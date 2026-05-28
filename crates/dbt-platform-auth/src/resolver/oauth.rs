@@ -1,0 +1,1460 @@
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
+
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use rand::RngCore;
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
+use url::Url;
+
+use crate::credential::OAuthSession;
+use crate::session_cache::OAuthSessionCache;
+use crate::{AuthError, Credential};
+
+// ── Public constants ──────────────────────────────────────────────────────────
+
+/// Default loopback port for the OAuth redirect listener.
+pub const LOOPBACK_PORT: u16 = 29527;
+
+/// Default timeout for the interactive browser flow. Matches the VSCode extension (10 min).
+pub const INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// Default OAuth scopes requested from dbt platform.
+pub const OAUTH_SCOPES: &str = "account:read offline_access";
+
+/// dbt platform registration endpoint. Users are redirected here to start login.
+/// TODO: support DBT_CLOUD_STAGING_URL env override for staging environments.
+pub const REGISTER_URL: &str = "https://us1.dbt.com/register";
+
+// ── Opener / abort handle ─────────────────────────────────────────────────────
+
+/// Callback invoked with the authorization URL. Implementations open a browser or
+/// modify the URL before doing so.
+pub type Opener = Box<dyn Fn(&str) + Send + Sync>;
+
+/// A handle that can abort an in-progress [`OAuthInteractiveResolver`] flow from
+/// another thread. Dropping the handle without calling [`abort`](OAuthAbortHandle::abort)
+/// has no effect.
+pub struct OAuthAbortHandle(tokio::sync::oneshot::Sender<()>);
+
+impl OAuthAbortHandle {
+    pub fn new(tx: tokio::sync::oneshot::Sender<()>) -> Self {
+        Self(tx)
+    }
+
+    /// Signal the in-progress flow to stop. The resolver will return
+    /// [`AuthError::Aborted`].
+    pub fn abort(self) {
+        let _ = self.0.send(());
+    }
+}
+
+// ── Passive resolver ──────────────────────────────────────────────────────────
+
+/// Resolves credentials from a cached OAuth session — no user interaction.
+///
+/// Checks the OAuth session cache (default: `~/.dbt/oauth_sessions.json`) for a
+/// non-expired session and returns it directly. If the access token is expired
+/// but a refresh token is present, this resolver will attempt to exchange the
+/// refresh token for new credentials before returning.
+///
+/// # Client ID matching
+///
+/// Only sessions for the given `client_id` are considered.
+///
+/// # Scope checking
+///
+/// When `scopes` is non-empty, the resolver only returns a session whose granted
+/// scopes are a superset of the requested scopes. If a valid session exists but
+/// its scopes are insufficient, [`AuthError::InadequateScopes`] is returned.
+/// An empty `scopes` list skips the check.
+///
+/// # Non-interactive contract
+///
+/// This resolver never opens a browser or prompts the user. For an interactive
+/// login flow, see [`OAuthInteractiveResolver`].
+pub struct OAuthPassiveResolver {
+    /// OAuth client ID for this application.
+    pub client_id: String,
+    /// Scopes required by the caller. Session must grant all of these.
+    pub scopes: Vec<String>,
+    /// Override for the session cache path. Defaults to `~/.dbt/oauth_sessions.json`.
+    pub cache_path: Option<PathBuf>,
+    /// HTTP client used for token refresh requests.
+    pub http: reqwest::Client,
+    /// Override the token endpoint base URL (scheme + host). Defaults to
+    /// `https://{account_host}` derived from the cached session. Useful for testing.
+    pub token_endpoint_override: Option<String>,
+}
+
+impl OAuthPassiveResolver {
+    pub fn new(client_id: impl Into<String>) -> Self {
+        Self {
+            client_id: client_id.into(),
+            scopes: vec![],
+            cache_path: None,
+            http: reqwest::Client::default(),
+            token_endpoint_override: None,
+        }
+    }
+
+    fn effective_cache_path(&self) -> Option<PathBuf> {
+        self.cache_path
+            .clone()
+            .or_else(|| dirs::home_dir().map(|h| h.join(".dbt").join("oauth_sessions.json")))
+    }
+
+    fn refresh_token_url(&self, account_host: &str) -> String {
+        let base = match &self.token_endpoint_override {
+            Some(b) => b.trim_end_matches('/').to_owned(),
+            None => format!("https://{account_host}"),
+        };
+        format!("{base}/oauth/token")
+    }
+
+    pub async fn resolve(&self) -> Result<Credential, AuthError> {
+        let path = match self.effective_cache_path() {
+            Some(p) => p,
+            None => return Err(AuthError::NotAuthenticated),
+        };
+
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(AuthError::NotAuthenticated);
+            }
+            Err(e) => return Err(AuthError::InaccessibleSource(e)),
+        };
+
+        let cache: OAuthSessionCache =
+            serde_json::from_slice(&bytes).map_err(|e| AuthError::Malformed(e.to_string()))?;
+
+        let now = SystemTime::now();
+
+        let matching: Vec<&OAuthSession> = cache
+            .sessions
+            .iter()
+            .filter(|s| s.client_id == self.client_id)
+            .collect();
+
+        if matching.is_empty() {
+            return Err(AuthError::NotAuthenticated);
+        }
+
+        let non_expired: Vec<&OAuthSession> = matching
+            .iter()
+            .copied()
+            .filter(|s| s.expires_at > now)
+            .collect();
+
+        if !non_expired.is_empty() {
+            if let Some(session) = non_expired
+                .iter()
+                .copied()
+                .find(|s| scopes_adequate(&self.scopes, &s.scopes))
+            {
+                return Ok(Credential::OAuth(session.clone()));
+            }
+            return Err(AuthError::InadequateScopes {
+                requested: self.scopes.clone(),
+                cached: non_expired[0].scopes.clone(),
+            });
+        }
+
+        // All matching sessions are expired. Try to refresh if a refresh token is available.
+        if let Some(session) = matching.iter().copied().find(|s| s.refresh_token.is_some()) {
+            let refresh_tok = session.refresh_token.as_deref().unwrap();
+            let token_url = self.refresh_token_url(&session.account_host);
+
+            let token =
+                exchange_refresh_token(&self.http, &token_url, &self.client_id, refresh_tok)
+                    .await?;
+
+            let (user_id, account_id, account_host) = decode_access_token(&token.access_token)
+                .map_err(|e| AuthError::RefreshFailed(e.to_string()))?;
+
+            let scopes: Vec<String> = token
+                .scope
+                .as_deref()
+                .unwrap_or("")
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect();
+
+            let expires_in = token.expires_in.unwrap_or(3600.0);
+            let expires_at = SystemTime::now() + Duration::from_secs(expires_in as u64);
+
+            let new_session = OAuthSession {
+                access_token: token.access_token,
+                refresh_token: token.refresh_token,
+                id_token: token.id_token,
+                scopes,
+                expires_at,
+                account_host,
+                account_id,
+                user_id,
+                client_id: self.client_id.clone(),
+            };
+
+            if !scopes_adequate(&self.scopes, &new_session.scopes) {
+                return Err(AuthError::InadequateScopes {
+                    requested: self.scopes.clone(),
+                    cached: new_session.scopes,
+                });
+            }
+
+            upsert_session(&path, new_session.clone())?;
+
+            return Ok(Credential::OAuth(new_session));
+        }
+        Err(AuthError::AuthenticationExpired)
+    }
+}
+
+// ── Interactive resolver ──────────────────────────────────────────────────────
+
+/// Resolves credentials by initiating an interactive OAuth authorization code flow.
+///
+/// Opens a browser to the dbt platform registration endpoint and spins up a local
+/// redirect server to capture the authorization code. On success the resulting
+/// session is persisted to the OAuth session cache and returned as a credential.
+///
+/// Construct via [`OAuthInteractiveResolver::builder`] (passing a `client_id`). An
+/// [`OAuthAbortHandle`] can be wired in via [`OAuthInteractiveResolverBuilder::abort_signal`]
+/// to cancel the flow from another thread, causing [`resolve`](Self::resolve) to return
+/// [`AuthError::Aborted`].
+pub struct OAuthInteractiveResolver {
+    client_id: String,
+    opener: Opener,
+    timeout: Duration,
+    redirect_port: u16,
+    register_url: String,
+    scopes: String,
+    http: reqwest::Client,
+    cache_path: Option<PathBuf>,
+    // Wrapped in Mutex so resolve() can take the receiver with &self.
+    abort_signal: std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+}
+
+impl OAuthInteractiveResolver {
+    /// Construct with all default settings for `client_id` (uses [`LOOPBACK_PORT`],
+    /// [`INTERACTIVE_TIMEOUT`], and the system browser).
+    pub fn new(client_id: impl Into<String>) -> Self {
+        OAuthInteractiveResolverBuilder::new(client_id).build()
+    }
+
+    /// Start building a custom resolver.
+    pub fn builder(client_id: impl Into<String>) -> OAuthInteractiveResolverBuilder {
+        OAuthInteractiveResolverBuilder::new(client_id)
+    }
+
+    /// Default opener: opens the URL in the system browser.
+    pub fn default_opener() -> Opener {
+        Box::new(|url: &str| {
+            if let Err(err) = open::that_detached(url) {
+                tracing::warn!(
+                    "failed to open browser automatically: {err}. \
+                    Open the following URL manually:\n{url}"
+                );
+            }
+        })
+    }
+
+    fn effective_cache_path(&self) -> Option<PathBuf> {
+        self.cache_path
+            .clone()
+            .or_else(|| dirs::home_dir().map(|h| h.join(".dbt").join("oauth_sessions.json")))
+    }
+
+    pub async fn resolve(&self) -> Result<Credential, AuthError> {
+        let cache_path = match self.effective_cache_path() {
+            Some(p) => p,
+            None => {
+                return Err(AuthError::Interactive(
+                    "cannot determine home directory for session cache".into(),
+                ));
+            }
+        };
+
+        let redirect_uri = format!("http://127.0.0.1:{}/", self.redirect_port);
+
+        // If a session already exists for this client, include its scopes in the new
+        // request so that a re-auth never silently drops previously-granted scopes.
+        let effective_scopes = {
+            let cached_scopes = std::fs::read(&cache_path)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<OAuthSessionCache>(&b).ok())
+                .and_then(|c| {
+                    c.sessions
+                        .into_iter()
+                        .find(|s| s.client_id == self.client_id)
+                })
+                .map(|s| s.scopes)
+                .unwrap_or_default();
+            merge_scopes(&self.scopes, &cached_scopes)
+        };
+
+        let listener = TcpListener::bind(("127.0.0.1", self.redirect_port))
+            .await
+            .map_err(|e| {
+                AuthError::Interactive(format!("loopback port {} in use: {e}", self.redirect_port))
+            })?;
+
+        let pkce = generate_pkce();
+        let state = generate_state();
+
+        let auth_url = build_register_url(
+            &self.register_url,
+            &redirect_uri,
+            &self.client_id,
+            &effective_scopes,
+            &state,
+            &pkce.challenge,
+        )?;
+
+        eprintln!("Opening browser for dbt platform login: {auth_url}");
+        (self.opener)(&auth_url);
+
+        let abort_rx = self.abort_signal.lock().unwrap().take();
+        let redirect = accept_one_redirect(&listener, &state, self.timeout, abort_rx).await?;
+
+        let token = exchange_code(
+            &self.http,
+            &redirect.account_url,
+            &self.client_id,
+            &redirect.code,
+            &redirect_uri,
+            &pkce.verifier,
+        )
+        .await?;
+
+        let (user_id, account_id, account_host) = decode_access_token(&token.access_token)?;
+
+        let scopes: Vec<String> = token
+            .scope
+            .as_deref()
+            .unwrap_or("")
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
+
+        let expires_in = token.expires_in.unwrap_or(3600.0);
+        let expires_at = SystemTime::now() + Duration::from_secs(expires_in as u64);
+
+        let session = OAuthSession {
+            access_token: token.access_token,
+            refresh_token: token.refresh_token,
+            id_token: token.id_token,
+            scopes,
+            expires_at,
+            account_host,
+            account_id,
+            user_id,
+            client_id: self.client_id.clone(),
+        };
+
+        upsert_session(&cache_path, session.clone())?;
+
+        Ok(Credential::OAuth(session))
+    }
+}
+
+// ── Builder ───────────────────────────────────────────────────────────────────
+
+/// Builder for [`OAuthInteractiveResolver`]. `client_id` is required at construction;
+/// all other fields are optional and fall back to defaults.
+pub struct OAuthInteractiveResolverBuilder {
+    client_id: String,
+    opener: Option<Opener>,
+    timeout: Option<Duration>,
+    redirect_port: Option<u16>,
+    register_url: Option<String>,
+    scopes: Option<String>,
+    http: Option<reqwest::Client>,
+    cache_path: Option<PathBuf>,
+    abort_signal: Option<tokio::sync::oneshot::Receiver<()>>,
+}
+
+impl OAuthInteractiveResolverBuilder {
+    pub fn new(client_id: impl Into<String>) -> Self {
+        Self {
+            client_id: client_id.into(),
+            opener: None,
+            timeout: None,
+            redirect_port: None,
+            register_url: None,
+            scopes: None,
+            http: None,
+            cache_path: None,
+            abort_signal: None,
+        }
+    }
+
+    pub fn opener(mut self, v: Opener) -> Self {
+        self.opener = Some(v);
+        self
+    }
+
+    pub fn timeout(mut self, v: Duration) -> Self {
+        self.timeout = Some(v);
+        self
+    }
+
+    pub fn redirect_port(mut self, v: u16) -> Self {
+        self.redirect_port = Some(v);
+        self
+    }
+
+    pub fn register_url(mut self, v: impl Into<String>) -> Self {
+        self.register_url = Some(v.into());
+        self
+    }
+
+    pub fn scopes(mut self, v: impl Into<String>) -> Self {
+        self.scopes = Some(v.into());
+        self
+    }
+
+    pub fn http(mut self, v: reqwest::Client) -> Self {
+        self.http = Some(v);
+        self
+    }
+
+    pub fn cache_path(mut self, v: PathBuf) -> Self {
+        self.cache_path = Some(v);
+        self
+    }
+
+    /// Supply an abort signal. Create the paired [`OAuthAbortHandle`] via
+    /// `tokio::sync::oneshot::channel()` and pass the sender to
+    /// `OAuthAbortHandle::new(tx)`.
+    pub fn abort_signal(mut self, rx: tokio::sync::oneshot::Receiver<()>) -> Self {
+        self.abort_signal = Some(rx);
+        self
+    }
+
+    pub fn build(self) -> OAuthInteractiveResolver {
+        OAuthInteractiveResolver {
+            client_id: self.client_id,
+            opener: self
+                .opener
+                .unwrap_or_else(OAuthInteractiveResolver::default_opener),
+            timeout: self.timeout.unwrap_or(INTERACTIVE_TIMEOUT),
+            redirect_port: self.redirect_port.unwrap_or(LOOPBACK_PORT),
+            register_url: self.register_url.unwrap_or_else(|| REGISTER_URL.to_owned()),
+            scopes: self.scopes.unwrap_or_else(|| OAUTH_SCOPES.to_owned()),
+            http: self.http.unwrap_or_default(),
+            cache_path: self.cache_path,
+            abort_signal: std::sync::Mutex::new(self.abort_signal),
+        }
+    }
+}
+
+// ── Scope helpers ─────────────────────────────────────────────────────────────
+
+/// Returns `true` if every scope in `requested` is present in `cached`.
+/// An empty `requested` list always returns `true`.
+fn scopes_adequate(requested: &[String], cached: &[String]) -> bool {
+    if requested.is_empty() {
+        return true;
+    }
+    let cached_set: std::collections::HashSet<&str> = cached.iter().map(String::as_str).collect();
+    requested.iter().all(|s| cached_set.contains(s.as_str()))
+}
+
+/// Returns the union of `requested` (space-delimited) and `cached`, preserving
+/// `requested`-first ordering and deduplicating.
+fn merge_scopes(requested: &str, cached: &[String]) -> String {
+    let mut seen = std::collections::HashSet::<&str>::new();
+    let mut merged: Vec<&str> = Vec::new();
+    for scope in requested
+        .split_whitespace()
+        .chain(cached.iter().map(String::as_str))
+    {
+        if seen.insert(scope) {
+            merged.push(scope);
+        }
+    }
+    merged.join(" ")
+}
+
+// ── Private helpers ───────────────────────────────────────────────────────────
+
+struct Pkce {
+    verifier: String,
+    challenge: String,
+}
+
+fn generate_pkce() -> Pkce {
+    let mut bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut bytes);
+    let verifier = URL_SAFE_NO_PAD.encode(bytes);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    Pkce {
+        verifier,
+        challenge,
+    }
+}
+
+fn generate_state() -> String {
+    let mut bytes = [0u8; 16];
+    rand::rng().fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn build_register_url(
+    base: &str,
+    redirect_url: &str,
+    client_id: &str,
+    scope: &str,
+    state: &str,
+    code_challenge: &str,
+) -> Result<String, AuthError> {
+    let mut url = Url::parse(base)
+        .map_err(|e| AuthError::Interactive(format!("invalid register URL '{base}': {e}")))?;
+    url.query_pairs_mut()
+        .append_pair("redirect_url", redirect_url)
+        .append_pair("client_id", client_id)
+        .append_pair("code_challenge", code_challenge)
+        .append_pair("state", state)
+        .append_pair("scope", scope)
+        .append_pair("response_type", "code")
+        .append_pair("code_challenge_method", "S256");
+    Ok(url.to_string())
+}
+
+#[derive(Debug)]
+struct RedirectResult {
+    code: String,
+    #[allow(dead_code)]
+    state: String,
+    account_url: String,
+}
+
+async fn accept_one_redirect(
+    listener: &TcpListener,
+    expected_state: &str,
+    timeout: Duration,
+    abort_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+) -> Result<RedirectResult, AuthError> {
+    let accept = async {
+        let (stream, _) = listener
+            .accept()
+            .await
+            .map_err(|e| AuthError::Interactive(format!("loopback accept failed: {e}")))?;
+        handle_redirect(stream, expected_state).await
+    };
+
+    if let Some(mut rx) = abort_rx {
+        tokio::select! {
+            result = tokio::time::timeout(timeout, accept) => {
+                match result {
+                    Ok(r) => r,
+                    Err(_) => Err(AuthError::Interactive(format!(
+                        "interactive authentication timed out after {}s",
+                        timeout.as_secs()
+                    ))),
+                }
+            }
+            _ = &mut rx => Err(AuthError::Aborted),
+        }
+    } else {
+        match tokio::time::timeout(timeout, accept).await {
+            Ok(r) => r,
+            Err(_) => Err(AuthError::Interactive(format!(
+                "interactive authentication timed out after {}s",
+                timeout.as_secs()
+            ))),
+        }
+    }
+}
+
+async fn handle_redirect(
+    stream: TcpStream,
+    expected_state: &str,
+) -> Result<RedirectResult, AuthError> {
+    let (read_half, mut write_half) = stream.into_split();
+    let mut reader = BufReader::new(read_half);
+    let mut request_line = String::new();
+    reader
+        .read_line(&mut request_line)
+        .await
+        .map_err(|e| AuthError::Interactive(format!("failed reading redirect request: {e}")))?;
+
+    let target = parse_request_target(&request_line)?;
+    let query = parse_query(&target);
+
+    if let Some(error) = query.get("error") {
+        let description = query
+            .get("error_description")
+            .map(String::as_str)
+            .unwrap_or("");
+        let message = if description.is_empty() {
+            error.clone()
+        } else {
+            format!("{error}: {description}")
+        };
+        let body = format!(
+            "{ERROR_HTML_PREFIX}{}{ERROR_HTML_SUFFIX}",
+            html_escape(&message)
+        );
+        let _ = write_http_response(&mut write_half, 500, &body).await;
+        return Err(AuthError::Interactive(message));
+    }
+
+    let state = query
+        .get("state")
+        .cloned()
+        .ok_or_else(|| AuthError::Interactive("redirect missing state parameter".into()))?;
+    if state != expected_state {
+        let _ = write_http_response(
+            &mut write_half,
+            500,
+            &format!("{ERROR_HTML_PREFIX}invalid state{ERROR_HTML_SUFFIX}"),
+        )
+        .await;
+        return Err(AuthError::Interactive(
+            "invalid OAuth state parameter".into(),
+        ));
+    }
+
+    let code = query
+        .get("code")
+        .cloned()
+        .ok_or_else(|| AuthError::Interactive("redirect missing code parameter".into()))?;
+
+    let account_url = query
+        .get("account_url")
+        .cloned()
+        .ok_or_else(|| AuthError::Interactive("redirect missing account_url parameter".into()))?;
+
+    let _ = write_http_response(&mut write_half, 200, SUCCESS_HTML).await;
+    Ok(RedirectResult {
+        code,
+        state,
+        account_url,
+    })
+}
+
+fn parse_request_target(request_line: &str) -> Result<String, AuthError> {
+    let mut parts = request_line.split_whitespace();
+    let _method = parts.next();
+    let target = parts
+        .next()
+        .ok_or_else(|| AuthError::Interactive("malformed redirect request line".into()))?;
+    Ok(target.to_string())
+}
+
+fn parse_query(target: &str) -> HashMap<String, String> {
+    let url = Url::parse(&format!("http://127.0.0.1{target}")).ok();
+    let mut map = HashMap::new();
+    if let Some(url) = url {
+        for (k, v) in url.query_pairs() {
+            map.insert(k.into_owned(), v.into_owned());
+        }
+    }
+    map
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+async fn write_http_response(
+    stream: &mut tokio::net::tcp::OwnedWriteHalf,
+    status: u16,
+    body: &str,
+) -> std::io::Result<()> {
+    let status_text = if status == 200 {
+        "OK"
+    } else {
+        "Internal Server Error"
+    };
+    let response = format!(
+        "HTTP/1.1 {status} {status_text}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(response.as_bytes()).await?;
+    stream.shutdown().await
+}
+
+const SUCCESS_HTML: &str = "<!doctype html><html><head><meta charset=\"UTF-8\"/><title>dbt - Login</title></head><body style=\"text-align:center;font-family:sans-serif\"><h1>Success</h1><p>You have logged in. You can close this window.</p></body></html>";
+const ERROR_HTML_PREFIX: &str = "<!doctype html><html><head><meta charset=\"UTF-8\"/><title>dbt - Login</title></head><body style=\"text-align:center;font-family:sans-serif\"><h1>Error</h1><p>";
+const ERROR_HTML_SUFFIX: &str = "</p></body></html>";
+
+#[derive(Debug, Deserialize)]
+struct TokenResponse {
+    access_token: String,
+    #[serde(default)]
+    refresh_token: Option<String>,
+    #[serde(default)]
+    id_token: Option<String>,
+    #[serde(default)]
+    scope: Option<String>,
+    #[serde(default)]
+    expires_in: Option<f64>,
+}
+
+async fn exchange_code(
+    http: &reqwest::Client,
+    account_url: &str,
+    client_id: &str,
+    code: &str,
+    redirect_uri: &str,
+    code_verifier: &str,
+) -> Result<TokenResponse, AuthError> {
+    let token_url = format!("{}/oauth/token", account_url.trim_end_matches('/'));
+    let form = [
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("client_id", client_id),
+        ("code_verifier", code_verifier),
+        ("redirect_uri", redirect_uri),
+    ];
+    let response = http
+        .post(&token_url)
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| AuthError::Interactive(format!("token exchange request failed: {e}")))?
+        .error_for_status()
+        .map_err(|e| AuthError::Interactive(format!("token exchange failed: {e}")))?;
+    let body = response
+        .text()
+        .await
+        .map_err(|e| AuthError::Interactive(format!("reading token response failed: {e}")))?;
+    serde_json::from_str::<TokenResponse>(&body)
+        .map_err(|e| AuthError::Interactive(format!("invalid token response: {e}")))
+}
+
+async fn exchange_refresh_token(
+    http: &reqwest::Client,
+    token_url: &str,
+    client_id: &str,
+    refresh_token: &str,
+) -> Result<TokenResponse, AuthError> {
+    let form = [
+        ("grant_type", "refresh_token"),
+        ("refresh_token", refresh_token),
+        ("client_id", client_id),
+    ];
+    let response = http
+        .post(token_url)
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| AuthError::RefreshFailed(e.to_string()))?;
+
+    // 4xx means the token was revoked or invalid; the user must interactively re-authenticate.
+    if response.status().is_client_error() {
+        return Err(AuthError::AuthenticationExpired);
+    }
+
+    let response = response
+        .error_for_status()
+        .map_err(|e| AuthError::RefreshFailed(format!("token refresh request failed: {e}")))?;
+
+    let body = response
+        .text()
+        .await
+        .map_err(|e| AuthError::RefreshFailed(format!("reading token response failed: {e}")))?;
+
+    serde_json::from_str::<TokenResponse>(&body)
+        .map_err(|e| AuthError::RefreshFailed(format!("invalid token response: {e}")))
+}
+
+fn decode_access_token(token: &str) -> Result<(u64, u64, String), AuthError> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err(AuthError::Interactive(
+            "access token is not a valid JWT".into(),
+        ));
+    }
+
+    // JWT uses base64url encoding without padding
+    let payload_bytes = URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .map_err(|e| AuthError::Interactive(format!("failed to decode JWT payload: {e}")))?;
+
+    let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
+        .map_err(|e| AuthError::Interactive(format!("failed to parse JWT payload: {e}")))?;
+
+    let user_id = payload["sub"]
+        .as_str()
+        .ok_or_else(|| AuthError::Interactive("JWT missing 'sub' claim".into()))?
+        .parse::<u64>()
+        .map_err(|e| AuthError::Interactive(format!("invalid 'sub' claim: {e}")))?;
+
+    let account_id = payload["https://dbt.com/account_id"]
+        .as_str()
+        .ok_or_else(|| {
+            AuthError::Interactive("JWT missing 'https://dbt.com/account_id' claim".into())
+        })?
+        .parse::<u64>()
+        .map_err(|e| AuthError::Interactive(format!("invalid account_id claim: {e}")))?;
+
+    let iss = payload["iss"]
+        .as_str()
+        .ok_or_else(|| AuthError::Interactive("JWT missing 'iss' claim".into()))?;
+
+    // Strip scheme from the issuer URL to get just the host
+    let account_host = Url::parse(iss)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_owned))
+        .ok_or_else(|| {
+            AuthError::Interactive(format!("cannot extract host from JWT 'iss': {iss}"))
+        })?;
+
+    Ok((user_id, account_id, account_host))
+}
+
+fn upsert_session(cache_path: &PathBuf, session: OAuthSession) -> Result<(), AuthError> {
+    let mut cache = if cache_path.exists() {
+        let bytes = std::fs::read(cache_path).map_err(AuthError::InaccessibleSource)?;
+        serde_json::from_slice::<OAuthSessionCache>(&bytes)
+            .map_err(|e| AuthError::Malformed(e.to_string()))?
+    } else {
+        OAuthSessionCache {
+            version: 1,
+            sessions: Vec::new(),
+        }
+    };
+
+    // Replace any existing session for the same (client_id, account_id) pair.
+    let existing = cache
+        .sessions
+        .iter()
+        .position(|s| s.client_id == session.client_id && s.account_id == session.account_id);
+    if let Some(idx) = existing {
+        cache.sessions[idx] = session;
+    } else {
+        cache.sessions.push(session);
+    }
+
+    let json =
+        serde_json::to_vec_pretty(&cache).map_err(|e| AuthError::Malformed(e.to_string()))?;
+
+    if let Some(parent) = cache_path.parent() {
+        std::fs::create_dir_all(parent).map_err(AuthError::InaccessibleSource)?;
+    }
+
+    write_secure(&json, cache_path).map_err(AuthError::InaccessibleSource)?;
+
+    Ok(())
+}
+
+#[cfg(unix)]
+fn write_secure(data: &[u8], path: &PathBuf) -> std::io::Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    std::io::Write::write_all(&mut file, data)
+}
+
+#[cfg(not(unix))]
+fn write_secure(data: &[u8], path: &PathBuf) -> std::io::Result<()> {
+    std::fs::write(path, data)
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session_cache::OAuthSessionCache;
+    use std::io::Write as _;
+    use std::time::{Duration, UNIX_EPOCH};
+    use tempfile::NamedTempFile;
+
+    fn write_cache(cache: &OAuthSessionCache) -> NamedTempFile {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(&serde_json::to_vec(cache).unwrap()).unwrap();
+        f
+    }
+
+    fn resolver_at(path: PathBuf) -> OAuthPassiveResolver {
+        OAuthPassiveResolver {
+            client_id: "test_client".into(),
+            scopes: vec![],
+            cache_path: Some(path),
+            http: reqwest::Client::new(),
+            token_endpoint_override: None,
+        }
+    }
+
+    /// Spin up a one-shot mock HTTP server that reads one request and writes back
+    /// `status` with `body`. Returns the bound address.
+    async fn mock_token_server(status: u16, body: String) -> std::net::SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let (read, mut write) = stream.into_split();
+            let mut reader = BufReader::new(read);
+            // Drain headers, find Content-Length.
+            let mut content_length: usize = 0;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).await.unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                let lower = line.to_lowercase();
+                if let Some(rest) = lower.strip_prefix("content-length:") {
+                    content_length = rest.trim().parse().unwrap_or(0);
+                }
+            }
+            // Drain body so the client doesn't get a broken-pipe on write.
+            {
+                use tokio::io::AsyncReadExt as _;
+                let mut buf = vec![0u8; content_length];
+                let _ = reader.read_exact(&mut buf).await;
+            }
+            let status_text = if status == 200 { "OK" } else { "Unauthorized" };
+            let resp = format!(
+                "HTTP/1.1 {status} {status_text}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            write.write_all(resp.as_bytes()).await.unwrap();
+            write.shutdown().await.unwrap();
+        });
+        addr
+    }
+
+    fn make_fake_jwt(user_id: u64, account_id: u64, account_host: &str) -> String {
+        let payload = serde_json::json!({
+            "sub": user_id.to_string(),
+            "https://dbt.com/account_id": account_id.to_string(),
+            "iss": format!("https://{account_host}")
+        });
+        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"RS256"}"#);
+        let body_enc = URL_SAFE_NO_PAD.encode(payload.to_string());
+        format!("{header}.{body_enc}.fakesig")
+    }
+
+    fn future_time() -> SystemTime {
+        UNIX_EPOCH + Duration::from_secs(u32::MAX as u64)
+    }
+
+    fn past_time() -> SystemTime {
+        UNIX_EPOCH + Duration::from_secs(1)
+    }
+
+    fn make_session(expires_at: SystemTime, refresh_token: Option<String>) -> OAuthSession {
+        OAuthSession {
+            access_token: "tok_abc".into(),
+            refresh_token,
+            id_token: None,
+            scopes: vec![],
+            expires_at,
+            account_host: "ab123.us1.dbt.com".into(),
+            account_id: 42,
+            user_id: 7,
+            client_id: "test_client".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_valid_session() {
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(future_time(), None)],
+        };
+        let f = write_cache(&cache);
+        let cred = resolver_at(f.path().to_path_buf()).resolve().await.unwrap();
+        assert!(matches!(cred, Credential::OAuth(_)));
+        assert_eq!(cred.token(), "tok_abc");
+        assert_eq!(cred.account_id(), 42);
+    }
+
+    #[tokio::test]
+    async fn missing_cache_file_returns_not_authenticated() {
+        let r = resolver_at(PathBuf::from("/nonexistent/oauth_sessions.json"));
+        let err = r.resolve().await.unwrap_err();
+        assert!(matches!(err, AuthError::NotAuthenticated));
+    }
+
+    #[tokio::test]
+    async fn malformed_cache_returns_malformed() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"not json {{{{").unwrap();
+        let err = resolver_at(f.path().to_path_buf())
+            .resolve()
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AuthError::Malformed(_)));
+    }
+
+    #[tokio::test]
+    async fn empty_sessions_returns_not_authenticated() {
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![],
+        };
+        let f = write_cache(&cache);
+        let err = resolver_at(f.path().to_path_buf())
+            .resolve()
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AuthError::NotAuthenticated));
+    }
+
+    #[tokio::test]
+    async fn expired_session_no_refresh_returns_authentication_expired() {
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(past_time(), None)],
+        };
+        let f = write_cache(&cache);
+        let err = resolver_at(f.path().to_path_buf())
+            .resolve()
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AuthError::AuthenticationExpired));
+    }
+
+    #[tokio::test]
+    async fn expired_session_with_refresh_token_network_error_returns_refresh_failed() {
+        // Point token_endpoint_override at a port that immediately closes the connection
+        // so the HTTP call fails with a network error → RefreshFailed (not AuthenticationExpired,
+        // which would indicate the token was rejected by the server).
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            drop(stream); // close without responding
+        });
+
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(past_time(), Some("refresh_tok".into()))],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.token_endpoint_override = Some(format!("http://127.0.0.1:{}", addr.port()));
+        let err = r.resolve().await.unwrap_err();
+        assert!(
+            matches!(err, AuthError::RefreshFailed(_)),
+            "expected RefreshFailed, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn expired_session_refresh_token_revoked_returns_authentication_expired() {
+        let addr = mock_token_server(401, r#"{"error":"invalid_grant"}"#.into()).await;
+
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(past_time(), Some("stale_tok".into()))],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.token_endpoint_override = Some(format!("http://127.0.0.1:{}", addr.port()));
+        let err = r.resolve().await.unwrap_err();
+        assert!(
+            matches!(err, AuthError::AuthenticationExpired),
+            "expected AuthenticationExpired, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn expired_session_refresh_succeeds_returns_new_credential_and_updates_cache() {
+        let new_access_token = make_fake_jwt(7, 42, "ab123.us1.dbt.com");
+        let token_response = serde_json::json!({
+            "access_token": new_access_token,
+            "refresh_token": "new_refresh_tok",
+            "scope": "account:read offline_access",
+            "expires_in": 3600.0
+        })
+        .to_string();
+
+        let addr = mock_token_server(200, token_response).await;
+
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(past_time(), Some("old_refresh_tok".into()))],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.token_endpoint_override = Some(format!("http://127.0.0.1:{}", addr.port()));
+        let cred = r.resolve().await.unwrap();
+        assert_eq!(cred.token(), new_access_token);
+        assert_eq!(cred.account_id(), 42);
+
+        // Verify cache was updated with the new session.
+        let bytes = std::fs::read(f.path()).unwrap();
+        let updated: OAuthSessionCache = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(updated.sessions.len(), 1);
+        assert_eq!(updated.sessions[0].access_token, new_access_token);
+        assert_eq!(
+            updated.sessions[0].refresh_token.as_deref(),
+            Some("new_refresh_tok")
+        );
+    }
+
+    #[tokio::test]
+    async fn expired_session_refresh_succeeds_but_inadequate_scopes_returns_inadequate_scopes() {
+        let new_access_token = make_fake_jwt(7, 42, "ab123.us1.dbt.com");
+        // Server grants only account:read, but caller requires offline_access too.
+        let token_response = serde_json::json!({
+            "access_token": new_access_token,
+            "scope": "account:read",
+            "expires_in": 3600.0
+        })
+        .to_string();
+
+        let addr = mock_token_server(200, token_response).await;
+
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(past_time(), Some("old_tok".into()))],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.scopes = vec!["account:read".into(), "offline_access".into()];
+        r.token_endpoint_override = Some(format!("http://127.0.0.1:{}", addr.port()));
+        let err = r.resolve().await.unwrap_err();
+        assert!(
+            matches!(err, AuthError::InadequateScopes { .. }),
+            "expected InadequateScopes, got {err:?}"
+        );
+    }
+
+    // ── Scope tests ───────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn session_with_superset_scopes_is_returned() {
+        let mut session = make_session(future_time(), None);
+        session.scopes = vec![
+            "account:read".into(),
+            "offline_access".into(),
+            "extra".into(),
+        ];
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![session],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.scopes = vec!["account:read".into(), "offline_access".into()];
+        let cred = r.resolve().await.unwrap();
+        assert_eq!(cred.token(), "tok_abc");
+    }
+
+    #[tokio::test]
+    async fn session_with_insufficient_scopes_returns_inadequate_scopes() {
+        let mut session = make_session(future_time(), None);
+        session.scopes = vec!["account:read".into()];
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![session],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.scopes = vec!["account:read".into(), "offline_access".into()];
+        let err = r.resolve().await.unwrap_err();
+        assert!(matches!(err, AuthError::InadequateScopes { .. }));
+    }
+
+    #[tokio::test]
+    async fn first_session_with_adequate_scopes_is_preferred() {
+        // Session A: valid, missing offline_access
+        // Session B: valid, has all required scopes
+        let mut session_a = make_session(future_time(), None);
+        session_a.account_id = 1;
+        session_a.scopes = vec!["account:read".into()];
+
+        let mut session_b = make_session(future_time(), None);
+        session_b.account_id = 2;
+        session_b.access_token = "tok_b".into();
+        session_b.scopes = vec!["account:read".into(), "offline_access".into()];
+
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![session_a, session_b],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.scopes = vec!["account:read".into(), "offline_access".into()];
+        let cred = r.resolve().await.unwrap();
+        assert_eq!(cred.token(), "tok_b");
+    }
+
+    #[tokio::test]
+    async fn no_session_for_client_id_returns_not_authenticated() {
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(future_time(), None)],
+        };
+        let f = write_cache(&cache);
+        // Different client_id — should not match
+        let r = OAuthPassiveResolver {
+            client_id: "other_client".into(),
+            scopes: vec![],
+            cache_path: Some(f.path().to_path_buf()),
+            http: reqwest::Client::new(),
+            token_endpoint_override: None,
+        };
+        let err = r.resolve().await.unwrap_err();
+        assert!(matches!(err, AuthError::NotAuthenticated));
+    }
+
+    // ── Scope helper unit tests ───────────────────────────────────────────────
+
+    #[test]
+    fn scopes_adequate_empty_request_always_passes() {
+        assert!(scopes_adequate(&[], &[]));
+        assert!(scopes_adequate(&[], &["account:read".to_owned()]));
+    }
+
+    #[test]
+    fn scopes_adequate_exact_match_passes() {
+        let req = vec!["account:read".to_owned(), "offline_access".to_owned()];
+        let cached = vec!["account:read".to_owned(), "offline_access".to_owned()];
+        assert!(scopes_adequate(&req, &cached));
+    }
+
+    #[test]
+    fn scopes_adequate_superset_cached_passes() {
+        let req = vec!["account:read".to_owned()];
+        let cached = vec!["account:read".to_owned(), "offline_access".to_owned()];
+        assert!(scopes_adequate(&req, &cached));
+    }
+
+    #[test]
+    fn scopes_adequate_missing_scope_fails() {
+        let req = vec!["account:read".to_owned(), "offline_access".to_owned()];
+        let cached = vec!["account:read".to_owned()];
+        assert!(!scopes_adequate(&req, &cached));
+    }
+
+    #[test]
+    fn merge_scopes_deduplicates_and_keeps_requested_first() {
+        let merged = merge_scopes(
+            "account:read offline_access",
+            &["offline_access".to_owned(), "extra".to_owned()],
+        );
+        assert_eq!(merged, "account:read offline_access extra");
+    }
+
+    #[test]
+    fn merge_scopes_with_empty_cached_is_identity() {
+        let merged = merge_scopes("account:read offline_access", &[]);
+        assert_eq!(merged, "account:read offline_access");
+    }
+
+    #[test]
+    fn merge_scopes_with_empty_requested_returns_cached() {
+        let merged = merge_scopes("", &["account:read".to_owned()]);
+        assert_eq!(merged, "account:read");
+    }
+
+    // ── PKCE / URL builder tests ──────────────────────────────────────────────
+
+    #[test]
+    fn pkce_verifier_is_url_safe_and_correct_length() {
+        let pkce = generate_pkce();
+        assert!(pkce.verifier.len() >= 43);
+        assert!(pkce.verifier.len() <= 128);
+        assert!(
+            pkce.verifier
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        );
+    }
+
+    #[test]
+    fn pkce_challenge_matches_sha256_of_verifier() {
+        let pkce = generate_pkce();
+        let expected = URL_SAFE_NO_PAD.encode(Sha256::digest(pkce.verifier.as_bytes()));
+        assert_eq!(pkce.challenge, expected);
+    }
+
+    #[test]
+    fn state_has_at_least_22_chars() {
+        assert!(generate_state().len() >= 22);
+    }
+
+    #[test]
+    fn register_url_includes_all_required_params() {
+        let url = build_register_url(
+            REGISTER_URL,
+            "http://127.0.0.1:29527/",
+            "client-id-x",
+            "account:read offline_access",
+            "state-abc",
+            "challenge-xyz",
+        )
+        .unwrap();
+        let parsed = Url::parse(&url).unwrap();
+        let pairs: HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+        assert_eq!(
+            pairs.get("redirect_url").map(String::as_str),
+            Some("http://127.0.0.1:29527/")
+        );
+        assert_eq!(
+            pairs.get("client_id").map(String::as_str),
+            Some("client-id-x")
+        );
+        assert_eq!(pairs.get("state").map(String::as_str), Some("state-abc"));
+        assert_eq!(
+            pairs.get("code_challenge").map(String::as_str),
+            Some("challenge-xyz")
+        );
+        assert_eq!(
+            pairs.get("code_challenge_method").map(String::as_str),
+            Some("S256")
+        );
+        assert_eq!(pairs.get("response_type").map(String::as_str), Some("code"));
+    }
+
+    #[test]
+    fn decode_access_token_extracts_claims() {
+        // Build a fake JWT with the required claims (no signature validation)
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        let payload = serde_json::json!({
+            "sub": "5001",
+            "https://dbt.com/account_id": "1001",
+            "iss": "https://ab123.us1.dbt.com"
+        });
+        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"RS256"}"#);
+        let body = URL_SAFE_NO_PAD.encode(payload.to_string());
+        let fake_jwt = format!("{header}.{body}.fakesig");
+
+        let (user_id, account_id, account_host) = decode_access_token(&fake_jwt).unwrap();
+        assert_eq!(user_id, 5001);
+        assert_eq!(account_id, 1001);
+        assert_eq!(account_host, "ab123.us1.dbt.com");
+    }
+
+    // ── Redirect listener tests ───────────────────────────────────────────────
+
+    use tokio::net::TcpStream;
+
+    async fn bind_local() -> (TcpListener, std::net::SocketAddr) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        (listener, addr)
+    }
+
+    async fn send_get(addr: std::net::SocketAddr, target: &str) {
+        let mut stream = TcpStream::connect(addr).await.unwrap();
+        let req = format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        stream.write_all(req.as_bytes()).await.unwrap();
+        stream.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn parses_code_state_and_account_url() {
+        let (listener, addr) = bind_local().await;
+        let handle = tokio::spawn(async move {
+            accept_one_redirect(&listener, "expected-state", Duration::from_secs(5), None).await
+        });
+        send_get(
+            addr,
+            "/handler?code=auth-code&state=expected-state&account_url=https%3A%2F%2Fab123.us1.dbt.com",
+        )
+        .await;
+        let result = handle.await.unwrap().unwrap();
+        assert_eq!(result.code, "auth-code");
+        assert_eq!(result.account_url, "https://ab123.us1.dbt.com");
+    }
+
+    #[tokio::test]
+    async fn rejects_mismatched_state() {
+        let (listener, addr) = bind_local().await;
+        let handle = tokio::spawn(async move {
+            accept_one_redirect(&listener, "expected-state", Duration::from_secs(5), None).await
+        });
+        send_get(
+            addr,
+            "/handler?code=auth-code&state=other-state&account_url=https%3A%2F%2Fab123.us1.dbt.com",
+        )
+        .await;
+        let err = handle.await.unwrap().unwrap_err();
+        assert!(err.to_string().contains("invalid OAuth state parameter"));
+    }
+
+    #[tokio::test]
+    async fn surfaces_error_query_param() {
+        let (listener, addr) = bind_local().await;
+        let handle = tokio::spawn(async move {
+            accept_one_redirect(&listener, "expected-state", Duration::from_secs(5), None).await
+        });
+        send_get(
+            addr,
+            "/handler?error=access_denied&error_description=User%20canceled",
+        )
+        .await;
+        let err = handle.await.unwrap().unwrap_err();
+        assert!(err.to_string().contains("access_denied"));
+        assert!(err.to_string().contains("User canceled"));
+    }
+
+    #[tokio::test]
+    async fn times_out_when_no_request_arrives() {
+        let (listener, _addr) = bind_local().await;
+        let result = accept_one_redirect(&listener, "any", Duration::from_millis(100), None).await;
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("timed out"));
+    }
+
+    #[tokio::test]
+    async fn abort_signal_returns_aborted() {
+        let (listener, _addr) = bind_local().await;
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let handle = tokio::spawn(async move {
+            accept_one_redirect(&listener, "any", Duration::from_secs(60), Some(rx)).await
+        });
+        // Immediately abort — no browser connection will arrive.
+        let abort_handle = OAuthAbortHandle::new(tx);
+        abort_handle.abort();
+        let err = handle.await.unwrap().unwrap_err();
+        assert!(matches!(err, AuthError::Aborted));
+    }
+
+    #[tokio::test]
+    async fn upsert_replaces_existing_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("oauth_sessions.json");
+
+        let session1 = make_session(future_time(), None);
+        upsert_session(&path, session1.clone()).unwrap();
+
+        let mut session2 = session1;
+        session2.access_token = "tok_updated".into();
+        upsert_session(&path, session2).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        let cache: OAuthSessionCache = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(cache.sessions.len(), 1);
+        assert_eq!(cache.sessions[0].access_token, "tok_updated");
+    }
+
+    #[tokio::test]
+    async fn upsert_appends_different_account() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("oauth_sessions.json");
+
+        let session1 = make_session(future_time(), None);
+        let mut session2 = make_session(future_time(), None);
+        session2.account_id = 99;
+
+        upsert_session(&path, session1).unwrap();
+        upsert_session(&path, session2).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        let cache: OAuthSessionCache = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(cache.sessions.len(), 2);
+    }
+}

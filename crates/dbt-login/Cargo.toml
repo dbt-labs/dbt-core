@@ -1,0 +1,25 @@
+[package]
+name = "dbt-login"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "dbt login command: traits, no-op implementations, and command execution logic"
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+dbt-common = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-platform-auth = { workspace = true }
+tracing = { workspace = true }
+
+[lib]
+name = "dbt_login"
+path = "src/lib.rs"
+doctest = false

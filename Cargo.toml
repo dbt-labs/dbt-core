@@ -74,6 +74,8 @@ members = [
   "crates/dbt-sql/dbt-sql-utils",
 
   "crates/dbt-ci",
+  "crates/dbt-login",
+  "crates/dbt-platform-auth",
 ]
 
 resolver = "2"
@@ -231,8 +233,10 @@ dbt-jinja-filters = { path = "crates/dbt-jinja-filters" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }
 dbt-loader = { path = "crates/dbt-loader" }
+dbt-login = { path = "crates/dbt-login" }
 dbt-metricflow = { path = "crates/dbt-metricflow" }
 dbt-parser = { path = "crates/dbt-parser" }
+dbt-platform-auth = { path = "crates/dbt-platform-auth" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
