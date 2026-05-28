@@ -22,7 +22,7 @@ use dbt_run_cache::request_builder::{
     SubmitEnrichedSqlRequestInput, SubmitValuesRequestInput, execution_type_from_input,
     seed_semantic_extras, seed_values_hash_reader, sql_semantic_extras,
 };
-use dbt_schemas::schemas::common::DbtMaterialization;
+use dbt_schemas::schemas::common::{DbtMaterialization, OnSchemaChange};
 use dbt_schemas::schemas::project::{ModelConfig, SeedConfig, SnapshotConfig};
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
@@ -212,7 +212,30 @@ pub fn test_execution_type_input() -> ExecutionTypeInput {
 pub fn model_sql_semantic_extra_config(
     model: &DbtModel,
 ) -> Result<SemanticExtraConfig, RequestBuildError> {
-    model_config_sql_semantic_extra_config(&model.deprecated_config)
+    let mut extras = model_config_sql_semantic_extra_config(&model.deprecated_config)?;
+
+    // The Python plugin emits `on_schema_change` only for `table` and
+    // `incremental` materializations, falling back to the dbt-core default
+    // ("ignore") when unset. Mirror that here so semantic hashes match —
+    // other materializations don't carry this field over the wire even when
+    // the user sets it explicitly.
+    let materialized = &model.base().materialized;
+    let emits_on_schema_change = matches!(
+        materialized,
+        DbtMaterialization::Table | DbtMaterialization::Incremental
+    );
+    if emits_on_schema_change {
+        if !extras.contains_key("on_schema_change") {
+            extras.insert(
+                "on_schema_change".to_string(),
+                Some(serde_json::to_value(OnSchemaChange::default())?),
+            );
+        }
+    } else {
+        extras.remove("on_schema_change");
+    }
+
+    Ok(extras)
 }
 
 pub fn seed_semantic_extra_config(
@@ -553,6 +576,44 @@ mod tests {
             "[\"status\",\"updated_at\"]"
         );
         assert!(!request.semantic_extras.contains_key("unique_key"));
+    }
+
+    #[test]
+    fn table_and_incremental_default_on_schema_change_to_ignore_when_unset() {
+        for materialization in [DbtMaterialization::Table, DbtMaterialization::Incremental] {
+            let mut model = make_model(materialization.clone());
+            model.deprecated_config.on_schema_change = None;
+            model.deprecated_config.incremental_predicates = None;
+            model.deprecated_config.merge_update_columns = None;
+
+            let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+
+            assert_eq!(
+                request.semantic_extras.get("on_schema_change").unwrap(),
+                "\"ignore\"",
+                "{materialization:?}"
+            );
+            assert!(
+                !request
+                    .semantic_extras
+                    .contains_key("incremental_predicates"),
+                "{materialization:?}"
+            );
+            assert!(
+                !request.semantic_extras.contains_key("merge_update_columns"),
+                "{materialization:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn view_model_omits_on_schema_change_even_when_set() {
+        let mut model = make_model(DbtMaterialization::View);
+        model.deprecated_config.on_schema_change = Some(OnSchemaChange::SyncAllColumns);
+
+        let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+
+        assert!(!request.semantic_extras.contains_key("on_schema_change"));
     }
 
     #[test]

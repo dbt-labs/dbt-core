@@ -722,9 +722,12 @@ pub enum DbtUniqueKey {
     Multiple(Vec<String>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OnSchemaChange {
+    // Matches dbt-core's default: `on_schema_change: Optional[str] = "ignore"`
+    // (core/dbt/artifacts/resources/v1/config.py).
+    #[default]
     Ignore,
     AppendNewColumns,
     Fail,

@@ -1580,9 +1580,7 @@ impl ConfigKeys for ModelConfig {
 // Helper function to compare on_schema_change fields, treating None and default OnSchemaChange as equivalent
 fn on_schema_change_eq(a: &Option<OnSchemaChange>, b: &Option<OnSchemaChange>) -> bool {
     use crate::schemas::common::OnSchemaChange;
-    // Default value in dbt-core is "ignore"
-    // See https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/artifacts/resources/v1/config.py#L109
-    let default_on_schema_change = OnSchemaChange::Ignore;
+    let default_on_schema_change = OnSchemaChange::default();
 
     match (a, b) {
         // Both None
