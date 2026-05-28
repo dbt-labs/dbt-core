@@ -55,6 +55,14 @@ def _fake_parser(manifest_text: Optional[str], returncode: int = 0, stderr: str 
 
 
 class TestBuildArgv:
+    @pytest.fixture(autouse=True)
+    def _identity_resolve(self):
+        # Bypass wheel-binary path resolution so tests assert on the bare
+        # command name regardless of whether dbt-core-experimental-parser is
+        # installed in the test environment's scripts dir.
+        with mock.patch("dbt.parser.fusion._resolve_engine_command", side_effect=lambda c: c):
+            yield
+
     def test_default_command_no_forwards(self):
         assert _build_argv(_flags()) == ["dbt-core-experimental-parser", "parse"]
 
