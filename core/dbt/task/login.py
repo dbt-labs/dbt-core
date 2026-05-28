@@ -4,6 +4,7 @@ from dbt.auth import AuthChain, AuthError, ResolverKind
 from dbt.auth.credentials import PlatformCredential, StateCredential
 from dbt.auth.oauth.platform import on_platform_login_success
 from dbt.auth.oauth.state import on_state_login_success
+from dbt.auth.session_cache import read_state_auth
 from dbt.cli.flags import Flags
 from dbt.exceptions import (
     AuthenticationExpired,
@@ -63,64 +64,69 @@ class LoginStatusTask(BaseTask):
         return f"in {mins}m"
 
     def run(self):
+        credential = None
+        source = None
+        platform_error_msg = None
+
         try:
             chain = AuthChain.default()
             credential, source = chain.resolve_with_source()
         except NotAuthenticated:
-            fire_event(
-                Note(
-                    msg="Status: unauthenticated\n"
-                    "  sources checked (in order):\n"
-                    "    1. env vars:       DBT_CLOUD_ACCOUNT_HOST, DBT_CLOUD_TOKEN, DBT_CLOUD_ACCOUNT_ID\n"
-                    "    2. OAuth session:  ~/.dbt/oauth_sessions.json  (run `dbt login` to create one)\n"
-                    "    3. dbt_cloud.yml:  ./dbt_cloud.yml or ~/.dbt/dbt_cloud.yml"
-                )
-            )
-            return False
+            pass
         except AuthenticationExpired:
-            fire_event(
-                Note(
-                    msg="Status: unauthenticated (credentials expired)\n"
-                    "  run `dbt login` to re-authenticate"
-                )
-            )
-            return False
+            platform_error_msg = "credentials expired — run `dbt login` to re-authenticate"
         except InaccessibleSource as e:
-            fire_event(
-                Note(msg=f"Status: unauthenticated (could not read credential source: {e})")
-            )
-            return False
+            platform_error_msg = f"could not read credential source: {e}"
         except MalformedAuthConfig as e:
-            fire_event(Note(msg=f"Status: unauthenticated (credential source is invalid: {e})"))
-            return False
+            platform_error_msg = f"credential source is invalid: {e}"
         except AuthError as e:
-            fire_event(Note(msg=f"Status: unauthenticated ({e})"))
-            return False
+            platform_error_msg = str(e)
 
-        via = self.SOURCE_LABELS.get(source, str(source.value))
+        state_data = read_state_auth()
 
-        if isinstance(credential, PlatformCredential):
-            if credential.oauth_session:
-                s = credential.oauth_session
-                fire_event(
-                    Note(
-                        msg=f"Status: authenticated (via {via})\n"
-                        f"  account host:  {s.account_host}\n"
-                        f"  account ID:    {s.account_id}\n"
-                        f"  user ID:       {s.user_id}\n"
-                        f"  expires:       {self._format_expiry(s.expires_at)}"
-                    )
-                )
+        if credential is None and state_data is None:
+            if platform_error_msg:
+                fire_event(Note(msg=f"Status: unauthenticated ({platform_error_msg})"))
             else:
                 fire_event(
                     Note(
-                        msg=f"Status: authenticated (via {via})\n"
-                        f"  account host:  {credential.account_host}\n"
-                        f"  account ID:    {credential.account_id}"
+                        msg="Status: unauthenticated\n"
+                        "  sources checked (in order):\n"
+                        "    1. env vars:       DBT_CLOUD_ACCOUNT_HOST, DBT_CLOUD_TOKEN, DBT_CLOUD_ACCOUNT_ID\n"
+                        "    2. OAuth session:  ~/.dbt/oauth_sessions.json  (run `dbt login` to create one)\n"
+                        "    3. dbt_cloud.yml:  ./dbt_cloud.yml or ~/.dbt/dbt_cloud.yml\n"
+                        "    4. state auth:     ~/.dbt/state_auth.json"
                     )
                 )
-        else:
-            fire_event(Note(msg=f"Status: authenticated (via {via})"))
+            return False
+
+        if credential is not None:
+            via = self.SOURCE_LABELS.get(source, str(source.value))
+            if isinstance(credential, PlatformCredential):
+                if credential.oauth_session:
+                    s = credential.oauth_session
+                    fire_event(
+                        Note(
+                            msg=f"Status: authenticated (via {via})\n"
+                            f"  account host:  {s.account_host}\n"
+                            f"  account ID:    {s.account_id}\n"
+                            f"  user ID:       {s.user_id}\n"
+                            f"  expires:       {self._format_expiry(s.expires_at)}"
+                        )
+                    )
+                else:
+                    fire_event(
+                        Note(
+                            msg=f"Status: authenticated (via {via})\n"
+                            f"  account host:  {credential.account_host}\n"
+                            f"  account ID:    {credential.account_id}"
+                        )
+                    )
+            else:
+                fire_event(Note(msg=f"Status: authenticated (via {via})"))
+
+        if credential is None and state_data is not None:
+            fire_event(Note(msg="Status: authenticated with dbt State"))
 
         return True
 

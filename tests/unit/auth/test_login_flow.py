@@ -141,7 +141,7 @@ class TestPlatformLoginFlow:
 class TestPostPlatformLogin:
     """All 4 cases of the configured/enabled matrix."""
 
-    def _run_post_login(self, configured: bool, enabled: bool):
+    def _run_post_login(self, configured: bool, enabled: bool, confirm: bool = True):
         cred = PlatformCredential(
             token=FAKE_JWT,
             expires_at=time.time() + 3600,
@@ -164,7 +164,9 @@ class TestPostPlatformLogin:
             "dbt.auth.oauth.platform.fire_event", side_effect=capture_event
         ), mock.patch(
             "dbt.auth.oauth.platform.set_user_setting_flag"
-        ) as mock_set_flag:
+        ) as mock_set_flag, mock.patch(
+            "dbt.auth.oauth.platform.click.confirm", return_value=confirm
+        ):
             on_platform_login_success(cred)
 
         return mock_set_flag, fired_messages
@@ -172,17 +174,25 @@ class TestPostPlatformLogin:
     def test_configured_and_enabled_is_noop(self):
         mock_set_flag, messages = self._run_post_login(configured=True, enabled=True)
         mock_set_flag.assert_not_called()
-        assert any("Sign in successful" in m for m in messages)
+        assert any("Congratulations" in m for m in messages)
 
-    def test_configured_and_not_enabled_enables_locally(self):
-        mock_set_flag, messages = self._run_post_login(configured=True, enabled=False)
+    def test_configured_and_not_enabled_user_confirms(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=False, confirm=True
+        )
         mock_set_flag.assert_called_once_with("manage_state", True)
-        assert any("enabled locally" in m for m in messages)
+
+    def test_configured_and_not_enabled_user_declines(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=False, confirm=False
+        )
+        mock_set_flag.assert_not_called()
+        assert any("you can modify ~/.dbt/user_settings.yml" in m for m in messages)
 
     def test_not_configured_and_not_enabled_is_noop(self):
         mock_set_flag, messages = self._run_post_login(configured=False, enabled=False)
         mock_set_flag.assert_not_called()
-        assert any("Sign in successful" in m for m in messages)
+        assert any("Congratulations" in m for m in messages)
 
     def test_not_configured_but_enabled_fires_info(self):
         mock_set_flag, messages = self._run_post_login(configured=False, enabled=True)

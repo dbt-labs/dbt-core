@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode, urlparse
 
+import click
 import requests
 
 from dbt.auth.credentials import OAuthSession, PlatformCredential
@@ -211,21 +212,34 @@ def on_platform_login_success(credential: PlatformCredential) -> None:
     client = DbtPlatformAPIClient(credential)
     client.warm_license_cache()
 
+    fire_event(Note(msg="Congratulations! You are now signed in."))
+
     state_enabled_locally = getattr(get_flags(), "MANAGE_STATE", False) or False
     configured = client.is_state_configured()
 
     if configured and not state_enabled_locally:
-        set_user_setting_flag("manage_state", True)
-        fire_event(Note(msg="dbt State is available for your account — enabled locally."))
+        confirmed = click.confirm(
+            "Looks like dbt State is enabled for your dbt platform account. "
+            "Enable state on this machine by default, for faster and cheaper builds? "
+            "You can always change this configuration in ~/.dbt/user_settings.yml",
+            default=True,
+        )
+        if confirmed:
+            set_user_setting_flag("manage_state", True)
+        else:
+            fire_event(
+                Note(
+                    msg="If you want to enable dbt State in the future, "
+                    "you can modify ~/.dbt/user_settings.yml"
+                )
+            )
     elif not configured and state_enabled_locally:
         fire_event(
             Note(
                 msg=(
-                    "Looks like dbt State is enabled on this machine but not in your dbt platform "
-                    "account. To enable State in your platform account, see docs: "
+                    "Looks like dbt State is enabled on this machine but not in your "
+                    "dbt platform account. To enable State in your platform account, see docs: "
                     "https://docs.getdbt.com/docs/deploy/dbt-state-setup"
                 )
             )
         )
-
-    fire_event(Note(msg="Sign in successful."))

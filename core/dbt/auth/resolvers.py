@@ -40,10 +40,10 @@ from dbt.exceptions import (
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 
-AUTH_SERVER_URL = "https://us2.staging.dbt.com/register"
+AUTH_SERVER_URL = "https://us1.dbt.com/register"
 INTERACTIVE_TIMEOUT = 600  # 10 minutes
 OAUTH_CLIENT_ID = "854ad54c885f03bbe6ca7eb1e75593fb"
-OAUTH_SCOPES = "identity:read offline_access"
+OAUTH_SCOPES = "account:read identity:read offline_access"
 
 
 class ResolverKind(Enum):
@@ -314,7 +314,10 @@ class OAuthInteractiveResolver:
         state_ctx = build_state_oauth_context(redirect_url)
         server.state_oauth_state = state_ctx["state"]
 
-        auth_url = platform_ctx["authorize_url"] + f"&dbt_state_oauth={state_ctx['encoded_param']}"
+        auth_url = (
+            platform_ctx["authorize_url"]
+            + f"&dbt_state_oauth={state_ctx['encoded_param']}&_dbtsrc=dbt-core"
+        )
 
         server.timeout = self.timeout
 
