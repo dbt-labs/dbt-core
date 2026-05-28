@@ -73,24 +73,29 @@ pub(crate) fn render_this(template: &str, rendered_relation: &str) -> String {
 /// `SELECT max({field}) FROM {relation}` for `FreshnessOverride::Field`,
 /// then defensively downcasts the first column over the common timestamp
 /// precisions (Snowflake returns ms, BigQuery micros, etc.).
-pub(crate) fn run_override_query(
-    adapter: &AdapterImpl,
-    conn: &mut dyn Connection,
+pub(crate) fn freshness_override_sql(
     relation: &Arc<dyn BaseRelation>,
     ovr: &FreshnessOverride,
-    token: CancellationToken,
-) -> AdapterResult<FreshnessTaskResult> {
-    let semantic_fqn = relation.semantic_fqn();
+) -> String {
     let rendered_relation = relation.render_self_as_str();
-    let sql = match ovr {
+    match ovr {
         FreshnessOverride::Query(query) => render_this(query, &rendered_relation),
         FreshnessOverride::Field(field) => format!(
             "SELECT max({}) AS last_modified FROM {}",
             field, rendered_relation
         ),
-    };
+    }
+}
+
+pub(crate) fn run_override_sql(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    semantic_fqn: String,
+    sql: &str,
+    token: CancellationToken,
+) -> AdapterResult<FreshnessTaskResult> {
     let ctx = QueryCtx::default().with_desc("Source freshness override (loaded_at_field/query)");
-    let (_resp, agate_table) = adapter.query(&ctx, conn, &sql, None, token)?;
+    let (_resp, agate_table) = adapter.query(&ctx, conn, sql, None, token)?;
     let batch = agate_table.original_record_batch();
     if batch.num_rows() == 0 || batch.num_columns() == 0 {
         return Ok(FreshnessTaskResult::Override(semantic_fqn, None));
@@ -117,6 +122,18 @@ pub(crate) fn run_override_query(
         ));
     };
     Ok(FreshnessTaskResult::Override(semantic_fqn, Some(epoch_ms)))
+}
+
+pub(crate) fn run_override_query(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    relation: &Arc<dyn BaseRelation>,
+    ovr: &FreshnessOverride,
+    token: CancellationToken,
+) -> AdapterResult<FreshnessTaskResult> {
+    let semantic_fqn = relation.semantic_fqn();
+    let sql = freshness_override_sql(relation, ovr);
+    run_override_sql(adapter, conn, semantic_fqn, &sql, token)
 }
 
 /// Merge one `FreshnessTaskResult` into a freshness accumulator. Use as the

@@ -2,7 +2,8 @@ use crate::adapter::adapter_impl::*;
 use crate::connection::AdapterConnectionFactory;
 use crate::metadata::FreshnessOverride;
 use crate::metadata::freshness_overrides::{
-    FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
+    FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, freshness_override_sql,
+    run_override_sql,
 };
 use crate::metadata::{CatalogAndSchema, *};
 use crate::record_batch::RecordBatchExt;
@@ -28,12 +29,112 @@ use minijinja::State;
 use once_cell::sync::Lazy;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::Display;
 use std::sync::Arc;
 
 /// Detect a `CREATE [<modifiers>] TABLE <name>` DDL.
 ///
 /// Used to filter out tables from `GET_DDL('VIEW', ...)` results, since
 /// Snowflake returns `CREATE TABLE` for tables instead of an error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SnowflakeMetadataQueryPlan {
+    statements: Vec<String>,
+}
+
+const SNOWFLAKE_METADATA_NODE_ID: &str = "snowflake-metadata";
+
+fn metadata_warehouse_error(err: impl Display) -> AdapterError {
+    AdapterError::new(AdapterErrorKind::Configuration, err.to_string())
+}
+
+fn with_metadata_warehouse_steps<T, C: ?Sized>(
+    ctx: &mut C,
+    metadata_warehouse: Option<&str>,
+    use_warehouse: impl FnOnce(&mut C, &str) -> AdapterResult<()>,
+    run_metadata: impl FnOnce(&mut C) -> AdapterResult<T>,
+    restore_warehouse: impl FnOnce(&mut C) -> AdapterResult<()>,
+) -> AdapterResult<T> {
+    let Some(warehouse) = metadata_warehouse.filter(|warehouse| !warehouse.is_empty()) else {
+        return run_metadata(ctx);
+    };
+
+    use_warehouse(ctx, warehouse)?;
+
+    let result = run_metadata(ctx);
+    let restore_result = restore_warehouse(ctx);
+
+    result.and_then(|value| restore_result.map(|()| value))
+}
+
+fn with_metadata_warehouse<T>(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    metadata_warehouse: Option<&str>,
+    token: &CancellationToken,
+    f: impl FnOnce(&mut dyn Connection) -> AdapterResult<T>,
+) -> AdapterResult<T> {
+    with_metadata_warehouse_steps(
+        conn,
+        metadata_warehouse,
+        |conn, warehouse| {
+            adapter
+                .use_warehouse(
+                    conn,
+                    warehouse.to_string(),
+                    SNOWFLAKE_METADATA_NODE_ID,
+                    token.clone(),
+                )
+                .map_err(metadata_warehouse_error)
+        },
+        |conn| f(conn),
+        |conn| {
+            adapter
+                .restore_warehouse(conn, SNOWFLAKE_METADATA_NODE_ID, token.clone())
+                .map_err(metadata_warehouse_error)
+        },
+    )
+}
+
+fn snowflake_metadata_query_plan(
+    metadata_sql: &str,
+    metadata_warehouse: Option<&str>,
+) -> SnowflakeMetadataQueryPlan {
+    let mut statements = Vec::new();
+    if let Some(warehouse) = metadata_warehouse.filter(|warehouse| !warehouse.is_empty()) {
+        statements.push(format!("use warehouse {warehouse}"));
+    }
+    statements.push(metadata_sql.to_string());
+
+    SnowflakeMetadataQueryPlan { statements }
+}
+
+fn snowflake_freshness_override_query_plan(
+    metadata_sql: &str,
+    metadata_warehouse: Option<&str>,
+) -> SnowflakeMetadataQueryPlan {
+    snowflake_metadata_query_plan(metadata_sql, metadata_warehouse)
+}
+
+fn snowflake_list_relations_query_plan(
+    metadata_warehouse: Option<&str>,
+) -> SnowflakeMetadataQueryPlan {
+    snowflake_metadata_query_plan("list_relations", metadata_warehouse)
+}
+
+fn snowflake_freshness_sql(database: &str, where_clauses: &[String]) -> String {
+    format!(
+        "SELECT
+                table_schema,
+                table_name,
+                last_altered,
+                (table_type = 'VIEW' OR table_type = 'MATERIALIZED VIEW') AS is_view
+             FROM {}.INFORMATION_SCHEMA.TABLES
+             WHERE {}",
+        database,
+        where_clauses.join(" OR ")
+    )
+}
+
 fn is_table_ddl(ddl: &str) -> bool {
     static TABLE_REGEX: Lazy<fancy_regex::Regex> = Lazy::new(|| {
         fancy_regex::Regex::new(
@@ -262,6 +363,287 @@ impl SnowflakeMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
         let adapter = AdapterImpl::new(engine, None);
         Self { adapter }
+    }
+
+    fn freshness_inner_with_options(
+        &self,
+        relations: &[Arc<dyn BaseRelation>],
+        options: &MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
+        // Build the where clause for all relations grouped by databases
+        let (where_clauses_by_database, relations_by_database) =
+            match build_relation_clauses(relations) {
+                Ok(result) => result,
+                Err(e) => {
+                    let future = async move { Err(Cancellable::Error(e)) };
+                    return Box::pin(future);
+                }
+            };
+
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let metadata_warehouse = options.warehouse.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          database_and_where_clauses: &(String, Vec<String>)|
+              -> AdapterResult<Arc<RecordBatch>> {
+            with_metadata_warehouse(
+                &adapter,
+                conn,
+                metadata_warehouse.as_deref(),
+                &token_clone,
+                |conn| {
+                    let (database, where_clauses) = &database_and_where_clauses;
+                    let sql = snowflake_freshness_sql(database, where_clauses);
+
+                    let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
+                    let metadata_sql = plan
+                        .statements
+                        .last()
+                        .expect("metadata query plan always includes metadata SQL");
+
+                    let ctx = QueryCtx::default()
+                        .with_desc("Extracting freshness from information schema");
+                    let (_adapter_response, agate_table) =
+                        adapter.query(&ctx, conn, metadata_sql, None, token_clone.clone())?;
+                    let batch = agate_table.original_record_batch();
+                    Ok(batch)
+                },
+            )
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             database_and_where_clauses: (String, Vec<String>),
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+            let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+
+            let (database, _where_clauses) = &database_and_where_clauses;
+            for i in 0..batch.num_rows() {
+                let schema = schemas.value(i);
+                let table = tables.value(i);
+                let timestamp = timestamps.value(i);
+                let relations = &relations_by_database[database];
+                let is_view = is_views.value(i);
+
+                for table_name in find_matching_relation(schema, table, relations)? {
+                    acc.insert(
+                        table_name,
+                        MetadataFreshness::from_millis(timestamp, is_view)?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
+        map_reduce.run(Arc::new(keys), token)
+    }
+
+    fn freshness_with_overrides_inner_with_options(
+        &self,
+        relations: &[Arc<dyn BaseRelation>],
+        overrides: &BTreeMap<String, FreshnessOverride>,
+        options: &MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness_inner_with_options(relations, options, token);
+        }
+
+        // Partition relations: those with overrides run their own targeted query;
+        // the rest go through the existing bulk INFORMATION_SCHEMA path.
+        let mut override_targets = Vec::new();
+        let mut bulk_relations = Vec::new();
+        for relation in relations {
+            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
+                override_targets.push((Arc::clone(relation), ovr.clone()));
+            } else {
+                bulk_relations.push(Arc::clone(relation));
+            }
+        }
+
+        let engine = self.adapter.engine().clone();
+        let threads = engine.threads();
+
+        // Run the bulk and per-override queries through one MapReduce pass so
+        // they share the same connection-factory threadpool — same parallelism
+        // model as the plugin.
+        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
+        if !bulk_relations.is_empty() {
+            tasks.push(FreshnessTask::Bulk(bulk_relations));
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(FreshnessTask::Override(relation, ovr));
+        }
+
+        let token_clone = token.clone();
+        let adapter_for_map = self.adapter.clone();
+        let metadata_warehouse = options.warehouse.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          task: &FreshnessTask|
+              -> AdapterResult<FreshnessTaskResult> {
+            with_metadata_warehouse(
+                &adapter_for_map,
+                conn,
+                metadata_warehouse.as_deref(),
+                &token_clone,
+                |conn| match task {
+                    FreshnessTask::Bulk(bulk) => {
+                        let (where_clauses_by_database, relations_by_database) =
+                            build_relation_clauses(bulk)?;
+                        let mut acc: Acc = BTreeMap::new();
+                        for (database, where_clauses) in where_clauses_by_database {
+                            let sql = snowflake_freshness_sql(&database, &where_clauses);
+                            let plan =
+                                snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
+                            let metadata_sql = plan
+                                .statements
+                                .last()
+                                .expect("metadata query plan always includes metadata SQL");
+                            let ctx = QueryCtx::default()
+                                .with_desc("Extracting freshness from information schema");
+                            let (_resp, agate_table) = adapter_for_map.query(
+                                &ctx,
+                                conn,
+                                metadata_sql,
+                                None,
+                                token_clone.clone(),
+                            )?;
+                            let batch = agate_table.original_record_batch();
+                            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+                            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+                            let timestamps =
+                                batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+                            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+                            let relations = &relations_by_database[&database];
+                            for i in 0..batch.num_rows() {
+                                let schema = schemas.value(i);
+                                let table = tables.value(i);
+                                let timestamp = timestamps.value(i);
+                                let is_view = is_views.value(i);
+                                for table_name in find_matching_relation(schema, table, relations)?
+                                {
+                                    acc.insert(
+                                        table_name,
+                                        MetadataFreshness::from_millis(timestamp, is_view)?,
+                                    );
+                                }
+                            }
+                        }
+                        Ok(FreshnessTaskResult::Bulk(acc))
+                    }
+                    FreshnessTask::Override(relation, ovr) => {
+                        let semantic_fqn = relation.semantic_fqn();
+                        let sql = freshness_override_sql(relation, ovr);
+                        let plan = snowflake_freshness_override_query_plan(
+                            &sql,
+                            metadata_warehouse.as_deref(),
+                        );
+                        let metadata_sql = plan
+                            .statements
+                            .last()
+                            .expect("metadata query plan always includes metadata SQL");
+                        run_override_sql(
+                            &adapter_for_map,
+                            conn,
+                            semantic_fqn,
+                            metadata_sql,
+                            token_clone.clone(),
+                        )
+                    }
+                },
+            )
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             _task: FreshnessTask,
+                             res: AdapterResult<FreshnessTaskResult>|
+              -> Result<(), Cancellable<AdapterError>> {
+            apply_freshness_task_result(acc, res?)?;
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(tasks), token)
+    }
+
+    fn list_relations_in_parallel_inner_with_options(
+        &self,
+        db_schemas: &[CatalogAndSchema],
+        options: &MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
+        type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let metadata_warehouse = options.warehouse.clone();
+
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          db_schema: &CatalogAndSchema|
+              -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+            with_metadata_warehouse(
+                &adapter,
+                conn,
+                metadata_warehouse.as_deref(),
+                &token_clone,
+                |conn| {
+                    let plan = snowflake_list_relations_query_plan(metadata_warehouse.as_deref());
+                    let _metadata_operation = plan
+                        .statements
+                        .last()
+                        .expect("metadata query plan always includes metadata operation");
+                    let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
+                    adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
+                },
+            )
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             db_schema: CatalogAndSchema,
+                             relations: AdapterResult<Vec<Arc<dyn BaseRelation>>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            match relations {
+                Ok(relations) => {
+                    acc.insert(db_schema, Ok(relations));
+                    Ok(())
+                }
+                Err(e) => {
+                    // Empty schema error code - no relations in this schema
+                    // XXX: The AdapterError struct is not properly being built at the moment, rely on string search for now
+                    if e.message().contains("Object does not exist") {
+                        acc.insert(db_schema, Ok(Vec::new()));
+                        Ok(())
+                    } else {
+                        // Other errors should be propagated
+                        Err(Cancellable::Error(e))
+                    }
+                }
+            }
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 }
 
@@ -741,80 +1123,16 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        // Build the where clause for all relations grouped by databases
-        let (where_clauses_by_database, relations_by_database) =
-            match build_relation_clauses(relations) {
-                Ok(result) => result,
-                Err(e) => {
-                    let future = async move { Err(Cancellable::Error(e)) };
-                    return Box::pin(future);
-                }
-            };
+        self.freshness_inner_with_options(relations, &MetadataQueryOptions::default(), token)
+    }
 
-        type Acc = BTreeMap<String, MetadataFreshness>;
-
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
-
-        let adapter = self.adapter.clone();
-        let token_clone = token.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          database_and_where_clauses: &(String, Vec<String>)|
-              -> AdapterResult<Arc<RecordBatch>> {
-            let (database, where_clauses) = &database_and_where_clauses;
-            // Query to get last modified times
-            let sql = format!(
-                "SELECT
-                table_schema,
-                table_name,
-                last_altered,
-                (table_type = 'VIEW' OR table_type = 'MATERIALIZED VIEW') AS is_view
-             FROM {}.INFORMATION_SCHEMA.TABLES
-             WHERE {}",
-                database,
-                where_clauses.join(" OR ")
-            );
-
-            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) =
-                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
-            let batch = agate_table.original_record_batch();
-            Ok(batch)
-        };
-
-        let reduce_f = move |acc: &mut Acc,
-                             database_and_where_clauses: (String, Vec<String>),
-                             batch_res: AdapterResult<Arc<RecordBatch>>|
-              -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
-            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
-            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
-            let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
-            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
-
-            let (database, _where_clauses) = &database_and_where_clauses;
-            for i in 0..batch.num_rows() {
-                let schema = schemas.value(i);
-                let table = tables.value(i);
-                let timestamp = timestamps.value(i);
-                let relations = &relations_by_database[database];
-                let is_view = is_views.value(i);
-
-                for table_name in find_matching_relation(schema, table, relations)? {
-                    acc.insert(
-                        table_name,
-                        MetadataFreshness::from_millis(timestamp, is_view)?,
-                    );
-                }
-            }
-            Ok(())
-        };
-
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        map_reduce.run(Arc::new(keys), token)
+    fn freshness_with_options<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        self.freshness_inner_with_options(relations, options, token)
     }
 
     /// Honors per-source `loaded_at_field` / `loaded_at_query` config. Mirrors the
@@ -828,108 +1146,22 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         overrides: &'a BTreeMap<String, FreshnessOverride>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        if overrides.is_empty() {
-            return self.freshness(relations, token);
-        }
+        self.freshness_with_overrides_inner_with_options(
+            relations,
+            overrides,
+            &MetadataQueryOptions::default(),
+            token,
+        )
+    }
 
-        // Partition relations: those with overrides run their own targeted query;
-        // the rest go through the existing bulk INFORMATION_SCHEMA path.
-        let mut override_targets = Vec::new();
-        let mut bulk_relations = Vec::new();
-        for relation in relations {
-            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
-                override_targets.push((Arc::clone(relation), ovr.clone()));
-            } else {
-                bulk_relations.push(Arc::clone(relation));
-            }
-        }
-
-        let engine = self.adapter.engine().clone();
-        let threads = engine.threads();
-
-        // Run the bulk and per-override queries through one MapReduce pass so
-        // they share the same connection-factory threadpool — same parallelism
-        // model as the plugin.
-        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
-        type Acc = BTreeMap<String, MetadataFreshness>;
-
-        let mut tasks: Vec<FreshnessTask> = Vec::new();
-        if !bulk_relations.is_empty() {
-            tasks.push(FreshnessTask::Bulk(bulk_relations));
-        }
-        for (relation, ovr) in override_targets {
-            tasks.push(FreshnessTask::Override(relation, ovr));
-        }
-
-        let token_clone = token.clone();
-        let adapter_for_map = self.adapter.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          task: &FreshnessTask|
-              -> AdapterResult<FreshnessTaskResult> {
-            match task {
-                FreshnessTask::Bulk(bulk) => {
-                    let (where_clauses_by_database, relations_by_database) =
-                        build_relation_clauses(bulk)?;
-                    let mut acc: Acc = BTreeMap::new();
-                    for (database, where_clauses) in where_clauses_by_database {
-                        let sql = format!(
-                            "SELECT
-                            table_schema,
-                            table_name,
-                            last_altered,
-                            (table_type = 'VIEW' OR table_type = 'MATERIALIZED VIEW') AS is_view
-                         FROM {}.INFORMATION_SCHEMA.TABLES
-                         WHERE {}",
-                            database,
-                            where_clauses.join(" OR ")
-                        );
-                        let ctx = QueryCtx::default()
-                            .with_desc("Extracting freshness from information schema");
-                        let (_resp, agate_table) = adapter_for_map.query(
-                            &ctx,
-                            &mut *conn,
-                            &sql,
-                            None,
-                            token_clone.clone(),
-                        )?;
-                        let batch = agate_table.original_record_batch();
-                        let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
-                        let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
-                        let timestamps =
-                            batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
-                        let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
-                        let relations = &relations_by_database[&database];
-                        for i in 0..batch.num_rows() {
-                            let schema = schemas.value(i);
-                            let table = tables.value(i);
-                            let timestamp = timestamps.value(i);
-                            let is_view = is_views.value(i);
-                            for table_name in find_matching_relation(schema, table, relations)? {
-                                acc.insert(
-                                    table_name,
-                                    MetadataFreshness::from_millis(timestamp, is_view)?,
-                                );
-                            }
-                        }
-                    }
-                    Ok(FreshnessTaskResult::Bulk(acc))
-                }
-                FreshnessTask::Override(relation, ovr) => {
-                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
-                }
-            }
-        };
-
-        let reduce_f = move |acc: &mut Acc,
-                             _task: FreshnessTask,
-                             res: AdapterResult<FreshnessTaskResult>|
-              -> Result<(), Cancellable<AdapterError>> {
-            apply_freshness_task_result(acc, res?)?;
-            Ok(())
-        };
-
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        map_reduce.run(Arc::new(tasks), token)
+    fn freshness_with_overrides_and_options<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        self.freshness_with_overrides_inner_with_options(relations, overrides, options, token)
     }
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-snowflake/src/dbt/include/snowflake/macros/metadata/list_relations_without_caching.sql
@@ -938,47 +1170,52 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         db_schemas: &[CatalogAndSchema],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
-        type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        self.list_relations_in_parallel_inner_with_options(
+            db_schemas,
+            &MetadataQueryOptions::default(),
+            token,
+        )
+    }
 
-        let adapter = self.adapter.clone();
-        let token_clone = token.clone();
+    fn relations_exist_with_options<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, bool>> {
+        let db_schemas = relations
+            .iter()
+            .map(CatalogAndSchema::from)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
 
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          db_schema: &CatalogAndSchema|
-              -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
-            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
-        };
+        let future = async move {
+            let listed = self
+                .list_relations_in_parallel_inner_with_options(&db_schemas, options, token)
+                .await?;
+            let mut result = BTreeMap::new();
 
-        let reduce_f = move |acc: &mut Acc,
-                             db_schema: CatalogAndSchema,
-                             relations: AdapterResult<Vec<Arc<dyn BaseRelation>>>|
-              -> Result<(), Cancellable<AdapterError>> {
-            match relations {
-                Ok(relations) => {
-                    acc.insert(db_schema, Ok(relations));
-                    Ok(())
-                }
-                Err(e) => {
-                    // Empty schema error code - no relations in this schema
-                    // XXX: The AdapterError struct is not properly being built at the moment, rely on string search for now
-                    if e.message().contains("Object does not exist") {
-                        acc.insert(db_schema, Ok(Vec::new()));
-                        Ok(())
-                    } else {
-                        // Other errors should be propagated
-                        Err(Cancellable::Error(e))
-                    }
-                }
+            for relation in relations {
+                let semantic_fqn = relation.semantic_fqn();
+                let catalog_schema = CatalogAndSchema::from(relation);
+                let Some(schema_relations) = listed.get(&catalog_schema) else {
+                    result.insert(semantic_fqn, false);
+                    continue;
+                };
+
+                let schema_relations = schema_relations.as_ref().map_err(|err| {
+                    Cancellable::Error(AdapterError::new(err.kind(), err.message().to_string()))
+                })?;
+                let exists = schema_relations
+                    .iter()
+                    .any(|candidate| candidate.semantic_fqn() == semantic_fqn);
+                result.insert(semantic_fqn, exists);
             }
-        };
 
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        map_reduce.run(Arc::new(db_schemas.to_vec()), token)
+            Ok(result)
+        };
+        Box::pin(future)
     }
 
     fn is_permission_error(&self, e: &AdapterError) -> bool {
@@ -1229,6 +1466,10 @@ fn build_schemas_from_information_schema(
 mod tests {
     use super::*;
 
+    fn test_adapter_error(message: &str) -> AdapterError {
+        AdapterError::new(AdapterErrorKind::UnexpectedResult, message)
+    }
+
     #[test]
     fn is_table_ddl_recognizes_create_table() {
         assert!(is_table_ddl("CREATE TABLE foo (x INT)"));
@@ -1290,6 +1531,161 @@ mod tests {
         assert!(!is_table_ddl(
             "CREATE MATERIALIZED VIEW foo AS SELECT * FROM bar"
         ));
+    }
+
+    #[test]
+    fn snowflake_metadata_query_plan_uses_metadata_warehouse_before_query() {
+        let options = MetadataQueryOptions {
+            warehouse: Some("metadata_wh".to_string()),
+        };
+        let metadata_sql = "select * from db.information_schema.tables";
+
+        let plan = snowflake_metadata_query_plan(metadata_sql, options.warehouse.as_deref());
+
+        assert_eq!(
+            plan.statements,
+            vec![
+                "use warehouse metadata_wh".to_string(),
+                "select * from db.information_schema.tables".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn snowflake_freshness_override_query_plan_uses_metadata_warehouse_before_query() {
+        let options = MetadataQueryOptions {
+            warehouse: Some("metadata_wh".to_string()),
+        };
+        let metadata_sql = "select max(loaded_at) as last_modified from raw.events";
+
+        let plan =
+            snowflake_freshness_override_query_plan(metadata_sql, options.warehouse.as_deref());
+
+        assert_eq!(
+            plan.statements,
+            vec![
+                "use warehouse metadata_wh".to_string(),
+                "select max(loaded_at) as last_modified from raw.events".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn snowflake_list_relations_query_plan_uses_metadata_warehouse_before_listing() {
+        let options = MetadataQueryOptions {
+            warehouse: Some("metadata_wh".to_string()),
+        };
+
+        let plan = snowflake_list_relations_query_plan(options.warehouse.as_deref());
+
+        assert_eq!(
+            plan.statements,
+            vec![
+                "use warehouse metadata_wh".to_string(),
+                "list_relations".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn with_metadata_warehouse_steps_restores_after_metadata_query() {
+        let mut statements = Vec::new();
+
+        let result: AdapterResult<&str> = with_metadata_warehouse_steps(
+            &mut statements,
+            Some("metadata_wh"),
+            |statements, warehouse| {
+                statements.push(format!("use warehouse {warehouse}"));
+                Ok(())
+            },
+            |statements| {
+                statements.push("select * from db.information_schema.tables".to_string());
+                Ok("value")
+            },
+            |statements| {
+                statements.push("use warehouse compute_wh".to_string());
+                Ok(())
+            },
+        );
+
+        assert_eq!(result.unwrap(), "value");
+        assert_eq!(
+            statements,
+            vec![
+                "use warehouse metadata_wh".to_string(),
+                "select * from db.information_schema.tables".to_string(),
+                "use warehouse compute_wh".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn with_metadata_warehouse_steps_restores_after_metadata_query_error() {
+        let mut statements = Vec::new();
+
+        let result: AdapterResult<&str> = with_metadata_warehouse_steps(
+            &mut statements,
+            Some("metadata_wh"),
+            |statements, warehouse| {
+                statements.push(format!("use warehouse {warehouse}"));
+                Ok(())
+            },
+            |statements| {
+                statements.push("select * from db.information_schema.tables".to_string());
+                Err(AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    "metadata query failed",
+                ))
+            },
+            |statements| {
+                statements.push("use warehouse compute_wh".to_string());
+                Ok(())
+            },
+        );
+
+        let err = result.unwrap_err();
+        assert_eq!(err.message(), "metadata query failed");
+        assert_eq!(
+            statements,
+            vec![
+                "use warehouse metadata_wh".to_string(),
+                "select * from db.information_schema.tables".to_string(),
+                "use warehouse compute_wh".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn with_metadata_warehouse_steps_returns_metadata_error_when_restore_also_fails() {
+        let mut statements = Vec::new();
+
+        let err = with_metadata_warehouse_steps::<&str, _>(
+            &mut statements,
+            Some("metadata_wh"),
+            |statements, warehouse| {
+                statements.push(format!("use warehouse {warehouse}"));
+                Ok(())
+            },
+            |statements| {
+                statements.push("select * from db.information_schema.tables".to_string());
+                Err(test_adapter_error("metadata query failed"))
+            },
+            |statements| {
+                statements.push("use warehouse compute_wh".to_string());
+                Err(test_adapter_error("restore failed"))
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.message(), "metadata query failed");
+        assert_eq!(
+            statements,
+            vec![
+                "use warehouse metadata_wh".to_string(),
+                "select * from db.information_schema.tables".to_string(),
+                "use warehouse compute_wh".to_string(),
+            ]
+        );
     }
 
     #[test]

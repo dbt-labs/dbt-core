@@ -19,9 +19,8 @@ use crate::runnable::run_cache::run_cache_request::{
     snapshot_clone_table_properties, snapshot_execution_type_input,
 };
 use crate::runnable::run_cache::run_cache_service::{
-    RUN_CACHE_METADATA_WAREHOUSE_NODE_ID, RunCacheCloneDecision,
-    confirm_run_cache_service_execution, execute_run_cache_service_clone,
-    snowflake_metadata_warehouse,
+    RunCacheCloneDecision, confirm_run_cache_service_execution, execute_run_cache_service_clone,
+    run_cache_metadata_query_options,
 };
 use dbt_tasks_core::context::TaskRunnerCtx;
 
@@ -193,27 +192,8 @@ fn state_pre_clone_to_policy(pre_clone: StatePreClone) -> CloneIncrementalInDev 
     }
 }
 
-fn use_metadata_warehouse(ctx: &TaskRunnerCtx) -> Option<bool> {
-    let adapter = ctx.env.get_adapter_ref()?;
-    match adapter.use_warehouse(
-        snowflake_metadata_warehouse(ctx),
-        RUN_CACHE_METADATA_WAREHOUSE_NODE_ID,
-    ) {
-        Ok(override_warehouse) => Some(override_warehouse),
-        Err(err) => {
-            emit_trace_log_message(|| format!("dbt State metadata warehouse switch failed: {err}"));
-            None
-        }
-    }
-}
-
-fn restore_metadata_warehouse(ctx: &TaskRunnerCtx) {
-    let Some(adapter) = ctx.env.get_adapter_ref() else {
-        return;
-    };
-    if let Err(err) = adapter.restore_warehouse(RUN_CACHE_METADATA_WAREHOUSE_NODE_ID) {
-        emit_trace_log_message(|| format!("dbt State metadata warehouse restore failed: {err}"));
-    }
+fn dev_clone_metadata_probes_use_options_aware_methods() -> bool {
+    true
 }
 
 enum DevCloneCandidate {
@@ -458,13 +438,21 @@ async fn fetch_relation_exists(
     let metadata_adapter = adapter.metadata_adapter()?;
 
     let semantic_fqn = relation.semantic_fqn();
-    let override_warehouse = use_metadata_warehouse(ctx)?;
-    let existence_result = metadata_adapter
-        .relations_exist(&[relation], adapter.cancellation_token())
-        .await;
-    if override_warehouse {
-        restore_metadata_warehouse(ctx);
-    }
+    let relations = [relation];
+    let metadata_options = run_cache_metadata_query_options(ctx);
+    let existence_result = if dev_clone_metadata_probes_use_options_aware_methods() {
+        metadata_adapter
+            .relations_exist_with_options(
+                &relations,
+                &metadata_options,
+                adapter.cancellation_token(),
+            )
+            .await
+    } else {
+        metadata_adapter
+            .relations_exist(&relations, adapter.cancellation_token())
+            .await
+    };
     let existence = match existence_result {
         Ok(m) => m,
         Err(err) => {
@@ -504,13 +492,17 @@ async fn last_modified_epoch(
     let metadata_adapter = adapter.metadata_adapter()?;
 
     let semantic_fqn = relation.semantic_fqn();
-    let override_warehouse = use_metadata_warehouse(ctx)?;
-    let freshness = metadata_adapter
-        .freshness(&[relation], adapter.cancellation_token())
-        .await;
-    if override_warehouse {
-        restore_metadata_warehouse(ctx);
-    }
+    let relations = [relation];
+    let metadata_options = run_cache_metadata_query_options(ctx);
+    let freshness = if dev_clone_metadata_probes_use_options_aware_methods() {
+        metadata_adapter
+            .freshness_with_options(&relations, &metadata_options, adapter.cancellation_token())
+            .await
+    } else {
+        metadata_adapter
+            .freshness(&relations, adapter.cancellation_token())
+            .await
+    };
     let epoch = match freshness {
         Ok(freshness) => freshness
             .get(&semantic_fqn)
@@ -563,6 +555,11 @@ mod tests {
     };
     use dbt_yaml::Spanned;
     use indexmap::IndexMap;
+
+    #[test]
+    fn dev_clone_metadata_probes_use_options_aware_adapter_methods() {
+        assert!(dev_clone_metadata_probes_use_options_aware_methods());
+    }
 
     #[test]
     fn dev_clone_candidate_uses_model_state_pre_clone_policy() {

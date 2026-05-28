@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{Cancellable, into_fs_error};
-use dbt_adapter::metadata::FreshnessOverride;
+use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
 use dbt_adapter::relation::{create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
 use dbt_adapter_core::AdapterType;
@@ -54,8 +54,6 @@ use crate::runnable::run_cache::run_cache_request::{
     build_seed_values_request, build_snapshot_sql_request, build_test_sql_request, node_identity,
 };
 use crate::task::TaskResult;
-
-pub const RUN_CACHE_METADATA_WAREHOUSE_NODE_ID: &str = "dbt-state-metadata";
 
 pub fn collect_upstream_hashes(ctx: &TaskRunnerCtx, unique_id: &str) -> HashMap<String, String> {
     ctx.inner
@@ -1416,31 +1414,28 @@ fn stale_upstream_policy_for_node(
     }
 }
 
-pub fn snowflake_metadata_warehouse(ctx: &TaskRunnerCtx) -> Option<String> {
+fn metadata_query_options_for_warehouses(
+    profile_warehouse: Option<String>,
+    legacy_service_warehouse: Option<String>,
+) -> MetadataQueryOptions {
+    MetadataQueryOptions {
+        warehouse: profile_warehouse.or(legacy_service_warehouse),
+    }
+}
+
+pub(crate) fn run_cache_metadata_query_options(ctx: &TaskRunnerCtx) -> MetadataQueryOptions {
     let profile_warehouse = match &ctx.dbt_profile().db_config {
         DbConfig::Snowflake(config) => config.metadata_warehouse.clone(),
         _ => None,
     };
-    profile_warehouse.or_else(|| {
-        ctx.inner
-            .run_cache_ctx
-            .run_cache_service_config
-            .as_ref()
-            .and_then(|config| config.snowflake_metadata_warehouse.clone())
-    })
-}
+    let legacy_service_warehouse = ctx
+        .inner
+        .run_cache_ctx
+        .run_cache_service_config
+        .as_ref()
+        .and_then(|config| config.snowflake_metadata_warehouse.clone());
 
-fn use_metadata_warehouse(ctx: &TaskRunnerCtx, adapter: &dbt_adapter::Adapter) -> FsResult<bool> {
-    adapter.use_warehouse(
-        snowflake_metadata_warehouse(ctx),
-        RUN_CACHE_METADATA_WAREHOUSE_NODE_ID,
-    )
-}
-
-fn restore_metadata_warehouse(adapter: &dbt_adapter::Adapter) {
-    if let Err(err) = adapter.restore_warehouse(RUN_CACHE_METADATA_WAREHOUSE_NODE_ID) {
-        emit_trace_log_message(|| format!("dbt State metadata warehouse restore failed: {err}"));
-    }
+    metadata_query_options_for_warehouses(profile_warehouse, legacy_service_warehouse)
 }
 
 /// Returns deferred dependencies that should be treated leniently by the dbt
@@ -1752,14 +1747,16 @@ async fn refresh_last_modified_epochs(
             .map(|(name, relation)| (relation.semantic_fqn(), name.clone()))
             .collect::<BTreeMap<_, _>>();
         let relation_values = grouped_relations.values().cloned().collect::<Vec<_>>();
-        let override_warehouse = use_metadata_warehouse(ctx, adapter)?;
-        let freshness_result = metadata_adapter
-            .freshness_with_overrides(&relation_values, overrides, adapter.cancellation_token())
-            .await;
-        if override_warehouse {
-            restore_metadata_warehouse(adapter);
-        }
-        let freshness = freshness_result.map_err(into_fs_error)?;
+        let metadata_options = run_cache_metadata_query_options(ctx);
+        let freshness = metadata_adapter
+            .freshness_with_overrides_and_options(
+                &relation_values,
+                overrides,
+                &metadata_options,
+                adapter.cancellation_token(),
+            )
+            .await
+            .map_err(into_fs_error)?;
 
         for (semantic_fqn, name) in semantic_to_name {
             let epoch = freshness
@@ -2460,6 +2457,23 @@ mod tests {
             &RunCacheMode::ReadWrite,
             false
         ));
+    }
+
+    #[test]
+    fn metadata_query_options_prefers_profile_metadata_warehouse() {
+        let options = metadata_query_options_for_warehouses(
+            Some("profile_wh".to_string()),
+            Some("legacy_wh".to_string()),
+        );
+
+        assert_eq!(options.warehouse.as_deref(), Some("profile_wh"));
+    }
+
+    #[test]
+    fn metadata_query_options_falls_back_to_legacy_service_warehouse() {
+        let options = metadata_query_options_for_warehouses(None, Some("legacy_wh".to_string()));
+
+        assert_eq!(options.warehouse.as_deref(), Some("legacy_wh"));
     }
 
     #[test]

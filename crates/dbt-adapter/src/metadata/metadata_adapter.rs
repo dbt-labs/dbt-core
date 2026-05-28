@@ -27,6 +27,11 @@ use std::sync::Arc;
 
 // XXX: we should unify relation representation as Arrow schemas across the codebase
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MetadataQueryOptions {
+    pub warehouse: Option<String>,
+}
+
 /// Adapter that supports metadata query.
 ///
 /// # Recording Pattern
@@ -293,6 +298,15 @@ pub trait MetadataAdapter: Send + Sync {
         )
     }
 
+    fn freshness_with_options<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        _options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        self.freshness(relations, token)
+    }
+
     /// Get freshness of relations, honoring per-relation overrides
     /// (`loaded_at_field`, `loaded_at_query`).
     ///
@@ -312,6 +326,16 @@ pub trait MetadataAdapter: Send + Sync {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
         self.freshness(relations, token)
+    }
+
+    fn freshness_with_overrides_and_options<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        _options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        self.freshness_with_overrides(relations, overrides, token)
     }
 
     /// Check whether each relation exists, keyed by semantic FQN.
@@ -364,6 +388,15 @@ pub trait MetadataAdapter: Send + Sync {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, bool>> {
         self.relations_exist_inner(relations, token)
+    }
+
+    fn relations_exist_with_options<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        _options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, bool>> {
+        self.relations_exist(relations, token)
     }
 
     /// List relations in the specified [CatalogAndSchema] in parallel (implementation).
