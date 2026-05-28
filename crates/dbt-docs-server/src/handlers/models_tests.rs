@@ -96,6 +96,10 @@ struct MockBackend {
     scalar_result: Option<String>,
     arrow_result: Result<Vec<RecordBatch>, BackendError>,
     fail_if_sql_contains: Option<&'static str>,
+    /// When set, returned for SQL containing `"materialized AS value"` (the
+    /// materialization facets query). Allows `list_model_facets` tests to return
+    /// a different batch for owners vs. materializations within one spawn_blocking.
+    materialization_result: Option<Vec<RecordBatch>>,
 }
 
 impl MockBackend {
@@ -104,6 +108,7 @@ impl MockBackend {
             scalar_result: Some(count.to_string()),
             arrow_result: Ok(rows),
             fail_if_sql_contains: None,
+            materialization_result: None,
         }
     }
 
@@ -114,7 +119,13 @@ impl MockBackend {
             scalar_result: Some(count.to_string()),
             arrow_result: Ok(rows),
             fail_if_sql_contains: Some("run_results"),
+            materialization_result: None,
         }
+    }
+
+    fn with_materialization_facets(mut self, batches: Vec<RecordBatch>) -> Self {
+        self.materialization_result = Some(batches);
+        self
     }
 }
 
@@ -132,7 +143,13 @@ impl Backend for MockBackend {
         self.scalar_result.clone()
     }
 
-    fn query_arrow(&self, _sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+    fn query_arrow(&self, sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        // Materialization facets query — return fixture if set, else empty vec.
+        // Must route here (not fall through) to avoid "column 'value' missing" panics
+        // when the owners batch is returned for this query instead.
+        if sql.contains("materialized AS value") {
+            return Ok(self.materialization_result.clone().unwrap_or_default());
+        }
         match &self.arrow_result {
             Ok(batches) => Ok(batches.clone()),
             Err(e) => Err(BackendError::Query(e.to_string())),
@@ -1126,4 +1143,63 @@ async fn get_model_edges_extracted_into_depends_on_and_referenced_by() {
         assert_eq!(edges[0]["edge_type"], "ref");
         assert_eq!(edges[1]["unique_id"], "model.jaffle_shop.stg_payments");
     }
+}
+
+// ---------------------------------------------------------------------------
+// ?materialization= filter tests
+// ---------------------------------------------------------------------------
+
+fn value_batch(values: &[&str]) -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![Field::new("value", DataType::Utf8, true)]));
+    RecordBatch::try_new(schema, vec![Arc::new(StringArray::from(values.to_vec()))])
+        .expect("valid value batch")
+}
+
+#[tokio::test]
+async fn materialization_filter_narrows_results() {
+    let batch = all_fields_batch();
+    let backend = MockBackend::with_rows(1, vec![batch]);
+    let state = make_state(backend);
+    let params = ModelListParams {
+        materialization: Some("table".into()),
+        ..Default::default()
+    };
+    let response = list_models(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
+async fn materialization_filter_accepts_custom_value() {
+    // Custom materialization like "iceberg" must return 200, never 400.
+    let backend = MockBackend::with_rows(0, vec![]);
+    let state = make_state(backend);
+    let params = ModelListParams {
+        materialization: Some("iceberg".into()),
+        ..Default::default()
+    };
+    let response = list_models(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    assert_eq!(body["page_info"]["total_count"], 0);
+}
+
+#[tokio::test]
+async fn model_facets_returns_materializations() {
+    let owners_batch = RecordBatch::try_new(
+        Arc::new(Schema::new(vec![Field::new("owner", DataType::Utf8, true)])),
+        vec![Arc::new(StringArray::from(vec!["Data Team"]))],
+    )
+    .unwrap();
+    let mat_batch = value_batch(&["table", "view"]);
+    let backend =
+        MockBackend::with_rows(0, vec![owners_batch]).with_materialization_facets(vec![mat_batch]);
+    let state = make_state(backend);
+    let response = list_model_facets(State(state)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let mats = body["materializations"].as_array().unwrap();
+    assert_eq!(mats.len(), 2);
+    assert_eq!(mats[0]["value"], "table");
+    assert_eq!(mats[1]["value"], "view");
+    assert_eq!(mats[0]["count"], serde_json::Value::Null);
 }

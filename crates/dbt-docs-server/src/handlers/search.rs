@@ -215,6 +215,9 @@ pub struct SearchQueryParams {
     pub tag: Option<String>,
     /// Comma-separated modeling_layer filter.
     pub modeling_layer: Option<String>,
+    /// Comma-separated materialization filter (model-scoped). Any string accepted;
+    /// unknown values return empty results, never 400.
+    pub materialization: Option<String>,
     /// Page size — clamped to [1, SEARCH_MAX_PAGE_SIZE].
     pub first: Option<u32>,
     /// Opaque cursor from a prior page's `page_info.end_cursor`.
@@ -596,6 +599,19 @@ fn build_search_sql(
         }
         let ml_cond = modeling_layer_where(ml_raw);
         base_where_parts.push(format!("({ml_cond})"));
+    }
+
+    if let Some(mat) = params.materialization.as_deref().filter(|s| !s.is_empty()) {
+        let list = mat
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("'{}'", escape_str(s)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !list.is_empty() {
+            base_where_parts.push(format!("b.materialized IN ({list})"));
+        }
     }
 
     let base_where = if base_where_parts.is_empty() {
@@ -1053,6 +1069,16 @@ pub async fn search(
         requested_types.retain(|t| *t == ResourceType::Model);
     }
 
+    // materialization is model-only — intersect requested types to {Model}.
+    if params
+        .materialization
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .is_some()
+    {
+        requested_types.retain(|t| *t == ResourceType::Model);
+    }
+
     // Build SQL with freshness JOIN, fallback without.
     let sql_with = match build_search_sql(&params, &requested_types, true, first, cursor.as_ref()) {
         Ok(s) => s,
@@ -1160,6 +1186,230 @@ pub async fn search(
         },
     })
     .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/search/facets
+// ---------------------------------------------------------------------------
+
+/// A single facet value with a project-wide count of matching resources.
+#[derive(Serialize)]
+pub struct SearchFacetValue {
+    pub value: String,
+    pub count: u64,
+}
+
+impl SearchFacetValue {
+    fn new(value: impl Into<String>, count: u64) -> Self {
+        Self {
+            value: value.into(),
+            count,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct SearchFacetsResponse {
+    /// Distinct model access levels with resource counts.
+    pub accesses: Vec<SearchFacetValue>,
+    /// Distinct modeling layers (Staging/Intermediate/Marts) with model counts.
+    pub modeling_layers: Vec<SearchFacetValue>,
+    /// Distinct model materialization strategies with model counts.
+    pub materialization_types: Vec<SearchFacetValue>,
+    /// Distinct tag values across all taggable resource types with resource counts.
+    pub tags: Vec<SearchFacetValue>,
+    /// Distinct package names across all resource types with resource counts.
+    pub packages: Vec<SearchFacetValue>,
+}
+
+// SQL comment prefix `/* facets:* */` lets the mock backend in tests route
+// each query to the correct fixture batch without executing real SQL.
+// All queries return (value VARCHAR, cnt BIGINT).
+
+const SEARCH_FACETS_ACCESSES_SQL: &str = "\
+/* facets:access */ \
+SELECT access_level AS value, COUNT(*) AS cnt \
+FROM dbt.nodes \
+WHERE resource_type = 'model' AND access_level IS NOT NULL \
+GROUP BY access_level \
+ORDER BY value";
+
+/// Builds the modeling-layers facets SQL dynamically from LAYER_CONDITIONS so
+/// the query stays in sync with the filter validation logic above.
+fn search_facets_modeling_layers_sql() -> String {
+    let case_branches: Vec<String> = LAYER_CONDITIONS
+        .iter()
+        .map(|(name, cond)| {
+            // LAYER_CONDITIONS use `b.` alias (valid in search UNION CTEs).
+            // Strip the alias for this standalone query against dbt.nodes directly.
+            let cond_unaliased = cond.replace("b.", "");
+            format!("WHEN {cond_unaliased} THEN '{name}'")
+        })
+        .collect();
+    let case_expr = format!("CASE {} ELSE NULL END", case_branches.join(" "));
+    format!(
+        "/* facets:layers */ \
+         SELECT {case_expr} AS value, COUNT(*) AS cnt \
+         FROM dbt.nodes \
+         WHERE resource_type = 'model' \
+         GROUP BY value \
+         HAVING value IS NOT NULL \
+         ORDER BY value"
+    )
+}
+
+const SEARCH_FACETS_MATERIALIZATIONS_SQL: &str = "\
+/* facets:mat */ \
+SELECT materialized AS value, COUNT(*) AS cnt \
+FROM dbt.nodes \
+WHERE resource_type = 'model' AND materialized IS NOT NULL \
+GROUP BY materialized \
+ORDER BY value";
+
+const SEARCH_FACETS_TAGS_SQL: &str = "\
+/* facets:tags */ \
+SELECT t.value, COUNT(*) AS cnt FROM (\
+  SELECT unnest(tags) AS value FROM dbt.nodes WHERE tags IS NOT NULL \
+  UNION ALL \
+  SELECT unnest(tags) AS value FROM dbt.exposures WHERE tags IS NOT NULL \
+  UNION ALL \
+  SELECT unnest(tags) AS value FROM dbt.metrics WHERE tags IS NOT NULL \
+  UNION ALL \
+  SELECT unnest(tags) AS value FROM dbt.saved_queries WHERE tags IS NOT NULL\
+) t \
+GROUP BY t.value \
+ORDER BY t.value";
+
+const SEARCH_FACETS_PACKAGES_SQL: &str = "\
+/* facets:pkg */ \
+SELECT pkg AS value, COUNT(*) AS cnt FROM (\
+  SELECT package_name AS pkg FROM dbt.nodes WHERE package_name IS NOT NULL \
+  UNION ALL \
+  SELECT package_name AS pkg FROM dbt.macros WHERE package_name IS NOT NULL \
+  UNION ALL \
+  SELECT package_name AS pkg FROM dbt.exposures WHERE package_name IS NOT NULL\
+) t \
+GROUP BY pkg \
+ORDER BY pkg";
+
+/// Access level values in display order (matches dbt's `access` config).
+const FACET_ACCESS_LEVELS: &[&str] = &["private", "protected", "public"];
+
+/// Standard dbt materialization strategies in alphabetical order (dbt 1.13).
+/// Ref: https://docs.getdbt.com/docs/build/materializations
+/// Custom strategies (e.g. `iceberg`, `python`) appear after these in results
+/// but are not guaranteed to be present with `count: 0`.
+const FACET_STANDARD_MATERIALIZATIONS: &[&str] = &[
+    "table",
+    "view",
+    "incremental",
+    "ephemeral",
+    "materialized_view",
+];
+
+/// Ensure every value in `defaults` appears in the output, with `count: 0`
+/// if absent from `sql_results`. Defaults are emitted in `defaults` order;
+/// any extra values from SQL (custom types) are appended alphabetically.
+fn with_defaults(sql_results: Vec<SearchFacetValue>, defaults: &[&str]) -> Vec<SearchFacetValue> {
+    use std::collections::HashMap;
+    let mut map: HashMap<String, u64> = sql_results
+        .into_iter()
+        .map(|f| (f.value, f.count))
+        .collect();
+
+    // Emit defaults in specified order, count 0 if absent.
+    let mut out: Vec<SearchFacetValue> = defaults
+        .iter()
+        .map(|d| SearchFacetValue::new(*d, map.remove(*d).unwrap_or(0)))
+        .collect();
+
+    // Append remaining (custom) values alphabetically.
+    let mut extras: Vec<SearchFacetValue> = map
+        .into_iter()
+        .map(|(v, c)| SearchFacetValue::new(v, c))
+        .collect();
+    extras.sort_by(|a, b| a.value.cmp(&b.value));
+    out.extend(extras);
+    out
+}
+
+/// Extract `(value, cnt)` pairs from a two-column Arrow result.
+///
+/// All search facets SQL queries return `value VARCHAR` and `cnt BIGINT`.
+fn batches_to_search_facet_values(batches: &[RecordBatch]) -> Vec<SearchFacetValue> {
+    use arrow_array::Int64Array;
+    let mut out = Vec::new();
+    for batch in batches {
+        if batch.num_rows() == 0 {
+            continue;
+        }
+        let val_col = str_col(batch, "value");
+        let cnt_col = batch
+            .column_by_name("cnt")
+            .and_then(|c| c.as_any().downcast_ref::<Int64Array>());
+        for i in 0..batch.num_rows() {
+            if !val_col.is_null(i) {
+                let count = cnt_col
+                    .map(|c| if c.is_null(i) { 0i64 } else { c.value(i) })
+                    .unwrap_or(0) as u64;
+                out.push(SearchFacetValue::new(val_col.value(i), count));
+            }
+        }
+    }
+    out
+}
+
+/// `GET /api/v1/search/facets` — project-wide filter dimensions with counts.
+///
+/// Returns distinct values and resource counts for all search filter dimensions.
+/// Counts are project-wide (not query-dependent). No query params; no cursor.
+pub async fn search_facets(State(state): State<SharedState>) -> Response {
+    let backend = state.providers.backend.clone();
+    let layers_sql = search_facets_modeling_layers_sql();
+    let result = tokio::task::spawn_blocking(move || -> Result<SearchFacetsResponse, String> {
+        let access_batches = backend
+            .query_arrow(SEARCH_FACETS_ACCESSES_SQL)
+            .map_err(|e| e.to_string())?;
+        let layers_batches = backend
+            .query_arrow(&layers_sql)
+            .map_err(|e| e.to_string())?;
+        let mat_batches = backend
+            .query_arrow(SEARCH_FACETS_MATERIALIZATIONS_SQL)
+            .map_err(|e| e.to_string())?;
+        let tags_batches = backend
+            .query_arrow(SEARCH_FACETS_TAGS_SQL)
+            .map_err(|e| e.to_string())?;
+        let pkg_batches = backend
+            .query_arrow(SEARCH_FACETS_PACKAGES_SQL)
+            .map_err(|e| e.to_string())?;
+        // Finite-enum dimensions use `with_defaults` so every known value
+        // appears with count 0 even if no project resources use it.
+        // materialization_types also ensures the four standard strategies
+        // appear; custom strategies are appended when present.
+        Ok(SearchFacetsResponse {
+            accesses: with_defaults(
+                batches_to_search_facet_values(&access_batches),
+                FACET_ACCESS_LEVELS,
+            ),
+            modeling_layers: with_defaults(
+                batches_to_search_facet_values(&layers_batches),
+                &LAYER_CONDITIONS.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+            ),
+            materialization_types: with_defaults(
+                batches_to_search_facet_values(&mat_batches),
+                FACET_STANDARD_MATERIALIZATIONS,
+            ),
+            tags: batches_to_search_facet_values(&tags_batches),
+            packages: batches_to_search_facet_values(&pkg_batches),
+        })
+    })
+    .await;
+
+    match result {
+        Ok(Ok(resp)) => Json(resp).into_response(),
+        Ok(Err(err)) => internal_error(err),
+        Err(err) => internal_error(err.to_string()),
+    }
 }
 
 #[cfg(test)]

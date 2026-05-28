@@ -44,6 +44,12 @@ struct SearchMockBackend {
     freshness_absent: bool,
     /// Fixed count to return for COUNT queries.
     count_override: Option<u64>,
+    // Facets fixtures — two-column `(value varchar, cnt bigint)` batches routed by SQL comment.
+    facet_access_batches: Vec<RecordBatch>,
+    facet_layers_batches: Vec<RecordBatch>,
+    facet_mat_batches: Vec<RecordBatch>,
+    facet_tags_batches: Vec<RecordBatch>,
+    facet_pkg_batches: Vec<RecordBatch>,
 }
 
 impl SearchMockBackend {
@@ -60,7 +66,22 @@ impl SearchMockBackend {
             node_columns_batches: vec![],
             freshness_absent: false,
             count_override: None,
+            facet_access_batches: vec![],
+            facet_layers_batches: vec![],
+            facet_mat_batches: vec![],
+            facet_tags_batches: vec![],
+            facet_pkg_batches: vec![],
         }
+    }
+
+    fn with_facet_mat(mut self, batches: Vec<RecordBatch>) -> Self {
+        self.facet_mat_batches = batches;
+        self
+    }
+
+    fn with_facet_pkg(mut self, batches: Vec<RecordBatch>) -> Self {
+        self.facet_pkg_batches = batches;
+        self
     }
 
     fn with_nodes(mut self, batches: Vec<RecordBatch>) -> Self {
@@ -148,6 +169,23 @@ impl Backend for SearchMockBackend {
     fn query_arrow(&self, sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
         if self.freshness_absent && sql.contains("source_freshness") {
             return Err(BackendError::Query("source_freshness view absent".into()));
+        }
+        // Route facets queries first — SQL comment discriminators prevent
+        // collision with the search UNION SQL that also references these tables.
+        if sql.contains("/* facets:access */") {
+            return Ok(self.facet_access_batches.clone());
+        }
+        if sql.contains("/* facets:layers */") {
+            return Ok(self.facet_layers_batches.clone());
+        }
+        if sql.contains("/* facets:mat */") {
+            return Ok(self.facet_mat_batches.clone());
+        }
+        if sql.contains("/* facets:tags */") {
+            return Ok(self.facet_tags_batches.clone());
+        }
+        if sql.contains("/* facets:pkg */") {
+            return Ok(self.facet_pkg_batches.clone());
         }
         // Route by SQL content keywords.
         // The column-highlight sub-query is: "SELECT DISTINCT column_name FROM dbt.node_columns WHERE ..."
@@ -969,4 +1007,114 @@ fn build_highlight_multi_token() {
 fn build_highlight_preserves_original_casing() {
     let result = build_highlight("ORDERS list", &["orders"]);
     assert_eq!(result, "<b>ORDERS</b> list");
+}
+
+// ---------------------------------------------------------------------------
+// ?materialization= filter tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn search_materialization_filter_model_scoped() {
+    // Fixture has a model and a macro. ?materialization=view must return 200.
+    let model_row = make_model_row_matched("model.js.orders", "orders", "name");
+    let macro_row = make_macro_row("macro.js.my_macro", "my_macro", None);
+    let state = make_state(
+        SearchMockBackend::empty()
+            .with_nodes(vec![model_row])
+            .with_macros(vec![macro_row]),
+    );
+    let params = SearchQueryParams {
+        materialization: Some("view".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
+async fn search_materialization_custom_returns_200() {
+    // Custom materialization "iceberg" — no 400, empty result.
+    let state = make_state(SearchMockBackend::empty());
+    let params = SearchQueryParams {
+        materialization: Some("iceberg".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    assert_eq!(body["page_info"]["total_count"], 0);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/search/facets tests
+// ---------------------------------------------------------------------------
+
+/// Build a two-column `(value VARCHAR, cnt BIGINT)` batch for facets tests.
+fn facet_batch(rows: &[(&str, i64)]) -> RecordBatch {
+    use arrow_array::Int64Array;
+    use arrow_schema::{Field, Schema};
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("value", DataType::Utf8, true),
+        Field::new("cnt", DataType::Int64, false),
+    ]));
+    let values: Vec<&str> = rows.iter().map(|(v, _)| *v).collect();
+    let counts: Vec<i64> = rows.iter().map(|(_, c)| *c).collect();
+    RecordBatch::try_new(
+        schema,
+        vec![
+            Arc::new(StringArray::from(values)),
+            Arc::new(Int64Array::from(counts)),
+        ],
+    )
+    .expect("valid facet batch")
+}
+
+#[tokio::test]
+async fn search_facets_empty_catalog() {
+    let state = make_state(SearchMockBackend::empty());
+    let response = search_facets(State(state)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    // Finite-enum dimensions always include all known values with count 0.
+    assert_eq!(body["materialization_types"].as_array().unwrap().len(), 5);
+    assert_eq!(body["accesses"].as_array().unwrap().len(), 3);
+    assert_eq!(body["modeling_layers"].as_array().unwrap().len(), 3);
+    // Dynamic dimensions are empty when catalog is empty.
+    assert_eq!(body["tags"].as_array().unwrap().len(), 0);
+    assert_eq!(body["packages"].as_array().unwrap().len(), 0);
+    // All finite-enum values have count 0.
+    let mats = body["materialization_types"].as_array().unwrap();
+    assert!(mats.iter().all(|v| v["count"] == 0));
+}
+
+#[tokio::test]
+async fn search_facets_materialization_types() {
+    // SQL returns table=10, view=6; remaining standard types fill in at count 0.
+    let mat_batch = facet_batch(&[("table", 10), ("view", 6)]);
+    let state = make_state(SearchMockBackend::empty().with_facet_mat(vec![mat_batch]));
+    let response = search_facets(State(state)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let mats = body["materialization_types"].as_array().unwrap();
+    assert_eq!(mats.len(), 5); // all 5 standard types
+    // Order: table, view, incremental, ephemeral, materialized_view
+    assert_eq!(mats[0]["value"], "table");
+    assert_eq!(mats[0]["count"], 10);
+    assert_eq!(mats[1]["value"], "view");
+    assert_eq!(mats[1]["count"], 6);
+    assert_eq!(mats[2]["value"], "incremental");
+    assert_eq!(mats[2]["count"], 0);
+}
+
+#[tokio::test]
+async fn search_facets_packages() {
+    let pkg_batch = facet_batch(&[("dbt_utils", 3), ("jaffle_shop", 42)]);
+    let state = make_state(SearchMockBackend::empty().with_facet_pkg(vec![pkg_batch]));
+    let response = search_facets(State(state)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let pkgs = body["packages"].as_array().unwrap();
+    assert_eq!(pkgs.len(), 2);
+    assert_eq!(pkgs[0]["value"], "dbt_utils");
+    assert_eq!(pkgs[0]["count"], 3);
 }

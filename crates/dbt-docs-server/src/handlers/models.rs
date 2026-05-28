@@ -68,6 +68,13 @@ SELECT DISTINCT name AS owner \
 FROM dbt.groups \
 ORDER BY owner";
 
+const MATERIALIZATIONS_FACET_SQL: &str = "\
+SELECT DISTINCT materialized AS value \
+FROM dbt.nodes \
+WHERE resource_type = 'model' \
+  AND materialized IS NOT NULL \
+ORDER BY value";
+
 /// Allowlisted sort columns. Each maps a query-parameter name to the SQL
 /// expression used in **both** `ORDER BY` and the cursor `WHERE` predicate.
 ///
@@ -146,6 +153,8 @@ pub struct ModelFacetsResponse {
     pub accesses: Vec<FacetValue>,
     /// Owner (group) options; project-specific, sourced from `dbt.groups`.
     pub owners: Vec<FacetValue>,
+    /// Distinct materialization values in the project (includes custom strategies).
+    pub materializations: Vec<FacetValue>,
 }
 
 /// Extract the `owner` string column from the facets query result.
@@ -163,6 +172,26 @@ fn batches_to_owner_names(batches: &[RecordBatch]) -> Vec<String> {
         }
     }
     owners
+}
+
+/// Extract distinct string values from a single-column Arrow result.
+///
+/// All facets SQL queries alias their output column as `value`, so this
+/// function always reads the `"value"` column.
+fn batches_to_facet_values(batches: &[RecordBatch]) -> Vec<FacetValue> {
+    let mut out = Vec::new();
+    for batch in batches {
+        if batch.num_rows() == 0 {
+            continue;
+        }
+        let col = str_col(batch, "value");
+        for i in 0..batch.num_rows() {
+            if !col.is_null(i) {
+                out.push(FacetValue::new(col.value(i)));
+            }
+        }
+    }
+    out
 }
 
 /// Convert Arrow record batches from the models SQL query into typed rows.
@@ -219,6 +248,10 @@ pub struct ModelListParams {
     /// Comma-separated access level filter: `public`, `protected`, `private`.
     /// Multiple values are OR'd: `?access=public,protected`
     pub access: Option<String>,
+    /// Comma-separated materialization filter. Any value accepted (custom
+    /// materializations like `iceberg` are valid). Unknown values return empty
+    /// results, never 400. Multiple values are OR'd: `?materialization=table,view`
+    pub materialization: Option<String>,
     /// Owner name (exact match): `?owner=Data+Team+%28EPD%29`
     pub owner: Option<String>,
     /// Sort spec `<column>:<asc|desc>`: `?sort=executed_at:desc`.
@@ -371,6 +404,18 @@ fn build_list_sql(
             .collect::<Vec<_>>()
             .join(", ");
         let _ = write!(where_clause, " AND n.access_level IN ({list})");
+    }
+    if let Some(mat) = params.materialization.as_deref().filter(|s| !s.is_empty()) {
+        let list = mat
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("'{}'", escape_str(s)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !list.is_empty() {
+            let _ = write!(where_clause, " AND n.materialized IN ({list})");
+        }
     }
     if let Some(owner) = params.owner.as_deref().filter(|s| !s.is_empty()) {
         let escaped = escape_str(owner);
@@ -585,15 +630,25 @@ pub async fn list_models(
 /// ```
 pub async fn list_model_facets(State(state): State<SharedState>) -> Response {
     let backend = state.providers.backend.clone();
-    let result = tokio::task::spawn_blocking(move || backend.query_arrow(OWNERS_FACET_SQL)).await;
+    let result = tokio::task::spawn_blocking(move || {
+        let owner_batches = backend
+            .query_arrow(OWNERS_FACET_SQL)
+            .map_err(|e| e.to_string())?;
+        let mat_batches = backend
+            .query_arrow(MATERIALIZATIONS_FACET_SQL)
+            .map_err(|e| e.to_string())?;
+        Ok::<_, String>((owner_batches, mat_batches))
+    })
+    .await;
 
-    let batches = match result {
-        Ok(Ok(b)) => b,
-        Ok(Err(err)) => return internal_error(err.to_string()),
+    let (owner_batches, mat_batches) = match result {
+        Ok(Ok(pair)) => pair,
+        Ok(Err(err)) => return internal_error(err),
         Err(err) => return internal_error(err.to_string()),
     };
 
-    let owners = batches_to_owner_names(&batches);
+    let owners = batches_to_owner_names(&owner_batches);
+    let materializations = batches_to_facet_values(&mat_batches);
 
     Json(ModelFacetsResponse {
         modeling_layers: LAYER_CONDITIONS
@@ -605,6 +660,7 @@ pub async fn list_model_facets(State(state): State<SharedState>) -> Response {
             .map(|v| FacetValue::new(*v))
             .collect(),
         owners: owners.into_iter().map(FacetValue::new).collect(),
+        materializations,
     })
     .into_response()
 }

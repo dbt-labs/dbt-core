@@ -101,6 +101,7 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
             get(column_lineage::get_column_lineage),
         )
         .route("/api/v1/search", get(search::search))
+        .route("/api/v1/search/facets", get(search::search_facets))
         .route("/api/v1/tables", get(query::list_tables))
         .route("/api/v1/query", post(query::run_query))
         .fallback(serve_assets)
