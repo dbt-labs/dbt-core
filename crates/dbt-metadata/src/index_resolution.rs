@@ -20,8 +20,8 @@ use parquet::arrow::{ProjectionMask, arrow_reader::ParquetRecordBatchReaderBuild
 use dbt_schemas::state::ResourcePathKind;
 
 use crate::parse_state::{
-    self, NodeIndexRow, cache_dir, existing_epoch_paths, load_packages, project_path,
-    system_time_to_nanos,
+    NodeIndexRow, ResolverStateRow, cache_dir, existing_epoch_paths, load_packages_from_filestamps,
+    resolver_state_path, system_time_to_nanos,
 };
 use crate::partial_parse::PackageSnapshot;
 
@@ -185,9 +185,10 @@ pub fn dirty_seed_ids_from_index(out_dir: &Path) -> Option<HashSet<String>> {
     if !dir.exists() {
         return None;
     }
-    let project: Vec<parse_state::KvRow> =
-        dbt_metadata_parquet::epoch_io::read_rows(&project_path(&dir));
-    let packages = load_packages(&dir, &project)?;
+    let rs_rows: Vec<ResolverStateRow> =
+        dbt_metadata_parquet::epoch_io::read_rows(&resolver_state_path(&dir));
+    let rs = rs_rows.into_iter().next().unwrap_or_default();
+    let packages = load_packages_from_filestamps(&dir, &rs.pkg_deps_json, &rs.pkg_kinds_json)?;
     let touched = detect_dirty_files(&packages);
     let all_rows = read_node_index_rows(&dir);
     let seed_ids = all_rows
@@ -214,9 +215,10 @@ pub fn resolve_dirty_unique_ids_from_index(
         return None;
     }
 
-    let project: Vec<parse_state::KvRow> =
-        dbt_metadata_parquet::epoch_io::read_rows(&project_path(&dir));
-    let packages = load_packages(&dir, &project)?;
+    let rs_rows: Vec<ResolverStateRow> =
+        dbt_metadata_parquet::epoch_io::read_rows(&resolver_state_path(&dir));
+    let rs = rs_rows.into_iter().next().unwrap_or_default();
+    let packages = load_packages_from_filestamps(&dir, &rs.pkg_deps_json, &rs.pkg_kinds_json)?;
     let touched = detect_dirty_files(&packages);
 
     if touched.is_empty() {

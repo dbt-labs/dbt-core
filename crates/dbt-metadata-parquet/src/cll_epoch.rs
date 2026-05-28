@@ -22,10 +22,11 @@
 //! * **Latest-wins** — for each `to_node_unique_id` the file with the highest
 //!   `ingested_at` wins; all its rows replace any earlier file's rows for that
 //!   node.  No row-level dedup is needed.
-//! * **Compaction** — when epoch count exceeds [`COMPACT_THRESHOLD`] the epochs
-//!   are merged into `v1_0.parquet` and deltas are deleted.  Compaction also
-//!   evicts rows whose `to_node_unique_id` is absent from `alive_ids` (deleted
-//!   nodes); between compactions ghost edges for deleted nodes are harmless.
+//! * **Compaction** — when delta row count or file count exceeds the threshold
+//!   (see [`epoch_io::should_compact`]) epochs are merged into `v1_0.parquet`
+//!   and deltas are deleted.  Compaction also evicts rows whose
+//!   `to_node_unique_id` is absent from `alive_ids` (deleted nodes); between
+//!   compactions ghost edges for deleted nodes are harmless.
 //! * **Schema versioning** — the `v1_` filename prefix is [`CLL_SCHEMA_VERSION`].
 //!   Files from other versions are silently ignored.  Bump the constant
 //!   whenever `CllRow` fields change; old files accumulate until `dbt clean`.
@@ -47,7 +48,6 @@ use crate::epoch_io;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const COMPACT_THRESHOLD: usize = 8;
 const VERSION_PREFIX: &str = "v1_";
 
 // ── row schema ────────────────────────────────────────────────────────────────
@@ -190,12 +190,19 @@ fn compact_epochs(dir: &Path, alive_ids: Option<&HashSet<String>>) -> FsResult<(
 /// edges from a previous successful compile survive until the next successful
 /// recompile or compaction.
 ///
-/// Triggers compaction when the epoch count exceeds [`COMPACT_THRESHOLD`].
+/// `alive_node_count`: total alive nodes in the manifest — when `Some`, the
+/// row-count compaction signal fires when delta > 10% of alive nodes.
+/// Pass `None` to rely on the file-count signal only (fine for tests).
+/// `alive_ids`: optional set for pruning dead nodes during compaction.
+///
+/// Triggers compaction when delta row count or file count exceeds the threshold
+/// (see [`epoch_io::should_compact`]).
 pub fn write_cll_epoch(
     cll_dir: &Path,
     rows: Vec<CllRow>,
     ingested_at: i64,
     recomputed_targets: Option<&HashSet<String>>,
+    alive_node_count: Option<usize>,
     alive_ids: Option<&HashSet<String>>,
 ) -> FsResult<()> {
     let mut filtered: Vec<CllRow> = if let Some(targets) = recomputed_targets {
@@ -227,7 +234,7 @@ pub fn write_cll_epoch(
     epoch_io::write_rows(&path, &cll_row_fields(), &filtered)?;
 
     let epoch_count = existing_epochs(cll_dir).len();
-    if epoch_count > COMPACT_THRESHOLD {
+    if epoch_io::should_compact(filtered.len(), alive_node_count.unwrap_or(0), epoch_count) {
         let _ = compact_epochs(cll_dir, alive_ids);
     }
 
@@ -281,7 +288,7 @@ mod tests {
             edge("model.pkg.b", Some("name"), "model.pkg.a", "name"),
             edge("model.pkg.c", Some("id"), "model.pkg.b", "id"),
         ];
-        write_cll_epoch(&cll_dir, rows, T0, None, None).unwrap();
+        write_cll_epoch(&cll_dir, rows, T0, None, None, None).unwrap();
 
         let epochs = existing_epochs(&cll_dir);
         assert_eq!(epochs.len(), 1);
@@ -301,12 +308,12 @@ mod tests {
             edge("model.pkg.b", Some("id"), "model.pkg.a", "id"),
             edge("model.pkg.c", Some("id"), "model.pkg.b", "id"),
         ];
-        write_cll_epoch(&cll_dir, rows0, T0, None, None).unwrap();
+        write_cll_epoch(&cll_dir, rows0, T0, None, None, None).unwrap();
 
         let mut targets = HashSet::new();
         targets.insert("model.pkg.b".to_string());
         let rows1 = vec![edge("model.pkg.b", Some("id"), "model.pkg.x", "id")];
-        write_cll_epoch(&cll_dir, rows1, T1, Some(&targets), None).unwrap();
+        write_cll_epoch(&cll_dir, rows1, T1, Some(&targets), None, None).unwrap();
 
         assert_eq!(existing_epochs(&cll_dir).len(), 2);
 
@@ -339,7 +346,7 @@ mod tests {
             edge("model.pkg.b", Some("id"), "model.pkg.a", "id"),
             edge("model.pkg.c", Some("id"), "model.pkg.b", "id"),
         ];
-        write_cll_epoch(&cll_dir, rows, T0, Some(&targets), None).unwrap();
+        write_cll_epoch(&cll_dir, rows, T0, Some(&targets), None, None).unwrap();
 
         let loaded = read_cll_latest(&cll_dir);
         assert_eq!(loaded.len(), 1);
@@ -351,7 +358,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cll_dir = dir.path().join("column_lineage");
 
-        write_cll_epoch(&cll_dir, vec![], T0, None, None).unwrap();
+        write_cll_epoch(&cll_dir, vec![], T0, None, None, None).unwrap();
 
         assert!(existing_epochs(&cll_dir).is_empty());
     }
@@ -361,14 +368,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cll_dir = dir.path().join("column_lineage");
 
-        for i in 0..=COMPACT_THRESHOLD {
+        // 9 writes: file-count signal fires at >8 files (epochs 0..=8).
+        for i in 0..=8usize {
             let rows = vec![edge(
                 "model.pkg.b",
                 Some("id"),
                 &format!("model.pkg.a{i}"),
                 "id",
             )];
-            write_cll_epoch(&cll_dir, rows, i as i64 + 1, None, None).unwrap();
+            write_cll_epoch(&cll_dir, rows, i as i64 + 1, None, None, None).unwrap();
         }
 
         let epochs = existing_epochs(&cll_dir);
@@ -377,8 +385,7 @@ mod tests {
 
         let latest = read_cll_latest(&cll_dir);
         assert_eq!(latest.len(), 1);
-        let expected_from = format!("model.pkg.a{}", COMPACT_THRESHOLD);
-        assert_eq!(latest[0].from_node_unique_id, expected_from);
+        assert_eq!(latest[0].from_node_unique_id, "model.pkg.a8");
     }
 
     #[test]
@@ -394,7 +401,7 @@ mod tests {
             lineage_kind: "scan".to_string(),
             ingested_at: 0,
         }];
-        write_cll_epoch(&cll_dir, rows, T0, None, None).unwrap();
+        write_cll_epoch(&cll_dir, rows, T0, None, None, None).unwrap();
 
         let loaded = read_cll_latest(&cll_dir);
         assert_eq!(loaded.len(), 1);
@@ -408,12 +415,12 @@ mod tests {
         let cll_dir = dir.path().join("column_lineage");
 
         let rows0 = vec![edge("model.pkg.b", Some("id"), "model.pkg.a", "id")];
-        write_cll_epoch(&cll_dir, rows0, T0, None, None).unwrap();
+        write_cll_epoch(&cll_dir, rows0, T0, None, None, None).unwrap();
 
         let mut targets = HashSet::new();
         targets.insert("model.pkg.b".to_string());
         let rows1 = vec![edge("model.pkg.b", Some("id"), "model.pkg.x", "id")];
-        write_cll_epoch(&cll_dir, rows1, T1, Some(&targets), None).unwrap();
+        write_cll_epoch(&cll_dir, rows1, T1, Some(&targets), None, None).unwrap();
 
         let latest = read_cll_latest(&cll_dir);
         let b_edges: Vec<_> = latest
@@ -436,7 +443,7 @@ mod tests {
 
         // Current-version write should start at epoch 0 and ignore the old files.
         let rows = vec![edge("model.pkg.b", Some("id"), "model.pkg.a", "id")];
-        write_cll_epoch(&cll_dir, rows, T0, None, None).unwrap();
+        write_cll_epoch(&cll_dir, rows, T0, None, None, None).unwrap();
 
         let epochs = existing_epochs(&cll_dir);
         assert_eq!(epochs.len(), 1);
@@ -458,7 +465,7 @@ mod tests {
             edge("model.pkg.a", Some("id"), "model.pkg.src", "id"),
             edge("model.pkg.b", Some("id"), "model.pkg.src", "id"),
         ];
-        write_cll_epoch(&cll_dir, rows, T0, None, None).unwrap();
+        write_cll_epoch(&cll_dir, rows, T0, None, None, None).unwrap();
 
         // Compact with only node A alive — B's edges should be evicted.
         let mut alive = HashSet::new();
@@ -477,13 +484,13 @@ mod tests {
 
         // Write epoch 0 with T1 (higher timestamp).
         let rows0 = vec![edge("model.pkg.b", Some("id"), "model.pkg.old", "id")];
-        write_cll_epoch(&cll_dir, rows0, T1, None, None).unwrap();
+        write_cll_epoch(&cll_dir, rows0, T1, None, None, None).unwrap();
 
         // Write epoch 1 with T0 (lower timestamp — simulates clock skew or reordering).
         let mut targets = HashSet::new();
         targets.insert("model.pkg.b".to_string());
         let rows1 = vec![edge("model.pkg.b", Some("id"), "model.pkg.new", "id")];
-        write_cll_epoch(&cll_dir, rows1, T0, Some(&targets), None).unwrap();
+        write_cll_epoch(&cll_dir, rows1, T0, Some(&targets), None, None).unwrap();
 
         // T1 > T0, so epoch 0 wins despite lower file number.
         let latest = read_cll_latest(&cll_dir);
@@ -496,7 +503,7 @@ mod tests {
 
         // Write epoch 2 with T2 (newer than both) — should now win.
         let rows2 = vec![edge("model.pkg.b", Some("id"), "model.pkg.newest", "id")];
-        write_cll_epoch(&cll_dir, rows2, T2, Some(&targets), None).unwrap();
+        write_cll_epoch(&cll_dir, rows2, T2, Some(&targets), None, None).unwrap();
 
         let latest2 = read_cll_latest(&cll_dir);
         let b2: Vec<_> = latest2

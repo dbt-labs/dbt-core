@@ -11,8 +11,9 @@
 //! * **Delta writes** — only columns for recomputed nodes are written per run.
 //! * **Latest-wins** — partition key is `unique_id`. All columns for a node share
 //!   the same `ingested_at`; the set with the highest timestamp wins entirely.
-//! * **Compaction** — when epoch count exceeds [`COMPACT_THRESHOLD`], epochs are
-//!   merged into `v1_0.parquet`. Optional `valid_ids` prunes dead nodes.
+//! * **Compaction** — when delta row count or file count exceeds the threshold
+//!   (see [`epoch_io::should_compact`]) epochs are merged into `v1_0.parquet`.
+//!   Optional `valid_ids` prunes dead nodes.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -27,7 +28,6 @@ use crate::epoch_io;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const COMPACT_THRESHOLD: usize = 8;
 const VERSION_PREFIX: &str = "v1_";
 
 // ── row schema ────────────────────────────────────────────────────────────────
@@ -119,11 +119,15 @@ fn compact_epochs(dir: &Path, valid_ids: Option<&HashSet<String>>) -> FsResult<(
 ///
 /// `recomputed_nodes`: if Some, only these nodes were recomputed (delta write).
 /// If None, this is a full compile (epoch 0).
-/// `valid_ids`: passed to compaction for dead-node pruning.
+/// `alive_node_count`: total alive nodes in the manifest — when `Some`, the
+/// row-count compaction signal fires when delta > 10% of alive nodes.
+/// Pass `None` to rely on the file-count signal only (fine for tests).
+/// `valid_ids`: optional set for pruning dead nodes during compaction.
 pub fn write_compile_columns(
     dir: &Path,
     rows: Vec<CompileColumnRow>,
     recomputed_nodes: Option<&HashSet<String>>,
+    alive_node_count: Option<usize>,
     valid_ids: Option<&HashSet<String>>,
 ) -> FsResult<()> {
     if rows.is_empty() {
@@ -146,8 +150,8 @@ pub fn write_compile_columns(
         }
     }
 
-    let epochs = existing_epochs(dir);
-    if epochs.len() > COMPACT_THRESHOLD {
+    let file_count = existing_epochs(dir).len();
+    if epoch_io::should_compact(rows.len(), alive_node_count.unwrap_or(0), file_count) {
         compact_epochs(dir, valid_ids)?;
     }
     Ok(())
@@ -206,7 +210,7 @@ mod tests {
             },
         ];
 
-        write_compile_columns(dir_path, rows, None, None).unwrap();
+        write_compile_columns(dir_path, rows, None, None, None).unwrap();
 
         let read_back = read_compile_columns(dir_path);
         assert_eq!(read_back.len(), 2);
@@ -241,7 +245,7 @@ mod tests {
         ];
         let mut targets = HashSet::new();
         targets.insert("model.pkg.a".to_string());
-        write_compile_columns(dir_path, rows1, Some(&targets), None).unwrap();
+        write_compile_columns(dir_path, rows1, Some(&targets), None, None).unwrap();
 
         // Second write: model_a recompiled with 1 column (schema changed)
         let rows2 = vec![CompileColumnRow {
@@ -252,7 +256,7 @@ mod tests {
             description: Some("Updated".to_string()),
             ingested_at: 2,
         }];
-        write_compile_columns(dir_path, rows2, Some(&targets), None).unwrap();
+        write_compile_columns(dir_path, rows2, Some(&targets), None, None).unwrap();
 
         let read_back = read_compile_columns(dir_path);
         assert_eq!(read_back.len(), 1);
@@ -268,7 +272,8 @@ mod tests {
         let mut targets = HashSet::new();
         targets.insert("model.pkg.m".to_string());
 
-        for i in 0..(COMPACT_THRESHOLD + 2) {
+        // 10 writes: file-count signal fires at >8 files (on the 9th write, 0-indexed).
+        for i in 0..10usize {
             let rows = vec![CompileColumnRow {
                 unique_id: "model.pkg.m".to_string(),
                 column_name: "col".to_string(),
@@ -277,7 +282,7 @@ mod tests {
                 description: None,
                 ingested_at: i as i64,
             }];
-            write_compile_columns(dir_path, rows, Some(&targets), None).unwrap();
+            write_compile_columns(dir_path, rows, Some(&targets), None, None).unwrap();
         }
 
         let epochs = existing_epochs(dir_path);
@@ -285,9 +290,6 @@ mod tests {
 
         let read_back = read_compile_columns(dir_path);
         assert_eq!(read_back.len(), 1);
-        assert_eq!(
-            read_back[0].column_type.as_deref(),
-            Some(format!("TYPE_{}", COMPACT_THRESHOLD + 1).as_str())
-        );
+        assert_eq!(read_back[0].column_type.as_deref(), Some("TYPE_9"));
     }
 }

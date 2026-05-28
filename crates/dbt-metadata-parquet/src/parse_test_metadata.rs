@@ -26,7 +26,6 @@ use crate::epoch_io;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const COMPACT_THRESHOLD: usize = 8;
 const VERSION_PREFIX: &str = "v1_";
 
 // ── row schema ────────────────────────────────────────────────────────────────
@@ -140,6 +139,7 @@ pub fn write_parse_test_metadata(
     dir: &Path,
     rows: Vec<ParseTestMetadataRow>,
     recomputed_nodes: Option<&HashSet<String>>,
+    alive_node_count: Option<usize>,
     valid_ids: Option<&HashSet<String>>,
 ) -> FsResult<()> {
     if rows.is_empty() {
@@ -163,7 +163,7 @@ pub fn write_parse_test_metadata(
     }
 
     let epochs = existing_epochs(dir);
-    if epochs.len() > COMPACT_THRESHOLD {
+    if epoch_io::should_compact(rows.len(), alive_node_count.unwrap_or(0), epochs.len()) {
         compact_epochs(dir, valid_ids)?;
     }
     Ok(())
@@ -223,7 +223,7 @@ mod tests {
                 1,
             ),
         ];
-        write_parse_test_metadata(dir.path(), rows, None, None).unwrap();
+        write_parse_test_metadata(dir.path(), rows, None, None, None).unwrap();
         let back = read_parse_test_metadata(dir.path());
         assert_eq!(back.len(), 2);
     }
@@ -236,11 +236,11 @@ mod tests {
         targets.insert(uid.to_string());
 
         let rows1 = vec![make_row(uid, "not_null", Some("id"), 1)];
-        write_parse_test_metadata(dir.path(), rows1, Some(&targets), None).unwrap();
+        write_parse_test_metadata(dir.path(), rows1, Some(&targets), None, None).unwrap();
 
         let mut row2 = make_row(uid, "not_null", Some("id"), 2);
         row2.severity = Some("WARN".to_string());
-        write_parse_test_metadata(dir.path(), vec![row2], Some(&targets), None).unwrap();
+        write_parse_test_metadata(dir.path(), vec![row2], Some(&targets), None, None).unwrap();
 
         let back = read_parse_test_metadata(dir.path());
         assert_eq!(back.len(), 1);
@@ -256,7 +256,7 @@ mod tests {
             None,
             1,
         )];
-        write_parse_test_metadata(dir.path(), rows, None, None).unwrap();
+        write_parse_test_metadata(dir.path(), rows, None, None, None).unwrap();
         let back = read_parse_test_metadata(dir.path());
         assert!(back[0].column_name.is_none());
     }

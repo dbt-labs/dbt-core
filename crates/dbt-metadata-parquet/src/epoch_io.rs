@@ -111,3 +111,17 @@ pub fn remove_epochs(dir: &Path, prefix: &str) {
         let _ = std::fs::remove_file(path);
     }
 }
+
+/// Returns true when compaction should fire.
+///
+/// Combines two signals so the epoch tables stay bounded both in space and in
+/// read-time file count:
+/// - Row-count signal: `delta_len > max(total_alive / 10, 10)` — keeps disk
+///   usage within ~2× the minimum (at most one extra 10%-batch on top of the
+///   compacted base).
+/// - File-count signal: `file_count > 8` — caps read cost at ≤9 files
+///   regardless of how large each individual delta was.
+pub fn should_compact(delta_len: usize, total_alive: usize, file_count: usize) -> bool {
+    let row_threshold = (total_alive / 10).max(10);
+    delta_len > row_threshold || file_count > 8
+}

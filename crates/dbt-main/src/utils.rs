@@ -20,6 +20,8 @@ pub struct InvocationContext {
     cli_args: Vec<String>,
     target_name: Option<String>,
     profile_name: Option<String>,
+    git_sha: Option<String>,
+    git_branch: Option<String>,
     start: std::time::Instant,
 }
 
@@ -31,6 +33,9 @@ impl InvocationContext {
         common_args: &dbt_clap_core::CommonArgs,
     ) -> Self {
         let selector = common_args.select.as_ref().map(|v| v.join(" "));
+        let git = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| dbt_metadata::partial_parse::read_git_info(&cwd));
         Self {
             invocations_dir: metadata_dir.join("run").join("invocations"),
             invocation_id: io.invocation_id.to_string(),
@@ -39,6 +44,14 @@ impl InvocationContext {
             cli_args: std::env::args().collect(),
             target_name: common_args.target.clone(),
             profile_name: common_args.profile.clone(),
+            git_sha: git
+                .as_ref()
+                .map(|g| g.sha.clone())
+                .filter(|s| !s.is_empty()),
+            git_branch: git
+                .as_ref()
+                .map(|g| g.branch.clone())
+                .filter(|s| !s.is_empty()),
             start: std::time::Instant::now(),
         }
     }
@@ -64,8 +77,8 @@ impl InvocationContext {
             user_id: None,
             user_name: None,
             dbt_version: env!("CARGO_PKG_VERSION").to_string(),
-            git_sha: None,
-            git_branch: None,
+            git_sha: self.git_sha,
+            git_branch: self.git_branch,
             git_is_dirty: None,
             elapsed_secs: Some(elapsed_secs),
             // TODO: populate from resolved_state.nodes.len() after compilation.

@@ -19,9 +19,9 @@
 //!   epoch N with changed nodes only.
 //! * **Latest-wins** — partition key is `unique_id`.  The highest `ingested_at`
 //!   for a node wins entirely.
-//! * **Compaction** — when epoch count exceeds [`COMPACT_THRESHOLD`] the epochs
-//!   are merged into `v1_0.parquet`. An optional `valid_ids` filter prunes
-//!   dead nodes during compaction (pass `None` to only deduplicate).
+//! * **Compaction** — when delta row count or file count exceeds the threshold
+//!   (see [`epoch_io::should_compact`]) the epochs are merged into `v1_0.parquet`.
+//!   An optional `valid_ids` filter prunes dead nodes during compaction.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -32,10 +32,6 @@ use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
 
 use crate::epoch_io;
-
-// ── constants ─────────────────────────────────────────────────────────────────
-
-const COMPACT_THRESHOLD: usize = 8;
 
 // ── row schema ────────────────────────────────────────────────────────────────
 
@@ -146,11 +142,19 @@ fn compact_epochs(dir: &Path, valid_ids: Option<&HashSet<String>>) -> FsResult<(
 ///
 /// Only rows whose `unique_id` is in `recomputed_nodes` are written.
 /// Pass `None` for a full compile to write all rows.
-/// Triggers compaction when epoch count exceeds [`COMPACT_THRESHOLD`].
+///
+/// `alive_node_count`: total alive nodes in the manifest — when `Some`, the
+/// row-count compaction signal fires when delta > 10% of alive nodes.
+/// Pass `None` to rely on the file-count signal only (fine for tests).
+/// `valid_ids`: optional set for pruning dead nodes during compaction.
+///
+/// Triggers compaction when the delta row count or epoch file count exceeds the
+/// threshold (see [`epoch_io::should_compact`]).
 pub fn write_compiled_nodes(
     nodes_dir: &Path,
     rows: Vec<CompiledNodeRow>,
     recomputed_nodes: Option<&HashSet<String>>,
+    alive_node_count: Option<usize>,
     valid_ids: Option<&HashSet<String>>,
 ) -> FsResult<()> {
     let filtered: Vec<CompiledNodeRow> = if let Some(targets) = recomputed_nodes {
@@ -177,7 +181,8 @@ pub fn write_compiled_nodes(
     ));
     epoch_io::write_rows(&path, &compiled_node_fields(), &sorted)?;
 
-    if existing_epochs(nodes_dir).len() > COMPACT_THRESHOLD {
+    let file_count = existing_epochs(nodes_dir).len();
+    if epoch_io::should_compact(sorted.len(), alive_node_count.unwrap_or(0), file_count) {
         let _ = compact_epochs(nodes_dir, valid_ids);
     }
     Ok(())
@@ -232,7 +237,7 @@ mod tests {
             node("model.pkg.a", "select 1", 1000),
             node("model.pkg.b", "select * from a", 1000),
         ];
-        write_compiled_nodes(&nodes_dir, rows, None, None).unwrap();
+        write_compiled_nodes(&nodes_dir, rows, None, None, None).unwrap();
 
         let epochs = existing_epochs(&nodes_dir);
         assert_eq!(epochs.len(), 1);
@@ -265,6 +270,7 @@ mod tests {
             ],
             None,
             None,
+            None,
         )
         .unwrap();
 
@@ -275,6 +281,7 @@ mod tests {
             &nodes_dir,
             vec![node("model.pkg.b", "select id from a", 2000)],
             Some(&targets),
+            None,
             None,
         )
         .unwrap();
@@ -312,7 +319,7 @@ mod tests {
             node("model.pkg.a", "select 1", 1000),
             node("model.pkg.b", "select * from a", 1000),
         ];
-        write_compiled_nodes(&nodes_dir, rows, Some(&targets), None).unwrap();
+        write_compiled_nodes(&nodes_dir, rows, Some(&targets), None, None).unwrap();
 
         let loaded = read_compiled_nodes_latest(&nodes_dir);
         assert_eq!(loaded.len(), 1);
@@ -324,7 +331,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let nodes_dir = dir.path().join("nodes");
 
-        write_compiled_nodes(&nodes_dir, vec![], None, None).unwrap();
+        write_compiled_nodes(&nodes_dir, vec![], None, None, None).unwrap();
         assert!(existing_epochs(&nodes_dir).is_empty());
     }
 
@@ -333,13 +340,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let nodes_dir = dir.path().join("nodes");
 
-        for i in 0..=COMPACT_THRESHOLD {
+        // 9 writes: file-count signal fires at >8 files (epochs 0..=8 → 9 files).
+        for i in 0..=8usize {
             let rows = vec![node(
                 "model.pkg.a",
                 &format!("select {i}"),
                 (i as i64 + 1) * 1000,
             )];
-            write_compiled_nodes(&nodes_dir, rows, None, None).unwrap();
+            write_compiled_nodes(&nodes_dir, rows, None, None, None).unwrap();
         }
 
         let epochs = existing_epochs(&nodes_dir);
@@ -348,10 +356,7 @@ mod tests {
 
         let latest = read_compiled_nodes_latest(&nodes_dir);
         assert_eq!(latest.len(), 1);
-        assert_eq!(
-            latest[0].compiled_code.as_deref(),
-            Some(format!("select {}", COMPACT_THRESHOLD).as_str())
-        );
+        assert_eq!(latest[0].compiled_code.as_deref(), Some("select 8"));
     }
 
     #[test]
@@ -359,8 +364,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let nodes_dir = dir.path().join("nodes");
 
-        // Write enough epochs to trigger compaction
-        for i in 0..=COMPACT_THRESHOLD {
+        // Write enough epochs to trigger compaction (file-count > 8 → 9 files).
+        for i in 0..=8usize {
             let rows = vec![
                 node(
                     "model.pkg.alive",
@@ -369,7 +374,7 @@ mod tests {
                 ),
                 node("model.pkg.dead", "select dead", (i as i64 + 1) * 1000),
             ];
-            write_compiled_nodes(&nodes_dir, rows, None, None).unwrap();
+            write_compiled_nodes(&nodes_dir, rows, None, None, None).unwrap();
         }
 
         // Before compaction with valid_ids, both nodes exist
@@ -399,7 +404,7 @@ mod tests {
             table_role: Some("fact".to_string()),
             ingested_at: 1_700_000_000_000_000,
         }];
-        write_compiled_nodes(&nodes_dir, rows, None, None).unwrap();
+        write_compiled_nodes(&nodes_dir, rows, None, None, None).unwrap();
 
         let loaded = read_compiled_nodes_latest(&nodes_dir);
         assert_eq!(loaded.len(), 1);
@@ -419,7 +424,7 @@ mod tests {
 
         // Write a valid v1 file
         let rows = vec![node("model.pkg.a", "select 1", 1000)];
-        write_compiled_nodes(&nodes_dir, rows, None, None).unwrap();
+        write_compiled_nodes(&nodes_dir, rows, None, None, None).unwrap();
 
         // Manually create a v2 file (future schema) and an unversioned file
         std::fs::write(nodes_dir.join("v2_0.parquet"), b"fake").unwrap();

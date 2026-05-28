@@ -27,7 +27,6 @@ use crate::epoch_io;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const COMPACT_THRESHOLD: usize = 8;
 const VERSION_PREFIX: &str = "v1_";
 
 // ── row schema ────────────────────────────────────────────────────────────────
@@ -141,6 +140,7 @@ pub fn write_parse_columns(
     dir: &Path,
     rows: Vec<ParseColumnRow>,
     recomputed_nodes: Option<&HashSet<String>>,
+    alive_node_count: Option<usize>,
     valid_ids: Option<&HashSet<String>>,
 ) -> FsResult<()> {
     if rows.is_empty() {
@@ -164,7 +164,7 @@ pub fn write_parse_columns(
     }
 
     let epochs = existing_epochs(dir);
-    if epochs.len() > COMPACT_THRESHOLD {
+    if epoch_io::should_compact(rows.len(), alive_node_count.unwrap_or(0), epochs.len()) {
         compact_epochs(dir, valid_ids)?;
     }
     Ok(())
@@ -221,7 +221,7 @@ mod tests {
             make_row("model.pkg.users", "id", "Primary key", 100),
             make_row("model.pkg.users", "email", "User email", 100),
         ];
-        write_parse_columns(dir.path(), rows, None, None).unwrap();
+        write_parse_columns(dir.path(), rows, None, None, None).unwrap();
         let back = read_parse_columns(dir.path());
         assert_eq!(back.len(), 2);
         assert_eq!(back[0].column_name, "email");
@@ -239,11 +239,11 @@ mod tests {
             make_row("model.pkg.a", "x", "old", 1),
             make_row("model.pkg.a", "y", "old", 1),
         ];
-        write_parse_columns(dir.path(), rows1, Some(&targets), None).unwrap();
+        write_parse_columns(dir.path(), rows1, Some(&targets), None, None).unwrap();
 
         // Re-parse: 1 column (y removed, x updated)
         let rows2 = vec![make_row("model.pkg.a", "x", "new", 2)];
-        write_parse_columns(dir.path(), rows2, Some(&targets), None).unwrap();
+        write_parse_columns(dir.path(), rows2, Some(&targets), None, None).unwrap();
 
         let back = read_parse_columns(dir.path());
         assert_eq!(back.len(), 1);
@@ -265,7 +265,7 @@ mod tests {
             granularity: None,
             ingested_at: 1,
         }];
-        write_parse_columns(dir.path(), rows, None, None).unwrap();
+        write_parse_columns(dir.path(), rows, None, None, None).unwrap();
         let back = read_parse_columns(dir.path());
         assert!(back[0].is_primary_key);
     }
