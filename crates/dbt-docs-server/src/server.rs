@@ -98,6 +98,7 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
             get(exposures::get_exposure),
         )
         .route("/api/v1/nodes", get(nodes::list_nodes))
+        .route("/api/v1/nodes/counts", get(nodes::list_node_counts))
         .route("/api/v1/nodes/{unique_id}", get(nodes::get_node))
         .route("/api/v1/files", get(files::list_files))
         .route(
