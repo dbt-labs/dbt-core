@@ -142,6 +142,29 @@ class TestRetryPreviousRun(BaseTestRetry):
         write_file(models__sample_model, "models", "sample_model.sql")
 
 
+class TestRetryAfterEmptyRetry(BaseTestRetry):
+    def test_retry_after_empty_retry(self, project):
+        # Run build with a failure
+        results = run_dbt(["build"], expect_pass=False)
+        assert any(r.status == RunStatus.Error for r in results.results)
+
+        # Fix the broken model and retry — everything should pass
+        fixed_sql = "select 1 as id, 1 as foo"
+        write_file(fixed_sql, "models", "sample_model.sql")
+
+        results = run_dbt(["retry"])
+        assert len(results) > 0
+
+        # Nothing left to retry — empty result set
+        results = run_dbt(["retry"])
+        assert {n.node.name: n.status for n in results.results} == {}
+
+        # Retry again after the empty retry — should still return empty result set
+        results = run_dbt(["retry"])
+        assert {n.node.name: n.status for n in results.results} == {}
+        write_file(models__sample_model, "models", "sample_model.sql")
+
+
 class TestRetryWarnError(BaseTestRetry):
     def test_warn_error(self, project):
         # Our test command should succeed when run normally...

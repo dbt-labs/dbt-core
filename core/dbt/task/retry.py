@@ -78,7 +78,7 @@ class RetryTask(ConfiguredTask):
         self.previous_results = load_result_state(
             Path(config.project_root) / Path(state_path) / RUN_RESULTS_FILE_NAME
         )
-        if not self.previous_results:
+        if self.previous_results is None:
             raise DbtRuntimeError(
                 f"Could not find previous run in '{state_path}' target directory"
             )
