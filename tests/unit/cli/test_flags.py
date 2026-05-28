@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import List, Optional
+from unittest import mock
 
 import click
 import pytest
@@ -42,7 +43,8 @@ class TestFlags:
 
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):
-        flags = Flags(run_context)
+        with mock.patch("dbt.cli.flags.get_user_setting_flags", return_value={}):
+            flags = Flags(run_context)
 
         if "DEPRECATED_" in param.name.upper():
             assert not hasattr(flags, param.name.upper())
