@@ -23,7 +23,7 @@ use dbt_tasks_core::task::TaskOp;
 use dbt_telemetry::{CompiledCode, NodeType};
 use minijinja::Value as MinijinjaValue;
 
-use crate::task::TaskResult;
+use dbt_tasks_core::task::TaskResult;
 
 use super::common::handle_render_result;
 use super::unit_test;

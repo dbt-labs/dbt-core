@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::sync::mpsc;
 
 use crate::renderable::seed::run_seed_render;
-use crate::task::TaskResult;
 use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_schemas::schemas::properties::UnitTestOverrides;
@@ -13,6 +12,7 @@ use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
 use dbt_tasks_core::task::TP;
 use dbt_tasks_core::task::Task;
+use dbt_tasks_core::task::TaskResult;
 use dbt_telemetry::NodeType;
 
 pub mod aggregated_test;
@@ -66,7 +66,7 @@ impl Task for RenderTask {
             // tasks via the DAG executor. No-op for nodes that aren't dev-clone
             // eligible (non-incremental tables, views, seeds, unit tests, etc.).
             let node_id = self.node.unique_id();
-            crate::runnable::run_cache::run_cache_dev_clone::maybe_run_dev_clone_for_node(
+            dbt_tasks_core::run_cache::run_cache_dev_clone::maybe_run_dev_clone_for_node(
                 ctx, &node_id,
             )
             .await;

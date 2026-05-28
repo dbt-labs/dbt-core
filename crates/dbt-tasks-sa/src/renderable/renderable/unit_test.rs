@@ -41,7 +41,7 @@ use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
 use dbt_telemetry::NodeType;
 
 use crate::renderable::unit_test_typing::{BigqueryTyping, SnowflakeTyping};
-use crate::task::TaskResult;
+use dbt_tasks_core::task::TaskResult;
 
 use arrow_schema::{DataType, Schema, SchemaRef};
 use csv::ReaderBuilder;

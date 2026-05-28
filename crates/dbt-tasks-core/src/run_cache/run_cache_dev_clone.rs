@@ -14,17 +14,17 @@ use dbt_schemas::schemas::properties::StatePreClone;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot, InternalDbtNode, InternalDbtNodeAttributes};
 
-use crate::runnable::run_cache::run_cache_request::{
+use crate::context::TaskRunnerCtx;
+use crate::run_cache::run_cache_request::{
     model_clone_table_properties, model_execution_type_input, node_identity,
     snapshot_clone_table_properties, snapshot_execution_type_input,
 };
-use crate::runnable::run_cache::run_cache_service::{
+use crate::run_cache::run_cache_service::{
     RunCacheCloneDecision, confirm_run_cache_service_execution, execute_run_cache_service_clone,
     run_cache_metadata_query_options,
 };
-use dbt_tasks_core::context::TaskRunnerCtx;
 
-pub(crate) async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
+pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     let Some(candidate) = dev_clone_candidate_for_node(ctx, node_id) else {
         return;
     };

@@ -14,6 +14,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
+use crate::context::TaskRunnerCtx;
+use crate::task::{TaskOp, TaskResult};
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{Cancellable, into_fs_error};
 use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
@@ -45,15 +47,12 @@ use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
 };
-use dbt_tasks_core::context::TaskRunnerCtx;
-use dbt_tasks_core::task::TaskOp;
 use dbt_xdbc::QueryCtx;
 
-use crate::runnable::run_cache::run_cache_request::{
+use crate::run_cache::run_cache_request::{
     SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
     build_seed_values_request, build_snapshot_sql_request, build_test_sql_request, node_identity,
 };
-use crate::task::TaskResult;
 
 pub fn collect_upstream_hashes(ctx: &TaskRunnerCtx, unique_id: &str) -> HashMap<String, String> {
     ctx.inner

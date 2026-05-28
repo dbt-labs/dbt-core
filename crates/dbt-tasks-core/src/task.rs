@@ -26,6 +26,19 @@ use crate::task_spans::{
 use crate::test_aggregation::GenericTestAggregation;
 use crate::visitor::SkipReason;
 
+use dbt_common::collections::DashMap;
+use dbt_scheduler::instructions::{LpInstruction, SqlInstruction};
+use minijinja::Value as MinijinjaValue;
+
+// Unified result type for all task outputs (render and/or analyze phase)
+#[derive(Debug, Clone)]
+pub struct TaskResult {
+    pub sql_instruction: SqlInstruction,
+    pub config_map: Arc<DashMap<String, MinijinjaValue>>,
+    /// Present only when the analyze phase ran (Local/Sidecar/Service execution).
+    pub lp_instruction: Option<LpInstruction>,
+}
+
 /// Stands for Task Phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum TP {

@@ -4,13 +4,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use crate::task::TaskResult;
 use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_schemas::schemas::{DbtTest, InternalDbtNodeAttributes};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
 use dbt_tasks_core::span_manager::SpanTreeRequest;
+use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task};
 use dbt_tasks_core::task_spans::create_task_span_for_node;
 use dbt_tasks_core::visitor::SkipReason;

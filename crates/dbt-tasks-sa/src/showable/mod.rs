@@ -20,12 +20,11 @@ use dbt_schemas::schemas::{InternalDbtNodeAttributes, Nodes};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::pretty_table::from_pretty_table_error;
 use dbt_tasks_core::show_task_hooks::ShowTaskHooks;
+use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task};
-
 use dbt_telemetry::{ShowDataOutput, ShowDataOutputFormat};
-use minijinja::Value as MinijinjaValue;
 
-use crate::task::TaskResult;
+use minijinja::Value as MinijinjaValue;
 
 mod analysis;
 mod model;

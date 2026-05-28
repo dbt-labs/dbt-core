@@ -1,11 +1,11 @@
 use crate::materialize::materialize_snapshot;
 use crate::runnable::cache::cache_materialization_return_value;
-use crate::task::TaskResult;
 use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_jinja_utils::utils::add_task_context;
 use dbt_schemas::schemas::{DbtSnapshot, InternalDbtNode};
 use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::task::TaskResult;
 
 pub fn execute_snapshot_remote(
     snapshot: &DbtSnapshot,

@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::time::SystemTime;
 
 use crate::materialize::materialize_unit_test_fast_pass;
-use crate::task::TaskResult;
 use dbt_common::FsResult;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::tracing::dbt_metrics::{FusionMetricKey, InvocationMetricKey};
@@ -17,6 +16,7 @@ use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::{DbtUnitTest, InternalDbtNodeAttributes};
 use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::task::TaskResult;
 use dbt_telemetry::{
     NodeErrorType, NodeEvaluated, NodeOutcome, NodeOutcomeDetail, NodeSkipReason,
     TestEvaluationDetail, TestOutcome,

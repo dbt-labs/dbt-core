@@ -2,13 +2,13 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::SystemTime;
 
-use crate::task::TaskResult;
 use dbt_common::FsResult;
 use dbt_common::collections::DashMap;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_scheduler::instructions::SqlInstruction;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::task::TaskResult;
 
 use minijinja::Value as MinijinjaValue;
 

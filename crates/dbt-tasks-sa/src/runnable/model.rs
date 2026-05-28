@@ -19,7 +19,7 @@ use dbt_telemetry::{NodeEvaluated, NodeEvent, has_node_warning};
 use minijinja::Value;
 use tracing::debug;
 
-use crate::task::TaskResult;
+use dbt_tasks_core::task::TaskResult;
 
 /// Check if a model uses the microbatch incremental strategy.
 pub fn try_get_microbatch_model(node: &dyn InternalDbtNodeAttributes) -> Option<&DbtModel> {

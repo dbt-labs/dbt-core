@@ -10,8 +10,7 @@ use dbt_schemas::schemas::DbtSnapshot;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::show_task_hooks::ShowTaskHooks;
-
-use crate::task::TaskResult;
+use dbt_tasks_core::task::TaskResult;
 
 use super::{Showable, rendered_sql_for, run_show};
 

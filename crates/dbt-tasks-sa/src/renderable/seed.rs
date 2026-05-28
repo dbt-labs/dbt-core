@@ -5,13 +5,13 @@
 /// `pre_register_seeds`.
 use std::sync::Arc;
 
-use crate::task::TaskResult;
 use dbt_common::FsResult;
 use dbt_common::collections::DashMap;
 use dbt_common::stats::NodeStatus;
 use dbt_scheduler::instructions::SqlInstruction;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::task::TaskResult;
 
 pub fn run_seed_render(
     node: Arc<dyn InternalDbtNodeAttributes>,
