@@ -63,7 +63,7 @@ static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
 // ----------------------------------------------------------------------------------------------
 // Cli and its subcommands
 
-const ABOUT: &str = "A fast and enriched dbt compiler and runner";
+const ABOUT: &str = "With dbt, data analysts and engineers can build analytics the way engineers build applications.";
 static AFTER_HELP: LazyLock<String> = LazyLock::new(|| {
     format!(
         "{}",
