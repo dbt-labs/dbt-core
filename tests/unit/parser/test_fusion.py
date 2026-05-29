@@ -11,7 +11,6 @@ import pytest
 from dbt.events.types import V2ParserEnd, V2ParserStart
 from dbt.exceptions import (
     FusionParserError,
-    FusionParserMissingError,
     FusionParserSchemaError,
     FusionParserVersionError,
 )
@@ -166,7 +165,7 @@ class TestParseWithFusion:
             "dbt.parser.fusion.get_flags",
             return_value=_flags(V2_PARSER="definitely-not-a-real-binary-xyz"),
         ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=FileNotFoundError()):
-            with pytest.raises(FusionParserMissingError):
+            with pytest.raises(FusionParserError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
     def test_sets_dbt_invocation_env_on_subprocess(self, tmp_path: Path, _patch_fusion_deps):
@@ -320,7 +319,7 @@ class TestParseWithFusionTelemetry:
     @pytest.mark.parametrize(
         "subprocess_side_effect, expected_error_class, expected_exit_code",
         [
-            (FileNotFoundError(), "FusionParserMissingError", -1),
+            (FileNotFoundError(), "FusionParserError", -1),
             # fs exits non-zero — exit code surfaced via FusionParserError.returncode
             (_fake_parser(manifest_text=None, returncode=2), "FusionParserError", 2),
             # fs exits 0 but writes no manifest — generic FusionParserError, no returncode

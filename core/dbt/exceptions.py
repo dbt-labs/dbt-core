@@ -95,11 +95,6 @@ class FusionParserError(DbtRuntimeError):
         self.returncode = returncode
 
 
-class FusionParserMissingError(FusionParserError):
-    CODE = 10026
-    MESSAGE = "Fusion Parser Missing"
-
-
 class FusionParserSchemaError(FusionParserError):
     CODE = 10027
     MESSAGE = "Fusion Parser Schema Error"

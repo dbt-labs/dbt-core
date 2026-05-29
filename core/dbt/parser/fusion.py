@@ -27,7 +27,6 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import V2ParserEnd, V2ParserStart
 from dbt.exceptions import (
     FusionParserError,
-    FusionParserMissingError,
     FusionParserSchemaError,
     FusionParserVersionError,
 )
@@ -91,7 +90,6 @@ def parse_with_fusion(
                         semantic_manifest_path, project_target_path / "semantic_manifest.json"
                     )
     except (
-        FusionParserMissingError,
         FusionParserVersionError,
         FusionParserSchemaError,
         FusionParserError,
@@ -250,7 +248,7 @@ def _run_fusion(argv: List[str]) -> None:
     try:
         result = subprocess.run(argv, check=False, env=_fusion_subprocess_env())
     except FileNotFoundError as e:
-        raise FusionParserMissingError(
+        raise FusionParserError(
             f"Fusion parser command not found: {argv[0]!r}. "
             f"Reinstall dbt-core-experimental-parser, or set --v2-parser to "
             f"point to an alternate engine binary."
