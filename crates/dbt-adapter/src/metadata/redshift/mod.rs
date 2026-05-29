@@ -15,7 +15,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
-use dbt_schemas::schemas::relations::base::{Policy, RelationPath, RelationPattern};
+use dbt_schemas::schemas::relations::base::RelationPattern;
 use dbt_xdbc::*;
 use indexmap::IndexMap;
 
@@ -47,21 +47,10 @@ fn build_redshift_relation(
     relation_type: RelationType,
     quoting: ResolvedQuoting,
 ) -> AdapterResult<Arc<dyn BaseRelation>> {
-    let relation = Relation::new_with_policy(
-        AdapterType::Redshift,
-        RelationPath {
-            database: Some(database).filter(|s| !s.is_empty()),
-            schema: Some(schema),
-            identifier: Some(name),
-        },
-        Some(relation_type),
-        Policy::trues(),
-        quoting,
-        None,
-        false,
-        false,
-    )
-    .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?;
+    let relation = Relation::new(AdapterType::Redshift, database, schema, name)
+        .with_relation_type(relation_type)
+        .with_quoting(quoting)
+        .validate()?;
     Ok(Arc::new(relation) as Arc<dyn BaseRelation>)
 }
 

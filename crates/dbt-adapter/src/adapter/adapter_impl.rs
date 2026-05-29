@@ -1089,19 +1089,14 @@ impl AdapterImpl {
                     "Introspective queries are disabled (--no-introspect).",
                 ));
             }
-            let mut relation = Relation::new(
+            let relation = Relation::new(
                 Snowflake,
-                Some(database.to_string()),
-                Some(schema.to_string()),
-                Some(identifier.to_string()),
-                None,
-                None,
-                self.quoting(),
-                None,
-                false,
-                false,
-            );
-            relation.table_format = TableFormat::Default;
+                database.to_string(),
+                schema.to_string(),
+                identifier.to_string(),
+            )
+            .with_quoting(self.quoting())
+            .validate()?;
             return Ok(Some(Arc::new(relation)));
         }
         match self.inner_adapter() {
@@ -1316,16 +1311,11 @@ impl AdapterImpl {
         // other platforms use it too
         let info_schema = Relation::new(
             self.adapter_type(),
-            Some(database.to_string()),
-            Some("INFORMATION_SCHEMA".to_string()),
-            None,
-            None,
-            None,
-            Policy::falses(),
-            None,
-            false,
-            false,
-        );
+            database.to_string(),
+            "INFORMATION_SCHEMA".to_string(),
+            None::<String>,
+        )
+        .with_quoting(Policy::falses());
 
         let (package_name, macro_name) = self.check_schema_exists_macro(state, &[])?;
         let batch = execute_macro_wrapper_with_package(
@@ -5076,16 +5066,12 @@ mod tests {
         // Test 1: Non-temporary Hive Metastore table -> should use legacy
         let hive_table = Relation::new(
             Databricks,
-            Some(DEFAULT_DATABRICKS_DATABASE.to_string()),
-            Some("schema1".to_string()),
-            Some("table1".to_string()),
-            Some(RelationType::Table),
-            None,
-            DEFAULT_RESOLVED_QUOTING,
-            None,
-            false,
-            false, // NOT temporary
-        );
+            DEFAULT_DATABRICKS_DATABASE.to_string(),
+            "schema1".to_string(),
+            "table1".to_string(),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING);
         assert!(
             hive_table.is_hive_metastore(),
             "Expected is_hive_metastore() to return true for non-temporary table in hive_metastore"
@@ -5106,16 +5092,13 @@ mod tests {
         // Note: In practice, UC temp tables wouldn't have database="hive_metastore", but this tests the logic
         let uc_temp_table = Relation::new(
             Databricks,
-            Some(DEFAULT_DATABRICKS_DATABASE.to_string()),
-            Some("schema1".to_string()),
-            Some("temp_table".to_string()),
-            Some(RelationType::Table),
-            None,
-            DEFAULT_RESOLVED_QUOTING,
-            None,
-            false,
-            true, // IS temporary (UC temporary table)
-        );
+            DEFAULT_DATABRICKS_DATABASE.to_string(),
+            "schema1".to_string(),
+            "temp_table".to_string(),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING)
+        .with_temporary(true);
         assert!(
             !uc_temp_table.is_hive_metastore(),
             "Expected is_hive_metastore() to return FALSE for UC temporary table (matching Python semantics)"
@@ -5134,16 +5117,12 @@ mod tests {
         // Test 3: Unity Catalog table (non-temporary) -> should NOT use legacy
         let unity_table = Relation::new(
             Databricks,
-            Some("unity_catalog".to_string()),
-            Some("schema1".to_string()),
-            Some("table1".to_string()),
-            Some(RelationType::Table),
-            None,
-            DEFAULT_RESOLVED_QUOTING,
-            None,
-            false,
-            false,
-        );
+            "unity_catalog".to_string(),
+            "schema1".to_string(),
+            "table1".to_string(),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING);
         assert!(
             !unity_table.is_hive_metastore(),
             "Expected Unity Catalog table (not Hive Metastore)"
@@ -5161,16 +5140,12 @@ mod tests {
         // Test 4: Materialized view -> should use legacy
         let mv = Relation::new(
             Databricks,
-            Some("unity_catalog".to_string()),
-            Some("schema1".to_string()),
-            Some("mv1".to_string()),
-            Some(RelationType::MaterializedView),
-            None,
-            DEFAULT_RESOLVED_QUOTING,
-            None,
-            false,
-            false,
-        );
+            "unity_catalog".to_string(),
+            "schema1".to_string(),
+            "mv1".to_string(),
+        )
+        .with_relation_type(RelationType::MaterializedView)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING);
         assert!(mv.is_materialized_view(), "Expected materialized view");
         // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
         // use_legacy = false || true || false = true

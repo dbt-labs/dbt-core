@@ -68,28 +68,12 @@ impl StaticBaseRelation for RelationStatic {
         custom_quoting: Option<ResolvedQuoting>,
         temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
-        let path = RelationPath {
-            // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/relation.py
-            database: match self.adapter_type {
-                AdapterType::ClickHouse => Some(String::new()),
-                _ => database.filter(|s| !s.is_empty()),
-            },
-            schema,
-            identifier,
-        };
-        let include_policy = include_policy(self.adapter_type, &path);
-        Ok(RelationObject::new(Arc::new(Relation::new_with_policy(
-            self.adapter_type,
-            path,
-            relation_type,
-            include_policy,
-            custom_quoting.unwrap_or(self.quoting),
-            // api.Relation.create doesn't set everything below
-            None,
-            false,
-            temporary.unwrap_or(false),
-        )?))
-        .into_value())
+        Relation::new(self.adapter_type, database, schema, identifier)
+            .with_relation_type(relation_type)
+            .with_quoting(custom_quoting.unwrap_or(self.quoting))
+            .with_temporary(temporary.unwrap_or(false))
+            .validate()
+            .map(|r| RelationObject::new(Arc::new(r)).into_value())
     }
 
     fn get_adapter_type(&self) -> String {
@@ -126,19 +110,11 @@ impl StaticBaseRelation for RelationStatic {
                         TableFormat::Default
                     };
 
-                let mut relation = Relation::new(
-                    AdapterType::Snowflake,
-                    database,
-                    schema,
-                    identifier,
-                    relation_type.map(|s| RelationType::from(s.as_str())),
-                    None,
-                    custom_quoting,
-                    None,
-                    false,
-                    false,
-                );
-                relation.table_format = table_format;
+                let relation = Relation::new(AdapterType::Snowflake, database, schema, identifier)
+                    .with_relation_type(relation_type.map(|s| RelationType::from(s.as_str())))
+                    .with_quoting(custom_quoting)
+                    .with_table_format(table_format)
+                    .validate()?;
                 let rel = RelationObject::new(Arc::new(relation));
                 Ok(Value::from_object(rel))
             }
@@ -326,24 +302,21 @@ impl BaseRelationProperties for Relation {
 }
 
 impl Relation {
-    /// Creates a new relation
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         adapter_type: AdapterType,
-        database: Option<String>,
-        schema: Option<String>,
-        identifier: Option<String>,
-        relation_type: Option<RelationType>,
-        native_schema: Option<RecordBatch>,
-        custom_quoting: ResolvedQuoting,
-        metadata: Option<BTreeMap<String, String>>,
-        is_delta: bool,
-        temporary: bool,
+        database: impl Into<Option<String>>,
+        schema: impl Into<Option<String>>,
+        identifier: impl Into<Option<String>>,
     ) -> Self {
         let path = RelationPath {
-            database: database.filter(|s| !s.is_empty()),
-            schema,
-            identifier,
+            database: match adapter_type {
+                // ClickHouse adapter does not normalize empty strings to None
+                // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/relation.py
+                AdapterType::ClickHouse => Some(String::new()),
+                _ => database.into().filter(|s| !s.is_empty()),
+            },
+            schema: schema.into(),
+            identifier: identifier.into(),
         };
         let include_policy = include_policy(adapter_type, &path);
         Self {
@@ -352,18 +325,89 @@ impl Relation {
             adapter_type,
             include_policy,
             path,
-            relation_type,
-            quote_policy: custom_quoting,
-            native_schema,
-            metadata,
-            is_delta,
+            relation_type: None,
+            quote_policy: ResolvedQuoting::trues(),
+            native_schema: None,
+            metadata: None,
+            is_delta: false,
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
-            temporary,
+            temporary: false,
             location: None,
             external: None,
             table_format: TableFormat::Default,
         }
+    }
+
+    pub fn with_relation_type(mut self, relation_type: impl Into<Option<RelationType>>) -> Self {
+        self.relation_type = relation_type.into();
+        self
+    }
+
+    pub fn with_quoting(mut self, quoting: ResolvedQuoting) -> Self {
+        self.quote_policy = quoting;
+        self
+    }
+
+    pub fn with_include_policy(mut self, include_policy: Policy) -> Self {
+        self.include_policy = include_policy;
+        self
+    }
+
+    pub fn with_native_schema(mut self, native_schema: impl Into<Option<RecordBatch>>) -> Self {
+        self.native_schema = native_schema.into();
+        self
+    }
+
+    pub fn with_metadata(mut self, metadata: impl Into<Option<BTreeMap<String, String>>>) -> Self {
+        self.metadata = metadata.into();
+        self
+    }
+
+    pub fn with_is_delta(mut self, is_delta: bool) -> Self {
+        self.is_delta = is_delta;
+        self
+    }
+
+    pub fn with_temporary(mut self, temporary: bool) -> Self {
+        self.temporary = temporary;
+        self
+    }
+
+    pub fn with_location(mut self, location: impl Into<String>) -> Self {
+        self.location = Some(location.into());
+        self
+    }
+
+    pub fn with_table_format(mut self, table_format: TableFormat) -> Self {
+        self.table_format = table_format;
+        self
+    }
+
+    pub fn with_external(mut self, external: impl Into<String>) -> Self {
+        self.external = Some(external.into());
+        self
+    }
+
+    pub fn validate(self) -> Result<Self, minijinja::Error> {
+        if let (Some(ident), Some(_relation_type), Some(max_len)) = (
+            &self.path.identifier,
+            &self.relation_type,
+            max_identifier_length(self.adapter_type),
+        ) {
+            if ident.len() > max_len.into() {
+                let message = format!(
+                    "Relation name '{}' is longer than {} characters",
+                    ident, max_len
+                );
+                return Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    message,
+                ));
+            }
+        }
+
+        Ok(self)
     }
 
     /// Create a relation that stubs some stuff to be used during `dbt parse`
@@ -433,65 +477,9 @@ impl Relation {
         relation_type: Option<RelationType>,
         custom_quoting: ResolvedQuoting,
     ) -> Self {
-        Self::new(
-            AdapterType::Fabric,
-            database,
-            schema,
-            identifier,
-            relation_type,
-            None,
-            custom_quoting,
-            None,
-            false,
-            false,
-        )
-    }
-
-    /// Create a new relation with a policy
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_policy(
-        adapter_type: AdapterType,
-        path: RelationPath,
-        relation_type: Option<RelationType>,
-        include_policy: Policy,
-        quote_policy: Policy,
-        metadata: Option<BTreeMap<String, String>>,
-        is_delta: bool,
-        temporary: bool,
-    ) -> Result<Self, minijinja::Error> {
-        if let (Some(ident), Some(_relation_type), Some(max_len)) = (
-            &path.identifier,
-            &relation_type,
-            max_identifier_length(adapter_type),
-        ) {
-            use minijinja::ErrorKind::InvalidOperation;
-            if ident.len() > max_len.into() {
-                let message = format!(
-                    "Relation name '{}' is longer than {} characters",
-                    ident, max_len
-                );
-                return Err(minijinja::Error::new(InvalidOperation, message));
-            }
-        }
-
-        Ok(Self {
-            is_parse_time: false,
-            is_information_schema: false,
-            adapter_type,
-            path,
-            relation_type,
-            include_policy,
-            quote_policy,
-            native_schema: None,
-            metadata,
-            is_delta,
-            create_constraints: Vec::new(),
-            alter_constraints: Vec::new(),
-            temporary,
-            location: None,
-            external: None,
-            table_format: TableFormat::Default,
-        })
+        Self::new(AdapterType::Fabric, database, schema, identifier)
+            .with_relation_type(relation_type)
+            .with_quoting(custom_quoting)
     }
 
     /// Add a constraint, routing to create_constraints or alter_constraints based on type
@@ -506,11 +494,6 @@ impl Relation {
                 self.create_constraints.push(constraint);
             }
         }
-    }
-
-    pub fn with_external(mut self, external: String) -> Self {
-        self.external = Some(external);
-        self
     }
 
     /// Create a copy of the relation with the given constraints added.
@@ -612,16 +595,20 @@ impl BaseRelation for Relation {
     }
 
     fn include_inner(&self, policy: Policy) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        let mut relation = Self::new_with_policy(
+        let mut relation = Relation::new(
             self.adapter_type,
-            self.path.clone(),
-            self.relation_type,
-            policy,
-            self.quote_policy,
-            self.metadata.clone(),
-            self.is_delta,
-            self.temporary,
-        )?;
+            self.path.database.clone(),
+            self.path.schema.clone(),
+            self.path.identifier.clone(),
+        )
+        .with_relation_type(self.relation_type)
+        .with_include_policy(policy)
+        .with_quoting(self.quote_policy)
+        .with_metadata(self.metadata.clone())
+        .with_is_delta(self.is_delta)
+        .with_temporary(self.temporary)
+        // FIXME: no need to validate here since the parent relation is already valid.
+        .validate()?;
 
         // Preserve constraints
         relation.create_constraints = self.create_constraints.clone();
@@ -633,16 +620,20 @@ impl BaseRelation for Relation {
     }
 
     fn quote_inner(&self, policy: Policy) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        let mut relation = Self::new_with_policy(
+        let mut relation = Relation::new(
             self.adapter_type,
-            self.path.clone(),
-            self.relation_type,
-            self.include_policy,
-            policy,
-            self.metadata.clone(),
-            self.is_delta,
-            self.temporary,
-        )?;
+            self.path.database.clone(),
+            self.path.schema.clone(),
+            self.path.identifier.clone(),
+        )
+        .with_relation_type(self.relation_type)
+        .with_include_policy(self.include_policy)
+        .with_quoting(policy)
+        .with_metadata(self.metadata.clone())
+        .with_is_delta(self.is_delta)
+        .with_temporary(self.temporary)
+        // FIXME: no need to validate here since the parent relation is already valid.
+        .validate()?;
         relation.create_constraints = self.create_constraints.clone();
         relation.alter_constraints = self.alter_constraints.clone();
         relation.is_parse_time = self.is_parse_time;
@@ -1097,22 +1088,14 @@ impl BaseRelation for Relation {
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        let path = RelationPath {
-            database: database.filter(|s| !s.is_empty()),
-            schema,
-            identifier,
-        };
-        let include_policy = include_policy(self.adapter_type, &path);
-        Ok(Arc::new(Relation::new_with_policy(
-            self.adapter_type,
-            path,
-            relation_type,
-            include_policy,
-            custom_quoting,
-            self.metadata.clone(),
-            self.is_delta,
-            self.temporary,
-        )?))
+        let relation = Relation::new(self.adapter_type, database, schema, identifier)
+            .with_relation_type(relation_type)
+            .with_quoting(custom_quoting)
+            .with_metadata(self.metadata.clone())
+            .with_is_delta(self.is_delta)
+            .with_temporary(self.temporary)
+            .validate()?;
+        Ok(Arc::new(relation))
     }
 
     fn information_schema(
@@ -1382,125 +1365,25 @@ mod tests {
 
         #[test]
         fn test_is_system() {
-            // Test system database (lowercase)
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                Some("system".to_string()),
-                Some("schema".to_string()),
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(relation.is_system());
+            let make = |db: Option<&str>, schema: Option<&str>| {
+                Relation::new(
+                    AdapterType::Databricks,
+                    db.map(String::from),
+                    schema.map(String::from),
+                    Some("table".to_string()),
+                )
+                .with_relation_type(RelationType::Table)
+                .with_quoting(DEFAULT_RESOLVED_QUOTING)
+            };
 
-            // Test system database (uppercase - case insensitive)
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                Some("SYSTEM".to_string()),
-                Some("schema".to_string()),
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(relation.is_system());
-
-            // Test information_schema schema (lowercase)
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                Some("database".to_string()),
-                Some("information_schema".to_string()),
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(relation.is_system());
-
-            // Test information_schema schema (uppercase - case insensitive)
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                Some("database".to_string()),
-                Some("INFORMATION_SCHEMA".to_string()),
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(relation.is_system());
-
-            // Test neither system database nor information_schema schema
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                Some("regular_database".to_string()),
-                Some("regular_schema".to_string()),
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(!relation.is_system());
-
-            // Test with None database and non-information_schema schema
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                None,
-                Some("regular_schema".to_string()),
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(!relation.is_system());
-
-            // Test with non-system database and None schema
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                Some("regular_database".to_string()),
-                None,
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(!relation.is_system());
-
-            // Test both system database and information_schema schema (should still be true)
-            let relation = Relation::new(
-                AdapterType::Databricks,
-                Some("system".to_string()),
-                Some("information_schema".to_string()),
-                Some("table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            assert!(relation.is_system());
+            assert!(make(Some("system"), Some("schema")).is_system());
+            assert!(make(Some("SYSTEM"), Some("schema")).is_system());
+            assert!(make(Some("database"), Some("information_schema")).is_system());
+            assert!(make(Some("database"), Some("INFORMATION_SCHEMA")).is_system());
+            assert!(!make(Some("regular_database"), Some("regular_schema")).is_system());
+            assert!(!make(None, Some("regular_schema")).is_system());
+            assert!(!make(Some("regular_database"), None).is_system());
+            assert!(make(Some("system"), Some("information_schema")).is_system());
         }
 
         #[test]
@@ -1509,16 +1392,12 @@ mod tests {
 
             let mut relation = Relation::new(
                 AdapterType::Databricks,
-                Some("test_db".to_string()),
-                Some("test_schema".to_string()),
-                Some("test_table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
+                "test_db".to_string(),
+                "test_schema".to_string(),
+                "test_table".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING);
 
             // Test check constraint goes to alter_constraints
             let check_constraint = TypedConstraint::Check {
@@ -1571,16 +1450,12 @@ mod tests {
         fn test_information_schema_with_database() {
             let relation = Relation::new(
                 AdapterType::Bigquery,
-                Some("test-db".to_string()),
-                Some("test_schema".to_string()),
-                Some("test_table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
+                "test-db".to_string(),
+                "test_schema".to_string(),
+                "test_table".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING);
 
             let info_schema = relation.information_schema("TABLES").unwrap();
             let rendered = info_schema.render_self_as_str();
@@ -1599,16 +1474,12 @@ mod tests {
         fn test_information_schema_quotes_project_identifier() {
             let relation = Relation::new(
                 AdapterType::Bigquery,
-                Some("my-project-1a".to_string()),
-                Some("test_schema".to_string()),
-                Some("test_table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
+                "my-project-1a".to_string(),
+                "test_schema".to_string(),
+                "test_table".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING);
 
             let info_schema = relation.information_schema("TABLES").unwrap();
 
@@ -1621,19 +1492,15 @@ mod tests {
 
         #[test]
         fn test_object_privileges_quotes_project_identifier() {
-            let mut relation = Relation::new(
+            let relation = Relation::new(
                 AdapterType::Bigquery,
-                Some("my-project-1a".to_string()),
-                Some("test_schema".to_string()),
-                Some("test_table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-            relation.location = Some("US".to_string());
+                "my-project-1a".to_string(),
+                "test_schema".to_string(),
+                "test_table".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING)
+            .with_location("US");
 
             let info_schema = relation.information_schema("OBJECT_PRIVILEGES").unwrap();
 
@@ -1648,16 +1515,12 @@ mod tests {
         fn test_information_schema_without_database() {
             let relation = Relation::new(
                 AdapterType::Bigquery,
-                None,
-                Some("test_schema".to_string()),
-                Some("test_table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
+                None::<String>,
+                "test_schema".to_string(),
+                "test_table".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING);
 
             // Test TABLES view without database - uses dataset-level INFORMATION_SCHEMA
             let info_schema = relation.information_schema("TABLES").unwrap();
@@ -1673,17 +1536,12 @@ mod tests {
         fn test_external_relation_renders_location() {
             let relation = Relation::new(
                 AdapterType::DuckDB,
-                Some("main".to_string()),
-                Some("raw".to_string()),
-                Some("orders".to_string()),
-                None,
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
+                "main".to_string(),
+                "raw".to_string(),
+                "orders".to_string(),
             )
-            .with_external("'data/RawOrders.csv'".to_string());
+            .with_quoting(DEFAULT_RESOLVED_QUOTING)
+            .with_external("'data/RawOrders.csv'");
 
             assert_eq!(relation.render_self_as_str(), "'data/RawOrders.csv'");
         }

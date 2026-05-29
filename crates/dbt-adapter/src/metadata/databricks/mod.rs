@@ -110,21 +110,20 @@ WHERE table_catalog = '{}'
         let table_type = table_types.value(i).to_uppercase();
         let is_delta = file_formats.value(i) == "delta";
 
-        let relation = Arc::new(Relation::new(
-            engine.adapter_type(),
-            Some(catalog.to_string()),
-            Some(schema.to_string()),
-            Some(name.to_string()),
-            Some(RelationType::from_adapter_type(
+        let relation = Arc::new(
+            Relation::new(
+                engine.adapter_type(),
+                catalog.to_string(),
+                schema.to_string(),
+                name.to_string(),
+            )
+            .with_relation_type(RelationType::from_adapter_type(
                 AdapterType::Databricks,
                 table_type.as_str(),
-            )),
-            None,
-            engine.quoting(),
-            None,
-            is_delta,
-            false,
-        )) as Arc<dyn BaseRelation>;
+            ))
+            .with_quoting(engine.quoting())
+            .with_is_delta(is_delta),
+        ) as Arc<dyn BaseRelation>;
         relations.push(relation);
     }
 
@@ -1450,18 +1449,16 @@ mod tests {
             identifier: quote_identifier,
         };
 
-        Arc::new(Relation::new(
-            AdapterType::Databricks,
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            Some(RelationType::Table),
-            None,
-            quote_policy,
-            None,
-            false,
-            false,
-        ))
+        Arc::new(
+            Relation::new(
+                AdapterType::Databricks,
+                database.to_string(),
+                schema.to_string(),
+                identifier.to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(quote_policy),
+        )
     }
 
     #[test]

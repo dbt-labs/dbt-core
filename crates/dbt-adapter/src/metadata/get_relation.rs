@@ -5,7 +5,7 @@ use arrow::array::{Array as _, StringArray};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, RelationPath, TableFormat};
+use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
@@ -196,19 +196,15 @@ fn snowflake_get_relation(
         TableFormat::Default
     };
 
-    let mut relation = Relation::new(
+    let relation = Relation::new(
         AdapterType::Snowflake,
-        Some(database.to_string()),
-        Some(schema.to_string()),
-        Some(identifier.to_string()),
-        relation_type,
-        None,
-        adapter.quoting(),
-        None,
-        false,
-        false,
-    );
-    relation.table_format = table_format;
+        database.to_string(),
+        schema.to_string(),
+        identifier.to_string(),
+    )
+    .with_relation_type(relation_type)
+    .with_quoting(adapter.quoting())
+    .with_table_format(table_format);
     Ok(Some(Box::new(relation)))
 }
 
@@ -275,18 +271,16 @@ fn bigquery_get_relation(
     let relation_type_name = string_array.value(0).to_uppercase();
     let relation_type = RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
 
-    let mut relation = Box::new(Relation::new(
-        AdapterType::Bigquery,
-        Some(database.to_string()),
-        Some(schema.to_string()),
-        Some(identifier.to_string()),
-        Some(relation_type),
-        None,
-        adapter.quoting(),
-        None,
-        false,
-        false,
-    ));
+    let mut relation = Box::new(
+        Relation::new(
+            AdapterType::Bigquery,
+            database.to_string(),
+            schema.to_string(),
+            identifier.to_string(),
+        )
+        .with_relation_type(relation_type)
+        .with_quoting(adapter.quoting()),
+    );
     let location = adapter.get_dataset_location(state, conn, relation.as_ref(), token)?;
     relation.location = location;
     Ok(Some(relation))
@@ -331,18 +325,18 @@ fn spark_get_relation(
     // TODO(serramatutu): populate table metadata.
     let json_metadata = BTreeMap::new();
 
-    Ok(Some(Box::new(Relation::new(
-        AdapterType::Spark,
-        Some("".to_string()),
-        Some(schema.to_string()),
-        Some(identifier.to_string()),
-        Some(relation_type),
-        None,
-        adapter.quoting(),
-        Some(json_metadata),
-        is_delta,
-        false,
-    ))))
+    Ok(Some(Box::new(
+        Relation::new(
+            AdapterType::Spark,
+            None::<String>,
+            schema.to_string(),
+            identifier.to_string(),
+        )
+        .with_relation_type(relation_type)
+        .with_quoting(adapter.quoting())
+        .with_metadata(json_metadata)
+        .with_is_delta(is_delta),
+    )))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -490,18 +484,18 @@ fn databricks_get_relation(
         Some(database.to_string())
     };
 
-    Ok(Some(Box::new(Relation::new(
-        adapter.adapter_type(),
-        db,
-        Some(schema.to_string()),
-        Some(identifier.to_string()),
-        relation_type,
-        None,
-        adapter.quoting(),
-        metadata,
-        is_delta,
-        false,
-    ))))
+    Ok(Some(Box::new(
+        Relation::new(
+            adapter.adapter_type(),
+            db,
+            schema.to_string(),
+            identifier.to_string(),
+        )
+        .with_relation_type(relation_type)
+        .with_quoting(adapter.quoting())
+        .with_metadata(metadata)
+        .with_is_delta(is_delta),
+    )))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -575,21 +569,15 @@ LEFT JOIN materialized_views mv
         _ => None,
     };
 
-    let relation = Relation::new_with_policy(
+    let relation = Relation::new(
         AdapterType::Redshift,
-        RelationPath {
-            database: Some(database.to_string()).filter(|s| !s.is_empty()),
-            schema: Some(schema.to_string()),
-            identifier: Some(identifier.to_string()),
-        },
-        relation_type,
-        Policy::trues(),
-        adapter.quoting(),
-        None,
-        false,
-        false,
+        database.to_string(),
+        schema.to_string(),
+        identifier.to_string(),
     )
-    .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?;
+    .with_relation_type(relation_type)
+    .with_quoting(adapter.quoting())
+    .validate()?;
     Ok(Some(Box::new(relation)))
 }
 
@@ -660,20 +648,15 @@ fn postgres_get_relation(
         _ => return invalid_value!("Unsupported relation type {}", string_array.value(0)),
     };
 
-    let relation = Relation::new_with_policy(
+    let relation = Relation::new(
         AdapterType::Postgres,
-        RelationPath {
-            database: Some(database.to_string()).filter(|s| !s.is_empty()),
-            schema: Some(schema.to_string()),
-            identifier: Some(identifier.to_string()),
-        },
-        relation_type,
-        Policy::trues(),
-        adapter.quoting(),
-        None,
-        false,
-        false,
-    )?;
+        database.to_string(),
+        schema.to_string(),
+        identifier.to_string(),
+    )
+    .with_relation_type(relation_type)
+    .with_quoting(adapter.quoting())
+    .validate()?;
     Ok(Some(Box::new(relation)))
 }
 
@@ -740,21 +723,15 @@ fn salesforce_get_relation(
     // TODO: resolves relation_table based on the metadata to be returned in schema
     match conn.get_table_schema(Some(database), None, identifier) {
         Ok(_) => Ok(Some(Box::new(
-            Relation::new_with_policy(
+            Relation::new(
                 AdapterType::Salesforce,
-                RelationPath {
-                    database: Some(database.to_string()).filter(|s| !s.is_empty()),
-                    schema: None,
-                    identifier: Some(identifier.to_string()),
-                },
-                Some(RelationType::Table),
-                Policy::new(false, false, true),
-                Policy::enabled(),
-                None,
-                false,
-                false,
+                database.to_string(),
+                None::<String>,
+                identifier.to_string(),
             )
-            .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?,
+            .with_relation_type(RelationType::Table)
+            .with_quoting(Policy::enabled())
+            .validate()?,
         ))),
         Err(_) => Ok(None),
     }

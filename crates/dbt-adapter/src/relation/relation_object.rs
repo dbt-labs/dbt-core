@@ -4,7 +4,7 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
-use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, RelationPath, TableFormat};
+use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{DbtSource, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_yaml as yml;
@@ -416,128 +416,11 @@ pub fn do_create_relation(
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
 ) -> Result<Box<dyn BaseRelation>, minijinja::Error> {
-    use AdapterType::*;
-    let relation = match adapter_type {
-        Postgres => Box::new(Relation::new_with_policy(
-            Postgres,
-            RelationPath {
-                database: Some(database).filter(|s| !s.is_empty()),
-                schema: Some(schema),
-                identifier,
-            },
-            relation_type,
-            Policy::trues(),
-            custom_quoting,
-            None,
-            false,
-            false,
-        )?) as Box<dyn BaseRelation>,
-        DuckDB => Box::new(Relation::new(
-            DuckDB,
-            Some(database).filter(|s| !s.is_empty()),
-            Some(schema),
-            identifier,
-            relation_type,
-            None,
-            custom_quoting,
-            None,
-            false,
-            false,
-        )) as Box<dyn BaseRelation>,
-        Snowflake => {
-            let mut relation = Relation::new(
-                Snowflake,
-                Some(database),
-                Some(schema),
-                identifier,
-                relation_type,
-                None,
-                custom_quoting,
-                None,
-                false,
-                false,
-            );
-            relation.table_format = TableFormat::Default;
-            Box::new(relation) as Box<dyn BaseRelation>
-        }
-        Redshift => Box::new(Relation::new_with_policy(
-            Redshift,
-            RelationPath {
-                database: Some(database).filter(|s| !s.is_empty()),
-                schema: Some(schema),
-                identifier,
-            },
-            relation_type,
-            Policy::trues(),
-            custom_quoting,
-            None,
-            false,
-            false,
-        )?) as Box<dyn BaseRelation>,
-        Bigquery | Databricks | Spark | Fabric => Box::new(Relation::new(
-            adapter_type,
-            Some(database),
-            Some(schema),
-            identifier,
-            relation_type,
-            None,
-            custom_quoting,
-            None,
-            false,
-            false,
-        )) as Box<dyn BaseRelation>,
-        ClickHouse => Box::new(Relation::new_with_policy(
-            ClickHouse,
-            RelationPath {
-                // Upstream `ClickHouseRelation.__post_init__` forces `path.database = ''`
-                // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/relation.py
-                database: Some(String::new()),
-                schema: Some(schema),
-                identifier,
-            },
-            relation_type,
-            Policy::new(false, true, true),
-            custom_quoting,
-            None,
-            false,
-            false,
-        )?) as Box<dyn BaseRelation>,
-        Exasol => Box::new(Relation::new_with_policy(
-            Exasol,
-            RelationPath {
-                database: Some(database).filter(|s| !s.is_empty()),
-                schema: Some(schema),
-                identifier,
-            },
-            relation_type,
-            Policy::new(false, true, true),
-            custom_quoting,
-            None,
-            false,
-            false,
-        )?) as Box<dyn BaseRelation>,
-        Salesforce => Box::new(Relation::new_with_policy(
-            Salesforce,
-            RelationPath {
-                database: Some(database).filter(|s| !s.is_empty()),
-                schema: Some(schema),
-                identifier,
-            },
-            relation_type,
-            Policy::new(false, false, true),
-            Policy::enabled(),
-            None,
-            false,
-            false,
-        )?) as Box<dyn BaseRelation>,
-        Starburst => todo!("Starburst"),
-        Athena => todo!("Athena"),
-        Trino => todo!("Trino"),
-        Dremio => todo!("Dremio"),
-        Oracle => todo!("Oracle"),
-        Datafusion => todo!("Datafusion"),
-    };
-    Ok(relation)
+    Relation::new(adapter_type, Some(database), Some(schema), identifier)
+        .with_relation_type(relation_type)
+        .with_quoting(custom_quoting)
+        .validate()
+        .map(|r| Box::new(r) as Box<dyn BaseRelation>)
 }
 
 /// Creates a relation based on the adapter type
@@ -576,19 +459,9 @@ pub fn create_relation_from_source(
         && let Some(external) = duckdb_external_location_for_source(source)?
     {
         return Ok(Box::new(
-            Relation::new(
-                AdapterType::DuckDB,
-                Some(database).filter(|s| !s.is_empty()),
-                Some(schema),
-                Some(identifier),
-                None,
-                None,
-                custom_quoting,
-                None,
-                false,
-                false,
-            )
-            .with_external(external),
+            Relation::new(AdapterType::DuckDB, database, schema, identifier)
+                .with_quoting(custom_quoting)
+                .with_external(external),
         ));
     }
 

@@ -74,18 +74,16 @@ FROM
         let relation_type =
             RelationType::from_adapter_type(AdapterType::Bigquery, table_types.value(i));
 
-        result.push(Arc::new(Relation::new(
-            AdapterType::Bigquery,
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            Some(relation_type),
-            None,
-            engine.quoting(),
-            None,
-            false,
-            false,
-        )) as Arc<dyn BaseRelation>);
+        result.push(Arc::new(
+            Relation::new(
+                AdapterType::Bigquery,
+                database.to_string(),
+                schema.to_string(),
+                identifier.to_string(),
+            )
+            .with_relation_type(relation_type)
+            .with_quoting(engine.quoting()),
+        ) as Arc<dyn BaseRelation>);
     }
     Ok(result)
 }

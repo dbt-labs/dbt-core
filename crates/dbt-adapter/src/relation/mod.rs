@@ -31,10 +31,7 @@ mod tests {
     use dbt_schemas::dbt_types::RelationType;
     use dbt_schemas::{
         filter::{RunFilter, Sample},
-        schemas::{
-            common::ResolvedQuoting,
-            relations::base::{BaseRelation as _, TableFormat},
-        },
+        schemas::{common::ResolvedQuoting, relations::base::BaseRelation as _},
     };
 
     use crate::AdapterType;
@@ -43,19 +40,13 @@ mod tests {
 
     #[test]
     fn test_render_with_run_filter_snowflake_adapter() {
-        let mut relation = Relation::new(
+        let relation = Relation::new(
             AdapterType::Snowflake,
-            None,
-            None,
-            Some("my_table".to_owned()),
-            None,
-            None,
-            ResolvedQuoting::disabled(),
-            None,
-            false,
-            false,
-        );
-        relation.table_format = TableFormat::Default;
+            None::<String>,
+            None::<String>,
+            "my_table".to_owned(),
+        )
+        .with_quoting(ResolvedQuoting::disabled());
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -92,16 +83,11 @@ mod tests {
     fn test_render_with_run_filter_snowflake_microbatch_includes_utc_offset() {
         let relation = Relation::new(
             AdapterType::Snowflake,
-            None,
-            None,
-            Some("stg_events".to_owned()),
-            None,
-            None,
-            ResolvedQuoting::disabled(),
-            None,
-            false,
-            false,
-        );
+            None::<String>,
+            None::<String>,
+            "stg_events".to_owned(),
+        )
+        .with_quoting(ResolvedQuoting::disabled());
         let start = NaiveDate::from_ymd_opt(2026, 4, 27)
             .unwrap()
             .and_hms_opt(16, 0, 0)
@@ -135,16 +121,11 @@ mod tests {
     fn test_render_with_run_filter_bigquery_adapter() {
         let relation = Relation::new(
             AdapterType::Bigquery,
-            None,
-            None,
-            Some("my_table".to_owned()),
-            None,
-            None,
-            ResolvedQuoting::disabled(),
-            None,
-            false,
-            false,
-        );
+            None::<String>,
+            None::<String>,
+            "my_table".to_owned(),
+        )
+        .with_quoting(ResolvedQuoting::disabled());
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -177,16 +158,11 @@ mod tests {
         // relation impl in core doesn't seem to override this
         let relation = Relation::new(
             AdapterType::Redshift,
-            None,
-            None,
-            Some("my_table".to_owned()),
-            None,
-            None,
-            ResolvedQuoting::disabled(),
-            None,
-            false,
-            false,
-        );
+            None::<String>,
+            None::<String>,
+            "my_table".to_owned(),
+        )
+        .with_quoting(ResolvedQuoting::disabled());
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -219,16 +195,11 @@ mod tests {
         // relation impl in dbt-databricks doesn't seem to override this
         let relation = Relation::new(
             AdapterType::Databricks, // ?
-            None,
-            None,
-            Some("my_table".to_owned()),
-            None,
-            None,
-            ResolvedQuoting::disabled(),
-            None,
-            false,
-            false,
-        );
+            None::<String>,
+            None::<String>,
+            "my_table".to_owned(),
+        )
+        .with_quoting(ResolvedQuoting::disabled());
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -282,16 +253,11 @@ mod tests {
     fn test_render_with_run_filter_clickhouse_adapter() {
         let relation = Relation::new(
             AdapterType::ClickHouse,
-            None,
-            Some("analytics".to_string()),
-            Some("events".to_owned()),
-            None,
-            None,
-            ResolvedQuoting::disabled(),
-            None,
-            false,
-            false,
-        );
+            None::<String>,
+            "analytics".to_string(),
+            "events".to_owned(),
+        )
+        .with_quoting(ResolvedQuoting::disabled());
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)

@@ -289,19 +289,15 @@ fn build_relations_from_show_objects(
             TableFormat::Default
         };
 
-        let mut relation = Relation::new(
+        let relation = Relation::new(
             AdapterType::Snowflake,
-            Some(database_name.to_string()),
-            Some(schema_name.to_string()),
-            Some(name.to_string()),
-            relation_type,
-            None,
-            quoting,
-            None,
-            false,
-            false,
-        );
-        relation.table_format = table_format;
+            database_name.to_string(),
+            schema_name.to_string(),
+            name.to_string(),
+        )
+        .with_relation_type(relation_type)
+        .with_quoting(quoting)
+        .with_table_format(table_format);
         relations.push(Arc::new(relation) as Arc<dyn BaseRelation>);
     }
 
