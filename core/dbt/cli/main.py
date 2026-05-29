@@ -127,6 +127,7 @@ def global_flags(func):
     @p.log_level_file
     @p.log_path
     @p.macro_debugging
+    @p.manage_state
     @p.partial_parse
     @p.partial_parse_file_path
     @p.partial_parse_file_diff
@@ -145,6 +146,8 @@ def global_flags(func):
     @p.use_colors
     @p.use_colors_file
     @p.use_experimental_parser
+    @p.use_v2_parser
+    @p.v2_parser
     @p.version
     @p.version_check
     @p.warn_error
@@ -496,6 +499,37 @@ def init(ctx, **kwargs):
     from dbt.task.init import InitTask
 
     with InitTask(ctx.obj["flags"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
+    return results, success
+
+
+# dbt login
+@cli.group(invoke_without_command=True)
+@click.pass_context
+@global_flags
+@p.profiles_dir_exists_false
+@p.skip_browser_auth
+@requires.preflight
+def login(ctx, **kwargs):
+    """Authenticate to dbt platform."""
+    if ctx.invoked_subcommand is not None:
+        return
+    from dbt.task.login import LoginTask
+
+    with LoginTask(ctx.obj["flags"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
+    return results, success
+
+
+@login.command("status")
+@click.pass_context
+def status(ctx, **kwargs):
+    """Show current authentication status."""
+    from dbt.task.login import LoginStatusTask
+
+    with LoginStatusTask(ctx.obj["flags"]) as task:
         results = task.run()
         success = task.interpret_results(results)
     return results, success
