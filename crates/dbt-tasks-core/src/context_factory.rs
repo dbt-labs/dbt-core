@@ -16,6 +16,7 @@ use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
 use petgraph::graph::DiGraph;
 
+use crate::CompiledSqlCache;
 use crate::PreTaskRunData;
 use crate::RunTasksArgs;
 use crate::context::{ExtendedCtx, RunCacheCtx, TaskRunnerCtx, TaskRunnerCtxInner};
@@ -29,7 +30,6 @@ use crate::test_aggregation::GenericTestRelationships;
 /// Abstract [TaskRunnerCtx] factory.
 pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
     fn rendering_listener_factory(&self) -> Arc<dyn RenderingEventListenerFactory>;
-    fn compiled_sql_cache(&self) -> Arc<dyn crate::CompiledSqlCache>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn build(
@@ -42,6 +42,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
         graph: &DiGraph<Arc<dyn Task>, ()>,
         schema_store: Arc<dyn SchemaStoreTrait>,
         data_store: Arc<dyn DataStoreTrait>,
+        compiled_sql_cache: Arc<dyn CompiledSqlCache>,
         mut base_context: BTreeMap<String, minijinja::Value>,
         schedule: Schedule<String>,
         jinja_env: Arc<JinjaEnv>,
@@ -61,7 +62,6 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
             );
             sm
         });
-        let compiled_sql_cache = self.compiled_sql_cache();
         let adhoc_runner = extended_ctx_factory.adhoc_runner(
             Arc::clone(&jinja_env),
             resolver_state.adapter_type,

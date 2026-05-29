@@ -18,7 +18,6 @@ use dbt_schema_store::store::SchemaStore;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
-use dbt_tasks_core::PreTaskRunData;
 use dbt_tasks_core::RunTaskResults;
 use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::TaskRunnerStats;
@@ -28,6 +27,7 @@ use dbt_tasks_core::precompile::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooks;
 use dbt_tasks_core::test_aggregation::GenericTestRelationships;
+use dbt_tasks_core::{CompiledSqlCache, PreTaskRunData};
 use dbt_telemetry::{ExecutionPhase, PhaseExecuted};
 use dbt_telemetry::{HookOutcome, HookProcessed, HookType};
 
@@ -66,6 +66,7 @@ pub struct TaskRunner {
     jinja_env: Arc<JinjaEnv>,
     schema_store: Arc<SchemaStore>,
     data_store: Arc<dyn DataStoreTrait>,
+    compiled_sql_cache: Arc<dyn CompiledSqlCache>,
     ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
     static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
 }
@@ -78,6 +79,7 @@ impl TaskRunner {
         jinja_env: Arc<JinjaEnv>,
         schema_store: Arc<SchemaStore>,
         data_store: Arc<dyn DataStoreTrait>,
+        compiled_sql_cache: Arc<dyn CompiledSqlCache>,
         ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
         static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
     ) -> Self {
@@ -88,6 +90,7 @@ impl TaskRunner {
             jinja_env,
             schema_store,
             data_store,
+            compiled_sql_cache,
             ctx_factory,
             static_analysis_buckets,
         }
@@ -186,6 +189,7 @@ impl TaskRunner {
                 graph,
                 Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
                 Arc::clone(&self.data_store),
+                Arc::clone(&self.compiled_sql_cache),
                 base_context,
                 schedule,
                 Arc::clone(&self.jinja_env),

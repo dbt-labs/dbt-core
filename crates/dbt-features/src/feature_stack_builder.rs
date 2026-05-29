@@ -37,11 +37,9 @@ use dbt_schemas::schemas::{
     InternalDbtNodeAttributes, ResolvedCloudConfig as SchemasResolvedCloudConfig,
 };
 use dbt_schemas::state::ResolverState;
-use dbt_tasks_core::CompiledSqlCache;
 use dbt_tasks_core::context::ExtendedCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
 use dbt_tasks_core::{PreTaskRunData, RunTasksArgs};
-use dbt_tasks_sa::compiled_sql_cache::CompiledSqlCacheImpl;
 use dbt_tasks_sa::schema_hydrator::NoopSchemaHydratorFactory;
 use dbt_tasks_sa::task::DefaultTasksForNodeFactory;
 use dbt_tasks_sa::task_runner_hooks::DefaultTaskRunnerHooksFactory;
@@ -172,13 +170,11 @@ impl AdapterFactory for DefaultAdapterFactoryImpl {
 }
 struct DefaultTaskRunnerCtxFactory {
     rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>,
-    compiled_sql_cache: Arc<dyn CompiledSqlCache>,
 }
 impl DefaultTaskRunnerCtxFactory {
     fn new(rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>) -> Self {
         Self {
             rendering_listener_factory,
-            compiled_sql_cache: Arc::new(CompiledSqlCacheImpl::default()),
         }
     }
 }
@@ -186,10 +182,6 @@ impl DefaultTaskRunnerCtxFactory {
 impl TaskRunnerCtxFactory for DefaultTaskRunnerCtxFactory {
     fn rendering_listener_factory(&self) -> Arc<dyn RenderingEventListenerFactory> {
         Arc::clone(&self.rendering_listener_factory)
-    }
-
-    fn compiled_sql_cache(&self) -> Arc<dyn CompiledSqlCache> {
-        Arc::clone(&self.compiled_sql_cache)
     }
 
     fn build_node_hashes<'a>(

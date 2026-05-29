@@ -65,7 +65,6 @@ use dbt_schemas::{
     stats::Stats,
 };
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooksFactory;
-use dbt_tasks_sa::task_runner::TaskRunner;
 use dbt_tasks_sa::utils::{
     update_columns_from_schemas, update_resolved_states_manifest_with_schemas_and_compiled_sql,
 };
@@ -76,6 +75,7 @@ use dbt_tasks_sa::{
         schedule_with_select, schedule_with_unique_ids,
     },
 };
+use dbt_tasks_sa::{compiled_sql_cache::CompiledSqlCacheImpl, task_runner::TaskRunner};
 use dbt_tasks_sa::{
     constraints::render_all_model_constraint_refs_in_place,
     run_operation::{INLINE_SQL_NAME, run_operation, run_operation_inline_sql},
@@ -1635,12 +1635,9 @@ impl DbtProjectCompilation {
         };
 
         // FEATURES: build_cache render
-        // Setup render cache — use the factory's cache so that the TaskRunnerCtx built
-        // later by TaskRunnerCtxFactory::build() operates on the same instance we clear here.
-        let compiled_sql_cache = feature_stack
-            .task_runner
-            .task_runner_ctx_factory
-            .compiled_sql_cache();
+        let compiled_sql_cache = previous_cache_state
+            .map(|x| x.compiled_sql_cache.clone())
+            .unwrap_or_else(|| Arc::new(CompiledSqlCacheImpl::default()));
         if let Some(prev_changed_nodes) = compilation_cache_changes.map(|x| {
             // If any yml files were changed, invalidate
             // the impacted nodes as they need to be re-rendered because
@@ -1855,6 +1852,7 @@ impl DbtProjectCompilation {
             jinja_env,
             schema_store.clone(),
             data_store.clone(),
+            compiled_sql_cache.clone(),
             Arc::clone(&feature_stack.task_runner.task_runner_ctx_factory),
             static_analysis_buckets,
         );
