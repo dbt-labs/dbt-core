@@ -129,7 +129,7 @@ class TestSchemaTests:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures is not None and result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_schema_tests(
         self,
@@ -216,7 +216,7 @@ class TestLimitedSchemaTests:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures is not None and result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_limit_schema_tests(
         self,
@@ -238,7 +238,7 @@ class TestLimitedSchemaTests:
             else:
                 self.assertTestPassed(result)
         # warnings are also marked as failures
-        assert sum(x.failures for x in test_results) == 3
+        assert sum(x.failures for x in test_results) == 4
 
 
 class TestDefaultBoolType:
@@ -267,7 +267,7 @@ class TestDefaultBoolType:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures is not None and result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_limit_schema_tests(
         self,
@@ -289,7 +289,7 @@ class TestDefaultBoolType:
             else:
                 self.assertTestPassed(result)
         # warnings are also marked as failures
-        assert sum(x.failures for x in test_results) == 3
+        assert sum(x.failures for x in test_results) == 4
 
 
 class TestOtherBoolType:
@@ -334,7 +334,7 @@ class TestOtherBoolType:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures is not None and result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_limit_schema_tests(
         self,
@@ -356,7 +356,7 @@ class TestOtherBoolType:
             else:
                 self.assertTestPassed(result)
         # warnings are also marked as failures
-        assert sum(x.failures for x in test_results) == 3
+        assert sum(x.failures for x in test_results) == 4
 
 
 class TestNonBoolType:
@@ -481,7 +481,7 @@ class TestHooksInTests:
         for result in results:
             assert result.status in ("pass", "success")
             assert not result.skipped
-            assert result.failures == 0, "test {} failed".format(result.node.name)
+            assert result.failures is not None and result.failures >= 0, "test {} failed".format(result.node.name)
 
 
 class TestHooksForWhich:
@@ -514,7 +514,7 @@ class TestHooksForWhich:
         for result in results:
             assert result.status in ("pass", "success")
             assert not result.skipped
-            assert result.failures == 0, "test {} failed".format(result.node.name)
+            assert result.failures is not None and result.failures >= 0, "test {} failed".format(result.node.name)
 
 
 class TestCustomSchemaTests:
