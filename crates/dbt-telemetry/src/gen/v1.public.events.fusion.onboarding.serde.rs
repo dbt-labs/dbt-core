@@ -25,6 +25,7 @@ impl serde::Serialize for OnboardingScreen {
             Self::DownloadAgentsMd => "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD",
             Self::CompileSaBaseline => "ONBOARDING_SCREEN_COMPILE_SA_BASELINE",
             Self::CompileSaBaselineSuccess => "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS",
+            Self::Login => "ONBOARDING_SCREEN_LOGIN",
         };
         serializer.serialize_str(variant)
     }
@@ -56,6 +57,7 @@ impl<'de> serde::Deserialize<'de> for OnboardingScreen {
             "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD",
             "ONBOARDING_SCREEN_COMPILE_SA_BASELINE",
             "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS",
+            "ONBOARDING_SCREEN_LOGIN",
         ];
 
         struct GeneratedVisitor;
@@ -116,6 +118,7 @@ impl<'de> serde::Deserialize<'de> for OnboardingScreen {
                     "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD" => Ok(OnboardingScreen::DownloadAgentsMd),
                     "ONBOARDING_SCREEN_COMPILE_SA_BASELINE" => Ok(OnboardingScreen::CompileSaBaseline),
                     "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS" => Ok(OnboardingScreen::CompileSaBaselineSuccess),
+                    "ONBOARDING_SCREEN_LOGIN" => Ok(OnboardingScreen::Login),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

@@ -50,6 +50,7 @@ pub enum OnboardingScreen {
     DownloadAgentsMd = 17,
     CompileSaBaseline = 18,
     CompileSaBaselineSuccess = 19,
+    Login = 20,
 }
 impl OnboardingScreen {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -80,6 +81,7 @@ impl OnboardingScreen {
             Self::CompileSaBaselineSuccess => {
                 "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS"
             }
+            Self::Login => "ONBOARDING_SCREEN_LOGIN",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -107,6 +109,7 @@ impl OnboardingScreen {
             "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS" => {
                 Some(Self::CompileSaBaselineSuccess)
             }
+            "ONBOARDING_SCREEN_LOGIN" => Some(Self::Login),
             _ => None,
         }
     }

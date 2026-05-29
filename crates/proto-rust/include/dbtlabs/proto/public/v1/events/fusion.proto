@@ -400,6 +400,7 @@ enum OnboardingScreen {
   DOWNLOAD_AGENTS_MD = 17;
   COMPILE_SA_BASELINE = 18;
   COMPILE_SA_BASELINE_SUCCESS = 19;
+  LOGIN              = 20;
 }
 
 enum OnboardingAction {
