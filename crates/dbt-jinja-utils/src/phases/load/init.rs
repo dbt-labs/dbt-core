@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_adapter::{Adapter, sql_types::DefaultTypeOpsImpl};
+use dbt_adapter::{Adapter, sql_types::DefaultTypeOps};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{
     ErrorCode, FsResult, fs_err, io_args::IoArgs, warn_error_options::WarnErrorOptions,
@@ -46,7 +46,7 @@ pub fn initialize_load_jinja_environment(
     let target_context = Arc::new(build_target_context_map(profile, target, target_context));
 
     let package_quoting = resolve_package_quoting(None, adapter_type);
-    let type_ops = Arc::new(DefaultTypeOpsImpl::new(adapter_type));
+    let type_ops = Arc::new(DefaultTypeOps::new(adapter_type));
 
     // TODO: change this to use the AdapterFactory instead
     let adapter = Adapter::new_parse_phase_adapter(

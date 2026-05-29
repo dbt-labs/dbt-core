@@ -164,15 +164,15 @@ pub trait TypeOpsFactory: Send + Sync {
 }
 
 /// Source-available [TypeOps] implementation.
-pub struct DefaultTypeOpsImpl(AdapterType);
+pub struct DefaultTypeOps(AdapterType);
 
-impl DefaultTypeOpsImpl {
+impl DefaultTypeOps {
     pub fn new(adapter_type: AdapterType) -> Self {
         Self(adapter_type)
     }
 }
 
-impl TypeOps for DefaultTypeOpsImpl {
+impl TypeOps for DefaultTypeOps {
     fn adapter_type(&self) -> AdapterType {
         self.0
     }
@@ -182,11 +182,12 @@ impl TypeOps for DefaultTypeOpsImpl {
         data_type: &DataType,
         out: &mut String,
     ) -> AdapterResult<()> {
+        use AdapterType::*;
         let adapter_type = self.0;
         match adapter_type {
-            AdapterType::Postgres | AdapterType::Salesforce => {
-                postgres::try_format_type(data_type, true, out)
-            }
+            Postgres | Salesforce => postgres::try_format_type(data_type, true, out),
+            Fabric => fabric::try_format_type(data_type, true, out),
+            ClickHouse => clickhouse::try_format_type(data_type, true, out),
             _ => {
                 // sdf-specific distinct types are encoded as FixedSizeList(field, 1).
                 // Render them as the uppercased field name (e.g. "variant" → "VARIANT").
@@ -196,7 +197,7 @@ impl TypeOps for DefaultTypeOpsImpl {
                 }
                 // List types: Snowflake uses unparameterized ARRAY; other dialects use ARRAY<T>.
                 if let DataType::List(field) = data_type {
-                    if adapter_type == AdapterType::Snowflake {
+                    if adapter_type == Snowflake {
                         out.push_str("ARRAY");
                     } else {
                         out.push_str("ARRAY<");
@@ -268,15 +269,22 @@ impl TypeOps for DefaultTypeOpsImpl {
         }
     }
 
-    fn parse_column_description(&self, _s: &str) -> AdapterResult<Field> {
-        let err = AdapterError::new(
-            AdapterErrorKind::NotSupported,
-            format!(
-                "parse_column_description is not supported for {}",
-                self.adapter_type()
-            ),
-        );
-        Err(err)
+    fn parse_column_description(&self, s: &str) -> AdapterResult<Field> {
+        let backend = self.adapter_type();
+        let col = SqlType::parse_column_description(backend, s, true)
+            .map_err(|err| AdapterError::new(AdapterErrorKind::NotSupported, err))?;
+        let name = col
+            .name
+            .as_ref()
+            .map(|id| id.as_ref().to_string())
+            .unwrap_or_default();
+        let mut field = col.sql_type.to_field(backend, name, col.nullable);
+        if let Some(comment) = col.comment {
+            let mut metadata = field.metadata().clone();
+            metadata.insert("comment".to_string(), comment);
+            field = field.with_metadata(metadata);
+        }
+        Ok(field)
     }
 
     fn normalize_and_compare_sql_types(&self, lhs: &str, rhs: &str) -> AdapterResult<bool> {

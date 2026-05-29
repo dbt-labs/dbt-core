@@ -1472,3 +1472,70 @@ fn test_athena_struct_rendering() {
     ]));
     assert_roundtrip(line!(), &t, s, Athena);
 }
+
+#[test]
+fn test_parse_column_description() {
+    let col = SqlType::parse_column_description(Snowflake, "id INTEGER NOT NULL", false).unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "id");
+    assert!(matches!(col.sql_type, Integer));
+    assert!(!col.nullable);
+    assert!(col.comment.is_none());
+
+    let col = SqlType::parse_column_description(Snowflake, "age FLOAT NULL", false).unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "age");
+    assert!(matches!(col.sql_type, Float(None)));
+    assert!(col.nullable);
+
+    let col = SqlType::parse_column_description(Snowflake, "price NUMBER(10,2)", false).unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "price");
+    assert!(matches!(col.sql_type, Numeric(Some((10, Some(2))))));
+    assert!(col.nullable);
+
+    let col =
+        SqlType::parse_column_description(Snowflake, "data VARIANT COMMENT 'json data'", false)
+            .unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "data");
+    assert_eq!(col.comment.as_deref(), Some("'json data'"));
+
+    let col = SqlType::parse_column_description(
+        Snowflake,
+        "name VARCHAR(50) NOT NULL COLLATE 'en-ci' COMMENT 'full name'",
+        false,
+    )
+    .unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "name");
+    assert!(!col.nullable);
+    assert_eq!(col.comment.as_deref(), Some("'full name'"));
+
+    let col = SqlType::parse_column_description(Databricks, "col: STRING NOT NULL", false).unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "col");
+    assert!(matches!(col.sql_type, Varchar(..)));
+    assert!(!col.nullable);
+
+    let col = SqlType::parse_column_description(Snowflake, "\"quoted_col\" STRING NOT NULL", false)
+        .unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "quoted_col");
+    assert!(!col.nullable);
+
+    // identifier_optional = true: parse type directly when no identifier present
+    let col = SqlType::parse_column_description(Snowflake, "INTEGER NOT NULL", true).unwrap();
+    assert!(col.name.is_none());
+    assert!(matches!(col.sql_type, Integer));
+    assert!(!col.nullable);
+
+    let col =
+        SqlType::parse_column_description(Snowflake, "VARCHAR(100) COMMENT 'hi'", true).unwrap();
+    assert!(col.name.is_none());
+    assert!(matches!(col.sql_type, Varchar(Some(100), ..)));
+    assert_eq!(col.comment.as_deref(), Some("'hi'"));
+
+    // identifier_optional = true: still parses identifier when present
+    let col = SqlType::parse_column_description(Snowflake, "id INTEGER NOT NULL", true).unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "id");
+    assert!(matches!(col.sql_type, Integer));
+    assert!(!col.nullable);
+
+    let col = SqlType::parse_column_description(Snowflake, "price NUMBER(10,2)", true).unwrap();
+    assert_eq!(col.name.unwrap().as_ref(), "price");
+    assert!(matches!(col.sql_type, Numeric(Some((10, Some(2))))));
+}

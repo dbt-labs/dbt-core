@@ -47,7 +47,7 @@ use std::sync::{Arc, Mutex};
 
 use dbt_adapter::Adapter;
 use dbt_adapter::relation::{RelationObject, create_relation};
-use dbt_adapter::sql_types::DefaultTypeOpsImpl;
+use dbt_adapter::sql_types::DefaultTypeOps;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
@@ -517,7 +517,7 @@ impl MacroTestHarnessBuilder {
             self.adapter_type,
             dbt_yaml::Mapping::default(),
             quoting,
-            Arc::new(DefaultTypeOpsImpl::new(self.adapter_type)),
+            Arc::new(DefaultTypeOps::new(self.adapter_type)),
             None,
         ));
 

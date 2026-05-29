@@ -3,7 +3,7 @@
 #[allow(clippy::module_inception)]
 mod tests {
     use dbt_adapter::Adapter;
-    use dbt_adapter::sql_types::DefaultTypeOpsImpl;
+    use dbt_adapter::sql_types::DefaultTypeOps;
     use dbt_adapter_core::AdapterType;
     use dbt_common::io_args::StaticAnalysisKind;
     use dbt_common::{FsResult, io_args::IoArgs};
@@ -399,7 +399,7 @@ mod tests {
                 AdapterType::Postgres,
                 dbt_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,
-                Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+                Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
                 None,
             ));
             env.add_global("adapter", adapter.as_value());

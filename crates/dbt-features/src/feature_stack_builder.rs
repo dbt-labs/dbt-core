@@ -13,7 +13,7 @@ use dbt_adapter::config::AdapterConfig;
 use dbt_adapter::engine::XdbcEngine;
 use dbt_adapter::engine::query_comment::QueryCommentConfig;
 use dbt_adapter::query_cache::QueryCache;
-use dbt_adapter::sql_types::{DefaultTypeOpsImpl, TypeOps, TypeOpsFactory};
+use dbt_adapter::sql_types::{DefaultTypeOps, TypeOps, TypeOpsFactory};
 use dbt_adapter::stmt_splitter::StmtSplitter;
 use dbt_adapter::{Adapter, AdapterEngine, AdapterImpl};
 use dbt_adapter_core::AdapterType;
@@ -62,7 +62,7 @@ use crate::tracing::TracingFeature;
 struct DefaultTypeOpsFactoryImpl;
 impl TypeOpsFactory for DefaultTypeOpsFactoryImpl {
     fn create(&self, adapter_type: AdapterType) -> Arc<dyn TypeOps> {
-        Arc::new(DefaultTypeOpsImpl::new(adapter_type))
+        Arc::new(DefaultTypeOps::new(adapter_type))
     }
 }
 

@@ -324,6 +324,17 @@ impl StructField {
     }
 }
 
+/// A parsed column description from a CREATE TABLE statement.
+///
+/// Example: `id INTEGER NOT NULL COMMENT 'primary key'`
+#[derive(Debug, Clone)]
+pub struct ColumnDescription {
+    pub name: Option<Ident>,
+    pub sql_type: SqlType,
+    pub nullable: bool,
+    pub comment: Option<String>,
+}
+
 /// Encodes an entry in an enum type.
 ///
 /// The enum label and an optional integer value.
@@ -497,6 +508,23 @@ impl SqlType {
         parser
             .parse(backend)
             .map_err(|err| format!("Failed to parse SQL type '{input}': {err}"))
+    }
+
+    /// Parse a column description (identifier followed by type and optional constraints).
+    ///
+    /// When `identifier_optional` is true, the parser will attempt to parse a type directly
+    /// if no identifier is found (for inputs like `INTEGER NOT NULL`).
+    ///
+    /// Example inputs: `id INTEGER NOT NULL`, `name VARCHAR(50) COMMENT 'full name'`
+    pub fn parse_column_description(
+        backend: AdapterType,
+        input: &str,
+        identifier_optional: bool,
+    ) -> Result<ColumnDescription, String> {
+        let mut parser = Parser::new(input);
+        parser
+            .parse_column_description(backend, identifier_optional)
+            .map_err(|err| format!("Failed to parse column description '{input}': {err}"))
     }
 
     pub fn to_string(&self, backend: AdapterType) -> String {
@@ -2293,6 +2321,105 @@ impl<'source> Parser<'source> {
     fn parse(&mut self, backend: AdapterType) -> Result<(SqlType, bool), ParseError<'source>> {
         let (ty, nullable) = self.parse_constrained_type(backend)?;
         Ok((ty, nullable.unwrap_or(true)))
+    }
+
+    /// Parse a column description: identifier, optional colon, type, optional NOT NULL,
+    /// optional COLLATE, optional COMMENT.
+    fn parse_column_description(
+        &mut self,
+        backend: AdapterType,
+        identifier_optional: bool,
+    ) -> Result<ColumnDescription, ParseError<'source>> {
+        let name = if identifier_optional {
+            // Try to parse a leading identifier. The first word is an identifier if:
+            // - It's followed by `:` (Databricks `name: TYPE` syntax), or
+            // - It's followed by another word that is not a constraint keyword
+            //   (i.e. followed by a type keyword)
+            //
+            // If neither condition holds, try_() resets position and we parse as type-only.
+            self.tokenizer
+                .try_(|tokenizer| {
+                    let Token::Word(w) = tokenizer.next()? else {
+                        return None;
+                    };
+                    // A `:` after the word means it's definitely an identifier
+                    if tokenizer.match_(|t| t == Token::Colon) {
+                        return Some(w.to_string());
+                    }
+                    // Peek at what follows: if it's a type-starting word, the first word
+                    // was an identifier. peek_and_then resets on None, advances on Some.
+                    // We DON'T want to advance past the type keyword, so we always return
+                    // None from the peek (just using it to inspect) and decide outside.
+                    let mut next_is_type_start = false;
+                    tokenizer.peek_and_then(|next| {
+                        if let Token::Word(next_w) = next {
+                            if !eqi(next_w, "NOT")
+                                && !eqi(next_w, "NULL")
+                                && !eqi(next_w, "NULLABLE")
+                                && !eqi(next_w, "COLLATE")
+                                && !eqi(next_w, "COMMENT")
+                            {
+                                next_is_type_start = true;
+                            }
+                        }
+                        None::<()>
+                    });
+                    next_is_type_start.then_some(w.to_string())
+                })
+                .map(|w| word2ident(w, backend))
+                .transpose()?
+        } else {
+            let tok = self.next()?;
+            let ident = match tok {
+                Token::Word(w) => word2ident(w.to_string(), backend)?,
+                _ => return Err(ParseError::Unexpected(tok)),
+            };
+            // Databricks supports `name: TYPE` syntax
+            let _ = self.match_(Token::Colon);
+            Some(ident)
+        };
+
+        self.parse_column_description_body(backend, name)
+    }
+
+    fn parse_column_description_body(
+        &mut self,
+        backend: AdapterType,
+        name: Option<Ident>,
+    ) -> Result<ColumnDescription, ParseError<'source>> {
+        let (sql_type, nullable) = self.parse_constrained_type(backend)?;
+        let nullable = nullable.unwrap_or(true);
+
+        // Parse optional trailing attributes: COLLATE and COMMENT
+        let mut collate: Option<String> = None;
+        let mut comment: Option<String> = None;
+        loop {
+            if collate.is_none() && self.match_word("COLLATE") {
+                collate = Some(self.collation_spec(backend)?);
+                continue;
+            }
+            if comment.is_none() && self.match_word("COMMENT") {
+                comment = Some(self.string_literal()?.to_string());
+                continue;
+            }
+            break;
+        }
+
+        // Fold COLLATE into the type if it's a string type
+        let sql_type = match (sql_type, collate) {
+            (SqlType::Varchar(max_len, mut attrs), Some(collate_spec)) => {
+                attrs.collate_spec = Some(collate_spec);
+                SqlType::Varchar(max_len, attrs)
+            }
+            (ty, _) => ty,
+        };
+
+        Ok(ColumnDescription {
+            name,
+            sql_type,
+            nullable,
+            comment,
+        })
     }
 
     fn parse_unconstrained_type(

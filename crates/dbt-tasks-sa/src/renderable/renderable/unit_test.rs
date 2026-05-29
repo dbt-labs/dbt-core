@@ -13,7 +13,7 @@ use dbt_adapter::Column;
 use dbt_adapter::errors::into_fs_error;
 use dbt_adapter::formatter::SqlLiteralFormatter;
 use dbt_adapter::relation::{RelationObject, create_relation_from_node};
-use dbt_adapter::sql_types::DefaultTypeOpsImpl;
+use dbt_adapter::sql_types::DefaultTypeOps;
 use dbt_adapter::sql_types::{TypeOps, make_arrow_field};
 use dbt_adapter_core::{AdapterType, ExecutionPhase, quote_char};
 use dbt_common::cancellation::Cancellable;
@@ -724,9 +724,7 @@ fn extract_expect_values<'a>(
         .env
         .get_base_adapter()
         .map(|a| a.engine().type_ops().clone())
-        .unwrap_or_else(|| {
-            Arc::new(DefaultTypeOpsImpl::new(ctx.adapter_type())) as Arc<dyn TypeOps>
-        });
+        .unwrap_or_else(|| Arc::new(DefaultTypeOps::new(ctx.adapter_type())) as Arc<dyn TypeOps>);
     let type_ops = type_ops_arc.as_ref();
     let column_names = Vec::from_iter(
         expect_schema
@@ -989,7 +987,7 @@ fn render_unit_test(
         .env
         .get_base_adapter()
         .map(|a| a.engine().type_ops().clone())
-        .unwrap_or_else(|| Arc::new(DefaultTypeOpsImpl::new(adapter_type)) as Arc<dyn TypeOps>);
+        .unwrap_or_else(|| Arc::new(DefaultTypeOps::new(adapter_type)) as Arc<dyn TypeOps>);
     let type_ops = type_ops_arc.as_ref();
 
     // Build compile context first so we can use it for rendering given_fqn
@@ -1989,7 +1987,7 @@ mod tests {
         let adapter_type = AdapterType::Bigquery;
         let fqn = "`project.dataset.table`";
         let result =
-            create_cte_name_from_fqn(adapter_type, &DefaultTypeOpsImpl::new(adapter_type), fqn);
+            create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
         assert_eq!(result, "project_dataset_table");
     }
 
@@ -1998,7 +1996,7 @@ mod tests {
         let adapter_type = AdapterType::Snowflake;
         let fqn = "database.schema.table";
         let result =
-            create_cte_name_from_fqn(adapter_type, &DefaultTypeOpsImpl::new(adapter_type), fqn);
+            create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
         assert_eq!(result, "\"database_schema_table\"");
     }
 
@@ -2031,7 +2029,7 @@ mod tests {
             ],
         ];
         let result = create_bigquery_relation_to_select_from(
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             enriched_rows,
             &schema,
             &columns,
@@ -2063,7 +2061,7 @@ mod tests {
             vec![YmlValue::null(), YmlValue::string("Test".to_string())],
         ];
         let result = create_bigquery_relation_to_select_from(
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             enriched_rows,
             &schema,
             &columns,
@@ -2089,7 +2087,7 @@ mod tests {
         ];
         let enriched_rows = vec![];
         let result = create_bigquery_relation_to_select_from(
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             enriched_rows,
             &schema,
             &columns,
@@ -2110,7 +2108,7 @@ mod tests {
         let columns = vec![(&message, &DataType::Utf8, "STRING".to_string())];
         let enriched_rows = vec![vec![YmlValue::string("Hello 'World'".to_string())]];
         let result = create_bigquery_relation_to_select_from(
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             enriched_rows,
             &schema,
             &columns,
@@ -2150,7 +2148,7 @@ mod tests {
             YmlValue::number(3.15.into()),
         ]];
         let result = create_bigquery_relation_to_select_from(
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             enriched_rows,
             &schema,
             &columns,
@@ -2190,7 +2188,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             single_row,
             &schema,
             &columns,
@@ -2227,7 +2225,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             multiple_rows,
             &schema,
             &columns,
@@ -2282,7 +2280,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             empty_rows,
             &schema,
             &columns,
@@ -2313,7 +2311,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             rows,
             &schema,
             &columns,
@@ -2347,7 +2345,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             rows,
             &schema,
             &columns,
@@ -2387,7 +2385,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             rows,
             &schema,
             &columns,
@@ -2422,7 +2420,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             rows,
             &schema,
             &columns,
@@ -2468,7 +2466,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Bigquery,
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             rows,
             &schema,
             &columns,
@@ -2512,7 +2510,7 @@ mod tests {
         ]));
 
         let columns =
-            columns_to_formatted_types(&schema, &DefaultTypeOpsImpl::new(AdapterType::Snowflake))
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Snowflake))
                 .expect("Must format column types");
 
         let mut object_map = dbt_yaml::mapping::Mapping::new();
@@ -2537,7 +2535,7 @@ mod tests {
 
         let result = create_select_with_union_all(
             AdapterType::Snowflake,
-            &DefaultTypeOpsImpl::new(AdapterType::Snowflake),
+            &DefaultTypeOps::new(AdapterType::Snowflake),
             yml_rows,
             &schema,
             &columns,
@@ -2584,7 +2582,7 @@ mod tests {
         ]));
 
         let columns =
-            columns_to_formatted_types(&schema, &DefaultTypeOpsImpl::new(AdapterType::Bigquery))
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Bigquery))
                 .expect("Must format column types");
 
         let mut object_map = dbt_yaml::mapping::Mapping::new();
@@ -2603,7 +2601,7 @@ mod tests {
         ]];
 
         let result = create_bigquery_relation_to_select_from(
-            &DefaultTypeOpsImpl::new(AdapterType::Bigquery),
+            &DefaultTypeOps::new(AdapterType::Bigquery),
             yml_rows,
             &schema,
             &columns,

@@ -132,7 +132,7 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
         _ctx: &mut TaskRunnerCtx,
         _token: &CancellationToken,
     ) -> FsResult<()> {
-        todo!("will_visit_taskgraph")
+        Ok(())
     }
 
     async fn did_visit_taskgraph(

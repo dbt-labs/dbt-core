@@ -250,6 +250,17 @@ impl<'source> Tokenizer<'source> {
         self.position = old_pos;
         None
     }
+
+    /// Speculatively run a closure that may consume multiple tokens. If it returns
+    /// `None`, the tokenizer's position is reset to its state before the call.
+    pub fn try_<T>(&mut self, f: impl FnOnce(&mut Self) -> Option<T>) -> Option<T> {
+        let old_pos = self.position;
+        let res = f(self);
+        if res.is_none() {
+            self.position = old_pos;
+        }
+        res
+    }
 }
 
 #[cfg(test)]

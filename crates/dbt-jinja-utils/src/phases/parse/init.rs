@@ -7,7 +7,7 @@ use std::{
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_adapter::{Adapter, sql_types::DefaultTypeOpsImpl};
+use dbt_adapter::{Adapter, sql_types::DefaultTypeOps};
 use dbt_adapter_core::*;
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_jinja_ctx::{GlobalCore, JinjaObject, ResolveCore, to_jinja_btreemap};
@@ -67,7 +67,7 @@ pub fn initialize_parse_jinja_environment(
 
     let invocation_args_dict = invocation_args_to_dict(invocation_args, &prj_flags);
 
-    let type_formatter = Arc::new(DefaultTypeOpsImpl::new(adapter_type));
+    let type_formatter = Arc::new(DefaultTypeOps::new(adapter_type));
     let adapter = Arc::new(Adapter::new_parse_phase_adapter(
         adapter_type,
         adapter_config_mapping,

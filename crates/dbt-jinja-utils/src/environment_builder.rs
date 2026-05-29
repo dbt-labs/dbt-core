@@ -460,7 +460,7 @@ mod tests {
     use std::{collections::BTreeSet, path::PathBuf, sync::Mutex};
 
     use dbt_adapter::Adapter;
-    use dbt_adapter::sql_types::DefaultTypeOpsImpl;
+    use dbt_adapter::sql_types::DefaultTypeOps;
     use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
@@ -596,7 +596,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -683,7 +683,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -745,7 +745,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
         );
         let env = JinjaEnvBuilder::new()
@@ -865,7 +865,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
         );
 
@@ -916,7 +916,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
         );
 
@@ -961,7 +961,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
         );
 
@@ -1022,7 +1022,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
         );
 
