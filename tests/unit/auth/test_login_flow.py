@@ -11,11 +11,14 @@ import json
 import time
 from argparse import Namespace
 from unittest import mock
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 from dbt.auth.credentials import OAuthSession, PlatformCredential, StateCredential
+from dbt.auth.oauth.platform import build_context as build_platform_ctx
 from dbt.auth.oauth.platform import exchange_code as platform_exchange_code
 from dbt.auth.oauth.platform import on_platform_login_success
 from dbt.auth.oauth.platform import resolve_from_callback as platform_resolve
+from dbt.auth.oauth.state import build_context as build_state_ctx
 from dbt.auth.oauth.state import on_state_login_success
 from dbt.auth.oauth.state import resolve_from_callback as state_resolve
 from dbt.auth.resolvers import OAuthPassiveResolver
@@ -383,3 +386,73 @@ class TestStateLoginFlow:
         assert call_data["code"] == "the_code"
         assert call_data["client_id"] == "rc_client"
         assert call_data["state"] == "the_state"
+
+
+class TestStateOAuthUrlRoundTrip:
+    """The dbt_state_oauth param carries a base64-encoded state authorize URL
+    inside the platform authorize URL. A prior bug caused base64 '=' padding to
+    collide with URL query syntax when the domain changed to auth.state.dbt.com.
+    These tests prove the nested URL survives the round-trip."""
+
+    def _build_combined_url(self, state_auth_url: str = "https://auth.state.dbt.com"):
+        """Replicate the URL construction in OAuthInteractiveResolver.resolve()."""
+        redirect_url = "http://localhost:54321/"
+
+        platform_ctx = build_platform_ctx(
+            redirect_url=redirect_url,
+            client_id="test_client",
+            auth_server_url="https://us1.dbt.com/register",
+            scopes="identity:read offline_access",
+        )
+
+        with mock.patch.dict("os.environ", {"RUN_CACHE_AUTH_URL": state_auth_url}, clear=False):
+            state_ctx = build_state_ctx(redirect_url)
+
+        parsed = urlparse(platform_ctx["authorize_url"])
+        params = parse_qsl(parsed.query)
+        params.append(("dbt_state_oauth", state_ctx["encoded_param"]))
+        params.append(("_dbtsrc", "dbt-core"))
+        combined_url = urlunparse(parsed._replace(query=urlencode(params)))
+
+        return combined_url, state_ctx
+
+    def _extract_state_url(self, combined_url: str) -> str:
+        """Parse dbt_state_oauth from the combined URL and base64-decode it."""
+        qs = parse_qs(urlparse(combined_url).query)
+        assert "dbt_state_oauth" in qs, "dbt_state_oauth missing from combined URL"
+        encoded = qs["dbt_state_oauth"][0]
+        return base64.b64decode(encoded).decode()
+
+    def test_state_url_roundtrips_with_padding_domain(self):
+        """auth.state.dbt.com produces base64 output with '=' padding.
+        Verify the decoded state URL retains all expected query params."""
+        combined_url, state_ctx = self._build_combined_url("https://auth.state.dbt.com")
+        decoded_url = self._extract_state_url(combined_url)
+
+        decoded_qs = parse_qs(urlparse(decoded_url).query)
+        assert decoded_qs["client_id"][0] == state_ctx["client_id"]
+        assert decoded_qs["state"][0] == state_ctx["state"]
+        assert decoded_qs["redirect_uri"][0] == "http://localhost:54321/"
+        assert decoded_qs["scope"][0] == "runcache:scope:orgs"
+        assert decoded_qs["response_type"][0] == "code"
+        assert "code_challenge" in decoded_qs
+        assert decoded_qs["code_challenge_method"][0] == "S256"
+
+    def test_state_url_roundtrips_with_no_padding_domain(self):
+        """auth.runcache.com (no padding) should also round-trip cleanly."""
+        combined_url, state_ctx = self._build_combined_url("https://auth.runcache.com")
+        decoded_url = self._extract_state_url(combined_url)
+
+        decoded_qs = parse_qs(urlparse(decoded_url).query)
+        assert decoded_qs["client_id"][0] == state_ctx["client_id"]
+        assert decoded_qs["state"][0] == state_ctx["state"]
+        assert decoded_qs["redirect_uri"][0] == "http://localhost:54321/"
+
+    def test_encoded_param_contains_padding(self):
+        """Confirm that auth.state.dbt.com actually produces '=' padding,
+        which was the root cause of the original bug."""
+        _, state_ctx = self._build_combined_url("https://auth.state.dbt.com")
+        encoded = state_ctx["encoded_param"]
+        assert (
+            "=" in encoded
+        ), f"Expected base64 padding in encoded_param for auth.state.dbt.com, got: {encoded}"
