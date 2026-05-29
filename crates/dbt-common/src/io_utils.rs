@@ -103,13 +103,13 @@ pub fn determine_project_dir(inputs: &[String], project_file: &str) -> FsResult<
                 if !inputs.is_empty() {
                     err!(
                         ErrorCode::IoError,
-                        "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project dir\nHint: pass a dbt project dir via `--project-dir <path>` or run `db init` to scaffold a project",
+                        "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project dir\nHint: pass a dbt project dir via `--project-dir <path>` or run `dbt init` to scaffold a project",
                         inputs[0]
                     )
                 } else {
                     err!(
                         ErrorCode::IoError,
-                        "The current dir is not a dbt project dir\nHint: `cd` into it; pass a <path> to it via `--project-dir <path>`; or run `db init` to scaffold a project"
+                        "The current dir is not a dbt project dir\nHint: `cd` into it; pass a <path> to it via `--project-dir <path>`; or run `dbt init` to scaffold a project"
                     )
                 }
             } else {
@@ -117,7 +117,7 @@ pub fn determine_project_dir(inputs: &[String], project_file: &str) -> FsResult<
                     diff_paths(search_start, env::current_dir()?).unwrap_or(env::current_dir()?);
                 err!(
                     ErrorCode::IoError,
-                    "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project dir\nHint: pass a dbt project dir via `--project-dir <path>` or run `db init` to scaffold a project",
+                    "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project dir\nHint: pass a dbt project dir via `--project-dir <path>` or run `dbt init` to scaffold a project",
                     relative_path.display()
                 )
             }
