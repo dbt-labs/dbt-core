@@ -275,6 +275,7 @@ fn search_row_schema() -> Arc<Schema> {
         Field::new("exposure_type", DataType::Utf8, true),
         Field::new("original_file_path", DataType::Utf8, true),
         Field::new("matched_field", DataType::Utf8, true),
+        Field::new("executed_at", DataType::Utf8, true),
     ]))
 }
 
@@ -296,6 +297,46 @@ fn make_search_row(
     exposure_type: Option<&str>,
     original_file_path: Option<&str>,
     matched_field: Option<&str>,
+) -> RecordBatch {
+    make_search_row_with_executed_at(
+        unique_id,
+        name,
+        resource_type,
+        package_name,
+        fqn,
+        tags,
+        description,
+        materialized,
+        access_level,
+        source_name,
+        freshness_checked,
+        test_type,
+        exposure_type,
+        original_file_path,
+        matched_field,
+        None,
+    )
+}
+
+/// Same as [`make_search_row`] but with an explicit `executed_at` value.
+#[allow(clippy::too_many_arguments)]
+fn make_search_row_with_executed_at(
+    unique_id: &str,
+    name: &str,
+    resource_type: &str,
+    package_name: Option<&str>,
+    fqn: Option<&[&str]>,
+    tags: Option<&[&str]>,
+    description: Option<&str>,
+    materialized: Option<&str>,
+    access_level: Option<&str>,
+    source_name: Option<&str>,
+    freshness_checked: Option<bool>,
+    test_type: Option<&str>,
+    exposure_type: Option<&str>,
+    original_file_path: Option<&str>,
+    matched_field: Option<&str>,
+    executed_at: Option<&str>,
 ) -> RecordBatch {
     let schema = search_row_schema();
 
@@ -341,6 +382,7 @@ fn make_search_row(
             Arc::new(StringArray::from(vec![exposure_type])),
             Arc::new(StringArray::from(vec![original_file_path])),
             Arc::new(StringArray::from(vec![matched_field])),
+            Arc::new(StringArray::from(vec![executed_at])),
         ],
     )
     .expect("valid search row batch")
@@ -858,6 +900,84 @@ async fn fqn_absent_for_macro_hits() {
         assert!(
             hit.get("fqn").is_none(),
             "fqn must be absent for macro hits, got: {hit}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn executed_at_present_on_runnable_hit_when_run_results_populated() {
+    let row = make_search_row_with_executed_at(
+        "model.jaffle_shop.orders",
+        "orders",
+        "model",
+        Some("jaffle_shop"),
+        Some(&["jaffle_shop", "orders"]),
+        Some(&[]),
+        None,
+        Some("table"),
+        Some("public"),
+        None,
+        None,
+        None,
+        None,
+        Some("models/orders.sql"),
+        Some("name"),
+        Some("2026-05-15T10:32:11Z"),
+    );
+    let state = make_state(SearchMockBackend::empty().with_nodes(vec![row]));
+    let params = SearchQueryParams {
+        type_filter: Some("model".into()),
+        q: Some("orders".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let hit = &body["data"][0]["hit"];
+    assert_eq!(hit["executed_at"], "2026-05-15T10:32:11Z");
+}
+
+#[tokio::test]
+async fn executed_at_absent_on_runnable_hit_when_never_executed() {
+    // ADR-5: Option fields use `#[serde(skip_serializing_if = "Option::is_none")]`,
+    // so a null executed_at must be omitted entirely from the JSON.
+    let row = make_model_row("model.jaffle_shop.orders", "orders");
+    let state = make_state(SearchMockBackend::empty().with_nodes(vec![row]));
+    let params = SearchQueryParams {
+        type_filter: Some("model".into()),
+        q: Some("orders".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let hit = &body["data"][0]["hit"];
+    assert!(
+        hit.get("executed_at").is_none(),
+        "executed_at must be absent when null, got: {hit}"
+    );
+}
+
+#[tokio::test]
+async fn executed_at_absent_on_non_runnable_macro_hit() {
+    // Macros are not runnable; the handler projects NULL for executed_at,
+    // and serde skip omits the field entirely.
+    let macro_row = make_macro_row("macro.jaffle_shop.my_macro", "my_macro", Some("name"));
+    let state = make_state(SearchMockBackend::empty().with_macros(vec![macro_row]));
+    let params = SearchQueryParams {
+        type_filter: Some("macro".into()),
+        q: Some("my".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let data = body["data"].as_array().unwrap();
+    if !data.is_empty() {
+        let hit = &data[0]["hit"];
+        assert!(
+            hit.get("executed_at").is_none(),
+            "executed_at must be absent for macro hits, got: {hit}"
         );
     }
 }

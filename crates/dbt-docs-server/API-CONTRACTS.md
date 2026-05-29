@@ -6471,6 +6471,19 @@ let freshness_projection = if state.capabilities().has_source_freshness {
 };
 ```
 
+**(6a) `executed_at` LEFT JOIN — runnable types only.**
+
+The nodes branch (model/source/seed/snapshot/test) LEFT JOINs an aggregation of `dbt_rt.run_results` per `unique_id`, projecting `CAST(MAX(created_at) AS VARCHAR) AS executed_at`. Same `MAX(created_at)` strategy used by `/api/v1/models/:id` for `execution_info.completed_at` (so the two endpoints agree on "last run"). Non-runnable branches project `NULL::VARCHAR AS executed_at` to keep the UNION shape uniform; the `SearchHit` field is `#[serde(skip_serializing_if = "Option::is_none")]` so non-runnable types serialize without the field, matching ADR-5. `unit_test` projects via the same union slot but currently has no rows in `dbt_rt.run_results` (the runtime doesn't write unit-test results into that table today) — `null` for now, populated automatically when the runtime starts emitting them.
+
+```sql
+-- in the nodes branch:
+LEFT JOIN (
+  SELECT unique_id, CAST(MAX(created_at) AS VARCHAR) AS executed_at
+  FROM dbt_rt.run_results
+  GROUP BY unique_id
+) rr ON rr.unique_id = n.unique_id
+```
+
 **(6) `semantic_models` tags extraction.**
 
 `dbt.semantic_models.parquet` carries `tags` inside the `config` JSON blob rather than as a top-level column. The extraction syntax matches the established pattern in the `/semantic_models/:id` contract (Risk #2 of that contract):
@@ -6511,7 +6524,10 @@ A representative response for `?q=order&first=50`. Hits illustrate every require
         "fqn": ["jaffle_shop", "staging", "stg_orders"],
         "package_name": "jaffle_shop",
         "materialized": "view",
-        "access_level": "protected"
+        "access_level": "protected",
+        // Last-run completion timestamp; null when dbt_rt.run_results has no row for this unique_id.
+        // Same format as ExecutionInfo.completed_at on /api/v1/models/:id (Risk #1 of that contract).
+        "executed_at": "2026-05-15 10:32:11.000000000-07:00"
       }
     },
     {
@@ -6698,6 +6714,7 @@ Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify pa
 | `data[*].hit.freshness_checked` | `boolean \| null` | Type-specific (Core-conditional) | 🔧 | `has_source_freshness` | `resource_type === "source"` only. Boolean indicator from `dbt.source_freshness` (a row exists for this source ⇒ `true`). `null` when capability is false. Full freshness object lives on `/api/v1/sources/:id`, not in search results. |
 | `data[*].hit.test_type` | `string` | Type-specific | 🔧 | — | `resource_type ∈ {"test", "unit_test"}`. Mirrors ADR-3's `resource_type` discriminator: `"test"` for `dbt.nodes` rows with `resource_type = "test"`, `"unit_test"` for rows in the `dbt.unit_tests` parquet. Allows the UI to route the result link to the unified `TestView.tsx` with the right narrowing. |
 | `data[*].hit.exposure_type` | `string \| null` | Type-specific | 🔧 | — | `resource_type === "exposure"` only. `"dashboard"` · `"notebook"` · `"analysis"` · `"ml"` · `"application"`. From `dbt.exposures.exposure_type`. |
+| `data[*].hit.executed_at` | `string \| null` | Type-specific (Core-conditional) | ✅ | — | Runnable resource types only (`model`, `source`, `seed`, `snapshot`, `test`, `unit_test`). Last-run completion timestamp — `MAX(created_at)` from `dbt_rt.run_results` grouped by `unique_id`, formatted as `CAST(... AS VARCHAR)` (space-separated local-timezone string, same format as `execution_info.completed_at` in `/api/v1/models/:id` — see Risk #1 of `/api/v1/models/:id`). `null` when the resource has no row in `dbt_rt.run_results` (i.e., `dbt build` hasn't run). **Omitted entirely** (per ADR-5) on non-runnable hit shapes (`exposure`, `metric`, `semantic_model`, `saved_query`, `macro`, `group`). Powers the "Last run: …" line on search result cards (mirrors the catalog `AssetHeader`). |
 | `page_info` | `PageInfo` | Core | 🔧 | — | Standard CC-4 cursor envelope shared with every LIST endpoint (see ADR-6's shared `PageInfo` type). |
 | `page_info.total_count` | `number` | Core | 🔧 | — | Total matching rows across the UNION (not just the current page). Renders as `getResultCountString(totalCount)` in `SearchResultsList.tsx` → `"N results"`. Single integer per UI evidence; no per-type breakdown is rendered. Placement under `page_info` follows ADR-6. |
 | `page_info.start_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor of the FIRST row of the current page. `null` when `data` is empty. Symmetric with `end_cursor` per ADR-6. |
@@ -6768,37 +6785,43 @@ interface SearchHitBase {
   package_name: string | null;
 }
 
-interface ModelHit extends SearchHitBase {
+// Runnable hits carry executed_at — null when dbt_rt.run_results has no row for this unique_id.
+// Non-runnable hits (Exposure/Metric/SemanticModel/SavedQuery/Macro/Group) omit the field entirely (ADR-5).
+interface RunnableHitMixin {
+  executed_at: string | null;
+}
+
+interface ModelHit extends SearchHitBase, RunnableHitMixin {
   resource_type: "model";
   fqn: string[];
   materialized: string | null;
   access_level: string | null;
 }
 
-interface SourceHit extends SearchHitBase {
+interface SourceHit extends SearchHitBase, RunnableHitMixin {
   resource_type: "source";
   fqn: string[];
   source_name: string | null;
   freshness_checked: boolean | null; // null when has_source_freshness is false
 }
 
-interface SeedHit extends SearchHitBase {
+interface SeedHit extends SearchHitBase, RunnableHitMixin {
   resource_type: "seed";
   fqn: string[];
 }
 
-interface SnapshotHit extends SearchHitBase {
+interface SnapshotHit extends SearchHitBase, RunnableHitMixin {
   resource_type: "snapshot";
   fqn: string[];
 }
 
-interface TestHit extends SearchHitBase {
+interface TestHit extends SearchHitBase, RunnableHitMixin {
   resource_type: "test";
   fqn: string[];
   test_type: "test";
 }
 
-interface UnitTestHit extends SearchHitBase {
+interface UnitTestHit extends SearchHitBase, RunnableHitMixin {
   resource_type: "unit_test";
   fqn: string[];
   test_type: "unit_test";

@@ -10,6 +10,7 @@ use crate::handlers::json::{
     bad_request, batches_as_value_array, first_row_as_object, internal_error, not_found,
     wrapped_list_response,
 };
+use crate::handlers::node_base::extract_execution_info;
 use crate::handlers::sql::{escape_str, is_safe_ident};
 use crate::state::SharedState;
 
@@ -146,6 +147,14 @@ pub async fn get_node(State(state): State<SharedState>, Path(unique_id): Path<St
          FROM dbt.edges WHERE parent_unique_id = '{escaped}' \
          ORDER BY child_unique_id"
     );
+    let run_result_sql = format!(
+        "SELECT status, execution_time, \
+                CAST(created_at AS VARCHAR) AS completed_at \
+         FROM dbt_rt.run_results \
+         WHERE unique_id = '{escaped}' \
+         ORDER BY created_at DESC \
+         LIMIT 1"
+    );
 
     let backend = state.providers.backend.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
@@ -159,20 +168,24 @@ pub async fn get_node(State(state): State<SharedState>, Path(unique_id): Path<St
         let downstream_batches = backend
             .query_arrow(&downstream_sql)
             .map_err(|e| e.to_string())?;
+        // run_results view is absent when the project was never run; ignore errors.
+        let run_result_batches = backend.query_arrow(&run_result_sql).ok();
         Ok((
             node_batches,
             column_batches,
             upstream_batches,
             downstream_batches,
+            run_result_batches,
         ))
     })
     .await;
 
-    let (node_batches, column_batches, upstream_batches, downstream_batches) = match result {
-        Ok(Ok(t)) => t,
-        Ok(Err(err)) => return internal_error(err),
-        Err(err) => return internal_error(err.to_string()),
-    };
+    let (node_batches, column_batches, upstream_batches, downstream_batches, run_result_batches) =
+        match result {
+            Ok(Ok(t)) => t,
+            Ok(Err(err)) => return internal_error(err),
+            Err(err) => return internal_error(err.to_string()),
+        };
 
     let node = match first_row_as_object(&node_batches) {
         Ok(Some(v)) => v,
@@ -192,11 +205,19 @@ pub async fn get_node(State(state): State<SharedState>, Path(unique_id): Path<St
         Err(err) => return internal_error(err.to_string()),
     };
 
+    let execution_info = run_result_batches
+        .as_deref()
+        .and_then(extract_execution_info);
+
     let mut node = node;
     if let Some(obj) = node.as_object_mut() {
         obj.insert("columns".into(), columns);
         obj.insert("depends_on".into(), depends_on);
         obj.insert("referenced_by".into(), referenced_by);
+        obj.insert(
+            "execution_info".into(),
+            serde_json::to_value(&execution_info).unwrap_or(serde_json::Value::Null),
+        );
     }
     Json(node).into_response()
 }
@@ -353,14 +374,14 @@ fn batches_to_counts(batches: &[RecordBatch]) -> NodeCountsResponse {
 mod tests {
     use std::sync::Arc;
 
-    use arrow_array::{Int64Array, RecordBatch, StringArray};
+    use arrow_array::{Float64Array, Int64Array, RecordBatch, StringArray};
     use arrow_schema::{DataType, Field, Schema};
-    use axum::extract::State;
+    use axum::extract::{Path, State};
 
-    use crate::providers::{BackendError, Providers};
+    use crate::providers::{Backend, BackendError, Providers};
     use crate::state::AppState;
 
-    use super::{batches_to_counts, list_node_counts};
+    use super::{batches_to_counts, get_node, list_node_counts};
 
     struct MockBackend {
         batches: Vec<RecordBatch>,
@@ -383,7 +404,7 @@ mod tests {
         }
     }
 
-    impl dbt_index_core::Backend for MockBackend {
+    impl Backend for MockBackend {
         fn query_arrow(&self, _sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
             if self.fail {
                 return Err(BackendError::Query("mock failure".into()));
@@ -497,5 +518,146 @@ mod tests {
         let counts = batches_to_counts(&[batch]);
         assert_eq!(counts.model, 10);
         assert_eq!(counts.source, 0);
+    }
+
+    // =======================================================================
+    // Tests: get_node — execution_info wiring
+    // =======================================================================
+    //
+    // The execution_info *extraction* is already covered exhaustively in
+    // models_tests.rs (shared via `extract_execution_info`). These tests cover
+    // the wiring inside `get_node`: that run_results absence falls back to
+    // null, and that a populated run_results batch surfaces on the response.
+
+    struct NodeDetailMockBackend {
+        node_batches: Vec<RecordBatch>,
+        run_result_batches: Option<Vec<RecordBatch>>,
+    }
+
+    impl Backend for NodeDetailMockBackend {
+        fn is_available(&self) -> bool {
+            true
+        }
+
+        fn query_arrow(&self, sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+            if sql.contains("dbt_rt.run_results") {
+                return self
+                    .run_result_batches
+                    .clone()
+                    .ok_or_else(|| BackendError::Query("run_results view absent".into()));
+            }
+            if sql.contains("dbt.node_columns") || sql.contains("dbt.edges") {
+                return Ok(vec![]);
+            }
+            if sql.contains("dbt.nodes") {
+                return Ok(self.node_batches.clone());
+            }
+            Err(BackendError::Query(format!("unrouted query: {sql}")))
+        }
+    }
+
+    fn node_detail_schema() -> Arc<Schema> {
+        Arc::new(Schema::new(vec![
+            Field::new("unique_id", DataType::Utf8, false),
+            Field::new("name", DataType::Utf8, false),
+            Field::new("resource_type", DataType::Utf8, false),
+            Field::new("package_name", DataType::Utf8, true),
+            Field::new("materialized", DataType::Utf8, true),
+            Field::new("description", DataType::Utf8, true),
+            Field::new("database_name", DataType::Utf8, true),
+            Field::new("schema_name", DataType::Utf8, true),
+            Field::new("relation_name", DataType::Utf8, true),
+            Field::new("identifier", DataType::Utf8, true),
+            Field::new("original_file_path", DataType::Utf8, true),
+            Field::new("access_level", DataType::Utf8, true),
+            Field::new("group_name", DataType::Utf8, true),
+            Field::new("raw_code", DataType::Utf8, true),
+        ]))
+    }
+
+    fn make_node_detail_batch(unique_id: &str, name: &str) -> RecordBatch {
+        RecordBatch::try_new(
+            node_detail_schema(),
+            vec![
+                Arc::new(StringArray::from(vec![unique_id])),
+                Arc::new(StringArray::from(vec![name])),
+                Arc::new(StringArray::from(vec!["model"])),
+                Arc::new(StringArray::from(vec![Some("jaffle_shop")])),
+                Arc::new(StringArray::from(vec![Some("table")])),
+                Arc::new(StringArray::from(vec![None::<&str>])),
+                Arc::new(StringArray::from(vec![Some("prod")])),
+                Arc::new(StringArray::from(vec![Some("dbt_prod")])),
+                Arc::new(StringArray::from(vec![Some("prod.dbt_prod.orders")])),
+                Arc::new(StringArray::from(vec![Some(name)])),
+                Arc::new(StringArray::from(vec![Some("models/orders.sql")])),
+                Arc::new(StringArray::from(vec![None::<&str>])),
+                Arc::new(StringArray::from(vec![None::<&str>])),
+                Arc::new(StringArray::from(vec![None::<&str>])),
+            ],
+        )
+        .expect("valid node detail batch")
+    }
+
+    fn run_result_schema() -> Arc<Schema> {
+        Arc::new(Schema::new(vec![
+            Field::new("status", DataType::Utf8, true),
+            Field::new("execution_time", DataType::Float64, true),
+            Field::new("completed_at", DataType::Utf8, true),
+        ]))
+    }
+
+    fn make_run_result_batch(status: &str, execution_time: f64, completed_at: &str) -> RecordBatch {
+        RecordBatch::try_new(
+            run_result_schema(),
+            vec![
+                Arc::new(StringArray::from(vec![status])),
+                Arc::new(Float64Array::from(vec![execution_time])),
+                Arc::new(StringArray::from(vec![completed_at])),
+            ],
+        )
+        .expect("valid run result batch")
+    }
+
+    fn make_detail_state(backend: NodeDetailMockBackend) -> Arc<AppState> {
+        let providers = Providers {
+            backend: Arc::new(backend),
+            ..Providers::default()
+        };
+        Arc::new(AppState::new("target/index".into(), providers))
+    }
+
+    #[tokio::test]
+    async fn get_node_execution_info_null_when_run_results_absent() {
+        let backend = NodeDetailMockBackend {
+            node_batches: vec![make_node_detail_batch("model.jaffle_shop.orders", "orders")],
+            run_result_batches: None,
+        };
+        let state = make_detail_state(backend);
+        let body = response_body(
+            get_node(State(state), Path("model.jaffle_shop.orders".to_owned())).await,
+        )
+        .await;
+        assert_eq!(body["execution_info"], serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn get_node_execution_info_populated_when_run_results_present() {
+        let backend = NodeDetailMockBackend {
+            node_batches: vec![make_node_detail_batch("model.jaffle_shop.orders", "orders")],
+            run_result_batches: Some(vec![make_run_result_batch(
+                "success",
+                4.2,
+                "2026-05-15T10:32:11Z",
+            )]),
+        };
+        let state = make_detail_state(backend);
+        let body = response_body(
+            get_node(State(state), Path("model.jaffle_shop.orders".to_owned())).await,
+        )
+        .await;
+        let ei = &body["execution_info"];
+        assert_eq!(ei["status"], "success");
+        assert_eq!(ei["completed_at"], "2026-05-15T10:32:11Z");
+        assert_eq!(ei["execution_time"], serde_json::json!(4.2));
     }
 }

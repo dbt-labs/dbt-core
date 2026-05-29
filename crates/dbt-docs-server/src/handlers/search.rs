@@ -189,6 +189,9 @@ pub struct SearchHit {
     /// exposure only
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exposure_type: Option<String>,
+    /// nodes only — last run completed_at (ISO string)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executed_at: Option<String>,
 }
 
 /// Response envelope for `GET /api/v1/search`.
@@ -257,9 +260,15 @@ fn nodes_branch_sql(types: &[&str], with_freshness: bool) -> String {
               WHEN n.resource_type = 'unit_test' THEN 'unit_test' \
               ELSE NULL END AS test_type, \
          NULL::VARCHAR AS exposure_type, \
+         rr.executed_at AS executed_at, \
          n.original_file_path \
          FROM dbt.nodes n \
          {freshness_join} \
+         LEFT JOIN ( \
+           SELECT unique_id, CAST(MAX(created_at) AS VARCHAR) AS executed_at \
+           FROM dbt_rt.run_results \
+           GROUP BY unique_id \
+         ) rr ON rr.unique_id = n.unique_id \
          WHERE n.resource_type IN ({type_list})"
     )
 }
@@ -271,6 +280,7 @@ fn exposures_branch_sql() -> String {
      NULL::BOOLEAN AS freshness_checked, \
      NULL::VARCHAR AS test_type, \
      e.exposure_type, \
+     NULL::VARCHAR AS executed_at, \
      NULL::VARCHAR AS original_file_path \
      FROM dbt.exposures e"
         .to_owned()
@@ -283,6 +293,7 @@ fn macros_branch_sql() -> String {
      NULL::BOOLEAN AS freshness_checked, \
      NULL::VARCHAR AS test_type, \
      NULL::VARCHAR AS exposure_type, \
+     NULL::VARCHAR AS executed_at, \
      NULL::VARCHAR AS original_file_path \
      FROM dbt.macros m"
         .to_owned()
@@ -295,6 +306,7 @@ fn metrics_branch_sql() -> String {
      NULL::BOOLEAN AS freshness_checked, \
      NULL::VARCHAR AS test_type, \
      NULL::VARCHAR AS exposure_type, \
+     NULL::VARCHAR AS executed_at, \
      NULL::VARCHAR AS original_file_path \
      FROM dbt.metrics m"
         .to_owned()
@@ -307,6 +319,7 @@ fn saved_queries_branch_sql() -> String {
      NULL::BOOLEAN AS freshness_checked, \
      NULL::VARCHAR AS test_type, \
      NULL::VARCHAR AS exposure_type, \
+     NULL::VARCHAR AS executed_at, \
      NULL::VARCHAR AS original_file_path \
      FROM dbt.saved_queries sq"
         .to_owned()
@@ -321,6 +334,7 @@ fn semantic_models_branch_sql() -> String {
      NULL::BOOLEAN AS freshness_checked, \
      NULL::VARCHAR AS test_type, \
      NULL::VARCHAR AS exposure_type, \
+     NULL::VARCHAR AS executed_at, \
      NULL::VARCHAR AS original_file_path \
      FROM dbt.semantic_models sm"
         .to_owned()
@@ -333,6 +347,7 @@ fn groups_branch_sql() -> String {
      NULL::BOOLEAN AS freshness_checked, \
      NULL::VARCHAR AS test_type, \
      NULL::VARCHAR AS exposure_type, \
+     NULL::VARCHAR AS executed_at, \
      NULL::VARCHAR AS original_file_path \
      FROM dbt.groups g"
         .to_owned()
@@ -345,6 +360,7 @@ fn unit_tests_branch_sql() -> String {
      NULL::BOOLEAN AS freshness_checked, \
      'unit_test'::VARCHAR AS test_type, \
      NULL::VARCHAR AS exposure_type, \
+     NULL::VARCHAR AS executed_at, \
      NULL::VARCHAR AS original_file_path \
      FROM dbt.unit_tests ut"
         .to_owned()
@@ -804,6 +820,7 @@ fn batches_to_search_rows(batches: &[RecordBatch]) -> Vec<(SearchEdge, String)> 
         let source_name = str_col(batch, "source_name");
         let test_type = str_col(batch, "test_type");
         let exposure_type = str_col(batch, "exposure_type");
+        let executed_at = str_col(batch, "executed_at");
         let matched_field = str_col(batch, "matched_field");
 
         let opt = |col: &StringArray, i: usize| -> Option<String> {
@@ -838,6 +855,7 @@ fn batches_to_search_rows(batches: &[RecordBatch]) -> Vec<(SearchEdge, String)> 
                 freshness_checked,
                 test_type: opt(test_type, i),
                 exposure_type: opt(exposure_type, i),
+                executed_at: opt(executed_at, i),
             };
 
             let mf = opt(matched_field, i);
