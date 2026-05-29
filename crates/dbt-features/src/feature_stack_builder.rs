@@ -250,6 +250,7 @@ pub struct FeatureStackBuilder {
     cli_extension: CliExtensionFeature,
     task_runner: TaskRunnerFeature,
     license_fetcher: Arc<dyn LicenseFetcher>,
+    dbt_distribution: &'static str,
 }
 
 impl FeatureStackBuilder {
@@ -298,6 +299,7 @@ impl FeatureStackBuilder {
             cli_extension,
             task_runner,
             license_fetcher: Arc::new(NoOpLicenseFetcher),
+            dbt_distribution: "unknown-oss",
         }
     }
 
@@ -308,6 +310,11 @@ impl FeatureStackBuilder {
 
     pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
         self.send_anonymous_usage_stats = enabled;
+        self
+    }
+
+    pub fn dbt_distribution(mut self, dbt_distribution: &'static str) -> Self {
+        self.dbt_distribution = dbt_distribution;
         self
     }
 
@@ -333,7 +340,10 @@ impl FeatureStackBuilder {
 
     pub fn build(self) -> Box<FeatureStack> {
         let instrumentation = InstrumentationFeature {
-            event_emitter: vortex_events::fusion_sa_event_emitter(self.send_anonymous_usage_stats),
+            event_emitter: vortex_events::fusion_sa_event_emitter(
+                self.send_anonymous_usage_stats,
+                self.dbt_distribution,
+            ),
         };
         let index = IndexFeature {
             hooks: Box::new(NoOpIndexHooks),

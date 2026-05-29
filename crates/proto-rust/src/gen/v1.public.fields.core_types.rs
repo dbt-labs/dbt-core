@@ -2373,6 +2373,200 @@ impl ::prost::Name for MissingArgumentsPropertyInGenericTestDeprecationMsg {
             .into()
     }
 }
+/// D040
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DuplicateNameDistinctNodeTypesDeprecation {
+    #[prost(string, tag = "1")]
+    pub resource_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub unique_id1: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub unique_id2: ::prost::alloc::string::String,
+}
+impl ::prost::Name for DuplicateNameDistinctNodeTypesDeprecation {
+    const NAME: &'static str = "DuplicateNameDistinctNodeTypesDeprecation";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.DuplicateNameDistinctNodeTypesDeprecation".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.DuplicateNameDistinctNodeTypesDeprecation".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DuplicateNameDistinctNodeTypesDeprecationMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<DuplicateNameDistinctNodeTypesDeprecation>,
+}
+impl ::prost::Name for DuplicateNameDistinctNodeTypesDeprecationMsg {
+    const NAME: &'static str = "DuplicateNameDistinctNodeTypesDeprecationMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.DuplicateNameDistinctNodeTypesDeprecationMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.DuplicateNameDistinctNodeTypesDeprecationMsg"
+            .into()
+    }
+}
+/// D042
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TimeDimensionsRequireGranularityDeprecation {
+    #[prost(string, tag = "1")]
+    pub msg: ::prost::alloc::string::String,
+}
+impl ::prost::Name for TimeDimensionsRequireGranularityDeprecation {
+    const NAME: &'static str = "TimeDimensionsRequireGranularityDeprecation";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.TimeDimensionsRequireGranularityDeprecation".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.TimeDimensionsRequireGranularityDeprecation".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TimeDimensionsRequireGranularityDeprecationMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<TimeDimensionsRequireGranularityDeprecation>,
+}
+impl ::prost::Name for TimeDimensionsRequireGranularityDeprecationMsg {
+    const NAME: &'static str = "TimeDimensionsRequireGranularityDeprecationMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.TimeDimensionsRequireGranularityDeprecationMsg"
+            .into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.TimeDimensionsRequireGranularityDeprecationMsg"
+            .into()
+    }
+}
+/// D043
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GenericSemanticLayerDeprecation {
+    #[prost(string, tag = "1")]
+    pub msg: ::prost::alloc::string::String,
+}
+impl ::prost::Name for GenericSemanticLayerDeprecation {
+    const NAME: &'static str = "GenericSemanticLayerDeprecation";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.GenericSemanticLayerDeprecation".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.GenericSemanticLayerDeprecation".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GenericSemanticLayerDeprecationMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<GenericSemanticLayerDeprecation>,
+}
+impl ::prost::Name for GenericSemanticLayerDeprecationMsg {
+    const NAME: &'static str = "GenericSemanticLayerDeprecationMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.GenericSemanticLayerDeprecationMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.GenericSemanticLayerDeprecationMsg".into()
+    }
+}
+/// D044
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GenerateSchemaNameNullValueDeprecation {
+    #[prost(string, tag = "1")]
+    pub resource_unique_id: ::prost::alloc::string::String,
+}
+impl ::prost::Name for GenerateSchemaNameNullValueDeprecation {
+    const NAME: &'static str = "GenerateSchemaNameNullValueDeprecation";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.GenerateSchemaNameNullValueDeprecation".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.GenerateSchemaNameNullValueDeprecation".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GenerateSchemaNameNullValueDeprecationMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<GenerateSchemaNameNullValueDeprecation>,
+}
+impl ::prost::Name for GenerateSchemaNameNullValueDeprecationMsg {
+    const NAME: &'static str = "GenerateSchemaNameNullValueDeprecationMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.GenerateSchemaNameNullValueDeprecationMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.GenerateSchemaNameNullValueDeprecationMsg".into()
+    }
+}
+/// D045
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UnknownFlagsDeprecation {
+    #[prost(string, repeated, tag = "1")]
+    pub flag_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+impl ::prost::Name for UnknownFlagsDeprecation {
+    const NAME: &'static str = "UnknownFlagsDeprecation";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.UnknownFlagsDeprecation".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.UnknownFlagsDeprecation".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UnknownFlagsDeprecationMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<UnknownFlagsDeprecation>,
+}
+impl ::prost::Name for UnknownFlagsDeprecationMsg {
+    const NAME: &'static str = "UnknownFlagsDeprecationMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.UnknownFlagsDeprecationMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.UnknownFlagsDeprecationMsg".into()
+    }
+}
 /// I065
 #[derive(::serde::Serialize, ::serde::Deserialize)]
 #[serde(default)]
@@ -3982,6 +4176,88 @@ impl ::prost::Name for InvalidMacroAnnotationMsg {
     }
     fn type_url() -> ::prost::alloc::string::String {
         "/v1.public.fields.core_types.InvalidMacroAnnotationMsg".into()
+    }
+}
+/// I077
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PackageNodeDependsOnRootProjectNode {
+    #[prost(string, tag = "1")]
+    pub node_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub root_project_unique_id: ::prost::alloc::string::String,
+}
+impl ::prost::Name for PackageNodeDependsOnRootProjectNode {
+    const NAME: &'static str = "PackageNodeDependsOnRootProjectNode";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.PackageNodeDependsOnRootProjectNode".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.PackageNodeDependsOnRootProjectNode".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PackageNodeDependsOnRootProjectNodeMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<PackageNodeDependsOnRootProjectNode>,
+}
+impl ::prost::Name for PackageNodeDependsOnRootProjectNodeMsg {
+    const NAME: &'static str = "PackageNodeDependsOnRootProjectNodeMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.PackageNodeDependsOnRootProjectNodeMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.PackageNodeDependsOnRootProjectNodeMsg".into()
+    }
+}
+/// I078
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MfConverterIssue {
+    #[prost(string, tag = "1")]
+    pub issue_type: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub element_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub converter_name: ::prost::alloc::string::String,
+}
+impl ::prost::Name for MfConverterIssue {
+    const NAME: &'static str = "MFConverterIssue";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.MFConverterIssue".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.MFConverterIssue".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MfConverterIssueMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<MfConverterIssue>,
+}
+impl ::prost::Name for MfConverterIssueMsg {
+    const NAME: &'static str = "MFConverterIssueMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.MFConverterIssueMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.MFConverterIssueMsg".into()
     }
 }
 /// M001
@@ -6770,6 +7046,182 @@ impl ::prost::Name for LogFunctionResultMsg {
         "/v1.public.fields.core_types.LogFunctionResultMsg".into()
     }
 }
+/// Q048
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LogStartOverload {
+    #[prost(message, optional, tag = "1")]
+    pub node_info: ::core::option::Option<NodeInfo>,
+    #[prost(string, tag = "2")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(int32, tag = "3")]
+    pub overload_index: i32,
+    #[prost(int32, tag = "4")]
+    pub total_overloads: i32,
+}
+impl ::prost::Name for LogStartOverload {
+    const NAME: &'static str = "LogStartOverload";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.LogStartOverload".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.LogStartOverload".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LogStartOverloadMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<LogStartOverload>,
+}
+impl ::prost::Name for LogStartOverloadMsg {
+    const NAME: &'static str = "LogStartOverloadMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.LogStartOverloadMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.LogStartOverloadMsg".into()
+    }
+}
+/// Q049
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LogOverloadResult {
+    #[prost(message, optional, tag = "1")]
+    pub node_info: ::core::option::Option<NodeInfo>,
+    #[prost(string, tag = "2")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(int32, tag = "4")]
+    pub overload_index: i32,
+    #[prost(int32, tag = "5")]
+    pub total_overloads: i32,
+    #[prost(float, tag = "6")]
+    pub execution_time: f32,
+    #[prost(message, optional, tag = "7")]
+    pub group: ::core::option::Option<Group>,
+}
+impl ::prost::Name for LogOverloadResult {
+    const NAME: &'static str = "LogOverloadResult";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.LogOverloadResult".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.LogOverloadResult".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LogOverloadResultMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<LogOverloadResult>,
+}
+impl ::prost::Name for LogOverloadResultMsg {
+    const NAME: &'static str = "LogOverloadResultMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.LogOverloadResultMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.LogOverloadResultMsg".into()
+    }
+}
+/// Q050
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct V2ParserStart {
+    #[prost(string, tag = "1")]
+    pub v2_parser_command: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub project_name: ::prost::alloc::string::String,
+}
+impl ::prost::Name for V2ParserStart {
+    const NAME: &'static str = "V2ParserStart";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.V2ParserStart".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.V2ParserStart".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct V2ParserStartMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<V2ParserStart>,
+}
+impl ::prost::Name for V2ParserStartMsg {
+    const NAME: &'static str = "V2ParserStartMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.V2ParserStartMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.V2ParserStartMsg".into()
+    }
+}
+/// Q051
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct V2ParserEnd {
+    #[prost(string, tag = "1")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(float, tag = "2")]
+    pub execution_time: f32,
+    #[prost(string, tag = "3")]
+    pub error_class: ::prost::alloc::string::String,
+    #[prost(int32, tag = "4")]
+    pub exit_code: i32,
+    #[prost(string, tag = "5")]
+    pub project_name: ::prost::alloc::string::String,
+}
+impl ::prost::Name for V2ParserEnd {
+    const NAME: &'static str = "V2ParserEnd";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.V2ParserEnd".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.V2ParserEnd".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct V2ParserEndMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<V2ParserEnd>,
+}
+impl ::prost::Name for V2ParserEndMsg {
+    const NAME: &'static str = "V2ParserEndMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.V2ParserEndMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.V2ParserEndMsg".into()
+    }
+}
 /// W002
 #[derive(::serde::Serialize, ::serde::Deserialize)]
 #[serde(default)]
@@ -8536,5 +8988,42 @@ impl ::prost::Name for ArtifactUploadSkippedMsg {
     }
     fn type_url() -> ::prost::alloc::string::String {
         "/v1.public.fields.core_types.ArtifactUploadSkippedMsg".into()
+    }
+}
+/// Z064
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SelectExcludeIgnoredWithSelectorWarning {
+    #[prost(string, tag = "1")]
+    pub msg: ::prost::alloc::string::String,
+}
+impl ::prost::Name for SelectExcludeIgnoredWithSelectorWarning {
+    const NAME: &'static str = "SelectExcludeIgnoredWithSelectorWarning";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.SelectExcludeIgnoredWithSelectorWarning".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.SelectExcludeIgnoredWithSelectorWarning".into()
+    }
+}
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(default)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectExcludeIgnoredWithSelectorWarningMsg {
+    #[prost(message, optional, tag = "1")]
+    pub info: ::core::option::Option<CoreEventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<SelectExcludeIgnoredWithSelectorWarning>,
+}
+impl ::prost::Name for SelectExcludeIgnoredWithSelectorWarningMsg {
+    const NAME: &'static str = "SelectExcludeIgnoredWithSelectorWarningMsg";
+    const PACKAGE: &'static str = "v1.public.fields.core_types";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.fields.core_types.SelectExcludeIgnoredWithSelectorWarningMsg".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.fields.core_types.SelectExcludeIgnoredWithSelectorWarningMsg".into()
     }
 }

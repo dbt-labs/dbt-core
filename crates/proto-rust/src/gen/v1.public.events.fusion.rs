@@ -153,6 +153,9 @@ pub struct Invocation {
     /// at a project level.
     #[prost(string, tag = "10")]
     pub git_commit_sha: ::prost::alloc::string::String,
+    /// The distribution of dbt that was used to run this command.
+    #[prost(string, tag = "11")]
+    pub distribution: ::prost::alloc::string::String,
 }
 impl ::prost::Name for Invocation {
     const NAME: &'static str = "Invocation";

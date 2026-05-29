@@ -43,15 +43,26 @@ impl DiscreteEventEmitter for NoopEventEmitter {
     ) {
         // No-op implementation
     }
+
+    fn dbt_distribution(&self) -> &'static str {
+        ""
+    }
 }
 
-pub fn fusion_sa_event_emitter(enabled: bool) -> Box<dyn DiscreteEventEmitter> {
-    Box::new(FusionSaEventEmitter { enabled })
+pub fn fusion_sa_event_emitter(
+    enabled: bool,
+    dbt_distribution: &'static str,
+) -> Box<dyn DiscreteEventEmitter> {
+    Box::new(FusionSaEventEmitter {
+        enabled,
+        dbt_distribution,
+    })
 }
 
 /// Source-available implementation of the DiscreteEventEmitter.
 struct FusionSaEventEmitter {
     enabled: bool,
+    dbt_distribution: &'static str,
 }
 
 impl DiscreteEventEmitter for FusionSaEventEmitter {
@@ -93,6 +104,8 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             result_type: "".to_string(),
             //  git_commit_sha - SHA of the git commit of the dbt project being run
             git_commit_sha: "".to_string(),
+            //  distribution - dbt distribution that ran this command
+            distribution: self.dbt_distribution.to_string(),
             //  enrichment - toggle enrichment of message by vortex
             enrichment: None,
         };
@@ -114,6 +127,10 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
 
         let _ = log_proto(message);
     }
+
+    fn dbt_distribution(&self) -> &'static str {
+        self.dbt_distribution
+    }
 }
 
 pub fn build_result_string(result: &FsResult<()>) -> String {
@@ -129,7 +146,12 @@ pub fn build_result_string(result: &FsResult<()>) -> String {
 }
 
 /// Logs the `Invocation` event and shuts down the Vortex client.
-pub fn invocation_end_event(invocation_id: String, result_string: String, shutdown: bool) {
+pub fn invocation_end_event(
+    invocation_id: String,
+    result_string: String,
+    dbt_distribution: &str,
+    shutdown: bool,
+) {
     let env = InternalEnv::global();
     // Create Invocation start message
     let message = Invocation {
@@ -152,6 +174,8 @@ pub fn invocation_end_event(invocation_id: String, result_string: String, shutdo
         result_type: result_string,
         //  git_commit_sha - SHA of the git commit of the dbt project being run
         git_commit_sha: "".to_string(),
+        //  distribution - dbt distribution that ran this command
+        distribution: dbt_distribution.to_string(),
         //  enrichment - toggle enrichment of message by vortex
         enrichment: None,
     };

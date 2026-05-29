@@ -16,6 +16,8 @@ pub trait DiscreteEventEmitter: Send + Sync {
         command: String,
     );
 
+    fn dbt_distribution(&self) -> &'static str;
+
     // TODO(felipecrv): move more events to this trait
     // so we can use different implementations in different contexts
 }

@@ -39,6 +39,16 @@ message BehaviorChangeEventMsg {
     BehaviorChangeEvent data = 2;
 }
 
+// D041
+message GetMetaKeyDeprecation {
+    string meta_key = 1;
+}
+
+message GetMetaKeyDeprecationMsg {
+    EventInfo info = 1;
+    GetMetaKeyDeprecation data = 2;
+}
+
 // M - Deps generation
 
 // M020
@@ -60,6 +70,18 @@ message RecordRetryException {
 message RecordRetryExceptionMsg {
     EventInfo info = 1;
     RecordRetryException data = 2;
+}
+
+// Q - Node execution
+
+// Q047
+message GetMetaKeyWarning {
+    string meta_key = 1;
+}
+
+message GetMetaKeyWarningMsg {
+    EventInfo info = 1;
+    GetMetaKeyWarning data = 2;
 }
 
 // Z - Misc

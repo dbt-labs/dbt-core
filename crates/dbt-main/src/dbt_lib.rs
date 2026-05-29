@@ -142,6 +142,10 @@ pub async fn execute_fs_and_shutdown(
 
     let invocation_id = eval_arg.io.invocation_id.to_string();
     let send_anonymous_usage_stats = eval_arg.io.send_anonymous_usage_stats;
+    let dbt_distribution = feature_stack
+        .instrumentation
+        .event_emitter
+        .dbt_distribution();
 
     // Capture invocation context now — eval_arg.metadata_dir() is correctly resolved here.
     // Written at exit so every path (success / error / warm-parse / Ctrl+C) is covered.
@@ -205,7 +209,7 @@ is false. This should not happen."
         tokio::task::spawn_blocking(move || {
             // This blocks on the worker thread until the final batch(es)
             // are sent, so we run it as a blocking tokio task.
-            invocation_end_event(invocation_id, result_string, shutdown);
+            invocation_end_event(invocation_id, result_string, dbt_distribution, shutdown);
         })
         .instrument(invocation_span)
         .await

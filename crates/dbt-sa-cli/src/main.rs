@@ -42,6 +42,7 @@ fn main() -> ExitCode {
     let feature_stack: Arc<FeatureStack> =
         dbt_features::feature_stack_builder::FeatureStackBuilder::new(tracing)
             .send_anonymous_usage_stats(arg.io.send_anonymous_usage_stats)
+            .dbt_distribution("dbt-oss")
             .build()
             .into();
 

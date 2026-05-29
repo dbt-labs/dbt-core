@@ -681,6 +681,64 @@ message MissingArgumentsPropertyInGenericTestDeprecationMsg {
     MissingArgumentsPropertyInGenericTestDeprecation data = 2;
 }
 
+// D040
+message DuplicateNameDistinctNodeTypesDeprecation {
+    string resource_name = 1;
+    string package_name = 2;
+    string unique_id1 = 3;
+    string unique_id2 = 4;
+}
+
+message DuplicateNameDistinctNodeTypesDeprecationMsg {
+    CoreEventInfo info = 1;
+    DuplicateNameDistinctNodeTypesDeprecation data = 2;
+}
+
+
+// D041 -- used in dbt_common
+
+
+// D042
+message TimeDimensionsRequireGranularityDeprecation {
+    string msg = 1;
+}
+
+message TimeDimensionsRequireGranularityDeprecationMsg {
+    CoreEventInfo info = 1;
+    TimeDimensionsRequireGranularityDeprecation data = 2;
+}
+
+
+// D043
+message GenericSemanticLayerDeprecation {
+    string msg = 1;
+}
+
+message GenericSemanticLayerDeprecationMsg {
+    CoreEventInfo info = 1;
+    GenericSemanticLayerDeprecation data = 2;
+}
+
+// D044
+message GenerateSchemaNameNullValueDeprecation {
+    string resource_unique_id = 1;
+}
+
+message GenerateSchemaNameNullValueDeprecationMsg {
+    CoreEventInfo info = 1;
+    GenerateSchemaNameNullValueDeprecation data = 2;
+}
+
+// D045
+message UnknownFlagsDeprecation {
+    repeated string flag_names = 1;
+}
+
+message UnknownFlagsDeprecationMsg {
+    CoreEventInfo info = 1;
+    UnknownFlagsDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;
@@ -1161,6 +1219,31 @@ message InvalidMacroAnnotation {
 message InvalidMacroAnnotationMsg {
     CoreEventInfo info = 1;
     InvalidMacroAnnotation data = 2;
+}
+
+
+// I077
+message PackageNodeDependsOnRootProjectNode {
+    string node_name = 1;
+    string package_name = 2;
+    string root_project_unique_id = 3;
+}
+
+message PackageNodeDependsOnRootProjectNodeMsg {
+    CoreEventInfo info = 1;
+    PackageNodeDependsOnRootProjectNode data = 2;
+}
+
+// I078
+message MFConverterIssue {
+    string issue_type = 1;
+    string element_name = 2;
+    string converter_name = 3;
+}
+
+message MFConverterIssueMsg {
+    CoreEventInfo info = 1;
+    MFConverterIssue data = 2;
 }
 
 
@@ -1985,6 +2068,60 @@ message LogFunctionResultMsg {
     LogFunctionResult data = 2;
 }
 
+// Q048
+message LogStartOverload {
+    NodeInfo node_info = 1;
+    string description = 2;
+    int32 overload_index = 3;
+    int32 total_overloads = 4;
+}
+
+message LogStartOverloadMsg {
+    CoreEventInfo info = 1;
+    LogStartOverload data = 2;
+}
+
+// Q049
+message LogOverloadResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 overload_index = 4;
+    int32 total_overloads = 5;
+    float execution_time = 6;
+    Group group = 7;
+}
+
+message LogOverloadResultMsg {
+    CoreEventInfo info = 1;
+    LogOverloadResult data = 2;
+}
+
+// Q050
+message V2ParserStart {
+    string v2_parser_command = 1;
+    string project_name = 2;
+}
+
+message V2ParserStartMsg {
+    CoreEventInfo info = 1;
+    V2ParserStart data = 2;
+}
+
+// Q051
+message V2ParserEnd {
+    string status = 1;
+    float execution_time = 2;
+    string error_class = 3;
+    int32 exit_code = 4;
+    string project_name = 5;
+}
+
+message V2ParserEndMsg {
+    CoreEventInfo info = 1;
+    V2ParserEnd data = 2;
+}
+
 // W - Node testing
 
 // Skipped W001
@@ -2501,3 +2638,14 @@ message ArtifactUploadSkippedMsg {
     CoreEventInfo info = 1;
     ArtifactUploadSkipped data = 2;
 }
+
+// Z064
+message SelectExcludeIgnoredWithSelectorWarning {
+    string msg = 1;
+}
+
+message SelectExcludeIgnoredWithSelectorWarningMsg {
+    CoreEventInfo info = 1;
+    SelectExcludeIgnoredWithSelectorWarning data = 2;
+}
+

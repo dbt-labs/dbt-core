@@ -145,6 +145,9 @@ message Invocation {
   // gives a hash of the model being run which may be finer granularity than
   // at a project level.
   string git_commit_sha = 10;
+
+  // The distribution of dbt that was used to run this command.
+  string distribution = 11;
 }
 
 // Invocation Environment Event is the primary way we are able to associate
