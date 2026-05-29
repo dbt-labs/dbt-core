@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::sync::Mutex;
 
-use dbt_platform_auth::Credential;
+use dbt_platform_auth::{AuthChain, AuthError, Credential};
 
 use crate::auth::browser_flow::{
     BrowserFlow, INTERACTIVE_TIMEOUT, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, TokenResponse,
@@ -44,7 +44,7 @@ pub struct OAuthTokenSource {
     cached: Arc<Mutex<Option<CachedToken>>>,
     disk_loaded: Arc<AtomicBool>,
     interactive_flow: Arc<dyn InteractiveFlow>,
-    platform_credential: Option<Credential>,
+    auth_chain: AuthChain,
 }
 
 impl std::fmt::Debug for OAuthTokenSource {
@@ -58,10 +58,7 @@ impl std::fmt::Debug for OAuthTokenSource {
 }
 
 impl OAuthTokenSource {
-    pub fn new(
-        config: &RunCacheServiceConfig,
-        platform_credential: Option<Credential>,
-    ) -> Result<Self, RunCacheServiceError> {
+    pub fn new(config: &RunCacheServiceConfig) -> Result<Self, RunCacheServiceError> {
         let http = reqwest::Client::builder()
             .connect_timeout(config.timeout)
             .timeout(config.timeout)
@@ -97,7 +94,7 @@ impl OAuthTokenSource {
             cached: Arc::new(Mutex::new(None)),
             disk_loaded: Arc::new(AtomicBool::new(false)),
             interactive_flow,
-            platform_credential,
+            auth_chain: AuthChain::default(),
         })
     }
 
@@ -106,7 +103,7 @@ impl OAuthTokenSource {
         config: &RunCacheServiceConfig,
         store: TokenStore,
         interactive_flow: Arc<dyn InteractiveFlow>,
-        platform_credential: Option<Credential>,
+        auth_chain: AuthChain,
     ) -> Result<Self, RunCacheServiceError> {
         let http = reqwest::Client::builder()
             .connect_timeout(config.timeout)
@@ -122,7 +119,7 @@ impl OAuthTokenSource {
             cached: Arc::new(Mutex::new(None)),
             disk_loaded: Arc::new(AtomicBool::new(false)),
             interactive_flow,
-            platform_credential,
+            auth_chain,
         })
     }
 
@@ -180,10 +177,18 @@ impl OAuthTokenSource {
     async fn acquire_fresh_token(&self) -> Result<CachedToken, RunCacheServiceError> {
         let response = if self.client_secret.is_some() {
             self.fetch_client_credentials().await?
-        } else if let Some(credential) = &self.platform_credential {
-            self.fetch_platform_token_exchange(credential).await?
         } else {
-            self.interactive_flow.run().await?
+            match self.auth_chain.resolve().await {
+                Ok(credential) => self.fetch_platform_token_exchange(&credential).await?,
+                // No platform credentials available — fall back to dbt State
+                // standalone authentication via the interactive browser flow.
+                Err(AuthError::NotAuthenticated) => self.interactive_flow.run().await?,
+                Err(err) => {
+                    return Err(RunCacheServiceError::Auth(format!(
+                        "failed to resolve dbt Platform credential for dbt State token exchange: {err}"
+                    )));
+                }
+            }
         };
         self.process_response(response)
     }
@@ -380,12 +385,82 @@ mod tests {
     use super::*;
     use crate::service_config::DEFAULT_OAUTH_AUTH_URL;
     use async_trait::async_trait;
+    use dbt_platform_auth::AuthChainBuilder;
+    use dbt_platform_auth::resolver::{AuthResolver, EnvVarResolver};
     use jsonwebtoken::{EncodingKey, Header, encode};
     use serde::Serialize;
     use std::sync::Mutex as StdMutex;
     use tempfile::TempDir;
     use wiremock::matchers::{body_string_contains, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    /// Builds an `AuthChain` with no resolvers — `resolve()` deterministically
+    /// returns `NotAuthenticated`. Used by tests that exercise the
+    /// interactive-flow or disk-cache paths and must not be influenced by the
+    /// test process's env vars or `~/.dbt/*` files.
+    fn empty_auth_chain() -> AuthChain {
+        AuthChainBuilder::with_resolvers(vec![]).build()
+    }
+
+    /// Builds an `AuthChain` containing only `EnvVarResolver`. Pair with a
+    /// `DbtCloudEnvGuard` so the env vars consumed by the resolver are scoped
+    /// to the test.
+    fn env_var_auth_chain() -> AuthChain {
+        AuthChainBuilder::with_resolvers(vec![AuthResolver::EnvVar(EnvVarResolver)]).build()
+    }
+
+    /// Serializes any test that mutates `DBT_CLOUD_*` env vars.
+    static TEST_ENV_LOCK: StdMutex<()> = StdMutex::new(());
+
+    /// RAII helper that sets `DBT_CLOUD_*` env vars (consumed by
+    /// `EnvVarResolver`) for the duration of a test, holding `TEST_ENV_LOCK`
+    /// to prevent races, and restoring any prior values on drop so the host
+    /// process's environment is left untouched.
+    struct DbtCloudEnvGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        prior: [(&'static str, Option<String>); 3],
+    }
+
+    impl DbtCloudEnvGuard {
+        fn new(token: &str, host: &str, account_id: &str) -> Self {
+            let lock = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let prior = [
+                ("DBT_CLOUD_TOKEN", std::env::var("DBT_CLOUD_TOKEN").ok()),
+                (
+                    "DBT_CLOUD_ACCOUNT_HOST",
+                    std::env::var("DBT_CLOUD_ACCOUNT_HOST").ok(),
+                ),
+                (
+                    "DBT_CLOUD_ACCOUNT_ID",
+                    std::env::var("DBT_CLOUD_ACCOUNT_ID").ok(),
+                ),
+            ];
+            unsafe {
+                #[allow(clippy::disallowed_methods)]
+                std::env::set_var("DBT_CLOUD_TOKEN", token);
+                #[allow(clippy::disallowed_methods)]
+                std::env::set_var("DBT_CLOUD_ACCOUNT_HOST", host);
+                #[allow(clippy::disallowed_methods)]
+                std::env::set_var("DBT_CLOUD_ACCOUNT_ID", account_id);
+            }
+            Self { _lock: lock, prior }
+        }
+    }
+
+    impl Drop for DbtCloudEnvGuard {
+        fn drop(&mut self) {
+            for (name, value) in &self.prior {
+                unsafe {
+                    match value {
+                        #[allow(clippy::disallowed_methods)]
+                        Some(v) => std::env::set_var(name, v),
+                        #[allow(clippy::disallowed_methods)]
+                        None => std::env::remove_var(name),
+                    }
+                }
+            }
+        }
+    }
 
     fn make_jwt(scope: &str) -> String {
         #[derive(Serialize)]
@@ -479,7 +554,7 @@ mod tests {
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            None,
+            empty_auth_chain(),
         )
         .unwrap();
 
@@ -508,8 +583,13 @@ mod tests {
 
         let scope = "runcache:scope:org:dev:admin";
         let fake = FakeFlow::new(vec![token_response(scope, 3600.0, Some("refresh-xyz"))]);
-        let source =
-            OAuthTokenSource::with_components(&config, token_store_in(&dir), fake, None).unwrap();
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            fake,
+            empty_auth_chain(),
+        )
+        .unwrap();
 
         let token = source.token().await.unwrap();
         assert_eq!(token.org_id, "dev");
@@ -553,8 +633,13 @@ mod tests {
         store.save(&stale).await.unwrap();
 
         let config = config_with(&server.uri(), None, Some("dev"));
-        let source =
-            OAuthTokenSource::with_components(&config, store, FakeFlow::new(vec![]), None).unwrap();
+        let source = OAuthTokenSource::with_components(
+            &config,
+            store,
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
 
         let token = source.token().await.unwrap();
         assert_eq!(token.id_token, new_token);
@@ -583,7 +668,7 @@ mod tests {
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            None,
+            empty_auth_chain(),
         )
         .unwrap();
 
@@ -628,7 +713,7 @@ mod tests {
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            None,
+            empty_auth_chain(),
         )
         .unwrap();
 
@@ -660,7 +745,7 @@ mod tests {
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            None,
+            empty_auth_chain(),
         )
         .unwrap();
 
@@ -691,18 +776,15 @@ mod tests {
             .mount(&server)
             .await;
 
+        let _env = DbtCloudEnvGuard::new("dbtc_platform_token", "ab123.us1.dbt.com", "42");
+
         let dir = TempDir::new().unwrap();
         let config = config_with(&server.uri(), None, Some("dev"));
-        let cred = Credential::ServiceToken {
-            token: "dbtc_platform_token".to_string(),
-            account_host: "ab123.us1.dbt.com".to_string(),
-            account_id: 42,
-        };
         let source = OAuthTokenSource::with_components(
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            Some(cred),
+            env_var_auth_chain(),
         )
         .unwrap();
 
@@ -728,16 +810,11 @@ mod tests {
 
         let dir = TempDir::new().unwrap();
         let config = config_with(&server.uri(), Some("client-secret"), Some("dev"));
-        let cred = Credential::ServiceToken {
-            token: "dbtc_platform_token".to_string(),
-            account_host: "ab123.us1.dbt.com".to_string(),
-            account_id: 42,
-        };
         let source = OAuthTokenSource::with_components(
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            Some(cred),
+            empty_auth_chain(),
         )
         .unwrap();
 
@@ -762,19 +839,16 @@ mod tests {
             .mount(&server)
             .await;
 
+        let _env = DbtCloudEnvGuard::new("dbtc_platform_token", "ab123.us1.dbt.com", "42");
+
         let dir = TempDir::new().unwrap();
         let config = config_with(&server.uri(), None, Some("dev"));
-        let cred = Credential::ServiceToken {
-            token: "dbtc_platform_token".to_string(),
-            account_host: "ab123.us1.dbt.com".to_string(),
-            account_id: 42,
-        };
         // FakeFlow would error if reached — exchange failure must propagate, not fall back.
         let source = OAuthTokenSource::with_components(
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            Some(cred),
+            env_var_auth_chain(),
         )
         .unwrap();
 

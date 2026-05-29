@@ -11,8 +11,6 @@ use tonic::{
     transport::{Channel, ClientTlsConfig, Endpoint},
 };
 
-use dbt_platform_auth::{AuthChain, AuthError};
-
 use crate::auth::OAuthTokenSource;
 use crate::proto::query_cache::{
     CloneRequest, CloneResponse, ConfirmExecutionRequest, ConfirmExecutionResponse,
@@ -124,27 +122,11 @@ enum RunCacheAuth {
 }
 
 impl RunCacheAuth {
-    async fn from_config(config: &RunCacheServiceConfig) -> Result<Self, RunCacheServiceError> {
+    fn from_config(config: &RunCacheServiceConfig) -> Result<Self, RunCacheServiceError> {
         if !config.secure {
             return Ok(Self::None);
         }
-        let platform_credential = if config.oauth_client_secret.is_some() {
-            None
-        } else {
-            match AuthChain::default().resolve().await {
-                Ok(cred) => Some(cred),
-                Err(AuthError::NotAuthenticated) => None,
-                Err(err) => {
-                    return Err(RunCacheServiceError::Auth(format!(
-                        "failed to resolve dbt Platform credential for dbt State token exchange: {err}"
-                    )));
-                }
-            }
-        };
-        Ok(Self::OAuth(Arc::new(OAuthTokenSource::new(
-            config,
-            platform_credential,
-        )?)))
+        Ok(Self::OAuth(Arc::new(OAuthTokenSource::new(config)?)))
     }
 
     async fn attach<T>(&self, request: Request<T>) -> Result<Request<T>, RunCacheServiceError> {
@@ -258,7 +240,7 @@ impl GrpcRunCacheServiceClient {
             return Err(RunCacheServiceError::Disabled);
         }
 
-        let auth = RunCacheAuth::from_config(&config).await?;
+        let auth = RunCacheAuth::from_config(&config)?;
         let mut endpoint = Endpoint::from_shared(config.endpoint_uri())?
             .connect_timeout(config.timeout)
             .timeout(config.timeout)
@@ -545,8 +527,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn secure_auth_without_client_secret_constructs_browser_source() {
+    #[test]
+    fn secure_auth_without_client_secret_constructs_browser_source() {
         let config = RunCacheServiceConfig {
             enabled: true,
             api_url: DEFAULT_API_URL.to_string(),
@@ -561,7 +543,6 @@ mod tests {
         };
 
         RunCacheAuth::from_config(&config)
-            .await
             .expect("construction should succeed without a client secret");
     }
 
