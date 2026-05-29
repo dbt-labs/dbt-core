@@ -2205,6 +2205,7 @@ impl CommonArgs {
             skip_post_hooks: false,
             skip_creating_generic_tests: false,
             write_lineage: self.write_lineage,
+            force_enable_linter: false,
         }
     }
 

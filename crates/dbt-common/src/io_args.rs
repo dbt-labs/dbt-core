@@ -542,6 +542,8 @@ pub struct EvalArgs {
     pub skip_creating_generic_tests: bool,
     /// Compute and write column-level lineage into compile/cll parquet (requires --write-metadata and --static-analysis strict)
     pub write_lineage: bool,
+    /// Always enable the linter.
+    pub force_enable_linter: bool,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
