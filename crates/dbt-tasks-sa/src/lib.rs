@@ -1,6 +1,8 @@
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::let_and_return)]
+#![allow(clippy::needless_return)]
 
 pub mod context;
 
@@ -21,6 +23,7 @@ pub mod run_operation;
 pub mod runnable;
 pub mod schema_hydrator;
 pub mod showable;
+pub mod task;
 pub mod task_runner;
 pub mod task_runner_hooks;
 pub mod utils;

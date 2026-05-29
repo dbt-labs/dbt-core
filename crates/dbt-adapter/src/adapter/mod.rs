@@ -3,6 +3,7 @@ use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 use crate::engine::XdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
+use crate::errors::into_fs_error;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
@@ -335,6 +336,35 @@ impl Adapter {
             Typed { adapter, .. } => adapter.metadata_adapter(),
             Parse(_) => None, // TODO: implement metadata_adapter() for ParseAdapter
         }
+    }
+
+    pub async fn hydrate_relation_cache(&self, db_schemas: &[CatalogAndSchema]) -> FsResult<()> {
+        let collected_relations = if let Some(metadata_adapter) = self.metadata_adapter() {
+            metadata_adapter
+                .list_relations_in_parallel(db_schemas, self.cancellation_token())
+                .await
+                .map_err(into_fs_error)
+                .map(|r| {
+                    r.into_iter()
+                        .filter_map(|(k, v)| {
+                            if let Ok(relations) = v {
+                                Some((k, relations))
+                            } else {
+                                // XXX: Warnings are not shown right now since this is purely for performance
+                                None
+                            }
+                        })
+                        .collect::<BTreeMap<CatalogAndSchema, Vec<Arc<dyn BaseRelation>>>>()
+                })?
+        } else {
+            // No metadata adapter available
+            Default::default()
+        };
+
+        self.engine()
+            .relation_cache()
+            .insert_many(collected_relations.into_iter());
+        Ok(())
     }
 
     /// This adapter as a Value

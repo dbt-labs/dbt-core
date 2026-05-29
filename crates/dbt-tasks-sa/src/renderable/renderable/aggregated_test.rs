@@ -13,6 +13,7 @@ use dbt_tasks_core::span_manager::SpanTreeRequest;
 use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task};
 use dbt_tasks_core::task_spans::create_task_span_for_node;
+use dbt_tasks_core::test_aggregation::GenericTestGroup;
 use dbt_tasks_core::visitor::SkipReason;
 use dbt_telemetry::{ExecutionPhase, NodeType};
 
@@ -43,6 +44,20 @@ impl AggregatedTestRenderTask {
             )),
             member_tests,
         }
+    }
+
+    pub fn from_generic_test_group(
+        group: &GenericTestGroup,
+        result_sender: Option<mpsc::SyncSender<TaskResult>>,
+        render_task_hooks: Arc<dyn RenderTaskHooks>,
+    ) -> AggregatedTestRenderTask {
+        Self::new(
+            group.unique_id.clone(),
+            group.aggregated_test.clone() as Arc<dyn InternalDbtNodeAttributes>,
+            group.member_tests.clone(),
+            result_sender,
+            render_task_hooks,
+        )
     }
 }
 

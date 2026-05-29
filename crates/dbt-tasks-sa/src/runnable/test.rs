@@ -177,6 +177,18 @@ impl AggregatedTestRunRemoteTask {
         }
     }
 
+    pub fn from_generic_test_group(
+        group: &Arc<GenericTestGroup>,
+        result_receiver: Option<mpsc::Receiver<TaskResult>>,
+    ) -> Self {
+        Self::new(
+            group.unique_id.clone(),
+            Arc::clone(group),
+            group.member_tests.clone(),
+            result_receiver,
+        )
+    }
+
     fn build_base_context(&self, ctx: &TaskRunnerCtx) -> BTreeMap<String, MinijinjaValue> {
         let mut base_context = ctx.inner.base_context.clone();
         base_context.insert(

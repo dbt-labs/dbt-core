@@ -1,8 +1,14 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use dbt_common::tracing::span_info::SpanStatusRecorder as _;
+use dbt_common::{FsResult, create_debug_span};
 use dbt_schemas::schemas::relations::base::BaseRelation;
+use dbt_telemetry::GenericOpExecuted;
+use tracing::Instrument as _;
 
+use crate::Adapter;
 use crate::{
     metadata::{CatalogAndSchema, RelationVec},
     relation::BaseRelationConfig,
@@ -264,6 +270,52 @@ impl RelationCache {
             relation_fqn
         }
     }
+}
+
+/// Hydrates the relation cache of the given [Adapter]
+/// The [Adapter] must support [MetadataAdapter] as well
+///
+/// Takes in an input of placeholder relations from which to hydrate schemas for
+/// if they are not already cached
+pub async fn hydrate_relation_cache_if_not_already_cached(
+    dummy_relations: &[Arc<dyn BaseRelation>],
+    adapter: &Arc<Adapter>,
+) -> FsResult<()> {
+    if adapter.metadata_adapter().is_none() {
+        return Ok(());
+    }
+    // Calculate the set of schemas to hydrate
+    let cache_misses: Vec<CatalogAndSchema> = {
+        let relation_cache = adapter.engine().relation_cache();
+        let mut seen: BTreeSet<_> = BTreeSet::new();
+        dummy_relations
+            .iter()
+            .filter_map(|r| {
+                let schema = CatalogAndSchema::from(r);
+                if seen.contains(&schema) || relation_cache.contains_full_schema(&schema) {
+                    None
+                } else {
+                    seen.insert(schema.clone());
+                    Some(schema)
+                }
+            })
+            .collect()
+    };
+    if cache_misses.is_empty() {
+        return Ok(());
+    }
+
+    let span = create_debug_span(GenericOpExecuted::new(
+        "hydrate_relation_cache".to_string(),
+        "downloading relations".to_string(),
+        Some(cache_misses.len() as u64),
+    ));
+
+    adapter
+        .hydrate_relation_cache(&cache_misses)
+        .instrument(span.clone())
+        .await
+        .record_status(&span)
 }
 
 #[cfg(test)]

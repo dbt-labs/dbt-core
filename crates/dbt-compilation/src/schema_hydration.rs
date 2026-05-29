@@ -8,6 +8,8 @@ use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::EvalArgs;
+use dbt_common::io_args::IoArgs;
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schema_store::store::SchemaStore;
@@ -19,6 +21,20 @@ use dbt_tasks_core::metricflow::MetricflowClient;
 use dbt_tasks_core::precompile::StaticAnalysisBuckets;
 
 use crate::config::CompilationConfig;
+
+#[derive(Clone)]
+pub struct SchemaHydrationArgs<'a> {
+    pub io: &'a IoArgs,
+    pub global_static_analysis: Option<StaticAnalysisKind>,
+    pub execute_mode: Execute,
+    pub scope: SchemaHydrationScope,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SchemaHydrationScope {
+    FrontierOnly,
+    Full,
+}
 
 #[derive(Clone)]
 pub struct SchemaHydrationDownloadWarning {

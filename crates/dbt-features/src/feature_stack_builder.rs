@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -31,23 +31,19 @@ use dbt_jinja_utils::listener::{
 };
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::schemas::project::QueryComment;
-use dbt_schemas::schemas::properties::UnitTestOverrides;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{
-    InternalDbtNodeAttributes, Nodes, ResolvedCloudConfig as SchemasResolvedCloudConfig,
+    InternalDbtNodeAttributes, ResolvedCloudConfig as SchemasResolvedCloudConfig,
 };
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::CompiledSqlCache;
 use dbt_tasks_core::context::ExtendedCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
-use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
-use dbt_tasks_core::run_task_hooks::RunTaskHooks;
-use dbt_tasks_core::task::{TP, TasksForNode, TasksForNodeFactory};
-use dbt_tasks_core::test_aggregation::GenericTestAggregation;
 use dbt_tasks_core::{PreTaskRunData, RunTasksArgs};
 use dbt_tasks_sa::compiled_sql_cache::CompiledSqlCacheImpl;
+use dbt_tasks_sa::schema_hydrator::NoopSchemaHydratorFactory;
+use dbt_tasks_sa::task::DefaultTasksForNodeFactory;
 use dbt_tasks_sa::task_runner_hooks::DefaultTaskRunnerHooksFactory;
 use minijinja::Value as MinijinjaValue;
 
@@ -174,32 +170,6 @@ impl AdapterFactory for DefaultAdapterFactoryImpl {
         unimplemented!()
     }
 }
-
-struct UnimplementedTasksForNodeFactory;
-impl TasksForNodeFactory for UnimplementedTasksForNodeFactory {
-    fn tasks_for_node(
-        &self,
-        _unique_id: &str,
-        _nodes: &Nodes,
-        _schedule: &Schedule<String>,
-        _execute: Execute,
-        _phases: &[TP],
-        _generic_test_aggregation: Option<&GenericTestAggregation>,
-        _unit_test_overrides: Option<&UnitTestOverrides>,
-        _reverse_deps: &HashMap<String, HashSet<String>>,
-    ) -> TasksForNode {
-        unimplemented!()
-    }
-
-    fn create_render_task_hooks(&self) -> Arc<dyn RenderTaskHooks> {
-        unimplemented!()
-    }
-
-    fn create_run_task_hooks(&self) -> Arc<dyn RunTaskHooks> {
-        unimplemented!()
-    }
-}
-
 struct DefaultTaskRunnerCtxFactory {
     rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>,
     compiled_sql_cache: Arc<dyn CompiledSqlCache>,
@@ -276,10 +246,8 @@ impl FeatureStackBuilder {
             ))) as Arc<dyn TaskRunnerCtxFactory>;
 
             TaskRunnerFeature {
-                schema_hydrator_factory: Arc::new(
-                    dbt_tasks_sa::schema_hydrator::NoopSchemaHydratorFactory,
-                ),
-                tasks_for_node_factory: Arc::new(UnimplementedTasksForNodeFactory),
+                schema_hydrator_factory: Arc::new(NoopSchemaHydratorFactory),
+                tasks_for_node_factory: Arc::new(DefaultTasksForNodeFactory),
                 compare_task_graph_builder: None,
                 rendering_listener_factory,
                 task_runner_ctx_factory,

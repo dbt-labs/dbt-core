@@ -50,6 +50,16 @@ pub struct GenericTestAggregation {
     pub relationships: GenericTestRelationships,
 }
 
+impl GenericTestAggregation {
+    pub fn generic_test_group_for_node(&self, unique_id: &str) -> Option<&Arc<GenericTestGroup>> {
+        self.groups.get(unique_id).or_else(|| {
+            self.group_ids
+                .get(unique_id)
+                .and_then(|group_id| self.groups.get(group_id))
+        })
+    }
+}
+
 fn is_aggregatable_test(test: &DbtTest) -> bool {
     let Some(macro_name) = get_macro_name(test) else {
         return false;

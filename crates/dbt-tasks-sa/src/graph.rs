@@ -22,8 +22,8 @@ use tracing::instrument;
 
 use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::precompile::StaticAnalysisBuckets;
+use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task::{TP, TasksForNode};
-use dbt_tasks_core::task::{Task, TasksForNodeFactory};
 use dbt_tasks_core::test_aggregation::{
     GenericTestAggregation, GenericTestRelationships, create_generic_test_aggregation,
 };
@@ -32,6 +32,7 @@ use crate::barrier::BarrierTask;
 use crate::cloneable::RunCloneTask;
 use crate::cloneable::cloneable_task;
 use crate::renderable::unit_test::build_unit_test_overrides_map;
+use crate::task::TasksForNodeFactory;
 
 const PHASES_RENDER_ANALYZE_RUN: &[TP] = &[TP::Render, TP::Analyze, TP::Run];
 const PHASES_RENDER_ANALYZE: &[TP] = &[TP::Render, TP::Analyze];
