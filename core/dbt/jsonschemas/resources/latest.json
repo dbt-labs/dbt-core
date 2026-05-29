@@ -1629,6 +1629,12 @@
             "null"
           ]
         },
+        "refresh_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "require_partition_filter": {
           "anyOf": [
             {
@@ -3528,6 +3534,12 @@
           ]
         },
         "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh_warehouse": {
           "type": [
             "string",
             "null"
@@ -5733,6 +5745,12 @@
             "null"
           ]
         },
+        "refresh_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "require_partition_filter": {
           "anyOf": [
             {
@@ -7743,6 +7761,12 @@
             "null"
           ]
         },
+        "refresh_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "require_partition_filter": {
           "anyOf": [
             {
@@ -8888,6 +8912,12 @@
             "null"
           ]
         },
+        "refresh_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "require_partition_filter": {
           "anyOf": [
             {
@@ -9981,6 +10011,12 @@
           ]
         },
         "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh_warehouse": {
           "type": [
             "string",
             "null"
@@ -11271,6 +11307,12 @@
           ]
         },
         "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh_warehouse": {
           "type": [
             "string",
             "null"
