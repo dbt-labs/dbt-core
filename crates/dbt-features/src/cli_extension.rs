@@ -37,7 +37,9 @@ impl CliExtensionFeatureBuilder {
     pub fn with_hooks(hooks: Box<dyn CliExtensionHooks>) -> Self {
         Self {
             hooks,
-            cli_parser_factory: Arc::new(DefaultCliParserFactory),
+            cli_parser_factory: Arc::new(DefaultCliParserFactory {
+                command_name: "dbt-fusion",
+            }),
         }
     }
 
@@ -54,16 +56,18 @@ impl CliExtensionFeatureBuilder {
     }
 }
 
-struct DefaultCliParserFactory;
+struct DefaultCliParserFactory {
+    command_name: &'static str,
+}
 
 impl CliParserFactory for DefaultCliParserFactory {
     fn create(&self) -> CliParser {
-        CliParser::new(Box::new(NoopExtensionCommandParser))
+        CliParser::new(self.command_name, Box::new(NoopExtensionCommandParser))
     }
 }
 
-pub fn default_cli_parser_factory() -> Box<dyn CliParserFactory> {
-    Box::new(DefaultCliParserFactory)
+pub fn default_cli_parser_factory(command_name: &'static str) -> Box<dyn CliParserFactory> {
+    Box::new(DefaultCliParserFactory { command_name })
 }
 
 struct NoopExtensionCommandParser;

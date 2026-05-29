@@ -90,13 +90,20 @@ pub trait CliParserFactory: Send + Sync {
 /// it allows [clap::Parser::try_parse] to be implemented as a method with a receiver
 /// that can carry dependencies instead of a static method.
 pub struct CliParser {
+    command_name: &'static str,
     command_parser: CommandParser,
 }
 
 impl CliParser {
-    pub fn new(extension_command_parser: Box<dyn ExtensionCommandParser>) -> Self {
+    pub fn new(
+        command_name: &'static str,
+        extension_command_parser: Box<dyn ExtensionCommandParser>,
+    ) -> Self {
         let command_parser = CommandParser::new(extension_command_parser);
-        Self { command_parser }
+        Self {
+            command_name,
+            command_parser,
+        }
     }
 
     /// Instantiate `Cli` from the `ArgMatches` that `clap` generated.
@@ -115,7 +122,7 @@ impl CliParser {
 
     /// Build the [clap::Command] for the CLI application.
     fn app(&self) -> clap::Command {
-        let app = clap::Command::new("dbt-fusion");
+        let app = clap::Command::new(self.command_name);
 
         // -- Augment arguments
         let app = app.group(clap::ArgGroup::new("Cli").multiple(true).args({
