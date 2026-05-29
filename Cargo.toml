@@ -573,6 +573,12 @@ thiserror = "2"
 env_logger = "0.10" # To be removed
 
 # tracing (observability)
+# Versioning warning: dbt-labs/fs#6993 tried upgrading to tracing 0.1.43
+# and tracing-subscriber 0.3.22 for upstream perf improvements, but was
+# closed after the newer versions showed consistent degradation. Do not retry
+# that version pair casually. Any tracing/tracing-subscriber update needs
+# explicit local parse/compile/build/show perf testing beyond CI perf tests,
+# which are flaky at the time of writing.
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 
@@ -593,6 +599,13 @@ ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 jsonwebtoken = { version = "9", features = ["use_pem"] }
 
 # OpenTelemetry (optional embedded OTLP exporter for traces, see dbt-common)
+# Keep the 0.30 OpenTelemetry crates in lockstep. opentelemetry-proto 0.30.1
+# changed its generated structs from prost 0.13 to prost 0.14 while
+# opentelemetry-otlp 0.30.0 still used prost 0.13, breaking fresh resolves;
+# see dbt-labs/fs#5773 and open-telemetry/opentelemetry-rust#3169. The exact
+# proto pin is a 0.30-line workaround, not a restriction on fs using prost 0.14.
+# Any OpenTelemetry update must test a fresh Cargo.lock resolve plus OTLP
+# exporter serialization/shutdown behavior.
 opentelemetry = "0.30.0"
 opentelemetry-otlp = "0.30.0"
 opentelemetry-proto = "=0.30.0"
