@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
-use sqlparser::tokenizer::{Location, Token, Tokenizer};
+use dbt_common::adapter::dialect_of;
+use dbt_sql_utils::{is_empty_or_comment_only, sql_split_statements};
 
 use crate::AdapterType;
-use crate::sql::dialect::sqlparser_dialect_for;
 
 /// Trait for SQL statement splitting functionality
 pub trait StmtSplitter: Send + Sync + Debug {
@@ -18,113 +18,20 @@ pub trait StmtSplitter: Send + Sync + Debug {
     fn is_empty(&self, sql: &str, adapter_type: AdapterType) -> bool;
 }
 
-/// Implementation of [`StmtSplitter`] backed by the `sqlparser` crate's tokenizer.
 #[derive(Debug)]
-pub struct SqlparserStmtSplitter;
+pub struct DefaultStmtSplitter;
 
-impl StmtSplitter for SqlparserStmtSplitter {
+impl StmtSplitter for DefaultStmtSplitter {
     fn split(&self, sql: &str, adapter_type: AdapterType) -> Vec<String> {
-        // Match `sql_split_statements` in `dbt_sql_utils::splitter`: trim
-        // leading/trailing whitespace so a trailing newline doesn't surface
-        // as an extra whitespace-only statement after the last `;`.
-        let sql = sql.trim();
-        let dialect = sqlparser_dialect_for(adapter_type);
-        let mut tokens = Vec::new();
-        let aborted = Tokenizer::new(dialect, sql)
-            .tokenize_with_location_into_buf(&mut tokens)
-            .is_err();
-
-        let mut cursor = LocationToByte::new(sql);
-        let mut result = Vec::new();
-        let mut start: Option<usize> = None;
-
-        for t in &tokens {
-            let tok_start = cursor.byte_of(t.span.start);
-            if start.is_none() {
-                start = Some(tok_start);
-            }
-            if matches!(t.token, Token::SemiColon) {
-                let s = start.take().unwrap();
-                result.push(sql[s..tok_start].to_string());
-            }
-        }
-
-        if !aborted
-            && let Some(s) = start
-            && s < sql.len()
-        {
-            result.push(sql[s..].to_string());
-        }
-
-        result
+        let dialect = dialect_of(adapter_type);
+        // Use sql_split_statements for splitting, then filter out empty/comment-only statements
+        // This separation of concerns keeps filtering logic in the adapter layer
+        sql_split_statements(sql, dialect).into_iter().collect()
     }
 
     fn is_empty(&self, sql: &str, adapter_type: AdapterType) -> bool {
-        if sql.trim().is_empty() {
-            return true;
-        }
-        let dialect = sqlparser_dialect_for(adapter_type);
-        let mut tokens = Vec::new();
-        // If tokenization fails, there is at least some non-whitespace content
-        // (e.g. an unterminated quoted string), so it's not empty.
-        if Tokenizer::new(dialect, sql)
-            .tokenize_with_location_into_buf(&mut tokens)
-            .is_err()
-        {
-            return false;
-        }
-        tokens
-            .iter()
-            .all(|t| matches!(t.token, Token::Whitespace(_)))
-    }
-}
-
-/// Converts `sqlparser` (line, column) [`Location`]s to byte offsets in the
-/// original input. `sqlparser` reports columns in `char`s, so this also
-/// handles multi-byte UTF-8 correctly.
-///
-/// Requires that locations be queried in monotonically non-decreasing order,
-/// which holds for tokens returned by the tokenizer.
-struct LocationToByte<'a> {
-    chars: std::str::CharIndices<'a>,
-    input_len: usize,
-    line: u64,
-    col: u64,
-    next_char: Option<(usize, char)>,
-}
-
-impl<'a> LocationToByte<'a> {
-    fn new(input: &'a str) -> Self {
-        let mut chars = input.char_indices();
-        let next_char = chars.next();
-        Self {
-            chars,
-            input_len: input.len(),
-            line: 1,
-            col: 1,
-            next_char,
-        }
-    }
-
-    fn byte_of(&mut self, loc: Location) -> usize {
-        while (self.line, self.col) < (loc.line, loc.column) {
-            match self.next_char {
-                Some((_, c)) => {
-                    if c == '\n' {
-                        self.line += 1;
-                        self.col = 1;
-                    } else {
-                        self.col += 1;
-                    }
-                    self.next_char = self.chars.next();
-                }
-                None => break,
-            }
-        }
-        match self.next_char {
-            Some((idx, _)) => idx,
-            None => self.input_len,
-        }
+        let dialect = dialect_of(adapter_type);
+        is_empty_or_comment_only(sql, dialect)
     }
 }
 
@@ -150,11 +57,11 @@ mod tests {
     ];
 
     fn split(sql: &str, adapter_type: AdapterType) -> Vec<String> {
-        SqlparserStmtSplitter.split(sql, adapter_type)
+        DefaultStmtSplitter.split(sql, adapter_type)
     }
 
     fn is_empty(sql: &str, adapter_type: AdapterType) -> bool {
-        SqlparserStmtSplitter.is_empty(sql, adapter_type)
+        DefaultStmtSplitter.is_empty(sql, adapter_type)
     }
 
     // ---- split: ported from dbt_sql_utils::splitter::tests ----

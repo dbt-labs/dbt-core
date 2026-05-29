@@ -14,7 +14,7 @@ use dbt_adapter::engine::XdbcEngine;
 use dbt_adapter::engine::query_comment::QueryCommentConfig;
 use dbt_adapter::query_cache::QueryCache;
 use dbt_adapter::sql_types::{DefaultTypeOps, TypeOps, TypeOpsFactory};
-use dbt_adapter::stmt_splitter::StmtSplitter;
+use dbt_adapter::stmt_splitter::{DefaultStmtSplitter, StmtSplitter};
 use dbt_adapter::{Adapter, AdapterEngine, AdapterImpl};
 use dbt_adapter_core::AdapterType;
 use dbt_auth::auth_for_backend;
@@ -220,7 +220,7 @@ impl FeatureStackBuilder {
         let adapter = {
             let type_ops_factory = Arc::new(DefaultTypeOpsFactoryImpl);
             let adapter_factory: Arc<dyn AdapterFactory> = {
-                let stmt_splitter = Arc::new(dbt_adapter::stmt_splitter::SqlparserStmtSplitter {});
+                let stmt_splitter = Arc::new(DefaultStmtSplitter {});
                 Arc::new(DefaultAdapterFactoryImpl { stmt_splitter })
             };
 

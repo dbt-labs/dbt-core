@@ -13,7 +13,7 @@ use crate::relation::{Relation, RelationObject};
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
-use crate::stmt_splitter::SqlparserStmtSplitter;
+use crate::stmt_splitter::DefaultStmtSplitter;
 use crate::time_machine::TimeMachine;
 use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
@@ -191,7 +191,7 @@ impl Adapter {
         let quoting = package_quoting
             .try_into()
             .expect("Failed to convert quoting to resolved quoting");
-        let stmt_splitter = Arc::new(SqlparserStmtSplitter {});
+        let stmt_splitter = Arc::new(DefaultStmtSplitter {});
         // No cloud config needed — bridge adapter is used for internal operations, not user-facing queries.
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false, None);
 
