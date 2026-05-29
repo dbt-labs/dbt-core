@@ -6,6 +6,7 @@ use dbt_yaml::Value as YValue;
 use serde::{Deserialize, Serialize};
 
 use std::any::Any;
+use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fmt;
@@ -56,6 +57,8 @@ use self::commands::{CommandParser, ExtensionCommandParser};
 
 pub const DEFAULT_LIMIT: &str = "10";
 pub const DEFAULT_FORMAT: DisplayFormat = DisplayFormat::Table;
+const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
+const USER_SETTINGS_YML: &str = ".dbt/user_settings.yml";
 
 // defined in pretty string, but copied here to avoid cycle...
 static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
@@ -638,10 +641,6 @@ pub struct SeedArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable dbt State
-    #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
-    pub no_run_cache: bool,
-
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
     #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
     pub static_analysis: Option<StaticAnalysisKind>,
@@ -658,7 +657,6 @@ impl SeedArgs {
         configure_run_cache(
             &mut eval_args,
             &self.common_args,
-            self.no_run_cache,
             self.force_node_selection,
             &self.run_cache_mode,
         );
@@ -815,10 +813,6 @@ pub struct SnapshotArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable dbt State
-    #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
-    pub no_run_cache: bool,
-
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
     #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
     pub static_analysis: Option<StaticAnalysisKind>,
@@ -831,7 +825,6 @@ impl SnapshotArgs {
         configure_run_cache(
             &mut eval_args,
             &self.common_args,
-            self.no_run_cache,
             self.force_node_selection,
             &self.run_cache_mode,
         );
@@ -867,10 +860,6 @@ pub struct TestArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable dbt State
-    #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
-    pub no_run_cache: bool,
-
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
     #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true)]
     pub limit: RowLimit,
@@ -899,7 +888,6 @@ impl TestArgs {
         configure_run_cache(
             &mut eval_args,
             &self.common_args,
-            self.no_run_cache,
             self.force_node_selection,
             &self.run_cache_mode,
         );
@@ -939,10 +927,6 @@ pub struct BuildArgs {
         conflicts_with = "force_node_selection"
     )]
     pub run_cache_mode: RunCacheMode,
-
-    /// Disable dbt State
-    #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
-    pub no_run_cache: bool,
 
     /// Drop incremental models and fully recalculate incremental tables.
     #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), short = 'f', env = "DBT_FULL_REFRESH")]
@@ -1000,7 +984,6 @@ impl BuildArgs {
         configure_run_cache(
             &mut eval_args,
             &self.common_args,
-            self.no_run_cache,
             self.force_node_selection,
             &self.run_cache_mode,
         );
@@ -1078,10 +1061,6 @@ pub struct RunArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable dbt State
-    #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
-    pub no_run_cache: bool,
-
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
     #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true)]
     pub limit: RowLimit,
@@ -1118,7 +1097,6 @@ impl RunArgs {
         configure_run_cache(
             &mut eval_args,
             &self.common_args,
-            self.no_run_cache,
             self.force_node_selection,
             &self.run_cache_mode,
         );
@@ -1153,17 +1131,17 @@ impl RunArgs {
 fn configure_run_cache(
     eval_args: &mut EvalArgs,
     common_args: &CommonArgs,
-    no_run_cache: bool,
     force_node_selection: bool,
     run_cache_mode: &RunCacheMode,
 ) {
-    if no_run_cache {
+    if common_args.no_manage_state {
         eval_args.run_cache_service = false;
         return;
     }
 
-    if common_args.task_cache_url != NOOP || common_args.run_cache_service {
-        eval_args.run_cache_service = common_args.run_cache_service;
+    let manage_state = common_args.get_manage_state(&eval_args.io.in_dir);
+    if common_args.task_cache_url != NOOP || manage_state {
+        eval_args.run_cache_service = manage_state;
         eval_args.run_cache_mode = if force_node_selection {
             RunCacheMode::WriteOnly
         } else {
@@ -1780,8 +1758,11 @@ pub struct CommonArgs {
     pub task_cache_url: String,
 
     /// Enable service-backed dbt State without legacy task-cache coordination
-    #[arg(global = true, long = "run-cache-service", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
-    pub run_cache_service: bool,
+    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, env = MANAGE_STATE_ENV, value_parser = BoolishValueParser::new())]
+    pub manage_state: bool,
+    /// Disable service-backed dbt State
+    #[arg(global = true, long = "no-manage-state", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    pub no_manage_state: bool,
 
     // --------------------------------------------------------------------------------------------
     // internal only
@@ -1993,14 +1974,67 @@ fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOption
     show
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct FlagsFile {
+    #[serde(default)]
+    flags: Option<FlagsBlock>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FlagsBlock {
+    manage_state: Option<bool>,
+}
+
+fn manage_state_from_yaml(path: &Path) -> Option<bool> {
+    let content = stdfs::read_to_string(path).ok()?;
+    let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
+    file.flags.and_then(|flags| flags.manage_state)
+}
+
+fn user_settings_path() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join(USER_SETTINGS_YML))
+}
+
 impl CommonArgs {
+    pub fn get_manage_state(&self, project_dir: &Path) -> bool {
+        self.get_manage_state_with(
+            project_dir,
+            env::var_os(MANAGE_STATE_ENV),
+            user_settings_path(),
+        )
+    }
+
+    fn get_manage_state_with(
+        &self,
+        project_dir: &Path,
+        manage_state_env: Option<OsString>,
+        user_settings_path: Option<PathBuf>,
+    ) -> bool {
+        if self.no_manage_state {
+            return false;
+        }
+        if self.manage_state {
+            return true;
+        }
+        if let Some(value) = manage_state_env {
+            return BoolishValueParser::new()
+                .parse_ref(&clap::Command::new("dbt-fusion"), None, value.as_ref())
+                .unwrap_or(self.manage_state);
+        }
+        manage_state_from_yaml(&project_dir.join(DBT_PROJECT_YML))
+            .or_else(|| user_settings_path.and_then(|path| manage_state_from_yaml(&path)))
+            .unwrap_or(false)
+    }
+
     pub fn get_warn_error(&self) -> Option<bool> {
         if self.warn_error {
             Some(true)
         } else if self.no_warn_error {
             Some(false)
         } else {
-            std::env::var_os("DBT_WARN_ERROR").and_then(|value| {
+            env::var_os("DBT_WARN_ERROR").and_then(|value| {
                 BoolishValueParser::new()
                     .parse_ref(&clap::Command::new("dbt-fusion"), None, OsStr::new(&value))
                     .ok()
@@ -2471,5 +2505,126 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
         target: common_args.target,
         num_threads: common_args.threads,
         no_parallel: common_args.no_parallel,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_manage_state_with_env(
+        common_args: &CommonArgs,
+        project_dir: &Path,
+        env_value: Option<&str>,
+        user_settings_path: Option<PathBuf>,
+    ) -> bool {
+        common_args.get_manage_state_with(
+            project_dir,
+            env_value.map(OsString::from),
+            user_settings_path,
+        )
+    }
+
+    #[test]
+    fn manage_state_defaults_to_false() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            None
+        ));
+    }
+
+    #[test]
+    fn manage_state_reads_project_flags() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            None
+        ));
+    }
+
+    #[test]
+    fn manage_state_reads_user_settings() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let home_dir = tempfile::tempdir().unwrap();
+        stdfs::create_dir_all(home_dir.path().join(".dbt")).unwrap();
+        let user_settings = home_dir.path().join(USER_SETTINGS_YML);
+        stdfs::write(&user_settings, "flags:\n  manage_state: true\n").unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            Some(user_settings)
+        ));
+    }
+
+    #[test]
+    fn manage_state_cli_overrides_env_false() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs {
+            manage_state: true,
+            ..Default::default()
+        };
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("false"),
+            None
+        ));
+    }
+
+    #[test]
+    fn no_manage_state_overrides_project_flags() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+        let common_args = CommonArgs {
+            no_manage_state: true,
+            ..Default::default()
+        };
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            None
+        ));
+    }
+
+    #[test]
+    fn env_false_overrides_project_flags() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("false"),
+            None
+        ));
     }
 }

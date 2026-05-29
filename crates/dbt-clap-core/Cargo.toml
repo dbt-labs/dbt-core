@@ -25,6 +25,9 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 uuid = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lib]
 name = "dbt_clap_core"
 doctest = false
