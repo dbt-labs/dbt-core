@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_platform_auth::Credential;
-use serde::{Deserialize, Serialize};
+use dbt_schemas::schemas::UserSettings;
 
 const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
 
@@ -36,14 +36,15 @@ pub fn check_state_configured() -> Option<StateConfigSource> {
         return Some(StateConfigSource::EnvVar);
     }
 
-    if read_manage_state_from_yaml(Path::new("dbt_project.yml")) {
+    if UserSettings::load_from(Path::new("dbt_project.yml"))
+        .map(|s| s.manage_state())
+        .unwrap_or(false)
+    {
         return Some(StateConfigSource::DbtProjectYml);
     }
 
-    if let Some(path) = user_settings_path() {
-        if read_manage_state_from_yaml(&path) {
-            return Some(StateConfigSource::UserSettingsYml);
-        }
+    if UserSettings::load().manage_state() {
+        return Some(StateConfigSource::UserSettingsYml);
     }
 
     None
@@ -109,11 +110,8 @@ pub async fn run_state_guidance(cred: &Credential, http: &reqwest::Client) -> Fs
 /// Creates or updates `~/.dbt/user_settings.yml` with `manage_state: true`
 /// unless the user has already explicitly set it to `false`.
 pub fn run_state_guidance_after_state_login() -> FsResult<()> {
-    match check_user_settings_state() {
-        UserSettingsState::FileNotFound | UserSettingsState::StateNotSet => {
-            write_manage_state_to_user_settings()?
-        }
-        UserSettingsState::StateSet => {}
+    if !UserSettings::load().manage_state_is_set() {
+        write_manage_state_to_user_settings()?;
     }
     Ok(())
 }
@@ -161,81 +159,10 @@ fn print_info_enable_state(source: StateConfigSource) {
     );
 }
 
-// ── YAML helpers ─────────────────────────────────────────────────────────────
-
-#[derive(Debug, Default, Deserialize)]
-struct FlagsFile {
-    #[serde(default)]
-    flags: Option<FlagsBlock>,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-struct FlagsBlock {
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    manage_state: bool,
-}
-
-/// Used when we need to distinguish "key absent" from an explicit value.
-#[derive(Debug, Default, Deserialize)]
-struct FlagsFileOpt {
-    #[serde(default)]
-    flags: Option<FlagsBlockOpt>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct FlagsBlockOpt {
-    manage_state: Option<bool>,
-}
-
-#[derive(Debug)]
-enum UserSettingsState {
-    /// `~/.dbt/user_settings.yml` does not exist.
-    FileNotFound,
-    /// File exists but `manage_state` key is absent.
-    StateNotSet,
-    /// File exists and `manage_state` is explicitly set.
-    StateSet,
-}
-
-fn check_user_settings_state() -> UserSettingsState {
-    let Some(path) = user_settings_path() else {
-        return UserSettingsState::FileNotFound;
-    };
-    if !path.exists() {
-        return UserSettingsState::FileNotFound;
-    }
-    let content = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => return UserSettingsState::FileNotFound,
-    };
-    let file: FlagsFileOpt = match dbt_yaml::from_str(&content) {
-        Ok(f) => f,
-        Err(_) => return UserSettingsState::StateNotSet,
-    };
-    match file.flags.and_then(|f| f.manage_state) {
-        Some(_) => UserSettingsState::StateSet,
-        None => UserSettingsState::StateNotSet,
-    }
-}
-
-fn read_manage_state_from_yaml(path: &Path) -> bool {
-    let content = match std::fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-    let file: FlagsFile = match dbt_yaml::from_str(&content) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-    file.flags.map(|f| f.manage_state).unwrap_or(false)
-}
-
-fn user_settings_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".dbt").join("user_settings.yml"))
-}
+// ── YAML write helper ─────────────────────────────────────────────────────────
 
 fn write_manage_state_to_user_settings() -> FsResult<()> {
-    let path = user_settings_path().ok_or_else(|| {
+    let path = UserSettings::path().ok_or_else(|| {
         fs_err!(
             ErrorCode::Unknown,
             "cannot determine home directory to write ~/.dbt/user_settings.yml"

@@ -25,6 +25,7 @@ dbt-proc-macros = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-yaml = { workspace = true }
+dirs = { workspace = true }
 hex = { workspace = true }
 humantime = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }

@@ -20,6 +20,7 @@ dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-platform-auth = { workspace = true }
 dbt-run-cache = { workspace = true }
+dbt-schemas = { workspace = true }
 dbt-yaml = { workspace = true }
 dialoguer = { workspace = true }
 dirs = { workspace = true }

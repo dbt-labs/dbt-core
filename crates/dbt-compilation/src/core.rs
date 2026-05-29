@@ -490,7 +490,15 @@ impl DbtLoadedProject {
             build_macro_units(&macros.macros),
             dbt_state.vars.clone(),
             dbt_state.cli_vars.clone(),
-            dbt_state.root_project_flags(),
+            {
+                // user_settings.yml is lowest-precedence; project flags override it
+                let mut flags = dbt_schemas::schemas::UserSettings::load()
+                    .flags
+                    .map(dbt_schemas::schemas::serde::yml_value_to_minijinja_map)
+                    .unwrap_or_default();
+                flags.extend(dbt_state.root_project_flags());
+                flags
+            },
             dbt_state.run_started_at,
             invocation_args,
             dbt_state
