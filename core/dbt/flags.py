@@ -81,9 +81,10 @@ def get_flag_obj():
         if isinstance(val, Path):
             val = str(val)
         setattr(new_flags, key.upper(), val)
-    # The following 3 are CLI arguments only so they're not full-fledged flags,
-    # but we put in flags for users.
+    # The following are CLI-only arguments (not in get_flag_dict()) exposed for Jinja.
     setattr(new_flags, "FULL_REFRESH", getattr(GLOBAL_FLAGS, "FULL_REFRESH", None))
     setattr(new_flags, "STORE_FAILURES", getattr(GLOBAL_FLAGS, "STORE_FAILURES", None))
     setattr(new_flags, "WHICH", getattr(GLOBAL_FLAGS, "WHICH", None))
+    setattr(new_flags, "EVENT_TIME_START", getattr(GLOBAL_FLAGS, "EVENT_TIME_START", None))
+    setattr(new_flags, "EVENT_TIME_END", getattr(GLOBAL_FLAGS, "EVENT_TIME_END", None))
     return new_flags
