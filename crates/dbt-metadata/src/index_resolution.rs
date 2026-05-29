@@ -188,7 +188,12 @@ pub fn dirty_seed_ids_from_index(out_dir: &Path) -> Option<HashSet<String>> {
     let rs_rows: Vec<ResolverStateRow> =
         dbt_metadata_parquet::epoch_io::read_rows(&resolver_state_path(&dir));
     let rs = rs_rows.into_iter().next().unwrap_or_default();
-    let packages = load_packages_from_filestamps(&dir, &rs.pkg_deps_json, &rs.pkg_kinds_json)?;
+    let packages = load_packages_from_filestamps(
+        &dir,
+        &rs.pkg_deps_json,
+        &rs.pkg_kinds_json,
+        &rs.pkg_manifest_path_configs_json,
+    )?;
     let touched = detect_dirty_files(&packages);
     let all_rows = read_node_index_rows(&dir);
     let seed_ids = all_rows
@@ -218,7 +223,12 @@ pub fn resolve_dirty_unique_ids_from_index(
     let rs_rows: Vec<ResolverStateRow> =
         dbt_metadata_parquet::epoch_io::read_rows(&resolver_state_path(&dir));
     let rs = rs_rows.into_iter().next().unwrap_or_default();
-    let packages = load_packages_from_filestamps(&dir, &rs.pkg_deps_json, &rs.pkg_kinds_json)?;
+    let packages = load_packages_from_filestamps(
+        &dir,
+        &rs.pkg_deps_json,
+        &rs.pkg_kinds_json,
+        &rs.pkg_manifest_path_configs_json,
+    )?;
     let touched = detect_dirty_files(&packages);
 
     if touched.is_empty() {

@@ -145,6 +145,17 @@ pub fn try_load_prev_compilation(
         }
     }
 
+    let manifest_path_configs = state
+        .packages
+        .iter()
+        .map(|package| {
+            (
+                package.package_name.clone(),
+                package.manifest_path_config.clone(),
+            )
+        })
+        .collect();
+
     let Some(packages) = state
         .packages
         .iter()
@@ -216,6 +227,7 @@ pub fn try_load_prev_compilation(
         patterned_dangling_sources: state.patterned_dangling_sources.clone(),
         run_started_at: chrono::Utc::now().with_timezone(&chrono_tz::UTC),
         runtime_config: Arc::new(DbtRuntimeConfig::default()),
+        manifest_path_configs,
         manifest_selectors: serde_json::from_str(&state.manifest_selectors_json)
             .unwrap_or_default(),
         resolved_selectors: {

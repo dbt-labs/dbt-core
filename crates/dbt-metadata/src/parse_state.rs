@@ -70,7 +70,7 @@ use dbt_schemas::{
         manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
         nodes::DbtGroup,
     },
-    state::{DbtPackage, Macros, ResourcePathKind},
+    state::{DbtPackage, Macros, ManifestPathConfig, ResourcePathKind},
 };
 
 use crate::partial_parse::PackageSnapshot;
@@ -178,6 +178,8 @@ pub struct ResolverStateRow {
     pub git_is_dirty: i32,
     pub pkg_deps_json: String,
     pub pkg_kinds_json: String,
+    #[serde(default)]
+    pub pkg_manifest_path_configs_json: String,
     pub any_uses_graph: i32,
 }
 
@@ -306,6 +308,7 @@ fn resolver_state_fields() -> Vec<FieldRef> {
         i32_field("git_is_dirty"),
         str_field("pkg_deps_json"),
         str_field("pkg_kinds_json"),
+        str_field("pkg_manifest_path_configs_json"),
         i32_field("any_uses_graph"),
     ]
 }
@@ -964,7 +967,10 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
     let mut filestamp_rows: Vec<FilestampRow> = Vec::new();
     let mut pkg_deps_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut pkg_kinds_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut pkg_manifest_path_configs: BTreeMap<String, ManifestPathConfig> = BTreeMap::new();
     for pkg in args.packages {
+        pkg_manifest_path_configs
+            .insert(pkg.package_name.clone(), pkg.manifest_path_config.clone());
         for dep in &pkg.dependencies {
             pkg_deps_map
                 .entry(pkg.package_name.clone())
@@ -1002,6 +1008,8 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
 
     let pkg_deps_json = serde_json::to_string(&pkg_deps_map).unwrap_or_else(|_| "{}".into());
     let pkg_kinds_json = serde_json::to_string(&pkg_kinds_map).unwrap_or_else(|_| "{}".into());
+    let pkg_manifest_path_configs_json =
+        serde_json::to_string(&pkg_manifest_path_configs).unwrap_or_else(|_| "{}".into());
 
     // ── nodes ─────────────────────────────────────────────────────────────────
     let nf_fields = node_fields();
@@ -1140,6 +1148,7 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
             git_is_dirty: args.git_is_dirty as i32,
             pkg_deps_json,
             pkg_kinds_json,
+            pkg_manifest_path_configs_json,
             any_uses_graph: any_uses_graph as i32,
         }],
     );
@@ -1285,7 +1294,12 @@ pub fn load_filtered_with_unique_ids(
     t("read resolver_state.parquet", t1b);
 
     let t2 = Instant::now();
-    let packages = load_packages_from_filestamps(&dir, &rs.pkg_deps_json, &rs.pkg_kinds_json)?;
+    let packages = load_packages_from_filestamps(
+        &dir,
+        &rs.pkg_deps_json,
+        &rs.pkg_kinds_json,
+        &rs.pkg_manifest_path_configs_json,
+    )?;
     t("load_packages (filestamps + pkg from resolver_state)", t2);
 
     let t3 = Instant::now();
@@ -1334,6 +1348,7 @@ pub(crate) fn load_packages_from_filestamps(
     dir: &Path,
     pkg_deps_json: &str,
     pkg_kinds_json: &str,
+    pkg_manifest_path_configs_json: &str,
 ) -> Option<Vec<PackageSnapshot>> {
     let mut pkg_roots: HashMap<String, String> = HashMap::new();
     let mut pkg_paths: HashMap<String, HashMap<ResourcePathKind, Vec<(String, u64)>>> =
@@ -1353,6 +1368,8 @@ pub(crate) fn load_packages_from_filestamps(
 
     let mut pkg_deps: HashMap<String, BTreeSet<String>> =
         serde_json::from_str(pkg_deps_json).unwrap_or_default();
+    let mut pkg_manifest_path_configs: BTreeMap<String, ManifestPathConfig> =
+        serde_json::from_str(pkg_manifest_path_configs_json).unwrap_or_default();
 
     let pkg_kinds_raw: BTreeMap<String, BTreeSet<String>> =
         serde_json::from_str(pkg_kinds_json).unwrap_or_default();
@@ -1404,6 +1421,7 @@ pub(crate) fn load_packages_from_filestamps(
         .map(|(name, root)| PackageSnapshot {
             package_root_path: root,
             package_name: name.clone(),
+            manifest_path_config: pkg_manifest_path_configs.remove(&name).unwrap_or_default(),
             all_paths: pkg_paths.remove(&name).unwrap_or_default(),
             dependencies: pkg_deps.remove(&name).unwrap_or_default(),
             is_local_dep: false, // re-derived below after root is placed at index 0
@@ -1545,6 +1563,10 @@ fn deserialize_into(
 // ── PackageSnapshot ↔ DbtPackage ─────────────────────────────────────────────
 
 pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
+    let root_package_path = packages
+        .first()
+        .map(|package| package.package_root_path.as_path())
+        .unwrap_or_else(|| Path::new(""));
     packages
         .iter()
         .enumerate()
@@ -1581,6 +1603,7 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
             PackageSnapshot {
                 package_root_path: pkg.package_root_path.display().to_string(),
                 package_name: pkg.dbt_project.name.clone(),
+                manifest_path_config: ManifestPathConfig::from_package(pkg, root_package_path),
                 all_paths,
                 dependencies: pkg.dependencies.clone(),
                 is_local_dep,

@@ -36,7 +36,7 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
 use dbt_schemas::state::{
     DbtPackage, GenericTestAsset, GetColumnsInRelationCalls, GetRelationCalls, Macros,
-    PatternedDanglingSources, RenderResults,
+    ManifestPathConfig, PatternedDanglingSources, RenderResults,
 };
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
@@ -140,7 +140,7 @@ pub async fn resolve(
             name: "__overview__".to_string(),
             package_name: "dbt".to_string(),
             path: PathBuf::from("overview.md"),
-            original_file_path: PathBuf::from("overview.md"),
+            original_file_path: PathBuf::from("docs/overview.md"),
             unique_id: overview_uid,
             block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
         });
@@ -404,6 +404,7 @@ pub async fn resolve(
             get_columns_in_relation_calls,
             patterned_dangling_sources,
             runtime_config: root_runtime_config.clone(),
+            manifest_path_configs: ManifestPathConfig::for_packages(&dbt_state.packages),
             manifest_selectors,
             resolved_selectors,
             root_project_quoting: root_project_quoting.try_into()?,
@@ -1239,7 +1240,7 @@ mod tests {
                 name: "__overview__".to_string(),
                 package_name: "dbt".to_string(),
                 path: PathBuf::from("overview.md"),
-                original_file_path: PathBuf::from("overview.md"),
+                original_file_path: PathBuf::from("docs/overview.md"),
                 unique_id: overview_uid,
                 block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
             });

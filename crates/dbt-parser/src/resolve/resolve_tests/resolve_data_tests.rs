@@ -192,6 +192,24 @@ fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
     None
 }
 
+fn file_key_name_from_asset(asset: &GenericTestAsset) -> Option<String> {
+    // Match dbt-core's `{yaml_key}.{name}` for generic tests. Source tests use
+    // the source collection name rather than the table name.
+    let yaml_key = match asset.resource_type.as_str() {
+        "model" => "models",
+        "seed" => "seeds",
+        "snapshot" => "snapshots",
+        "source" => "sources",
+        "analysis" => "analyses",
+        other => other,
+    };
+    let name = asset
+        .source_name
+        .as_deref()
+        .unwrap_or(asset.resource_name.as_str());
+    Some(format!("{yaml_key}.{name}"))
+}
+
 pub fn build_data_test_raw_code(
     test_metadata: Option<TestMetadata>,
     alias: String,
@@ -582,23 +600,6 @@ pub async fn resolve_data_tests(
                         ))
                     }
                 });
-                // Match dbt-core schema_generic_tests.py:218-221: `{yaml_key}.{name}`.
-                // For source tests, name is the source-collection name, not the table.
-                let file_key_name = test_asset.map(|ta| {
-                    let yaml_key = match ta.resource_type.as_str() {
-                        "model" => "models",
-                        "seed" => "seeds",
-                        "snapshot" => "snapshots",
-                        "source" => "sources",
-                        "analysis" => "analyses",
-                        other => other,
-                    };
-                    let name = ta
-                        .source_name
-                        .as_deref()
-                        .unwrap_or(ta.resource_name.as_str());
-                    format!("{yaml_key}.{name}")
-                });
                 let group = attached_node
                     .as_deref()
                     .and_then(|id| models.get(id))
@@ -607,7 +608,7 @@ pub async fn resolve_data_tests(
                     column_name: test_asset.and_then(|ta| ta.test_metadata_column_name.clone()),
                     attached_node,
                     test_metadata: inferred_test_metadata.clone(),
-                    file_key_name,
+                    file_key_name: test_asset.and_then(|ta| file_key_name_from_asset(ta)),
                     introspection: IntrospectionKind::None,
                     original_name: test_asset.and_then(|ta| ta.original_name.clone()),
                     group,

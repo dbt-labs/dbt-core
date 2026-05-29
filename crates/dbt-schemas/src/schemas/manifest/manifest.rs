@@ -5,7 +5,13 @@ use dbt_common::Span;
 use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::PathBuf, str::FromStr as _, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    str::FromStr as _,
+    sync::Arc,
+};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 
@@ -22,12 +28,14 @@ use crate::{
             Access, DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn,
             conform_normalized_snapshot_raw_code_to_mantle_format, normalize_sql,
         },
+        macros::DbtDocsMacro,
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
-                ManifestAnalysis, ManifestDataTest, ManifestFunction, ManifestMetric,
-                ManifestModel, ManifestOperation, ManifestSeed, ManifestSemanticModel,
-                ManifestSnapshot, ManifestSource,
+                ManifestAnalysis, ManifestCommonAttributes, ManifestDataTest, ManifestFunction,
+                ManifestMaterializableCommonAttributes, ManifestMetric, ManifestModel,
+                ManifestOperation, ManifestSeed, ManifestSemanticModel, ManifestSnapshot,
+                ManifestSource,
             },
             saved_query::DbtSavedQueryAttr,
             semantic_model::NodeRelation,
@@ -38,7 +46,7 @@ use crate::{
         },
         relations::default_dbt_quoting_for,
     },
-    state::{Operations, ResolverState},
+    state::{ManifestPathConfig, Operations, ResolverState},
 };
 
 #[allow(clippy::large_enum_variant)]
@@ -158,45 +166,71 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 (id.clone(), {
                     let mut model_node: ManifestModel = (**node).clone().into();
 
-                    // External public models should not have a path or original_file_path
-                    if model_node.access == Some(Access::Public)
-                        && resolver_state.root_project_name
-                            != model_node.__common_attr__.package_name
-                    {
+                    if is_external_public_model(resolver_state, &model_node) {
                         model_node.__common_attr__.path = PathBuf::new();
                         model_node.__common_attr__.original_file_path = PathBuf::new();
+                    } else {
+                        let path_config = path_config_for_package(
+                            resolver_state,
+                            &model_node.__common_attr__.package_name,
+                        );
+                        normalize_manifest_common_path(
+                            &mut model_node.__common_attr__,
+                            path_config,
+                            &path_config.model_paths,
+                        );
+                        normalize_manifest_patch_path(&mut model_node.__common_attr__, path_config);
                     }
                     DbtNode::Model(model_node)
                 })
             })
-            .chain(
-                resolver_state
-                    .nodes
-                    .tests
-                    .iter()
-                    .map(|(id, node)| (id.clone(), DbtNode::Test((**node).clone().into()))),
-            )
-            .chain(
-                resolver_state
-                    .nodes
-                    .snapshots
-                    .iter()
-                    .map(|(id, node)| (id.clone(), DbtNode::Snapshot((**node).clone().into()))),
-            )
-            .chain(
-                resolver_state
-                    .nodes
-                    .seeds
-                    .iter()
-                    .map(|(id, node)| (id.clone(), DbtNode::Seed((**node).clone().into()))),
-            )
-            .chain(
-                resolver_state
-                    .nodes
-                    .analyses
-                    .iter()
-                    .map(|(id, node)| (id.clone(), DbtNode::Analysis((**node).clone().into()))),
-            )
+            .chain(resolver_state.nodes.tests.iter().map(|(id, node)| {
+                let mut test_node: ManifestDataTest = (**node).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &test_node.__common_attr__.package_name,
+                );
+                normalize_manifest_test_path(&mut test_node, path_config);
+                (id.clone(), DbtNode::Test(test_node))
+            }))
+            .chain(resolver_state.nodes.snapshots.iter().map(|(id, node)| {
+                let mut snapshot_node: ManifestSnapshot = (**node).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &snapshot_node.__common_attr__.package_name,
+                );
+                normalize_manifest_common_path(
+                    &mut snapshot_node.__common_attr__,
+                    path_config,
+                    &path_config.snapshot_paths,
+                );
+                normalize_manifest_patch_path(&mut snapshot_node.__common_attr__, path_config);
+                (id.clone(), DbtNode::Snapshot(snapshot_node))
+            }))
+            .chain(resolver_state.nodes.seeds.iter().map(|(id, node)| {
+                let mut seed_node: ManifestSeed = (**node).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &seed_node.__common_attr__.package_name,
+                );
+                normalize_manifest_common_path(
+                    &mut seed_node.__common_attr__,
+                    path_config,
+                    &path_config.seed_paths,
+                );
+                normalize_manifest_patch_path(&mut seed_node.__common_attr__, path_config);
+                (id.clone(), DbtNode::Seed(seed_node))
+            }))
+            .chain(resolver_state.nodes.analyses.iter().map(|(id, node)| {
+                let mut analysis_node: ManifestAnalysis = (**node).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &analysis_node.__common_attr__.package_name,
+                );
+                normalize_manifest_analysis_path(&mut analysis_node.__common_attr__, path_config);
+                normalize_manifest_patch_path(&mut analysis_node.__common_attr__, path_config);
+                (id.clone(), DbtNode::Analysis(analysis_node))
+            }))
             // Note: Functions are now handled separately in the functions field, not in nodes
             .chain(resolver_state.operations.on_run_start.iter().map(|node| {
                 (
@@ -215,37 +249,101 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .nodes
             .sources
             .iter()
-            .map(|(id, source)| (id.clone(), (**source).clone().into()))
+            .map(|(id, source)| {
+                let mut manifest_source: ManifestSource = (**source).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &manifest_source.__common_attr__.package_name,
+                );
+                normalize_manifest_source_path(&mut manifest_source, path_config);
+                (id.clone(), manifest_source)
+            })
             .collect(),
         exposures: resolver_state
             .nodes
             .exposures
             .iter()
-            .map(|(id, exposure)| (id.clone(), (**exposure).clone().into()))
+            .map(|(id, exposure)| {
+                let mut manifest_exposure: ManifestExposure = (**exposure).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &manifest_exposure.__common_attr__.package_name,
+                );
+                normalize_manifest_common_attrs_property_path(
+                    &mut manifest_exposure.__common_attr__,
+                    path_config,
+                );
+                (id.clone(), manifest_exposure)
+            })
             .collect(),
         semantic_models: resolver_state
             .nodes
             .semantic_models
             .iter()
-            .map(|(id, semantic_model)| (id.clone(), (**semantic_model).clone().into()))
+            .map(|(id, semantic_model)| {
+                let mut manifest_semantic_model: ManifestSemanticModel =
+                    (**semantic_model).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &manifest_semantic_model.__common_attr__.package_name,
+                );
+                normalize_manifest_common_attrs_property_path(
+                    &mut manifest_semantic_model.__common_attr__,
+                    path_config,
+                );
+                (id.clone(), manifest_semantic_model)
+            })
             .collect(),
         metrics: resolver_state
             .nodes
             .metrics
             .iter()
-            .map(|(id, metric)| (id.clone(), (**metric).clone().into()))
+            .map(|(id, metric)| {
+                let mut manifest_metric: ManifestMetric = (**metric).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &manifest_metric.__common_attr__.package_name,
+                );
+                normalize_manifest_common_attrs_property_path(
+                    &mut manifest_metric.__common_attr__,
+                    path_config,
+                );
+                (id.clone(), manifest_metric)
+            })
             .collect(),
         saved_queries: resolver_state
             .nodes
             .saved_queries
             .iter()
-            .map(|(id, saved_query)| (id.clone(), (**saved_query).clone().into()))
+            .map(|(id, saved_query)| {
+                let mut manifest_saved_query: ManifestSavedQuery = (**saved_query).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &manifest_saved_query.__common_attr__.package_name,
+                );
+                normalize_manifest_common_attrs_property_path(
+                    &mut manifest_saved_query.__common_attr__,
+                    path_config,
+                );
+                (id.clone(), manifest_saved_query)
+            })
             .collect(),
         unit_tests: resolver_state
             .nodes
             .unit_tests
             .iter()
-            .map(|(id, unit_test)| (id.clone(), (**unit_test).clone().into()))
+            .map(|(id, unit_test)| {
+                let mut manifest_unit_test: ManifestUnitTest = (**unit_test).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &manifest_unit_test.__common_attr__.package_name,
+                );
+                normalize_manifest_materializable_property_path(
+                    &mut manifest_unit_test.__common_attr__,
+                    path_config,
+                );
+                (id.clone(), manifest_unit_test)
+            })
             .collect(),
         macros: resolver_state
             .macros
@@ -257,16 +355,46 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .nodes
             .functions
             .iter()
-            .map(|(id, function)| (id.clone(), (**function).clone().into()))
+            .map(|(id, function)| {
+                let mut manifest_function: ManifestFunction = (**function).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &manifest_function.__common_attr__.package_name,
+                );
+                normalize_manifest_common_path(
+                    &mut manifest_function.__common_attr__,
+                    path_config,
+                    &path_config.function_paths,
+                );
+                normalize_manifest_patch_path(&mut manifest_function.__common_attr__, path_config);
+                (id.clone(), manifest_function)
+            })
             .collect(),
         groups: resolver_state
             .nodes
             .groups
             .iter()
-            .map(|(id, group)| (id.clone(), (**group).clone().into()))
+            .map(|(id, group)| {
+                let mut manifest_group: ManifestGroup = (**group).clone().into();
+                let path_config =
+                    path_config_for_package(resolver_state, &manifest_group.package_name);
+                manifest_group.path =
+                    strip_resource_path(&manifest_group.path, &path_config.model_paths);
+                (id.clone(), manifest_group)
+            })
             .collect(),
         selectors: resolver_state.manifest_selectors.clone(),
-        docs: resolver_state.macros.docs_macros.clone(),
+        docs: resolver_state
+            .macros
+            .docs_macros
+            .iter()
+            .map(|(id, docs_macro)| {
+                let mut docs_macro = docs_macro.clone();
+                let path_config = path_config_for_package(resolver_state, &docs_macro.package_name);
+                normalize_docs_macro_path(&mut docs_macro, path_config);
+                (id.clone(), docs_macro)
+            })
+            .collect(),
         parent_map,
         child_map,
         group_map,
@@ -274,16 +402,263 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
     }
 }
 
+/// Returns the path config that owns a manifest node's resource paths.
+///
+/// Manifest `path` conformance is package-relative: dependency resources must be normalized
+/// using that dependency package's `model-paths`, `test-paths`, etc., not the root project's.
+fn path_config_for_package<'a>(
+    resolver_state: &'a ResolverState,
+    package_name: &str,
+) -> &'a ManifestPathConfig {
+    let root_config = resolver_state
+        .manifest_path_configs
+        .get(&resolver_state.root_project_name);
+    if package_name == resolver_state.root_project_name {
+        return root_config.expect("root manifest path config missing");
+    }
+
+    resolver_state
+        .manifest_path_configs
+        .get(package_name)
+        .or(root_config)
+        .expect("manifest path config missing for manifest node package")
+}
+
+fn is_external_public_model(resolver_state: &ResolverState, model: &ManifestModel) -> bool {
+    model.access == Some(Access::Public)
+        && resolver_state.root_project_name != model.__common_attr__.package_name
+}
+
+/// dbt-core manifest conformance: `original_file_path` stays project-relative,
+/// while `path` is serialized relative to the configured resource root.
+///
+/// Used for resources with one obvious root list: models, snapshots, seeds,
+/// functions, unit tests, and singular tests.
+fn normalize_manifest_common_path(
+    common: &mut ManifestMaterializableCommonAttributes,
+    path_config: &ManifestPathConfig,
+    resource_paths: &[String],
+) {
+    let package_relative_path = strip_package_root_path(&common.path, path_config);
+    common.path = strip_resource_path(&package_relative_path, resource_paths);
+    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+}
+
+/// dbt-core property resources may live under several configured roots.
+/// Strip the first matching root from the serialized manifest `path`.
+fn normalize_manifest_common_attrs_property_path(
+    common: &mut ManifestCommonAttributes,
+    path_config: &ManifestPathConfig,
+) {
+    let package_relative_path = strip_package_root_path(&common.path, path_config);
+    common.path = strip_property_resource_path(&package_relative_path, path_config);
+    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+}
+
+/// Same path normalization as property resources, for manifest nodes that use
+/// materializable common attrs, such as unit tests.
+fn normalize_manifest_materializable_property_path(
+    common: &mut ManifestMaterializableCommonAttributes,
+    path_config: &ManifestPathConfig,
+) {
+    let package_relative_path = strip_package_root_path(&common.path, path_config);
+    common.path = strip_property_resource_path(&package_relative_path, path_config);
+    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+}
+
+/// Analyses are special in dbt-core manifests: strip the configured analysis
+/// root, then keep an `analysis/` prefix in the serialized `path`.
+fn normalize_manifest_analysis_path(
+    common: &mut ManifestMaterializableCommonAttributes,
+    path_config: &ManifestPathConfig,
+) {
+    let package_relative_path = strip_package_root_path(&common.path, path_config);
+    let stripped = strip_resource_path(&package_relative_path, &path_config.analysis_paths);
+    common.path = if stripped == package_relative_path {
+        stripped
+    } else {
+        PathBuf::from("analysis").join(stripped)
+    };
+    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+}
+
+/// dbt-core emits patch paths as package URIs (`package://path`).
+fn normalize_manifest_patch_path(
+    common: &mut ManifestMaterializableCommonAttributes,
+    path_config: &ManifestPathConfig,
+) {
+    let Some(patch_path) = common.patch_path.as_ref() else {
+        return;
+    };
+    let package_relative_patch_path = strip_package_root_path(patch_path, path_config);
+    common.patch_path = Some(package_uri_path(
+        &common.package_name,
+        &package_relative_patch_path,
+    ));
+}
+
+/// Prefix bare paths with a package URI; leave existing URI-like paths alone.
+fn package_uri_path(package_name: &str, path: &Path) -> PathBuf {
+    if path
+        .as_os_str()
+        .as_encoded_bytes()
+        .windows(3)
+        .any(|bytes| bytes == b"://")
+    {
+        path.to_path_buf()
+    } else {
+        let mut package_uri_path = OsString::from(format!("{package_name}://"));
+        package_uri_path.push(path.as_os_str());
+        PathBuf::from(package_uri_path)
+    }
+}
+
+/// Docs default to all resource roots unless `docs-paths` is explicitly set.
+fn normalize_docs_macro_path(docs_macro: &mut DbtDocsMacro, path_config: &ManifestPathConfig) {
+    let package_relative_path = strip_package_root_path(&docs_macro.path, path_config);
+    docs_macro.path = if path_config.docs_paths.is_empty() {
+        strip_default_docs_resource_path(&package_relative_path, path_config)
+    } else {
+        strip_resource_path(&package_relative_path, &path_config.docs_paths)
+    };
+    docs_macro.original_file_path =
+        strip_package_root_path(&docs_macro.original_file_path, path_config);
+}
+
+/// Sources keep property-file paths project-relative in dbt-core manifests.
+fn normalize_manifest_source_path(source: &mut ManifestSource, path_config: &ManifestPathConfig) {
+    source.__common_attr__.path =
+        strip_package_root_path(&source.__common_attr__.path, path_config);
+    source.__common_attr__.original_file_path =
+        strip_package_root_path(&source.__common_attr__.original_file_path, path_config);
+}
+
+/// Apply dbt-core's implicit docs search roots when `docs-paths` is omitted.
+fn strip_default_docs_resource_path(path: &Path, path_config: &ManifestPathConfig) -> PathBuf {
+    strip_resource_path_from_slices(
+        path,
+        &[
+            path_config.analysis_paths.as_slice(),
+            path_config.function_paths.as_slice(),
+            path_config.macro_paths.as_slice(),
+            path_config.model_paths.as_slice(),
+            path_config.seed_paths.as_slice(),
+            path_config.snapshot_paths.as_slice(),
+            path_config.test_paths.as_slice(),
+        ],
+    )
+}
+
+/// Property files can define many resource types, so try each relevant root.
+fn strip_property_resource_path(path: &Path, path_config: &ManifestPathConfig) -> PathBuf {
+    strip_resource_path_from_slices(
+        path,
+        &[
+            path_config.model_paths.as_slice(),
+            path_config.seed_paths.as_slice(),
+            path_config.snapshot_paths.as_slice(),
+            path_config.analysis_paths.as_slice(),
+            path_config.test_paths.as_slice(),
+            path_config.function_paths.as_slice(),
+            path_config.macro_paths.as_slice(),
+        ],
+    )
+}
+
+/// Return the first path with any configured resource root stripped.
+fn strip_resource_path_from_slices(path: &Path, resource_path_slices: &[&[String]]) -> PathBuf {
+    for resource_paths in resource_path_slices {
+        let stripped = strip_resource_path(path, resource_paths);
+        if stripped != path {
+            return stripped;
+        }
+    }
+    path.to_path_buf()
+}
+
+/// Normalize test `path` with dbt-core's generic-test special case.
+///
+/// Singular tests strip `test-paths`; generic tests are YAML-defined but backed
+/// by generated SQL, and dbt-core serializes only that generated file name.
+fn normalize_manifest_test_path(test: &mut ManifestDataTest, path_config: &ManifestPathConfig) {
+    if is_generic_manifest_test(test) {
+        if let Some(file_name) = test.__common_attr__.path.file_name() {
+            test.__common_attr__.path = PathBuf::from(file_name.to_os_string());
+        }
+    } else {
+        normalize_manifest_common_path(
+            &mut test.__common_attr__,
+            path_config,
+            &path_config.test_paths,
+        );
+    }
+    test.__common_attr__.original_file_path =
+        strip_package_root_path(&test.__common_attr__.original_file_path, path_config);
+}
+
+/// Detect generic data tests after conversion into the manifest shape.
+///
+/// Generic tests have generated SQL distinct from the YAML declaration.
+/// Singular SQL tests use the same path for both.
+fn is_generic_manifest_test(test: &ManifestDataTest) -> bool {
+    test.generated_sql_file
+        .as_deref()
+        .map(|generated_sql_file| {
+            Path::new(generated_sql_file) != test.__common_attr__.original_file_path.as_path()
+        })
+        .unwrap_or(false)
+}
+
+/// Strip the dependency package root from paths that are stored relative to the root project.
+fn strip_package_root_path(path: &Path, path_config: &ManifestPathConfig) -> PathBuf {
+    if !path_config.package_root_prefix.as_os_str().is_empty()
+        && path.starts_with(&path_config.package_root_prefix)
+        && let Ok(stripped) = path.strip_prefix(&path_config.package_root_prefix)
+        && !stripped.as_os_str().is_empty()
+    {
+        return stripped.to_path_buf();
+    }
+    path.to_path_buf()
+}
+
+/// Strip one configured resource-root prefix from a manifest `path`.
+///
+/// Converts `models/marts/orders.sql` to `marts/orders.sql`, while leaving
+/// unmatched or already root-level paths unchanged.
+fn strip_resource_path(path: &Path, resource_paths: &[String]) -> PathBuf {
+    for resource_path in resource_paths {
+        let resource_path = Path::new(resource_path);
+        if path.starts_with(resource_path)
+            && let Ok(stripped) = path.strip_prefix(resource_path)
+            && !stripped.as_os_str().is_empty()
+        {
+            return stripped.to_path_buf();
+        }
+    }
+    path.to_path_buf()
+}
+
 fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<YmlValue>> {
-    let disabled: BTreeMap<String, Vec<YmlValue>> = resolver_state
+    resolver_state
         .disabled_nodes
         .models
         .iter()
         .map(|(id, model)| {
+            let mut manifest_model = ManifestModel::from((**model).clone());
+            let path_config = path_config_for_package(
+                resolver_state,
+                &manifest_model.__common_attr__.package_name,
+            );
+            normalize_manifest_common_path(
+                &mut manifest_model.__common_attr__,
+                path_config,
+                &path_config.model_paths,
+            );
+            normalize_manifest_patch_path(&mut manifest_model.__common_attr__, path_config);
             (
                 id.clone(),
                 vec![serialize_with_resource_type(
-                    dbt_yaml::to_value(ManifestModel::from((**model).clone())).unwrap_or_default(),
+                    dbt_yaml::to_value(manifest_model).unwrap_or_default(),
                     "model",
                 )],
             )
@@ -294,11 +669,16 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .tests
                 .iter()
                 .map(|(id, test)| {
+                    let mut manifest_test = ManifestDataTest::from((**test).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_test.__common_attr__.package_name,
+                    );
+                    normalize_manifest_test_path(&mut manifest_test, path_config);
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestDataTest::from((**test).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_test).unwrap_or_default(),
                             "test",
                         )],
                     )
@@ -310,11 +690,24 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .snapshots
                 .iter()
                 .map(|(id, snapshot)| {
+                    let mut manifest_snapshot = ManifestSnapshot::from((**snapshot).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_snapshot.__common_attr__.package_name,
+                    );
+                    normalize_manifest_common_path(
+                        &mut manifest_snapshot.__common_attr__,
+                        path_config,
+                        &path_config.snapshot_paths,
+                    );
+                    normalize_manifest_patch_path(
+                        &mut manifest_snapshot.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestSnapshot::from((**snapshot).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_snapshot).unwrap_or_default(),
                             "snapshot",
                         )],
                     )
@@ -326,11 +719,21 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .seeds
                 .iter()
                 .map(|(id, seed)| {
+                    let mut manifest_seed = ManifestSeed::from((**seed).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_seed.__common_attr__.package_name,
+                    );
+                    normalize_manifest_common_path(
+                        &mut manifest_seed.__common_attr__,
+                        path_config,
+                        &path_config.seed_paths,
+                    );
+                    normalize_manifest_patch_path(&mut manifest_seed.__common_attr__, path_config);
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestSeed::from((**seed).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_seed).unwrap_or_default(),
                             "seed",
                         )],
                     )
@@ -342,11 +745,23 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .analyses
                 .iter()
                 .map(|(id, analysis)| {
+                    let mut manifest_analysis = ManifestAnalysis::from((**analysis).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_analysis.__common_attr__.package_name,
+                    );
+                    normalize_manifest_analysis_path(
+                        &mut manifest_analysis.__common_attr__,
+                        path_config,
+                    );
+                    normalize_manifest_patch_path(
+                        &mut manifest_analysis.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestAnalysis::from((**analysis).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_analysis).unwrap_or_default(),
                             "analysis",
                         )],
                     )
@@ -358,11 +773,24 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .functions
                 .iter()
                 .map(|(id, function)| {
+                    let mut manifest_function = ManifestFunction::from((**function).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_function.__common_attr__.package_name,
+                    );
+                    normalize_manifest_common_path(
+                        &mut manifest_function.__common_attr__,
+                        path_config,
+                        &path_config.function_paths,
+                    );
+                    normalize_manifest_patch_path(
+                        &mut manifest_function.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestFunction::from((**function).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_function).unwrap_or_default(),
                             "function",
                         )],
                     )
@@ -374,11 +802,19 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .exposures
                 .iter()
                 .map(|(id, exposure)| {
+                    let mut manifest_exposure = ManifestExposure::from((**exposure).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_exposure.__common_attr__.package_name,
+                    );
+                    normalize_manifest_common_attrs_property_path(
+                        &mut manifest_exposure.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestExposure::from((**exposure).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_exposure).unwrap_or_default(),
                             "exposure",
                         )],
                     )
@@ -390,11 +826,20 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .saved_queries
                 .iter()
                 .map(|(id, saved_query)| {
+                    let mut manifest_saved_query =
+                        ManifestSavedQuery::from((**saved_query).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_saved_query.__common_attr__.package_name,
+                    );
+                    normalize_manifest_common_attrs_property_path(
+                        &mut manifest_saved_query.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestSavedQuery::from((**saved_query).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_saved_query).unwrap_or_default(),
                             "saved_query",
                         )],
                     )
@@ -406,11 +851,19 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .unit_tests
                 .iter()
                 .map(|(id, unit_test)| {
+                    let mut manifest_unit_test = ManifestUnitTest::from((**unit_test).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_unit_test.__common_attr__.package_name,
+                    );
+                    normalize_manifest_materializable_property_path(
+                        &mut manifest_unit_test.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestUnitTest::from((**unit_test).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_unit_test).unwrap_or_default(),
                             "unit_test",
                         )],
                     )
@@ -422,11 +875,15 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .groups
                 .iter()
                 .map(|(id, group)| {
+                    let mut manifest_group = ManifestGroup::from((**group).clone());
+                    let path_config =
+                        path_config_for_package(resolver_state, &manifest_group.package_name);
+                    manifest_group.path =
+                        strip_resource_path(&manifest_group.path, &path_config.model_paths);
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestGroup::from((**group).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_group).unwrap_or_default(),
                             "group",
                         )],
                     )
@@ -438,11 +895,16 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .sources
                 .iter()
                 .map(|(id, source)| {
+                    let mut manifest_source = ManifestSource::from((**source).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_source.__common_attr__.package_name,
+                    );
+                    normalize_manifest_source_path(&mut manifest_source, path_config);
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestSource::from((**source).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_source).unwrap_or_default(),
                             "source",
                         )],
                     )
@@ -454,11 +916,19 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .metrics
                 .iter()
                 .map(|(id, metric)| {
+                    let mut manifest_metric = ManifestMetric::from((**metric).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_metric.__common_attr__.package_name,
+                    );
+                    normalize_manifest_common_attrs_property_path(
+                        &mut manifest_metric.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestMetric::from((**metric).clone()))
-                                .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_metric).unwrap_or_default(),
                             "metric",
                         )],
                     )
@@ -470,20 +940,26 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .semantic_models
                 .iter()
                 .map(|(id, semantic_model)| {
+                    let mut manifest_semantic_model =
+                        ManifestSemanticModel::from((**semantic_model).clone());
+                    let path_config = path_config_for_package(
+                        resolver_state,
+                        &manifest_semantic_model.__common_attr__.package_name,
+                    );
+                    normalize_manifest_common_attrs_property_path(
+                        &mut manifest_semantic_model.__common_attr__,
+                        path_config,
+                    );
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
-                            dbt_yaml::to_value(ManifestSemanticModel::from(
-                                (**semantic_model).clone(),
-                            ))
-                            .unwrap_or_default(),
+                            dbt_yaml::to_value(manifest_semantic_model).unwrap_or_default(),
                             "semantic_model",
                         )],
                     )
                 }),
         )
-        .collect();
-    disabled
+        .collect()
 }
 
 // Build map of group names to nodes in the group

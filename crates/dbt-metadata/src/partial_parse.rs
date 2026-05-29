@@ -74,8 +74,8 @@ use dbt_schemas::{
         Nodes, common::ResolvedQuoting, macros::DbtDocsMacro, relations::base::RelationPattern,
     },
     state::{
-        DbtPackage, DbtProfile, DbtState, GetRelationCalls, Macros, Operations, ResolverState,
-        ResourcePathKind,
+        DbtPackage, DbtProfile, DbtState, GetRelationCalls, Macros, ManifestPathConfig, Operations,
+        ResolverState, ResourcePathKind,
     },
 };
 use indexmap::IndexMap;
@@ -86,7 +86,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-const INCREMENTAL_STATE_VERSION: u32 = 2;
+const INCREMENTAL_STATE_VERSION: u32 = 3;
 
 pub struct IncrementalState {
     pub version: u32,
@@ -368,6 +368,8 @@ pub fn hash_file_at_path(path: &Path) -> String {
 pub struct PackageSnapshot {
     pub package_root_path: String,
     pub package_name: String,
+    #[serde(default)]
+    pub manifest_path_config: ManifestPathConfig,
     pub all_paths: HashMap<ResourcePathKind, Vec<(String, u64)>>,
     pub dependencies: BTreeSet<String>,
     /// True when this is a local-path dep (`local: ../foo`).
@@ -1133,6 +1135,7 @@ mod tests {
             packages: vec![PackageSnapshot {
                 package_root_path: "/tmp/project".into(),
                 package_name: "my_project".into(),
+                manifest_path_config: ManifestPathConfig::default(),
                 all_paths: HashMap::from([(
                     ResourcePathKind::ModelPaths,
                     vec![
@@ -1185,7 +1188,12 @@ mod tests {
 
         let profile = test_profile();
         let packages = vec![DbtPackage {
-            dbt_project: serde_json::from_value(serde_json::json!({"name": "my_project"})).unwrap(),
+            dbt_project: serde_json::from_value(serde_json::json!({
+                "name": "my_project",
+                "model-paths": ["models", "custom_models"],
+                "test-paths": ["tests"]
+            }))
+            .unwrap(),
             package_root_path: PathBuf::from("/tmp/project"),
             dbt_properties: vec![],
             analysis_files: vec![],
@@ -1246,6 +1254,14 @@ mod tests {
         assert_eq!(loaded.version, INCREMENTAL_STATE_VERSION);
         assert_eq!(loaded.packages.len(), 1);
         assert_eq!(loaded.packages[0].package_name, "my_project");
+        assert_eq!(
+            loaded.packages[0].manifest_path_config.model_paths,
+            vec!["models", "custom_models"]
+        );
+        assert_eq!(
+            loaded.packages[0].manifest_path_config.test_paths,
+            vec!["tests"]
+        );
         assert!(loaded.nodes_with_resolution_errors.contains("err_node"));
 
         // Reconstruct package metadata and verify paths survive
@@ -2657,6 +2673,7 @@ mod tests {
         PackageSnapshot {
             package_root_path: root.to_str().unwrap().into(),
             package_name: "proj".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 kind,
                 vec![(rel_path.into(), system_time_to_nanos(saved_mtime))],
@@ -3094,6 +3111,7 @@ mod tests {
         let root_pkg = PackageSnapshot {
             package_root_path: tmp.path().to_str().unwrap().into(),
             package_name: "my_project".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 ResourcePathKind::ModelPaths,
                 vec![(
@@ -3115,6 +3133,7 @@ mod tests {
         let dep_pkg = PackageSnapshot {
             package_root_path: dep_dir.to_str().unwrap().into(),
             package_name: "dbt_utils".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 ResourcePathKind::MacroPaths,
                 vec![(
@@ -3156,6 +3175,7 @@ mod tests {
         let root_pkg = PackageSnapshot {
             package_root_path: tmp.path().to_str().unwrap().into(),
             package_name: "my_project".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 ResourcePathKind::ModelPaths,
                 vec![(
@@ -3174,6 +3194,7 @@ mod tests {
         let local_pkg = PackageSnapshot {
             package_root_path: local_dep_dir.to_str().unwrap().into(),
             package_name: "my_utils".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 ResourcePathKind::MacroPaths,
                 vec![("macros/util.sql".into(), system_time_to_nanos(local_mtime))],
@@ -3829,6 +3850,7 @@ mod tests {
             patterned_dangling_sources: Default::default(),
             run_started_at: dbt_state.run_started_at,
             runtime_config: Arc::new(DbtRuntimeConfig::default()),
+            manifest_path_configs: ManifestPathConfig::for_packages(&dbt_state.packages),
             manifest_selectors: Default::default(),
             resolved_selectors: Default::default(),
             root_project_quoting: Default::default(),
@@ -3907,6 +3929,7 @@ mod tests {
         let pkg = PackageSnapshot {
             package_root_path: tmp.path().to_str().unwrap().into(),
             package_name: "proj".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 ResourcePathKind::ModelPaths,
                 vec![("models/orders.sql".into(), mtime)],
@@ -3964,6 +3987,7 @@ mod tests {
         let pkg = PackageSnapshot {
             package_root_path: tmp.path().to_str().unwrap().into(),
             package_name: "proj".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 ResourcePathKind::ModelPaths,
                 vec![("models/orders.sql".into(), mtime)],
@@ -4024,6 +4048,7 @@ mod tests {
         let pkg = PackageSnapshot {
             package_root_path: tmp.path().to_str().unwrap().into(),
             package_name: "proj".into(),
+            manifest_path_config: ManifestPathConfig::default(),
             all_paths: HashMap::from([(
                 ResourcePathKind::MacroPaths,
                 vec![("macros/my_macro.sql".into(), mtime)],
