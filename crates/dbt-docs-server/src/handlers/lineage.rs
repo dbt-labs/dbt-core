@@ -1,7 +1,7 @@
 //! Model-level lineage: `GET /api/v1/nodes/:unique_id/lineage`.
 //!
 //! Recursive CTE on `dbt.edges` walks both upstream and downstream from
-//! the root, bounded by `max_depth` (default 5). The response includes
+//! the root, bounded by `max_depth` (default 3, capped at 3). The response includes
 //! every node touched (joined with `dbt.nodes` for metadata) and every
 //! edge traversed.
 //!
@@ -9,7 +9,7 @@
 //! ```json
 //! {
 //!   "root": "model.foo.bar",
-//!   "max_depth": 5,
+//!   "max_depth": 3,
 //!   "nodes": [
 //!     { "unique_id": "model.foo.bar", "name": "bar",
 //!       "resource_type": "model", "materialized": "view", "depth": 0 },
@@ -37,8 +37,8 @@ use crate::state::SharedState;
 
 /// Default and maximum traversal depth. Capped to keep responses bounded
 /// even if a misbehaving client requests something huge.
-const DEFAULT_MAX_DEPTH: u32 = 5;
-const HARD_MAX_DEPTH: u32 = 50;
+const DEFAULT_MAX_DEPTH: u32 = 3;
+const HARD_MAX_DEPTH: u32 = 3;
 
 #[derive(Debug, Deserialize)]
 pub struct LineageParams {
