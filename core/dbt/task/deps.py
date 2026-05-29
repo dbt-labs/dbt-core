@@ -16,6 +16,7 @@ from dbt.contracts.project import PackageSpec
 from dbt.deps.base import downloads_directory
 from dbt.deps.registry import RegistryPinnedPackage
 from dbt.deps.resolver import resolve_lock_packages, resolve_packages
+from dbt.deps.skills import install_skills
 from dbt.events.types import (
     DepsAddPackage,
     DepsFoundDuplicatePackage,
@@ -315,6 +316,7 @@ class DepsTask(BaseTask):
 
         if not packages_lock_config:
             fire_event(DepsNoPackagesFound())
+            install_skills(self.project, self.cli_vars)
             return
 
         with downloads_directory():
@@ -352,3 +354,5 @@ class DepsTask(BaseTask):
             if packages_to_upgrade:
                 fire_event(Formatting(""))
                 fire_event(DepsNotifyUpdatesAvailable(packages=packages_to_upgrade))
+
+        install_skills(self.project, self.cli_vars)
