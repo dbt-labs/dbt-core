@@ -1279,7 +1279,7 @@ async fn build_sql_context(
         ));
     };
 
-    let query_dependencies = collect_query_dependencies(ctx, node, &sql).await?;
+    let query_dependencies = collect_query_dependencies(ctx, node, &sql, is_view).await?;
     let tables = collect_table_modified_infos(
         ctx,
         node,
@@ -1522,6 +1522,19 @@ impl CollectedViewQueryDependencies {
             parser_seen_relations: BTreeMap::new(),
             metadata_complete: false,
         }
+    }
+
+    /// Empty, completed result used for views.
+    ///
+    /// Views are re-evaluated on every read, so the dbt State service only
+    /// checks the view's own `last_modified_epoch` and SQL hash to decide
+    /// reuse — upstream view DDL and base-table freshness are irrelevant.
+    /// Mirrors the dbt-state Python plugin's view path
+    /// (clients/dbt_state/src/dbt_state/run_cache.py:1116-1146), which sends
+    /// `query_dependencies=[]`. `metadata_complete` must stay `true` so the
+    /// submit isn't silently skipped.
+    fn for_view() -> Self {
+        Self::complete(Vec::new(), BTreeSet::new(), BTreeMap::new())
     }
 }
 
@@ -1886,7 +1899,11 @@ async fn collect_query_dependencies(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
     sql: &str,
+    is_view: bool,
 ) -> FsResult<CollectedViewQueryDependencies> {
+    if is_view {
+        return Ok(CollectedViewQueryDependencies::for_view());
+    }
     let relations = parse_sql_relations_for_run_cache(
         ctx,
         sql,
@@ -2565,6 +2582,21 @@ mod tests {
             build_lenient_dependencies(false, &deferred_fqns, &tables, &query_dependencies)
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn collected_view_query_dependencies_for_view_is_empty_and_complete() {
+        // The view fast-path in `collect_query_dependencies` must produce no
+        // upstream dependencies, no seen tables, and no parser relations, while
+        // still marking the result complete so the submit isn't skipped.
+        // Matches the dbt-state Python plugin's view path
+        // (clients/dbt_state/src/dbt_state/run_cache.py:1116-1146).
+        let deps = CollectedViewQueryDependencies::for_view();
+
+        assert!(deps.dependencies.is_empty());
+        assert!(deps.seen_tables.is_empty());
+        assert!(deps.parser_seen_relations.is_empty());
+        assert!(deps.metadata_complete);
     }
 
     #[test]
