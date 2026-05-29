@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use dbt_common::ErrorCode;
@@ -32,6 +32,8 @@ const REQUEST_ID_HEADER: &str = "x-request-id";
 const SESSION_ID_HEADER: &str = "x-session-id";
 const SUBMITTED_AT_EPOCH_HEADER: &str = "x-submitted-at-epoch";
 const SYSTEM_USER_ID_HEADER: &str = "x-system-user-id";
+const HTTP2_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(30);
+const HTTP2_KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientVersionStatus {
@@ -259,7 +261,10 @@ impl GrpcRunCacheServiceClient {
         let auth = RunCacheAuth::from_config(&config).await?;
         let mut endpoint = Endpoint::from_shared(config.endpoint_uri())?
             .connect_timeout(config.timeout)
-            .timeout(config.timeout);
+            .timeout(config.timeout)
+            .http2_keep_alive_interval(HTTP2_KEEP_ALIVE_INTERVAL)
+            .keep_alive_timeout(HTTP2_KEEP_ALIVE_TIMEOUT)
+            .keep_alive_while_idle(true);
         if config.secure {
             endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
         }
