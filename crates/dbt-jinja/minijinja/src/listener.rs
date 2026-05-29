@@ -4,6 +4,7 @@
 use std::fmt::Write;
 use std::path::Path;
 
+use crate::compiler::tokens::Token;
 use crate::output_tracker::OutputTracker;
 use crate::{machinery::Span, CodeLocation};
 
@@ -29,6 +30,15 @@ pub trait RenderingEventListener: std::fmt::Debug {
     /// Called when a macro stop is encountered.
     /// The expanded location can be obtained from the output_tracker_location if needed.
     fn on_macro_stop(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32);
+
+    /// Called when raw template text is emitted into rendered output.
+    fn on_raw_emit(&self, _raw: &str, _source_span: &Span) {}
+
+    /// Called immediately before a Jinja expression is emitted into rendered output.
+    fn on_emit_start(&self, _source_span: &Span) {}
+
+    /// Called immediately after a Jinja expression is emitted into rendered output.
+    fn on_emit_end(&self, _source_span: &Span) {}
 
     /// Called when a malicious return is encountered.
     /// It means return is not on the top level of block
@@ -72,6 +82,12 @@ pub trait RenderingEventListener: std::fmt::Debug {
         _macro_spans: &[(Span, Span)],
     ) {
     }
+}
+
+/// A listener for tokenizer events emitted during template compilation.
+pub trait TokenizerEventListener: std::fmt::Debug {
+    /// Called when the tokenizer emits a source token.
+    fn on_source_token(&self, token: &Token<'_>, span: &Span);
 }
 
 /// A macro start event.

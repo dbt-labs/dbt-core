@@ -30,6 +30,16 @@ pub trait RenderingEventListenerFactory: Send + Sync {
     /// Destroys a rendering event listener
     fn destroy_listener(&self, _filename: &Path, _listener: Rc<dyn RenderingEventListener>);
 
+    /// Creates rendering and tokenizer listeners for the same render.
+    fn create_listener_bundle(
+        &self,
+        filename: &Path,
+        offset: &dbt_frontend_common::error::CodeLocation,
+        _source_sql: &str,
+    ) -> Vec<Rc<dyn RenderingEventListener>> {
+        self.create_listeners(filename, offset)
+    }
+
     /// get macro spans
     fn drain_macro_spans(&self, filename: &Path) -> MacroSpans;
 }
@@ -467,6 +477,62 @@ impl DefaultRenderingEventListener {
     }
 }
 
+#[derive(Clone, Copy)]
+struct SpanPosition {
+    line: u32,
+    col: u32,
+    offset: u32,
+}
+
+fn push_raw_source_spans(
+    raw: &str,
+    source_span: Span,
+    expanded_start: SpanPosition,
+    spans: &mut Vec<(Span, Span)>,
+) {
+    let mut source = SpanPosition {
+        line: source_span.start_line,
+        col: source_span.start_col,
+        offset: source_span.start_offset,
+    };
+    let mut expanded = expanded_start;
+
+    for part in raw.split_inclusive('\n') {
+        if part.is_empty() {
+            continue;
+        }
+        let source_start = source;
+        let expanded_start = expanded;
+        advance_span_position(&mut source, part);
+        advance_span_position(&mut expanded, part);
+        spans.push((
+            span_from_positions(source_start, source),
+            span_from_positions(expanded_start, expanded),
+        ));
+    }
+}
+
+fn advance_span_position(position: &mut SpanPosition, text: &str) {
+    position.offset += text.len() as u32;
+    if let Some(last_newline) = text.rfind('\n') {
+        position.line += text.bytes().filter(|byte| *byte == b'\n').count() as u32;
+        position.col = (text.len() - last_newline) as u32;
+    } else {
+        position.col += text.len() as u32;
+    }
+}
+
+fn span_from_positions(start: SpanPosition, end: SpanPosition) -> Span {
+    Span {
+        start_line: start.line,
+        start_col: start.col,
+        start_offset: start.offset,
+        end_line: end.line,
+        end_col: end.col,
+        end_offset: end.offset,
+    }
+}
+
 impl RenderingEventListener for DefaultRenderingEventListener {
     fn on_function_start(&self) {
         self.macro_start_stack.borrow_mut().push(vec![]);
@@ -552,6 +618,19 @@ impl RenderingEventListener for DefaultRenderingEventListener {
         } else {
             macro_start_stack_last.pop();
         }
+    }
+
+    fn on_raw_emit(&self, raw: &str, source_span: &Span) {
+        push_raw_source_spans(
+            raw,
+            *source_span,
+            SpanPosition {
+                line: self.output_tracker_location.line(),
+                col: self.output_tracker_location.col(),
+                offset: self.output_tracker_location.index(),
+            },
+            &mut self.macro_spans.borrow_mut().raw_source_spans,
+        );
     }
 
     fn on_malicious_return(&self, location: &CodeLocation) {

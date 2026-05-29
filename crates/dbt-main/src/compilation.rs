@@ -1166,7 +1166,12 @@ impl DbtProjectCompilation {
         feature_stack
             .cli_extension
             .hooks
-            .did_resolve_project(executor.arg.as_ref(), &resolved_state)
+            .did_resolve_project(
+                executor.cli.as_ref(),
+                executor.arg.as_ref(),
+                &resolved_state,
+                &jinja_env,
+            )
             .await?;
 
         // todo: if you execute local then no sources can be used!

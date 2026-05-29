@@ -17,7 +17,7 @@ use crate::constants::{
 };
 use crate::error::{Error, ErrorKind};
 use crate::expression::Expression;
-use crate::listener::RenderingEventListener;
+use crate::listener::{RenderingEventListener, TokenizerEventListener};
 use crate::machinery::Span;
 use crate::output::Output;
 use crate::template::{CompiledTemplate, CompiledTemplateRef, Template, TemplateConfig};
@@ -471,6 +471,28 @@ impl<'source> Environment<'source> {
         ))
     }
 
+    fn template_from_named_str_with_profile_and_tokenizer_listeners(
+        &self,
+        name: &'source str,
+        source: &'source str,
+        profile: CodeGenerationProfile,
+        tokenizer_listeners: &[Rc<dyn TokenizerEventListener>],
+    ) -> Result<Template<'_, 'source>, Error> {
+        Ok(Template::new(
+            self,
+            CompiledTemplateRef::Owned(Arc::new(ok!(
+                CompiledTemplate::new_with_tokenizer_listeners(
+                    name,
+                    source,
+                    &self.templates.template_config,
+                    None,
+                    profile,
+                    tokenizer_listeners,
+                )
+            ))),
+        ))
+    }
+
     /// Loads a template from a string, with name `<string>`.
     ///
     /// This is a shortcut to [`template_from_named_str`](Self::template_from_named_str)
@@ -509,6 +531,26 @@ impl<'source> Environment<'source> {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<String, Error> {
         ok!(self.template_from_named_str(name, source)).render(ctx, listeners)
+    }
+
+    /// Parses and renders a template from a string while emitting tokenizer events.
+    pub fn render_named_str_with_tokenizer_listeners<S: Serialize>(
+        &self,
+        name: &str,
+        source: &str,
+        ctx: S,
+        listeners: &[Rc<dyn RenderingEventListener>],
+        tokenizer_listeners: &[Rc<dyn TokenizerEventListener>],
+    ) -> Result<String, Error> {
+        ok!(
+            self.template_from_named_str_with_profile_and_tokenizer_listeners(
+                name,
+                source,
+                self.profile.clone(),
+                tokenizer_listeners,
+            )
+        )
+        .render(ctx, listeners)
     }
 
     /// Parses and renders a template from a string in one go.
@@ -995,7 +1037,7 @@ mod basic_store {
             &mut self,
             name: &'source str,
             source: &'source str,
-            listeners: &[Rc<dyn RenderingEventListener>],
+            _listeners: &[Rc<dyn RenderingEventListener>],
         ) -> Result<(), Error> {
             self.map.insert(
                 name,
@@ -1005,7 +1047,6 @@ mod basic_store {
                     &self.template_config,
                     None,
                     CodeGenerationProfile::Render,
-                    listeners
                 ))),
             );
             Ok(())

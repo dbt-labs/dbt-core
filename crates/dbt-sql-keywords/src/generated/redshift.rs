@@ -4,7 +4,8 @@ pub static RESERVED_KEYWORDS: &[&str] = &[
     "AS", "IDENTITY", "SNAPSHOT", "SYSTEM", "TOP", "UNLOAD", "WITHIN",
 ];
 pub static STRICT_NON_RESERVED_KEYWORDS: &[&str] = &[
-    "CROSS", "FULL", "INNER", "LEFT", "MINUS", "NATURAL", "NOT", "OUTER", "RIGHT", "USING", "WHERE",
+    "CROSS", "FULL", "INNER", "JOIN", "LEFT", "MINUS", "NATURAL", "NOT", "OUTER", "RIGHT", "USING",
+    "WHERE",
 ];
 pub static NON_RESERVED_KEYWORDS: &[&str] = &[
     "ABORT",
@@ -157,7 +158,6 @@ pub static NON_RESERVED_KEYWORDS: &[&str] = &[
     "IS",
     "ISNULL",
     "ISOLATION",
-    "JOIN",
     "JSON",
     "JSON_ARRAY",
     "JSON_EXISTS",

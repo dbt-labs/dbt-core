@@ -114,8 +114,10 @@ pub trait CliExtensionHooks: Send + Sync {
     /// groups, and other resolved project data) is available.
     async fn did_resolve_project(
         &self,
+        cli: &Cli,
         arg: &EvalArgs,
         resolved_state: &ResolverState,
+        jinja_env: &JinjaEnv,
     ) -> FsResult<()>;
 
     /// Called just before tasks are scheduled and run.
@@ -243,8 +245,10 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
 
     async fn did_resolve_project(
         &self,
+        _cli: &Cli,
         _arg: &EvalArgs,
         _resolved_state: &ResolverState,
+        _jinja_env: &JinjaEnv,
     ) -> FsResult<()> {
         Ok(())
     }

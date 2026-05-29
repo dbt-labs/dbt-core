@@ -78,6 +78,12 @@ impl<'a> Output<'a> {
         matches!(self.capture_stack.last(), Some(None))
     }
 
+    /// Returns `true` if output is currently captured instead of written.
+    #[inline(always)]
+    pub(crate) fn is_capturing(&self) -> bool {
+        !self.capture_stack.is_empty()
+    }
+
     /// Writes some data to the underlying buffer contained within this output.
     #[inline]
     pub fn write_str(&mut self, s: &str) -> fmt::Result {
@@ -136,6 +142,8 @@ impl fmt::Write for NullWriter {
 pub struct MacroSpans {
     /// The list of spans that are mapped to the source file
     pub items: Vec<(Span, Span)>,
+    /// Raw template text spans with their rendered positions.
+    pub raw_source_spans: Vec<(Span, Span)>,
 }
 
 impl MacroSpans {
@@ -147,10 +155,12 @@ impl MacroSpans {
     /// extend the list with another list
     pub fn extend(&mut self, other: MacroSpans) {
         self.items.extend(other.items);
+        self.raw_source_spans.extend(other.raw_source_spans);
     }
 
     /// clear the list
     pub fn clear(&mut self) {
         self.items.clear();
+        self.raw_source_spans.clear();
     }
 }

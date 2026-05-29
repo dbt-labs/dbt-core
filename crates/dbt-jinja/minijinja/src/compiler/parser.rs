@@ -2,12 +2,14 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::LazyLock;
 
 use crate::compiler::ast::{self, Comment, MacroKind, Spanned};
 use crate::compiler::lexer::{Tokenizer, WhitespaceConfig};
 use crate::compiler::tokens::{Span, Token};
 use crate::error::{Error, ErrorKind};
+use crate::listener::TokenizerEventListener;
 use crate::syntax::SyntaxConfig;
 use crate::value::Value;
 
@@ -138,8 +140,33 @@ impl<'a> TokenStream<'a> {
         syntax_config: SyntaxConfig,
         whitespace_config: WhitespaceConfig,
     ) -> TokenStream<'a> {
-        let mut tokenizer =
-            Tokenizer::new(source, filename, in_expr, syntax_config, whitespace_config);
+        Self::new_with_tokenizer_listeners(
+            source,
+            filename,
+            in_expr,
+            syntax_config,
+            whitespace_config,
+            &[],
+        )
+    }
+
+    /// Tokenize a template and notify listeners.
+    pub fn new_with_tokenizer_listeners(
+        source: &'a str,
+        filename: &'a str,
+        in_expr: bool,
+        syntax_config: SyntaxConfig,
+        whitespace_config: WhitespaceConfig,
+        source_listeners: &[Rc<dyn TokenizerEventListener>],
+    ) -> TokenStream<'a> {
+        let mut tokenizer = Tokenizer::new_with_tokenizer_listeners(
+            source,
+            filename,
+            in_expr,
+            syntax_config,
+            whitespace_config,
+            source_listeners,
+        );
         let current = tokenizer.next_token().transpose();
         TokenStream {
             tokenizer,
@@ -275,8 +302,34 @@ impl<'a> Parser<'a> {
         syntax_config: SyntaxConfig,
         whitespace_config: WhitespaceConfig,
     ) -> Parser<'a> {
+        Self::new_with_tokenizer_listeners(
+            source,
+            filename,
+            in_expr,
+            syntax_config,
+            whitespace_config,
+            &[],
+        )
+    }
+
+    /// Creates a new parser that notifies listeners as source tokens are emitted.
+    pub fn new_with_tokenizer_listeners(
+        source: &'a str,
+        filename: &'a str,
+        in_expr: bool,
+        syntax_config: SyntaxConfig,
+        whitespace_config: WhitespaceConfig,
+        source_listeners: &[Rc<dyn TokenizerEventListener>],
+    ) -> Parser<'a> {
         Parser {
-            stream: TokenStream::new(source, filename, in_expr, syntax_config, whitespace_config),
+            stream: TokenStream::new_with_tokenizer_listeners(
+                source,
+                filename,
+                in_expr,
+                syntax_config,
+                whitespace_config,
+                source_listeners,
+            ),
             in_macro: false,
             in_loop: false,
             blocks: BTreeSet::new(),
@@ -886,8 +939,14 @@ impl<'a> Parser<'a> {
         };
 
         Ok(match ident {
-            "for" => ast::Stmt::ForLoop(respan!(ok!(self.parse_for_stmt()))),
-            "if" => ast::Stmt::IfCond(respan!(ok!(self.parse_if_cond()))),
+            "for" => {
+                let node = ok!(self.parse_for_stmt(span));
+                ast::Stmt::ForLoop(Spanned::new(node, self.stream.expand_span(span)))
+            }
+            "if" => {
+                let node = ok!(self.parse_if_cond(span));
+                ast::Stmt::IfCond(Spanned::new(node, self.stream.expand_span(span)))
+            }
             "with" => ast::Stmt::WithBlock(respan!(ok!(self.parse_with_block()))),
             "set" => match ok!(self.parse_set()) {
                 SetParseResult::Set(rv) => ast::Stmt::Set(respan!(rv)),
@@ -1052,7 +1111,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_for_stmt(&mut self) -> Result<ast::ForLoop<'a>, Error> {
+    fn parse_for_stmt(&mut self, start_open_span: Span) -> Result<ast::ForLoop<'a>, Error> {
         let old_in_loop = std::mem::replace(&mut self.in_loop, true);
         let target = ok!(self.parse_assignment());
         expect_token!(self, Token::Ident("in"), "in");
@@ -1082,20 +1141,38 @@ impl<'a> Parser<'a> {
         skip_token!(self, Token::Colon);
 
         expect_token!(self, Token::BlockEnd, "end of block");
+        let _ = start_open_span;
         let body = ok!(self.subparse(
             &|tok| matches!(tok, Token::Ident("endfor" | "else")),
             Some(("for", &["endfor", "else"])),
         ));
-        let else_body = if skip_token!(self, Token::Ident("else")) {
-            expect_token!(self, Token::BlockEnd, "end of block");
-            ok!(self.subparse(
-                &|tok| matches!(tok, Token::Ident("endfor")),
-                Some(("for", &["endfor"])),
-            ))
-        } else {
-            Vec::new()
+        let next_open_span = self.stream.last_span();
+        let (else_body, end_open_span) = match ok!(self.stream.next()) {
+            Some((Token::Ident("else"), _)) => {
+                expect_token!(self, Token::BlockEnd, "end of block");
+                let else_body = ok!(self.subparse(
+                    &|tok| matches!(tok, Token::Ident("endfor")),
+                    Some(("for", &["endfor"])),
+                ));
+                let end_open_span = self.stream.last_span();
+                expect_token!(self, Token::Ident("endfor"), "endfor");
+                (else_body, end_open_span)
+            }
+            Some((Token::Ident("endfor"), _)) => (Vec::new(), next_open_span),
+            Some((token, span)) => {
+                syntax_error!(
+                    "unexpected end of for-loop: expected endfor or else, got {}",
+                    &self.filename,
+                    &span,
+                    token
+                );
+            }
+            None => {
+                return Err(unexpected_eof("endfor or else"));
+            }
         };
-        ok!(self.stream.next());
+        expect_token!(self, Token::BlockEnd, "end of block");
+        let _ = end_open_span;
         self.in_loop = old_in_loop;
         Ok(ast::ForLoop {
             target,
@@ -1107,7 +1184,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_if_cond(&mut self) -> Result<ast::IfCond<'a>, Error> {
+    fn parse_if_cond(&mut self, _start_open_span: Span) -> Result<ast::IfCond<'a>, Error> {
         let expr = ok!(self.parse_expr_noif());
         skip_token!(self, Token::Colon);
         expect_token!(self, Token::BlockEnd, "end of block");
@@ -1115,6 +1192,7 @@ impl<'a> Parser<'a> {
             &|tok| matches!(tok, Token::Ident("endif" | "else" | "elif")),
             Some(("if", &["elif", "else", "endif"])),
         ));
+        let next_open_span = self.stream.last_span();
         let false_body = match ok!(self.stream.next()) {
             Some((Token::Ident("else"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
@@ -1122,14 +1200,34 @@ impl<'a> Parser<'a> {
                     &|tok| matches!(tok, Token::Ident("endif")),
                     Some(("if", &["endif"])),
                 ));
-                ok!(self.stream.next());
+                let end_open_span = self.stream.last_span();
+                expect_token!(self, Token::Ident("endif"), "endif");
+                expect_token!(self, Token::BlockEnd, "end of block");
+                let _ = end_open_span;
                 rv
             }
-            Some((Token::Ident("elif"), span)) => vec![ast::Stmt::IfCond(Spanned::new(
-                ok!(self.parse_if_cond()),
-                self.stream.expand_span(span),
-            ))],
-            _ => Vec::new(),
+            Some((Token::Ident("elif"), span)) => {
+                let nested = ok!(self.parse_if_cond(next_open_span));
+                vec![ast::Stmt::IfCond(Spanned::new(
+                    nested,
+                    self.stream.expand_span(span),
+                ))]
+            }
+            Some((Token::Ident("endif"), _)) => {
+                expect_token!(self, Token::BlockEnd, "end of block");
+                Vec::new()
+            }
+            Some((token, span)) => {
+                syntax_error!(
+                    "unexpected end of if-block: expected endif, else, or elif, got {}",
+                    &self.filename,
+                    &span,
+                    token
+                );
+            }
+            None => {
+                return Err(unexpected_eof("endif, else, or elif"));
+            }
         };
 
         Ok(ast::IfCond {
@@ -1967,6 +2065,25 @@ pub fn parse<'source>(
     whitespace_config: WhitespaceConfig,
 ) -> Result<ast::Stmt<'source>, Error> {
     Parser::new(source, filename, false, syntax_config, whitespace_config).parse()
+}
+
+/// Parses a template and notifies listeners as source tokens are emitted.
+pub fn parse_with_listeners<'source>(
+    source: &'source str,
+    filename: &'source str,
+    syntax_config: SyntaxConfig,
+    whitespace_config: WhitespaceConfig,
+    source_listeners: &[Rc<dyn TokenizerEventListener>],
+) -> Result<ast::Stmt<'source>, Error> {
+    Parser::new_with_tokenizer_listeners(
+        source,
+        filename,
+        false,
+        syntax_config,
+        whitespace_config,
+        source_listeners,
+    )
+    .parse()
 }
 
 /// Parses a standalone expression.

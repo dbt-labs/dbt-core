@@ -1,9 +1,11 @@
 use std::borrow::Cow;
 use std::ops::ControlFlow;
 use std::path::Path;
+use std::rc::Rc;
 
 use crate::compiler::tokens::{Span, Token};
 use crate::error::{Error, ErrorKind};
+use crate::listener::TokenizerEventListener;
 use crate::syntax::SyntaxConfig;
 use crate::utils::{memchr, memstr, unescape};
 
@@ -25,6 +27,7 @@ pub struct Tokenizer<'s> {
     current_offset: usize,
     trim_leading_whitespace: bool,
     pending_start_marker: Option<(StartMarker, usize)>,
+    source_listeners: Vec<Rc<dyn TokenizerEventListener>>,
     #[cfg(feature = "custom_syntax")]
     paren_balance: isize,
     brace_balance: isize,
@@ -293,6 +296,25 @@ impl<'s> Tokenizer<'s> {
         syntax_config: SyntaxConfig,
         whitespace_config: WhitespaceConfig,
     ) -> Tokenizer<'s> {
+        Self::new_with_tokenizer_listeners(
+            input,
+            filename,
+            in_expr,
+            syntax_config,
+            whitespace_config,
+            &[],
+        )
+    }
+
+    /// Creates a new tokenizer that notifies listeners as tokens are emitted.
+    pub fn new_with_tokenizer_listeners(
+        input: &'s str,
+        filename: &'s str,
+        in_expr: bool,
+        syntax_config: SyntaxConfig,
+        whitespace_config: WhitespaceConfig,
+        source_listeners: &[Rc<dyn TokenizerEventListener>],
+    ) -> Tokenizer<'s> {
         let mut source = input;
         if !whitespace_config.keep_trailing_newline {
             if source.ends_with('\n') {
@@ -318,6 +340,7 @@ impl<'s> Tokenizer<'s> {
             brace_balance: 0,
             trim_leading_whitespace: false,
             pending_start_marker: None,
+            source_listeners: source_listeners.to_vec(),
             syntax_config,
             ws_config: whitespace_config,
         }
@@ -337,7 +360,9 @@ impl<'s> Tokenizer<'s> {
                 #[cfg(feature = "custom_syntax")]
                 {
                     if matches!(self.stack.pop(), Some(LexerState::LineStatement)) {
-                        return Ok(Some((Token::BlockEnd, self.span(self.loc()))));
+                        let rv = (Token::BlockEnd, self.span(self.loc()));
+                        self.notify_source_listeners(&rv);
+                        return Ok(Some(rv));
                     }
                 }
                 return Ok(None);
@@ -353,9 +378,18 @@ impl<'s> Tokenizer<'s> {
                 None => panic!("empty lexer stack"),
             };
             match ok!(outcome) {
-                ControlFlow::Break(rv) => return Ok(Some(rv)),
+                ControlFlow::Break(rv) => {
+                    self.notify_source_listeners(&rv);
+                    return Ok(Some(rv));
+                }
                 ControlFlow::Continue(()) => continue,
             }
+        }
+    }
+
+    fn notify_source_listeners(&self, rv: &(Token<'s>, Span)) {
+        for listener in &self.source_listeners {
+            listener.on_source_token(&rv.0, &rv.1);
         }
     }
 

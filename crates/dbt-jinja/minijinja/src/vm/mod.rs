@@ -87,6 +87,27 @@ where
     }
 }
 
+fn span_with_current_offset(span: &Span, offset: &Span) -> Span {
+    Span {
+        start_line: span.start_line + offset.start_line - 1,
+        start_col: span.start_col
+            + if offset.start_line == 1 {
+                offset.start_col.saturating_sub(1)
+            } else {
+                0
+            },
+        start_offset: span.start_offset + offset.start_offset,
+        end_line: span.end_line + offset.start_line - 1,
+        end_col: span.end_col
+            + if span.end_line == 1 {
+                offset.start_col.saturating_sub(1)
+            } else {
+                0
+            },
+        end_offset: span.end_offset + offset.end_offset,
+    }
+}
+
 /// Wrapper for return values originating from within a `{% call %}` block.
 ///
 /// When `return()` is called inside a `{% call %}` block (i.e., within a `caller()` invocation),
@@ -446,6 +467,12 @@ impl<'env> Vm<'env> {
                     stack.push(b);
                 }
                 Instruction::EmitRaw(val, span) => {
+                    if current_macro_name.is_none() && !out.is_capturing() {
+                        let source_span = span_with_current_offset(span, &state.ctx.current_span);
+                        listeners.iter().for_each(|listener| {
+                            listener.on_raw_emit(val, &source_span);
+                        });
+                    }
                     // this only produces a format error, no need to attach
                     // location information.
                     out.write_str(val).map_err(|e| {
@@ -454,9 +481,24 @@ impl<'env> Vm<'env> {
                     })?;
                 }
                 Instruction::Emit(span) => {
+                    let source_span = if current_macro_name.is_none() && !out.is_capturing() {
+                        Some(span_with_current_offset(span, &state.ctx.current_span))
+                    } else {
+                        None
+                    };
+                    if let Some(source_span) = &source_span {
+                        listeners
+                            .iter()
+                            .for_each(|listener| listener.on_emit_start(source_span));
+                    }
                     self.env
                         .format(&stack.pop(), state, &mut out)
                         .map_err(|e| state.with_span_error(e, span))?;
+                    if let Some(source_span) = &source_span {
+                        listeners
+                            .iter()
+                            .for_each(|listener| listener.on_emit_end(source_span));
+                    }
                 }
                 Instruction::StoreLocal(name, _) => {
                     let value = stack.pop();

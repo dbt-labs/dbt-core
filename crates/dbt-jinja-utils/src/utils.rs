@@ -290,10 +290,17 @@ pub fn render_sql(
     listener_factory: &dyn RenderingEventListenerFactory,
     filename: &Path,
 ) -> FsResult<String> {
-    let listeners = listener_factory.create_listeners(filename, &CodeLocation::start_of_file());
+    let listeners =
+        listener_factory.create_listener_bundle(filename, &CodeLocation::start_of_file(), sql);
     let result = env
-        .as_ref()
-        .render_named_str(filename.to_str().unwrap(), sql, ctx, &listeners)
+        .env
+        .render_named_str_with_tokenizer_listeners(
+            filename.to_str().unwrap(),
+            sql,
+            ctx,
+            &listeners,
+            &[],
+        )
         .map_err(|e| FsError::from_jinja_err(e, "Failed to render SQL"))?;
     for listener in listeners {
         listener_factory.destroy_listener(filename, listener);
@@ -311,11 +318,18 @@ pub fn render_sql_with_listeners(
     env: &JinjaEnv,
     ctx: &BTreeMap<String, Value>,
     listeners: &[Rc<dyn RenderingEventListener>],
+    tokenizer_listeners: &[Rc<dyn minijinja::listener::TokenizerEventListener>],
     filename: &Path,
 ) -> FsResult<String> {
     let result = env
-        .as_ref()
-        .render_named_str(filename.to_str().unwrap(), sql, ctx, listeners)
+        .env
+        .render_named_str_with_tokenizer_listeners(
+            filename.to_str().unwrap(),
+            sql,
+            ctx,
+            listeners,
+            tokenizer_listeners,
+        )
         .map_err(|e| FsError::from_jinja_err(e, "Failed to render SQL"))?;
 
     Ok(result)
@@ -323,8 +337,18 @@ pub fn render_sql_with_listeners(
 
 /// Converts a MacroSpans object to a vector of MacroSpan objects
 pub fn macro_spans_to_macro_span_vec(macro_spans: &MacroSpans) -> Vec<MacroSpan> {
-    macro_spans
-        .items
+    spans_to_macro_span_vec(&macro_spans.items)
+}
+
+/// Converts raw source-map spans to MacroSpan objects.
+pub fn raw_source_spans_to_macro_span_vec(macro_spans: &MacroSpans) -> Vec<MacroSpan> {
+    spans_to_macro_span_vec(&macro_spans.raw_source_spans)
+}
+
+fn spans_to_macro_span_vec(
+    spans: &[(minijinja::machinery::Span, minijinja::machinery::Span)],
+) -> Vec<MacroSpan> {
+    spans
         .iter()
         .map(|(source, expanded)| MacroSpan {
             macro_span: Span {
@@ -691,4 +715,45 @@ pub(crate) fn get_status_reporter<'a>(env: &'a Environment) -> Option<&'a Arc<dy
     env.status_reporter
         .as_ref()
         .and_then(|x| x.downcast_ref::<Arc<dyn StatusReporter>>())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use minijinja::{Environment, context, listener::RenderingEventListener};
+
+    use crate::listener::DefaultRenderingEventListener;
+
+    use super::raw_source_spans_to_macro_span_vec;
+
+    #[test]
+    fn raw_source_spans_track_rendered_loop_lines() {
+        let source = "{% for value in values -%}\nselect {{ value }}\n{% endfor %}";
+        let env = Environment::new();
+        let listener = Rc::new(DefaultRenderingEventListener::new(false));
+        let listeners: Vec<Rc<dyn RenderingEventListener>> = vec![listener.clone()];
+
+        env.render_named_str(
+            "loop.sql",
+            source,
+            context!(values => vec!["a", "b"]),
+            &listeners,
+        )
+        .unwrap();
+
+        let macro_spans = listener.macro_spans.borrow();
+        let raw_source_spans = raw_source_spans_to_macro_span_vec(&macro_spans);
+
+        assert!(
+            raw_source_spans.iter().any(|span| {
+                span.macro_span.start.line == 2 && span.expanded_span.start.line == 1
+            })
+        );
+        assert!(
+            raw_source_spans.iter().any(|span| {
+                span.macro_span.start.line == 2 && span.expanded_span.start.line == 2
+            })
+        );
+    }
 }

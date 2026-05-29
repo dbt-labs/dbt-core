@@ -231,6 +231,7 @@ pub use vm::listeners::TypecheckingEventListener;
 pub mod cache_key;
 pub mod filters;
 pub mod functions;
+/// Source-side Jinja layout analysis.
 pub mod listener;
 
 /// Dispatch object for Jinja templates

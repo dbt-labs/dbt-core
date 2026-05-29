@@ -12,11 +12,11 @@ use crate::compiler::codegen::{CodeGenerationProfile, CodeGenerator};
 use crate::compiler::instructions::Instructions;
 use crate::compiler::lexer::WhitespaceConfig;
 use crate::compiler::meta::find_undeclared;
-use crate::compiler::parser::parse;
+use crate::compiler::parser::{parse, parse_with_listeners};
 use crate::compiler::typecheck::FunctionRegistry;
 use crate::environment::Environment;
 use crate::error::Error;
-use crate::listener::RenderingEventListener;
+use crate::listener::{RenderingEventListener, TokenizerEventListener};
 use crate::syntax::SyntaxConfig;
 use crate::utils::AutoEscape;
 use crate::value::{self, Value};
@@ -394,7 +394,19 @@ impl<'source> CompiledTemplate<'source> {
         filename: Option<String>,
         profile: CodeGenerationProfile,
     ) -> Result<CompiledTemplate<'source>, Error> {
-        Self::_new_impl(name, source, config, filename, profile)
+        Self::_new_impl(name, source, config, filename, profile, &[])
+    }
+
+    /// Creates a compiled template and notifies tokenizer listeners during parsing.
+    pub fn new_with_tokenizer_listeners(
+        name: &'source str,
+        source: &'source str,
+        config: &TemplateConfig,
+        filename: Option<String>,
+        profile: CodeGenerationProfile,
+        source_listeners: &[Rc<dyn TokenizerEventListener>],
+    ) -> Result<CompiledTemplate<'source>, Error> {
+        Self::_new_impl(name, source, config, filename, profile, source_listeners)
     }
 
     fn _new_impl(
@@ -403,15 +415,17 @@ impl<'source> CompiledTemplate<'source> {
         config: &TemplateConfig,
         filename: Option<String>,
         profile: CodeGenerationProfile,
+        source_listeners: &[Rc<dyn TokenizerEventListener>],
     ) -> Result<CompiledTemplate<'source>, Error> {
         // the parser/compiler combination can create constants in which case
         // we can probably benefit from the value optimization a bit.
         let _guard = value::value_optimization();
-        let ast = ok!(parse(
+        let ast = ok!(parse_with_listeners(
             source,
             name,
             config.syntax_config.clone(),
-            config.ws_config
+            config.ws_config,
+            source_listeners,
         ));
         let mut gen = CodeGenerator::new_with_filename(name, source, filename, profile);
         gen.compile_stmt(&ast)?;

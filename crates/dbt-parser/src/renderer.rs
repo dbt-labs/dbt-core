@@ -335,9 +335,10 @@ where
     } else {
         DefaultRenderingEventListenerFactory::new(true)
     };
-    let mut listeners = listener_factory.create_listeners(
+    let mut listeners = listener_factory.create_listener_bundle(
         &display_path,
         &dbt_frontend_common::error::CodeLocation::start_of_file(),
+        &sql,
     );
     let macro_dep_listener = Rc::new(dbt_jinja_utils::listener::MacroDependencyListener::new());
     listeners.push(macro_dep_listener.clone());
@@ -348,6 +349,7 @@ where
             jinja_env.as_ref(),
             &resolve_model_context,
             &listeners,
+            &[],
             &display_path,
         ) {
             Ok(rendered_sql) => {
