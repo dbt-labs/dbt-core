@@ -463,7 +463,7 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Seed: {
             "paths": project.seed_paths,
-            "extensions": [".csv"],
+            "extensions": [".csv", ".jsonl", ".ndjson"],
             "parser": "SeedParser",
         },
         ParseFileType.Documentation: {
