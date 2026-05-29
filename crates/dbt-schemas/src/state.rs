@@ -150,6 +150,9 @@ pub struct GenericTestAsset {
     /// unversioned models and non-model resources. Used to build `attached_node` with the
     /// correct `.v<version>` suffix, matching dbt-core's `RefableLookup.get_unique_id`.
     pub version: Option<String>,
+    /// Tags from `columns[*].config.tags` in schema YAML, carried for generic column tests.
+    /// Empty for model-level and singular tests.
+    pub column_tags: Vec<String>,
 }
 
 impl fmt::Display for GenericTestAsset {

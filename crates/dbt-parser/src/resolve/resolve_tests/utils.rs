@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_schemas::schemas::{data_tests::DataTests, dbt_column::ColumnProperties};
 
-type DataTestVec = Vec<DataTests>;
+use crate::resolve::resolve_tests::persist_generic_data_tests::ColumnTestEntry;
+
 type ModelDataTestVec = Vec<DataTests>;
 
 pub fn base_tests_inner(
@@ -27,7 +28,7 @@ pub fn base_tests_inner(
 
 pub fn column_tests_inner(
     columns: &Option<Vec<ColumnProperties>>,
-) -> FsResult<Option<BTreeMap<String, (bool, DataTestVec)>>> {
+) -> FsResult<Option<BTreeMap<String, ColumnTestEntry>>> {
     if columns.is_some()
         && columns
             .as_ref()
@@ -52,9 +53,19 @@ pub fn column_tests_inner(
                     .as_ref()
                     .or((col.data_tests).as_ref())
                     .map(|tests| {
+                        let tags = col
+                            .config
+                            .as_ref()
+                            .and_then(|c| c.tags.clone())
+                            .map(|t| t.into())
+                            .unwrap_or_default();
                         (
                             col.name.clone(),
-                            (col.quote.unwrap_or(false), tests.clone()),
+                            ColumnTestEntry {
+                                quote: col.quote.unwrap_or(false),
+                                tests: tests.clone(),
+                                tags,
+                            },
                         )
                     })
             })

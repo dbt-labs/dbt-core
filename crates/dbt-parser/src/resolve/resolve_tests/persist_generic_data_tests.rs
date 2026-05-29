@@ -42,6 +42,13 @@ use std::sync::LazyLock;
 
 use dbt_common::string_utils::maybe_truncate_test_name;
 
+#[derive(Debug, Clone)]
+pub struct ColumnTestEntry {
+    pub quote: bool,
+    pub tests: Vec<DataTests>,
+    pub tags: Vec<String>,
+}
+
 pub struct TestableNode<'a, T: TestableNodeTrait> {
     inner: &'a T,
 }
@@ -76,6 +83,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         original_file_path,
                         &mut seen_tests,
                         test_name_truncations,
+                        &[],
                     )?;
                     collected_generic_tests.push(test_asset);
                 }
@@ -83,11 +91,11 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
 
             // Handle column-level tests
             if let Some(column_tests) = &test_config.column_tests {
-                for (column_name, (should_quote, tests)) in column_tests {
-                    for test in tests {
+                for (column_name, entry) in column_tests {
+                    for test in &entry.tests {
                         // Need dialect to quote properly
                         let (column_name, should_quote) =
-                            normalize_quote(*should_quote, adapter_type, column_name);
+                            normalize_quote(entry.quote, adapter_type, column_name);
 
                         let quoted_column_name = if should_quote {
                             let q = quote_char(adapter_type).to_string();
@@ -105,6 +113,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             original_file_path,
                             &mut seen_tests,
                             test_name_truncations,
+                            &entry.tags,
                         )?;
                         collected_generic_tests.push(test_asset);
                     }
@@ -128,6 +137,7 @@ fn persist_inner(
     original_file_path: &PathBuf,
     seen_tests: &mut HashSet<String>,
     test_name_truncations: &mut HashMap<String, String>,
+    column_tags: &[String],
 ) -> FsResult<GenericTestAsset> {
     // If this is not the root project, we need to pass the project name as a dependency package name
     let dependecy_package_name = if project_name != root_project_name {
@@ -271,6 +281,7 @@ fn persist_inner(
         test_metadata_kwargs,
         original_name,
         unique_id_hash: Some(test_hash),
+        column_tags: column_tags.to_vec(),
     })
 }
 
@@ -1034,7 +1045,7 @@ struct GenericTestConfig {
     resource_name: String,
     version_num: Option<String>,
     model_tests: Option<Vec<DataTests>>,
-    column_tests: Option<BTreeMap<String, (bool, Vec<DataTests>)>>,
+    column_tests: Option<BTreeMap<String, ColumnTestEntry>>,
     source_name: Option<String>,
 }
 
@@ -1349,9 +1360,19 @@ fn collect_versioned_model_tests(
                     // In properties files, column tests may be specified via either `tests` or
                     // `data_tests`. Treat them equivalently (same as non-versioned columns).
                     if let Some(tests) = col.tests.as_ref().or(col.data_tests.as_ref()) {
+                        let tags = col
+                            .config
+                            .as_ref()
+                            .and_then(|c| c.tags.clone())
+                            .map(|t| t.into())
+                            .unwrap_or_default();
                         column_tests.insert(
                             col.name.clone(),
-                            (col.quote.unwrap_or(false), tests.clone()),
+                            ColumnTestEntry {
+                                quote: col.quote.unwrap_or(false),
+                                tests: tests.clone(),
+                                tags,
+                            },
                         );
                     }
                 }
@@ -1423,8 +1444,7 @@ pub trait TestableNodeTrait {
     fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>>;
 
     /// Columns, each with optional tests.
-    #[allow(clippy::type_complexity)]
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>>;
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, ColumnTestEntry>>>;
 
     /// Versions for models, or None for everything else.
     fn versions(&self) -> Option<&[Versions]> {
@@ -1452,7 +1472,7 @@ impl TestableNodeTrait for ModelProperties {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, ColumnTestEntry>>> {
         column_tests_inner(&self.columns)
     }
 
@@ -1474,7 +1494,7 @@ impl TestableNodeTrait for SeedProperties {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, ColumnTestEntry>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -1492,7 +1512,7 @@ impl TestableNodeTrait for SnapshotProperties {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, ColumnTestEntry>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -1523,7 +1543,7 @@ impl TestableNodeTrait for TestableTable<'_> {
         )
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, ColumnTestEntry>>> {
         column_tests_inner(&self.table.columns)
     }
 }
@@ -1866,7 +1886,14 @@ mod tests {
         // Build a base config: one column "cost_center_bkey" with a `unique` test.
         let unique_test = DataTests::String(Spanned::from("unique".to_string()));
         let mut base_col_tests = BTreeMap::new();
-        base_col_tests.insert("cost_center_bkey".to_string(), (false, vec![unique_test]));
+        base_col_tests.insert(
+            "cost_center_bkey".to_string(),
+            ColumnTestEntry {
+                quote: false,
+                tests: vec![unique_test],
+                tags: vec![],
+            },
+        );
         let base_config = GenericTestConfig {
             resource_type: "model".to_string(),
             resource_name: "cost_centers".to_string(),

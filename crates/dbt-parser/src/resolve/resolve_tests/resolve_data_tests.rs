@@ -47,6 +47,7 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::DocsConfig;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::common::merge_tags;
 use dbt_schemas::schemas::nodes::DbtModel;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
@@ -388,6 +389,14 @@ pub async fn resolve_data_tests(
             &DataTestProperties::empty(test_name.to_owned())
         };
 
+        // Merge column test tags into the top-level config.
+        // Reference: https://github.com/dbt-labs/dbt-core/blob/b783c97eff9cf72e6fc43ef93523b8ec7b029583/core/dbt/parser/schema_generic_tests.py#L368
+        let test_tags = test_config.tags.clone().map(|tags| tags.into());
+        let column_tags = test_path_to_test_asset
+            .get(&dbt_asset.path)
+            .map(|asset| asset.column_tags.clone());
+        let tags = merge_tags(test_tags, column_tags);
+
         // To conform to the unique_id format in dbt-core, we need to hash the test name
         // plus the test metadata (namespace, name, kwargs) and append the last 10 characters
         // of the hash to the unique_id.
@@ -520,11 +529,7 @@ pub async fn resolve_data_tests(
                 // - Singular test: "SELECT 1\nFROM {{ ref('customers') }}\nLIMIT 0"
                 raw_code: Some("will_be_updated_below".to_string()),
                 language: Some("sql".to_string()),
-                tags: test_config
-                    .tags
-                    .clone()
-                    .map(|tags| tags.into())
-                    .unwrap_or_default(),
+                tags: tags.unwrap_or_default(),
                 meta: test_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
@@ -726,6 +731,7 @@ mod tests {
             original_name: None,
             unique_id_hash: None,
             version: None,
+            column_tags: vec![],
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -777,6 +783,7 @@ mod tests {
             original_name: Some(full_name.to_string()),
             unique_id_hash: None,
             version: None,
+            column_tags: vec![],
         };
 
         let unique_id = compute_generic_test_unique_id("my_project", &asset);
@@ -816,6 +823,7 @@ mod tests {
             original_name: None,
             unique_id_hash: None,
             version: None,
+            column_tags: vec![],
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");
