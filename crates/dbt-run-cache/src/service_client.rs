@@ -66,6 +66,8 @@ pub enum RunCacheServiceError {
     Rpc(#[from] tonic::Status),
     #[error("dbt State authentication was cancelled")]
     Aborted,
+    #[error("dbt State authentication timed out after {0}s")]
+    Timeout(u64),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

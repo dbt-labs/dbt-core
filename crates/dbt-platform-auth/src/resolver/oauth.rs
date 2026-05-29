@@ -705,8 +705,12 @@ const PAGE_START: &str = r##"<!doctype html>
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
-    .main { padding: 80px 0 0 170px; }
+    .main { max-width: 32rem; width: 100%; padding: 2rem 1rem; }
     .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 56px; }
     .logo-text { font-size: 22px; font-weight: 600; }
     h1 { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
@@ -722,6 +726,7 @@ const PAGE_START: &str = r##"<!doctype html>
       border-radius: 6px;
       padding: 14px 16px;
       max-width: 480px;
+      margin-bottom: 1.5rem;
     }
     .banner-icon { flex-shrink: 0; color: #f87171; margin-top: 1px; }
     .banner-title { font-size: 14px; font-weight: 600; color: #fca5a5; margin-bottom: 4px; }
@@ -756,6 +761,7 @@ const ERROR_BANNER_START: &str = r#"
 const ERROR_BANNER_END: &str = r#"</div>
       </div>
     </div>
+    <p class="subtitle">You can close this tab and return to the CLI.</p>
   </div>
 </body>
 </html>"#;

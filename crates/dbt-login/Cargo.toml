@@ -23,7 +23,6 @@ dbt-run-cache = { workspace = true }
 dbt-yaml = { workspace = true }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
-indicatif = { workspace = true }
 open = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

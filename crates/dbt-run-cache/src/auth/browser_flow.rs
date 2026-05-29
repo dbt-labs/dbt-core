@@ -94,10 +94,7 @@ pub(crate) async fn accept_one_redirect(
         result = tokio::time::timeout(timeout, accept) => {
             match result {
                 Ok(r) => r,
-                Err(_) => Err(RunCacheServiceError::Auth(format!(
-                    "interactive authentication timed out after {}s",
-                    timeout.as_secs()
-                ))),
+                Err(_) => Err(RunCacheServiceError::Timeout(timeout.as_secs())),
             }
         }
         _ = abort => Err(RunCacheServiceError::Aborted),

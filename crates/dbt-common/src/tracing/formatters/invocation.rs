@@ -16,8 +16,8 @@ use crate::tracing::{
 
 use super::duration::format_duration_for_summary;
 
-/// Commands that should not include the result breakdown line.
-const RESULT_LINE_OPT_OUT_COMMANDS: [&str; 1] = ["man"];
+/// Commands that skip the entire Execution Summary banner (no status line, no result breakdown).
+const RESULT_LINE_OPT_OUT_COMMANDS: [&str; 2] = ["man", "login"];
 /// Commands that should include the extended evaluation/result breakdown.
 const SUMMARY_COMMANDS: [&str; 7] = [
     "build", "compile", "run", "sample", "seed", "snapshot", "test",

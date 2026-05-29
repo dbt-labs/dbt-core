@@ -3,29 +3,18 @@ use std::sync::{Arc, Mutex};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_platform_auth::OAUTH_CLIENT_ID;
-use dbt_platform_auth::resolver::OAuthInteractiveResolver;
+use dbt_platform_auth::resolver::{INTERACTIVE_TIMEOUT, OAuthInteractiveResolver};
+use dbt_platform_auth::{AuthError, OAUTH_CLIENT_ID};
 use dbt_run_cache::auth::{
-    BrowserFlow, INTERACTIVE_TIMEOUT, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, StoredToken,
-    TokenStore,
+    BrowserFlow, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, StoredToken, TokenStore,
 };
+use dbt_run_cache::service_client::RunCacheServiceError;
 use dbt_run_cache::service_config::{
     DEFAULT_OAUTH_AUTH_URL, DEFAULT_OAUTH_CLIENT_ID, DEFAULT_OAUTH_TOKEN_URL,
 };
 
 use crate::LicenseFetcher;
-use crate::state_guidance::run_state_guidance;
-
-fn auth_spinner() -> indicatif::ProgressBar {
-    let pb = indicatif::ProgressBar::new_spinner();
-    pb.set_style(
-        indicatif::ProgressStyle::default_spinner()
-            .template("{spinner} {msg}")
-            .expect("valid spinner template"),
-    );
-    pb.set_message("Waiting for authentication.");
-    pb
-}
+use crate::state_guidance::{run_state_guidance, run_state_guidance_after_state_login};
 
 pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
     // Each opener captures its URL via a oneshot and returns immediately.
@@ -54,14 +43,9 @@ pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
         })
     };
 
-    // The spinner is created up-front so both the spawn (which starts it) and the
-    // select! arms (which clear it) can share the same handle via clone.
-    let spinner = auth_spinner();
-
     // Wait for both authorize URLs (with timeout), combine them into a single browser open:
     // the platform-auth URL with the base64-encoded state URL as a query param.
     let url_timeout = tokio::time::Duration::from_secs(30);
-    let spinner_clone = spinner.clone();
     tokio::spawn(async move {
         let state_url = match tokio::time::timeout(url_timeout, state_url_rx).await {
             Ok(Ok(url)) => url,
@@ -102,7 +86,7 @@ pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
             authenticating.",
             console::style("dbt login").bold()
         );
-        spinner_clone.enable_steady_tick(std::time::Duration::from_millis(80));
+        println!("\nWaiting for authentication.");
     });
 
     let state_flow = BrowserFlow {
@@ -121,9 +105,16 @@ pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
         .opener(platform_opener)
         .build();
 
+    let state_result = async {
+        match state_flow.run().await {
+            Ok(r) => Some(Ok(r)),
+            Err(RunCacheServiceError::Aborted | RunCacheServiceError::Timeout(_)) => None,
+            Err(e) => Some(Err(e)),
+        }
+    };
+
     tokio::select! {
-        result = state_flow.run() => {
-            spinner.finish_and_clear();
+        Some(result) = state_result => {
             let response = result.map_err(|e| fs_err!(ErrorCode::AuthFailed, "{e}"))?;
             let stored = StoredToken::from_token_response(response, None)
                 .map_err(|e| fs_err!(ErrorCode::AuthFailed, "{e}"))?;
@@ -137,12 +128,13 @@ pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
                 .save(&stored)
                 .await
                 .map_err(|e| fs_err!(ErrorCode::AuthFailed, "{e}"))?;
+            run_state_guidance_after_state_login()?;
             println!("dbt State login successful (org: {}).", stored.org_id);
         }
         result = platform_resolver.resolve() => {
-            spinner.finish_and_clear();
             let cred = match result {
                 Ok(c) => c,
+                Err(AuthError::Aborted) => return Ok(()),
                 Err(e) => {
                     eprintln!(
                         "Authentication failed. Re-run {} to try again.\n\n{e}",

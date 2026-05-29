@@ -104,6 +104,20 @@ pub async fn run_state_guidance(cred: &Credential, http: &reqwest::Client) -> Fs
     Ok(())
 }
 
+/// Runs post-login state guidance when dbt State auth has just succeeded (so
+/// state is known to be enabled — no platform credential needed to verify it).
+/// Creates or updates `~/.dbt/user_settings.yml` with `manage_state: true`
+/// unless the user has already explicitly set it to `false`.
+pub fn run_state_guidance_after_state_login() -> FsResult<()> {
+    match check_user_settings_state() {
+        UserSettingsState::FileNotFound | UserSettingsState::StateNotSet => {
+            write_manage_state_to_user_settings()?
+        }
+        UserSettingsState::StateSet => {}
+    }
+    Ok(())
+}
+
 // ── User-facing messages and prompt ──────────────────────────────────────────
 
 async fn prompt_to_set_state() -> FsResult<()> {
@@ -143,7 +157,7 @@ fn print_info_enable_state(source: StateConfigSource) {
         "Looks like dbt State is enabled on this machine ({desc}) but not in your dbt platform \
         account. To enable State in your platform account, see docs: \
         {}.",
-        console::style("https://docs.getdbt.com/docs/dbt-state").bold()
+        console::style("https://docs.getdbt.com/docs/deploy/dbt-state-setup").bold()
     );
 }
 
@@ -159,6 +173,49 @@ struct FlagsFile {
 struct FlagsBlock {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     manage_state: bool,
+}
+
+/// Used when we need to distinguish "key absent" from an explicit value.
+#[derive(Debug, Default, Deserialize)]
+struct FlagsFileOpt {
+    #[serde(default)]
+    flags: Option<FlagsBlockOpt>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FlagsBlockOpt {
+    manage_state: Option<bool>,
+}
+
+#[derive(Debug)]
+enum UserSettingsState {
+    /// `~/.dbt/user_settings.yml` does not exist.
+    FileNotFound,
+    /// File exists but `manage_state` key is absent.
+    StateNotSet,
+    /// File exists and `manage_state` is explicitly set.
+    StateSet,
+}
+
+fn check_user_settings_state() -> UserSettingsState {
+    let Some(path) = user_settings_path() else {
+        return UserSettingsState::FileNotFound;
+    };
+    if !path.exists() {
+        return UserSettingsState::FileNotFound;
+    }
+    let content = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return UserSettingsState::FileNotFound,
+    };
+    let file: FlagsFileOpt = match dbt_yaml::from_str(&content) {
+        Ok(f) => f,
+        Err(_) => return UserSettingsState::StateNotSet,
+    };
+    match file.flags.and_then(|f| f.manage_state) {
+        Some(_) => UserSettingsState::StateSet,
+        None => UserSettingsState::StateNotSet,
+    }
 }
 
 fn read_manage_state_from_yaml(path: &Path) -> bool {
