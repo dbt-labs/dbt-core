@@ -1334,9 +1334,19 @@ fn freshness_tolerance_seconds_for_node(
     node: &dyn InternalDbtNodeAttributes,
     service_default: i64,
 ) -> i64 {
-    model_state_for_node(node)
+    let state_lag_tolerance = model_state_for_node(node)
         .and_then(|state| state.lag_tolerance.as_ref())
-        .and_then(freshness_rule_to_seconds)
+        .and_then(freshness_rule_to_seconds);
+
+    let legacy_build_after = node
+        .as_any()
+        .downcast_ref::<DbtModel>()
+        .and_then(|model| model.__model_attr__.freshness.as_ref())
+        .and_then(|freshness| freshness.build_after.as_ref())
+        .and_then(freshness_rule_to_seconds);
+
+    state_lag_tolerance
+        .or(legacy_build_after)
         .unwrap_or(service_default)
 }
 
@@ -2504,6 +2514,50 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_reuse: None,
+        });
+
+        assert_eq!(freshness_tolerance_seconds_for_node(&model, 2700), 7200);
+    }
+
+    #[test]
+    fn freshness_tolerance_falls_back_to_legacy_build_after() {
+        let mut model = model_with_state(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_reuse: None,
+        });
+        model.__model_attr__.freshness = Some(ModelFreshness {
+            build_after: Some(ModelFreshnessRules {
+                count: Some(1),
+                period: Some(FreshnessPeriod::day),
+                updates_on: None,
+            }),
+        });
+
+        assert_eq!(freshness_tolerance_seconds_for_node(&model, 2700), 86400);
+    }
+
+    #[test]
+    fn freshness_tolerance_prefers_state_lag_tolerance_over_legacy_build_after() {
+        let mut model = model_with_state(ModelState {
+            lag_tolerance: Some(ModelFreshnessRules {
+                count: Some(2),
+                period: Some(FreshnessPeriod::hour),
+                updates_on: None,
+            }),
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_reuse: None,
+        });
+        model.__model_attr__.freshness = Some(ModelFreshness {
+            build_after: Some(ModelFreshnessRules {
+                count: Some(1),
+                period: Some(FreshnessPeriod::day),
+                updates_on: None,
+            }),
         });
 
         assert_eq!(freshness_tolerance_seconds_for_node(&model, 2700), 7200);

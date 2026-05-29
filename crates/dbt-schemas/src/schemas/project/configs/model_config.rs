@@ -1772,6 +1772,65 @@ __additional_properties__: {}
     }
 
     #[test]
+    fn test_project_model_config_state_lag_tolerance_parses_duration_string() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: "1 day"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::day));
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: "1d"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::day));
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: "1.5h"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(90));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::minute));
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: "0s"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(0));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::minute));
+    }
+
+    #[test]
     fn test_packages_append() {
         use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;

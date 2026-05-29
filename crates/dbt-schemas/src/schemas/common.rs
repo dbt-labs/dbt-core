@@ -201,6 +201,59 @@ impl ModelFreshnessRules {
     }
 }
 
+pub fn model_freshness_rules_or_duration<'de, D>(
+    deserializer: D,
+) -> Result<Option<ModelFreshnessRules>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ModelFreshnessRulesOrDuration {
+        Duration(String),
+        Rules(ModelFreshnessRules),
+    }
+
+    Option::<ModelFreshnessRulesOrDuration>::deserialize(deserializer)?
+        .map(|value| match value {
+            ModelFreshnessRulesOrDuration::Duration(duration) => {
+                model_freshness_rules_from_duration(&duration).map_err(serde::de::Error::custom)
+            }
+            ModelFreshnessRulesOrDuration::Rules(rules) => Ok(rules),
+        })
+        .transpose()
+}
+
+fn model_freshness_rules_from_duration(duration: &str) -> Result<ModelFreshnessRules, String> {
+    let parsed = humantime::parse_duration(duration)
+        .map_err(|e| format!("invalid lag_tolerance duration {duration:?}: {e}"))?;
+    let seconds = parsed.as_secs();
+
+    let (count, period) = if seconds == 0 {
+        (0, FreshnessPeriod::minute)
+    } else if seconds % (60 * 60 * 24) == 0 {
+        (seconds / (60 * 60 * 24), FreshnessPeriod::day)
+    } else if seconds % (60 * 60) == 0 {
+        (seconds / (60 * 60), FreshnessPeriod::hour)
+    } else if seconds % 60 == 0 {
+        (seconds / 60, FreshnessPeriod::minute)
+    } else {
+        return Err(format!(
+            "invalid lag_tolerance duration {duration:?}: expected a whole number of minutes, hours, or days"
+        ));
+    };
+
+    let count = i64::try_from(count).map_err(|_| {
+        format!("invalid lag_tolerance duration {duration:?}: duration is too large")
+    })?;
+
+    Ok(ModelFreshnessRules {
+        count: Some(count),
+        period: Some(period),
+        updates_on: None,
+    })
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum FreshnessPeriod {

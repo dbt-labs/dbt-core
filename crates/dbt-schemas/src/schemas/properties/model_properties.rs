@@ -4,6 +4,7 @@ use crate::schemas::common::DimensionValidityParams;
 use crate::schemas::common::ModelFreshnessRules;
 use crate::schemas::common::UpdatesOn;
 use crate::schemas::common::Versions;
+use crate::schemas::common::model_freshness_rules_or_duration;
 use crate::schemas::data_tests::DataTests;
 use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::dbt_column::ColumnPropertiesDimensionType;
@@ -179,6 +180,7 @@ pub enum StatePreClone {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ModelState {
+    #[serde(default, deserialize_with = "model_freshness_rules_or_duration")]
     pub lag_tolerance: Option<ModelFreshnessRules>,
     pub require_fresh_data_from: Option<UpdatesOn>,
     pub evaluate_volatile_sql: Option<bool>,
