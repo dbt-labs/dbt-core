@@ -251,22 +251,7 @@ impl TypeOps for DefaultTypeOps {
     }
 
     fn adapt_seed_type(&self, _data_type: &DataType) -> Option<DataType> {
-        use AdapterType::*;
-        match self.adapter_type() {
-            adapter_type @ (Snowflake | Bigquery | Databricks | Redshift) => {
-                debug_assert!(
-                    false,
-                    "adapt_seed_type() for {adapter_type} is not source-available yet"
-                );
-                None
-            }
-            // No type transformations have been necessary for the seed operation against
-            // these data platforms so far, but this may need to be updated if that changes.
-            Postgres | Salesforce | Spark | DuckDB | Fabric | ClickHouse => None,
-            Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => {
-                todo!("not yet")
-            }
-        }
+        None
     }
 
     fn parse_column_description(&self, s: &str) -> AdapterResult<Field> {
