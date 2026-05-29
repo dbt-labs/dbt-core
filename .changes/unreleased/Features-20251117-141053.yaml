@@ -1,6 +1,0 @@
-kind: Features
-body: Allow for defining funciton arguments with default values
-time: 2025-11-17T14:10:53.860178-06:00
-custom:
-  Author: QMalcolm
-  Issue: "12044"

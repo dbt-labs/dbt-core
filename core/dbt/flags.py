@@ -87,4 +87,10 @@ def get_flag_obj():
     setattr(new_flags, "WHICH", getattr(GLOBAL_FLAGS, "WHICH", None))
     setattr(new_flags, "EVENT_TIME_START", getattr(GLOBAL_FLAGS, "EVENT_TIME_START", None))
     setattr(new_flags, "EVENT_TIME_END", getattr(GLOBAL_FLAGS, "EVENT_TIME_END", None))
+    # Project-level behavior change flag, exposed to Jinja for gating in adapter macros.
+    setattr(
+        new_flags,
+        "REQUIRE_SQL_HEADER_IN_TEST_CONFIGS",
+        getattr(GLOBAL_FLAGS, "REQUIRE_SQL_HEADER_IN_TEST_CONFIGS", False),
+    )
     return new_flags

@@ -68,6 +68,54 @@ unit_tests:
 """
 
 
+raw_seed_csv = """id,name,price,is_active,created_at
+1,Alice,1.23,true,2024-01-01 00:00:00
+2,Bob,99.99,false,2024-06-15 12:30:00
+"""
+
+model_reference_seed_sql = """
+select * from {{ ref('raw_seed') }}
+"""
+
+
+class TestEmptyFlagSeed:
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"raw_seed.csv": raw_seed_csv}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": model_reference_seed_sql,
+        }
+
+    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
+        relation = relation_from_name(project.adapter, relation_name)
+        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
+        assert result[0] == expected_row_count
+
+    def test_seed_empty_creates_table_with_zero_rows(self, project):
+        run_dbt(["seed", "--empty"])
+        self.assert_row_count(project, "raw_seed", 0)
+
+    def test_seed_empty_preserves_column_types(self, project):
+        # seed with --empty, then full seed into the same table
+        # if --empty created wrong column types, the full seed will fail
+        run_dbt(["seed", "--empty"])
+        self.assert_row_count(project, "raw_seed", 0)
+        run_dbt(["seed", "--full-refresh"])
+        self.assert_row_count(project, "raw_seed", 2)
+
+    def test_seed_without_empty_loads_all_rows(self, project):
+        run_dbt(["seed"])
+        self.assert_row_count(project, "raw_seed", 2)
+
+    def test_build_empty_with_seed(self, project):
+        results = run_dbt(["build", "--empty"])
+        self.assert_row_count(project, "raw_seed", 0)
+        assert len(results) == 2  # seed + model
+
+
 class TestEmptyFlag:
     @pytest.fixture(scope="class")
     def seeds(self):

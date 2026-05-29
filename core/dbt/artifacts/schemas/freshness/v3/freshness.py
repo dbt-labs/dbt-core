@@ -42,7 +42,7 @@ class PartialSourceFreshnessResult(NodeResult):
         return False
 
 
-FreshnessNodeResult = Union[PartialSourceFreshnessResult, SourceFreshnessResult]
+FreshnessNodeResult = Union[SourceFreshnessResult, PartialSourceFreshnessResult]
 
 
 @dataclass
@@ -92,7 +92,7 @@ class FreshnessErrorEnum(StrEnum):
 @dataclass
 class SourceFreshnessRuntimeError(dbtClassMixin):
     unique_id: str
-    error: Optional[Union[str, int]]
+    error: Optional[Union[int, str]]
     status: FreshnessErrorEnum
 
 

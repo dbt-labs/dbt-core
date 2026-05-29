@@ -65,6 +65,7 @@ class NodeStatus(StrEnum):
     Pass = "pass"
     RuntimeErr = "runtime error"
     NoOp = "no-op"
+    Reused = "reused"
 
 
 class RunStatus(StrEnum):
@@ -73,6 +74,7 @@ class RunStatus(StrEnum):
     Skipped = NodeStatus.Skipped
     PartialSuccess = NodeStatus.PartialSuccess
     NoOp = NodeStatus.NoOp
+    Reused = NodeStatus.Reused
 
 
 class TestStatus(StrEnum):

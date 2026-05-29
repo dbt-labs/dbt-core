@@ -1,7 +1,7 @@
 import io
 import json
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.node_types import REFABLE_NODE_TYPES, AccessType, NodeType
 from dbt_common.constants import SECRET_ENV_PREFIX
@@ -9,6 +9,7 @@ from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import (
     CommandResultError,
     CompilationError,
+    DbtBaseException,
     DbtConfigError,
     DbtInternalError,
     DbtRuntimeError,
@@ -83,6 +84,26 @@ class AliasError(DbtValidationError):
 class DependencyError(DbtRuntimeError):
     CODE = 10006
     MESSAGE = "Dependency Error"
+
+
+class FusionParserError(DbtRuntimeError):
+    CODE = 10025
+    MESSAGE = "Fusion Parser Error"
+
+
+class FusionParserMissingError(FusionParserError):
+    CODE = 10026
+    MESSAGE = "Fusion Parser Missing"
+
+
+class FusionParserSchemaError(FusionParserError):
+    CODE = 10027
+    MESSAGE = "Fusion Parser Schema Error"
+
+
+class FusionParserVersionError(FusionParserError):
+    CODE = 10028
+    MESSAGE = "Fusion Parser Version Error"
 
 
 class FailFastError(DbtRuntimeError):
@@ -801,6 +822,16 @@ class TestArgsNotDictError(ParsingError):
         return msg
 
 
+class TestConfigNotDictError(ParsingError):
+    def __init__(self, config: Any) -> None:
+        self.config = config
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"'config' must be a dict, got {type(self.config)} (value {self.config})"
+        return msg
+
+
 class TestDefinitionDictLengthError(ParsingError):
     def __init__(self, test):
         self.test = test
@@ -1073,25 +1104,31 @@ class NonUniquePackageNameError(CompilationError):
 class UninstalledPackagesFoundError(CompilationError):
     def __init__(
         self,
-        count_packages_specified: int,
         count_packages_installed: int,
+        count_packages_specified: int,
         packages_specified_path: str,
         packages_install_path: str,
+        uninstalled_packages: Tuple[str, ...] = tuple(),
     ):
         self.count_packages_specified = count_packages_specified
         self.count_packages_installed = count_packages_installed
+        self.uninstalled_packages = uninstalled_packages
         self.packages_specified_path = packages_specified_path
         self.packages_install_path = packages_install_path
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
+        uninstalled_packages_str = ", ".join(self.uninstalled_packages)
         msg = (
-            f"dbt found {self.count_packages_specified} package(s) "
-            f"specified in {self.packages_specified_path}, but only "
-            f"{self.count_packages_installed} package(s) installed "
-            f'in {self.packages_install_path}. Run "dbt deps" to '
-            "install package dependencies."
+            f"dbt expects {self.count_packages_specified} package(s) "
+            f"based on packages specified in {self.packages_specified_path}, but "
+            f"found only {self.count_packages_installed} package(s) installed "
+            f"in {self.packages_install_path}. "
         )
+        if self.uninstalled_packages:
+            msg += f"Following packages were not found: {uninstalled_packages_str}. "
+
+        msg += 'Run "dbt deps" to install package dependencies.'
         return msg
 
 
@@ -1484,3 +1521,53 @@ class RPCLoadException(DbtRuntimeError):
 
     def data(self):
         return {"cause": self.cause, "message": self.msg}
+
+
+class AuthError(DbtBaseException):
+    pass
+
+
+class NotAuthenticated(AuthError):
+    def __init__(self):
+        super().__init__("not authenticated: no credentials found")
+
+
+class AuthenticationExpired(AuthError):
+    def __init__(self):
+        super().__init__("authentication expired")
+
+
+class InaccessibleSource(AuthError):
+    def __init__(self, source: str, cause: Exception):
+        self.source = source
+        self.cause = cause
+        super().__init__(f"inaccessible source ({source}): {cause}")
+
+
+class MalformedAuthConfig(AuthError):
+    def __init__(self, detail: str):
+        super().__init__(f"malformed auth config: {detail}")
+
+
+class InteractiveAuthError(AuthError):
+    def __init__(self, detail: str):
+        super().__init__(f"interactive auth failed: {detail}")
+
+
+class AuthAborted(AuthError):
+    def __init__(self):
+        super().__init__("interactive auth aborted")
+
+
+class InadequateScopes(AuthError):
+    def __init__(self, requested: list[str], cached: list[str]):
+        self.requested = requested
+        self.cached = cached
+        super().__init__(
+            f"inadequate scopes: cached session has {cached!r} but {requested!r} are required"
+        )
+
+
+class RefreshFailed(AuthError):
+    def __init__(self, detail: str):
+        super().__init__(f"token refresh failed: {detail}")

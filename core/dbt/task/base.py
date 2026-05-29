@@ -6,13 +6,16 @@ from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Generic, List, Optional, Set, TypeVar
 
 import dbt.exceptions
 import dbt_common.exceptions.base
 from dbt import tracking
+from dbt.adapters.base.impl import BaseAdapter
+from dbt.artifacts.resources import Catalog
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.schemas.results import (
+    NodeResult,
     NodeStatus,
     RunningStatus,
     RunStatus,
@@ -26,6 +29,7 @@ from dbt.config import RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.events.types import (
     CatchableExceptionOnRun,
     GenericExceptionOnRun,
@@ -45,7 +49,7 @@ from dbt.task import group_lookup
 from dbt.task.printer import print_run_result_error
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
-from dbt_common.exceptions import DbtInternalError, DbtRuntimeError, NotImplementedError
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 
 def read_profiles(profiles_dir: Optional[str] = None) -> Dict[str, Any]:
@@ -109,8 +113,9 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
 
 def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
     nearest_project_dir = get_nearest_project_dir(project_dir)
-    os.chdir(nearest_project_dir)
-    return nearest_project_dir
+    resolved_nearest_project_dir = nearest_project_dir.resolve()
+    os.chdir(resolved_nearest_project_dir)
+    return resolved_nearest_project_dir
 
 
 # TODO: look into deprecating this class in favor of several small functions that
@@ -118,12 +123,17 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
 # holding a manifest, and moving direcories.
 class ConfiguredTask(BaseTask):
     def __init__(
-        self, args: Flags, config: RuntimeConfig, manifest: Optional[Manifest] = None
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Optional[Manifest] = None,
+        catalogs: Optional[List[Catalog]] = None,
     ) -> None:
         super().__init__(args)
         self.config = config
         self.graph: Optional[Graph] = None
         self.manifest = manifest
+        self.catalogs = catalogs
         self.compiler = Compiler(self.config)
 
     def compile_manifest(self) -> None:
@@ -132,7 +142,7 @@ class ConfiguredTask(BaseTask):
 
         start_compile_manifest = time.perf_counter()
 
-        self.graph = self.compiler.compile(self.manifest)
+        self.graph = self.compiler.compile(self.manifest, catalogs=self.catalogs)
 
         compile_time = time.perf_counter() - start_compile_manifest
         if dbt.tracking.active_user is not None:
@@ -157,29 +167,40 @@ class ConfiguredTask(BaseTask):
         return cls(args, config, *pargs, **kwargs)
 
 
+RunnerResultT = TypeVar("RunnerResultT", bound=NodeResult)
+NodeT = TypeVar("NodeT", bound=ResultNode)
+
+
 class ExecutionContext:
     """During execution and error handling, dbt makes use of mutable state:
     timing information and the newest (compiled vs executed) form of the node.
     """
 
-    def __init__(self, node) -> None:
+    def __init__(self, node: ResultNode) -> None:
         self.timing: List[TimingInfo] = []
-        self.node = node
+        self.node: ResultNode = node
 
 
-class BaseRunner(metaclass=ABCMeta):
-    def __init__(self, config, adapter, node, node_index: int, num_nodes: int) -> None:
-        self.config = config
-        self.compiler = Compiler(config)
-        self.adapter = adapter
-        self.node = node
-        self.node_index = node_index
-        self.num_nodes = num_nodes
+class BaseRunner(Generic[NodeT, RunnerResultT], metaclass=ABCMeta):
+    def __init__(
+        self,
+        config: RuntimeConfig,
+        adapter: BaseAdapter,
+        node: NodeT,
+        node_index: int,
+        num_nodes: int,
+    ) -> None:
+        self.config: RuntimeConfig = config
+        self.compiler: Compiler = Compiler(config)
+        self.adapter: BaseAdapter = adapter
+        self.node: NodeT = node
+        self.node_index: int = node_index
+        self.num_nodes: int = num_nodes
 
-        self.skip = False
+        self.skip: bool = False
         self.skip_cause: Optional[RunResult] = None
 
-        self.run_ephemeral_models = False
+        self.run_ephemeral_models: bool = False
 
     @abstractmethod
     def compile(self, manifest: Manifest) -> Any:
@@ -200,7 +221,7 @@ class BaseRunner(metaclass=ABCMeta):
         else:
             return {"node_status": "passed"}
 
-    def run_with_hooks(self, manifest):
+    def run_with_hooks(self, manifest: Manifest) -> RunnerResultT:
         if self.skip:
             return self.on_skip()
 
@@ -230,12 +251,12 @@ class BaseRunner(metaclass=ABCMeta):
         adapter_response=None,
         failures=None,
         batch_results=None,
-    ):
+    ) -> RunnerResultT:
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         if adapter_response is None:
             adapter_response = {}
-        return RunResult(
+        return RunResult(  # type: ignore[return-value]
             status=status,
             thread_id=thread_id,
             execution_time=execution_time,
@@ -248,7 +269,7 @@ class BaseRunner(metaclass=ABCMeta):
             batch_results=batch_results,
         )
 
-    def error_result(self, node, message, start_time, timing_info):
+    def error_result(self, node, message, start_time, timing_info) -> RunnerResultT:
         return self._build_run_result(
             node=node,
             start_time=start_time,
@@ -257,7 +278,7 @@ class BaseRunner(metaclass=ABCMeta):
             message=message,
         )
 
-    def ephemeral_result(self, node, start_time, timing_info):
+    def ephemeral_result(self, node, start_time, timing_info) -> RunnerResultT:
         return self._build_run_result(
             node=node,
             start_time=start_time,
@@ -266,20 +287,24 @@ class BaseRunner(metaclass=ABCMeta):
             message=None,
         )
 
-    def from_run_result(self, result, start_time, timing_info):
+    def from_run_result(self, result: RunnerResultT, start_time, timing_info) -> RunnerResultT:
+        # agate_table and batch_results are RunResult-specific; subclasses with different
+        # result types override this method entirely
         return self._build_run_result(
             node=result.node,
             start_time=start_time,
             status=result.status,
             timing_info=timing_info,
             message=result.message,
-            agate_table=result.agate_table,
+            agate_table=result.agate_table,  # type: ignore[attr-defined]
             adapter_response=result.adapter_response,
             failures=result.failures,
-            batch_results=result.batch_results,
+            batch_results=result.batch_results,  # type: ignore[attr-defined]
         )
 
-    def compile_and_execute(self, manifest: Manifest, ctx: ExecutionContext):
+    def compile_and_execute(
+        self, manifest: Manifest, ctx: ExecutionContext
+    ) -> Optional[RunnerResultT]:
         result = None
         with (
             self.adapter.connection_named(self.node.unique_id, self.node)
@@ -353,7 +378,7 @@ class BaseRunner(metaclass=ABCMeta):
             error = self._handle_generic_exception(e, ctx)
         return error
 
-    def safe_run(self, manifest: Manifest):
+    def safe_run(self, manifest: Manifest) -> RunnerResultT:
         started = time.time()
         ctx = ExecutionContext(self.node)
         error = None
@@ -400,24 +425,30 @@ class BaseRunner(metaclass=ABCMeta):
 
         return None
 
+    @abstractmethod
     def before_execute(self) -> None:
-        raise NotImplementedError("before_execute is not implemented")
+        pass
 
-    def execute(self, compiled_node, manifest):
-        raise NotImplementedError("execute is not implemented")
+    @abstractmethod
+    def execute(self, compiled_node: NodeT, manifest: Manifest) -> RunnerResultT:
+        pass
 
-    def run(self, compiled_node, manifest):
-        return self.execute(compiled_node, manifest)
+    def run(self, compiled_node: ResultNode, manifest: Manifest) -> RunnerResultT:
+        # compiled_node comes from ExecutionContext.node (ResultNode), but at
+        # runtime it is always a NodeT; the cast is safe because runners only
+        # receive nodes of the type they were constructed with.
+        return self.execute(compiled_node, manifest)  # type: ignore[arg-type]
 
-    def after_execute(self, result) -> None:
-        raise NotImplementedError("after_execute is not implemented")
+    @abstractmethod
+    def after_execute(self, result: RunnerResultT) -> None:
+        pass
 
     def _skip_caused_by_ephemeral_failure(self) -> bool:
         if self.skip_cause is None or self.skip_cause.node is None:
             return False
         return self.skip_cause.node.is_ephemeral_model
 
-    def on_skip(self):
+    def on_skip(self) -> RunnerResultT:
         schema_name = getattr(self.node, "schema", "")
         node_name = self.node.name
 
@@ -429,6 +460,10 @@ class BaseRunner(metaclass=ABCMeta):
             group = group_lookup.get(self.node.unique_id)
 
             if self._skip_caused_by_ephemeral_failure():
+                if self.skip_cause is None:
+                    raise DbtInternalError(
+                        "Skip cause not set but skip was somehow caused by an ephemeral failure"
+                    )
                 fire_event(
                     LogSkipBecauseError(
                         schema=schema_name,
@@ -441,10 +476,6 @@ class BaseRunner(metaclass=ABCMeta):
                 )
                 # skip_cause here should be the run_result from the ephemeral model
                 print_run_result_error(result=self.skip_cause, newline=False)
-                if self.skip_cause is None:  # mypy appeasement
-                    raise DbtInternalError(
-                        "Skip cause not set but skip was somehow caused by an ephemeral failure"
-                    )
                 # set an error so dbt will exit with an error code
                 error_message = (
                     "Compilation Error in {}, caused by compilation error "
@@ -469,7 +500,7 @@ class BaseRunner(metaclass=ABCMeta):
                 )
 
         node_result = RunResult.from_node(self.node, RunStatus.Skipped, error_message)
-        return node_result
+        return node_result  # type: ignore[return-value]
 
     def do_skip(self, cause=None) -> None:
         self.skip = True

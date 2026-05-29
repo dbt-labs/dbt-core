@@ -8,7 +8,7 @@ from docutils.parsers.rst import Directive
 
 import dbt.cli.option_types as dbt_t
 
-PARAM_TYPE_MAP = {
+PARAM_TYPE_MAP: t.Dict[type, t.Callable[[t.Any], str]] = {
     click_t.BoolParamType: lambda _: "boolean",
     click_t.Choice: lambda c: f"choice: {c.choices}",
     click_t.IntParamType: lambda _: "int",

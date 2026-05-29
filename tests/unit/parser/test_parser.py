@@ -26,6 +26,7 @@ from dbt.contracts.graph.nodes import (
     SnapshotNode,
     UnpatchedSourceDefinition,
 )
+from dbt.events.types import FreshnessConfigProblem
 from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
@@ -57,6 +58,8 @@ from dbt.parser.schemas import (
 from dbt.parser.search import FileBlock
 from dbt.parser.sources import SourcePatcher
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.event_manager_client import add_callback_to_manager
 from tests.unit.utils import (
     MockNode,
     config_from_parts_or_dicts,
@@ -507,6 +510,17 @@ sources:
       - name: my_table
         loaded_at_field: test
 """
+SOURCE_FRESHNESS_WITH_LOADED_AT_QUERY = """
+sources:
+  - name: my_source
+    tables:
+      - name: my_table
+        config:
+            loaded_at_query: "select 1 as id"
+            freshness:
+                warn_after: {count: 1, period: hour}
+                error_after: {count: 1, period: day}
+"""
 
 
 class SchemaParserTest(BaseParserTest):
@@ -759,6 +773,25 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertIsNone(table.description)
         self.assertEqual(len(table.columns), 1)
         self.assertEqual(len(table.columns[0].data_tests), 2)
+
+    @mock.patch(
+        "dbt.parser.sources.get_adapter",
+        return_value=mock.MagicMock(supports=mock.MagicMock(return_value=False)),
+    )
+    def test__loaded_at_query_does_not_fire_config_problem_event(self, _):
+        """Test where we have a loaded_at_query defined but no loaded_at_field and the adapter does not support metadata-based freshness.
+        We should not fire a config problem event.
+        """
+        catcher = EventCatcher(FreshnessConfigProblem)
+        add_callback_to_manager(catcher.catch)
+
+        block = self.file_block_for(SOURCE_FRESHNESS_WITH_LOADED_AT_QUERY, "test_one.yml")
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        self.source_patcher.parse_source(unpatched_src_default)
+
+        assert len(catcher.caught_events) == 0
 
 
 class SchemaParserModelsTest(SchemaParserTest):
@@ -1231,6 +1264,57 @@ def model(dbt, session):
     return pd.dataframe([1, 2])
 """
 
+python_model_meta_get = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+        meta={'owner': 'data-team', 'priority': 'high'}
+    )
+    owner = dbt.config.meta_get('owner')
+    priority = dbt.config.meta_get('priority')
+    return dbt.ref("some_model")
+"""
+
+python_model_meta_get_with_defaults = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+        meta={'owner': 'data-team'}
+    )
+    owner = dbt.config.meta_get('owner', 'default-owner')
+    priority = dbt.config.meta_get('priority', 'low')
+    env = dbt.config.meta_get('environment', 'dev')
+    return dbt.ref("some_model")
+"""
+
+python_model_mixed_config_and_meta_get = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+        meta={'owner': 'data-team', 'priority': 'high'}
+    )
+    # Regular config access
+    mat = dbt.config.get('materialized')
+    # Meta access
+    owner = dbt.config.meta_get('owner')
+    priority = dbt.config.meta_get('priority', 'low')
+    return dbt.ref("some_model")
+"""
+
+python_model_meta_get_no_args = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+    value = dbt.config.meta_get()
+    return dbt.ref("some_model")
+"""
+
+python_model_meta_get_too_many_args = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+    value = dbt.config.meta_get('key', 'default', 'extra')
+    return dbt.ref("some_model")
+"""
+
 
 class ModelParserTest(BaseParserTest):
     def setUp(self):
@@ -1432,6 +1516,61 @@ class ModelParserTest(BaseParserTest):
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
         self.assertEqual(node.get_materialization(), "incremental")
+
+    def test_python_model_meta_get(self):
+        """Test that dbt.config.meta_get() calls are tracked correctly"""
+        block = self.file_block_for(python_model_meta_get, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        config_dict = node.config.to_dict()
+        self.assertEqual(config_dict["meta_keys_used"], ["owner", "priority"])
+        # Both keys should have None as default since no explicit default was provided
+        self.assertIsNone(config_dict["meta_keys_defaults"][0])
+        self.assertIsNone(config_dict["meta_keys_defaults"][1])
+
+    def test_python_model_meta_get_with_defaults(self):
+        """Test that dbt.config.meta_get() default values are tracked correctly"""
+        block = self.file_block_for(python_model_meta_get_with_defaults, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        config_dict = node.config.to_dict()
+        self.assertEqual(config_dict["meta_keys_used"], ["owner", "priority", "environment"])
+        default_values = config_dict["meta_keys_defaults"]
+        self.assertEqual(default_values[0], "default-owner")
+        self.assertEqual(default_values[1], "low")
+        self.assertEqual(default_values[2], "dev")
+
+    def test_python_model_mixed_config_and_meta_get(self):
+        """Test that config.get() and config.meta_get() can be used together"""
+        block = self.file_block_for(python_model_mixed_config_and_meta_get, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        config_dict = node.config.to_dict()
+        # Should track both config.get and meta_get calls
+        self.assertEqual(config_dict["config_keys_used"], ["materialized"])
+        self.assertEqual(config_dict["meta_keys_used"], ["owner", "priority"])
+        self.assertIsNone(config_dict["config_keys_defaults"][0])
+        self.assertIsNone(config_dict["meta_keys_defaults"][0])
+        self.assertEqual(config_dict["meta_keys_defaults"][1], "low")
+
+    def test_python_model_meta_get_no_args(self):
+        """Test that meta_get() with no arguments raises an error"""
+        block = self.file_block_for(python_model_meta_get_no_args, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError) as exc:
+            self.parser.parse_file(block)
+        self.assertIn("dbt.config.meta_get() requires at least one argument", str(exc.exception))
+
+    def test_python_model_meta_get_too_many_args(self):
+        """Test that meta_get() with more than 2 arguments raises an error"""
+        block = self.file_block_for(python_model_meta_get_too_many_args, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError) as exc:
+            self.parser.parse_file(block)
+        self.assertIn("dbt.config.meta_get() takes at most 2 arguments", str(exc.exception))
 
 
 class StaticModelParserTest(BaseParserTest):

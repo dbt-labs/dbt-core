@@ -8,11 +8,16 @@ from typing import Dict, Optional
 from click import Context
 
 import dbt.tracking
+from dbt.adapters.capability import Capability
 from dbt.adapters.factory import adapter_management, get_adapter, register_adapter
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
-from dbt.config.catalogs import get_active_write_integration, load_catalogs
+from dbt.config.catalogs import (
+    get_active_write_integration,
+    load_catalogs,
+    load_catalogs_v2,
+)
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
@@ -41,10 +46,12 @@ from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context
-from dbt_common.events.base_types import EventLevel
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.events.base_types import EventGroupType, EventLevel
 from dbt_common.events.event_manager_client import get_event_manager
-from dbt_common.events.functions import LOG_VERSION, fire_event
+from dbt_common.events.functions import LOG_VERSION, fire_deferred_events, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.invocation import reset_invocation_id
 from dbt_common.record import (
@@ -99,6 +106,7 @@ def preflight(func):
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
         setup_event_logger(flags=flags, callbacks=callbacks)
+        get_event_manager().allow_deferral = flags.enable_grouped_warn_error_parser_logs
 
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
@@ -184,6 +192,9 @@ def postflight(func):
             fire_event(MainEncounteredError(exc=str(e)))
             raise ResultExit(e.result)
         except DbtException as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            raise ExceptionExit(e)
+        except ValidationError as e:
             fire_event(MainEncounteredError(exc=str(e)))
             raise ExceptionExit(e)
         except BaseException as e:
@@ -370,32 +381,9 @@ def runtime_config(func):
     return update_wrapper(wrapper, func)
 
 
-def catalogs(func):
-    """A decorator used by click command functions for loading catalogs"""
-
-    def wrapper(*args, **kwargs):
-        ctx = args[0]
-        assert isinstance(ctx, Context)
-
-        req_strs = ["flags", "profile", "project"]
-        reqs = [ctx.obj.get(req_str) for req_str in req_strs]
-        if None in reqs:
-            raise DbtProjectError("profile and flags required to load catalogs")
-
-        flags = ctx.obj["flags"]
-        ctx_project = ctx.obj["project"]
-
-        _catalogs = load_catalogs(flags.PROJECT_DIR, ctx_project.project_name, flags.VARS)
-        ctx.obj["catalogs"] = _catalogs
-
-        return func(*args, **kwargs)
-
-    return update_wrapper(wrapper, func)
-
-
 def manifest(*args0, write=True, write_perf_info=False):
     """A decorator used by click command functions for generating a manifest
-    given a profile, project, and runtime config. This also registers the adapter
+    given a flags object, profile, project, and runtime config. This also registers the adapter
     from the runtime config and conditionally writes the manifest to disk.
     """
 
@@ -416,35 +404,97 @@ def manifest(*args0, write=True, write_perf_info=False):
     return outer_wrapper(args0[0])
 
 
+def _bridge_v2_catalogs(runtime_config: "RuntimeConfig", catalogs_v2: list) -> list:
+    # Bridge requires an adapter instance for type() and override hooks.
+    # parse_manifest will register the adapter again (same config); that
+    # second registration is harmless and ensures integrations are present
+    # when ManifestLoader runs catalog lookups during parsing.
+    register_adapter(runtime_config, get_mp_context())
+    adapter = get_adapter(runtime_config)
+    _cat_v2 = getattr(Capability, "CatalogsV2", None)  # type: ignore[attr-defined]
+    if _cat_v2 is None or not adapter.capabilities()[_cat_v2]:
+        raise DbtProjectError(
+            f"Adapter '{adapter.type()}' does not support catalogs.yml v2 yet. "
+            f"Use catalogs.yml v1 or upgrade to a supported adapter version."
+        )
+    return [adapter.bridge_v2_catalog(c) for c in catalogs_v2]
+
+
 def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = False):
     """Load the manifest and add it to the context."""
-    req_strs = ["profile", "project", "runtime_config"]
+    req_strs = ["flags", "profile", "project", "runtime_config"]
     reqs = [ctx.obj.get(dep) for dep in req_strs]
 
     if None in reqs:
-        raise DbtProjectError("profile, project, and runtime_config required for manifest")
+        raise DbtProjectError("flags, profile, project, and runtime_config required for manifest")
 
     runtime_config = ctx.obj["runtime_config"]
 
-    catalogs = ctx.obj["catalogs"] if "catalogs" in ctx.obj else []
-    active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+    flags = ctx.obj["flags"]
+    project_name = ctx.obj["project"].project_name
+    use_v2 = flags.USE_CATALOGS_V2
+
+    if use_v2:
+        catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
+        # TODO: ctx.obj["catalogs"] is List[CatalogV2] here but downstream tasks
+        # (base.py, build.py, run.py, etc.) annotate it as Optional[List[Catalog]].
+        # Widen signatures to Sequence[Union[Catalog, CatalogV2]] or add a common base.
+        ctx.obj["catalogs"] = catalogs_v2
+        if catalogs_v2:
+            fire_event(
+                Note(
+                    msg="catalogs.yml v2 schema validation is experimental, not officially supported yet, "
+                    "and its spec is liable to change. "
+                    "See https://github.com/dbt-labs/dbt-core/discussions/12723"
+                ),
+                EventLevel.WARN,
+            )
+            active_integrations = _bridge_v2_catalogs(runtime_config, catalogs_v2)
+        else:
+            active_integrations = []
+    else:
+        catalogs = load_catalogs(flags.PROJECT_DIR, project_name, flags.VARS)
+        active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+        ctx.obj["catalogs"] = catalogs
 
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
-        ctx.obj["manifest"] = parse_manifest(
-            runtime_config,
-            write_perf_info,
-            write,
-            ctx.obj["flags"].write_json,
-            active_integrations,
-        )
-        adapter = get_adapter(runtime_config)
+        if getattr(flags, "USE_V2_PARSER", False):
+            from dbt.parser.fusion import parse_with_fusion
+
+            ctx.obj["manifest"] = parse_with_fusion(
+                runtime_config, write, ctx.obj["flags"].write_json
+            )
+            _wire_adapter_for_external_manifest(
+                runtime_config, ctx.obj["manifest"], active_integrations
+            )
+        else:
+            ctx.obj["manifest"] = parse_manifest(
+                runtime_config,
+                write_perf_info,
+                write,
+                ctx.obj["flags"].write_json,
+                active_integrations,
+            )
     else:
-        register_adapter(runtime_config, get_mp_context())
-        adapter = get_adapter(runtime_config)
-        adapter.set_macro_context_generator(generate_runtime_macro_context)  # type: ignore[arg-type]
-        adapter.set_macro_resolver(ctx.obj["manifest"])
-        query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
-        adapter.connections.set_query_header(query_header_context)
-        for integration in active_integrations:
-            adapter.add_catalog_integration(integration)
+        _wire_adapter_for_external_manifest(
+            runtime_config, ctx.obj["manifest"], active_integrations
+        )
+
+    fire_deferred_events(event_group_type=EventGroupType.PARSE)
+
+
+def _wire_adapter_for_external_manifest(runtime_config, manifest, active_integrations):
+    """Register and configure the adapter for a manifest that was produced
+    outside of parse_manifest() — e.g. pre-set on the context, or loaded
+    from the fusion parser.
+    """
+    register_adapter(runtime_config, get_mp_context())
+    adapter = get_adapter(runtime_config)
+    adapter.set_macro_context_generator(generate_runtime_macro_context)  # type: ignore[arg-type]
+    adapter.set_macro_resolver(manifest)
+    query_header_context = generate_query_header_context(adapter.config, manifest)  # type: ignore[attr-defined]
+    adapter.connections.set_query_header(query_header_context)
+    for integration in active_integrations:
+        adapter.add_catalog_integration(integration)
+    return adapter

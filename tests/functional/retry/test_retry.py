@@ -12,6 +12,7 @@ from dbt.tests.util import (
     update_config_file,
     write_file,
 )
+from dbt_common.exceptions import CompilationError
 from tests.functional.retry.fixtures import (
     macros__alter_timezone_sql,
     macros__success_macro_sql,
@@ -217,7 +218,7 @@ class TestRetryRemovedFileLeafNode(BaseTestRetry):
         run_dbt(["build"], expect_pass=False)
 
         rm_file("models", "third_model.sql")
-        with pytest.raises(ValueError, match="Couldn't find model 'model.test.third_model'"):
+        with pytest.raises(CompilationError, match="Couldn't find model 'model.test.third_model'"):
             run_dbt(["retry"], expect_pass=False)
 
 

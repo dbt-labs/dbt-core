@@ -1,6 +1,7 @@
 import os
 import shutil
 from copy import deepcopy
+from typing import Dict
 
 import pytest
 
@@ -11,6 +12,8 @@ from tests.functional.defer_state.fixtures import (
     changed_ephemeral_model_sql,
     changed_table_model_sql,
     changed_view_model_sql,
+    double_it_sql,
+    double_it_yml,
     ephemeral_model_sql,
     exposures_yml,
     infinite_macros_sql,
@@ -25,15 +28,17 @@ from tests.functional.defer_state.fixtures import (
 
 
 class BaseDeferState:
+    _models = {
+        "table_model.sql": table_model_sql,
+        "view_model.sql": view_model_sql,
+        "ephemeral_model.sql": ephemeral_model_sql,
+        "schema.yml": schema_yml,
+        "exposures.yml": exposures_yml,
+    }
+
     @pytest.fixture(scope="class")
     def models(self):
-        return {
-            "table_model.sql": table_model_sql,
-            "view_model.sql": view_model_sql,
-            "ephemeral_model.sql": ephemeral_model_sql,
-            "schema.yml": schema_yml,
-            "exposures.yml": exposures_yml,
-        }
+        return self._models
 
     @pytest.fixture(scope="class")
     def macros(self):
@@ -356,3 +361,39 @@ class TestDeferStateFlag(BaseDeferState):
         assert results.results[0].status == RunStatus.Success
         assert results.results[0].node.name == "table_model"
         assert results.results[0].adapter_response["rows_affected"] == 2
+
+
+class TestFunctionDeferral(BaseDeferState):
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            **self._models,
+            "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
+        }
+
+    def test_build_with_other_schema_defer(self, project, other_schema):
+        project.create_test_schema(other_schema)
+        run_dbt(["build"])
+        self.copy_state(project.project_root)
+
+        result = run_dbt(
+            [
+                "run",
+                "-s",
+                "double_it_model",
+                "--state",
+                "state",
+                "--defer",
+                "--target",
+                "otherschema",
+            ]
+        )
+        assert len(result.results) == 1
+        assert result.results[0].node.name == "double_it_model"

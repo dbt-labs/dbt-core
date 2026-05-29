@@ -5,7 +5,7 @@ from dbt.exceptions import EnvVarMissingError
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.context import get_invocation_context
 
-from .base import BaseContext, contextmember
+from .base import BaseContext, _get_env_var, contextmember
 
 
 class SecretContext(BaseContext):
@@ -29,11 +29,12 @@ class SecretContext(BaseContext):
         # instead of rendering the actual value here, to avoid any risk of
         # Jinja manipulation. it will be subbed out later, in SecretRenderer.render_value
         env = get_invocation_context().env
-        if var in env and var.startswith(SECRET_ENV_PREFIX):
+        env_value, found_in_env = _get_env_var(env, var)
+        if found_in_env and var.startswith(SECRET_ENV_PREFIX):
             return SECRET_PLACEHOLDER.format(var)
 
-        if var in env:
-            return_value = env[var]
+        if found_in_env:
+            return_value = env_value
         elif default is not None:
             return_value = default
 
@@ -46,7 +47,7 @@ class SecretContext(BaseContext):
                 # that so we can skip partial parsing.  Otherwise the file will be scheduled for
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
-                self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+                self.env_vars[var] = return_value if found_in_env else DEFAULT_ENV_PLACEHOLDER
             return return_value
         else:
             raise EnvVarMissingError(var)

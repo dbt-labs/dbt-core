@@ -4,6 +4,16 @@ from typing import List
 
 import pytest
 from freezegun import freeze_time
+from metricflow_semantic_interfaces.references import (
+    MeasureReference,
+    TimeDimensionReference,
+)
+from metricflow_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+)
 
 from dbt.artifacts.resources import (
     Defaults,
@@ -24,13 +34,6 @@ from dbt_common.contracts.constraints import (
     ColumnLevelConstraint,
     ConstraintType,
     ModelLevelConstraint,
-)
-from dbt_semantic_interfaces.references import MeasureReference, TimeDimensionReference
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    DimensionType,
-    EntityType,
-    MetricType,
 )
 from tests.unit.fixtures import generic_test_node, model_node
 

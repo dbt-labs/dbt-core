@@ -4,6 +4,23 @@ from typing import Protocol, runtime_checkable
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis.strategies import builds, none, text
+from metricflow_semantic_interfaces.protocols import WhereFilter as WhereFilterProtocol
+from metricflow_semantic_interfaces.protocols import dimension as DimensionProtocols
+from metricflow_semantic_interfaces.protocols import entity as EntityProtocols
+from metricflow_semantic_interfaces.protocols import measure as MeasureProtocols
+from metricflow_semantic_interfaces.protocols import metadata as MetadataProtocols
+from metricflow_semantic_interfaces.protocols import metric as MetricProtocols
+from metricflow_semantic_interfaces.protocols import saved_query as SavedQueryProtocols
+from metricflow_semantic_interfaces.protocols import (
+    semantic_model as SemanticModelProtocols,
+)
+from metricflow_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
+)
 
 from dbt.artifacts.resources import (
     ConstantPropertyInput,
@@ -28,21 +45,6 @@ from dbt.artifacts.resources import (
 )
 from dbt.contracts.graph.nodes import Metric, SavedQuery, SemanticModel
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.protocols import WhereFilter as WhereFilterProtocol
-from dbt_semantic_interfaces.protocols import dimension as DimensionProtocols
-from dbt_semantic_interfaces.protocols import entity as EntityProtocols
-from dbt_semantic_interfaces.protocols import measure as MeasureProtocols
-from dbt_semantic_interfaces.protocols import metadata as MetadataProtocols
-from dbt_semantic_interfaces.protocols import metric as MetricProtocols
-from dbt_semantic_interfaces.protocols import saved_query as SavedQueryProtocols
-from dbt_semantic_interfaces.protocols import semantic_model as SemanticModelProtocols
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    DimensionType,
-    EntityType,
-    MetricType,
-    TimeGranularity,
-)
 
 
 @runtime_checkable

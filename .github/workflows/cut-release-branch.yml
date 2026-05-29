@@ -123,7 +123,7 @@ jobs:
       - name: "Check Current Version In Code"
         id: determine_version
         run: |
-          current_version=$(grep '^version = ' core/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          current_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' core/dbt/__version__.py)
           echo "current_version=$current_version" >> $GITHUB_OUTPUT
 
       - name: "[Notification] Check Current Version In Code"
@@ -133,7 +133,7 @@ jobs:
 
       - name: "Parse Current Version Into Parts for Changelog Directories"
         id: semver-current
-        uses: dbt-labs/actions/parse-semver@main
+        uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ steps.determine_version.outputs.current_version }}
 
@@ -198,17 +198,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install libsasl2-dev
 
-      - name: "Install Python Dependencies"
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install hatch
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: "Bump Version To ${{ needs.cleanup_changelog.outputs.next-version }}"
         run: |
           cd core
           hatch version ${{ needs.cleanup_changelog.outputs.next-version }}
           hatch run dev-req
-          dbt --version
+          hatch run dbt --version
 
       - name: "Commit Version Bump to Branch"
         run: |
@@ -285,17 +283,19 @@ jobs:
       - name: "Determine PR Title"
         id: pr_title
         run: |
-          echo "pr_title=${{ env.PR_TITLE }}" >> $GITHUB_OUTPUT
-          if [${{ env.PR_TITLE }} == ""]; then
-            echo "pr_title='Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}'" >> $GITHUB_OUTPUT
+          if [[ -z "$PR_TITLE" ]]; then
+            echo "pr_title=Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}" >> $GITHUB_OUTPUT
+          else
+            echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
           fi
 
       - name: "Determine PR Body"
         id: pr_body
         run: |
-          echo "pr_body=${{ env.PR_BODY }}" >> $GITHUB_OUTPUT
-          if [${{ env.PR_BODY }} == ""]; then
-            echo "pr_body='Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}'" >> $GITHUB_OUTPUT
+          if [[ -z "$PR_BODY" ]]; then
+            echo "pr_body=Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}" >> $GITHUB_OUTPUT
+          else
+            echo "pr_body=$PR_BODY" >> $GITHUB_OUTPUT
           fi
 
       - name: "Add Branch Details"

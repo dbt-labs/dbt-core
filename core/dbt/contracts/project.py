@@ -97,6 +97,12 @@ class PrivatePackage(Package):
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
 
+    def get_revisions(self) -> List[str]:
+        if self.revision is None:
+            return []
+        else:
+            return [str(self.revision)]
+
 
 @dataclass
 class RegistryPackage(Package):
@@ -339,6 +345,11 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     log_format_file: Optional[str] = None
     log_level: Optional[str] = None
     log_level_file: Optional[str] = None
+    # Opt-in for the bundled dbt-state plugin. Default None defers to the CLI/env-var
+    # default (False). Set true in dbt_project.yml's `flags:` block (or profiles.yml's
+    # `config:` block) to enable plugin auto-discovery. Also settable via
+    # `--manage-state/--no-manage-state` and `DBT_ENGINE_MANAGE_STATE`.
+    manage_state: Optional[bool] = None
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
@@ -347,6 +358,8 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
     use_experimental_parser: Optional[bool] = None
+    use_v2_parser: Optional[bool] = None
+    v2_parser: Optional[str] = None
     version_check: Optional[bool] = None
     warn_error: Optional[bool] = None
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
@@ -368,6 +381,15 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_generic_test_arguments_property: bool = True
     require_unique_project_resource_names: bool = False
     require_ref_searches_node_package_before_root: bool = False
+    require_valid_schema_from_generate_schema_name: bool = False
+    allow_jinja_file_extensions: bool = False
+    require_sql_header_in_test_configs: bool = False
+    support_custom_ref_kwargs: bool = False
+    require_corrected_analysis_fqns: bool = False
+    require_source_and_semantic_model_names_without_spaces: bool = False
+    enable_grouped_warn_error_parser_logs: bool = False
+    use_catalogs_v2: bool = False
+    latest_version_pointer_enabled_by_default: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -386,6 +408,15 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_generic_test_arguments_property": self.require_generic_test_arguments_property,
             "require_unique_project_resource_names": self.require_unique_project_resource_names,
             "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
+            "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
+            "allow_jinja_file_extensions": self.allow_jinja_file_extensions,
+            "require_sql_header_in_test_configs": self.require_sql_header_in_test_configs,
+            "support_custom_ref_kwargs": self.support_custom_ref_kwargs,
+            "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
+            "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
+            "enable_grouped_warn_error_parser_logs": self.enable_grouped_warn_error_parser_logs,
+            "use_catalogs_v2": self.use_catalogs_v2,
+            "latest_version_pointer_enabled_by_default": self.latest_version_pointer_enabled_by_default,
         }
 
 

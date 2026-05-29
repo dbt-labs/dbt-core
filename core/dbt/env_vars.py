@@ -1,9 +1,7 @@
-from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 from dbt.cli import params
 from dbt.deprecations import warn
-from dbt.exceptions import DbtInternalError
 from dbt_common.constants import ENGINE_ENV_PREFIX
 from dbt_common.context import get_invocation_context
 
@@ -19,34 +17,20 @@ _ADDITIONAL_ENGINE_ENV_VARS: List[str] = [
     "DBT_DOWNLOAD_DIR",
     "DBT_PP_FILE_DIFF_TEST",  # TODO: This is testing related, should we do this differently?
     "DBT_PP_TEST",  # TODO: This is testing related, should we do this differently?
+    "DBT_ENGINE_STATE_EMIT_REUSED_STATUS",
+    "DBT_ENGINE_STATE_OAUTH_CLIENT_ID",
+    "DBT_ENGINE_STATE_AUTH_URL",
+    "DBT_ENGINE_STATE_TOKEN_URL",
+    "DBT_ENGINE_STATE_API_URL",
 ]
-
-
-@dataclass(frozen=True, init=False)
-class EngineEnvVar:
-    name: str
-    old_name: Optional[str] = None
-
-    def __init__(self, envvar: str) -> None:
-        if envvar.startswith(ENGINE_ENV_PREFIX):
-            object.__setattr__(self, "name", envvar)
-            object.__setattr__(self, "old_name", None)
-        elif envvar.startswith("DBT"):
-            object.__setattr__(self, "name", envvar.replace("DBT", f"{ENGINE_ENV_PREFIX}"))
-            object.__setattr__(self, "old_name", envvar)
-        else:
-            raise DbtInternalError(
-                f"Invalid environment variable: {envvar}, this will only happen if we add a new option to dbt that has an envvar that doesn't start with DBT_ or {ENGINE_ENV_PREFIX}"
-            )
 
 
 # Here we are creating a set of all known engine env vars. This is used in this moduleto create an allow list of dbt
 # engine env vars. We also use it in the cli flags module to cross propagate engine env vars with their old non-engine prefixed names.
-KNOWN_ENGINE_ENV_VARS: set[EngineEnvVar] = {
-    EngineEnvVar(envvar=envvar)
-    for envvar in [*params.KNOWN_ENV_VARS, *_ADDITIONAL_ENGINE_ENV_VARS]
-}
-_ALLOWED_ENV_VARS: set[str] = {envvar.name for envvar in KNOWN_ENGINE_ENV_VARS}
+KNOWN_ENGINE_ENV_VARS: set[params.EngineEnvVar] = set(params.KNOWN_ENV_VARS).union(
+    {params.EngineEnvVar(envvar=envvar) for envvar in _ADDITIONAL_ENGINE_ENV_VARS}
+)
+_ALLOWED_ENV_VARS: set[str] = {engine_env_var.name for engine_env_var in KNOWN_ENGINE_ENV_VARS}
 
 
 def validate_engine_env_vars() -> None:

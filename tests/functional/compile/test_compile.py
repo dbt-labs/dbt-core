@@ -3,6 +3,7 @@ import pathlib
 import re
 
 import pytest
+import sqlparse
 
 from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture
 from dbt_common.exceptions import DbtBaseException as DbtException
@@ -19,6 +20,10 @@ from tests.functional.compile.fixtures import (
     second_model_sql,
     third_ephemeral_model_sql,
     with_recursive_model_sql,
+)
+from tests.functional.v2_parser_parity.v2_self_parser import (
+    run_dbt_and_capture_for_mode,
+    run_dbt_for_mode,
 )
 
 
@@ -48,8 +53,9 @@ class TestIntrospectFlag:
             "schema.yml": schema_yml,
         }
 
-    def test_default(self, project):
-        run_dbt(["compile"])
+    @pytest.mark.v2_parser_parity
+    def test_default(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["compile"])
         assert get_lines("first_model") == ["select 1 as fun"]
         assert any("_test_compile as schema" in line for line in get_lines("second_model"))
 
@@ -68,35 +74,39 @@ class TestEphemeralModels:
             "with_recursive_model.sql": with_recursive_model_sql,
         }
 
-    def test_first_selector(self, project):
-        (results, log_output) = run_dbt_and_capture(
-            ["compile", "--select", "first_ephemeral_model"]
+    @pytest.mark.v2_parser_parity
+    def test_first_selector(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--select", "first_ephemeral_model"]
         )
         assert file_exists("first_ephemeral_model")
         assert not file_exists("second_ephemeral_model")
         assert not file_exists("third_ephemeral_model")
         assert "Compiled node 'first_ephemeral_model' is" in log_output
 
-    def test_middle_selector(self, project):
-        (results, log_output) = run_dbt_and_capture(
-            ["compile", "--select", "second_ephemeral_model"]
+    @pytest.mark.v2_parser_parity
+    def test_middle_selector(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--select", "second_ephemeral_model"]
         )
         assert file_exists("first_ephemeral_model")
         assert file_exists("second_ephemeral_model")
         assert not file_exists("third_ephemeral_model")
         assert "Compiled node 'second_ephemeral_model' is" in log_output
 
-    def test_last_selector(self, project):
-        (results, log_output) = run_dbt_and_capture(
-            ["compile", "--select", "third_ephemeral_model"]
+    @pytest.mark.v2_parser_parity
+    def test_last_selector(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--select", "third_ephemeral_model"]
         )
         assert file_exists("first_ephemeral_model")
         assert file_exists("second_ephemeral_model")
         assert file_exists("third_ephemeral_model")
         assert "Compiled node 'third_ephemeral_model' is" in log_output
 
-    def test_no_selector(self, project):
-        run_dbt(["compile"])
+    @pytest.mark.v2_parser_parity
+    def test_no_selector(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["compile"])
 
         sql = read_file("target", "compiled", "test", "models", "first_ephemeral_model.sql")
         assert norm_whitespace(sql) == norm_whitespace("select 1 as fun")
@@ -115,8 +125,9 @@ class TestEphemeralModels:
             select 2 as fun"""
         assert norm_whitespace(sql) == norm_whitespace(expected_sql)
 
-    def test_with_recursive_cte(self, project):
-        run_dbt(["compile"])
+    @pytest.mark.v2_parser_parity
+    def test_with_recursive_cte(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["compile"])
 
         assert get_lines("with_recursive_model") == [
             "with recursive  __dbt__cte__first_ephemeral_model as (",
@@ -138,8 +149,9 @@ class TestEphemeralModelWithAlias:
             "second_ephemeral_model_with_alias.sql": second_ephemeral_model_with_alias_sql,
         }
 
-    def test_compile(self, project):
-        run_dbt(["compile"])
+    @pytest.mark.v2_parser_parity
+    def test_compile(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["compile"])
 
         assert get_lines("second_ephemeral_model_with_alias") == [
             "with __dbt__cte__first_alias as (",
@@ -157,8 +169,9 @@ class TestCompile:
             "schema.yml": schema_yml,
         }
 
-    def test_none(self, project):
-        (results, log_output) = run_dbt_and_capture(["compile"])
+    @pytest.mark.v2_parser_parity
+    def test_none(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(parser_mode, ["compile"])
         assert len(results) == 4
         assert "Compiled node" not in log_output
 
@@ -176,21 +189,26 @@ class TestCompile:
         assert len(results) == 1
         assert "Compiled inline node is:" not in log_output
 
-    def test_select_pass(self, project):
-        (results, log_output) = run_dbt_and_capture(["compile", "--select", "second_model"])
+    @pytest.mark.v2_parser_parity
+    def test_select_pass(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--select", "second_model"]
+        )
         assert len(results) == 3
         assert "Compiled node 'second_model' is:" in log_output
 
-    def test_select_pass_quiet(self, project):
-        (results, log_output) = run_dbt_and_capture(
-            ["compile", "--quiet", "--select", "second_model"]
+    @pytest.mark.v2_parser_parity
+    def test_select_pass_quiet(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--quiet", "--select", "second_model"]
         )
         assert len(results) == 3
         assert "Compiled node 'second_model' is:" not in log_output
 
-    def test_select_pass_empty(self, project):
-        (results, log_output) = run_dbt_and_capture(
-            ["compile", "--indirect-selection", "empty", "--select", "second_model"]
+    @pytest.mark.v2_parser_parity
+    def test_select_pass_empty(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--indirect-selection", "empty", "--select", "second_model"]
         )
         assert len(results) == 1
         assert "Compiled node 'second_model' is:" in log_output
@@ -208,9 +226,10 @@ class TestCompile:
         assert len(results) == 1
         assert "Compiled inline node is:" in log_output
 
-    def test_output_json_select(self, project):
-        (results, log_output) = run_dbt_and_capture(
-            ["compile", "--select", "second_model", "--output", "json"]
+    @pytest.mark.v2_parser_parity
+    def test_output_json_select(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--select", "second_model", "--output", "json"]
         )
         assert len(results) == 3
         assert "node" in log_output
@@ -218,9 +237,10 @@ class TestCompile:
         with pytest.raises(json.JSONDecodeError):
             json.loads(log_output)
 
-    def test_output_json_select_quiet(self, project):
-        (results, log_output) = run_dbt_and_capture(
-            ["compile", "--quiet", "--select", "second_model", "--output", "json"]
+    @pytest.mark.v2_parser_parity
+    def test_output_json_select_quiet(self, project, parser_mode):
+        (results, log_output) = run_dbt_and_capture_for_mode(
+            parser_mode, ["compile", "--quiet", "--select", "second_model", "--output", "json"]
         )
         assert len(results) == 3
         assert "node" in log_output
@@ -289,3 +309,61 @@ class TestCompile:
             summary = json.load(summary_file)
             assert "_invocation_id" in summary
             assert "linked" in summary
+
+
+class TestSqlParseGroupingTokenLimit:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_ephemeral_model.sql": first_ephemeral_model_sql,
+            "second_ephemeral_model.sql": second_ephemeral_model_sql,
+            "third_ephemeral_model.sql": third_ephemeral_model_sql,
+            "with_recursive_model.sql": with_recursive_model_sql,
+        }
+
+    def test_sqlparse_grouping_token_limit(self, project):
+        # No flag: compile succeeds (default is no limit)
+        run_dbt(["compile"])
+        assert sqlparse.engine.grouping.MAX_GROUPING_TOKENS is None
+
+        # Flag set to 0: compile fails because token limit is exceeded
+        with pytest.raises(DbtRuntimeError, match="You may raise the limit via --sqlparse"):
+            run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_TOKENS": "0"}'])
+
+        # Flag set to 10000: compile succeeds
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_TOKENS": "10000"}'])
+
+
+class TestSqlParseGroupingDepthLimit:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_ephemeral_model.sql": first_ephemeral_model_sql,
+            "second_ephemeral_model.sql": second_ephemeral_model_sql,
+            "third_ephemeral_model.sql": third_ephemeral_model_sql,
+            "with_recursive_model.sql": with_recursive_model_sql,
+        }
+
+    def test_sqlparse_grouping_depth_limit(self, project):
+        # No flag: compile succeeds (default is no limit)
+        run_dbt(["compile"])
+        assert sqlparse.engine.grouping.MAX_GROUPING_DEPTH is None
+
+        # Flag set to 0: compile fails because depth limit is exceeded
+        with pytest.raises(DbtRuntimeError, match="You may raise the limit via --sqlparse"):
+            run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "0"}'])
+
+        # Flag set to 10000: compile succeeds
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "10000"}'])
+
+
+class TestSqlParseOnlyTokensLeavesDepthNone:
+    def test_only_tokens_set_leaves_depth_none(self, project):
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_TOKENS": "10000"}'])
+        assert sqlparse.engine.grouping.MAX_GROUPING_DEPTH is None
+
+
+class TestSqlParseOnlyDepthLeavesTokensNone:
+    def test_only_depth_set_leaves_tokens_none(self, project):
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "10000"}'])
+        assert sqlparse.engine.grouping.MAX_GROUPING_TOKENS is None

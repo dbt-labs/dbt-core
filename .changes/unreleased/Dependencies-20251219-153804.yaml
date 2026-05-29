@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Bump minimum click to 8.2.0
-time: 2025-12-19T15:38:04.785842-06:00
-custom:
-  Author: QMalcolm
-  Issue: "12305"

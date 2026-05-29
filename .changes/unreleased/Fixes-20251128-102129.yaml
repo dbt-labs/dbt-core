@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix bug in partial parsing when updating a model with a schema file that is referenced by a singular test
-time: 2025-11-28T10:21:29.911147Z
-custom:
-    Author: mattogburke
-    Issue: "12223"

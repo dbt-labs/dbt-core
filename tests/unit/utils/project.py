@@ -60,6 +60,7 @@ def project(selector_config: SelectorConfig) -> Project:
         semantic_models={},
         saved_queries={},
         exposures={},
+        analyses={},
         functions={},
         vars=VarProvider({}),
         dbt_version=[VersionSpecifier.from_version_string("0.0.0")],
@@ -74,6 +75,7 @@ def project(selector_config: SelectorConfig) -> Project:
         restrict_access=False,
         dbt_cloud={},
         flags={},
+        vars_from_file={},
     )
 
 
@@ -82,6 +84,8 @@ def mock_project():
     mock_project = MagicMock(RuntimeConfig)
     mock_project.cli_vars = {}
     mock_project.args = MagicMock()
+    mock_project.profile_name = "test"
+    mock_project.target_name = "test"
     mock_project.args.profile = "test"
     mock_project.args.target = "test"
     mock_project.project_env_vars = {}
@@ -89,4 +93,5 @@ def mock_project():
     mock_project.project_target_path = "mock_target_path"
     mock_project.credentials = MagicMock()
     mock_project.clear_dependencies = MagicMock()
+    mock_project.vars_from_file = {}
     return mock_project

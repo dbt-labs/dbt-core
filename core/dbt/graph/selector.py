@@ -1,4 +1,4 @@
-from typing import List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from dbt import selected_resources
 from dbt.contracts.graph.manifest import Manifest
@@ -7,11 +7,11 @@ from dbt.contracts.state import PreviousState
 from dbt.events.types import NoNodesForSelectionCriteria, SelectorReportInvalidSelector
 from dbt.exceptions import DbtInternalError, InvalidSelectorError
 from dbt.node_types import NodeType
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
-from .selector_methods import MethodManager
+from .selector_methods import MethodManager, MethodName
 from .selector_spec import IndirectSelection, SelectionCriteria, SelectionSpec
 
 
@@ -42,10 +42,12 @@ class NodeSelector(MethodManager):
         manifest: Manifest,
         previous_state: Optional[PreviousState] = None,
         include_empty_nodes: bool = False,
+        selectors: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(manifest, previous_state)
         self.full_graph: Graph = graph
         self.include_empty_nodes: bool = include_empty_nodes
+        self._selectors: Optional[Dict[str, Any]] = selectors
 
         # build a subgraph containing only non-empty, enabled nodes and enabled
         # sources.
@@ -53,6 +55,14 @@ class NodeSelector(MethodManager):
             unique_id for unique_id in self.full_graph.nodes() if self._is_graph_member(unique_id)
         }
         self.graph = self.full_graph.subgraph(graph_members)
+
+    def get_method(self, method: MethodName, method_arguments: List[str], **kwargs: Any):
+        return super().get_method(
+            method,
+            method_arguments,
+            selectors=self._selectors,
+            get_selected_callback=self.get_selected,
+        )
 
     def select_included(
         self,
@@ -62,7 +72,12 @@ class NodeSelector(MethodManager):
         """Select the explicitly included nodes, using the given spec. Return
         the selected set of unique IDs.
         """
-        method = self.get_method(spec.method, spec.method_arguments)
+        method = self.get_method(
+            spec.method,
+            spec.method_arguments,
+            selectors=self._selectors,
+            get_selected_callback=self.get_selected,
+        )
         return set(method.search(included_nodes, spec.value))
 
     def get_nodes_from_criteria(
@@ -92,6 +107,13 @@ class NodeSelector(MethodManager):
 
         # if --indirect-selection EMPTY, do not expand to adjacent tests
         if spec.indirect_selection == IndirectSelection.Empty:
+            return selected, set()
+        # The `selector` method calls get_selected() internally, which already
+        # runs the full selection pipeline including expand_selection() and any
+        # exclusions (e.g. exclude: test_name:not_null). Re-running
+        # expand_selection here would re-introduce tests that were explicitly
+        # excluded by the referenced selector.
+        elif spec.method == MethodName.Selector:
             return selected, set()
         else:
             direct_nodes, indirect_nodes = self.expand_selection(
@@ -150,7 +172,10 @@ class NodeSelector(MethodManager):
             )
 
             if spec.expect_exists and len(direct_nodes) == 0 and warn_on_no_nodes:
-                warn_or_error(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
+                fire_event(
+                    NoNodesForSelectionCriteria(spec_raw=str(spec.raw)),
+                    force_warn_or_error_handling=True,
+                )
 
         return direct_nodes, indirect_nodes
 
@@ -372,12 +397,14 @@ class ResourceTypeSelector(NodeSelector):
         previous_state: Optional[PreviousState],
         resource_types: List[NodeType],
         include_empty_nodes: bool = False,
+        selectors: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(
             graph=graph,
             manifest=manifest,
             previous_state=previous_state,
             include_empty_nodes=include_empty_nodes,
+            selectors=selectors,
         )
         self.resource_types: Set[NodeType] = set(resource_types)
 

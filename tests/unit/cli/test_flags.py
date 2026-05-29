@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import List, Optional
+from unittest import mock
 
 import click
 import pytest
@@ -42,7 +43,8 @@ class TestFlags:
 
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):
-        flags = Flags(run_context)
+        with mock.patch("dbt.cli.flags.get_user_setting_flags", return_value={}):
+            flags = Flags(run_context)
 
         if "DEPRECATED_" in param.name.upper():
             assert not hasattr(flags, param.name.upper())
@@ -149,6 +151,34 @@ class TestFlags:
 
         flags = Flags(context, project_flags)
         assert flags.USE_COLORS
+
+    def test_prefer_user_settings_to_default(self, monkeypatch):
+        monkeypatch.setattr(
+            "dbt.cli.flags.get_user_setting_flags",
+            lambda: {"use_colors": False},
+        )
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context)
+        assert flags.USE_COLORS is False
+
+    def test_prefer_project_flags_to_user_settings(self, monkeypatch, project_flags):
+        project_flags.use_colors = True
+        monkeypatch.setattr(
+            "dbt.cli.flags.get_user_setting_flags",
+            lambda: {"use_colors": False},
+        )
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context, project_flags)
+        assert flags.USE_COLORS is True
+
+    def test_prefer_cli_to_user_settings(self, monkeypatch):
+        monkeypatch.setattr(
+            "dbt.cli.flags.get_user_setting_flags",
+            lambda: {"use_colors": False},
+        )
+        context = self.make_dbt_context("run", ["--use-colors", "True", "run"])
+        flags = Flags(context)
+        assert flags.USE_COLORS is True
 
     def test_mutually_exclusive_options_passed_separately(self):
         """Assert options that are mutually exclusive can be passed separately without error"""
@@ -468,6 +498,8 @@ def test_project_flag_defaults():
         "use_colors",
         "use_colors_file",
         "use_experimental_parser",
+        "use_v2_parser",
+        "v2_parser",
         "version_check",
         "warn_error",
         "warn_error_options",
@@ -475,3 +507,59 @@ def test_project_flag_defaults():
     ]
     for flag in project_flags:
         assert getattr(flags, flag) is None
+
+
+class TestFusionParserFlags:
+    def make_dbt_context(
+        self, context_name: str, args: List[str], parent: Optional[click.Context] = None
+    ) -> click.Context:
+        return cli.make_context(context_name, args.copy(), parent)
+
+    def test_default_off(self):
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.USE_V2_PARSER is False
+        assert flags.V2_PARSER == "dbt-core-experimental-parser parse"
+
+    def test_cli_arg_enables(self):
+        ctx = self.make_dbt_context("run", ["--use-v2-parser", "run"])
+        flags = Flags(ctx)
+        assert flags.USE_V2_PARSER is True
+
+    def test_cli_arg_command(self):
+        ctx = self.make_dbt_context(
+            "run",
+            ["--v2-parser", "/opt/parser/bin/dbt-core-experimental-parser parse", "run"],
+        )
+        flags = Flags(ctx)
+        assert flags.V2_PARSER == "/opt/parser/bin/dbt-core-experimental-parser parse"
+
+    def test_env_var_enables(self, monkeypatch):
+        monkeypatch.setenv("DBT_ENGINE_USE_V2_PARSER", "True")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.USE_V2_PARSER is True
+
+    def test_env_var_command(self, monkeypatch):
+        monkeypatch.setenv("DBT_ENGINE_V2_PARSER", "dbt-core-experimental-parser parse --foo")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.V2_PARSER == "dbt-core-experimental-parser parse --foo"
+
+    def test_project_flags_set_use_v2_parser(self):
+        project_flags = ProjectFlags(use_v2_parser=True)
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.USE_V2_PARSER is True
+
+    def test_project_flags_set_command(self):
+        project_flags = ProjectFlags(v2_parser="dbt-core-experimental-parser parse --strict")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.V2_PARSER == "dbt-core-experimental-parser parse --strict"
+
+    def test_cli_overrides_project_flags(self):
+        project_flags = ProjectFlags(use_v2_parser=True)
+        ctx = self.make_dbt_context("run", ["--no-use-v2-parser", "run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.USE_V2_PARSER is False

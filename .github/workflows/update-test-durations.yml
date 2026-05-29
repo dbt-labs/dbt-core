@@ -1,0 +1,302 @@
+# **what?**
+# Generates pytest-split test duration data for optimized test splitting.
+# It runs tests with pytest-split to generate duration data, and then merges the data
+# into a single file to reduce the time it takes to generate the durations file.  It
+# runs for 5+ hours otherwise. The updated file is committed to a branch and a PR is
+# opened for review. The PR is auto-merged once CI passes.
+
+# **why?**
+# pytest-split uses duration data to balance test workloads across workers.
+# Without this data, tests are split evenly by count which can cause imbalanced runs.
+
+# **when?**
+# Runs weekly on Sunday at midnight UTC, and can be manually triggered as needed.
+
+name: Update Test Durations
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+    inputs:
+      auto-merge-pr:
+        description: "Auto-merge the PR"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Number of parallel workers - matches main.yml for consistent splitting
+  PYTHON_INTEGRATION_TEST_WORKERS: 15
+
+jobs:
+  generate-split-groups:
+    name: "Generate Split Groups"
+    runs-on: ubuntu-latest
+    outputs:
+      split-groups: ${{ steps.generate.outputs.split-groups }}
+
+    steps:
+      - name: "Generate split group matrix"
+        id: generate
+        run: |
+          MATRIX_JSON="["
+          for B in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
+              MATRIX_JSON+=$(sed 's/^/"/;s/$/"/' <<< "${B}")
+          done
+          MATRIX_JSON="${MATRIX_JSON//\"\"/\", \"}"
+          MATRIX_JSON+="]"
+          echo "split-groups=${MATRIX_JSON}"
+          echo "split-groups=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+
+  generate-durations:
+    name: "Generate Durations (Group ${{ matrix.split-group }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [generate-split-groups]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        split-group: ${{ fromJson(needs.generate-split-groups.outputs.split-groups) }}
+
+    env:
+      DBT_INVOCATION_ENV: github-actions
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: "Check out the repository"
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
+
+      - name: "Set up Python 3.11"
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: "Run postgres setup script"
+        run: ./scripts/setup_db.sh
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGPASSWORD: password
+
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
+
+      - name: "Run integration tests and store durations"
+        run: |
+          cd core
+          hatch -v run ci:integration-tests-generate-durations -- \
+            --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} \
+            --group ${{ matrix.split-group }} \
+            || true
+          # Rename to per-group file (pytest-split overwrites with only this group's tests)
+          if [ -f .test_durations ]; then
+            mv .test_durations .test_durations_${{ matrix.split-group }}
+          else
+            echo "ERROR: .test_durations not created - check pytest output above"
+            exit 1
+          fi
+
+      - name: "Upload partial durations file"
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # actions/upload-artifact@v6
+        with:
+          name: durations-${{ matrix.split-group }}
+          path: core/.test_durations_${{ matrix.split-group }}
+          if-no-files-found: error
+          include-hidden-files: true
+
+  create-pr:
+    name: "Create Pull Request"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [generate-durations]
+    outputs:
+      pr_number: ${{ steps.cpr.outputs.pull-request-number }}
+      pr_url: ${{ steps.cpr.outputs.pull-request-url }}
+
+    steps:
+      - name: "Check out the repository"
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
+
+      - name: "Import build bot GPG key"
+        id: import-gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.FISHTOWN_BOT_GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.FISHTOWN_BOT_GPG_PASSPHRASE }}
+          git_config_global: true
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_committer_name: "Github Build Bot"
+          git_committer_email: "buildbot@dbtlabs.com"
+
+      - name: "Download all partial duration files"
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # actions/download-artifact@v7
+        with:
+          pattern: durations-*
+          path: partial-durations
+          merge-multiple: true
+
+      - name: "Set up Python 3.11"
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: "Merge duration files"
+        run: |
+          python3 << 'EOF'
+          import json
+          import glob
+
+          merged = {}
+          for filepath in glob.glob("partial-durations/.test_durations_*"):
+              print(f"Processing {filepath}")
+              with open(filepath, "r") as f:
+                  data = json.load(f)
+                  merged.update(data)
+                  print(f"  Added {len(data)} tests")
+
+          print(f"Total tests: {len(merged)}")
+
+          # Sort by test name for consistent output
+          sorted_merged = dict(sorted(merged.items()))
+
+          with open("core/.test_durations", "w") as f:
+              json.dump(sorted_merged, f, indent=4)
+              f.write("\n")
+          EOF
+
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
+
+      - name: "Code quality"
+        run: |
+          cd core
+          git add .test_durations
+          hatch run pre-commit run end-of-file-fixer --files .test_durations || true
+
+      - name: "Create Pull Request"
+        id: cpr
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # peter-evans/create-pull-request@v8.1.0
+        with:
+          token: ${{ secrets.FISHTOWN_BOT_PAT }}
+          commit-message: "Update test durations for pytest-split"
+          author: "Github Build Bot <buildbot@dbtlabs.com>"
+          committer: "Github Build Bot <buildbot@dbtlabs.com>"
+          branch: update-test-durations
+          base: main
+          delete-branch: true
+          title: "Update test durations for pytest-split"
+          body: |
+            This PR is automatically generated to update the test durations file used by pytest-split.
+
+            The durations are generated by running the full integration test suite and recording how long each test takes. This data is used to balance test workloads across parallel workers.
+          labels: |
+            Skip Changelog
+          add-paths: |
+            core/.test_durations
+
+  await-ci:
+    name: "Wait for CI"
+    runs-on: ubuntu-latest
+    needs: [create-pr]
+    if: needs.create-pr.outputs.pr_number != '' && (github.event_name == 'schedule' || inputs.auto-merge-pr == true)
+    env:
+      GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
+
+    steps:
+      - name: "Check out the repository"
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
+
+      - name: "Wait for CI to start"
+        run: |
+          sleep 60
+
+      - name: "Wait for CI checks to complete"
+        run: |
+          gh pr checks ${{ needs.create-pr.outputs.pr_number }} --fail-fast --watch
+
+  merge-pr:
+    name: "Merge Pull Request"
+    runs-on: ubuntu-latest
+    needs: [create-pr, await-ci]
+    if: github.event_name == 'schedule' || inputs.auto-merge-pr == true
+    env:
+      GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
+
+    steps:
+      - name: "Check out the repository"
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
+
+      - name: "Merge PR"
+        run: |
+          gh pr merge ${{ needs.create-pr.outputs.pr_number }} \
+            --admin \
+            --squash \
+            --body "Update test durations for pytest-split" \
+            --delete-branch
+
+  slack-notification:
+    name: "Slack Notification"
+    runs-on: ubuntu-latest
+    needs: [create-pr, await-ci, merge-pr]
+    if: always() && contains(join(needs.*.result, ','), 'failure')
+    steps:
+      - name: "Post Slack Notification"
+        run: |
+          python3 <<'PY' > slack-payload.json
+          import json
+          import os
+
+          failed_jobs = [
+              job
+              for job in ("create-pr", "await-ci", "merge-pr")
+              if os.environ.get(f"{job.upper().replace('-', '_')}_RESULT") == "failure"
+          ]
+          failed_summary = ", ".join(failed_jobs) if failed_jobs else "unknown job"
+          pr_url = os.environ.get("PR_URL", "")
+          pr_text = f"PR <{pr_url}|opened by the workflow>" if pr_url else "The workflow PR"
+          text = (
+              f":x: {pr_text} failed to merge for `{os.environ['GITHUB_REPOSITORY']}` "
+              f"on `{os.environ['GITHUB_REF_NAME']}`. Failed job(s): {failed_summary}. "
+              f"<{os.environ['RUN_URL']}|View workflow run>."
+          )
+          print(json.dumps({"text": text}))
+          PY
+
+          curl -X POST \
+            -H "Content-type: application/json" \
+            --data @slack-payload.json \
+            "$SLACK_WEBHOOK_URL"
+        env:
+          CREATE_PR_RESULT: ${{ needs.create-pr.result }}
+          AWAIT_CI_RESULT: ${{ needs.await-ci.result }}
+          MERGE_PR_RESULT: ${{ needs.merge-pr.result }}
+          PR_URL: ${{ needs.create-pr.outputs.pr_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_CORE_PR_CHANNEL_URL }}
