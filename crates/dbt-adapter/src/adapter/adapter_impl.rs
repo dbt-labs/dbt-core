@@ -953,7 +953,17 @@ impl AdapterImpl {
     /// AthenaAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-athena/src/dbt/adapters/athena/impl.py#L1154
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L299
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L205
-    pub fn list_schemas(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {
+    pub fn list_schemas(&self, state: &State, database: &str) -> AdapterResult<Vec<String>> {
+        use crate::macro_exec::execute_macro_wrapper;
+        use minijinja::value::{Kwargs, Value};
+
+        let kwargs = Kwargs::from_iter([("database", Value::from(database))]);
+        let result = execute_macro_wrapper(state, &[Value::from(kwargs)], "list_schemas")?;
+
+        self.list_schemas_inner(result)
+    }
+
+    pub fn list_schemas_inner(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {
         if self.mock_state().is_some() {
             return Ok(vec![]);
         }
@@ -5317,7 +5327,7 @@ mod tests {
     fn test_redshift_list_schemas_uses_nspname_by_default() {
         let adapter = AdapterImpl::new(engine(Redshift), None);
         let batch = record_batch_with_string_column("nspname", vec!["public", "analytics"]);
-        let schemas = adapter.list_schemas(batch).unwrap();
+        let schemas = adapter.list_schemas_inner(batch).unwrap();
         assert_eq!(schemas, vec!["public".to_string(), "analytics".to_string()]);
     }
 
@@ -5330,7 +5340,7 @@ mod tests {
         ]);
         let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
         let batch = record_batch_with_string_column("schema_name", vec!["public", "shared_a"]);
-        let schemas = adapter.list_schemas(batch).unwrap();
+        let schemas = adapter.list_schemas_inner(batch).unwrap();
         assert_eq!(schemas, vec!["public".to_string(), "shared_a".to_string()]);
     }
 
@@ -5344,7 +5354,7 @@ mod tests {
         ]);
         let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
         let batch = record_batch_with_string_column("nspname", vec!["public"]);
-        assert!(adapter.list_schemas(batch).is_err());
+        assert!(adapter.list_schemas_inner(batch).is_err());
     }
 
     // -- BigQuery job_execution_timeout_seconds tests -------------------------

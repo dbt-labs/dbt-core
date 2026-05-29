@@ -13,3 +13,4 @@ local:
       warehouse: 'stub-warehouse'
       database: 'stub-database'
       schema: "stub-schema"
+      driver_log_level: trace

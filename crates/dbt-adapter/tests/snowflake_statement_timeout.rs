@@ -76,7 +76,10 @@ fn open_database(client_timeout_secs: u64) -> Result<Box<dyn Database>> {
     builder.with_named_option(snowflake::LOG_TRACING, LogLevel::Warn.to_string())?;
     builder.with_named_option(snowflake::LOGIN_TIMEOUT, "60s")?;
     builder.with_named_option(snowflake::REQUEST_TIMEOUT, "600s")?;
-    builder.with_named_option(snowflake::CLIENT_TIMEOUT, format!("{client_timeout_secs}s"))?;
+    builder.with_named_option(
+        snowflake::AUTH_CLIENT_TIMEOUT,
+        format!("{client_timeout_secs}s"),
+    )?;
     builder.build(&mut driver)
 }
 
@@ -104,7 +107,7 @@ fn query_string(conn: &mut dyn Connection, sql: &str) -> Result<String> {
 #[tokio::test]
 async fn statement_timeout_cancellation() {
     tokio::task::spawn_blocking(move || {
-        // CLIENT_TIMEOUT generously above the 30s server-side cancellation
+        // AUTH_CLIENT_TIMEOUT generously above the 30s server-side cancellation
         // window so we can be sure any client-side timeout is incidental.
         let mut database = open_database(120).expect("open database");
         let mut conn = connection::Builder::default()

@@ -611,26 +611,35 @@ pub fn filter_missing_schemas(
             catalog,
             ComponentName::Database,
         );
-        if let Ok(schemas_values) = adapter
-            .list_schemas(state, &quoted_catalog)
-            .and_then(|value| value.try_iter())
-        {
-            let existing_schemas = BTreeSet::<String>::from_iter(
-                schemas_values.map(|value| value.to_string().to_lowercase()),
-            );
-            missing_catalog_schemas.extend(schemas.iter().filter_map(|(schema, unique_id)| {
-                if existing_schemas.contains(&schema.to_lowercase()) {
-                    None
-                } else {
-                    Some((catalog.clone(), schema.clone(), unique_id.clone()))
-                }
-            }));
-        } else {
-            missing_catalog_schemas.extend(
-                schemas.iter().map(|(schema, unique_id)| {
+        match adapter.list_schemas_typed(state, &quoted_catalog) {
+            Ok(schemas_values) => {
+                let existing_schemas = BTreeSet::<String>::from_iter(
+                    schemas_values.into_iter().map(|s| s.to_lowercase()),
+                );
+                missing_catalog_schemas.extend(schemas.iter().filter_map(|(schema, unique_id)| {
+                    if existing_schemas.contains(&schema.to_lowercase()) {
+                        None
+                    } else {
+                        Some((catalog.clone(), schema.clone(), unique_id.clone()))
+                    }
+                }));
+            }
+            // Fail fast on this Snowflake driver error,
+            // this indicates that the driver times out on the http request from the server
+            // after default number if retries in gosnowflake
+            // TODO: see if we can represent irrecoverable errors like this one using ErrorKind etc.
+            // we cannot currently because the ErrorKind::Driver is too inclusive that contain errors we want to ignore
+            Err(err)
+                if err.to_string().contains("context deadline exceeded")
+                    && adapter.adapter_type() == AdapterType::Snowflake =>
+            {
+                return Err(err);
+            }
+            Err(_) => {
+                missing_catalog_schemas.extend(schemas.iter().map(|(schema, unique_id)| {
                     (catalog.clone(), schema.clone(), unique_id.clone())
-                }),
-            );
+                }));
+            }
         }
     }
 

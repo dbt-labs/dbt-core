@@ -684,7 +684,7 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub port: Option<String>,
+    pub port: Option<StringOrInteger>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1492,10 +1492,10 @@ pub struct SnowflakeTargetEnv {
     pub query_tag: Option<QueryTag>,
     pub client_session_keep_alive: bool, // Default: false
     pub host: Option<String>,
-    pub port: Option<String>,
+    pub port: Option<StringOrInteger>,
     pub protocol: Option<String>,
     pub proxy_host: Option<String>,
-    pub proxy_port: Option<String>,
+    pub proxy_port: Option<StringOrInteger>,
     pub insecure_mode: bool,  // Default: false
     pub connect_retries: i64, // Default: 1
     pub connect_timeout: Option<i64>,
@@ -2174,6 +2174,43 @@ mod tests {
             panic!("expected snowflake target context");
         };
         assert_eq!(target.user.as_deref(), Some("user"));
+    }
+
+    #[test]
+    fn test_snowflake_port_accepts_integer_and_string() {
+        let cases = [
+            ("port: 9999", StringOrInteger::Integer(9999)),
+            (
+                "port: \"9999\"",
+                StringOrInteger::String("9999".to_string()),
+            ),
+        ];
+
+        for (port_yaml, expected_port) in cases {
+            let config: DbConfig = dbt_yaml::from_str(&format!(
+                "type: snowflake\n\
+                 account: acct\n\
+                 database: db\n\
+                 schema: schema\n\
+                 host: 127.0.0.1\n\
+                 {port_yaml}\n\
+                 protocol: http"
+            ))
+            .unwrap_or_else(|err| {
+                panic!("failed to parse snowflake config with {port_yaml}: {err}")
+            });
+
+            let DbConfig::Snowflake(snowflake_config) = config.clone() else {
+                panic!("expected snowflake config");
+            };
+            assert_eq!(snowflake_config.port, Some(expected_port.clone()));
+
+            let target = TargetContext::try_from(config).expect("snowflake target context");
+            let TargetContext::Snowflake(target) = target else {
+                panic!("expected snowflake target context");
+            };
+            assert_eq!(target.port, Some(expected_port));
+        }
     }
 
     #[test]

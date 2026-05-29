@@ -84,7 +84,7 @@ fn spawn_blackhole_listener() -> u16 {
 /// - `login_timeout` sets ADBC `login_timeout` → gosnowflake `Config.LoginTimeout`,
 ///   which becomes `retryHTTP.totalTimeout` for auth (the login retry budget, not
 ///   per-request wall clock; see gosnowflake `retry.go`).
-/// - `CLIENT_TIMEOUT` is fixed at `1ms` so each `http.Client.Do` fails fast instead
+/// - `AUTH_CLIENT_TIMEOUT` is fixed at `1ms` so each `http.Client.Do` fails fast instead
 ///   of blocking on gosnowflake's 900s default.
 fn build_stub_database_with(port: u16, login_timeout: &str) -> Box<dyn Database> {
     let mut driver = driver::Builder::new(Backend::Snowflake, driver::LoadStrategy::CdnCache)

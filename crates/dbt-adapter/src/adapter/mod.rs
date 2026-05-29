@@ -3,7 +3,6 @@ use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 use crate::engine::XdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
-use crate::macro_exec::*;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
@@ -39,7 +38,7 @@ use minijinja::arg_utils::ArgsIter;
 use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::{Kwargs, Object, ValueKind};
+use minijinja::value::{Object, ValueKind};
 use minijinja::{State, Value};
 use serde::Deserialize;
 use tracing;
@@ -974,14 +973,21 @@ impl Adapter {
     pub fn list_schemas(&self, state: &State, database: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let kwargs = Kwargs::from_iter([("database", Value::from(database))]);
-
-                let result = execute_macro_wrapper(state, &[Value::from(kwargs)], "list_schemas")?;
-                let result = adapter.list_schemas(result)?;
+                let result = adapter.list_schemas(state, database)?;
 
                 Ok(Value::from_iter(result))
             }
             Parse(_) => Ok(empty_vec_value()),
+        }
+    }
+
+    /// Typed variant of [`Adapter::list_schemas`] that returns the underlying
+    /// [`AdapterResult`] so callers can inspect the [`AdapterError`] kind
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    pub fn list_schemas_typed(&self, state: &State, database: &str) -> AdapterResult<Vec<String>> {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.list_schemas(state, database),
+            Parse(_) => Ok(Vec::new()),
         }
     }
 
