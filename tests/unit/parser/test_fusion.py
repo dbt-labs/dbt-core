@@ -288,7 +288,11 @@ class TestParseWithFusionTelemetry:
 
     def _patch_fire_event(self):
         events: list = []
-        return events, mock.patch("dbt.parser.fusion.fire_event", side_effect=events.append)
+
+        def _capture(event, *args, **kwargs):
+            events.append(event)
+
+        return events, mock.patch("dbt.parser.fusion.fire_event", side_effect=_capture)
 
     def test_success_fires_start_and_end_success(self, tmp_path: Path, _patch_fusion_deps):
         events, patch_fire = self._patch_fire_event()

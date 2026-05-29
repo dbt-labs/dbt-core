@@ -32,6 +32,7 @@ from dbt.exceptions import (
     FusionParserVersionError,
 )
 from dbt.flags import get_flags
+from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event, get_invocation_id
 
 if TYPE_CHECKING:
@@ -102,7 +103,8 @@ def parse_with_fusion(
                 error_class=type(e).__name__,
                 exit_code=getattr(e, "returncode", -1),
                 project_name=project_name,
-            )
+            ),
+            level=EventLevel.ERROR,
         )
         raise
 
@@ -113,7 +115,8 @@ def parse_with_fusion(
             error_class="",
             exit_code=-1,
             project_name=project_name,
-        )
+        ),
+        level=EventLevel.INFO,
     )
 
     manifest = Manifest.from_writable_manifest(writable_manifest)
