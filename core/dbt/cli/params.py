@@ -325,7 +325,7 @@ indirect_selection = _create_option_and_track_env_var(
 inline = _create_option_and_track_env_var(
     "--inline",
     envvar=None,
-    help="Pass SQL inline to dbt compile and show",
+    help="Pass SQL inline to 'dbt compile' and 'dbt show'",
 )
 
 sql = _create_option_and_track_env_var(
