@@ -562,6 +562,7 @@ fn determine_changeset_from_previous_resolved_nodes<'a>(
         prev_resolved_state.get_columns_in_relation_calls.clone();
     let mut patterned_dangling_sources = prev_resolved_state.patterned_dangling_sources.clone();
 
+    let impacted_nodes = invalidated.keys().cloned().collect();
     for node in invalidated {
         let unique_id = node.0;
         remove_node(&mut resolved_nodes.nodes, &unique_id);
@@ -581,6 +582,7 @@ fn determine_changeset_from_previous_resolved_nodes<'a>(
         unimpacted_get_columns_in_relation_calls: get_columns_in_relation_calls,
         unimpacted_patterned_dangling_sources: patterned_dangling_sources,
         changed_nodes: Arc::new(changed_nodes),
+        impacted_nodes: Arc::new(impacted_nodes),
     };
 
     // If too many files changed, the incremental cache is more expensive than a full

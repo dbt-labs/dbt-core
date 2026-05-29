@@ -1641,7 +1641,16 @@ impl DbtProjectCompilation {
             .task_runner
             .task_runner_ctx_factory
             .compiled_sql_cache();
-        if let Some(prev_changed_nodes) = compilation_cache_changes.map(|x| x.changed_nodes()) {
+        if let Some(prev_changed_nodes) = compilation_cache_changes.map(|x| {
+            // If any yml files were changed, invalidate
+            // the impacted nodes as they need to be re-rendered because
+            // the source names could have changed.
+            if x.did_any_yml_files_change() {
+                x.impacted_nodes()
+            } else {
+                x.changed_nodes()
+            }
+        }) {
             for node in prev_changed_nodes.iter() {
                 compiled_sql_cache.clear(node);
             }

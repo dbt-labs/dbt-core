@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use dbt_common::io_utils::YML_EXT;
 use dbt_common::path::DbtPath;
 use dbt_schemas::state::CacheState;
 
@@ -46,11 +47,23 @@ impl DbtProjectCompilationCacheChanges {
         &self.build_cache_changes.file_changes.changed_files
     }
 
+    pub fn did_any_yml_files_change(&self) -> bool {
+        self.build_cache_changes
+            .file_changes
+            .changed_files
+            .iter()
+            .any(|x| x.has_extension(YML_EXT))
+    }
+
     pub fn as_cache_state(&self) -> &CacheState {
         &self.build_cache_changes
     }
 
     pub fn changed_nodes(&self) -> &Arc<HashSet<String>> {
         &self.build_cache_changes.changed_nodes
+    }
+
+    pub fn impacted_nodes(&self) -> &Arc<HashSet<String>> {
+        &self.build_cache_changes.impacted_nodes
     }
 }

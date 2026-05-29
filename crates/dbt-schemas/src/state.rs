@@ -749,6 +749,8 @@ pub struct CacheState {
     /// The changed nodes, by unique id, based on file changes.
     /// Does not include any deleted or added nodes.
     pub changed_nodes: Arc<HashSet<String>>,
+    /// The impacted nodes, by unique id, from files changes.
+    pub impacted_nodes: Arc<HashSet<String>>,
 }
 impl CacheState {
     pub fn has_changes(&self) -> bool {
