@@ -12,13 +12,7 @@ use crate::{
 use arrow::array::RecordBatch;
 use arrow_schema::{DataType, Field, Schema};
 use chrono::{DateTime, Utc};
-use dbt_common::FsResult;
-use dbt_frontend_common::ident::Identifier;
-use dbt_schema_store::CanonicalFqn;
-use dbt_schemas::schemas::{
-    common::ResolvedQuoting,
-    relations::base::{BaseRelation, BaseRelationProperties},
-};
+use dbt_schemas::schemas::relations::base::BaseRelation;
 use minijinja::State;
 
 pub(crate) mod bigquery;
@@ -364,203 +358,43 @@ pub fn find_matching_relation(
     Ok(out)
 }
 
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-struct MockBaseRelation {
-    adapter_type: AdapterType,
-    database: String,
-    schema: String,
-    identifier: String,
-    quote_policy: ResolvedQuoting,
-    is_delta: Option<bool>,
-}
-
-impl MockBaseRelation {
-    #[cfg(test)]
-    pub fn new(
-        adapter_type: AdapterType,
-        database: String,
-        schema: String,
-        identifier: String,
-    ) -> Self {
-        Self {
-            adapter_type,
-            database,
-            schema,
-            identifier,
-            quote_policy: ResolvedQuoting {
-                database: true,
-                schema: true,
-                identifier: true,
-            },
-            is_delta: None,
-        }
-    }
-}
-
-impl BaseRelationProperties for MockBaseRelation {
-    fn is_database_relation(&self) -> bool {
-        false
-    }
-
-    fn include_policy(&self) -> ResolvedQuoting {
-        ResolvedQuoting {
-            database: true,
-            schema: true,
-            identifier: true,
-        }
-    }
-
-    fn quote_policy(&self) -> ResolvedQuoting {
-        self.quote_policy
-    }
-
-    fn get_database(&self) -> FsResult<String> {
-        Ok(self.database.clone())
-    }
-
-    fn get_schema(&self) -> FsResult<String> {
-        Ok(self.schema.clone())
-    }
-
-    fn get_identifier(&self) -> FsResult<String> {
-        Ok(self.identifier.clone())
-    }
-
-    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
-        Ok(CanonicalFqn::new(
-            &Identifier::new(self.get_database()?),
-            &Identifier::new(self.get_schema()?),
-            &Identifier::new(self.get_identifier()?),
-        ))
-    }
-}
-
-impl BaseRelation for MockBaseRelation {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn to_owned(&self) -> Arc<dyn BaseRelation> {
-        Arc::new(self.clone())
-    }
-
-    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        unimplemented!()
-    }
-
-    fn is_delta(&self) -> bool {
-        self.is_delta.unwrap_or(false)
-    }
-
-    fn set_is_delta(&mut self, is_delta: Option<bool>) {
-        self.is_delta = is_delta;
-    }
-
-    fn database(&self) -> Option<&str> {
-        Some(&self.database)
-    }
-
-    fn schema(&self) -> Option<&str> {
-        Some(&self.schema)
-    }
-
-    fn identifier(&self) -> Option<&str> {
-        Some(&self.identifier)
-    }
-
-    fn adapter_type(&self) -> AdapterType {
-        self.adapter_type
-    }
-
-    fn normalize_component(&self, component: &str) -> String {
-        component.to_lowercase()
-    }
-
-    fn create_relation(
-        &self,
-        _database: Option<String>,
-        _schema: Option<String>,
-        _identifier: Option<String>,
-        _relation_type: Option<dbt_schemas::dbt_types::RelationType>,
-        _quote_policy: ResolvedQuoting,
-    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        unimplemented!("relation creation in metadata adapter")
-    }
-
-    fn include_inner(
-        &self,
-        _policy: ResolvedQuoting,
-    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        Ok(Arc::new(self.clone()))
-    }
-
-    fn semantic_fqn(&self) -> String {
-        let mut parts = vec![];
-
-        if self.quote_policy().database {
-            parts.push(self.quoted(&self.database));
-        } else {
-            parts.push(self.quoted(&self.normalize_component(&self.database)));
-        }
-
-        if self.quote_policy().schema {
-            parts.push(self.quoted(&self.schema));
-        } else {
-            parts.push(self.quoted(&self.normalize_component(&self.schema)));
-        }
-
-        if self.quote_policy().identifier {
-            parts.push(self.quoted(&self.identifier));
-        } else {
-            parts.push(self.quoted(&self.normalize_component(&self.identifier)));
-        }
-
-        parts.join(".")
-    }
-
-    fn schema_as_resolved_str(&self) -> Result<String, minijinja::Error> {
-        Ok(self.schema.clone())
-    }
-
-    fn identifier_as_resolved_str(&self) -> Result<String, minijinja::Error> {
-        Ok(self.identifier.clone())
-    }
-
-    fn information_schema(
-        &self,
-        _view_name: &str,
-    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        unimplemented!("information_schema")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::relation::Relation;
+    use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
     use dbt_test_primitives::assert_contains;
 
     #[test]
     fn test_build_relation_clauses() {
         let relations = vec![
-            Arc::new(MockBaseRelation::new(
-                AdapterType::Snowflake,
-                "db1".to_string(),
-                "schema1".to_string(),
-                "table1".to_string(),
-            )) as Arc<dyn BaseRelation>,
-            Arc::new(MockBaseRelation::new(
-                AdapterType::Snowflake,
-                "db1".to_string(),
-                "schema2".to_string(),
-                "table2".to_string(),
-            )) as Arc<dyn BaseRelation>,
-            Arc::new(MockBaseRelation::new(
-                AdapterType::Snowflake,
-                "db2".to_string(),
-                "schema1".to_string(),
-                "table3".to_string(),
-            )) as Arc<dyn BaseRelation>,
+            Arc::new(
+                Relation::new(
+                    AdapterType::Snowflake,
+                    "db1".to_string(),
+                    "schema1".to_string(),
+                    "table1".to_string(),
+                )
+                .with_quoting(DEFAULT_RESOLVED_QUOTING),
+            ) as Arc<dyn BaseRelation>,
+            Arc::new(
+                Relation::new(
+                    AdapterType::Snowflake,
+                    "db1".to_string(),
+                    "schema2".to_string(),
+                    "table2".to_string(),
+                )
+                .with_quoting(DEFAULT_RESOLVED_QUOTING),
+            ) as Arc<dyn BaseRelation>,
+            Arc::new(
+                Relation::new(
+                    AdapterType::Snowflake,
+                    "db2".to_string(),
+                    "schema1".to_string(),
+                    "table3".to_string(),
+                )
+                .with_quoting(DEFAULT_RESOLVED_QUOTING),
+            ) as Arc<dyn BaseRelation>,
         ];
 
         let (where_clauses, relations_by_db) = build_relation_clauses(&relations).unwrap();
@@ -587,12 +421,15 @@ mod tests {
 
     #[test]
     fn test_build_relation_clauses_invalid_fqn() {
-        let relations = vec![Arc::new(MockBaseRelation::new(
-            AdapterType::Snowflake,
-            "invalid.fqn".to_string(), // This will cause an error as it contains a dot
-            "schema1".to_string(),
-            "table1".to_string(),
-        )) as Arc<dyn BaseRelation>];
+        let relations = vec![Arc::new(
+            Relation::new(
+                AdapterType::Snowflake,
+                "invalid.fqn".to_string(), // This will cause an error as it contains a dot
+                "schema1".to_string(),
+                "table1".to_string(),
+            )
+            .with_quoting(DEFAULT_RESOLVED_QUOTING),
+        ) as Arc<dyn BaseRelation>];
 
         let result = build_relation_clauses(&relations);
         assert!(result.is_err());
@@ -602,18 +439,24 @@ mod tests {
     #[test]
     fn test_find_matching_relation() {
         let relations = vec![
-            Arc::new(MockBaseRelation::new(
-                AdapterType::Snowflake,
-                "db1".to_string(),
-                "schema1".to_string(),
-                "table1".to_string(),
-            )) as Arc<dyn BaseRelation>,
-            Arc::new(MockBaseRelation::new(
-                AdapterType::Snowflake,
-                "db1".to_string(),
-                "schema2".to_string(),
-                "table2".to_string(),
-            )) as Arc<dyn BaseRelation>,
+            Arc::new(
+                Relation::new(
+                    AdapterType::Snowflake,
+                    "db1".to_string(),
+                    "schema1".to_string(),
+                    "table1".to_string(),
+                )
+                .with_quoting(DEFAULT_RESOLVED_QUOTING),
+            ) as Arc<dyn BaseRelation>,
+            Arc::new(
+                Relation::new(
+                    AdapterType::Snowflake,
+                    "db1".to_string(),
+                    "schema2".to_string(),
+                    "table2".to_string(),
+                )
+                .with_quoting(DEFAULT_RESOLVED_QUOTING),
+            ) as Arc<dyn BaseRelation>,
         ];
 
         let result = find_matching_relation("schema1", "table1", &relations).unwrap();

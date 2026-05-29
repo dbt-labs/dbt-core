@@ -1289,6 +1289,277 @@ mod tests {
         }
     }
 
+    /// This module tests all the fallback behaviors that are not adapter-type specific
+    mod generic {
+        use super::*;
+        use chrono::{DateTime, NaiveDate, Utc};
+        use dbt_schemas::filter::{RunFilter, Sample};
+
+        fn relation(quoting: Policy) -> Relation {
+            Relation::new(
+                AdapterType::Postgres,
+                "test_db".to_string(),
+                "test_schema".to_string(),
+                "test_table".to_string(),
+            )
+            .with_quoting(quoting)
+        }
+
+        #[test]
+        fn test_get_components() {
+            let relation = relation(Policy::enabled());
+            assert_eq!(
+                relation.get("database", None).unwrap(),
+                Value::from("test_db")
+            );
+            assert_eq!(
+                relation.get("schema", None).unwrap(),
+                Value::from("test_schema")
+            );
+            assert_eq!(
+                relation.get("identifier", None).unwrap(),
+                Value::from("test_table")
+            );
+        }
+
+        #[test]
+        fn test_get_metadata() {
+            let result = relation(Policy::enabled()).get("metadata", None).unwrap();
+            let mut expected = BTreeMap::new();
+            expected.insert("type", Value::from(std::any::type_name::<Relation>()));
+            assert_eq!(result, Value::from(expected));
+        }
+
+        #[test]
+        fn test_get_nonexistent() {
+            let relation = relation(Policy::enabled());
+            assert_eq!(
+                relation
+                    .get("nonexistent", Some(Value::from("default_value")))
+                    .unwrap(),
+                Value::from("default_value")
+            );
+            assert_eq!(relation.get("nonexistent", None).unwrap(), Value::UNDEFINED);
+        }
+
+        fn fqn_relation(quoting: Policy) -> Relation {
+            Relation::new(
+                AdapterType::Postgres,
+                "MyDB".to_string(),
+                "MySchema".to_string(),
+                "MyTable".to_string(),
+            )
+            .with_quoting(quoting)
+        }
+
+        #[test]
+        fn test_normalized_fqn_all_quoted() {
+            let relation = fqn_relation(Policy {
+                database: true,
+                schema: true,
+                identifier: true,
+            });
+            assert_eq!(relation.semantic_fqn(), "\"MyDB\".\"MySchema\".\"MyTable\"");
+        }
+
+        #[test]
+        fn test_normalized_fqn_none_quoted() {
+            let relation = fqn_relation(Policy {
+                database: false,
+                schema: false,
+                identifier: false,
+            });
+            assert_eq!(relation.semantic_fqn(), "\"mydb\".\"myschema\".\"mytable\"");
+        }
+
+        #[test]
+        fn test_normalized_fqn_mixed_quoted() {
+            let relation = fqn_relation(Policy {
+                database: true,
+                schema: false,
+                identifier: true,
+            });
+            assert_eq!(relation.semantic_fqn(), "\"MyDB\".\"myschema\".\"MyTable\"");
+        }
+
+        fn filter_relation() -> Relation {
+            Relation::new(
+                AdapterType::Postgres,
+                "my_db".to_string(),
+                "my_schema".to_string(),
+                "my_table".to_string(),
+            )
+            .with_quoting(Policy::disabled())
+        }
+
+        #[test]
+        fn test_render_with_run_filter_empty() {
+            let run_filter = RunFilter {
+                empty: true,
+                sample: None,
+            };
+            let result = filter_relation().render_with_run_filter(&run_filter, &None);
+            assert_eq!(result, "(select * from my_db.my_schema.my_table limit 0)");
+        }
+
+        #[test]
+        fn test_render_with_run_filter_no_sample() {
+            let run_filter = RunFilter {
+                empty: false,
+                sample: None,
+            };
+            let event_time = Some("created_at".to_string());
+            let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
+            assert_eq!(result, "my_db.my_schema.my_table");
+        }
+
+        #[test]
+        fn test_render_with_run_filter_both_start_and_end() {
+            let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap();
+            let end = NaiveDate::from_ymd_opt(2024, 7, 8)
+                .unwrap()
+                .and_hms_opt(18, 0, 0)
+                .unwrap();
+
+            let sample = Sample {
+                start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+                end: Some(DateTime::<Utc>::from_naive_utc_and_offset(end, Utc)),
+            };
+
+            let run_filter = RunFilter {
+                empty: false,
+                sample: Some(sample),
+            };
+            let event_time = Some("created_at".to_string());
+
+            let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
+            assert_eq!(
+                result,
+                "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
+            );
+        }
+
+        #[test]
+        fn test_render_with_run_filter_start_only() {
+            let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap();
+
+            let sample = Sample {
+                start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+                end: None,
+            };
+
+            let run_filter = RunFilter {
+                empty: false,
+                sample: Some(sample),
+            };
+            let event_time = Some("created_at".to_string());
+
+            let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
+            assert_eq!(
+                result,
+                "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00+00:00')"
+            );
+        }
+
+        #[test]
+        fn test_render_with_run_filter_end_only() {
+            let end = NaiveDate::from_ymd_opt(2024, 7, 8)
+                .unwrap()
+                .and_hms_opt(18, 0, 0)
+                .unwrap();
+
+            let sample = Sample {
+                start: None,
+                end: Some(DateTime::<Utc>::from_naive_utc_and_offset(end, Utc)),
+            };
+
+            let run_filter = RunFilter {
+                empty: false,
+                sample: Some(sample),
+            };
+            let event_time = Some("created_at".to_string());
+
+            let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
+            assert_eq!(
+                result,
+                "(select * from my_db.my_schema.my_table where created_at < '2024-07-08T18:00:00+00:00')"
+            );
+        }
+
+        #[test]
+        fn test_render_with_run_filter_sample_none_values() {
+            let sample = Sample {
+                start: None,
+                end: None,
+            };
+
+            let run_filter = RunFilter {
+                empty: false,
+                sample: Some(sample),
+            };
+            let event_time = Some("created_at".to_string());
+
+            let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
+            assert_eq!(result, "my_db.my_schema.my_table");
+        }
+
+        #[test]
+        fn test_render_with_run_filter_no_event_time_error() {
+            let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap();
+
+            let sample = Sample {
+                start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+                end: None,
+            };
+
+            let run_filter = RunFilter {
+                empty: false,
+                sample: Some(sample),
+            };
+
+            let result = filter_relation().render_with_run_filter(&run_filter, &None);
+            assert_eq!(result, "my_db.my_schema.my_table");
+        }
+
+        #[test]
+        fn test_render_with_run_filter_empty_and_sample() {
+            let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap();
+            let end = NaiveDate::from_ymd_opt(2024, 7, 8)
+                .unwrap()
+                .and_hms_opt(18, 0, 0)
+                .unwrap();
+
+            let sample = Sample {
+                start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+                end: Some(DateTime::<Utc>::from_naive_utc_and_offset(end, Utc)),
+            };
+
+            let run_filter = RunFilter {
+                empty: true,
+                sample: Some(sample),
+            };
+            let event_time = Some("created_at".to_string());
+
+            let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
+            assert_eq!(
+                result,
+                "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
+            );
+        }
+    }
+
     mod databricks {
         use super::*;
 
@@ -1570,6 +1841,7 @@ mod tests {
             assert!(!include_policy(AdapterType::DuckDB, &path_from_db(None)).database);
         }
     }
+
     mod snowflake {
         use super::*;
 
@@ -1596,49 +1868,49 @@ mod tests {
         }
     }
 
-    /// ClickHouse uses `schema` as the effective database — its include policy
-    /// is `database=false`, so even when a database is supplied to
-    /// `api.Relation.create(...)`, the rendered FQN must skip the database
-    /// segment and produce `` `<schema>`.`<identifier>` ``.
-    #[test]
-    fn test_try_new_via_static_base_relation_clickhouse_normalizes_database_to_empty_string() {
-        let relation_type = RelationStatic {
-            adapter_type: AdapterType::ClickHouse,
-            quoting: DEFAULT_RESOLVED_QUOTING,
-        };
+    mod clickhouse {
+        use super::*;
 
-        let from_none = relation_type
-            .try_new(
-                None,
-                Some("my_schema".to_string()),
-                Some("my_table".to_string()),
-                Some(RelationType::Table),
-                Some(DEFAULT_RESOLVED_QUOTING),
-                None,
-            )
-            .unwrap();
-        let from_none = from_none.downcast_object::<RelationObject>().unwrap();
-        assert_eq!(from_none.inner().database(), Some(""));
-        assert_eq!(
-            from_none.inner().render_self_as_str(),
-            "`my_schema`.`my_table`"
-        );
+        #[test]
+        fn test_try_new_via_static_base_relation_normalizes_database_to_empty_string() {
+            let relation_type = RelationStatic {
+                adapter_type: AdapterType::ClickHouse,
+                quoting: DEFAULT_RESOLVED_QUOTING,
+            };
 
-        let from_supplied = relation_type
-            .try_new(
-                Some("ignored_db".to_string()),
-                Some("my_schema".to_string()),
-                Some("my_table".to_string()),
-                Some(RelationType::Table),
-                Some(DEFAULT_RESOLVED_QUOTING),
-                None,
-            )
-            .unwrap();
-        let from_supplied = from_supplied.downcast_object::<RelationObject>().unwrap();
-        assert_eq!(from_supplied.inner().database(), Some(""));
-        assert_eq!(
-            from_supplied.inner().render_self_as_str(),
-            "`my_schema`.`my_table`"
-        );
+            let from_none = relation_type
+                .try_new(
+                    None,
+                    Some("my_schema".to_string()),
+                    Some("my_table".to_string()),
+                    Some(RelationType::Table),
+                    Some(DEFAULT_RESOLVED_QUOTING),
+                    None,
+                )
+                .unwrap();
+            let from_none = from_none.downcast_object::<RelationObject>().unwrap();
+            assert_eq!(from_none.inner().database(), Some(""));
+            assert_eq!(
+                from_none.inner().render_self_as_str(),
+                "`my_schema`.`my_table`"
+            );
+
+            let from_supplied = relation_type
+                .try_new(
+                    Some("ignored_db".to_string()),
+                    Some("my_schema".to_string()),
+                    Some("my_table".to_string()),
+                    Some(RelationType::Table),
+                    Some(DEFAULT_RESOLVED_QUOTING),
+                    None,
+                )
+                .unwrap();
+            let from_supplied = from_supplied.downcast_object::<RelationObject>().unwrap();
+            assert_eq!(from_supplied.inner().database(), Some(""));
+            assert_eq!(
+                from_supplied.inner().render_self_as_str(),
+                "`my_schema`.`my_table`"
+            );
+        }
     }
 }
