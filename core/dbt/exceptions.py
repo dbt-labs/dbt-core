@@ -9,6 +9,7 @@ from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import (
     CommandResultError,
     CompilationError,
+    DbtBaseException,
     DbtConfigError,
     DbtInternalError,
     DbtRuntimeError,
@@ -83,6 +84,26 @@ class AliasError(DbtValidationError):
 class DependencyError(DbtRuntimeError):
     CODE = 10006
     MESSAGE = "Dependency Error"
+
+
+class FusionParserError(DbtRuntimeError):
+    CODE = 10025
+    MESSAGE = "Fusion Parser Error"
+
+
+class FusionParserMissingError(FusionParserError):
+    CODE = 10026
+    MESSAGE = "Fusion Parser Missing"
+
+
+class FusionParserSchemaError(FusionParserError):
+    CODE = 10027
+    MESSAGE = "Fusion Parser Schema Error"
+
+
+class FusionParserVersionError(FusionParserError):
+    CODE = 10028
+    MESSAGE = "Fusion Parser Version Error"
 
 
 class FailFastError(DbtRuntimeError):
@@ -1500,3 +1521,53 @@ class RPCLoadException(DbtRuntimeError):
 
     def data(self):
         return {"cause": self.cause, "message": self.msg}
+
+
+class AuthError(DbtBaseException):
+    pass
+
+
+class NotAuthenticated(AuthError):
+    def __init__(self):
+        super().__init__("not authenticated: no credentials found")
+
+
+class AuthenticationExpired(AuthError):
+    def __init__(self):
+        super().__init__("authentication expired")
+
+
+class InaccessibleSource(AuthError):
+    def __init__(self, source: str, cause: Exception):
+        self.source = source
+        self.cause = cause
+        super().__init__(f"inaccessible source ({source}): {cause}")
+
+
+class MalformedAuthConfig(AuthError):
+    def __init__(self, detail: str):
+        super().__init__(f"malformed auth config: {detail}")
+
+
+class InteractiveAuthError(AuthError):
+    def __init__(self, detail: str):
+        super().__init__(f"interactive auth failed: {detail}")
+
+
+class AuthAborted(AuthError):
+    def __init__(self):
+        super().__init__("interactive auth aborted")
+
+
+class InadequateScopes(AuthError):
+    def __init__(self, requested: list[str], cached: list[str]):
+        self.requested = requested
+        self.cached = cached
+        super().__init__(
+            f"inadequate scopes: cached session has {cached!r} but {requested!r} are required"
+        )
+
+
+class RefreshFailed(AuthError):
+    def __init__(self, detail: str):
+        super().__init__(f"token refresh failed: {detail}")

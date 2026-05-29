@@ -418,6 +418,25 @@ macro_debugging = _create_option_and_track_env_var(
     hidden=True,
 )
 
+skip_browser_auth = _create_option_and_track_env_var(
+    "--skip-browser-auth/--no-skip-browser-auth",
+    envvar="DBT_ENGINE_SKIP_BROWSER_AUTH",
+    help="Skip opening the browser and print the authentication URL instead.",
+    default=False,
+)
+
+
+manage_state = _create_option_and_track_env_var(
+    "--manage-state/--no-manage-state",
+    envvar="DBT_ENGINE_MANAGE_STATE",
+    help=(
+        "Opt in to loading the bundled dbt-state plugin (installed as a dependency "
+        "of dbt-core). Default false. Pass --manage-state to enable auto-discovery "
+        "and the plugin's runtime behavior."
+    ),
+    default=False,
+)
+
 
 sqlparse_options = _create_option_and_track_env_var(
     "--sqlparse",
@@ -785,6 +804,22 @@ use_fast_test_edges = _create_option_and_track_env_var(
     "--use-fast-test-edges/--no-use-fast-test-edges",
     envvar="DBT_USE_FAST_TEST_EDGES",
     default=False,
+    hidden=True,
+)
+
+use_v2_parser = _create_option_and_track_env_var(
+    "--use-v2-parser/--no-use-v2-parser",
+    envvar="DBT_ENGINE_USE_V2_PARSER",
+    help="Delegate parsing to the fusion parser instead of running dbt-core's own parser.",
+    default=False,
+    hidden=False,
+)
+
+v2_parser = _create_option_and_track_env_var(
+    "--v2-parser",
+    envvar="DBT_ENGINE_V2_PARSER",
+    help="Command to invoke for the fusion parser when --use-v2-parser is set. Defaults to the bundled 'dbt-core-experimental-parser' binary.",
+    default="dbt-core-experimental-parser parse",
     hidden=True,
 )
 
