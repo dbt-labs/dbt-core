@@ -261,7 +261,7 @@ impl Task for RunTask {
                                     }
                                     Err(err) => {
                                         emit_warn_log_message(
-                                            ErrorCode::RunCacheServiceWarn,
+                                            ErrorCode::StateServiceWarn,
                                             format!(
                                                 "dbt State service clone failed for node {}: {err}; executing normally",
                                                 self.node.unique_id()
@@ -572,7 +572,7 @@ async fn run_cache_after_success_action(
                 && let Err(err) = refresh_final_last_modified_epoch_for_node(ctx, node).await
             {
                 emit_warn_log_message(
-                    ErrorCode::RunCacheServiceWarn,
+                    ErrorCode::StateServiceWarn,
                     format!(
                         "dbt State post-execution metadata refresh failed for node {}: {err}; command remains successful",
                         node.unique_id()

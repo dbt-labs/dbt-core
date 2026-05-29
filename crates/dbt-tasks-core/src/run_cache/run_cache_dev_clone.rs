@@ -46,7 +46,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
         Ok(None) => return,
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State dev clone request preparation failed for node {node_id}: {err}; executing normally"
                 ),
@@ -60,7 +60,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
         Ok(response) => response,
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State dev clone registration failed for node {node_id}: {err}; executing normally"
                 ),
@@ -124,7 +124,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
         }
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State dev clone SQL failed for node {node_id}: {err}; executing normally"
                 ),

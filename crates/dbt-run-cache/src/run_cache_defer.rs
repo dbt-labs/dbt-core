@@ -121,7 +121,7 @@ fn run_cache_auto_defer_config(
         Ok(config) => config,
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State auto-deferral config failed: {err}; continuing without synthesized defer state"
                 ),

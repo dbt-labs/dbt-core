@@ -83,7 +83,7 @@ async fn initialize_run_cache_service(
                 1,
             );
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State service config failed: {}; executing normally",
                     format_error_chain(&err)
@@ -133,7 +133,7 @@ async fn initialize_run_cache_service(
                 1,
             );
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State service client initialization failed: {}; executing normally",
                     format_error_chain(&err)
@@ -173,7 +173,7 @@ async fn initialize_run_cache_service(
                 1,
             );
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 "dbt State service does not support this client version; executing normally",
                 None,
             );
@@ -189,7 +189,7 @@ async fn initialize_run_cache_service(
                 1,
             );
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 "dbt State service validation was skipped; executing normally",
                 None,
             );

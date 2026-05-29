@@ -1206,7 +1206,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
                 // with empty defaults that would misqualify unqualified
                 // references downstream.
                 emit_warn_log_message(
-                    ErrorCode::RunCacheServiceWarn,
+                    ErrorCode::StateServiceWarn,
                     format!(
                         "Skipping view definition: could not parse `View Catalog and Namespace` ({catalog_and_ns:?}) or fqn ({fqn})"
                     ),

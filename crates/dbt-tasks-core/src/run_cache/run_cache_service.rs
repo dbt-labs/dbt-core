@@ -413,7 +413,7 @@ pub fn insert_compiled_view_definition(
     // downstream lookups keyed by `semantic_fqn`.
     let Ok(cfqn) = relation.get_canonical_fqn() else {
         emit_warn_log_message(
-            ErrorCode::RunCacheServiceWarn,
+            ErrorCode::StateServiceWarn,
             format!(
                 "Skipping compiled view definition insert for node {}: canonical FQN unavailable; cannot determine deferral status",
                 node.unique_id()
@@ -498,7 +498,7 @@ pub async fn run_cache_service_before_execution(
 ) -> RunCacheServiceDecision {
     if !ctx.inner.run_cache_ctx.run_cache_service_requested {
         emit_warn_log_message(
-            ErrorCode::RunCacheServiceWarn,
+            ErrorCode::StateServiceWarn,
             format!(
                 "dbt State service hook reached while service mode is disabled for node {}; executing normally",
                 node.unique_id()
@@ -510,7 +510,7 @@ pub async fn run_cache_service_before_execution(
 
     let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
         emit_warn_log_message(
-            ErrorCode::RunCacheServiceWarn,
+            ErrorCode::StateServiceWarn,
             format!(
                 "dbt State service was requested but no validated client is available for node {}; executing normally",
                 node.unique_id()
@@ -535,7 +535,7 @@ pub async fn run_cache_service_before_execution(
             }
             Err(err) => {
                 emit_warn_log_message(
-                    ErrorCode::RunCacheServiceWarn,
+                    ErrorCode::StateServiceWarn,
                     format!(
                         "dbt State service record preparation failed for node {}: {err}; executing normally",
                         node.unique_id()
@@ -602,7 +602,7 @@ pub async fn run_cache_service_before_execution(
         }
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State service submit failed for node {}: {err}; executing normally",
                     node.unique_id()
@@ -640,7 +640,7 @@ pub async fn confirm_run_cache_service_execution(
             Ok(epoch) => epoch,
             Err(err) => {
                 emit_warn_log_message(
-                    ErrorCode::RunCacheServiceWarn,
+                    ErrorCode::StateServiceWarn,
                     format!(
                         "dbt State service final metadata lookup failed for node {}: {err}; command remains successful",
                         node.unique_id()
@@ -658,7 +658,7 @@ pub async fn confirm_run_cache_service_execution(
 
     let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
         emit_warn_log_message(
-            ErrorCode::RunCacheServiceWarn,
+            ErrorCode::StateServiceWarn,
             format!(
                 "dbt State service confirmation skipped because no validated client is available (node {}, request_id {})",
                 node.unique_id(),
@@ -677,7 +677,7 @@ pub async fn confirm_run_cache_service_execution(
         Ok(None) => return,
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State service confirmation metadata lookup failed for node {}: {err}; command remains successful",
                     node.unique_id()
@@ -691,7 +691,7 @@ pub async fn confirm_run_cache_service_execution(
     let request_id = request.request_id.clone();
     if let Err(err) = client.confirm_execution(request).await {
         emit_warn_log_message(
-            ErrorCode::RunCacheServiceWarn,
+            ErrorCode::StateServiceWarn,
             format!(
                 "dbt State service confirmation failed for node {} (request_id {request_id}): {err}; command remains successful",
                 node.unique_id()
@@ -725,7 +725,7 @@ pub async fn record_run_cache_service_execution(
 
     let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
         emit_warn_log_message(
-            ErrorCode::RunCacheServiceWarn,
+            ErrorCode::StateServiceWarn,
             format!(
                 "dbt State service record skipped for node {} because no validated client is available",
                 node.unique_id()
@@ -743,7 +743,7 @@ pub async fn record_run_cache_service_execution(
         Ok(None) => return,
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State service record metadata lookup failed for node {}: {err}; command remains successful",
                     node.unique_id()
@@ -756,7 +756,7 @@ pub async fn record_run_cache_service_execution(
 
     if let Err(err) = client.record_executions(request).await {
         emit_warn_log_message(
-            ErrorCode::RunCacheServiceWarn,
+            ErrorCode::StateServiceWarn,
             format!(
                 "dbt State service record failed for node {}: {err}; command remains successful",
                 node.unique_id()
@@ -1386,7 +1386,7 @@ fn resolve_tolerate_nondeterminism(
         }
     }
     emit_warn_log_message(
-        ErrorCode::RunCacheServiceWarn,
+        ErrorCode::StateServiceWarn,
         format!(
             "Ignoring meta.{KEY} on node {}: value is not a bool, int, or recognized string",
             node.unique_id()

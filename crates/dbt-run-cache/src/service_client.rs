@@ -427,7 +427,7 @@ where
         Ok(status) => status,
         Err(err) => {
             emit_warn_log_message(
-                ErrorCode::RunCacheServiceWarn,
+                ErrorCode::StateServiceWarn,
                 format!(
                     "dbt State client validation failed: {}; executing normally",
                     format_error_chain(&err)
