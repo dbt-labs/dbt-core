@@ -535,6 +535,8 @@ pub fn save_parse_state(
         out_dir: &io.out_dir,
         version: INCREMENTAL_STATE_VERSION,
         dbt_version: &current_dbt_version(),
+        project_name: packages.first().map_or("", |p| p.package_name.as_str()),
+        adapter_type: dbt_state.dbt_profile.db_config.adapter_type().into(),
         profile_hash: &dbt_state.dbt_profile.blake3_hash(),
         profile_file_hash: &hash_file_at_path(&profile_file_path),
         project_file_hash: &hash_file_at_path(&project_file_path),
