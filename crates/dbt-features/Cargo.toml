@@ -26,7 +26,9 @@ dbt-docs-server = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
+dbt-loader = { workspace = true }
 dbt-login = { workspace = true }
+dbt-parser = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }

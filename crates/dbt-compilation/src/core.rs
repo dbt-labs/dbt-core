@@ -29,12 +29,14 @@ use dbt_jinja_utils::{
 use dbt_loader::{
     args::{IoArgs, LoadArgs},
     load,
+    loader_hooks::LoaderHooks,
 };
 use dbt_metadata::parse_cache::{
     PreviousResolvedState, add_all_unchanged_nodes,
     determine_cache_state_from_previous_previous_resolved_nodes, drop_all_unchanged_nodes,
 };
 use dbt_parser::args::ResolveArgs;
+use dbt_parser::resolver_hooks::ResolverHooks;
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
@@ -67,6 +69,7 @@ async fn load_phase(
     maybe_prev_loaded_project: Option<&DbtLoadedProject>,
     tracing_config: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
+    loader_hooks: Arc<dyn LoaderHooks>,
 ) -> FsResult<DbtLoadedProject> {
     // Set previous state for incremental compilation if provided
     if let Some(prev_dbt_state) = maybe_prev_loaded_project
@@ -78,7 +81,14 @@ async fn load_phase(
     }
 
     // Load dbt project
-    let dbt_state = load(&load_args, invocation_args, tracing_config, token).await?;
+    let dbt_state = load(
+        &load_args,
+        invocation_args,
+        tracing_config,
+        token,
+        loader_hooks,
+    )
+    .await?;
 
     Ok(DbtLoadedProject {
         config,
@@ -96,6 +106,7 @@ async fn resolve_phase(
     cache_state: Option<&CacheState>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    resolver_hooks: Arc<dyn ResolverHooks>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     use dbt_parser::resolver::resolve;
     use dbt_schemas::schemas::Nodes;
@@ -157,6 +168,7 @@ async fn resolve_phase(
         patterned_dangling_sources,
         token,
         jinja_type_checking_event_listener_factory,
+        resolver_hooks,
     )
     .await?;
     // Add unchanged nodes back if we have cache
@@ -400,6 +412,7 @@ impl DbtLoadedProject {
         prev_loaded_project: Option<&DbtLoadedProject>,
         tracing_config: Option<&dyn TracingConfigProvider>,
         token: &CancellationToken,
+        loader_hooks: Arc<dyn LoaderHooks>,
     ) -> FsResult<DbtLoadedProject> {
         load_phase(
             config,
@@ -410,6 +423,7 @@ impl DbtLoadedProject {
             prev_loaded_project,
             tracing_config,
             token,
+            loader_hooks,
         )
         .await
     }
@@ -528,6 +542,7 @@ impl DbtLoadedProject {
         cache_state: Option<&CacheState>,
         token: &CancellationToken,
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+        resolver_hooks: Arc<dyn ResolverHooks>,
     ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
         resolve_phase(
             self,
@@ -536,6 +551,7 @@ impl DbtLoadedProject {
             cache_state,
             token,
             jinja_type_checking_event_listener_factory,
+            resolver_hooks,
         )
         .await
     }

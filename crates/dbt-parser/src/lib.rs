@@ -31,6 +31,8 @@ mod renderer_test;
 /// All of the individual resolve functions broken out into their own files
 pub mod resolve;
 pub mod resolver;
+/// Hooks for extending resolver behavior
+pub mod resolver_hooks;
 pub mod sql_file_info;
 pub mod tests;
 mod unused_config_paths;

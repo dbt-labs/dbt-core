@@ -193,6 +193,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             maybe_prev_loaded_project,
             Some(feature_stack.tracing.config_provider.as_ref()),
             &self.token,
+            feature_stack.loader.hooks.clone(),
         )
         .await?;
         self.token.check_cancellation()?;
@@ -1158,6 +1159,7 @@ impl DbtProjectCompilation {
                     build_cache_changes.as_ref(),
                     token,
                     jinja_type_checking_event_listener_factory.clone(),
+                    feature_stack.resolver.hooks.clone(),
                 )
                 .await?
         };

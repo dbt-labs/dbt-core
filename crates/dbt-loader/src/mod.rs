@@ -1,13 +1,13 @@
-mod cloud_http_client;
+pub mod cloud_http_client;
 mod deps;
 mod download_manifest;
-mod download_publication;
 mod load_packages;
 mod load_profiles;
 mod load_vars;
 mod upload_artifact_ingest;
 
 pub mod loader;
+pub mod loader_hooks;
 
 pub use deps::execute_deps_command;
 pub use download_manifest::CloudManifestDownloader;

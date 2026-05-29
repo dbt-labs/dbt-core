@@ -10,7 +10,9 @@ use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
 use crate::cli_extension::CliExtensionFeature;
 use crate::index::IndexFeature;
+use crate::loader::LoaderFeature;
 use crate::metricflow::MetricflowFeature;
+use crate::resolver::ResolverFeature;
 use crate::sidecar::SidecarFeature;
 use crate::task_runner::TaskRunnerFeature;
 use crate::tracing::TracingFeature;
@@ -33,6 +35,8 @@ pub struct FeatureStack {
     pub sidecar: SidecarFeature,
     pub metricflow: MetricflowFeature,
     pub task_runner: TaskRunnerFeature,
+    pub resolver: ResolverFeature,
+    pub loader: LoaderFeature,
     pub license_fetcher: Arc<dyn LicenseFetcher>,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to

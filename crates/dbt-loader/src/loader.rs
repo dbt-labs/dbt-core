@@ -56,7 +56,7 @@ use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, ResourcePathKind};
 
 use crate::args::{IoArgs, LoadArgs};
 use crate::dbt_project_yml_loader::load_project_yml;
-use crate::download_publication::download_publication_artifacts;
+use crate::loader_hooks::LoaderHooks;
 use crate::utils::{collect_file_info, identify_package_dependencies};
 use crate::{
     construct_internal_packages, load_internal_packages, load_packages, load_profiles, load_vars,
@@ -182,6 +182,7 @@ pub async fn load(
     iarg: Cow<'_, InvocationArgs>,
     tracing_features: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
+    loader_hooks: Arc<dyn LoaderHooks>,
 ) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile, vars_from_file) =
         load_simplified_project_and_profiles(arg).await?;
@@ -450,8 +451,8 @@ pub async fn load(
     );
 
     if !is_time_machine_replay {
-        // get publication artifact for each upstream project
-        download_publication_artifacts(&upstream_projects, &dbt_state.cloud_config, &arg.io)
+        loader_hooks
+            .download_artifacts(&upstream_projects, &dbt_state.cloud_config, &arg.io)
             .await?;
     }
 

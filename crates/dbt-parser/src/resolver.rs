@@ -30,6 +30,7 @@ use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
 use crate::resolve::resolve_groups::resolve_groups;
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::resolve::resolve_query_comment::resolve_query_comment;
+use crate::resolver_hooks::ResolverHooks;
 use crate::utils::{self, clear_package_diagnostics};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::common::DbtQuoting;
@@ -97,6 +98,7 @@ pub async fn resolve(
     patterned_dangling_sources: PatternedDanglingSources,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    resolver_hooks: Arc<dyn ResolverHooks>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
@@ -183,6 +185,7 @@ pub async fn resolve(
 
     // let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
+    resolver_hooks.pre_resolve(&arg.io, adapter_type, &mut nodes, root_project_quoting)?;
     let root_project_configs = build_root_project_configs(
         arg,
         dbt_state.root_project(),
@@ -368,6 +371,13 @@ pub async fn resolve(
 
     // Check access
     let nodes_with_access_errors = check_access(arg, &nodes, &all_runtime_configs);
+    resolver_hooks.post_resolve(
+        &arg.io,
+        &mut nodes,
+        root_project_name,
+        root_project_quoting,
+        &dbt_state.cloud_config,
+    )?;
 
     // Set the project name on nodes so that `package:this` selectors can resolve
     nodes.project_name = Some(root_project_name.to_string());

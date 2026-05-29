@@ -52,7 +52,9 @@ use crate::cli_extension::{
 };
 use crate::feature_stack::{FeatureStack, InstrumentationFeature};
 use crate::index::{IndexFeature, IndexHooks};
+use crate::loader::LoaderFeature;
 use crate::metricflow::MetricflowFeature;
+use crate::resolver::ResolverFeature;
 use crate::sidecar::SidecarFeature;
 use crate::task_runner::TaskRunnerFeature;
 use crate::tracing::TracingFeature;
@@ -211,6 +213,8 @@ pub struct FeatureStackBuilder {
     sidecar: SidecarFeature,
     cli_extension: CliExtensionFeature,
     task_runner: TaskRunnerFeature,
+    resolver: ResolverFeature,
+    loader: LoaderFeature,
     license_fetcher: Arc<dyn LicenseFetcher>,
     dbt_distribution: &'static str,
 }
@@ -258,6 +262,8 @@ impl FeatureStackBuilder {
             sidecar: SidecarFeature::default(),
             cli_extension,
             task_runner,
+            resolver: ResolverFeature::default(),
+            loader: LoaderFeature::default(),
             license_fetcher: Arc::new(NoOpLicenseFetcher),
             dbt_distribution: "unknown-oss",
         }
@@ -298,6 +304,16 @@ impl FeatureStackBuilder {
         self
     }
 
+    pub fn resolver(mut self, feature: ResolverFeature) -> Self {
+        self.resolver = feature;
+        self
+    }
+
+    pub fn loader(mut self, feature: LoaderFeature) -> Self {
+        self.loader = feature;
+        self
+    }
+
     pub fn build(self) -> Box<FeatureStack> {
         let instrumentation = InstrumentationFeature {
             event_emitter: vortex_events::fusion_sa_event_emitter(
@@ -318,6 +334,8 @@ impl FeatureStackBuilder {
             sidecar: self.sidecar,
             metricflow: MetricflowFeature::default(),
             task_runner: self.task_runner,
+            resolver: self.resolver,
+            loader: self.loader,
             license_fetcher: self.license_fetcher,
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),

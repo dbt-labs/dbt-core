@@ -5,20 +5,20 @@ use reqwest_retry::{
     RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
 };
 
-pub(crate) const MAX_CLIENT_RETRIES: u32 = 3;
+pub const MAX_CLIENT_RETRIES: u32 = 3;
 
 /// Builds a URL under the dbt Cloud private API base path:
 /// `https://{host}/api/private/accounts/{account_id}/{path}`
-pub(crate) fn build_private_api_url(host: &str, account_id: &str, path: &str) -> String {
+pub fn build_private_api_url(host: &str, account_id: &str, path: &str) -> String {
     format!("https://{host}/api/private/accounts/{account_id}/{path}")
 }
 
-pub(crate) enum CloudAuthScheme {
+pub enum CloudAuthScheme {
     Bearer,
     Token,
 }
 
-pub(crate) fn build_retry_client(base_client: reqwest::Client) -> ClientWithMiddleware {
+pub fn build_retry_client(base_client: reqwest::Client) -> ClientWithMiddleware {
     let retry_policy =
         RetryExponentialBackoff::builder().build_with_max_retries(MAX_CLIENT_RETRIES);
     ClientBuilder::new(base_client)
@@ -26,7 +26,7 @@ pub(crate) fn build_retry_client(base_client: reqwest::Client) -> ClientWithMidd
         .build()
 }
 
-pub(crate) fn build_cloud_api_client(
+pub fn build_cloud_api_client(
     token: &str,
     auth_scheme: CloudAuthScheme,
     invocation_id: Option<&str>,

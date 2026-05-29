@@ -48,7 +48,6 @@ dbt-test-primitives = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
 
-
 [lib]
 doctest = true
 name = "dbt_parser"
