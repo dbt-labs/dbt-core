@@ -778,6 +778,17 @@ impl<'a> AllPhasesExecutor<'a> {
         let compiled_sql = map_compiled_sql
             .get(unique_id)
             .and_then(Option::as_deref)
+            .map(|s| s.to_string())
+            .or_else(|| {
+                let path = get_target_write_path(
+                    &self.arg.io.in_dir,
+                    &self.arg.io.out_dir.join(DBT_COMPILED_DIR_NAME),
+                    &model.__common_attr__.package_name,
+                    &model.__common_attr__.path,
+                    &model.__common_attr__.original_file_path,
+                );
+                stdfs::read_to_string(&path).ok()
+            })
             .ok_or_else(|| {
                 fs_err!(
                     ErrorCode::Unexpected,
