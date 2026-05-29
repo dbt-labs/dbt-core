@@ -13,7 +13,7 @@ from unittest import mock
 import pytest
 
 from dbt.auth.session_cache import read_session_cache
-from dbt.config.user_settings import get_user_setting_flags
+from dbt.config.user_settings import get_user_setting_flag, get_user_setting_flags
 from dbt.tests.util import run_dbt
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.types import Note
@@ -77,39 +77,47 @@ class TestLoginInteractivePlatform:
         assert cache.sessions[0].access_token == fake_jwt
         assert cache.sessions[0].account_id == 42
 
+    def test_state_not_set_auto_enables(self, stub_confirm):
+        """manage_state not in user_settings.yml -> auto-enable without prompting."""
+        catcher = EventCatcher(Note)
+        run_dbt(["login"], callbacks=[catcher.catch])
+
+        stub_confirm.assert_not_called()
+        assert get_user_setting_flag("manage_state") is True
+        assert any("Configuration written" in e.info.msg for e in catcher.caught_events)
+
     @pytest.mark.parametrize("stub_platform_api", [True], indirect=True)
-    def test_state_configured_remotely_user_confirms(
-        self,
-        stub_platform_api,
-        stub_confirm,
-    ):
+    def test_explicitly_disabled_user_confirms(self, stub_platform_api, stub_confirm):
+        """manage_state explicitly false in user_settings.yml -> prompt, user confirms."""
+        from dbt.config.user_settings import set_user_setting_flag
+
+        set_user_setting_flag("manage_state", False)
+
         catcher = EventCatcher(Note)
         run_dbt(["login"], callbacks=[catcher.catch])
 
         stub_confirm.assert_called_once()
-        assert "Enable state on this machine" in stub_confirm.call_args[0][0]
-        assert get_user_setting_flags()["manage_state"] is True
+        assert "currently disabled" in stub_confirm.call_args[0][0]
+        assert get_user_setting_flag("manage_state") is True
 
     @pytest.mark.parametrize("stub_platform_api", [True], indirect=True)
     @pytest.mark.parametrize("stub_confirm", [False], indirect=True)
-    def test_state_configured_remotely_user_declines(
-        self,
-        stub_platform_api,
-        stub_confirm,
-    ):
+    def test_explicitly_disabled_user_declines(self, stub_platform_api, stub_confirm):
+        """manage_state explicitly false in user_settings.yml -> prompt, user declines."""
+        from dbt.config.user_settings import set_user_setting_flag
+
+        set_user_setting_flag("manage_state", False)
+
         catcher = EventCatcher(Note)
         run_dbt(["login"], callbacks=[catcher.catch])
 
         assert any(
             "you can modify ~/.dbt/user_settings.yml" in e.info.msg for e in catcher.caught_events
         )
-        assert not get_user_setting_flags().get("manage_state")
+        assert get_user_setting_flag("manage_state") is False
 
     @pytest.mark.parametrize("mock_flags", [True], indirect=True)
-    def test_state_enabled_locally_but_not_remotely_warns(
-        self,
-        mock_flags,
-    ):
+    def test_state_enabled_locally_but_not_remotely_warns(self, mock_flags):
         from dbt.config.user_settings import set_user_setting_flag
 
         set_user_setting_flag("manage_state", True)

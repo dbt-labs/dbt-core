@@ -15,7 +15,7 @@ import requests
 from dbt.auth.credentials import OAuthSession, PlatformCredential
 from dbt.auth.secure_file import secure_open
 from dbt.auth.session_cache import DBT_HOME_DIR, DEFAULT_CACHE_PATH, upsert_session
-from dbt.config.user_settings import set_user_setting_flag
+from dbt.config.user_settings import get_user_setting_flag, set_user_setting_flag
 from dbt.exceptions import InteractiveAuthError
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
@@ -205,8 +205,13 @@ def resolve_from_callback(
 
 
 def on_platform_login_success(credential: PlatformCredential) -> None:
-    # TODO: remove lazy import once dbt.cli.__init__ circular dep is resolved
-    # dbt.flags -> dbt.cli.main -> dbt.auth.oauth.platform
+    """Post-login steps after a successful platform OAuth login.
+
+    - manage_state already enabled (resolved flag): no change.
+    - manage_state explicitly false in user_settings.yml: prompts before overriding.
+    - manage_state not set: auto-enables without prompting.
+    """
+    # Lazy import: dbt.flags -> dbt.cli.main -> dbt.auth.oauth.platform
     from dbt.flags import get_flags
 
     client = DbtPlatformAPIClient(credential)
@@ -214,18 +219,41 @@ def on_platform_login_success(credential: PlatformCredential) -> None:
 
     fire_event(Note(msg="Congratulations! You are now signed in."))
 
-    state_enabled_locally = getattr(get_flags(), "MANAGE_STATE", False) or False
     configured = client.is_state_configured()
+    state_enabled_locally = getattr(get_flags(), "MANAGE_STATE", False) or False
 
-    if configured and not state_enabled_locally:
+    if state_enabled_locally:
+        if not configured:
+            fire_event(
+                Note(
+                    msg=(
+                        "Looks like dbt State is enabled on this machine but not in your "
+                        "dbt platform account. To enable State in your platform account, see docs: "
+                        "https://docs.getdbt.com/docs/deploy/dbt-state-setup"
+                    )
+                )
+            )
+    elif get_user_setting_flag("manage_state") is False:
         confirmed = click.confirm(
-            "Looks like dbt State is enabled for your dbt platform account. "
-            "Enable state on this machine by default, for faster and cheaper builds? "
-            "You can always change this configuration in ~/.dbt/user_settings.yml",
+            "dbt State is currently disabled in ~/.dbt/user_settings.yml. "
+            "Enable state on this machine by default, for faster and cheaper builds?",
             default=True,
         )
         if confirmed:
             set_user_setting_flag("manage_state", True)
+            fire_event(
+                Note(msg="dbt State enabled. Configuration written to ~/.dbt/user_settings.yml.")
+            )
+            if not configured:
+                fire_event(
+                    Note(
+                        msg=(
+                            "Looks like dbt State is enabled on this machine but not in your "
+                            "dbt platform account. To enable State in your platform account, see docs: "
+                            "https://docs.getdbt.com/docs/deploy/dbt-state-setup"
+                        )
+                    )
+                )
         else:
             fire_event(
                 Note(
@@ -233,13 +261,18 @@ def on_platform_login_success(credential: PlatformCredential) -> None:
                     "you can modify ~/.dbt/user_settings.yml"
                 )
             )
-    elif not configured and state_enabled_locally:
+    else:
+        set_user_setting_flag("manage_state", True)
         fire_event(
-            Note(
-                msg=(
-                    "Looks like dbt State is enabled on this machine but not in your "
-                    "dbt platform account. To enable State in your platform account, see docs: "
-                    "https://docs.getdbt.com/docs/deploy/dbt-state-setup"
+            Note(msg="dbt State enabled. Configuration written to ~/.dbt/user_settings.yml.")
+        )
+        if not configured:
+            fire_event(
+                Note(
+                    msg=(
+                        "Looks like dbt State is enabled on this machine but not in your "
+                        "dbt platform account. To enable State in your platform account, see docs: "
+                        "https://docs.getdbt.com/docs/deploy/dbt-state-setup"
+                    )
                 )
             )
-        )

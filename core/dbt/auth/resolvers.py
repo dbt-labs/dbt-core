@@ -6,6 +6,7 @@ import webbrowser
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 import yaml
@@ -314,10 +315,11 @@ class OAuthInteractiveResolver:
         state_ctx = build_state_oauth_context(redirect_url)
         server.state_oauth_state = state_ctx["state"]
 
-        auth_url = (
-            platform_ctx["authorize_url"]
-            + f"&dbt_state_oauth={state_ctx['encoded_param']}&_dbtsrc=dbt-core"
-        )
+        parsed = urlparse(platform_ctx["authorize_url"])
+        params = parse_qsl(parsed.query)
+        params.append(("dbt_state_oauth", state_ctx["encoded_param"]))
+        params.append(("_dbtsrc", "dbt-core"))
+        auth_url = urlunparse(parsed._replace(query=urlencode(params)))
 
         server.timeout = self.timeout
 

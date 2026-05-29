@@ -139,9 +139,21 @@ class TestPlatformLoginFlow:
 
 
 class TestPostPlatformLogin:
-    """All 4 cases of the configured/enabled matrix."""
+    """Post-login decision matrix: get_flags().MANAGE_STATE for resolved check,
+    get_user_setting_flag() to detect explicit disable, set_user_setting_flag to write."""
 
-    def _run_post_login(self, configured: bool, enabled: bool, confirm: bool = True):
+    def _run_post_login(
+        self,
+        configured: bool,
+        enabled: bool,
+        user_setting: object = None,
+        confirm: bool = True,
+    ):
+        """Run on_platform_login_success.
+
+        enabled: resolved MANAGE_STATE from get_flags() (CLI > env > project > user_settings)
+        user_setting: explicit value in user_settings.yml (True/False/None=not set)
+        """
         cred = PlatformCredential(
             token=FAKE_JWT,
             expires_at=time.time() + 3600,
@@ -156,6 +168,8 @@ class TestPostPlatformLogin:
                 fired_messages.append(event.msg)
 
         with mock.patch("dbt.flags.get_flags", return_value=flags), mock.patch(
+            "dbt.auth.oauth.platform.get_user_setting_flag", return_value=user_setting
+        ), mock.patch(
             "dbt.auth.oauth.platform.DbtPlatformAPIClient.is_state_configured",
             return_value=configured,
         ), mock.patch(
@@ -171,32 +185,60 @@ class TestPostPlatformLogin:
 
         return mock_set_flag, fired_messages
 
-    def test_configured_and_enabled_is_noop(self):
-        mock_set_flag, messages = self._run_post_login(configured=True, enabled=True)
+    def test_already_enabled_and_configured_is_noop(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=True, user_setting=True
+        )
         mock_set_flag.assert_not_called()
         assert any("Congratulations" in m for m in messages)
 
-    def test_configured_and_not_enabled_user_confirms(self):
+    def test_already_enabled_but_not_configured_warns(self):
         mock_set_flag, messages = self._run_post_login(
-            configured=True, enabled=False, confirm=True
+            configured=False, enabled=True, user_setting=True
+        )
+        mock_set_flag.assert_not_called()
+        assert any("not in your dbt platform" in m for m in messages)
+
+    def test_enabled_via_env_overrides_user_settings_false(self):
+        """MANAGE_STATE=True from env/CLI even though user_settings has false."""
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=True, user_setting=False
+        )
+        mock_set_flag.assert_not_called()
+
+    def test_explicitly_disabled_user_confirms(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=False, user_setting=False, confirm=True
         )
         mock_set_flag.assert_called_once_with("manage_state", True)
+        assert any("Configuration written" in m for m in messages)
 
-    def test_configured_and_not_enabled_user_declines(self):
+    def test_explicitly_disabled_user_declines(self):
         mock_set_flag, messages = self._run_post_login(
-            configured=True, enabled=False, confirm=False
+            configured=True, enabled=False, user_setting=False, confirm=False
         )
         mock_set_flag.assert_not_called()
         assert any("you can modify ~/.dbt/user_settings.yml" in m for m in messages)
 
-    def test_not_configured_and_not_enabled_is_noop(self):
-        mock_set_flag, messages = self._run_post_login(configured=False, enabled=False)
-        mock_set_flag.assert_not_called()
-        assert any("Congratulations" in m for m in messages)
+    def test_explicitly_disabled_not_configured_user_confirms(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=False, enabled=False, user_setting=False, confirm=True
+        )
+        mock_set_flag.assert_called_once_with("manage_state", True)
+        assert any("not in your dbt platform" in m for m in messages)
 
-    def test_not_configured_but_enabled_fires_info(self):
-        mock_set_flag, messages = self._run_post_login(configured=False, enabled=True)
-        mock_set_flag.assert_not_called()
+    def test_not_set_auto_enables(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=False, user_setting=None
+        )
+        mock_set_flag.assert_called_once_with("manage_state", True)
+        assert any("Configuration written" in m for m in messages)
+
+    def test_not_set_not_configured_auto_enables_and_warns(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=False, enabled=False, user_setting=None
+        )
+        mock_set_flag.assert_called_once_with("manage_state", True)
         assert any("not in your dbt platform" in m for m in messages)
 
 
