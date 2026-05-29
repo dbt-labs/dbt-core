@@ -220,11 +220,8 @@ impl TypeOps for DefaultTypeOps {
                     out.push('>');
                     return Ok(());
                 }
-                let hint: SqlTypeHint = data_type.try_into()?;
-                // TODO: handle has_decimal_places correctly
-                let has_decimal_places = false;
-                let res = sql_type_hint_to_str(hint, has_decimal_places, adapter_type);
-                out.push_str(res.as_ref());
+                let type_str = arrow_type_to_sql_str(data_type, adapter_type)?;
+                out.push_str(type_str);
                 Ok(())
             }
         }
@@ -532,50 +529,6 @@ pub fn arrow_schema_to_sdf_schema(
     builder.build_sdf_schema(type_ops)
 }
 
-pub enum SqlTypeHint {
-    Integer,
-    Floating,
-    Decimal,
-    Boolean,
-    Datetime,
-    Date,
-    Time,
-    Text,
-}
-
-impl TryFrom<&DataType> for SqlTypeHint {
-    type Error = AdapterError;
-
-    fn try_from(data_type: &DataType) -> Result<SqlTypeHint, Self::Error> {
-        use SqlTypeHint::*;
-        let hint = if data_type.is_null() {
-            Text
-        } else if data_type.is_integer() {
-            Integer
-        } else if data_type.is_floating() {
-            Floating
-        } else if data_type.is_numeric() {
-            Decimal
-        } else if *data_type == DataType::Boolean {
-            Boolean
-        } else if matches!(data_type, DataType::Timestamp(_, _)) {
-            Datetime
-        } else if matches!(data_type, DataType::Date32 | DataType::Date64) {
-            Date
-        } else if matches!(data_type, DataType::Duration(_) | DataType::Interval(_)) {
-            Time
-        } else if matches!(data_type, DataType::Utf8) {
-            Text
-        } else {
-            return Err(AdapterError::new(
-                AdapterErrorKind::NotSupported,
-                format!("Unsupported data type {data_type:?}"),
-            ));
-        };
-        Ok(hint)
-    }
-}
-
 /// A function that replaces all `convert_{type}_type` functions [1].
 ///
 /// The functions are:
@@ -593,58 +546,113 @@ impl TryFrom<&DataType> for SqlTypeHint {
 /// [2]: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/impl.py
 /// [3]: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-spark/src/dbt/adapters/spark/impl.py
 /// [4]: https://github.com/microsoft/dbt-fabric/blob/81d9764e24b00e7c923a2235ba68fa6bd6b90ea9/dbt/adapters/fabric/fabric_adapter.py
-pub fn sql_type_hint_to_str<'a>(
-    hint: SqlTypeHint,
-    _has_decimal_places: bool,
+pub fn arrow_type_to_sql_str(
+    data_type: &DataType,
     adapter_type: AdapterType,
-) -> Cow<'a, str> {
-    use SqlTypeHint::*;
+) -> AdapterResult<&'static str> {
     use dbt_adapter_core::AdapterType::*;
-    let str = match (adapter_type, hint) {
-        // ## convert_integer_type()
-        (Bigquery, Integer) => "int64",
-        (Databricks, Integer) => "bigint",
-        (_, Integer) => "integer",
 
-        // ## convert_number_type()
-        (Bigquery, Floating) => "int64", // TODO: fix to "float64" if has_decimal_places is true
-        (Bigquery, Decimal) => "float64", // TODO: fix to "int64" if has_decimal_places is false
-        (Databricks, Floating) => "bigint", // TODO: fix to "double" if has_decimal_places is true
-        (Databricks, Decimal) => "double", // TODO: fix to "bigint" if has_decimal_places is false
-        (Fabric, Decimal) => "float",
-        (Fabric, Floating) => "int",
-        (_, Floating) => "integer", // TODO: fix to "float8" if has_decimal_places is true
-        (_, Decimal) => "float8",   // TODO: fix to "integer" if has_decimal_places is false
+    match data_type {
+        // ## convert_integer_type()
+        dt if dt.is_null() => Ok("text"),
+        dt if dt.is_integer() => Ok(match adapter_type {
+            Bigquery => "int64",
+            Databricks => "bigint",
+            _ => "integer",
+        }),
+
+        // ## convert_number_type() - Float32
+        DataType::Float32 => Ok(match adapter_type {
+            Bigquery => "float64",
+            Databricks => "float",
+            Fabric => "real",
+            _ => "float8",
+        }),
+
+        // ## convert_number_type() - Float64
+        DataType::Float64 => Ok(match adapter_type {
+            Bigquery => "float64",
+            Databricks => "double",
+            // Divergence: upstream has an implicit narrowing bug we fix
+            // see https://github.com/microsoft/dbt-fabric/blob/0de219082282724a789b0d1b18509d39899da8e1/dbt/adapters/fabric/fabric_adapter.py#L117
+            // https://learn.microsoft.com/en-us/sql/t-sql/data-types/float-and-real-transact-sql?view=fabric&preserve-view=true
+            Fabric => "float",
+            _ => "float8",
+        }),
+
+        // ## convert_number_type() - Decimal
+        DataType::Decimal32(_, scale)
+        | DataType::Decimal64(_, scale)
+        | DataType::Decimal128(_, scale)
+        | DataType::Decimal256(_, scale) => Ok(match adapter_type {
+            // TODO(versusfacit): stick to upstream and integer coercion, or map decimal types?
+            // https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_types
+            // https://learn.microsoft.com/en-us/sql/t-sql/data-types/decimal-and-numeric-transact-sql?view=fabric&preserve-view=true
+            Bigquery => {
+                if *scale > 0 {
+                    "float64"
+                } else {
+                    "int64"
+                }
+            }
+            Fabric => "float",
+            Databricks => {
+                if *scale > 0 {
+                    "double"
+                } else {
+                    "bigint"
+                }
+            }
+            _ => {
+                if *scale > 0 {
+                    "float8"
+                } else {
+                    "integer"
+                }
+            }
+        }),
 
         // ## convert_boolean_type()
-        (Bigquery, Boolean) => "bool",
-        (Fabric, Boolean) => "bit",
-        (_, Boolean) => "boolean",
+        DataType::Boolean => Ok(match adapter_type {
+            Bigquery => "bool",
+            Fabric => "bit",
+            _ => "boolean",
+        }),
 
         // ## convert_datetime_type()
-        (Bigquery, Datetime) => "datetime",
-        (Databricks, Datetime) => "timestamp",
-        (Fabric, Datetime) => "datetime2(6)",
-        (_, Datetime) => "timestamp without time zone",
+        DataType::Timestamp(_, _) => Ok(match adapter_type {
+            Bigquery => "datetime",
+            Databricks => "timestamp",
+            Fabric => "datetime2(6)",
+            _ => "timestamp without time zone",
+        }),
 
         // ## convert_date_type()
-        (_, Date) => "date",
+        DataType::Date32 | DataType::Date64 => Ok("date"),
 
         // ## convert_time_type()
-        (Fabric, Time) => "time(6)",
-        (_, Time) => "time",
+        DataType::Duration(_) | DataType::Interval(_) => Ok(match adapter_type {
+            Fabric => "time(6)",
+            _ => "time",
+        }),
 
         // ## convert_text_type()
-        (Bigquery | Databricks, Text) => "string",
-        // technically should be `varchar(N)`
-        // where `N` is based on the max length of the strings in the column
-        // but that information isn't available here
-        // - N = 64 if column is empty
-        // - N = max(16, max_length) if column is not empty
-        (Fabric, Text) => "varchar",
-        (_, Text) => "text",
-    };
-    Cow::Borrowed(str)
+        DataType::Utf8 => Ok(match adapter_type {
+            Bigquery | Databricks => "string",
+            // technically should be `varchar(N)`
+            // where `N` is based on the max length of the strings in the column
+            // but that information isn't available here
+            // - N = 64 if column is empty
+            // - N = max(16, max_length) if column is not empty
+            Fabric => "varchar",
+            _ => "text",
+        }),
+
+        _ => Err(AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            format!("Unsupported data type {data_type:?}"),
+        )),
+    }
 }
 
 pub mod bigquery {
@@ -1212,13 +1220,12 @@ pub fn numeric_precision_scale(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use SqlTypeHint::*;
     use dbt_adapter_core::AdapterType::*;
 
     #[test]
     fn test_convert_integer_type() {
         let convert_integer_type =
-            |adapter_type| sql_type_hint_to_str(Integer, false, adapter_type);
+            |adapter_type| arrow_type_to_sql_str(&DataType::Int64, adapter_type).unwrap();
         assert_eq!(convert_integer_type(Bigquery), "int64");
         assert_eq!(convert_integer_type(Databricks), "bigint");
         assert_eq!(convert_integer_type(Postgres), "integer");
@@ -1280,14 +1287,23 @@ mod tests {
     #[test]
     fn test_convert_number_type() {
         let convert_floating_type =
-            |adapter_type| sql_type_hint_to_str(Floating, false, adapter_type);
-        assert_eq!(convert_floating_type(Bigquery), "int64");
-        assert_eq!(convert_floating_type(Databricks), "bigint");
-        assert_eq!(convert_floating_type(Postgres), "integer");
-        assert_eq!(convert_floating_type(Snowflake), "integer");
-        assert_eq!(convert_floating_type(Redshift), "integer");
-        let convert_decimal_type =
-            |adapter_type| sql_type_hint_to_str(Decimal, false, adapter_type);
+            |adapter_type| arrow_type_to_sql_str(&DataType::Float64, adapter_type).unwrap();
+        assert_eq!(convert_floating_type(Bigquery), "float64");
+        assert_eq!(convert_floating_type(Databricks), "double");
+        assert_eq!(convert_floating_type(Postgres), "float8");
+        assert_eq!(convert_floating_type(Snowflake), "float8");
+        assert_eq!(convert_floating_type(Redshift), "float8");
+        let convert_decimal_type = |adapter_type| {
+            arrow_type_to_sql_str(&DataType::Decimal32(10, 0), adapter_type).unwrap()
+        };
+        assert_eq!(convert_decimal_type(Bigquery), "int64");
+        assert_eq!(convert_decimal_type(Databricks), "bigint");
+        assert_eq!(convert_decimal_type(Postgres), "integer");
+        assert_eq!(convert_decimal_type(Snowflake), "integer");
+        assert_eq!(convert_decimal_type(Redshift), "integer");
+        let convert_decimal_type = |adapter_type| {
+            arrow_type_to_sql_str(&DataType::Decimal128(10, 2), adapter_type).unwrap()
+        };
         assert_eq!(convert_decimal_type(Bigquery), "float64");
         assert_eq!(convert_decimal_type(Databricks), "double");
         assert_eq!(convert_decimal_type(Postgres), "float8");
@@ -1298,7 +1314,7 @@ mod tests {
     #[test]
     fn test_convert_boolean_type() {
         let convert_boolean_type =
-            |adapter_type| sql_type_hint_to_str(Boolean, false, adapter_type);
+            |adapter_type| arrow_type_to_sql_str(&DataType::Boolean, adapter_type).unwrap();
         assert_eq!(convert_boolean_type(Bigquery), "bool");
         assert_eq!(convert_boolean_type(Databricks), "boolean");
         assert_eq!(convert_boolean_type(Postgres), "boolean");
@@ -1308,8 +1324,13 @@ mod tests {
 
     #[test]
     fn test_convert_datetime_type() {
-        let convert_datetime_type =
-            |adapter_type| sql_type_hint_to_str(Datetime, false, adapter_type);
+        let convert_datetime_type = |adapter_type| {
+            arrow_type_to_sql_str(
+                &DataType::Timestamp(TimeUnit::Millisecond, None),
+                adapter_type,
+            )
+            .unwrap()
+        };
         assert_eq!(convert_datetime_type(Bigquery), "datetime");
         assert_eq!(convert_datetime_type(Databricks), "timestamp");
         assert_eq!(
@@ -1329,7 +1350,8 @@ mod tests {
 
     #[test]
     fn test_convert_date_type() {
-        let convert_date_type = |adapter_type| sql_type_hint_to_str(Date, false, adapter_type);
+        let convert_date_type =
+            |adapter_type| arrow_type_to_sql_str(&DataType::Date64, adapter_type).unwrap();
         // Test all adapters return "date"
         for adapter_type in ALL_ADAPTERS {
             assert_eq!(convert_date_type(adapter_type), "date");
@@ -1338,7 +1360,9 @@ mod tests {
 
     #[test]
     fn test_convert_time_type() {
-        let convert_time_type = |adapter_type| sql_type_hint_to_str(Time, false, adapter_type);
+        let convert_time_type = |adapter_type| {
+            arrow_type_to_sql_str(&DataType::Duration(TimeUnit::Nanosecond), adapter_type).unwrap()
+        };
         // Test all adapters return "time"
         for adapter_type in ALL_ADAPTERS {
             assert_eq!(convert_time_type(adapter_type), "time");
@@ -1347,7 +1371,8 @@ mod tests {
 
     #[test]
     fn test_convert_text_type() {
-        let convert_text_type = |adapter_type| sql_type_hint_to_str(Text, false, adapter_type);
+        let convert_text_type =
+            |adapter_type| arrow_type_to_sql_str(&DataType::Utf8, adapter_type).unwrap();
         assert_eq!(convert_text_type(Bigquery), "string");
         assert_eq!(convert_text_type(Databricks), "string");
         assert_eq!(convert_text_type(Postgres), "text");
