@@ -11,11 +11,14 @@ import json
 import time
 from argparse import Namespace
 from unittest import mock
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 from dbt.auth.credentials import OAuthSession, PlatformCredential, StateCredential
+from dbt.auth.oauth.platform import build_context as build_platform_ctx
 from dbt.auth.oauth.platform import exchange_code as platform_exchange_code
 from dbt.auth.oauth.platform import on_platform_login_success
 from dbt.auth.oauth.platform import resolve_from_callback as platform_resolve
+from dbt.auth.oauth.state import build_context as build_state_ctx
 from dbt.auth.oauth.state import on_state_login_success
 from dbt.auth.oauth.state import resolve_from_callback as state_resolve
 from dbt.auth.resolvers import OAuthPassiveResolver
@@ -139,9 +142,21 @@ class TestPlatformLoginFlow:
 
 
 class TestPostPlatformLogin:
-    """All 4 cases of the configured/enabled matrix."""
+    """Post-login decision matrix: get_flags().MANAGE_STATE for resolved check,
+    get_user_setting_flag() to detect explicit disable, set_user_setting_flag to write."""
 
-    def _run_post_login(self, configured: bool, enabled: bool, confirm: bool = True):
+    def _run_post_login(
+        self,
+        configured: bool,
+        enabled: bool,
+        user_setting: object = None,
+        confirm: bool = True,
+    ):
+        """Run on_platform_login_success.
+
+        enabled: resolved MANAGE_STATE from get_flags() (CLI > env > project > user_settings)
+        user_setting: explicit value in user_settings.yml (True/False/None=not set)
+        """
         cred = PlatformCredential(
             token=FAKE_JWT,
             expires_at=time.time() + 3600,
@@ -156,6 +171,8 @@ class TestPostPlatformLogin:
                 fired_messages.append(event.msg)
 
         with mock.patch("dbt.flags.get_flags", return_value=flags), mock.patch(
+            "dbt.auth.oauth.platform.get_user_setting_flag", return_value=user_setting
+        ), mock.patch(
             "dbt.auth.oauth.platform.DbtPlatformAPIClient.is_state_configured",
             return_value=configured,
         ), mock.patch(
@@ -171,32 +188,60 @@ class TestPostPlatformLogin:
 
         return mock_set_flag, fired_messages
 
-    def test_configured_and_enabled_is_noop(self):
-        mock_set_flag, messages = self._run_post_login(configured=True, enabled=True)
+    def test_already_enabled_and_configured_is_noop(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=True, user_setting=True
+        )
         mock_set_flag.assert_not_called()
         assert any("Congratulations" in m for m in messages)
 
-    def test_configured_and_not_enabled_user_confirms(self):
+    def test_already_enabled_but_not_configured_warns(self):
         mock_set_flag, messages = self._run_post_login(
-            configured=True, enabled=False, confirm=True
+            configured=False, enabled=True, user_setting=True
+        )
+        mock_set_flag.assert_not_called()
+        assert any("not in your dbt platform" in m for m in messages)
+
+    def test_enabled_via_env_overrides_user_settings_false(self):
+        """MANAGE_STATE=True from env/CLI even though user_settings has false."""
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=True, user_setting=False
+        )
+        mock_set_flag.assert_not_called()
+
+    def test_explicitly_disabled_user_confirms(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=False, user_setting=False, confirm=True
         )
         mock_set_flag.assert_called_once_with("manage_state", True)
+        assert any("Configuration written" in m for m in messages)
 
-    def test_configured_and_not_enabled_user_declines(self):
+    def test_explicitly_disabled_user_declines(self):
         mock_set_flag, messages = self._run_post_login(
-            configured=True, enabled=False, confirm=False
+            configured=True, enabled=False, user_setting=False, confirm=False
         )
         mock_set_flag.assert_not_called()
         assert any("you can modify ~/.dbt/user_settings.yml" in m for m in messages)
 
-    def test_not_configured_and_not_enabled_is_noop(self):
-        mock_set_flag, messages = self._run_post_login(configured=False, enabled=False)
-        mock_set_flag.assert_not_called()
-        assert any("Congratulations" in m for m in messages)
+    def test_explicitly_disabled_not_configured_user_confirms(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=False, enabled=False, user_setting=False, confirm=True
+        )
+        mock_set_flag.assert_called_once_with("manage_state", True)
+        assert any("not in your dbt platform" in m for m in messages)
 
-    def test_not_configured_but_enabled_fires_info(self):
-        mock_set_flag, messages = self._run_post_login(configured=False, enabled=True)
-        mock_set_flag.assert_not_called()
+    def test_not_set_auto_enables(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=True, enabled=False, user_setting=None
+        )
+        mock_set_flag.assert_called_once_with("manage_state", True)
+        assert any("Configuration written" in m for m in messages)
+
+    def test_not_set_not_configured_auto_enables_and_warns(self):
+        mock_set_flag, messages = self._run_post_login(
+            configured=False, enabled=False, user_setting=None
+        )
+        mock_set_flag.assert_called_once_with("manage_state", True)
         assert any("not in your dbt platform" in m for m in messages)
 
 
@@ -341,3 +386,73 @@ class TestStateLoginFlow:
         assert call_data["code"] == "the_code"
         assert call_data["client_id"] == "rc_client"
         assert call_data["state"] == "the_state"
+
+
+class TestStateOAuthUrlRoundTrip:
+    """The dbt_state_oauth param carries a base64-encoded state authorize URL
+    inside the platform authorize URL. A prior bug caused base64 '=' padding to
+    collide with URL query syntax when the domain changed to auth.state.dbt.com.
+    These tests prove the nested URL survives the round-trip."""
+
+    def _build_combined_url(self, state_auth_url: str = "https://auth.state.dbt.com"):
+        """Replicate the URL construction in OAuthInteractiveResolver.resolve()."""
+        redirect_url = "http://localhost:54321/"
+
+        platform_ctx = build_platform_ctx(
+            redirect_url=redirect_url,
+            client_id="test_client",
+            auth_server_url="https://us1.dbt.com/register",
+            scopes="identity:read offline_access",
+        )
+
+        with mock.patch.dict("os.environ", {"RUN_CACHE_AUTH_URL": state_auth_url}, clear=False):
+            state_ctx = build_state_ctx(redirect_url)
+
+        parsed = urlparse(platform_ctx["authorize_url"])
+        params = parse_qsl(parsed.query)
+        params.append(("dbt_state_oauth", state_ctx["encoded_param"]))
+        params.append(("_dbtsrc", "dbt-core"))
+        combined_url = urlunparse(parsed._replace(query=urlencode(params)))
+
+        return combined_url, state_ctx
+
+    def _extract_state_url(self, combined_url: str) -> str:
+        """Parse dbt_state_oauth from the combined URL and base64-decode it."""
+        qs = parse_qs(urlparse(combined_url).query)
+        assert "dbt_state_oauth" in qs, "dbt_state_oauth missing from combined URL"
+        encoded = qs["dbt_state_oauth"][0]
+        return base64.b64decode(encoded).decode()
+
+    def test_state_url_roundtrips_with_padding_domain(self):
+        """auth.state.dbt.com produces base64 output with '=' padding.
+        Verify the decoded state URL retains all expected query params."""
+        combined_url, state_ctx = self._build_combined_url("https://auth.state.dbt.com")
+        decoded_url = self._extract_state_url(combined_url)
+
+        decoded_qs = parse_qs(urlparse(decoded_url).query)
+        assert decoded_qs["client_id"][0] == state_ctx["client_id"]
+        assert decoded_qs["state"][0] == state_ctx["state"]
+        assert decoded_qs["redirect_uri"][0] == "http://localhost:54321/"
+        assert decoded_qs["scope"][0] == "runcache:scope:orgs"
+        assert decoded_qs["response_type"][0] == "code"
+        assert "code_challenge" in decoded_qs
+        assert decoded_qs["code_challenge_method"][0] == "S256"
+
+    def test_state_url_roundtrips_with_no_padding_domain(self):
+        """auth.runcache.com (no padding) should also round-trip cleanly."""
+        combined_url, state_ctx = self._build_combined_url("https://auth.runcache.com")
+        decoded_url = self._extract_state_url(combined_url)
+
+        decoded_qs = parse_qs(urlparse(decoded_url).query)
+        assert decoded_qs["client_id"][0] == state_ctx["client_id"]
+        assert decoded_qs["state"][0] == state_ctx["state"]
+        assert decoded_qs["redirect_uri"][0] == "http://localhost:54321/"
+
+    def test_encoded_param_contains_padding(self):
+        """Confirm that auth.state.dbt.com actually produces '=' padding,
+        which was the root cause of the original bug."""
+        _, state_ctx = self._build_combined_url("https://auth.state.dbt.com")
+        encoded = state_ctx["encoded_param"]
+        assert (
+            "=" in encoded
+        ), f"Expected base64 padding in encoded_param for auth.state.dbt.com, got: {encoded}"

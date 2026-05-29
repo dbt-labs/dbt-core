@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import os
 import secrets
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, urlunparse
 
 import requests
 
@@ -15,8 +15,8 @@ from dbt.exceptions import InteractiveAuthError
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 
-STATE_OAUTH_AUTH_URL = "https://auth.runcache.com"
-STATE_OAUTH_TOKEN_URL = "https://auth.runcache.com/token"
+STATE_OAUTH_AUTH_URL = "https://auth.state.dbt.com"
+STATE_OAUTH_TOKEN_URL = "https://auth.state.dbt.com/token"
 STATE_OAUTH_CLIENT_ID = "2fd87cd5-69a6-4c5f-9097-747a58f0edf6"
 STATE_OAUTH_SCOPE = "runcache:scope:orgs"
 
@@ -41,9 +41,10 @@ def build_context(redirect_url: str) -> dict:
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
-    authorize_url = f"{auth_url.rstrip('/')}?{urlencode(authorize_params)}"
+    parsed = urlparse(auth_url.rstrip("/"))
+    authorize_url = urlunparse(parsed._replace(query=urlencode(authorize_params)))
     return {
-        "encoded_param": base64.urlsafe_b64encode(authorize_url.encode()).decode(),
+        "encoded_param": base64.b64encode(authorize_url.encode()).decode(),
         "code_verifier": verifier,
         "client_id": client_id,
         "token_url": token_url,
@@ -97,6 +98,10 @@ def resolve_from_callback(result: dict, ctx: dict) -> StateCredential:
 
 
 def on_state_login_success(credential: StateCredential) -> None:
+    """Post-login steps after a successful dbt State OAuth login.
+
+    - Unconditionally sets manage_state: true in user_settings.yml (no prompt).
+    """
     set_user_setting_flag("manage_state", True)
     fire_event(
         Note(

@@ -519,7 +519,8 @@ class TestManageStateClickIntegration:
         previous_global_flags = dbt.flags.get_flags()
         try:
             runner = CliRunner()
-            result = runner.invoke(probe, argv, env=env, catch_exceptions=False)
+            with mock.patch("dbt.cli.flags.get_user_setting_flags", return_value={}):
+                result = runner.invoke(probe, argv, env=env, catch_exceptions=False)
             assert result.exit_code == 0, result.output
         finally:
             dbt.flags.set_flags(previous_global_flags)

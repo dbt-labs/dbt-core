@@ -55,6 +55,10 @@ def get_user_setting_flags(path: Path | None = None) -> dict:
     return settings.flags
 
 
+def get_user_setting_flag(name: str, path: Path | None = None) -> bool | None:
+    return get_user_setting_flags(path).get(name)
+
+
 def set_user_setting_flag(name: str, value: bool, path: Path | None = None) -> None:
     settings = read_user_settings(path)
     settings.flags[name] = value
