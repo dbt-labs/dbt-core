@@ -886,7 +886,7 @@ impl<'a> AllPhasesExecutor<'a> {
 
         let type_ops_factory = Arc::clone(&self.feature_stack.adapter.type_ops_factory);
         // Inform the user that schemas require --static-analysis strict, and CLL requires
-        // --lineage in addition.
+        // --write-lineage in addition.
         if self.arg.write_metadata
             && matches!(
                 self.arg.command,
@@ -899,7 +899,7 @@ impl<'a> AllPhasesExecutor<'a> {
         {
             emit_warn_log_message(
                 ErrorCode::Generic,
-                "--metadata: column schemas will not be populated without `--static-analysis strict`; add `--lineage` to also write column-level lineage.",
+                "--write-metadata: column schemas will not be populated without `--static-analysis strict`; add `--write-lineage` to also write column-level lineage.",
                 self.arg.io.status_reporter.as_ref(),
             );
         } else if self.arg.write_metadata
@@ -915,7 +915,7 @@ impl<'a> AllPhasesExecutor<'a> {
         {
             emit_warn_log_message(
                 ErrorCode::Generic,
-                "--metadata: add `--lineage` to write column-level lineage into compile/cll parquet.",
+                "--write-metadata: add `--write-lineage` to write column-level lineage into compile/cll parquet.",
                 self.arg.io.status_reporter.as_ref(),
             );
         }

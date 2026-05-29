@@ -540,7 +540,7 @@ pub struct EvalArgs {
     pub metadata_dir: Option<PathBuf>,
     /// Whether to skip creating generic tests
     pub skip_creating_generic_tests: bool,
-    /// Compute and write column-level lineage into compile/cll parquet (requires --metadata and --static-analysis strict)
+    /// Compute and write column-level lineage into compile/cll parquet (requires --write-metadata and --static-analysis strict)
     pub write_lineage: bool,
 }
 impl fmt::Debug for EvalArgs {
