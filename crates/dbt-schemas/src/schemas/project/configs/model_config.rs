@@ -52,11 +52,9 @@ use crate::schemas::serde::{
 };
 use dbt_proc_macros::Resolvable;
 use dbt_yaml::ShouldBe;
-use serde_with::skip_serializing_none;
 
 /// Represents the latest version view configuration for versioned models.
 /// Supports shorthand (bool) and full form ({enabled: bool, alias: string}).
-#[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema)]
 pub struct LatestVersionPointer {
     pub enabled: Option<bool>,
@@ -581,6 +579,7 @@ pub struct ModelConfig {
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
     pub state: Option<ModelState>,
+    #[resolved(promote)]
     pub latest_version_pointer: Option<LatestVersionPointer>,
     pub sql_header: Option<String>,
     pub location: Option<String>,
@@ -1233,7 +1232,16 @@ impl ModelConfig {
         let table_format_eq = self.table_format == other.table_format;
         let freshness_eq = self.freshness == other.freshness;
         let state_eq = self.state == other.state;
-        let latest_version_pointer_eq = self.latest_version_pointer == other.latest_version_pointer;
+        // Treat `None` and `Some(LatestVersionPointer::default())` as equivalent so that
+        // previous-state manifests written before `latest_version_pointer` was emitted as
+        // a default struct (i.e. `null`) do not register as modified after the emit change.
+        let default_lvp = LatestVersionPointer::default();
+        let latest_version_pointer_eq =
+            self.latest_version_pointer.as_ref().unwrap_or(&default_lvp)
+                == other
+                    .latest_version_pointer
+                    .as_ref()
+                    .unwrap_or(&default_lvp);
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
         let predicates_eq = self.predicates == other.predicates;
