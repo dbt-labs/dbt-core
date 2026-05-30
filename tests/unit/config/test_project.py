@@ -22,6 +22,7 @@ from dbt.flags import set_from_args
 from dbt.jsonschemas.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.dataclass_schema import ValidationError
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.types import Note
@@ -275,6 +276,47 @@ class TestProjectInitialization(BaseConfigTest):
         )
         str(project)  # this does the equivalent of project.to_project_config(with_packages=True)
         json.dumps(project.to_project_config())
+
+    def test_git_package_revision_range(self):
+        packages = {
+            "packages": [
+                {
+                    "git": "git@example.com:dbt-labs/dbt-utils.git",
+                    "revision": [">=v0.0.1", "<v1.1.0"],
+                }
+            ]
+        }
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir, packages=packages
+        )
+        self.assertEqual(
+            project.packages,
+            PackageConfig(
+                packages=[
+                    GitPackage(
+                        git="git@example.com:dbt-labs/dbt-utils.git",
+                        revision=[">=v0.0.1", "<v1.1.0"],
+                        unrendered={
+                            "git": "git@example.com:dbt-labs/dbt-utils.git",
+                            "revision": [">=v0.0.1", "<v1.1.0"],
+                        },
+                    )
+                ]
+            ),
+        )
+
+    def test_invalid_git_package_revision_and_revision_range(self):
+        packages = {
+            "packages": [
+                {
+                    "git": "git@example.com:dbt-labs/dbt-utils.git",
+                    "revision": "0.0.1",
+                    "revision_range": [">=v0.0.1", "<v1.1.0"],
+                }
+            ]
+        }
+        with self.assertRaises(ValidationError):
+            PackageConfig.validate(packages)
 
     def test_string_run_hooks(self):
         self.default_project_data.update(
