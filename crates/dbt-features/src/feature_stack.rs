@@ -38,6 +38,7 @@ pub struct FeatureStack {
     pub resolver: ResolverFeature,
     pub loader: LoaderFeature,
     pub license_fetcher: Arc<dyn LicenseFetcher>,
+    pub version_check_disabled: bool,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).

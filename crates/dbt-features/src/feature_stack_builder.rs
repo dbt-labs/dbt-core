@@ -217,6 +217,7 @@ pub struct FeatureStackBuilder {
     loader: LoaderFeature,
     license_fetcher: Arc<dyn LicenseFetcher>,
     dbt_distribution: &'static str,
+    version_check_disabled: bool,
 }
 
 impl FeatureStackBuilder {
@@ -266,6 +267,7 @@ impl FeatureStackBuilder {
             loader: LoaderFeature::default(),
             license_fetcher: Arc::new(NoOpLicenseFetcher),
             dbt_distribution: "unknown-oss",
+            version_check_disabled: false,
         }
     }
 
@@ -281,6 +283,11 @@ impl FeatureStackBuilder {
 
     pub fn dbt_distribution(mut self, dbt_distribution: &'static str) -> Self {
         self.dbt_distribution = dbt_distribution;
+        self
+    }
+
+    pub fn disable_version_check(mut self) -> Self {
+        self.version_check_disabled = true;
         self
     }
 
@@ -337,6 +344,7 @@ impl FeatureStackBuilder {
             resolver: self.resolver,
             loader: self.loader,
             license_fetcher: self.license_fetcher,
+            version_check_disabled: self.version_check_disabled,
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };

@@ -45,6 +45,7 @@ fn main() -> ExitCode {
         dbt_features::feature_stack_builder::FeatureStackBuilder::new(tracing)
             .send_anonymous_usage_stats(arg.io.send_anonymous_usage_stats)
             .dbt_distribution("dbt-oss")
+            .disable_version_check()
             .build()
             .into();
 

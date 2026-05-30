@@ -266,8 +266,11 @@ impl<'a> CompilationPhasesExecutor<'a> {
         }
         self.token.check_cancellation()?;
 
-        *version_check_handle =
-            spawn_version_check_if_possible(config, self.arg.local_execution_backend);
+        *version_check_handle = spawn_version_check_if_possible(
+            config,
+            self.arg.local_execution_backend,
+            feature_stack.version_check_disabled,
+        );
         self.token.check_cancellation()?;
 
         if self.arg.io.should_show(ShowOptions::InputFiles) {
@@ -2093,7 +2096,11 @@ pub fn update_resolved_state_node_columns(
 fn spawn_version_check_if_possible(
     config: &CompilationConfig,
     compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
+    version_check_disabled: bool,
 ) -> Option<tokio::task::JoinHandle<Option<String>>> {
+    if version_check_disabled {
+        return None;
+    }
     let is_local = matches!(
         compute_flag,
         dbt_common::io_args::LocalExecutionBackendKind::Inline
