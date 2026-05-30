@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Emit a debug event when `run_query` is called during the parse phase, pointing users at the `{% if execute %}` documentation
+time: 2026-05-09T15:00:00.000000+02:00
+custom:
+    Author: jbbqqf
+    Issue: "11070"
