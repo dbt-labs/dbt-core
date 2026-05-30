@@ -1,0 +1,5 @@
+kind: Under the Hood
+body: Optimize dictionary membership checks by replacing 'in dict.keys()' with 'in dict' for better performance
+time: 2025-11-20T17:58:05.215680-08:00
+custom:
+    Author: christopherrya
