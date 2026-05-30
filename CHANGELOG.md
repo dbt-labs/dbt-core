@@ -139,6 +139,71 @@ Released May 08, 2026
 - [@zhong-dbtlabs](https://github.com/zhong-dbtlabs) ([#1590](https://github.com/dbt-labs/dbt-fusion/issues/1590), [#884](https://github.com/dbt-labs/dbt-fusion/issues/884), [#1086](https://github.com/dbt-labs/dbt-fusion/issues/1086))
 
 
+## 2.0.0-preview.180
+
+Released May 29, 2026
+
+### Features
+
+- [dbt-fusion] Sqlfluff parity
+- [dbt-extension] VS Code extension OAuth login now requests narrower, feature-specific permissions. If a permission is denied, the extension keeps working for unaffected features and prompts you to re-authorize when you trigger a feature that needs the missing permission.
+- [dbt-fusion] Onboarding now prompts to sign in or create a free dbt platform account via `dbt login` instead of asking you to manually place a `dbt_cloud.yml` file.
+- [dbt-fusion] dbt-docs-server: add executed_at to /api/v1/search hits and execution_info to /api/v1/nodes/:id detail responses
+- [dbt-extension] The extension now registers automatically when a dbt_cloud.yml file is present, with no manual step required.
+- [dbt-fusion] Support user_settings.yml flags: read ~/.dbt/user_settings.yml and apply its flags block at the lowest precedence layer (below dbt_project.yml, above defaults), matching dbt-core behavior.
+
+### Fixes
+
+- [dbt-fusion] (fix snowflake) port allows either integer or string
+- [dbt-fusion] Fix column-level tags not selecting properly for test nodes.
+- [dbt-fusion] sidecar: make OBJECT_AGG work as a window aggregate (OVER (PARTITION BY ...)) by rewriting it to an inlined string_agg in the decompiler instead of a macro ([#10503](https://github.com/dbt-labs/dbt-fusion/issues/10503))
+- [dbt-fusion] Manifest emit: serialize `latest_version_pointer` as `{"enabled": null, "alias": null}` instead of `null` so dbt-core can deserialize fusion-produced manifests
+- [dbt-fusion] Fix warning/error messages that referenced non-existent flags `--metadata` and `--lineage`; correct to `--write-metadata` and `--write-lineage`
+- [dbt-fusion] LSP: Fixed incremental compilation when a sources.yml was changed
+- [dbt-fusion] Fix `dbt.project` not being populated when using `--write-metadata`: write `project_name` and `adapter_type` into `generation.parquet` and read them back during index ingest
+- [dbt-index] Metrics no longer show empty names in /api/v1/metrics and /api/v1/search when the index is built via the Fusion compile path ([#7491](https://github.com/dbt-labs/dbt-fusion/issues/7491))
+- [dbt-fusion] Omit query dependencies and upstream table timestamps from dbt State submit requests for view models
+- [dbt-fusion] (dbt-adapter): fix the sql_types.rs numeric imprecision for Decimal types in type conversion functions
+- [dbt-extension] Fixed the trial expiration notification reappearing on every restart.
+- [dbt-extension] Fixed the extension writing a dbt_cloud.yml file when signed in with OAuth; it now only exports one when authenticated with a long-lived API token.
+- [dbt-fusion] Use cached dbt State auth token before consulting the dbt platform auth chain so a malformed dbt_cloud.yml does not block state client initialization
+
+### Under the Hood
+
+- [dbt-fusion] Paths in manifest.json are now conformant with their dbt-core counter-parts
+- [dbt-fusion] Make `Relation` constructor more idiomatic by using a builder.
+- [dbt-fusion] Manifest parity with Core: stop serializing a patch_path for test nodes
+- [dbt-extension] Remove unused Compare panel feature flag gating.
+- [internal] Add new README for dbt-core v2 and sync README-dbtcore.md to dbt-core as README.md via copybara, mirroring the pyproject-dbtcore.toml pattern
+- [dbt-fusion] Bump bundled dbt-docs-v2 UI to b0e4f9b388403fe04c41d00633aea2c7f43c4329
+- [dbt-index] dbt-index crack_epochs: Rust payload pre-decoding for parse/nodes delta — flat typed parquet eliminates json_extract in DuckDB, 9× faster incremental ingest; threshold-based deletion diff avoids table scans on node removal
+- [dbt-fusion] Use "dbt-core" as the clap command name for the dbt-sa-cli binary, so `dbt --help` displays the correct product name.
+- [dbt-index] dbt.metrics names were NULL — fall back to node name column when payload name is absent ([#10627](https://github.com/dbt-labs/dbt-fusion/issues/10627))
+- [dbt-fusion] Exclude snapshots failing due to on-run-start/on-run-end.
+- [dbt-fusion] dbt-docs-server: cap lineage max_depth to 3 (default 3, hard cap 3) on GET /api/v1/nodes/:id/lineage
+- [dbt-fusion] Support lage tolerance compatability configs
+- [dbt-fusion] Keep dbt State gRPC channel alive
+- [dbt-fusion] Make path comparison in tests slash agnostic for windows
+- [dbt-fusion] rename to StateServiceWarn
+- [dbt-fusion] Rename dbt State opt-in flag to manage-state
+
+### Contributors
+- [@HannanNaeem](https://github.com/HannanNaeem)
+- [@aiguofer](https://github.com/aiguofer)
+- [@ajhlee-dbt](https://github.com/ajhlee-dbt)
+- [@izeigerman](https://github.com/izeigerman)
+- [@jcserv](https://github.com/jcserv)
+- [@kczimm](https://github.com/kczimm)
+- [@lottaquestions](https://github.com/lottaquestions)
+- [@mach-kernel](https://github.com/mach-kernel) ([#10503](https://github.com/dbt-labs/dbt-fusion/issues/10503))
+- [@serramatutu](https://github.com/serramatutu)
+- [@tauhid621](https://github.com/tauhid621)
+- [@tauhidanjum](https://github.com/tauhidanjum)
+- [@vfranco](https://github.com/vfranco)
+- [@walther-lalk](https://github.com/walther-lalk)
+- [@waltherl](https://github.com/waltherl)
+
+
 ## 2.0.0-preview.179
 
 Released May 28, 2026
