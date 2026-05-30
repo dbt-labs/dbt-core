@@ -2194,6 +2194,27 @@ class LogOverloadResult(DynamicLevel):
         return f"Overload {formatted}"
 
 
+class V2ParserStart(InfoLevel):
+    def code(self) -> str:
+        return "Q050"
+
+    def message(self) -> str:
+        return f"Delegating parse to v2 parser: {self.v2_parser_command}"
+
+
+class V2ParserEnd(DynamicLevel):
+    def code(self) -> str:
+        return "Q051"
+
+    def message(self) -> str:
+        if self.status == "success":
+            return f"v2 parser completed in {self.execution_time:.2f}s"
+        return (
+            f"v2 parser failed after {self.execution_time:.2f}s "
+            f"({self.error_class}, exit_code={self.exit_code})"
+        )
+
+
 # =======================================================
 # W - Node testing
 # =======================================================
