@@ -1,0 +1,762 @@
+# **what?**
+# Cut a `dbt-sa-cli` release: bump version on a release branch, build the
+# binary matrix via `cargo build`, pack each binary into a wheel via
+# `cargo ci pypi pack`, tag the build commit, publish to PyPI.
+#
+# **why?**
+# OSS release path for the standalone analyzer CLI. The build (`cargo build`)
+# is decoupled from the wheel writer (`cargo ci pypi pack`) — same pattern
+# the internal fs side will use to consume its CDN-built signed binaries.
+# `dbt-ci` writes wheels in pure Rust (zip + metadata) and uploads via the
+# PyPI HTTP API; no maturin, no twine.
+#
+# **when?**
+# Manual `workflow_dispatch` only — every release goes through
+# `cargo ci bump-cargo-version` for the workspace version bump.
+#
+# Flow: prepare-release → { build (matrix), test } → pack → tag →
+# { publish-pypi, github-release }. build and test fan out from
+# prepare-release in parallel and both gate pack — a failing test
+# aborts the release before any wheels are written. tag is a small
+# gate that everything downstream depends on; publish-pypi and
+# github-release run in parallel and are each independently retriable.
+#
+# Repo setup (required `vars.*` runner labels, branch protection, secret
+# provisioning) is documented in `crates/dbt-ci/README.md`.
+#
+# **PyPI publishing**
+# `publish-pypi` uploads to production PyPI via `cargo ci pypi publish`
+# with `--environment prod`, authenticating with the repo-level
+# `PYPI_API_TOKEN` secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`).
+# Two distributions are published — `dbt-core` and
+# `dbt-core-experimental-parser` — selected by the `release_target` input.
+# Dry-run (`inputs.dry_run = true`) skips tag push, publish, and the
+# GitHub Release — build + pack still run so artifacts are inspectable.
+# The release branch is still pushed under `release/dry-run/v…-<run_id>`
+# so the matrix has something to check out; clean these up periodically.
+
+name: Release dbt Core V2
+run-name: >-
+  ${{
+    inputs.dry_run && format('Publish PyPI v{0} (dry run — build only)', inputs.version)
+    || format('Publish PyPI v{0}', inputs.version)
+  }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release SemVer. OSS: X.Y.Z or X.Y.Z-{alpha|beta|rc|preview|dev}.N. GA proprietary: X.Y.Z only."
+        required: true
+        type: string
+      dry_run:
+        description: "Build and pack only — skip tag push, PyPI publish, and GitHub Release."
+        required: false
+        type: boolean
+        default: false
+      source_ref:
+        description: "Source ref to cut the release branch from (default: main)."
+        required: false
+        type: string
+        default: "main"
+      release_target:
+        description: "Which package(s) to publish to PyPI. Pack always builds both; no effect on dry runs."
+        required: false
+        type: choice
+        options:
+          - both
+          - core
+          - parser
+        default: both
+
+concurrency:
+  group: ${{ inputs.dry_run && format('publish-pypi-dry-{0}', github.run_id) || 'publish-pypi-prod' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read   # default; jobs that write (branch/tag/release) declare it themselves
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  # ------------------------------------------------------------------
+  # Cut release/vX.Y.Z, bump workspace version, push the branch.
+  # ------------------------------------------------------------------
+  prepare-release:
+    name: Prepare release branch
+    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    permissions:
+      contents: write
+    outputs:
+      branch: ${{ steps.bump.outputs.branch }}
+      tag: ${{ steps.bump.outputs.tag }}
+      version: ${{ inputs.version }}
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-tags: true
+
+      - name: Reject pre-existing tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag v$VERSION already exists. Pick a new version."
+            exit 1
+          fi
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and dbt-ci build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          shared-key: cargo-ci-tool
+          cache-targets: "true"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Cut release branch and bump version
+        id: bump
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            BRANCH="release/dry-run/v${VERSION}-${GITHUB_RUN_ID}"
+          else
+            BRANCH="release/v${VERSION}"
+          fi
+
+          if [ "$DRY_RUN" != "true" ] && git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::error::Branch $BRANCH already exists. Delete it or pick a new version."
+            exit 1
+          fi
+
+          git switch -c "$BRANCH"
+
+          # Validates SemVer shape, writes [workspace.package].version, refreshes Cargo.lock.
+          cargo ci bump-cargo-version "$VERSION"
+
+          git add Cargo.toml Cargo.lock
+          git commit \
+            -m "chore: release v${VERSION}" \
+            -m "Release workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          git push origin "$BRANCH"
+
+          {
+            echo "branch=$BRANCH"
+            echo "tag=v${VERSION}"
+          } >> "$GITHUB_OUTPUT"
+
+  # ------------------------------------------------------------------
+  # Build the binary per target via `cargo build`. This is the
+  # canonical build path; the wheel writer just consumes its output.
+  # Linux runs in manylinux_2_28 containers for PyPI ABI compliance.
+  # ------------------------------------------------------------------
+  build:
+    name: Build binary (${{ matrix.target }})
+    needs: [prepare-release]
+    runs-on: ${{ matrix.os }}
+    container:
+      image: ${{ matrix.container }}
+    permissions:
+      contents: read
+    env:
+      CARGO_INCREMENTAL: 0
+      RUST_BACKTRACE: 1
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+      BINARY_NAME: dbt-sa-cli
+      PACKAGE_NAME: dbt-core
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ${{ vars.UBUNTU_RUNNER_32 }}
+            container: quay.io/pypa/manylinux_2_28_x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ${{ vars.UBUNTU_RUNNER_ARM_32 }}
+            container: quay.io/pypa/manylinux_2_28_aarch64
+          - target: x86_64-apple-darwin
+            os: ${{ vars.MACOS_RUNNER }}
+            container: ""
+          - target: aarch64-apple-darwin
+            os: ${{ vars.MACOS_RUNNER }}
+            container: ""
+          - target: x86_64-pc-windows-msvc
+            os: ${{ vars.WINDOWS_RUNNER_32 }}
+            container: ""
+    steps:
+      # Windows: disable CRLF conversion on checkout (corrupts text fixtures
+      # and trips Cargo.lock hash checks) and enable long paths (Rust target
+      # dirs blow past MAX_PATH fast).
+      - name: Fixup Git (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --system core.longpaths true
+
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.branch }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+      
+      - name: Install Protocol Buffer Compiler (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          if command -v protoc &> /dev/null; then
+            echo "protoc already installed: $(protoc --version)"
+            exit 0
+          fi
+          if [ -x "/tmp/protoc/bin/protoc" ]; then
+            echo "protoc found in /tmp/protoc/bin"
+            echo "/tmp/protoc/bin" >> $GITHUB_PATH
+            /tmp/protoc/bin/protoc --version
+            exit 0
+          fi
+          echo "Installing Protocol Buffer Compiler..."
+          PB_VERSION="29.4"
+          case "$(uname -m)" in
+            x86_64) PB_ARCH="x86_64" ;;
+            aarch64|arm64) PB_ARCH="aarch_64" ;;
+            *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
+          curl -LsSf $PB_URL -o /tmp/protoc.zip
+          rm -rf /tmp/protoc
+          unzip -o /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> $GITHUB_PATH
+          /tmp/protoc/bin/protoc --version
+          rm /tmp/protoc.zip
+
+      - name: Install Protocol Buffer Compiler (macOS)
+        if: ${{ runner.os == 'macOS' }}
+        run: |
+          if command -v protoc &> /dev/null; then
+            echo "protoc already installed: $(protoc --version)"
+            exit 0
+          fi
+          if [ -x "/tmp/protoc/bin/protoc" ]; then
+            echo "protoc found in /tmp/protoc/bin"
+            echo "/tmp/protoc/bin" >> $GITHUB_PATH
+            /tmp/protoc/bin/protoc --version
+            exit 0
+          fi
+          echo "Installing Protocol Buffer Compiler..."
+          PB_VERSION="29.4"
+          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-osx-universal_binary.zip"
+          curl -LsSf $PB_URL -o /tmp/protoc.zip
+          rm -rf /tmp/protoc
+          unzip -o /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> $GITHUB_PATH
+          /tmp/protoc/bin/protoc --version
+          rm /tmp/protoc.zip
+
+      - name: Install Protocol Buffer Compiler (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          try {
+            $existing = Get-Command protoc -ErrorAction Stop
+            Write-Host "protoc already installed: $($existing.Source)"
+            & protoc --version
+            exit 0
+          } catch {
+            # protoc not found, continue with installation
+          }
+
+          $extractPath = "$env:TEMP\protoc"
+          $protocPath = Join-Path $extractPath "bin"
+          $protocExe = Join-Path $protocPath "protoc.exe"
+          if (Test-Path $protocExe) {
+            Write-Host "protoc found in $protocPath"
+            echo "$protocPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            & "$protocExe" --version
+            exit 0
+          }
+
+          Write-Host "Installing Protocol Buffer Compiler..."
+          $PB_VERSION = "29.4"
+          $PB_URL = "https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-win64.zip"
+          $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+          Invoke-WebRequest -OutFile $tmp $PB_URL
+          Expand-Archive -Path $tmp -DestinationPath $extractPath -Force
+          echo "$protocPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$protocExe" --version
+          Remove-Item $tmp
+
+      - name: Build release binary
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
+        with:
+          timeout_minutes: 45
+          max_attempts: 2
+          shell: bash
+          command: |
+            cargo build --release --locked --bin "$BINARY_NAME" --target "${{ matrix.target }}"
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true
+
+      - name: Strip release binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            strip "target/${TARGET}/release/${BINARY_NAME}.exe"
+          else
+            strip "target/${TARGET}/release/${BINARY_NAME}"
+          fi
+
+      - name: Sign macOS dbt binary
+        if: ${{ runner.os == 'macOS' }}
+        uses: ./.github/actions/macos-sign
+        with:
+          directory: target/${{ matrix.target }}/release
+          filenames: "${{ env.BINARY_NAME }}"
+          disable-library-validation: "true"
+          certificate-base64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          p12-base64: ${{ secrets.APPLE_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          keychain-password: ${{ github.run_id }}
+
+      - name: Sign Windows binaries
+        if: ${{ runner.os == 'Windows' }}
+        uses: ./.github/actions/windows-sign
+        with:
+          directory: target/${{ matrix.target }}/release
+          filenames: "${{ env.BINARY_NAME }}.exe"
+          certificate-b64: ${{ secrets.CODE_SIGNING_CERTIFICATE_B64 }}
+          certificate-password: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          certificates-path: "./certificates"
+
+      - name: Stage binary for pack
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          # `cargo ci pypi pack` expects binaries named by target triple
+          # so a single --binaries-dir call can resolve all platforms.
+          mkdir -p binaries
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${TARGET}/release/${BINARY_NAME}.exe" "binaries/${TARGET}.exe"
+          else
+            cp "target/${TARGET}/release/${BINARY_NAME}" "binaries/${TARGET}"
+          fi
+
+      - name: Create release archive
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          ARCHIVE_BASE="${PACKAGE_NAME}-${VERSION}-${TARGET}"
+          mkdir -p archives "stage/${ARCHIVE_BASE}"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${TARGET}/release/${BINARY_NAME}.exe" "stage/${ARCHIVE_BASE}/"
+            (cd stage && 7z a -tzip "../archives/${ARCHIVE_BASE}.zip" "${ARCHIVE_BASE}" >/dev/null)
+          else
+            cp "target/${TARGET}/release/${BINARY_NAME}" "stage/${ARCHIVE_BASE}/"
+            tar -czf "archives/${ARCHIVE_BASE}.tar.gz" -C stage "${ARCHIVE_BASE}"
+          fi
+          ls -la archives/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: binaries/*
+          if-no-files-found: error
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.target }}
+          path: archives/*
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------
+  # Run the workspace test suite. Parallel to `build` (both fan out from
+  # `prepare-release`) and gates `pack` so a failing test aborts the
+  # release before any wheels are produced. Linux-only — host OS
+  # coverage lives in the regular CI workflow; this is a release gate.
+  # ------------------------------------------------------------------
+  test:
+    name: Test workspace
+    needs: [prepare-release]
+    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    permissions:
+      contents: read
+    env:
+      CARGO_INCREMENTAL: 0
+      RUST_BACKTRACE: 1
+      RUST_MIN_STACK: "8388608"
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.branch }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          key: test-x86_64-unknown-linux-gnu
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+
+      - name: Install Protocol Buffer Compiler
+        run: |
+          if command -v protoc &> /dev/null; then
+            echo "protoc already installed: $(protoc --version)"
+            exit 0
+          fi
+          if [ -x "/tmp/protoc/bin/protoc" ]; then
+            echo "protoc found in /tmp/protoc/bin"
+            echo "/tmp/protoc/bin" >> $GITHUB_PATH
+            /tmp/protoc/bin/protoc --version
+            exit 0
+          fi
+          echo "Installing Protocol Buffer Compiler..."
+          PB_VERSION="29.4"
+          case "$(uname -m)" in
+            x86_64) PB_ARCH="x86_64" ;;
+            aarch64|arm64) PB_ARCH="aarch_64" ;;
+            *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
+          curl -LsSf $PB_URL -o /tmp/protoc.zip
+          rm -rf /tmp/protoc
+          unzip -o /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> $GITHUB_PATH
+          /tmp/protoc/bin/protoc --version
+          rm /tmp/protoc.zip
+
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run tests
+        run: cargo nextest run
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true
+
+  # ------------------------------------------------------------------
+  # Pack all platform binaries into wheels. Single job — wheel writing
+  # is pure-Rust zip + metadata, fast, doesn't need the build matrix.
+  # ------------------------------------------------------------------
+  pack:
+    name: Pack wheels
+    needs: [prepare-release, build, test]
+    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    permissions:
+      contents: read
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.branch }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and dbt-ci build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          shared-key: cargo-ci-tool
+          cache-targets: "true"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+
+      - name: Download all binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+        with:
+          path: binaries
+          pattern: binary-*
+          merge-multiple: true
+
+      - name: List binaries
+        run: ls -la binaries/
+
+      # Two distribution names are produced from the same binaries:
+      #   - dbt-core                       (script: dbt)
+      #   - dbt-core-experimental-parser   (script: dbt-core-experimental-parser)
+      # `cargo ci pypi pack` reads the wheel/distribution name from
+      # [project].name in pyproject.toml — there's no CLI override — so we
+      # pack once, swap pyproject in place, then pack again. The edit is
+      # scoped to the runner's checkout and never committed.
+      - name: Pack wheels (dbt-core)
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          cargo ci pypi pack \
+            --binaries-dir binaries \
+            --version "$VERSION" \
+            --bin-name dbt \
+            --out target/wheels
+
+      - name: Rename pyproject for parser pack
+        run: |
+          sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
+          grep '^name = ' pyproject.toml
+
+      - name: Pack wheels (dbt-core-experimental-parser)
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          cargo ci pypi pack \
+            --binaries-dir binaries \
+            --version "$VERSION" \
+            --bin-name dbt-core-experimental-parser \
+            --out target/wheels
+
+      - name: Restore pyproject name after parser pack
+        if: always()
+        run: |
+          sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
+          grep '^name = ' pyproject.toml
+
+      - name: Download all archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+        with:
+          path: target/archives
+          pattern: archive-*
+          merge-multiple: true
+
+      # Stage every release asset in a single `dist/` directory: wheels
+      # (PyPI), platform archives (GitHub Release), and one SHA256SUMS
+      # covering both. Mirrors the layout the publisher downloads into.
+      - name: Stage release assets
+        run: |
+          mkdir -p dist
+          shopt -s nullglob
+          cp target/wheels/*.whl dist/
+          cp target/archives/*.tar.gz target/archives/*.zip dist/
+          (cd dist && sha256sum *.whl *.tar.gz *.zip | tee SHA256SUMS)
+          ls -la dist/
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------
+  # Tag the release branch HEAD. Tiny, fast, sets the immutable ref
+  # everything downstream hangs off. Skipped on dry-run — the throwaway
+  # `release/dry-run/...` branch isn't worth tagging, and the upstream
+  # `prepare-release` step already rejects pre-existing tags.
+  # Idempotent: re-running a successful tag job is a no-op; pointing
+  # at a different SHA than the existing tag fails loudly.
+  # ------------------------------------------------------------------
+  tag:
+    name: Tag release commit
+    needs: [prepare-release, pack]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.branch }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Tag branch HEAD
+        env:
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          HEAD_SHA=$(git rev-parse HEAD)
+          EXISTING=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
+          if [ -n "$EXISTING" ] && [ "$EXISTING" != "$HEAD_SHA" ]; then
+            echo "::error::Tag $TAG already exists at $EXISTING but HEAD is $HEAD_SHA."
+            exit 1
+          fi
+          git tag -a "$TAG" -m "Release $VERSION" 2>/dev/null || true
+          git push origin "$TAG"
+
+  # ------------------------------------------------------------------
+  # Publish wheels to production PyPI. Skipped on dry-run. Isolated so a
+  # GitHub Release flake doesn't force a re-upload. Authenticates with the
+  # repo-level `PYPI_API_TOKEN` secret (passed to `cargo ci pypi publish`
+  # as `DBT_PYPI_PROD_TOKEN`). `release_target` selects which of the two
+  # distributions (`dbt-core`, `dbt-core-experimental-parser`) to publish.
+  # ------------------------------------------------------------------
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [prepare-release, pack, tag]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    permissions:
+      contents: read
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.branch }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and dbt-ci build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          shared-key: cargo-ci-tool
+          cache-targets: "true"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+
+      - name: Download release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+
+      - name: List release assets
+        run: ls -la dist/
+
+      # `cargo ci pypi publish` filters `dist/` by [project].name in
+      # pyproject.toml (see crates/dbt-ci/src/publish.rs `discover_wheels`),
+      # so to publish both distributions we publish once, swap pyproject in
+      # place, then publish again. Mirrors the pack-job pattern.
+      # - name: Publish (dbt-core)
+      #   if: inputs.release_target != 'parser'
+      #   env:
+      #     DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      #   run: |
+      #     cargo ci pypi publish \
+      #       --environment prod \
+      #       --version "${{ needs.prepare-release.outputs.version }}" \
+      #       --dist dist
+
+      - name: Rename pyproject for parser publish
+        if: inputs.release_target != 'core'
+        run: |
+          sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
+          grep '^name = ' pyproject.toml
+
+      - name: Publish (dbt-core-experimental-parser)
+        if: inputs.release_target != 'core'
+        env:
+          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          cargo ci pypi publish \
+            --environment prod \
+            --version "${{ needs.prepare-release.outputs.version }}" \
+            --dist dist
+
+      - name: Restore pyproject name after parser publish
+        if: ${{ always() && inputs.release_target != 'core' }}
+        run: |
+          sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
+          grep '^name = ' pyproject.toml
+
+  # ------------------------------------------------------------------
+  # Create the GitHub Release with all assets. Skipped on dry-run.
+  # Idempotent: if the release already exists, re-uploads assets with
+  # --clobber so a flaky asset upload can be retried without manual
+  # cleanup.
+  # ------------------------------------------------------------------
+  github-release:
+    name: Create GitHub Release
+    needs: [prepare-release, pack, tag]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.branch }}
+
+      - name: Download release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          shopt -s nullglob
+          ASSETS=(dist/*.whl dist/*.tar.gz dist/*.zip)
+          [ -f dist/SHA256SUMS ] && ASSETS+=(dist/SHA256SUMS)
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; re-uploading assets."
+          else
+            # Pre-release versions (SemVer with a pre-release segment) shouldn't
+            # surface as "Latest" on the Releases page.
+            CREATE_ARGS=(--title "$TAG")
+            [[ "$VERSION" == *-* ]] && CREATE_ARGS+=(--prerelease)
+
+            NOTES=".changes/${VERSION}.md"
+            if [ -f "$NOTES" ]; then
+              CREATE_ARGS+=(--notes-file "$NOTES")
+            else
+              echo "::warning::$NOTES not found; using autogenerated notes."
+              CREATE_ARGS+=(--generate-notes)
+            fi
+
+            gh release create "$TAG" "${CREATE_ARGS[@]}"
+          fi
+
+          gh release upload "$TAG" --clobber "${ASSETS[@]}"
