@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_platform_auth::resolver::{INTERACTIVE_TIMEOUT, OAuthInteractiveResolver};
 use dbt_platform_auth::{AuthError, OAUTH_CLIENT_ID};
@@ -16,7 +17,10 @@ use dbt_run_cache::service_config::{
 use crate::LicenseFetcher;
 use crate::state_guidance::{run_state_guidance, run_state_guidance_after_state_login};
 
-pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
+pub async fn execute_login(
+    fetcher: Arc<dyn LicenseFetcher>,
+    token: &CancellationToken,
+) -> FsResult<()> {
     // Each opener captures its URL via a oneshot and returns immediately.
     // A separate task joins both URLs, combines them into a single browser open.
     let (state_url_tx, state_url_rx) = tokio::sync::oneshot::channel::<String>();
@@ -89,6 +93,9 @@ pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
         println!("\nWaiting for authentication.");
     });
 
+    let (state_abort_tx, state_abort_rx) = tokio::sync::oneshot::channel::<()>();
+    let (platform_abort_tx, platform_abort_rx) = tokio::sync::oneshot::channel::<()>();
+
     let state_flow = BrowserFlow {
         http: reqwest::Client::new(),
         auth_url: DEFAULT_OAUTH_AUTH_URL.to_string(),
@@ -98,11 +105,12 @@ pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
         timeout: INTERACTIVE_TIMEOUT,
         redirect_port: LOOPBACK_PORT,
         opener: state_opener,
-        abort_signal: Mutex::new(None),
+        abort_signal: Mutex::new(Some(state_abort_rx)),
     };
 
     let platform_resolver = OAuthInteractiveResolver::builder(OAUTH_CLIENT_ID)
         .opener(platform_opener)
+        .abort_signal(platform_abort_rx)
         .build();
 
     let state_result = async {
@@ -114,6 +122,16 @@ pub async fn execute_login(fetcher: Arc<dyn LicenseFetcher>) -> FsResult<()> {
     };
 
     tokio::select! {
+        _ = async {
+            loop {
+                if token.is_cancelled() { break; }
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            }
+        } => {
+            let _ = state_abort_tx.send(());
+            let _ = platform_abort_tx.send(());
+            return Ok(());
+        }
         Some(result) = state_result => {
             let response = result.map_err(|e| fs_err!(ErrorCode::AuthFailed, "{e}"))?;
             let stored = StoredToken::from_token_response(response, None)
