@@ -21,6 +21,7 @@ from dbt.events.types import (
     DepsFoundDuplicatePackage,
     DepsInstallInfo,
     DepsListSubdirectory,
+    DepsLockfileRegenerating,
     DepsLockUpdating,
     DepsNoPackagesFound,
     DepsNotifyUpdatesAvailable,
@@ -50,7 +51,14 @@ def _create_sha1_hash(packages: List[PackageSpec]) -> str:
     Returns:
         str: SHA1 hash of the packages list
     """
-    package_strs = [json.dumps(package.to_dict(), sort_keys=True) for package in packages]
+    package_strs = []
+    for package in packages:
+        if hasattr(package, "to_dict_for_hash"):
+            package_dict = package.to_dict_for_hash()
+        else:
+            package_dict = package.to_dict()
+        package_strs.append(json.dumps(package_dict, sort_keys=True))
+
     package_strs = sorted(package_strs)
 
     return sha1("\n".join(package_strs).encode("utf-8")).hexdigest()
@@ -294,6 +302,7 @@ class DepsTask(BaseTask):
             current_hash = _create_sha1_hash(self.project.packages.packages)
             previous_hash = load_yml_dict(lock_file_path).get(PACKAGE_LOCK_HASH_KEY, None)
             if previous_hash != current_hash:
+                fire_event(DepsLockfileRegenerating(lock_filepath=lock_file_path))
                 self.lock()
 
         # Early return when 'dbt deps --lock'
