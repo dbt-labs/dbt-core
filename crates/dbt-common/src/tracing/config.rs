@@ -91,6 +91,9 @@ pub struct FsTraceConfig {
     /// If True, disables stdout/console output even when using Text/Default format.
     /// Useful for long-running services like LSP that only want file logging.
     pub(super) disable_console_output: bool,
+    /// User-facing CLI brand name shown in the version banner and JSON log lines.
+    /// Defaults to "dbt-fusion"; override per binary via `with_command_name`.
+    pub(super) command_name: &'static str,
 }
 
 impl Default for FsTraceConfig {
@@ -114,6 +117,7 @@ impl Default for FsTraceConfig {
             show_all_deprecations: false,
             warn_error_options: WarnErrorOptions::default(),
             disable_console_output: false,
+            command_name: DBT_FUSION,
         }
     }
 }
@@ -291,7 +295,15 @@ impl FsTraceConfig {
             show_all_deprecations,
             warn_error_options,
             disable_console_output,
+            command_name: DBT_FUSION,
         }
+    }
+
+    /// Override the user-facing CLI brand name shown in the version banner and
+    /// JSON log lines. Defaults to "dbt-fusion".
+    pub fn with_command_name(mut self, command_name: &'static str) -> Self {
+        self.command_name = command_name;
+        self
     }
 
     /// Creates a new FsTraceConfig with proper path resolution.
@@ -427,6 +439,7 @@ impl FsTraceConfig {
                         self.max_log_verbosity,
                         self.invocation_id,
                         self.command,
+                        self.command_name,
                     ))
                 }
                 LogFormat::Otel => {
@@ -473,6 +486,7 @@ impl FsTraceConfig {
                     self.max_file_log_verbosity,
                     self.invocation_id,
                     self.command,
+                    self.command_name,
                 )),
                 LogFormat::Otel => None,
             } {
@@ -489,7 +503,7 @@ impl FsTraceConfig {
         };
 
         let tracing_config_provider =
-            create_tracing_config_provider(warn_error_options, file_log_path);
+            create_tracing_config_provider(warn_error_options, file_log_path, self.command_name);
 
         // Create query log writer layer (always enabled; internal-only event sink)
         if self.enable_query_log {
@@ -506,7 +520,7 @@ impl FsTraceConfig {
         // Create OTLP layer - if enabled and endpoint is set via env vars
         if self.export_to_otlp
             && let Some((otlp_layer, mut handles)) = build_otlp_layer(OtlpResourceConfig::new(
-                DBT_FUSION,
+                self.command_name,
                 env!("CARGO_PKG_VERSION"),
             ))
         {

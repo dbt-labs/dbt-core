@@ -14,22 +14,24 @@ fn main() -> ExitCode {
 
     let mut arg = from_main(&cli);
 
-    let (telemetry_handle, tracing_config_provider) =
-        match init_tracing(FsTraceConfig::new_from_io_args(
+    let (telemetry_handle, tracing_config_provider) = match init_tracing(
+        FsTraceConfig::new_from_io_args(
             arg.command,
             cli.project_dir().as_ref(),
             cli.target_path().as_ref(),
             &arg.io,
             Some(&cli.common_args().get_cli_warn_error_options()),
             "dbt",
-        )) {
-            Ok(handle) => handle,
-            Err(e) => {
-                let msg = e.to_string();
-                print_trimmed_error(msg);
-                std::process::exit(1);
-            }
-        };
+        )
+        .with_command_name(cli_parser.command_name()),
+    ) {
+        Ok(handle) => handle,
+        Err(e) => {
+            let msg = e.to_string();
+            print_trimmed_error(msg);
+            std::process::exit(1);
+        }
+    };
 
     let tracing = TracingFeature::default()
         .with_config_provider(tracing_config_provider)

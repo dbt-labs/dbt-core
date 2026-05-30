@@ -13,6 +13,7 @@ use dbt_clap_core::{
     Cli, Command, CompileArgs, CoreCommand, DocsServeArgs as ClapDocsServeArgs, DocsSubcommand,
     LoginSubcommand, ProjectTemplate, ShowArgs, SystemCommand,
 };
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::{
     ErrorCode, FsResult,
@@ -41,7 +42,6 @@ use dbt_common::{
     warn_error_options::{SupportedLegacyWarnError, WarnErrorDecision},
 };
 use dbt_common::{FsError, io_args::FsCommand};
-use dbt_common::{cancellation::CancellationToken, constants::DBT_FUSION};
 use dbt_dag::schedule::Schedule;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_init::init;
@@ -361,9 +361,10 @@ async fn do_execute_fs(
             }
         }
     } else if let Command::Core(Deps(deps_args)) = &cli.command {
+        let command_name = feature_stack.tracing.config_provider.get_command_name();
         emit_info_progress_message(
             ProgressMessage::new_from_action_and_target(
-                DBT_FUSION.to_string(),
+                command_name.to_string(),
                 env!("CARGO_PKG_VERSION").to_string(),
             ),
             eval_arg.io.status_reporter.as_ref(),
@@ -386,9 +387,10 @@ async fn do_execute_fs(
             }
         };
     } else if let Command::Core(Clean(clean_args)) = &cli.command {
+        let command_name = feature_stack.tracing.config_provider.get_command_name();
         emit_info_progress_message(
             ProgressMessage::new_from_action_and_target(
-                DBT_FUSION.to_string(),
+                command_name.to_string(),
                 env!("CARGO_PKG_VERSION").to_string(),
             ),
             eval_arg.io.status_reporter.as_ref(),
@@ -409,7 +411,10 @@ pub async fn execute_setup_and_all_phases(
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    emit_version_info(eval_arg)?;
+    emit_version_info(
+        eval_arg,
+        feature_stack.tracing.config_provider.get_command_name(),
+    )?;
 
     check_options(&eval_arg.io, cli);
     if let Err(e) = validate_engine_env_vars() {
@@ -453,13 +458,12 @@ pub async fn execute_setup_and_all_phases(
 
 /// Emits version information as a progress message.
 /// In debug builds, includes additional details like git hash and build time.
-fn emit_version_info(eval_arg: &EvalArgs) -> FsResult<()> {
+fn emit_version_info(eval_arg: &EvalArgs, command_name: &str) -> FsResult<()> {
     // current_exe errors when running in dbt-cloud
     // https://github.com/rust-lang/rust/issues/46090
     #[cfg(debug_assertions)]
     {
         use chrono::{DateTime, Local};
-        use dbt_common::constants::DBT_FUSION;
         use std::env;
         let exe_path = env::current_exe()
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get current exe path: {}", e))?;
@@ -477,7 +481,7 @@ fn emit_version_info(eval_arg: &EvalArgs) -> FsResult<()> {
                 formatted_time
             );
             emit_info_progress_message(
-                ProgressMessage::new_from_action_and_target(DBT_FUSION.to_string(), build_time),
+                ProgressMessage::new_from_action_and_target(command_name.to_string(), build_time),
                 eval_arg.io.status_reporter.as_ref(),
             );
             return Ok(());
@@ -488,7 +492,7 @@ fn emit_version_info(eval_arg: &EvalArgs) -> FsResult<()> {
     let current_version = env!("CARGO_PKG_VERSION");
     emit_info_progress_message(
         ProgressMessage::new_from_action_and_target(
-            DBT_FUSION.to_string(),
+            command_name.to_string(),
             current_version.to_string(),
         ),
         eval_arg.io.status_reporter.as_ref(),

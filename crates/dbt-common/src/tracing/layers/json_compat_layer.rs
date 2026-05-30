@@ -48,8 +48,12 @@ pub fn build_json_compat_layer<W: SharedWriter + 'static>(
     max_log_verbosity: LevelFilter,
     invocation_id: uuid::Uuid,
     command: FsCommand,
+    command_name: &'static str,
 ) -> ConsumerLayer {
-    Box::new(JsonCompatLayer::new(writer, invocation_id, command).with_filter(max_log_verbosity))
+    Box::new(
+        JsonCompatLayer::new(writer, invocation_id, command, command_name)
+            .with_filter(max_log_verbosity),
+    )
 }
 
 /// Build a JSON compatibility layer with a background writer. This is preferred for writing to
@@ -59,11 +63,18 @@ pub fn build_json_compat_layer_with_background_writer<W: std::io::Write + Send +
     max_log_verbosity: LevelFilter,
     invocation_id: uuid::Uuid,
     command: FsCommand,
+    command_name: &'static str,
 ) -> (ConsumerLayer, TelemetryShutdownItem) {
     let (writer, handle) = BackgroundWriter::new(writer);
 
     (
-        build_json_compat_layer(writer, max_log_verbosity, invocation_id, command),
+        build_json_compat_layer(
+            writer,
+            max_log_verbosity,
+            invocation_id,
+            command,
+            command_name,
+        ),
         Box::new(handle),
     )
 }
@@ -169,6 +180,7 @@ struct JsonCompatLayer {
     filter_flag: TelemetryOutputFlags,
     command: FsCommand,
     custom_envs: std::collections::BTreeMap<String, String>,
+    command_name: &'static str,
 }
 
 impl JsonCompatLayer {
@@ -176,6 +188,7 @@ impl JsonCompatLayer {
         writer: W,
         invocation_id: uuid::Uuid,
         command: FsCommand,
+        command_name: &'static str,
     ) -> Self {
         let is_tty = writer.is_terminal();
         let custom_envs = crate::constants::collect_dbt_custom_envs();
@@ -190,6 +203,7 @@ impl JsonCompatLayer {
             },
             command,
             custom_envs,
+            command_name,
         }
     }
 
@@ -226,7 +240,7 @@ impl JsonCompatLayer {
             Some("A001"),
             Some("MainReportVersion"),
             "info",
-            format!("Running with dbt-fusion={}", version),
+            format!("Running with {}={}", self.command_name, version),
         ))
         .expect("Failed to serialize core event info to JSON");
 
@@ -294,11 +308,12 @@ impl JsonCompatLayer {
             }
 
             format!(
-                "running dbt-fusion with arguments {}",
+                "running {} with arguments {}",
+                self.command_name,
                 serde_json::to_string(eval_args).unwrap_or_default()
             )
         } else {
-            "running dbt-fusion".to_string()
+            format!("running {}", self.command_name)
         };
 
         let info_json = serde_json::to_value(self.build_core_event_info(

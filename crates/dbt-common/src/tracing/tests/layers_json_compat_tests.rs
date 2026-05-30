@@ -44,8 +44,13 @@ where
     let trace_id = rand::random::<u128>();
     let writer = TestWriter::non_terminal();
 
-    let json_layer =
-        build_json_compat_layer(writer.clone(), LevelFilter::TRACE, invocation_id, command);
+    let json_layer = build_json_compat_layer(
+        writer.clone(),
+        LevelFilter::TRACE,
+        invocation_id,
+        command,
+        "dbt-fusion",
+    );
 
     let subscriber = create_tracing_subcriber_with_layer(
         LevelFilter::TRACE,

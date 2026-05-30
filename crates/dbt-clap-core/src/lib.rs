@@ -109,6 +109,12 @@ impl CliParser {
         }
     }
 
+    /// User-facing CLI brand name. Surfaced in clap help/version output,
+    /// the version banner, and `--log-format json` log lines.
+    pub fn command_name(&self) -> &'static str {
+        self.command_name
+    }
+
     /// Instantiate `Cli` from the `ArgMatches` that `clap` generated.
     fn try_parse_from_arg_matches_mut(
         &self,
