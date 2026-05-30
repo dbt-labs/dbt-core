@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,9 +8,9 @@ from unittest import mock
 
 import pytest
 
+from dbt.events.types import V2ParserEnd, V2ParserStart
 from dbt.exceptions import (
     FusionParserError,
-    FusionParserMissingError,
     FusionParserSchemaError,
     FusionParserVersionError,
 )
@@ -52,6 +53,13 @@ def _fake_parser(manifest_text: Optional[str], returncode: int = 0, stderr: str 
         )
 
     return _run
+
+
+@pytest.fixture(autouse=True)
+def _no_invocation_id():
+    """Default to no invocation id so argv tests assert only the flags they set."""
+    with mock.patch("dbt.parser.fusion.get_invocation_id", return_value=None):
+        yield
 
 
 class TestBuildArgv:
@@ -102,6 +110,19 @@ class TestBuildArgv:
         assert argv[i + 1] == "/tmp/handoff"
         assert "user/target" not in argv
 
+    def test_forwards_invocation_id(self):
+        with mock.patch(
+            "dbt.parser.fusion.get_invocation_id",
+            return_value="11111111-1111-1111-1111-111111111111",
+        ):
+            argv = _build_argv(_flags())
+        i = argv.index("--invocation-id")
+        assert argv[i + 1] == "11111111-1111-1111-1111-111111111111"
+
+    def test_omits_invocation_id_when_unavailable(self):
+        argv = _build_argv(_flags())
+        assert "--invocation-id" not in argv
+
 
 class TestSerializeVars:
     def test_dict_to_yaml(self):
@@ -144,8 +165,33 @@ class TestParseWithFusion:
             "dbt.parser.fusion.get_flags",
             return_value=_flags(V2_PARSER="definitely-not-a-real-binary-xyz"),
         ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=FileNotFoundError()):
-            with pytest.raises(FusionParserMissingError):
+            with pytest.raises(FusionParserError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
+
+    def test_sets_dbt_invocation_env_on_subprocess(self, tmp_path: Path, _patch_fusion_deps):
+        """fs must see DBT_INVOCATION_ENV=dbt-core-v2-parser regardless of the
+        parent process's value, so analytics can attribute the embedded fs run
+        to the v2-parser pathway without clobbering the host's own telemetry."""
+        captured = {}
+
+        def _capture(argv, *args, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return _fake_parser(json.dumps({"metadata": {}}))(argv, *args, **kwargs)
+
+        with mock.patch.dict(
+            "os.environ", {"DBT_INVOCATION_ENV": "dbt-cloud-prod__host:cloud"}, clear=False
+        ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_capture), mock.patch(
+            "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
+        ):
+            parse_with_fusion(self._runtime_config(tmp_path), write=False, write_json=False)
+            # parent process env is untouched (asserted inside the patch.dict
+            # block so the original value is still in place to compare against)
+            assert os.environ["DBT_INVOCATION_ENV"] == "dbt-cloud-prod__host:cloud"
+
+        assert captured["env"] is not None
+        assert captured["env"]["DBT_INVOCATION_ENV"] == "dbt-core-v2-parser"
 
     def test_nonzero_exit_raises(self, tmp_path: Path, _patch_fusion_deps):
         # Passthrough mode: the parser's stderr streams directly to the user,
@@ -226,3 +272,95 @@ class TestParseWithFusion:
         ):
             parse_with_fusion(self._runtime_config(target), write=True, write_json=True)
         assert (target / "manifest.json").exists()
+
+
+class TestParseWithFusionTelemetry:
+    """V2ParserStart/V2ParserEnd must fire around every v2-parser handoff so
+    internal analytics can attribute v2-parser invocations and measure success
+    rate end-to-end. Both events must fire on success; on each typed-exception
+    failure path the end event must carry status="failure" + the exception
+    class name. exit_code is -1 except for FusionParserError, which surfaces
+    fs's process exit code via FusionParserError.returncode."""
+
+    def _runtime_config(self, target_path: Path):
+        return SimpleNamespace(project_target_path=str(target_path), project_name="test")
+
+    def _patch_fire_event(self):
+        events: list = []
+
+        def _capture(event, *args, **kwargs):
+            events.append(event)
+
+        return events, mock.patch("dbt.parser.fusion.fire_event", side_effect=_capture)
+
+    def test_success_fires_start_and_end_success(self, tmp_path: Path, _patch_fusion_deps):
+        events, patch_fire = self._patch_fire_event()
+        with patch_fire, mock.patch(
+            "dbt.parser.fusion.subprocess.run",
+            side_effect=_fake_parser(json.dumps({"metadata": {}})),
+        ), mock.patch(
+            "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
+        ):
+            parse_with_fusion(self._runtime_config(tmp_path), write=False, write_json=False)
+
+        types = [type(e).__name__ for e in events]
+        assert types == ["V2ParserStart", "V2ParserEnd"]
+        start, end = events
+        assert isinstance(start, V2ParserStart)
+        assert start.project_name == "test"
+        assert isinstance(end, V2ParserEnd)
+        assert end.status == "success"
+        assert end.error_class == ""
+        assert end.exit_code == -1
+        assert end.execution_time >= 0
+
+    @pytest.mark.parametrize(
+        "subprocess_side_effect, expected_error_class, expected_exit_code",
+        [
+            (FileNotFoundError(), "FusionParserError", -1),
+            # fs exits non-zero — exit code surfaced via FusionParserError.returncode
+            (_fake_parser(manifest_text=None, returncode=2), "FusionParserError", 2),
+            # fs exits 0 but writes no manifest — generic FusionParserError, no returncode
+            (_fake_parser(manifest_text=None), "FusionParserError", -1),
+            (_fake_parser("{ not valid json"), "FusionParserSchemaError", -1),
+        ],
+    )
+    def test_failure_fires_end_failure(
+        self,
+        tmp_path: Path,
+        _patch_fusion_deps,
+        subprocess_side_effect,
+        expected_error_class,
+        expected_exit_code,
+    ):
+        events, patch_fire = self._patch_fire_event()
+        with patch_fire, mock.patch(
+            "dbt.parser.fusion.subprocess.run", side_effect=subprocess_side_effect
+        ):
+            with pytest.raises(FusionParserError):
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
+
+        types = [type(e).__name__ for e in events]
+        assert types == ["V2ParserStart", "V2ParserEnd"]
+        end = events[1]
+        assert end.status == "failure"
+        assert end.error_class == expected_error_class
+        assert end.exit_code == expected_exit_code
+
+    def test_failure_version_error_fires_end_failure(self, tmp_path: Path, _patch_fusion_deps):
+        events, patch_fire = self._patch_fire_event()
+        bad_version = json.dumps(
+            {"metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v1.json"}}
+        )
+        with patch_fire, mock.patch(
+            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(bad_version)
+        ):
+            with pytest.raises(FusionParserVersionError):
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
+
+        end = events[1]
+        assert end.status == "failure"
+        assert end.error_class == "FusionParserVersionError"
+        assert end.exit_code == -1

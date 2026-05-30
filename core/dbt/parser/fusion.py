@@ -17,19 +17,22 @@ import shutil
 import subprocess
 import sysconfig
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
 from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.artifacts.schemas.manifest import WritableManifest
 from dbt.contracts.graph.manifest import Manifest
+from dbt.events.types import V2ParserEnd, V2ParserStart
 from dbt.exceptions import (
     FusionParserError,
-    FusionParserMissingError,
     FusionParserSchemaError,
     FusionParserVersionError,
 )
 from dbt.flags import get_flags
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event, get_invocation_id
 
 if TYPE_CHECKING:
     from dbt.config import RuntimeConfig
@@ -56,31 +59,63 @@ def parse_with_fusion(
 
     flags = get_flags()
     project_target_path = Path(runtime_config.project_target_path)
+    v2_parser_command = getattr(flags, "V2_PARSER", "dbt-core-experimental-parser parse")
+    project_name = runtime_config.project_name
 
-    with tempfile.TemporaryDirectory(prefix="dbt-fusion-") as handoff_dir:
-        handoff = Path(handoff_dir)
-        argv = _build_argv(flags, target_path_override=str(handoff))
+    fire_event(V2ParserStart(v2_parser_command=v2_parser_command, project_name=project_name))
+    start_time = time.monotonic()
+    try:
+        with tempfile.TemporaryDirectory(prefix="dbt-fusion-") as handoff_dir:
+            handoff = Path(handoff_dir)
+            argv = _build_argv(flags, target_path_override=str(handoff))
 
-        _run_fusion(argv)
+            _run_fusion(argv)
 
-        manifest_path = handoff / "manifest.json"
-        if not manifest_path.exists():
-            raise FusionParserError(
-                f"Fusion parser exited successfully but did not produce {manifest_path.name} "
-                f"in the handoff directory."
-            )
-
-        writable_manifest = _load_writable_manifest(manifest_path)
-
-        if write and write_json:
-            # Copy v2 parser artifacts rather than re-serializing through write_manifest
-            project_target_path.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(manifest_path, project_target_path / "manifest.json")
-            semantic_manifest_path = handoff / "semantic_manifest.json"
-            if semantic_manifest_path.exists():
-                shutil.copyfile(
-                    semantic_manifest_path, project_target_path / "semantic_manifest.json"
+            manifest_path = handoff / "manifest.json"
+            if not manifest_path.exists():
+                raise FusionParserError(
+                    f"Fusion parser exited successfully but did not produce {manifest_path.name} "
+                    f"in the handoff directory."
                 )
+
+            writable_manifest = _load_writable_manifest(manifest_path)
+
+            if write and write_json:
+                # Copy v2 parser artifacts rather than re-serializing through write_manifest
+                project_target_path.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(manifest_path, project_target_path / "manifest.json")
+                semantic_manifest_path = handoff / "semantic_manifest.json"
+                if semantic_manifest_path.exists():
+                    shutil.copyfile(
+                        semantic_manifest_path, project_target_path / "semantic_manifest.json"
+                    )
+    except (
+        FusionParserVersionError,
+        FusionParserSchemaError,
+        FusionParserError,
+    ) as e:
+        fire_event(
+            V2ParserEnd(
+                status="failure",
+                execution_time=time.monotonic() - start_time,
+                error_class=type(e).__name__,
+                exit_code=getattr(e, "returncode", -1),
+                project_name=project_name,
+            ),
+            level=EventLevel.ERROR,
+        )
+        raise
+
+    fire_event(
+        V2ParserEnd(
+            status="success",
+            execution_time=time.monotonic() - start_time,
+            error_class="",
+            exit_code=-1,
+            project_name=project_name,
+        ),
+        level=EventLevel.INFO,
+    )
 
     manifest = Manifest.from_writable_manifest(writable_manifest)
     # build_flat_graph is normally called by ManifestLoader.get_full_manifest;
@@ -152,6 +187,11 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     if cli_vars:
         forwarded += ["--vars", _serialize_vars(cli_vars)]
 
+    # Forward dbt-core's invocation_id so fs telemetry shares the same trace.
+    invocation_id = get_invocation_id()
+    if invocation_id:
+        forwarded += ["--invocation-id", str(invocation_id)]
+
     return base + forwarded
 
 
@@ -170,6 +210,21 @@ def _resolve_engine_command(command: str) -> str:
     if candidate.exists():
         return str(candidate)
     return command
+
+
+def _fusion_subprocess_env() -> dict:
+    """Return env for the fs subprocess, overriding DBT_INVOCATION_ENV.
+
+    Setting DBT_INVOCATION_ENV=dbt-core-v2-parser on the child only (not the
+    parent process env) tags every fs telemetry record from this run so the
+    internal-analytics warehouse can attribute it to the v2-parser pathway.
+    The host orchestrator's DBT_INVOCATION_ENV (set by dbt platform Orc/Sinter
+    or by CI) still applies to dbt-core's own telemetry — we only relabel the
+    embedded fs run.
+    """
+    env = os.environ.copy()
+    env["DBT_INVOCATION_ENV"] = "dbt-core-v2-parser"
+    return env
 
 
 def _run_fusion(argv: List[str]) -> None:
@@ -191,9 +246,9 @@ def _run_fusion(argv: List[str]) -> None:
     # Until then, capturing-then-printing-at-end would lose streaming (fusion
     # parsing can take minutes on large projects), so we inherit fds instead.
     try:
-        result = subprocess.run(argv, check=False)
+        result = subprocess.run(argv, check=False, env=_fusion_subprocess_env())
     except FileNotFoundError as e:
-        raise FusionParserMissingError(
+        raise FusionParserError(
             f"Fusion parser command not found: {argv[0]!r}. "
             f"Reinstall dbt-core-experimental-parser, or set --v2-parser to "
             f"point to an alternate engine binary."
@@ -201,7 +256,8 @@ def _run_fusion(argv: List[str]) -> None:
 
     if result.returncode != 0:
         raise FusionParserError(
-            f"Fusion parser failed (exit {result.returncode}); see parser output above."
+            f"Fusion parser failed (exit {result.returncode}); see parser output above.",
+            returncode=result.returncode,
         )
 
 
