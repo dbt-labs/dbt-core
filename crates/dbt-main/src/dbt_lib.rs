@@ -1,6 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -44,16 +43,22 @@ use dbt_common::{
 use dbt_common::{FsError, io_args::FsCommand};
 use dbt_dag::schedule::Schedule;
 use dbt_features::feature_stack::FeatureStack;
+use dbt_features::index::write_metadata_parquet;
+use dbt_index_core::ingest::ingest_state::IngestState;
+use dbt_index_core::ingest::metadata_to_parquet::ingest_from_metadata_direct;
+use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_init::init;
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     listener::{DefaultJinjaTypeCheckEventListenerFactory, JinjaTypeCheckingEventListenerFactory},
     utils::get_catalog_by_relations,
 };
+use dbt_lineage_core::ColIdWithOp;
 use dbt_loader::{
     clean::execute_clean_command, execute_deps_command, upload_artifacts_ingest_if_enabled,
 };
 use dbt_login::{execute_login, execute_login_status};
+use dbt_scheduler::node_selector::ColId;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::{
     man::execute_man_command,
@@ -1090,17 +1095,117 @@ impl<'a> AllPhasesExecutor<'a> {
         if self.arg.write_metadata && self.arg.command != FsCommand::Show {
             let schema_store =
                 Arc::clone(&compilation_cache_state.schema_store) as Arc<dyn SchemaStoreTrait>;
-            self.feature_stack
+
+            let grain_infos = self
+                .feature_stack
                 .index
                 .hooks
-                .write_artifacts(
+                .lineage_grain_infos(&run_task_results)
+                .await?;
+
+            let recomputed_targets: HashSet<String> = if matches!(
+                self.arg.command,
+                FsCommand::Compile | FsCommand::Build | FsCommand::Run
+            ) {
+                run_task_results
+                    .stats
+                    .compile
+                    .stats
+                    .iter()
+                    .map(|s| s.unique_id.clone())
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+            if recomputed_targets.is_empty() {
+                write_metadata_parquet(
                     self.arg.as_ref(),
                     &dbt_manifest,
-                    &resolved_state,
+                    Some(resolved_state.as_ref()),
                     Some(schema_store.as_ref()),
-                    &run_task_results,
-                )
-                .await?;
+                    None,
+                    &recomputed_targets,
+                    &grain_infos,
+                );
+            } else if !self.arg.write_lineage {
+                let empty_lineage: BTreeMap<ColId, BTreeSet<ColIdWithOp>> = BTreeMap::new();
+                write_metadata_parquet(
+                    self.arg.as_ref(),
+                    &dbt_manifest,
+                    Some(resolved_state.as_ref()),
+                    Some(schema_store.as_ref()),
+                    Some(&empty_lineage),
+                    &recomputed_targets,
+                    &grain_infos,
+                );
+            } else {
+                match self
+                    .feature_stack
+                    .index
+                    .hooks
+                    .column_lineage(resolved_state.as_ref(), &run_task_results)
+                    .await
+                {
+                    Ok(column_lineage) => {
+                        write_metadata_parquet(
+                            self.arg.as_ref(),
+                            &dbt_manifest,
+                            Some(resolved_state.as_ref()),
+                            Some(schema_store.as_ref()),
+                            Some(&column_lineage),
+                            &recomputed_targets,
+                            &grain_infos,
+                        );
+                    }
+                    Err(e) => {
+                        emit_warn_log_message(
+                            ErrorCode::Generic,
+                            format!("dbt-index: column_lineage: {e}"),
+                            self.arg.io.status_reporter.as_ref(),
+                        );
+                        let empty_lineage: BTreeMap<ColId, BTreeSet<ColIdWithOp>> = BTreeMap::new();
+                        let empty_targets: HashSet<String> = HashSet::new();
+                        write_metadata_parquet(
+                            self.arg.as_ref(),
+                            &dbt_manifest,
+                            Some(resolved_state.as_ref()),
+                            Some(schema_store.as_ref()),
+                            Some(&empty_lineage),
+                            &empty_targets,
+                            &grain_infos,
+                        );
+                    }
+                }
+            }
+
+            // When --write-index is active, convert metadata epochs → snapshot index parquet.
+            if self.arg.write_index {
+                let metadata_dir = self.arg.metadata_dir();
+                let index_dir = self.arg.index_dir();
+                let mut state = IngestState::default();
+                match ingest_from_metadata_direct(&metadata_dir, &index_dir, &mut state) {
+                    Ok(_) => {
+                        if let Err(e) = save_artifact_meta(
+                            &index_dir,
+                            &self.arg.io.out_dir,
+                            WriteSource::DirectWrite,
+                            None,
+                        ) {
+                            emit_warn_log_message(
+                                ErrorCode::Generic,
+                                format!("dbt-index: save_artifact_meta: {e}"),
+                                self.arg.io.status_reporter.as_ref(),
+                            );
+                        }
+                    }
+                    Err(e) => emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!("dbt-index: write-index: {e}"),
+                        self.arg.io.status_reporter.as_ref(),
+                    ),
+                }
+            }
         }
 
         // todo: here we clone lots of stuff, but this could also be just the CAS

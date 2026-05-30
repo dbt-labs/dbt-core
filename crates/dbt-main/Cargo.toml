@@ -35,8 +35,10 @@ dbt-docs-server = { workspace = true }
 dbt-error = { workspace = true }
 dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-index-core = { workspace = true }
 dbt-init = { workspace = true }
 dbt-jinja-utils = { workspace = true }
+dbt-lineage-core = { workspace = true }
 dbt-loader = { workspace = true }
 dbt-login = { workspace = true }
 dbt-metadata = { workspace = true }

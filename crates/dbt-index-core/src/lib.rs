@@ -25,9 +25,23 @@
 //! 2. Provide a real `DuckDbFooProvider` impl in `dbt-index`.
 //! 3. Wire it from `dbt-cli` at the call sites.
 
+pub mod db;
+pub use db::{DBT_RT_TABLES, DBT_TABLES, write_views_sql};
+
+pub mod ingest;
+
+pub mod parquet;
+pub use parquet::{IndexWriter, WriteMode};
+
+pub mod epoch_layers;
+
+pub mod error;
+pub use error::IndexError;
+
 pub mod backend;
 pub mod column_impact;
 pub mod column_lineage;
+pub mod freshness;
 pub mod provider;
 
 pub use backend::{Backend, BackendError, UnavailableBackend};
@@ -38,4 +52,13 @@ pub use column_lineage::{
     ColumnLineageArgs, ColumnLineageEdge, ColumnLineageProvider, LineageError,
     UnavailableColumnLineage,
 };
+pub use freshness::{ArtifactMetaError, WriteSource, save_artifact_meta};
 pub use provider::{Provider, ProviderOutput, UnavailableProvider};
+
+/// Simple non-cryptographic hash for raw_code.
+pub fn hash_str(s: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}

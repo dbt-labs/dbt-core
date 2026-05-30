@@ -23,6 +23,7 @@ members = [
   "crates/dbt-tasks-sa",
   "crates/dbt-init",
   "crates/dbt-index-core",
+  "crates/dbt-lineage-core",
   "crates/dbt-error",
   "crates/dbt-frontend-common",
   "crates/dbt-jinja/minijinja",
@@ -234,6 +235,7 @@ dbt-jinja-ctx = { path = "crates/dbt-jinja-ctx" }
 dbt-jinja-filters = { path = "crates/dbt-jinja-filters" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }
+dbt-lineage-core = { path = "crates/dbt-lineage-core" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-login = { path = "crates/dbt-login" }
 dbt-main = { path = "crates/dbt-main", default-features = false }

@@ -17,6 +17,8 @@ use dbt_common::{
 use dbt_compilation::{core::DbtLoadedProject, schema_hydration::SchemaHydrationState};
 use dbt_dag::{deps_mgmt::reverse, schedule::Schedule};
 use dbt_features::feature_stack::FeatureStack;
+use dbt_features::index::write_metadata_parquet;
+use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_jinja_utils::{
     invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
@@ -451,14 +453,32 @@ impl<'a> CompilationPhasesExecutor<'a> {
         // Produce parquet metadata epoch files for `parse` (no lineage or schemas available).
         if self.arg.write_metadata && self.arg.command == FsCommand::Parse {
             let manifest = self.memoized_manifest(invocation_id, resolved_state);
-            feature_stack
-                .index
-                .hooks
-                .write_index_direct(self.arg.as_ref(), manifest);
-            feature_stack
-                .index
-                .hooks
-                .save_artifact_meta(self.arg.as_ref());
+
+            let empty_targets = HashSet::new();
+            let empty_grain_infos = HashMap::new();
+            write_metadata_parquet(
+                &self.arg,
+                manifest,
+                None,
+                None,
+                None,
+                &empty_targets,
+                &empty_grain_infos,
+            );
+
+            let index_dir = self.arg.index_dir();
+            if let Err(e) = save_artifact_meta(
+                &index_dir,
+                &self.arg.io.out_dir,
+                WriteSource::DirectWrite,
+                None,
+            ) {
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    format!("dbt-index: save_artifact_meta: {e}"),
+                    self.arg.io.status_reporter.as_ref(),
+                );
+            }
         }
 
         if self.arg.io.should_show(ShowOptions::Manifest) {
