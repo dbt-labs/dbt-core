@@ -482,7 +482,7 @@ impl SqlType {
                 Ok((sql_type, nullable))
             }
             None => {
-                let sql_type = Self::_from_arrow_type(backend, field.data_type());
+                let sql_type = Self::from_arrow_type(backend, field.data_type());
                 Ok((sql_type, field.is_nullable()))
             }
         }
@@ -994,7 +994,7 @@ impl SqlType {
     /// will return a `SqlType` that is the closest match. This is only
     /// used in situations where the field metadata in an Arrow schema
     /// doesn't contain the SQL type string.
-    fn _from_arrow_type(backend: AdapterType, data_type: &DataType) -> SqlType {
+    pub fn from_arrow_type(backend: AdapterType, data_type: &DataType) -> SqlType {
         match data_type {
             DataType::Null => SqlType::Varchar(None, Default::default()),
             DataType::Boolean => SqlType::Boolean,
@@ -1070,9 +1070,11 @@ impl SqlType {
                     TimeZoneSpec::Without
                 },
             },
-            DataType::Duration(..) => {
-                todo!("conversion from Arrow duration to a SQL type for {backend:?}")
-            }
+            // TODO: think more carefully about this one
+            DataType::Duration(unit) => SqlType::Time {
+                precision: Some(time_unit_to_precision(*unit)),
+                time_zone_spec: TimeZoneSpec::Without,
+            },
             // Proposal for extending Arrow to support more SQL interval types:
             // https://docs.google.com/document/d/12ghQxWxyAhSQeZyy0IWiwJ02gTqFOgfYm8x851HZFLk/edit
             DataType::Interval(interval_unit) => match interval_unit {
@@ -1131,7 +1133,7 @@ impl SqlType {
             DataType::Struct(fields) => {
                 let mut sql_fields = Vec::with_capacity(fields.len());
                 for field in fields {
-                    let sql_type = Self::_from_arrow_type(backend, field.data_type());
+                    let sql_type = Self::from_arrow_type(backend, field.data_type());
                     let nullable = field.is_nullable();
                     // XXX: this is not necessarily correct, field names might contain
                     // quote characters that need to be escaped (meaning they should exist
@@ -1143,9 +1145,9 @@ impl SqlType {
             }
             DataType::Union(..) => SqlType::Other("UNION".to_string()),
             DataType::Map(..) => SqlType::Map(None), // TODO: handle key/value types
-            DataType::Dictionary(_, value_type) => Self::_from_arrow_type(backend, value_type),
+            DataType::Dictionary(_, value_type) => Self::from_arrow_type(backend, value_type),
             DataType::RunEndEncoded(_, values) => {
-                Self::_from_arrow_type(backend, values.as_ref().data_type())
+                Self::from_arrow_type(backend, values.as_ref().data_type())
             }
         }
     }
