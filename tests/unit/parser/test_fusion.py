@@ -104,6 +104,13 @@ class TestBuildArgv:
         argv = _build_argv(_flags(V2_PARSER="uv run dbt-core-experimental-parser parse"))
         assert argv == ["uv", "run", "dbt-core-experimental-parser", "parse"]
 
+    def test_expands_tilde_in_v2_parser_path(self):
+        # shlex.split leaves ~ literal; users expect shell-style expansion when
+        # pointing --v2-parser at a binary under their home directory.
+        home = os.path.expanduser("~")
+        argv = _build_argv(_flags(V2_PARSER="~/bin/my-parser parse"))
+        assert argv == [f"{home}/bin/my-parser", "parse"]
+
     def test_target_path_override_replaces_user_value(self):
         argv = _build_argv(_flags(TARGET_PATH="user/target"), target_path_override="/tmp/handoff")
         i = argv.index("--target-path")
@@ -192,6 +199,47 @@ class TestParseWithFusion:
 
         assert captured["env"] is not None
         assert captured["env"]["DBT_INVOCATION_ENV"] == "dbt-core-v2-parser"
+
+    def test_strips_core_only_engine_env_vars_from_subprocess(
+        self, tmp_path: Path, _patch_fusion_deps
+    ):
+        """fs hard-errors on unknown DBT_ENGINE_* vars. Every DBT_ENGINE_* var
+        that maps to a dbt-core CLI option must be stripped from the child env;
+        non-click DBT_ENGINE_* vars (state/recorder/deps) must pass through."""
+        captured = {}
+
+        def _capture(argv, *args, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return _fake_parser(json.dumps({"metadata": {}}))(argv, *args, **kwargs)
+
+        parent_env = {
+            # click-bound — must be stripped
+            "DBT_ENGINE_USE_V2_PARSER": "true",
+            "DBT_ENGINE_V2_PARSER": "dbt-core-experimental-parser parse",
+            "DBT_ENGINE_SKIP_BROWSER_AUTH": "true",
+            "DBT_ENGINE_SQLPARSE": '{"MAX_GROUPING_DEPTH": "10"}',
+            "DBT_ENGINE_DEBUG": "true",  # alias of DBT_DEBUG, click-bound
+            # not click-bound — must pass through (fs uses these natively)
+            "DBT_ENGINE_STATE_OAUTH_CLIENT_ID": "client-id",
+            "DBT_ENGINE_STATE_API_URL": "https://state.example.com",
+        }
+        with mock.patch.dict("os.environ", parent_env, clear=False), mock.patch(
+            "dbt.parser.fusion.subprocess.run", side_effect=_capture
+        ), mock.patch(
+            "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
+        ):
+            parse_with_fusion(self._runtime_config(tmp_path), write=False, write_json=False)
+
+        child_env = captured["env"]
+        assert "DBT_ENGINE_USE_V2_PARSER" not in child_env
+        assert "DBT_ENGINE_V2_PARSER" not in child_env
+        assert "DBT_ENGINE_SKIP_BROWSER_AUTH" not in child_env
+        assert "DBT_ENGINE_SQLPARSE" not in child_env
+        assert "DBT_ENGINE_DEBUG" not in child_env
+        assert child_env["DBT_ENGINE_STATE_OAUTH_CLIENT_ID"] == "client-id"
+        assert child_env["DBT_ENGINE_STATE_API_URL"] == "https://state.example.com"
 
     def test_nonzero_exit_raises(self, tmp_path: Path, _patch_fusion_deps):
         # Passthrough mode: the parser's stderr streams directly to the user,
