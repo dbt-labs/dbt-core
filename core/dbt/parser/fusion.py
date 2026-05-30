@@ -152,8 +152,10 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
         getattr(flags, "V2_PARSER", "dbt-core-experimental-parser parse"),
         posix=(os.name != "nt"),
     )
+    # Expand `~` in the parser binary so users can point --v2-parser at e.g.
+    # `~/bin/my-parser`. shlex.split treats `~` as literal.
     if base:
-        base[0] = _resolve_engine_command(base[0])
+        base[0] = _resolve_engine_command(os.path.expanduser(base[0]))
     forwarded: List[str] = []
 
     project_dir = getattr(flags, "PROJECT_DIR", None)
@@ -221,8 +223,18 @@ def _fusion_subprocess_env() -> dict:
     The host orchestrator's DBT_INVOCATION_ENV (set by dbt platform Orc/Sinter
     or by CI) still applies to dbt-core's own telemetry — we only relabel the
     embedded fs run.
+
+    Also strips every DBT_ENGINE_* env var that maps to a dbt-core CLI option:
+    fs hard-errors on unknown DBT_ENGINE_* vars (its prefix is reserved), and
+    parsing-relevant flags are forwarded via argv by _build_argv. The
+    DBT_ENGINE_STATE_* / recorder / deps vars in _ADDITIONAL_ENGINE_ENV_VARS
+    are not click-bound and pass through unchanged — fs uses them natively.
     """
+    from dbt.cli import params
+
     env = os.environ.copy()
+    for engine_env_var in params.KNOWN_ENV_VARS:
+        env.pop(engine_env_var.name, None)
     env["DBT_INVOCATION_ENV"] = "dbt-core-v2-parser"
     return env
 
