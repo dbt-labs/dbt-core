@@ -132,12 +132,17 @@ class FreshnessRunner(BaseRunner[SourceDefinition, FreshnessNodeResult]):
                     macro_resolver=manifest,
                 )
                 status = compiled_node.freshness.status(freshness["age"])
-            elif compiled_node.loaded_at_field is not None:
-                adapter_response, freshness = self.adapter.calculate_freshness(
+                loaded_at_field = (
+                    compiled_node.loaded_at_field
+                    or compiled_node.config.loaded_at_field
+                )
+
+            elif loaded_at_field is not None:
+                adapter_response,freshness = self.adapter.calculate_freshness(
                     relation,
-                    compiled_node.loaded_at_field,
+                    loaded_at_field,
                     compiled_node.freshness.filter,
-                    macro_resolver=manifest,
+                    macro_resolver = manifest,
                 )
 
                 status = compiled_node.freshness.status(freshness["age"])

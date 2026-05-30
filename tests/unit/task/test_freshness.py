@@ -38,6 +38,19 @@ class TestFreshnessTaskMetadataCache:
         mock_source = mock.Mock()
         mock_source.unique_id = "source_no_loaded_at_field"
         return mock_source
+    
+    @pytest.fixture(scope="class")
+    def source_config_loaded_at_field(self):
+     mock_source = mock.Mock()
+     mock_source.unique_id = "source_config_loaded_at_field"
+     mock_source.loaded_at_field = None
+
+     mock_config = mock.Mock()
+     mock_config.loaded_at_field = "created_at"
+
+     mock_source.config = mock_config
+
+     return mock_source
 
     @pytest.fixture(scope="class")
     def source_no_loaded_at_field2(self):

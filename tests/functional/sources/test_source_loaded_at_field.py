@@ -81,6 +81,18 @@ sources:
       - name: table1
         loaded_at_field: ""
 """
+loaded_at_field_config_schema_yml = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_field: created_at
+    freshness:
+      warn_after:
+        count: 1
+        period: day
+    tables:
+      - name: table1
+"""
 
 
 class TestParsingLoadedAtField:
@@ -134,3 +146,21 @@ class TestParsingLoadedAtField:
         )
         with pytest.raises(YamlParseDictError):
             run_dbt(["parse"])
+        
+                # test config-level loaded_at_field
+        write_file(
+            loaded_at_field_config_schema_yml,
+            project.project_root,
+            "models",
+            "schema.yml",
+        )
+
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+
+        assert "source.test.test_source.table1" in manifest.sources
+
+        assert (
+            manifest.sources.get("source.test.test_source.table1").loaded_at_field
+            == "created_at"
+        )
