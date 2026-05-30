@@ -81,3 +81,27 @@ models:
           - not_null
 
 """
+
+# Fixtures for testing retry with failed tests (GitHub issue #10164)
+# Model that has null values which will fail a not_null test
+models__model_with_null = """
+select 1 as id
+union all
+select null as id
+"""
+
+# Fixed version of the model (no nulls)
+models__model_with_null_fixed = """
+select 1 as id
+union all
+select 2 as id
+"""
+
+schema_model_with_null_yml = """
+models:
+  - name: model_with_null
+    columns:
+      - name: id
+        data_tests:
+          - not_null
+"""
