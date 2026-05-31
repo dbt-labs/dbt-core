@@ -491,9 +491,11 @@ impl KnownDeviation for DbtArtifactsDeviation {
         }
 
         // Indirect match: dbt_artifacts registers on-run-end hooks under the consuming
-        // project's namespace (`operation.<project>.<project>-on_run_end-N`). Detect
+        // project's namespace (`operation.<project>.<project>-on-run-end-N`). Detect
         // these by confirming the SQL is an INSERT INTO targeting a dbt_artifacts schema.
-        if incoming.node_id.contains("-on_run_end-") {
+        // PR #10448 switched hook node IDs from underscores (`-on_run_end-`) to hyphens
+        // (`-on-run-end-`); accept both so older recordings keep matching.
+        if incoming.node_id.contains("-on-run-end-") || incoming.node_id.contains("-on_run_end-") {
             static RE: LazyLock<Regex> = LazyLock::new(|| {
                 Regex::new(r"(?i)insert\s+into\s+[^\s(]*dbt_artifacts").expect("valid regex")
             });
@@ -1266,7 +1268,32 @@ mod tests {
     fn test_dbt_artifacts_deviation_skips_consuming_project_on_run_end_hook() {
         // dbt_artifacts registers on-run-end hooks under the consuming project's namespace,
         // so the node_id won't contain ".dbt_artifacts." — detect via INSERT INTO targeting
-        // a schema whose name contains dbt_artifacts.
+        // a schema whose name contains dbt_artifacts. Since PR #10448 the hook node_id uses
+        // hyphens (`-on-run-end-`), which is the form the runtime now emits.
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_sql = "insert into `proj`.`myproject_dbt_artifacts`.`model_executions` ( node_id ) select col1 from values ( 'abc' )";
+        let recorded_sql = "insert into `proj`.`myproject_dbt_artifacts`.`model_executions` ( node_id ) select col1 from values ( 'xyz' )";
+        let incoming_args = serde_json::json!([incoming_sql]);
+        let recorded_args = serde_json::json!([recorded_sql]);
+
+        let incoming = IncomingEvent::new(
+            "operation.myproject.myproject-on-run-end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        assert!(matches!(
+            engine.validate(&incoming, &recorded),
+            ValidationResult::Skipped(_)
+        ));
+    }
+
+    #[test]
+    fn test_dbt_artifacts_deviation_skips_consuming_project_legacy_underscore_hook() {
+        // Older recordings (pre PR #10448) use the underscore form `-on_run_end-`. Keep
+        // matching it so those recordings continue to replay.
         let engine = TimeMachineEventValidationEngine::new();
 
         let incoming_sql = "insert into `proj`.`myproject_dbt_artifacts`.`model_executions` ( node_id ) select col1 from values ( 'abc' )";
