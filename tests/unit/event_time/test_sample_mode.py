@@ -126,8 +126,30 @@ from dbt_common.exceptions import DbtRuntimeError
         ),
         (
             "1 week",
-            DbtRuntimeError(
-                "Invalid grain size 'week'. Must be one of ['hour', 'day', 'month', 'year', 'hours', 'days', 'months', 'years']."
+            SampleWindow(
+                start=datetime(2025, 1, 21, 18, 4, 0, 0, pytz.UTC),
+                end=datetime(2025, 1, 28, 18, 4, 0, 0, pytz.UTC),
+            ),
+        ),
+        (
+            "4 weeks",
+            SampleWindow(
+                start=datetime(2024, 12, 31, 18, 4, 0, 0, pytz.UTC),
+                end=datetime(2025, 1, 28, 18, 4, 0, 0, pytz.UTC),
+            ),
+        ),
+        (
+            "1 WEEK",
+            SampleWindow(
+                start=datetime(2025, 1, 21, 18, 4, 0, 0, pytz.UTC),
+                end=datetime(2025, 1, 28, 18, 4, 0, 0, pytz.UTC),
+            ),
+        ),
+        (
+            "4 WEEKS",
+            SampleWindow(
+                start=datetime(2024, 12, 31, 18, 4, 0, 0, pytz.UTC),
+                end=datetime(2025, 1, 28, 18, 4, 0, 0, pytz.UTC),
             ),
         ),
         ("an hour", DbtRuntimeError("Unable to convert 'an' to an integer.")),

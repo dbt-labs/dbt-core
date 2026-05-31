@@ -1246,9 +1246,11 @@ class ProviderContext(ManifestContext):
             and self.model.config.get("incremental_strategy") == "microbatch"
             and self.model.batch is not None
         ):
+            week_start = getattr(self.model.config, "week_start", None) or 0
             split_suffix = MicrobatchBuilder.format_batch_start(
                 self.model.batch.event_time_start,
                 self.model.config.batch_size,
+                week_start,
             )
 
         self.model.build_path = self.model.get_target_write_path(

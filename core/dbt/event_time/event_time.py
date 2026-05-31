@@ -20,6 +20,8 @@ def offset_timestamp(timestamp=datetime, batch_size=BatchSize, offset=int) -> da
     2024-09-17 16:06:00 + Batchsize.hour +1 -> 2024-09-17 17:06:00
     2024-09-17 16:06:00 + Batchsize.day -1 -> 2024-09-16 16:06:00
     2024-09-17 16:06:00 + Batchsize.day +1 -> 2024-09-18 16:06:00
+    2024-09-17 16:06:00 + Batchsize.week -1 -> 2024-09-10 16:06:00
+    2024-09-17 16:06:00 + Batchsize.week +1 -> 2024-09-24 16:06:00
     2024-09-17 16:06:00 + Batchsize.month -1 -> 2024-08-17 16:06:00
     2024-09-17 16:06:00 + Batchsize.month +1 -> 2024-10-17 16:06:00
     2024-09-17 16:06:00 + Batchsize.year -1 -> 2023-09-17 16:06:00
@@ -32,6 +34,8 @@ def offset_timestamp(timestamp=datetime, batch_size=BatchSize, offset=int) -> da
         return timestamp + relativedelta(hours=offset)
     elif batch_size == BatchSize.day:
         return timestamp + relativedelta(days=offset)
+    elif batch_size == BatchSize.week:
+        return timestamp + relativedelta(weeks=offset)
     elif batch_size == BatchSize.month:
         return timestamp + relativedelta(months=offset)
     elif batch_size == BatchSize.year:
