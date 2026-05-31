@@ -1,0 +1,10 @@
+[graph]
+exclude = ["dbt-fusion-workspace-hack"]
+
+[bans]
+multiple-versions = "allow"
+deny = [
+  { crate = "dbt-common", reason = "dbt-adapter-sql should not depend on dbt-common" },
+  { crate = "dbt-xdbc", reason = "dbt-adapter-sql should not depend on dbt-xdbc" },
+  { crate = "dbt-adapter", reason = "dbt-adapter-sql should not depend on dbt-adapter" },
+]

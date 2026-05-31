@@ -1,0 +1,688 @@
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
+use dashmap::DashMap;
+use dbt_common::tracing::span_info::SpanStatusRecorder as _;
+use dbt_common::{FsResult, create_debug_span};
+use dbt_schemas::schemas::relations::base::BaseRelation;
+use dbt_telemetry::GenericOpExecuted;
+use tracing::Instrument as _;
+
+use crate::Adapter;
+use crate::{
+    metadata::{CatalogAndSchema, RelationVec},
+    relation::BaseRelationConfig,
+};
+
+type RelationCacheKey = String;
+/// Represents a [BaseRelation] and any associated [BaseRelationConfig] if available
+/// This struct represents any value inside a [RelationCache]
+#[derive(Debug, Clone)]
+pub struct RelationCacheEntry {
+    relation: Arc<dyn BaseRelation>,
+    relation_config: Option<Arc<dyn BaseRelationConfig>>,
+}
+
+impl RelationCacheEntry {
+    /// Used to create a new [RelationCacheEntry] with the given [Arc<dyn BaseRelation>] and [Arc<dyn BaseRelationConfig>]
+    pub fn new(
+        relation: Arc<dyn BaseRelation>,
+        relation_config: Option<Arc<dyn BaseRelationConfig>>,
+    ) -> Self {
+        Self {
+            relation,
+            relation_config,
+        }
+    }
+
+    /// Gets a reference to the [BaseRelation]
+    pub fn relation(&self) -> Arc<dyn BaseRelation> {
+        self.relation.clone()
+    }
+
+    /// Gets a reference to the [BaseRelationConfig], if available
+    pub fn relation_config(&self) -> Option<Arc<dyn BaseRelationConfig>> {
+        self.relation_config.clone()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct SchemaEntry {
+    relations: DashMap<RelationCacheKey, RelationCacheEntry>,
+    // Tracks whether or not we have complete knowledge of this schema
+    is_complete: bool,
+}
+
+/// A dialect agnostic cache of [RelationCacheEntry]
+///
+/// # Example
+/// ```rust
+/// use std::sync::Arc;
+/// use dbt_schemas::schemas::relations::base::BaseRelation;
+/// use dbt_adapter::cache::{RelationCache, RelationCacheEntry};
+///
+/// let cache = RelationCache::new();
+/// let relation: Arc<dyn BaseRelation> = // ... some relation
+///
+/// // Insert relation into cache
+/// cache.insert_relation(relation.clone());
+///
+/// // Retrieve cached relation
+/// let cached: Option<RelationCacheEntry> = cache.get_relation(relation);
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct RelationCache {
+    // This structure loosely represents remote warehouse state
+    // Outer key represents a database schema
+    //
+    // Schema Key -> SchemaeEntry
+    //               Relation Key -> Cache Entry (Relation + Relation Config)
+    // The inner key is a unique key generated from a relation's fully qualified name
+    // We also differentiate using [SchemaEntry] to see what information we actually know about that schema
+    schemas_and_relations: DashMap<String, SchemaEntry>,
+}
+
+impl RelationCache {
+    /// Retrieves a cached entry by relation
+    pub fn get_relation(&self, relation: &dyn BaseRelation) -> Option<RelationCacheEntry> {
+        let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
+        if let Some(schema) = self.schemas_and_relations.get(&schema_key) {
+            schema
+                .relations
+                .get(&relation_key)
+                .map(|r| r.value().clone())
+        } else {
+            None
+        }
+    }
+
+    /// Inserts a relation of [Arc<dyn BaseRelation] along with an optional <Arc<dyn BaseRelationConfig>> if applicable
+    pub fn insert_relation(
+        &self,
+        relation: Arc<dyn BaseRelation>,
+        relation_config: Option<Arc<dyn BaseRelationConfig>>,
+    ) -> Option<RelationCacheEntry> {
+        let (schema_key, relation_key) = Self::get_relation_cache_keys(relation.as_ref());
+        let entry = RelationCacheEntry::new(relation, relation_config);
+        self.schemas_and_relations
+            .entry(schema_key)
+            .or_default()
+            .relations
+            .insert(relation_key, entry)
+    }
+
+    /// Removes and returns a cached entry by key
+    fn evict(&self, schema_key: &str, key: &str) -> Option<RelationCacheEntry> {
+        // Schema Read Guard -> Inner Delete
+        // We do not need to lock reads to the schema as the read guard is sufficient
+        if let Some(relations) = self.schemas_and_relations.get(schema_key) {
+            relations
+                .value()
+                .relations
+                .remove(key)
+                .map(|(_key, value)| value)
+        } else {
+            None
+        }
+    }
+
+    /// Removes and returns a cached entry by relation
+    pub fn evict_relation(&self, relation: &dyn BaseRelation) -> Option<RelationCacheEntry> {
+        let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
+        self.evict(&schema_key, &relation_key)
+    }
+
+    /// Inserts a schema and its relations into the cache
+    pub fn insert_schema(&self, schema: CatalogAndSchema, relations: RelationVec) {
+        let schema_key = schema.to_string();
+        let cached_relations: DashMap<_, _> = relations
+            .iter()
+            .map(|r| {
+                let key = Self::normalize_relation_key(&schema_key, r.as_ref());
+                (key, RelationCacheEntry::new(r.clone(), None))
+            })
+            .collect();
+
+        self.schemas_and_relations.insert(
+            schema_key,
+            SchemaEntry {
+                relations: cached_relations,
+                is_complete: true,
+            },
+        );
+    }
+
+    pub fn insert_many(
+        &self,
+        to_insert: impl IntoIterator<Item = (CatalogAndSchema, Vec<Arc<dyn BaseRelation>>)>,
+    ) {
+        to_insert
+            .into_iter()
+            .for_each(|(schema, relations)| self.insert_schema(schema, relations));
+    }
+
+    /// Drops an entire schema
+    pub fn evict_schema_for_relation(&self, relation: &dyn BaseRelation) {
+        let schema_key = Self::get_schema_cache_key_from_relation(relation);
+        self.schemas_and_relations.remove(&schema_key);
+    }
+
+    /// Checks if the entire schema was cached
+    ///
+    /// If relation provided does not contain catalog/database and schema information
+    /// this function will always return false
+    pub fn contains_full_schema_for_relation(&self, relation: &dyn BaseRelation) -> bool {
+        self.schemas_and_relations
+            .get(&Self::get_schema_cache_key_from_relation(relation))
+            .map(|entry| entry.is_complete)
+            .unwrap_or(false)
+    }
+
+    /// Checks if the entire schema was cached
+    pub fn contains_full_schema(&self, schema: &CatalogAndSchema) -> bool {
+        self.schemas_and_relations
+            .get(&schema.to_string())
+            .map(|entry| entry.is_complete)
+            .unwrap_or(false)
+    }
+
+    /// Checks if a relation exists in the cache
+    pub fn contains_relation(&self, relation: &dyn BaseRelation) -> bool {
+        let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
+        if let Some(relation_cache) = self.schemas_and_relations.get(&schema_key) {
+            relation_cache.value().relations.contains_key(&relation_key)
+        } else {
+            false
+        }
+    }
+
+    /// Renames a relation by updating its key while preserving its configuration
+    /// Returns the new entry that was inserted
+    pub fn rename_relation(
+        &self,
+        old: &dyn BaseRelation,
+        new: Arc<dyn BaseRelation>,
+    ) -> Option<RelationCacheEntry> {
+        if let Some(original_entry) = self.evict_relation(old) {
+            self.insert_relation(new, original_entry.relation_config)
+        } else {
+            None
+        }
+    }
+
+    /// Removes all entries from the cache
+    pub fn clear(&self) {
+        self.schemas_and_relations.clear();
+    }
+
+    /// Number of total relations cached
+    pub fn num_relations(&self) -> usize {
+        self.schemas_and_relations
+            .iter()
+            .map(|entry| entry.value().relations.len())
+            .sum()
+    }
+
+    /// Number of total schemas cached
+    pub fn num_schemas(&self) -> usize {
+        self.schemas_and_relations
+            .iter()
+            .filter(|entry| entry.value().is_complete)
+            .count()
+    }
+
+    /// Helper: Generates cache key pairs from a [BaseRelation]
+    fn get_relation_cache_keys(relation: &dyn BaseRelation) -> (String, String) {
+        (
+            Self::get_schema_cache_key_from_relation(relation),
+            Self::get_relation_cache_key_from_relation(relation),
+        )
+    }
+
+    /// Helper: Generates a relation cache key from a [BaseRelation]
+    fn get_relation_cache_key_from_relation(relation: &dyn BaseRelation) -> String {
+        relation.semantic_fqn()
+    }
+
+    /// Helper: Generates a schema cache key from a [BaseRelation]
+    fn get_schema_cache_key_from_relation(relation: &dyn BaseRelation) -> String {
+        CatalogAndSchema::from(relation).to_string()
+    }
+
+    /// Helper: Generates a normalized relation key by substituting the relation's own schema
+    /// prefix with the provided `schema_key`.
+    ///
+    /// This is needed when the warehouse normalizes identifier casing (e.g. Databricks stores
+    /// all schema names in lowercase in `information_schema`). The caller holds the
+    /// user-specified `schema_key` (which may be uppercase), while the relation returned by
+    /// the warehouse carries the warehouse-normalized (lowercase) schema. Replacing the prefix
+    /// ensures that later lookups via the caller's `CatalogAndSchema` key find the relation.
+    fn normalize_relation_key(schema_key: &str, relation: &dyn BaseRelation) -> String {
+        let relation_schema_key = Self::get_schema_cache_key_from_relation(relation);
+        let relation_fqn = Self::get_relation_cache_key_from_relation(relation);
+        if relation_fqn.starts_with(&relation_schema_key) {
+            format!(
+                "{}{}",
+                schema_key,
+                &relation_fqn[relation_schema_key.len()..]
+            )
+        } else {
+            relation_fqn
+        }
+    }
+}
+
+/// Hydrates the relation cache of the given [Adapter]
+/// The [Adapter] must support [MetadataAdapter] as well
+///
+/// Takes in an input of placeholder relations from which to hydrate schemas for
+/// if they are not already cached
+pub async fn hydrate_relation_cache_if_not_already_cached(
+    dummy_relations: &[Arc<dyn BaseRelation>],
+    adapter: &Arc<Adapter>,
+) -> FsResult<()> {
+    if adapter.metadata_adapter().is_none() {
+        return Ok(());
+    }
+    // Calculate the set of schemas to hydrate
+    let cache_misses: Vec<CatalogAndSchema> = {
+        let relation_cache = adapter.engine().relation_cache();
+        let mut seen: BTreeSet<_> = BTreeSet::new();
+        dummy_relations
+            .iter()
+            .filter_map(|r| {
+                let schema = CatalogAndSchema::from(r);
+                if seen.contains(&schema) || relation_cache.contains_full_schema(&schema) {
+                    None
+                } else {
+                    seen.insert(schema.clone());
+                    Some(schema)
+                }
+            })
+            .collect()
+    };
+    if cache_misses.is_empty() {
+        return Ok(());
+    }
+
+    let span = create_debug_span(GenericOpExecuted::new(
+        "hydrate_relation_cache".to_string(),
+        "downloading relations".to_string(),
+        Some(cache_misses.len() as u64),
+    ));
+
+    adapter
+        .hydrate_relation_cache(&cache_misses)
+        .instrument(span.clone())
+        .await
+        .record_status(&span)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::AdapterType;
+
+    use super::*;
+    use dbt_schemas::schemas::{common::ResolvedQuoting, relations::DEFAULT_RESOLVED_QUOTING};
+
+    #[test]
+    fn test_different_key_creation() {
+        use crate::relation::do_create_relation;
+
+        let cache = RelationCache::default();
+
+        // Create relations with different combinations of database, schema, identifier
+        let relation1: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "db1".to_string(),
+            "schema1".to_string(),
+            Some("table1".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        let relation2: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "db2".to_string(),
+            "schema1".to_string(),
+            Some("table1".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        let relation3: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "db1".to_string(),
+            "schema2".to_string(),
+            Some("table1".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        let relation4: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "db1".to_string(),
+            "schema1".to_string(),
+            Some("table2".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        let relation1_dup: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "db1".to_string(),
+            "schema1".to_string(),
+            Some("table1".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        // Insert relations into cache
+        cache.insert_relation(relation1.clone(), None);
+        cache.insert_relation(relation2.clone(), None);
+        cache.insert_relation(relation3.clone(), None);
+        cache.insert_relation(relation4.clone(), None);
+        cache.insert_relation(relation1_dup.clone(), None);
+
+        // Verify all different relations are cached separately
+        assert!(cache.contains_relation(relation1.as_ref()));
+        assert!(cache.contains_relation(relation2.as_ref()));
+        assert!(cache.contains_relation(relation3.as_ref()));
+        assert!(cache.contains_relation(relation4.as_ref()));
+
+        // Verify cache keys are different
+        let key1 = RelationCache::get_relation_cache_key_from_relation(relation1.as_ref());
+        let key2 = RelationCache::get_relation_cache_key_from_relation(relation2.as_ref());
+        let key3 = RelationCache::get_relation_cache_key_from_relation(relation3.as_ref());
+        let key4 = RelationCache::get_relation_cache_key_from_relation(relation4.as_ref());
+        let key5 = RelationCache::get_relation_cache_key_from_relation(relation1_dup.as_ref());
+
+        // Different relations should have different keys
+        assert_ne!(key1, key2);
+        assert_ne!(key1, key3);
+        assert_ne!(key1, key4);
+        assert_ne!(key2, key3);
+        assert_ne!(key2, key4);
+        assert_ne!(key3, key4);
+
+        // Same relation should have same key
+        assert_eq!(key1, key5);
+    }
+
+    #[test]
+    fn test_quoting_policy_affects_cache_keys() {
+        use crate::relation::do_create_relation;
+
+        let cache = RelationCache::default();
+
+        // With DEFAULT_RESOLVED_QUOT: Arc<dyn BaseRelation> =
+        let relation_quoted: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "MyDB".to_string(),
+            "MySchema".to_string(),
+            Some("MyTable".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        // With no quoting
+        let relation_unquoted: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "MyDB".to_string(),
+            "MySchema".to_string(),
+            Some("MyTable".to_string()),
+            None,
+            ResolvedQuoting {
+                database: false,
+                schema: false,
+                identifier: false,
+            },
+        )
+        .unwrap()
+        .into();
+
+        let key_quoted =
+            RelationCache::get_relation_cache_key_from_relation(relation_quoted.as_ref());
+        let key_unquoted =
+            RelationCache::get_relation_cache_key_from_relation(relation_unquoted.as_ref());
+
+        // Cache keys should be different due to quoting policy affecting normalization
+        // This is intentional! Quoting enforces different semantics within dialects
+        // Relations created with identical quoting configs should result in cache hits
+        assert_ne!(key_quoted, key_unquoted);
+
+        cache.insert_relation(relation_quoted.clone(), None);
+        cache.insert_relation(relation_unquoted.clone(), None);
+
+        // Both should exist as separate entries
+        assert!(cache.contains_relation(relation_quoted.as_ref()));
+        assert!(cache.contains_relation(relation_unquoted.as_ref()));
+
+        // Test that we find the unquoted relation when searching with unquoted policy
+        let search_relation_unquoted: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Postgres,
+            "MyDB".to_string(),
+            "MySchema".to_string(),
+            Some("MyTable".to_string()),
+            None,
+            ResolvedQuoting {
+                database: false,
+                schema: false,
+                identifier: false,
+            },
+        )
+        .unwrap()
+        .into();
+
+        let found_unquoted_entry = cache.get_relation(search_relation_unquoted.as_ref());
+        assert!(found_unquoted_entry.is_some());
+    }
+
+    #[test]
+    fn test_concurrent_mixed_operations_no_race_condition() {
+        use crate::metadata::CatalogAndSchema;
+        use crate::relation::do_create_relation;
+        use std::sync::Arc;
+        use std::thread;
+
+        let cache = Arc::new(RelationCache::default());
+        let num_threads = 8;
+        let operations_per_thread = 50;
+
+        let relations: Vec<Arc<dyn BaseRelation>> = (0..operations_per_thread)
+            .flat_map(|i| {
+                // Create relations in 3 different schemas
+                (0..3).map(move |schema_id| {
+                    do_create_relation(
+                        AdapterType::Postgres,
+                        "test_db".to_string(),
+                        format!("schema_{schema_id}"),
+                        Some(format!("table_{schema_id}_{i}")),
+                        None,
+                        DEFAULT_RESOLVED_QUOTING,
+                    )
+                    .unwrap()
+                    .into()
+                })
+            })
+            .collect();
+
+        let relations = Arc::new(relations);
+
+        let handles: Vec<_> = (0..num_threads)
+            .map(|thread_id| {
+                let cache = cache.clone();
+                let relations = relations.clone();
+
+                thread::spawn(move || {
+                    for i in 0..operations_per_thread {
+                        let relation_idx =
+                            (thread_id * operations_per_thread + i) % relations.len();
+                        let relation = &relations[relation_idx];
+
+                        match i % 7 {
+                            0 => {
+                                // Individual relation insert
+                                cache.insert_relation(Arc::clone(relation), None);
+                            }
+                            1 => {
+                                // Individual relation evict
+                                cache.evict_relation(relation.as_ref());
+                            }
+                            2 => {
+                                // Schema hydration
+                                let schema = CatalogAndSchema::from(relation);
+                                let schema_relations: Vec<_> = relations
+                                    .iter()
+                                    .filter(|r| CatalogAndSchema::from(*r) == schema)
+                                    .cloned()
+                                    .collect();
+                                cache.insert_schema(schema, schema_relations);
+                            }
+                            3 => {
+                                // Schema eviction
+                                cache.evict_schema_for_relation(relation.as_ref());
+                            }
+                            4 => {
+                                // Read operations (most common in real usage)
+                                cache.contains_relation(relation.as_ref());
+                                cache.get_relation(relation.as_ref());
+                            }
+                            5 => {
+                                // Schema checks
+                                cache.contains_full_schema_for_relation(relation.as_ref());
+                            }
+                            6 => {
+                                // Rename operations (less common but important)
+                                let new_relation = do_create_relation(
+                                    AdapterType::Postgres,
+                                    "test_db".to_string(),
+                                    format!("schema_{}", thread_id % 3),
+                                    Some(format!("renamed_table_{thread_id}_{i}")),
+                                    None,
+                                    DEFAULT_RESOLVED_QUOTING,
+                                )
+                                .map(Arc::from)
+                                .unwrap();
+                                cache.rename_relation(relation.as_ref(), new_relation);
+                            }
+                            _ => unreachable!(),
+                        }
+
+                        // Occasionally clear everything (stress test)
+                        if i % 25 == 0 && thread_id == 0 {
+                            cache.clear();
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Verify consistency after all operations
+        for relation in relations.iter() {
+            let contains = cache.contains_relation(relation.as_ref());
+            let get_result = cache.get_relation(relation.as_ref());
+
+            // consistency check: if contains says it exists, it must actually exist!
+            if contains {
+                assert!(
+                    get_result.is_some(),
+                    "Cache inconsistency: contains_relation=true but get_relation=None for relation: {:?}",
+                    relation.semantic_fqn()
+                );
+            }
+
+            // Schema-level consistency
+            let schema_exists = cache.contains_full_schema_for_relation(relation.as_ref());
+            if schema_exists && contains {
+                assert!(
+                    get_result.is_some(),
+                    "Schema exists and relation exists, but get_relation failed"
+                );
+            }
+        }
+        // Test survived all concurrent operations without panicking or corrupting
+    }
+
+    /// Regression test for https://github.com/dbt-labs/dbt-fusion/issues/943
+    ///
+    /// When schema name contains uppercase letters on Databricks, the second `dbtf seed`
+    /// run fails with TABLE_OR_VIEW_ALREADY_EXISTS.
+    ///
+    /// Root cause: `insert_schema` stores relations under the outer schema key derived
+    /// from the caller's (user-specified, uppercase) `CatalogAndSchema`, but the inner
+    /// relation keys come from `semantic_fqn()` of the warehouse-returned relations
+    /// (which have lowercase schema, as Databricks normalises names to lowercase).
+    /// The outer key matches on the next lookup (so `is_complete = true`), but the
+    /// inner key doesn't — `get_relation_value_from_cache` therefore returns
+    /// `none_value()` ("table doesn't exist"), causing the seed materializer to attempt
+    /// CREATE TABLE on an already-existing table.
+    #[test]
+    fn test_databricks_uppercase_schema_seed_second_run_repro() {
+        use crate::metadata::CatalogAndSchema;
+        use crate::relation::do_create_relation;
+
+        let cache = RelationCache::default();
+
+        // The user specifies schema "NOTLIKETHIS" (uppercase) in their dbt project.
+        let user_relation: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Databricks,
+            "my_catalog".to_string(),
+            "NOTLIKETHIS".to_string(),
+            Some("my_seed".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        // Databricks returns schema names in lowercase from information_schema.tables.
+        let db_relation: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Databricks,
+            "my_catalog".to_string(),
+            "notlikethis".to_string(),
+            Some("my_seed".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        // Simulates `update_relation_cache`: insert_schema is called with the
+        // CatalogAndSchema derived from the user relation (uppercase schema key)
+        // but with the warehouse-returned relation (lowercase schema in semantic_fqn).
+        let schema = CatalogAndSchema::from(user_relation.as_ref());
+        cache.insert_schema(schema, vec![db_relation]);
+
+        // The schema is marked as complete (is_complete = true), so the cache believes
+        // it has full knowledge of this schema.
+        assert!(cache.contains_full_schema_for_relation(user_relation.as_ref()));
+
+        // The relation must be findable via the user-specified (uppercase) relation.
+        // Without the fix this assertion fails: the inner relation key ("NOTLIKETHIS")
+        // doesn't match the DB-returned key ("notlikethis"), so get_relation returns
+        // None while contains_full_schema says the schema is complete — causing
+        // get_relation_value_from_cache to return none_value() instead of the relation.
+        assert!(
+            cache.contains_relation(user_relation.as_ref()),
+            "issue #943: uppercase schema 'NOTLIKETHIS' should find the relation that \
+             Databricks returned with lowercase schema 'notlikethis'"
+        );
+    }
+}

@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: remove `quoted_identifiers_ignore_case` (parity w/ core adapter)
+time: 2026-03-03T11:49:20.794813-07:00
+custom:
+    author: chasewalden
+    issue: ""
+    project: dbt-fusion

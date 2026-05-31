@@ -1,0 +1,8 @@
+# Scenario: Bare Glue catalog with no secret, no endpoint_type.
+# Exercises: ATTACH source defaults to the catalog name.
+catalogs:
+  - name: aws_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb: {}

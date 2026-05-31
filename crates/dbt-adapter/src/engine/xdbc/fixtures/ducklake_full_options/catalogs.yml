@@ -1,0 +1,15 @@
+# Scenario: DuckLake catalog with every supported option populated.
+# Exercises: DATA_PATH, METADATA_SCHEMA, CREATE_IF_NOT_EXISTS, READ_ONLY, ENCRYPTED.
+catalogs:
+  - name: lake_full
+    type: ducklake
+    table_format: iceberg
+    config:
+      duckdb:
+        metadata_path: "metadata.db"
+        data_path: "s3://bucket/lake"
+        metadata_schema: "lake_meta"
+        create_if_not_exists: true
+        read_only: false
+        encrypted: true
+        attach_as: "lake_full"

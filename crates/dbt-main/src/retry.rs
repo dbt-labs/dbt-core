@@ -1,0 +1,413 @@
+//! Retry command implementation for re-running failed nodes from previous executions.
+
+use dbt_clap_core::*;
+use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::{ErrorCode, FsResult, err};
+use dbt_schemas::schemas::RunResultsArtifact;
+use std::path::Path;
+use std::str::FromStr;
+
+/// Statuses that should be retried on retry command.
+/// These match dbt-core's retryable statuses.
+pub const RETRYABLE_STATUSES: &[&str] = &["error", "fail", "skipped", "warn"];
+
+pub const RETRIABLE_COMMANDS: &[&str] = &["run", "build", "test", "seed", "snapshot", "compile"];
+
+/// Holds the state extracted from a previous run's run_results.json
+/// needed to execute a retry command.
+#[derive(Debug)]
+pub struct RetryState {
+    /// The original command type that was run (e.g., "run", "build", "test")
+    pub original_command: String,
+    /// List of unique_ids for nodes that should be retried
+    pub retryable_node_ids: Vec<String>,
+    /// The static analysis setting from the original run, if present
+    pub original_static_analysis: Option<StaticAnalysisKind>,
+}
+
+impl RetryState {
+    /// Load retry state from a run_results.json file.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the run_results.json file
+    ///
+    /// # Returns
+    /// * `Ok(RetryState)` - If the file was parsed and contains retryable nodes
+    /// * `Err` - If the file doesn't exist, is invalid, or has no failed nodes
+    pub fn from_run_results(path: &Path) -> FsResult<Self> {
+        let artifact = RunResultsArtifact::from_file(path)?;
+
+        let original_command = artifact.args.which.clone();
+
+        // Parse static analysis setting from args.__other__
+        let original_static_analysis = artifact
+            .args
+            .__other__
+            .get("static_analysis")
+            .and_then(|v| v.as_str())
+            .and_then(|s| StaticAnalysisKind::from_str(s).ok());
+
+        // Collect all retryable nodes: error, fail, skipped, warn
+        // The graph infrastructure will handle dependency ordering automatically
+        let retryable_node_ids: Vec<String> = artifact
+            .results
+            .iter()
+            .filter(|r| RETRYABLE_STATUSES.contains(&r.status.as_str()))
+            .map(|r| r.unique_id.clone())
+            .collect();
+
+        if retryable_node_ids.is_empty() {
+            return err!(
+                ErrorCode::Generic,
+                "No failed nodes found in run_results.json - nothing to retry"
+            );
+        }
+
+        Ok(Self {
+            original_command,
+            retryable_node_ids,
+            original_static_analysis,
+        })
+    }
+
+    /// Convert the original command string to a CoreCommand.
+    ///
+    /// Returns an Err containing the original command string if it is not supported for retry.
+    pub fn to_command(&self, retry_args: &RetryArgs) -> Result<CoreCommand, String> {
+        let common_args = retry_args.common_args.clone();
+
+        // Determine effective static analysis setting:
+        //
+        // 1. Explicit CLI flag (from retry_args) takes highest priority
+        // 2. Original run's setting (if present) is used to preserve behavior
+        // 3. Otherwise preserve the absence of an explicit setting
+        let static_analysis = retry_args.static_analysis.or(self.original_static_analysis);
+
+        // XXX: the RetryState should have enough information to reconstruct
+        // the original command with all necessary args, but that's unfortunately
+        // not the case yet
+        let core_cmd = match self.original_command.as_str() {
+            "run" => CoreCommand::Run(RunArgs {
+                common_args,
+                static_analysis,
+                ..RunArgs::default()
+            }),
+            "build" => CoreCommand::Build(BuildArgs {
+                common_args,
+                static_analysis,
+                ..BuildArgs::default()
+            }),
+            "test" => CoreCommand::Test(TestArgs {
+                common_args,
+                static_analysis,
+                ..TestArgs::default()
+            }),
+            "seed" => CoreCommand::Seed(SeedArgs {
+                common_args,
+                static_analysis,
+                ..SeedArgs::default()
+            }),
+            "snapshot" => CoreCommand::Snapshot(SnapshotArgs {
+                common_args,
+                static_analysis,
+                ..SnapshotArgs::default()
+            }),
+            "compile" => CoreCommand::Compile(CompileArgs {
+                common_args,
+                static_analysis,
+                ..CompileArgs::default()
+            }),
+            other => {
+                debug_assert!(!RETRIABLE_COMMANDS.contains(&other));
+                return Err(other.to_string());
+            }
+        };
+        Ok(core_cmd)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_retryable_statuses_contains_expected() {
+        assert!(RETRYABLE_STATUSES.contains(&"error"));
+        assert!(RETRYABLE_STATUSES.contains(&"fail"));
+        assert!(RETRYABLE_STATUSES.contains(&"skipped"));
+        assert!(RETRYABLE_STATUSES.contains(&"warn"));
+        assert!(!RETRYABLE_STATUSES.contains(&"success"));
+        assert!(!RETRYABLE_STATUSES.contains(&"pass"));
+    }
+
+    fn cmd_for_retry(
+        original_cmd: &str,
+        original_sa: Option<StaticAnalysisKind>,
+        retry_sa: Option<StaticAnalysisKind>,
+    ) -> Result<CoreCommand, String> {
+        let state = RetryState {
+            original_command: original_cmd.into(),
+            retryable_node_ids: vec!["some_node_id".to_string()],
+            original_static_analysis: original_sa,
+        };
+        let retry_args = RetryArgs {
+            common_args: CommonArgs::default(),
+            static_analysis: retry_sa,
+        };
+        state.to_command(&retry_args)
+    }
+
+    fn check_cmd_for_retry(
+        original_cmd: &str,
+        original_sa: Option<StaticAnalysisKind>,
+        retry_sa: Option<StaticAnalysisKind>,
+    ) {
+        let cmd = cmd_for_retry(original_cmd, original_sa, retry_sa).unwrap();
+        assert_eq!(cmd.name(), original_cmd);
+
+        let expected_sa = retry_sa.or(original_sa);
+
+        assert_eq!(
+            cmd.static_analysis(),
+            expected_sa,
+            "Failed for command: {original_cmd}, \
+original_sa: {original_sa:?}, \
+retry_args.sa: {retry_sa:?}, \
+expected_sa: {expected_sa:?}",
+        );
+    }
+
+    #[test]
+    fn test_command_for_retry() {
+        const SA: [Option<StaticAnalysisKind>; 5] = [
+            None,
+            Some(StaticAnalysisKind::On),
+            Some(StaticAnalysisKind::Strict),
+            Some(StaticAnalysisKind::Off),
+            Some(StaticAnalysisKind::Unsafe),
+        ];
+        for cmd in RETRIABLE_COMMANDS {
+            for original_sa in SA.iter() {
+                for retry_sa in SA.iter() {
+                    check_cmd_for_retry(cmd, *original_sa, *retry_sa);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_invalid_command_for_retry() {
+        assert_eq!(
+            cmd_for_retry("other-command-that-cant-be-retried", None, None).unwrap_err(),
+            "other-command-that-cant-be-retried"
+        );
+    }
+
+    /// Helper to create a run_results.json file for testing
+    fn create_run_results_json(results: &[(&str, &str)], which: &str) -> NamedTempFile {
+        create_run_results_json_with_sa(results, which, None)
+    }
+
+    /// Helper to create a run_results.json file for testing with optional static_analysis
+    fn create_run_results_json_with_sa(
+        results: &[(&str, &str)],
+        which: &str,
+        static_analysis: Option<&str>,
+    ) -> NamedTempFile {
+        let results_json: Vec<String> = results
+            .iter()
+            .map(|(unique_id, status)| {
+                format!(
+                    r#"{{"status": "{}", "unique_id": "{}", "timing": [], "thread_id": "Thread-1", "execution_time": 0.1, "adapter_response": {{}}}}"#,
+                    status, unique_id
+                )
+            })
+            .collect();
+
+        let sa_part = static_analysis
+            .map(|sa| format!(r#", "static_analysis": "{}""#, sa))
+            .unwrap_or_default();
+
+        let json = format!(
+            r#"{{
+                "metadata": {{
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/run-results/v6.json",
+                    "dbt_version": "1.9.0",
+                    "generated_at": "2024-01-01T00:00:00Z",
+                    "invocation_id": "test-invocation-id",
+                    "env": {{}}
+                }},
+                "results": [{}],
+                "elapsed_time": 1.0,
+                "args": {{
+                    "command": "{}",
+                    "which": "{}"{sa_part}
+                }}
+            }}"#,
+            results_json.join(","),
+            which,
+            which
+        );
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(json.as_bytes()).unwrap();
+        file
+    }
+
+    #[test]
+    fn test_from_run_results_with_failures() {
+        let file = create_run_results_json(
+            &[
+                ("model.my_project.model_a", "success"),
+                ("model.my_project.model_b", "error"),
+                ("model.my_project.model_c", "fail"),
+                ("model.my_project.model_d", "skipped"),
+            ],
+            "run",
+        );
+
+        let state = RetryState::from_run_results(file.path()).unwrap();
+
+        assert_eq!(state.original_command, "run");
+        assert_eq!(state.retryable_node_ids.len(), 3);
+        assert!(
+            state
+                .retryable_node_ids
+                .contains(&"model.my_project.model_b".to_string())
+        );
+        assert!(
+            state
+                .retryable_node_ids
+                .contains(&"model.my_project.model_c".to_string())
+        );
+        assert!(
+            state
+                .retryable_node_ids
+                .contains(&"model.my_project.model_d".to_string())
+        );
+        // success should NOT be included
+        assert!(
+            !state
+                .retryable_node_ids
+                .contains(&"model.my_project.model_a".to_string())
+        );
+    }
+
+    #[test]
+    fn test_from_run_results_all_success_errors() {
+        let file = create_run_results_json(
+            &[
+                ("model.my_project.model_a", "success"),
+                ("model.my_project.model_b", "success"),
+            ],
+            "run",
+        );
+
+        let result = RetryState::from_run_results(file.path());
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("No failed nodes"));
+    }
+
+    #[test]
+    fn test_from_run_results_file_not_found() {
+        let result = RetryState::from_run_results(Path::new("/nonexistent/run_results.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_run_results_preserves_command_type() {
+        for cmd in &["run", "build", "test", "seed", "snapshot", "compile"] {
+            let file = create_run_results_json(&[("model.my_project.model_a", "error")], cmd);
+
+            let state = RetryState::from_run_results(file.path()).unwrap();
+            assert_eq!(state.original_command, *cmd);
+        }
+    }
+
+    #[test]
+    fn test_from_run_results_includes_warn_status() {
+        let file = create_run_results_json(
+            &[
+                ("test.my_project.test_a", "pass"),
+                ("test.my_project.test_b", "warn"),
+            ],
+            "test",
+        );
+
+        let state = RetryState::from_run_results(file.path()).unwrap();
+        assert_eq!(state.retryable_node_ids.len(), 1);
+        assert!(
+            state
+                .retryable_node_ids
+                .contains(&"test.my_project.test_b".to_string())
+        );
+    }
+
+    #[test]
+    fn test_from_run_results_parses_static_analysis_on() {
+        let file = create_run_results_json_with_sa(
+            &[("model.my_project.model_a", "error")],
+            "run",
+            Some("on"),
+        );
+
+        let state = RetryState::from_run_results(file.path()).unwrap();
+        assert_eq!(state.original_static_analysis, Some(StaticAnalysisKind::On));
+    }
+
+    #[test]
+    fn test_from_run_results_parses_static_analysis_off() {
+        let file = create_run_results_json_with_sa(
+            &[("model.my_project.model_a", "error")],
+            "run",
+            Some("off"),
+        );
+
+        let state = RetryState::from_run_results(file.path()).unwrap();
+        assert_eq!(
+            state.original_static_analysis,
+            Some(StaticAnalysisKind::Off)
+        );
+    }
+
+    #[test]
+    fn test_from_run_results_parses_static_analysis_unsafe() {
+        let file = create_run_results_json_with_sa(
+            &[("model.my_project.model_a", "error")],
+            "run",
+            Some("unsafe"),
+        );
+
+        let state = RetryState::from_run_results(file.path()).unwrap();
+        assert_eq!(
+            state.original_static_analysis,
+            Some(StaticAnalysisKind::Unsafe)
+        );
+    }
+
+    #[test]
+    fn test_from_run_results_parses_static_analysis_baseline() {
+        let file = create_run_results_json_with_sa(
+            &[("model.my_project.model_a", "error")],
+            "run",
+            Some("baseline"),
+        );
+
+        let state = RetryState::from_run_results(file.path()).unwrap();
+        assert_eq!(
+            state.original_static_analysis,
+            Some(StaticAnalysisKind::Baseline)
+        );
+    }
+
+    #[test]
+    fn test_from_run_results_no_static_analysis() {
+        let file = create_run_results_json(&[("model.my_project.model_a", "error")], "run");
+
+        let state = RetryState::from_run_results(file.path()).unwrap();
+        assert_eq!(state.original_static_analysis, None);
+    }
+}

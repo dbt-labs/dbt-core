@@ -1,0 +1,10 @@
+# The SPA source lives in the dbt-ui repo. A built `dist/` is committed
+# here so every build of `dbt-docs-server` embeds a working bundle.
+node_modules/
+.vite/
+
+# Parent fs/sa/.gitignore excludes `dist/` everywhere; re-include this
+# committed bundle but keep sourcemaps out (upstream vite has
+# sourcemap: false; belt-and-suspenders).
+!dist/
+dist/**/*.map

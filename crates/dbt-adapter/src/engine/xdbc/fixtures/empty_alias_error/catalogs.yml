@@ -1,0 +1,10 @@
+# Scenario: attach_as that sanitizes to the empty string.
+# Exercises: Configuration error for empty alias after sanitization.
+catalogs:
+  - name: bad_alias
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        attach_as: "!!!"
+        endpoint_type: GLUE

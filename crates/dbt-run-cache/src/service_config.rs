@@ -1,0 +1,674 @@
+use std::env;
+use std::fmt;
+use std::time::Duration;
+
+pub const DEFAULT_API_URL: &str = "api.state.dbt.com:443";
+pub const DEFAULT_OAUTH_TOKEN_URL: &str = "https://auth.state.dbt.com/token";
+pub const DEFAULT_OAUTH_AUTH_URL: &str = "https://auth.state.dbt.com";
+pub const DEFAULT_API_CLIENT_TIMEOUT_SECONDS: u64 = 60;
+pub const DEFAULT_FRESHNESS_TOLERANCE_SECONDS: i64 = 2700;
+pub const DEFAULT_OAUTH_CLIENT_ID: &str = "2fd87cd5-69a6-4c5f-9097-747a58f0edf6";
+pub const DEFAULT_DEFER_TO: &str = "prod";
+pub const DEFAULT_DEFER_LOG_LEVEL: &str = "off";
+pub const DEFAULT_LOG_FILE_LIMIT: i64 = 20;
+pub const DEFAULT_LOG_PREFIX: &str = "responses_";
+pub const DEFAULT_METADATA_CACHE_TTL_SECONDS: i64 = 0;
+const STATE_MANAGE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
+const STATE_OAUTH_CLIENT_ID_ENV: &str = "DBT_ENGINE_STATE_OAUTH_CLIENT_ID";
+const STATE_OAUTH_CLIENT_SECRET_ENV: &str = "DBT_ENV_SECRET_STATE_OAUTH_CLIENT_SECRET";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CloneIncrementalInDev {
+    Never,
+    IfTableMissing,
+    Always,
+}
+
+impl CloneIncrementalInDev {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Never => "NEVER",
+            Self::IfTableMissing => "IF_TABLE_MISSING",
+            Self::Always => "ALWAYS",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunCacheServiceConfig {
+    pub enabled: bool,
+    pub api_url: String,
+    pub secure: bool,
+    pub org_id: Option<String>,
+    pub oauth_client_id: String,
+    pub oauth_client_secret: Option<String>,
+    pub oauth_token_url: String,
+    pub oauth_auth_url: String,
+    pub timeout: Duration,
+    pub defer_to: String,
+    pub defer_log_level: String,
+    pub enable_response_logging: bool,
+    pub enable_data_tests: bool,
+    pub log_file_limit: i64,
+    pub log_dir_override: Option<String>,
+    pub log_prefix: String,
+    pub freshness_tolerance_seconds: i64,
+    pub tolerate_nondeterminism: bool,
+    pub enable_lenient_dependencies: bool,
+    pub clone_incremental_in_dev: CloneIncrementalInDev,
+    pub clone_time_travel_limit_seconds: Option<i64>,
+    pub metadata_cache_ttl_seconds: i64,
+    pub run_hooks_on_no_op: bool,
+    pub snowflake_get_view_ddl_override: Option<String>,
+    pub snowflake_metadata_warehouse: Option<String>,
+}
+
+impl RunCacheServiceConfig {
+    pub fn from_env() -> Result<Self, RunCacheServiceConfigError> {
+        Self::from_env_getter(|name| env::var(name).ok())
+    }
+
+    pub fn is_explicitly_requested_from_env() -> bool {
+        Self::is_explicitly_requested_from_env_getter(|name| env::var(name).ok())
+    }
+
+    pub fn is_explicitly_requested_from_env_getter<F>(mut get_env: F) -> bool
+    where
+        F: FnMut(&str) -> Option<String>,
+    {
+        get_env(STATE_MANAGE_ENV)
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| parse_bool(STATE_MANAGE_ENV, &value).unwrap_or(true))
+            .unwrap_or(false)
+    }
+
+    pub fn from_env_getter<F>(mut get_env: F) -> Result<Self, RunCacheServiceConfigError>
+    where
+        F: FnMut(&str) -> Option<String>,
+    {
+        let enabled = match get_env(STATE_MANAGE_ENV).filter(|value| !value.trim().is_empty()) {
+            Some(value) => parse_bool(STATE_MANAGE_ENV, &value)?,
+            None => true,
+        };
+        let api_url =
+            config_value(&mut get_env, "API_URL").unwrap_or_else(|| DEFAULT_API_URL.to_string());
+        let secure = match config_value(&mut get_env, "API_SECURE") {
+            Some(value) => parse_bool("API_SECURE", &value)?,
+            None => default_secure(&api_url),
+        };
+        let timeout = match config_value(&mut get_env, "API_CLIENT_TIMEOUT") {
+            Some(value) => Duration::from_secs(parse_u64_seconds("API_CLIENT_TIMEOUT", &value)?),
+            None => Duration::from_secs(DEFAULT_API_CLIENT_TIMEOUT_SECONDS),
+        };
+        let defer_to =
+            config_value(&mut get_env, "DEFER_TO").unwrap_or_else(|| DEFAULT_DEFER_TO.to_string());
+        let defer_log_level = config_value(&mut get_env, "DEFER_LOG_LEVEL")
+            .unwrap_or_else(|| DEFAULT_DEFER_LOG_LEVEL.to_string());
+        let enable_response_logging = match config_value(&mut get_env, "ENABLE_RESPONSE_LOGGING") {
+            Some(value) => parse_bool("ENABLE_RESPONSE_LOGGING", &value)?,
+            None => true,
+        };
+        let enable_data_tests = match config_value(&mut get_env, "ENABLE_DATA_TESTS") {
+            Some(value) => parse_bool("ENABLE_DATA_TESTS", &value)?,
+            None => true,
+        };
+        let log_file_limit = match config_value(&mut get_env, "LOG_FILE_LIMIT") {
+            Some(value) => parse_i64("LOG_FILE_LIMIT", &value)?,
+            None => DEFAULT_LOG_FILE_LIMIT,
+        };
+        let log_prefix = config_value(&mut get_env, "LOG_PREFIX")
+            .unwrap_or_else(|| DEFAULT_LOG_PREFIX.to_string());
+        let freshness_tolerance_seconds = match config_value(&mut get_env, "FRESHNESS_TOLERANCE") {
+            Some(value) => parse_i64_seconds("FRESHNESS_TOLERANCE", &value)?,
+            None => DEFAULT_FRESHNESS_TOLERANCE_SECONDS,
+        };
+        let tolerate_nondeterminism = match config_value(&mut get_env, "TOLERATE_NONDETERMINISM") {
+            Some(value) => parse_bool("TOLERATE_NONDETERMINISM", &value)?,
+            None => true,
+        };
+        let enable_lenient_dependencies =
+            match config_value(&mut get_env, "ENABLE_LENIENT_DEPENDENCIES") {
+                Some(value) => parse_bool("ENABLE_LENIENT_DEPENDENCIES", &value)?,
+                None => true,
+            };
+        let clone_incremental_in_dev = match config_value(&mut get_env, "CLONE_INCREMENTAL_IN_DEV")
+        {
+            Some(value) => parse_clone_incremental_in_dev(&value)?,
+            None => CloneIncrementalInDev::IfTableMissing,
+        };
+        let clone_time_travel_limit_seconds =
+            match config_value(&mut get_env, "CLONE_TIME_TRAVEL_LIMIT") {
+                Some(value) => Some(parse_i64_seconds("CLONE_TIME_TRAVEL_LIMIT", &value)?),
+                None => None,
+            };
+        let metadata_cache_ttl_seconds = match config_value(&mut get_env, "METADATA_CACHE_TTL") {
+            Some(value) => parse_i64_seconds("METADATA_CACHE_TTL", &value)?,
+            None => DEFAULT_METADATA_CACHE_TTL_SECONDS,
+        };
+        let run_hooks_on_no_op = match config_value(&mut get_env, "RUN_HOOKS_ON_NO_OP") {
+            Some(value) => parse_bool("RUN_HOOKS_ON_NO_OP", &value)?,
+            None => false,
+        };
+
+        Ok(Self {
+            enabled,
+            api_url,
+            secure,
+            org_id: config_value(&mut get_env, "ORG_ID"),
+            oauth_client_id: state_config_value(
+                &mut get_env,
+                STATE_OAUTH_CLIENT_ID_ENV,
+                "OAUTH_CLIENT_ID",
+            )
+            .unwrap_or_else(|| DEFAULT_OAUTH_CLIENT_ID.to_string()),
+            oauth_client_secret: state_config_value(
+                &mut get_env,
+                STATE_OAUTH_CLIENT_SECRET_ENV,
+                "OAUTH_CLIENT_SECRET",
+            ),
+            oauth_token_url: config_value(&mut get_env, "TOKEN_URL")
+                .unwrap_or_else(|| DEFAULT_OAUTH_TOKEN_URL.to_string()),
+            oauth_auth_url: config_value(&mut get_env, "AUTH_URL")
+                .unwrap_or_else(|| DEFAULT_OAUTH_AUTH_URL.to_string()),
+            timeout,
+            defer_to,
+            defer_log_level,
+            enable_response_logging,
+            enable_data_tests,
+            log_file_limit,
+            log_dir_override: config_value(&mut get_env, "LOG_DIR_OVERRIDE"),
+            log_prefix,
+            freshness_tolerance_seconds,
+            tolerate_nondeterminism,
+            enable_lenient_dependencies,
+            clone_incremental_in_dev,
+            clone_time_travel_limit_seconds,
+            metadata_cache_ttl_seconds,
+            run_hooks_on_no_op,
+            snowflake_get_view_ddl_override: config_value(
+                &mut get_env,
+                "SNOWFLAKE_GET_VIEW_DDL_OVERRIDE",
+            ),
+            snowflake_metadata_warehouse: config_value(
+                &mut get_env,
+                "SNOWFLAKE_METADATA_WAREHOUSE",
+            ),
+        })
+    }
+
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            api_url: DEFAULT_API_URL.to_string(),
+            secure: true,
+            org_id: None,
+            oauth_client_id: DEFAULT_OAUTH_CLIENT_ID.to_string(),
+            oauth_client_secret: None,
+            oauth_token_url: DEFAULT_OAUTH_TOKEN_URL.to_string(),
+            oauth_auth_url: DEFAULT_OAUTH_AUTH_URL.to_string(),
+            timeout: Duration::from_secs(DEFAULT_API_CLIENT_TIMEOUT_SECONDS),
+            defer_to: DEFAULT_DEFER_TO.to_string(),
+            defer_log_level: DEFAULT_DEFER_LOG_LEVEL.to_string(),
+            enable_response_logging: true,
+            enable_data_tests: true,
+            log_file_limit: DEFAULT_LOG_FILE_LIMIT,
+            log_dir_override: None,
+            log_prefix: DEFAULT_LOG_PREFIX.to_string(),
+            freshness_tolerance_seconds: DEFAULT_FRESHNESS_TOLERANCE_SECONDS,
+            tolerate_nondeterminism: true,
+            enable_lenient_dependencies: true,
+            clone_incremental_in_dev: CloneIncrementalInDev::IfTableMissing,
+            clone_time_travel_limit_seconds: None,
+            metadata_cache_ttl_seconds: DEFAULT_METADATA_CACHE_TTL_SECONDS,
+            run_hooks_on_no_op: false,
+            snowflake_get_view_ddl_override: None,
+            snowflake_metadata_warehouse: None,
+        }
+    }
+
+    pub fn endpoint_uri(&self) -> String {
+        let api_url = self.api_url.trim();
+        let scheme = if self.secure { "https" } else { "http" };
+        if let Some((_, authority)) = api_url.split_once("://") {
+            format!("{scheme}://{authority}")
+        } else {
+            format!("{scheme}://{api_url}")
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RunCacheServiceConfigError {
+    InvalidBool { name: &'static str, value: String },
+    InvalidDuration { name: &'static str, value: String },
+    InvalidInteger { name: &'static str, value: String },
+    InvalidCloneIncrementalInDev { value: String },
+}
+
+impl fmt::Display for RunCacheServiceConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidBool { name, value } => {
+                write!(f, "invalid boolean for {}: {value}", env_name(name))
+            }
+            Self::InvalidDuration { name, value } => {
+                write!(f, "invalid duration for {}: {value}", env_name(name))
+            }
+            Self::InvalidInteger { name, value } => {
+                write!(f, "invalid integer for {}: {value}", env_name(name))
+            }
+            Self::InvalidCloneIncrementalInDev { value } => write!(
+                f,
+                "invalid value for RUN_CACHE_CLONE_INCREMENTAL_IN_DEV: {value}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RunCacheServiceConfigError {}
+
+fn env_name(name: &'static str) -> String {
+    if name.starts_with("DBT_") {
+        name.to_string()
+    } else {
+        format!("RUN_CACHE_{name}")
+    }
+}
+
+fn config_value<F>(get_env: &mut F, name: &'static str) -> Option<String>
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    let primary = format!("RUN_CACHE_{name}");
+    get_env(&primary).filter(|value| !value.trim().is_empty())
+}
+
+fn state_config_value<F>(
+    get_env: &mut F,
+    state_name: &'static str,
+    run_cache_name: &'static str,
+) -> Option<String>
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    get_env(state_name)
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| config_value(get_env, run_cache_name))
+}
+
+fn default_secure(api_url: &str) -> bool {
+    let normalized = api_url.trim().to_ascii_lowercase();
+    normalized.starts_with("https://") || normalized.ends_with(":443")
+}
+
+fn parse_bool(name: &'static str, value: &str) -> Result<bool, RunCacheServiceConfigError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "t" | "yes" | "y" | "on" => Ok(true),
+        "0" | "false" | "f" | "no" | "n" | "off" => Ok(false),
+        _ => Err(RunCacheServiceConfigError::InvalidBool {
+            name,
+            value: value.to_string(),
+        }),
+    }
+}
+
+fn parse_u64_seconds(name: &'static str, value: &str) -> Result<u64, RunCacheServiceConfigError> {
+    parse_seconds(name, value).and_then(|seconds| {
+        u64::try_from(seconds).map_err(|_| RunCacheServiceConfigError::InvalidDuration {
+            name,
+            value: value.to_string(),
+        })
+    })
+}
+
+fn parse_i64_seconds(name: &'static str, value: &str) -> Result<i64, RunCacheServiceConfigError> {
+    parse_seconds(name, value)
+}
+
+fn parse_i64(name: &'static str, value: &str) -> Result<i64, RunCacheServiceConfigError> {
+    value
+        .trim()
+        .parse::<i64>()
+        .map_err(|_| RunCacheServiceConfigError::InvalidInteger {
+            name,
+            value: value.to_string(),
+        })
+}
+
+fn parse_clone_incremental_in_dev(
+    value: &str,
+) -> Result<CloneIncrementalInDev, RunCacheServiceConfigError> {
+    match value.trim().to_ascii_uppercase().as_str() {
+        "NEVER" => Ok(CloneIncrementalInDev::Never),
+        "IF_TABLE_MISSING" => Ok(CloneIncrementalInDev::IfTableMissing),
+        "ALWAYS" => Ok(CloneIncrementalInDev::Always),
+        _ => Err(RunCacheServiceConfigError::InvalidCloneIncrementalInDev {
+            value: value.to_string(),
+        }),
+    }
+}
+
+fn parse_seconds(name: &'static str, value: &str) -> Result<i64, RunCacheServiceConfigError> {
+    let trimmed = value.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let (number, multiplier) = lower
+        .strip_suffix("seconds")
+        .map(|number| (number, 1))
+        .or_else(|| lower.strip_suffix("second").map(|number| (number, 1)))
+        .or_else(|| lower.strip_suffix("secs").map(|number| (number, 1)))
+        .or_else(|| lower.strip_suffix("sec").map(|number| (number, 1)))
+        .or_else(|| lower.strip_suffix("minutes").map(|number| (number, 60)))
+        .or_else(|| lower.strip_suffix("minute").map(|number| (number, 60)))
+        .or_else(|| lower.strip_suffix("mins").map(|number| (number, 60)))
+        .or_else(|| lower.strip_suffix("min").map(|number| (number, 60)))
+        .or_else(|| lower.strip_suffix('m').map(|number| (number, 60)))
+        .or_else(|| lower.strip_suffix("hours").map(|number| (number, 3600)))
+        .or_else(|| lower.strip_suffix("hour").map(|number| (number, 3600)))
+        .or_else(|| lower.strip_suffix("hrs").map(|number| (number, 3600)))
+        .or_else(|| lower.strip_suffix("hr").map(|number| (number, 3600)))
+        .or_else(|| lower.strip_suffix('h').map(|number| (number, 3600)))
+        .or_else(|| lower.strip_suffix("days").map(|number| (number, 86400)))
+        .or_else(|| lower.strip_suffix("day").map(|number| (number, 86400)))
+        .or_else(|| lower.strip_suffix('d').map(|number| (number, 86400)))
+        .or_else(|| lower.strip_suffix('s').map(|number| (number, 1)))
+        .unwrap_or((trimmed, 1));
+
+    number
+        .trim()
+        .parse::<i64>()
+        .map(|n| n * multiplier)
+        .map_err(|_| RunCacheServiceConfigError::InvalidDuration {
+            name,
+            value: value.to_string(),
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn config_from_pairs(
+        pairs: &[(&str, &str)],
+    ) -> Result<RunCacheServiceConfig, RunCacheServiceConfigError> {
+        let values = pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+            .collect::<BTreeMap<_, _>>();
+        RunCacheServiceConfig::from_env_getter(|name| values.get(name).cloned())
+    }
+
+    #[test]
+    fn defaults_match_python_client_surface() {
+        let config = config_from_pairs(&[]).unwrap();
+
+        assert_eq!(config.api_url, DEFAULT_API_URL);
+        assert_eq!(config.oauth_token_url, DEFAULT_OAUTH_TOKEN_URL);
+        assert!(config.enabled);
+        assert!(config.secure);
+        assert_eq!(config.timeout, Duration::from_secs(60));
+        assert_eq!(config.defer_to, "prod");
+        assert_eq!(config.defer_log_level, "off");
+        assert!(config.enable_response_logging);
+        assert!(config.enable_data_tests);
+        assert_eq!(config.log_file_limit, 20);
+        assert_eq!(config.log_dir_override, None);
+        assert_eq!(config.log_prefix, "responses_");
+        assert_eq!(config.freshness_tolerance_seconds, 2700);
+        assert!(config.tolerate_nondeterminism);
+        assert!(config.enable_lenient_dependencies);
+        assert_eq!(
+            config.clone_incremental_in_dev,
+            CloneIncrementalInDev::IfTableMissing
+        );
+        assert_eq!(config.clone_time_travel_limit_seconds, None);
+        assert_eq!(config.metadata_cache_ttl_seconds, 0);
+        assert!(!config.run_hooks_on_no_op);
+        assert_eq!(config.snowflake_get_view_ddl_override, None);
+        assert_eq!(config.snowflake_metadata_warehouse, None);
+    }
+
+    #[test]
+    fn manage_state_can_be_disabled_from_config() {
+        let config = config_from_pairs(&[("DBT_ENGINE_MANAGE_STATE", "false")]).unwrap();
+
+        assert!(!config.enabled);
+        assert!(!RunCacheServiceConfig::disabled().enabled);
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "false".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn legacy_dbt_run_cache_env_prefix_is_ignored() {
+        let config =
+            config_from_pairs(&[("DBT_RUN_CACHE_API_URL", "legacy.example:1234")]).unwrap();
+
+        assert_eq!(config.api_url, DEFAULT_API_URL);
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_RUN_CACHE_API_URL").then(|| "legacy.example:1234".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn explicit_enabled_env_requests_service_without_api_url() {
+        assert!(
+            RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "true".to_string())
+            })
+        );
+
+        assert!(
+            RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "not-a-bool".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn service_config_env_does_not_request_service() {
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "RUN_CACHE_API_URL").then(|| "localhost:50051".to_string())
+            })
+        );
+
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_STATE_OAUTH_CLIENT_ID").then(|| "state-client-id".to_string())
+            })
+        );
+
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENV_SECRET_STATE_OAUTH_CLIENT_SECRET")
+                    .then(|| "state-client-secret".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn dbt_state_manage_env_controls_enabled() {
+        let config = config_from_pairs(&[("DBT_ENGINE_MANAGE_STATE", "false")]).unwrap();
+
+        assert!(!config.enabled);
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "false".to_string())
+            })
+        );
+
+        assert!(
+            RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "true".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn dbt_state_manage_env_controls_enabled_without_service_config() {
+        let config = config_from_pairs(&[
+            ("DBT_ENGINE_MANAGE_STATE", "false"),
+            ("RUN_CACHE_API_URL", "localhost:50051"),
+        ])
+        .unwrap();
+
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn invalid_manage_state_env_reports_manage_state_name() {
+        let err = config_from_pairs(&[("DBT_ENGINE_MANAGE_STATE", "invalid")]).unwrap_err();
+
+        assert!(err.to_string().contains("DBT_ENGINE_MANAGE_STATE"));
+    }
+
+    #[test]
+    fn dbt_state_oauth_env_takes_precedence_over_legacy_run_cache_env() {
+        let config = config_from_pairs(&[
+            ("DBT_ENGINE_STATE_OAUTH_CLIENT_ID", "state-client-id"),
+            ("RUN_CACHE_OAUTH_CLIENT_ID", "legacy-client-id"),
+            (
+                "DBT_ENV_SECRET_STATE_OAUTH_CLIENT_SECRET",
+                "state-client-secret",
+            ),
+            ("RUN_CACHE_OAUTH_CLIENT_SECRET", "legacy-client-secret"),
+        ])
+        .unwrap();
+
+        assert_eq!(config.oauth_client_id, "state-client-id");
+        assert_eq!(
+            config.oauth_client_secret.as_deref(),
+            Some("state-client-secret")
+        );
+    }
+
+    #[test]
+    fn parses_booleans_and_duration_units() {
+        let config = config_from_pairs(&[
+            ("RUN_CACHE_API_URL", "localhost:50051"),
+            ("RUN_CACHE_API_SECURE", "0"),
+            ("RUN_CACHE_API_CLIENT_TIMEOUT", "2m"),
+            ("RUN_CACHE_FRESHNESS_TOLERANCE", "45min"),
+            ("RUN_CACHE_TOLERATE_NONDETERMINISM", "yes"),
+            ("RUN_CACHE_ENABLE_LENIENT_DEPENDENCIES", "off"),
+            ("RUN_CACHE_ENABLE_RESPONSE_LOGGING", "false"),
+            ("RUN_CACHE_ENABLE_DATA_TESTS", "0"),
+            ("RUN_CACHE_RUN_HOOKS_ON_NO_OP", "true"),
+        ])
+        .unwrap();
+
+        assert!(!config.secure);
+        assert_eq!(config.timeout, Duration::from_secs(120));
+        assert_eq!(config.freshness_tolerance_seconds, 2700);
+        assert!(config.tolerate_nondeterminism);
+        assert!(!config.enable_lenient_dependencies);
+        assert!(!config.enable_response_logging);
+        assert!(!config.enable_data_tests);
+        assert!(config.run_hooks_on_no_op);
+    }
+
+    #[test]
+    fn explicit_secure_config_overrides_api_url_scheme() {
+        let config = config_from_pairs(&[
+            ("RUN_CACHE_API_URL", "http://localhost:50051"),
+            ("RUN_CACHE_API_SECURE", "true"),
+        ])
+        .unwrap();
+
+        assert!(config.secure);
+        assert_eq!(config.endpoint_uri(), "https://localhost:50051");
+
+        let config = config_from_pairs(&[
+            ("RUN_CACHE_API_URL", "https://localhost:50051"),
+            ("RUN_CACHE_API_SECURE", "false"),
+        ])
+        .unwrap();
+
+        assert!(!config.secure);
+        assert_eq!(config.endpoint_uri(), "http://localhost:50051");
+    }
+
+    #[test]
+    fn parses_remaining_python_client_config_surface() {
+        let config = config_from_pairs(&[
+            ("RUN_CACHE_DEFER_TO", "production"),
+            ("RUN_CACHE_DEFER_LOG_LEVEL", "debug"),
+            ("RUN_CACHE_LOG_FILE_LIMIT", "7"),
+            ("RUN_CACHE_LOG_DIR_OVERRIDE", "/tmp/run-cache-logs"),
+            ("RUN_CACHE_LOG_PREFIX", "fusion_"),
+            ("RUN_CACHE_CLONE_INCREMENTAL_IN_DEV", "always"),
+            ("RUN_CACHE_CLONE_TIME_TRAVEL_LIMIT", "4h"),
+            ("RUN_CACHE_METADATA_CACHE_TTL", "10m"),
+            ("RUN_CACHE_SNOWFLAKE_GET_VIEW_DDL_OVERRIDE", "show views"),
+            ("RUN_CACHE_SNOWFLAKE_METADATA_WAREHOUSE", "metadata_wh"),
+        ])
+        .unwrap();
+
+        assert_eq!(config.defer_to, "production");
+        assert_eq!(config.defer_log_level, "debug");
+        assert_eq!(config.log_file_limit, 7);
+        assert_eq!(
+            config.log_dir_override.as_deref(),
+            Some("/tmp/run-cache-logs")
+        );
+        assert_eq!(config.log_prefix, "fusion_");
+        assert_eq!(
+            config.clone_incremental_in_dev,
+            CloneIncrementalInDev::Always
+        );
+        assert_eq!(config.clone_incremental_in_dev.as_str(), "ALWAYS");
+        assert_eq!(config.clone_time_travel_limit_seconds, Some(14400));
+        assert_eq!(config.metadata_cache_ttl_seconds, 600);
+        assert_eq!(
+            config.snowflake_get_view_ddl_override.as_deref(),
+            Some("show views")
+        );
+        assert_eq!(
+            config.snowflake_metadata_warehouse.as_deref(),
+            Some("metadata_wh")
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_clone_incremental_in_dev() {
+        let err =
+            config_from_pairs(&[("RUN_CACHE_CLONE_INCREMENTAL_IN_DEV", "sometimes")]).unwrap_err();
+
+        assert!(err.to_string().contains("CLONE_INCREMENTAL_IN_DEV"));
+    }
+
+    #[test]
+    fn defaults_include_oauth_authorize_endpoint() {
+        let config = config_from_pairs(&[]).unwrap();
+        assert_eq!(config.oauth_auth_url, "https://auth.state.dbt.com");
+    }
+
+    #[test]
+    fn oauth_auth_url_can_be_overridden() {
+        let config =
+            config_from_pairs(&[("RUN_CACHE_AUTH_URL", "https://auth.example.com")]).unwrap();
+        assert_eq!(config.oauth_auth_url, "https://auth.example.com");
+    }
+
+    #[test]
+    fn parses_plural_duration_units_before_bare_seconds_suffix() {
+        assert_eq!(
+            parse_seconds("API_CLIENT_TIMEOUT", "2 minutes").unwrap(),
+            120
+        );
+        assert_eq!(parse_seconds("API_CLIENT_TIMEOUT", "45mins").unwrap(), 2700);
+        assert_eq!(
+            parse_seconds("API_CLIENT_TIMEOUT", "3 hours").unwrap(),
+            10800
+        );
+        assert_eq!(
+            parse_seconds("API_CLIENT_TIMEOUT", "7days").unwrap(),
+            604800
+        );
+    }
+}
