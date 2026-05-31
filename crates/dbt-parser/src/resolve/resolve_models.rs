@@ -309,6 +309,7 @@ pub async fn resolve_models(
         asset: dbt_asset,
         sql_file_info,
         config: model_config_resolved,
+        raw_code,
         rendered_sql,
         macro_spans,
         properties: maybe_properties,
@@ -567,9 +568,7 @@ pub async fn resolve_models(
                 // dbt-core: description is always default ''
                 description: Some(model_description),
                 checksum: sql_file_info.checksum.clone(),
-                // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
-                // hydrating it with get_original_file_contents would actually break dbt-evaluator
-                raw_code: Some("--placeholder--".to_string()),
+                raw_code: Some(raw_code),
                 language: if dbt_asset.is_python() {
                     Some("python".to_string())
                 } else {
@@ -1146,6 +1145,8 @@ fn process_python_models(
                 checksum: python_file_info.checksum,
                 execute: false,
             },
+            // Match dbt-core's `load_file_contents(strip=True)` behavior.
+            raw_code: source.trim().to_owned(),
             rendered_sql: source.clone(),
             macro_spans: Default::default(),
             properties: maybe_properties,

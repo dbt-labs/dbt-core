@@ -120,6 +120,7 @@ pub async fn resolve_functions(
         asset: dbt_asset,
         sql_file_info,
         config: model_config,
+        raw_code,
         rendered_sql,
         macro_spans,
         properties: maybe_properties,
@@ -192,9 +193,7 @@ pub async fn resolve_functions(
                 patch_path,
                 fqn,
                 description: properties.description,
-                // NOTE: raw_code has to be this value for consistency with models
-                // The actual rendered SQL is stored in rendering_results
-                raw_code: Some("--placeholder--".to_string()),
+                raw_code: Some(raw_code),
                 checksum: sql_file_info.checksum,
                 language: if dbt_asset.is_python() {
                     Some("python".to_string())

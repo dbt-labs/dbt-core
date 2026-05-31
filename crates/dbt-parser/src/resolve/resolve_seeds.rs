@@ -307,7 +307,9 @@ pub async fn resolve_seeds(
                 fqn,
                 // dbt-core: description is always default ''
                 description: Some(seed.description.clone().unwrap_or_default()),
-                raw_code: None,
+                // dbt-core writes raw_code as `block.contents or ""` for seeds —
+                // there's no Jinja source, so it's always empty string, not null.
+                raw_code: Some(String::new()),
                 language: None,
                 tags: properties_config
                     .tags

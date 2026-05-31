@@ -57,6 +57,10 @@ pub struct SqlFileRenderResult<T: ResolvableConfig<T>, S> {
     pub sql_file_info: SqlFileInfo<T>,
     /// Fully resolved config for this node (project + properties + inline + root overlay).
     pub config: T::Resolved,
+    /// The verbatim, unrendered source contents (raw bytes from disk for SQL/Python,
+    /// or the synthesized `select * from {{ ... }}` for YAML-defined snapshots).
+    /// Used to populate `raw_code` in the manifest — see dbt-core/core/dbt/parser/base.py:249.
+    pub raw_code: String,
     /// The rendered SQL
     pub rendered_sql: String,
     /// The macro spans for the rendered SQL
@@ -263,6 +267,7 @@ where
             asset: dbt_asset.clone(),
             sql_file_info: SqlFileInfo::default(),
             config: config_resolver.resolve_with_configs(&original_fqn, &fqn, properties_configs),
+            raw_code: String::new(),
             rendered_sql: String::new(),
             macro_spans: MacroSpans::default(),
             properties: maybe_model,
@@ -538,6 +543,9 @@ where
         asset: dbt_asset.clone(),
         sql_file_info,
         config: resolved_config,
+        // Match dbt-core: file contents are loaded via `load_file_contents(strip=True)`,
+        // which trims leading/trailing whitespace before storing as raw_code.
+        raw_code: sql.trim().to_owned(),
         rendered_sql,
         macro_spans,
         properties: maybe_model,

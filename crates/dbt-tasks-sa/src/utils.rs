@@ -18,7 +18,6 @@ use dbt_common::unexpected_err;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, stdfs};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_parser::utils::get_original_file_contents;
 use dbt_schema_store::{CanonicalFqn, SchemaStoreTrait};
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
@@ -74,39 +73,16 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             },
         };
 
-        let mut base_mut = match manifest_model.as_mut() {
+        let base_mut = match manifest_model.as_mut() {
             None => None,
             Some(manifest_model) => Some(&mut manifest_model.__base_attr__),
         };
 
-        // Only populate raw_code/compiled_code into the manifest when writing manifest.json
-        // or metadata parquet (compile/nodes epoch needs compiled_code and compiled_path).
+        // Only populate compiled_code into the manifest when writing manifest.json or metadata
+        // parquet (compile/nodes epoch needs compiled_code and compiled_path).
         // Skipping this avoids reading 5k+ compiled SQL files from disk otherwise.
+        // raw_code is already populated at resolve time — see resolve_models.rs.
         if arg.write_json || arg.write_metadata {
-            let model_extension = model
-                .original_file_path()
-                .extension()
-                .unwrap_or_default()
-                .to_ascii_lowercase();
-            if arg.write_json {
-                if model_extension == "sql" || model_extension == "py" {
-                    if let Some(base_mut) = base_mut.as_mut() {
-                        base_mut.raw_code =
-                            get_original_file_contents(&io.in_dir, &model.original_file_path());
-                    }
-                } else {
-                    emit_warn_log_message(
-                        ErrorCode::Generic,
-                        format!(
-                            "Tried serializing model {} raw_code but it is not a SQL or Python model: {}",
-                            unique_id,
-                            model.original_file_path().display()
-                        ),
-                        io.status_reporter.as_ref(),
-                    );
-                };
-            }
-
             if let Some(base_mut) = base_mut {
                 let absolute_path = get_target_write_path(
                     &io.in_dir,
@@ -167,37 +143,14 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             },
         };
 
-        let mut base_mut = match manifest_snapshot {
+        let base_mut = match manifest_snapshot {
             None => None,
             Some(manifest_snapshot) => Some(&mut manifest_snapshot.__base_attr__),
         };
 
-        // Only populate raw_code/compiled_code when writing manifest.json or metadata parquet.
+        // Only populate compiled_code into the manifest when writing manifest.json or metadata
+        // parquet. raw_code is already populated at resolve time — see resolve_snapshots.rs.
         if arg.write_json || arg.write_metadata {
-            let snapshot_extension = snapshot
-                .original_file_path()
-                .extension()
-                .unwrap_or_default()
-                .to_ascii_lowercase();
-            if arg.write_json {
-                if snapshot_extension == "sql" {
-                    if let Some(base_mut) = base_mut.as_mut() {
-                        base_mut.raw_code =
-                            get_original_file_contents(&io.in_dir, &snapshot.original_file_path());
-                    }
-                } else if snapshot_extension != "yml" && snapshot_extension != "yaml" {
-                    emit_warn_log_message(
-                        ErrorCode::Generic,
-                        format!(
-                            "Tried serializing snapshot {} raw_code but it is not of either SQL or YAML/YML: {}",
-                            unique_id,
-                            snapshot.original_file_path().display()
-                        ),
-                        io.status_reporter.as_ref(),
-                    );
-                };
-            }
-
             if let Some(base_mut) = base_mut {
                 // Always use nested path for snapshots — mirrors task_runner and materialize_snapshot.
                 // Must stay in sync with DefaultCompiledSqlCache::get_compiled_sql_path.

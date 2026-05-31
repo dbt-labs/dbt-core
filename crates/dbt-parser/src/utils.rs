@@ -199,7 +199,11 @@ pub fn get_original_file_path(base_path: &Path, in_dir: &Path, sub_path: &Path) 
 /// Returns the contents of a file given an original_file_path and in_dir,
 pub fn get_original_file_contents(in_dir: &Path, original_file_path: &PathBuf) -> Option<String> {
     let absolute_path = in_dir.join(original_file_path);
-    stdfs::read_to_string(&absolute_path).ok()
+    // Match dbt-core's `load_file_contents(strip=True)`: trim leading/trailing
+    // whitespace so raw_code parity holds for state:modified / same_body.
+    stdfs::read_to_string(&absolute_path)
+        .ok()
+        .map(|s| s.trim().to_owned())
 }
 
 /// Prepares package dependencies for resolution and sets thread local dependencies.

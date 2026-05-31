@@ -2017,14 +2017,13 @@ pub fn manifest_function_to_dbt_function(
 }
 
 /// Recalculate checksum for a snapshot/model based on normalized raw code.
-/// If the normalized code is the placeholder, use the original checksum.
+/// If the normalized code is missing, use the original checksum.
 /// Otherwise, hash the normalized code.
 pub fn recalculate_checksum(
     normalized_raw_code: Option<&str>,
     original_checksum: DbtChecksum,
 ) -> DbtChecksum {
     match normalized_raw_code {
-        Some("--placeholder--") => original_checksum,
         Some(code) => DbtChecksum::hash(code.as_bytes()),
         None => original_checksum,
     }

@@ -124,6 +124,7 @@ pub async fn resolve_analyses(
         asset: dbt_asset,
         sql_file_info,
         config: analysis_config,
+        raw_code,
         rendered_sql,
         macro_spans,
         properties: maybe_properties,
@@ -201,7 +202,7 @@ pub async fn resolve_analyses(
                 patch_path,
                 checksum: sql_file_info.checksum.clone(),
                 language: Some("sql".to_string()),
-                raw_code: None,
+                raw_code: Some(raw_code),
                 tags: analysis_config
                     .tags
                     .clone()

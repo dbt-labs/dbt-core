@@ -76,19 +76,11 @@ pub fn prepare_microbatch_batches(
         .expect("MicrobatchTask node must be a DbtModel");
     let unique_id = &model.__common_attr__.unique_id;
 
-    // Read raw SQL from disk (sync) — raw_code is a placeholder, so we need the actual file
-    let absolute_path = ctx
-        .inner
-        .arg
-        .io
-        .in_dir
-        .join(&model.__common_attr__.original_file_path);
-    let raw_sql = Arc::new(std::fs::read_to_string(&absolute_path).map_err(|_| {
+    let raw_sql = Arc::new(model.__common_attr__.raw_code.clone().ok_or_else(|| {
         fs_err!(
             ErrorCode::InvalidConfig,
-            "Microbatch model {} could not read raw SQL from file {}. Raw code is required for batch-aware ref filtering.",
+            "Microbatch model {} has no raw_code populated. Raw code is required for batch-aware ref filtering.",
             unique_id,
-            model.__common_attr__.original_file_path.display()
         )
     })?);
 
