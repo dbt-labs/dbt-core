@@ -119,8 +119,37 @@ pub(crate) fn adapter_args_match(
                     },
                 )
         }
+        "submit_python_job" => python_job_args_match(recorded, actual),
         _ => values_match(recorded, actual),
     }
+}
+
+/// Compare `submit_python_job` args, ignoring the model object's `raw_code` field.
+///
+/// `submit_python_job` is invoked as `(model, compiled_code)`. The first arg is the
+/// fully serialized model object and the second is the compiled python that is actually
+/// submitted to the warehouse — the latter is what determines behavior.
+///
+/// The model object carries `raw_code`, which used to be a `--placeholder--` stub at run
+/// time and is now populated with the verbatim source at parse time (see
+/// dbt-parser `resolve_models.rs`, commit e2ff091). That field does not affect the
+/// submitted job, so recordings captured before raw_code was populated would otherwise
+/// false-fail replay against newer binaries. Strip `raw_code` from the model object on
+/// both sides before comparing so the comparison reflects the actual submission.
+fn python_job_args_match(recorded: &serde_json::Value, actual: &serde_json::Value) -> bool {
+    fn strip_model_raw_code(args: &serde_json::Value) -> serde_json::Value {
+        let mut args = args.clone();
+        if let Some(model) = args.as_array_mut().and_then(|arr| arr.first_mut())
+            && let Some(obj) = model.as_object_mut()
+        {
+            obj.remove("raw_code");
+        }
+        args
+    }
+    values_match(
+        &strip_model_raw_code(recorded),
+        &strip_model_raw_code(actual),
+    )
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1778,6 +1807,40 @@ mod tests {
             SemanticCategory::MetadataRead,
         );
         assert!(result.is_none(), "Should not find TABLE_C");
+    }
+
+    #[test]
+    fn test_submit_python_job_ignores_model_raw_code() {
+        // Recordings made before raw_code was populated at parse time captured the
+        // `--placeholder--` stub in the serialized model object; newer binaries populate
+        // it with the verbatim source. raw_code does not affect the submitted job, so the
+        // two must still match. See `python_job_args_match`.
+        let recorded = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m", "raw_code": "--placeholder--" },
+            "import pandas as pd\n\ndef model(dbt, session):\n    return None\n"
+        ]);
+        let actual = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m", "raw_code": "import pandas as pd\n\ndef model(dbt, session):\n    return None" },
+            "import pandas as pd\n\ndef model(dbt, session):\n    return None\n"
+        ]);
+
+        assert!(adapter_args_match("submit_python_job", &recorded, &actual));
+        assert!(adapter_args_match("submit_python_job", &actual, &recorded));
+    }
+
+    #[test]
+    fn test_submit_python_job_still_detects_compiled_code_diff() {
+        // Stripping raw_code must not mask a real difference in the submitted python.
+        let recorded = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m", "raw_code": "--placeholder--" },
+            "def model(dbt, session):\n    return 1\n"
+        ]);
+        let actual = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m", "raw_code": "def model(dbt, session):\n    return 2" },
+            "def model(dbt, session):\n    return 2\n"
+        ]);
+
+        assert!(!adapter_args_match("submit_python_job", &recorded, &actual));
     }
 
     #[test]
