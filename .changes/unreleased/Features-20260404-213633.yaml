@@ -1,0 +1,6 @@
+kind: Features
+body: Add priority config to schedule DAG-ready models by relative execution priority
+time: 2026-04-04T21:36:33.46296201+02:00
+custom:
+    Author: naszly
+    Issue: "10632"

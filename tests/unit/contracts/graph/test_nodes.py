@@ -201,6 +201,7 @@ def basic_compiled_dict():
             "access": "protected",
             "lookback": 1,
             "latest_version_pointer": {},
+            "priority": 0,
         },
         "docs": {"show": True},
         "columns": {},

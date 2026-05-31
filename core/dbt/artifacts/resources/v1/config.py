@@ -135,6 +135,9 @@ class NodeConfig(NodeAndTestConfig):
     )
     event_time: Any = None
     concurrent_batches: Any = None
+    # Priority orders DAG-ready nodes; higher values are scheduled first.
+    # Topological score is only used as a fallback/tie-breaker when priorities are equal.
+    priority: int = 0
 
     def __post_init__(self):
         super().__post_init__()
