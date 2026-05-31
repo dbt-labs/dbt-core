@@ -30,6 +30,7 @@ members = [
   "crates/minijinja-typecheck-builtins",
   "crates/dbt-jinja/minijinja-contrib",
   "crates/dbt-dag",
+  "crates/dbt-defer",
   "crates/dbt-loader",
   "crates/dbt-test-containers",
   "crates/dbt-parser",
@@ -219,6 +220,7 @@ dbt-common = { path = "crates/dbt-common" }
 dbt-compilation = { path = "crates/dbt-compilation" }
 dbt-csv = { path = "crates/dbt-csv" }
 dbt-dag = { path = "crates/dbt-dag" }
+dbt-defer = { path = "crates/dbt-defer" }
 dbt-deps = { path = "crates/dbt-deps" }
 dbt-df-providers = { path = "crates/dbt-df-providers" }
 dbt-docs-server = { path = "crates/dbt-docs-server", default-features = false }

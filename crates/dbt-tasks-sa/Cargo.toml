@@ -20,6 +20,7 @@ dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }
 dbt-csv = { workspace = true }
 dbt-dag = { workspace = true }
+dbt-defer = { workspace = true }
 dbt-df-providers = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
