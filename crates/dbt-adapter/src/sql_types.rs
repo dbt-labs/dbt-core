@@ -178,6 +178,14 @@ pub trait TypeOpsFactory: Send + Sync {
     fn create(&self, adapter_type: AdapterType) -> Arc<dyn TypeOps>;
 }
 
+pub struct DefaultTypeOpsFactory;
+
+impl TypeOpsFactory for DefaultTypeOpsFactory {
+    fn create(&self, adapter_type: AdapterType) -> Arc<dyn TypeOps> {
+        Arc::new(DefaultTypeOps::new(adapter_type))
+    }
+}
+
 /// Source-available [TypeOps] implementation.
 pub struct DefaultTypeOps(AdapterType);
 

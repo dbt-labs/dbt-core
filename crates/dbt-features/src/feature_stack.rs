@@ -2,13 +2,11 @@ use std::fmt;
 use std::sync::Arc;
 
 use dbt_common::DiscreteEventEmitter;
-use dbt_common::cancellation::CancellationTokenSource;
-use dbt_common::fail_fast::FailFast;
 use dbt_login::LicenseFetcher;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
-use crate::cli_extension::CliExtensionFeature;
+use crate::cli::CliFeature;
 use crate::index::IndexFeature;
 use crate::loader::LoaderFeature;
 use crate::metricflow::MetricflowFeature;
@@ -23,11 +21,31 @@ pub struct InstrumentationFeature {
     // TODO: add more instrumentation services here
 }
 
-/// A feature stack is an object that can be initialized with type-erased
-/// objects that implement feature-specific services.
+/// A feature stack is an object that can be initialized with containers of
+/// type-erased objects that implement feature-specific services.
+///
+/// It serves as the root of the dependency graph for all features [1] and a
+/// very simple abstract state-machine for the setup and teardown of features.
+///
+/// The crates implementing features should not depend on the [FeatureStack]
+/// struct directly or even the `*Feature` structs, but the more granular
+/// services that the features expose (e.g. `SchemaHydratorFactory` in the
+/// `TaskRunnerFeature`). If you violate this principle you will end up with
+/// a circular dependency and won't be able to build the project.
+///
+/// Not everything should necessarily go in the feature stack. In fact, the
+/// requirements for what goes in the feature stack are very restrictive. These
+/// objects should be buildable before everything including the setup of the CLI
+/// parser and should only depend on other services in the feature stack, hence
+/// the name "stack". Features are stacked on top of each other and can only
+/// depend on features below them in the stack. Do not cheat by introducing
+/// global singletons or static variables to get around having to pass
+/// dependencies through the feature stack.
+///
+/// [1] https://martinfowler.com/articles/injection.html
 pub struct FeatureStack {
     pub instrumentation: InstrumentationFeature,
-    pub cli_extension: CliExtensionFeature,
+    pub cli: CliFeature,
     pub index: IndexFeature,
     pub tracing: TracingFeature,
     pub adapter: AdapterFeature,
@@ -38,16 +56,8 @@ pub struct FeatureStack {
     pub resolver: ResolverFeature,
     pub loader: LoaderFeature,
     pub license_fetcher: Arc<dyn LicenseFetcher>,
-    pub version_check_disabled: bool,
+    pub version_check_enabled: bool,
     // TODO: add more features here
-    /// Global [CancelltionTokenSource] that can be used to signal cancellation to
-    /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
-    pub cancellation_token_source: CancellationTokenSource,
-    /// Per CLI invocation fail-fast signal.
-    ///
-    /// Each invocation of the CLI (or test) gets its own isolated signal
-    /// so concurrent runs don't interfere with each other.
-    pub fail_fast: FailFast,
 }
 
 impl fmt::Debug for FeatureStack {

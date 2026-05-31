@@ -92,7 +92,6 @@ pub struct FsTraceConfig {
     /// Useful for long-running services like LSP that only want file logging.
     pub(super) disable_console_output: bool,
     /// User-facing CLI brand name shown in the version banner and JSON log lines.
-    /// Defaults to "dbt-fusion"; override per binary via `with_command_name`.
     pub(super) command_name: &'static str,
 }
 
@@ -300,7 +299,7 @@ impl FsTraceConfig {
     }
 
     /// Override the user-facing CLI brand name shown in the version banner and
-    /// JSON log lines. Defaults to "dbt-fusion".
+    /// JSON log lines.
     pub fn with_command_name(mut self, command_name: &'static str) -> Self {
         self.command_name = command_name;
         self

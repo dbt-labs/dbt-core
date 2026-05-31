@@ -9,7 +9,8 @@ use dbt_clap_core::commands::ExtensionCommandParser;
 use dbt_clap_core::{Cli, CliParser, CliParserFactory, InitArgs};
 use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::FsResult;
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{CancellationToken, CancellationTokenSource};
+use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::{EvalArgs, IoArgs};
 use dbt_compilation::config::CompilationConfig;
 use dbt_dag::schedule::Schedule;
@@ -25,17 +26,25 @@ use uuid::Uuid;
 use crate::feature_stack::FeatureStack;
 use crate::metricflow::MetricflowClient;
 
-pub struct CliExtensionFeature {
+pub struct CliFeature {
+    pub hooks: Box<dyn CliExtensionHooks>,
+    pub cli_parser_factory: Arc<dyn CliParserFactory>,
+    /// Global [CancelltionTokenSource] that can be used to signal cancellation to
+    /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
+    pub cancellation_token_source: CancellationTokenSource,
+    /// Per CLI invocation fail-fast signal.
+    ///
+    /// Each invocation of the CLI (or test) gets its own isolated signal
+    /// so concurrent runs don't interfere with each other.
+    pub fail_fast: FailFast,
+}
+
+pub struct CliFeatureBuilder {
     pub hooks: Box<dyn CliExtensionHooks>,
     pub cli_parser_factory: Arc<dyn CliParserFactory>,
 }
 
-pub struct CliExtensionFeatureBuilder {
-    pub hooks: Box<dyn CliExtensionHooks>,
-    pub cli_parser_factory: Arc<dyn CliParserFactory>,
-}
-
-impl CliExtensionFeatureBuilder {
+impl CliFeatureBuilder {
     pub fn with_hooks(hooks: Box<dyn CliExtensionHooks>) -> Self {
         Self {
             hooks,
@@ -50,10 +59,12 @@ impl CliExtensionFeatureBuilder {
         self
     }
 
-    pub fn build(self) -> CliExtensionFeature {
-        CliExtensionFeature {
+    pub fn build(self) -> CliFeature {
+        CliFeature {
             hooks: self.hooks,
             cli_parser_factory: self.cli_parser_factory,
+            cancellation_token_source: CancellationTokenSource::new(),
+            fail_fast: FailFast::new(),
         }
     }
 }

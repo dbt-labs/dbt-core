@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::providers::Providers;
+pub use dbt_docs_core::DistInfo;
 
 /// Shared application state held by the axum router.
 pub struct AppState {
@@ -19,14 +20,6 @@ pub type SharedState = Arc<AppState>;
 #[derive(Debug, Clone, Serialize)]
 pub struct Capabilities {
     pub has_column_lineage: bool,
-}
-
-/// Metadata about the running distribution. Returned by `GET /api/v1/distribution`.
-#[derive(Debug, Clone, Serialize)]
-pub struct DistInfo {
-    pub name: String,
-    pub version: &'static str,
-    pub is_logged_in: bool,
 }
 
 impl AppState {

@@ -1,41 +1,18 @@
-use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use dbt_login::{LicenseFetcher, NoOpLicenseFetcher};
-
 use async_trait::async_trait;
-use dbt_adapter::adapter::{AdapterFactory, backend_of};
-use dbt_adapter::auth::Auth;
-use dbt_adapter::cache::RelationCache;
-use dbt_adapter::config::AdapterConfig;
-use dbt_adapter::engine::XdbcEngine;
-use dbt_adapter::engine::query_comment::QueryCommentConfig;
-use dbt_adapter::query_cache::QueryCache;
-use dbt_adapter::sql_types::{DefaultTypeOps, TypeOps, TypeOpsFactory};
-use dbt_adapter::stmt_splitter::{DefaultStmtSplitter, StmtSplitter};
-use dbt_adapter::{Adapter, AdapterEngine, AdapterImpl};
-use dbt_adapter_core::AdapterType;
-use dbt_auth::auth_for_backend;
-use dbt_cloud_config::ResolvedCloudConfig;
-use dbt_common::cancellation::{CancellationToken, CancellationTokenSource};
+use dbt_adapter::adapter::DefaultAdapterFactory;
+use dbt_adapter::sql_types::DefaultTypeOpsFactory;
+use dbt_common::FsError;
 use dbt_common::collections::DashMap;
-use dbt_common::fail_fast::FailFast;
-use dbt_common::io_args::ReplayMode;
-use dbt_common::{FsError, FsResult};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
     DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
 };
-use dbt_schema_store::SchemaStoreTrait;
-use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::project::QueryComment;
-use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_schemas::schemas::{
-    InternalDbtNodeAttributes, ResolvedCloudConfig as SchemasResolvedCloudConfig,
-};
+use dbt_login::{LicenseFetcher, NoOpLicenseFetcher};
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::context::ExtendedCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
@@ -43,13 +20,10 @@ use dbt_tasks_core::{PreTaskRunData, RunTasksArgs};
 use dbt_tasks_sa::schema_hydrator::DefaultSchemaHydratorFactory;
 use dbt_tasks_sa::task::DefaultTasksForNodeFactory;
 use dbt_tasks_sa::task_runner_hooks::DefaultTaskRunnerHooksFactory;
-use minijinja::Value as MinijinjaValue;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
-use crate::cli_extension::{
-    CliExtensionFeature, CliExtensionFeatureBuilder, DefaultCliExtensionHooks,
-};
+use crate::cli::{CliFeature, CliFeatureBuilder, DefaultCliExtensionHooks};
 use crate::feature_stack::{FeatureStack, InstrumentationFeature};
 use crate::index::{IndexFeature, IndexHooks};
 use crate::loader::LoaderFeature;
@@ -59,117 +33,6 @@ use crate::sidecar::SidecarFeature;
 use crate::task_runner::TaskRunnerFeature;
 use crate::tracing::TracingFeature;
 
-struct DefaultTypeOpsFactoryImpl;
-impl TypeOpsFactory for DefaultTypeOpsFactoryImpl {
-    fn create(&self, adapter_type: AdapterType) -> Arc<dyn TypeOps> {
-        Arc::new(DefaultTypeOps::new(adapter_type))
-    }
-}
-
-struct DefaultAdapterFactoryImpl {
-    stmt_splitter: Arc<dyn StmtSplitter>,
-}
-
-impl DefaultAdapterFactoryImpl {
-    fn create_engine(
-        &self,
-        adapter_type: AdapterType,
-        adapter_config: AdapterConfig,
-        type_ops_factory: Arc<dyn TypeOpsFactory>,
-        quoting: ResolvedQuoting,
-        query_comment: Option<QueryComment>,
-        behavior_flag_overrides: BTreeMap<String, bool>,
-        cloud_config: Option<&ResolvedCloudConfig>,
-        threads: Option<usize>,
-    ) -> FsResult<Arc<dyn AdapterEngine>> {
-        let backend = backend_of(adapter_type);
-        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
-        let stmt_splitter = Arc::clone(&self.stmt_splitter);
-        let type_ops = type_ops_factory.create(adapter_type);
-        let relation_cache = Arc::new(RelationCache::default());
-
-        let query_comment =
-            QueryCommentConfig::from_query_comment(query_comment, adapter_type, true, cloud_config);
-
-        let engine = Arc::new(XdbcEngine::new(
-            adapter_type,
-            auth,
-            adapter_config,
-            quoting,
-            query_comment,
-            type_ops,
-            stmt_splitter,
-            None,
-            relation_cache,
-            behavior_flag_overrides,
-            threads,
-        ));
-        Ok(engine)
-    }
-}
-
-impl AdapterFactory for DefaultAdapterFactoryImpl {
-    fn create_adapter(
-        &self,
-        adapter_type: AdapterType,
-        config: dbt_yaml::Mapping,
-        type_ops_factory: Arc<dyn TypeOpsFactory>,
-        _replay_mode: Option<ReplayMode>,
-        flags: BTreeMap<String, MinijinjaValue>,
-        schema_cache: Option<Arc<dyn SchemaStoreTrait>>,
-        _query_cache: Option<Arc<dyn QueryCache>>,
-        quoting: ResolvedQuoting,
-        query_comment: Option<QueryComment>,
-        token: CancellationToken,
-        cloud_config: Option<&SchemasResolvedCloudConfig>,
-        threads: Option<usize>,
-    ) -> FsResult<Arc<Adapter>> {
-        let adapter_config = AdapterConfig::new(config);
-
-        let behavior_flag_overrides = flags
-            .iter()
-            .map(|(key, value)| {
-                let bool_val = if value.is_true() {
-                    true
-                } else if let Some(s) = value.as_str() {
-                    s == "true" || s.parse::<bool>().unwrap_or(false)
-                } else {
-                    false
-                };
-                (key.clone(), bool_val)
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        let engine = self.create_engine(
-            adapter_type,
-            AdapterConfig::new(adapter_config.repr().clone()),
-            type_ops_factory,
-            quoting,
-            query_comment,
-            behavior_flag_overrides,
-            cloud_config,
-            threads,
-        )?;
-
-        let adapter_impl = Arc::new(AdapterImpl::new(engine, schema_cache));
-
-        // Create adapter with appropriate time machine mode
-        let adapter: Arc<Adapter> = Arc::new(Adapter::new(adapter_impl, None, token));
-        Ok(adapter)
-    }
-
-    fn stmt_splitter(&self) -> Arc<dyn StmtSplitter> {
-        unimplemented!()
-    }
-
-    fn create_relation_from_node(
-        &self,
-        _node: &dyn InternalDbtNodeAttributes,
-        _adapter_type: AdapterType,
-    ) -> Result<Box<dyn BaseRelation>, minijinja::Error> {
-        unimplemented!()
-    }
-}
 struct DefaultTaskRunnerCtxFactory {
     rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>,
 }
@@ -202,6 +65,7 @@ impl TaskRunnerCtxFactory for DefaultTaskRunnerCtxFactory {
 }
 
 struct NoOpIndexHooks;
+
 #[async_trait]
 impl IndexHooks for NoOpIndexHooks {}
 
@@ -211,23 +75,19 @@ pub struct FeatureStackBuilder {
     adapter: AdapterFeature,
     antlr_parser: AntlrParserFeature,
     sidecar: SidecarFeature,
-    cli_extension: CliExtensionFeature,
+    cli: CliFeature,
     task_runner: TaskRunnerFeature,
     resolver: ResolverFeature,
     loader: LoaderFeature,
     license_fetcher: Arc<dyn LicenseFetcher>,
     dbt_distribution: &'static str,
-    version_check_disabled: bool,
 }
 
 impl FeatureStackBuilder {
     pub fn new(tracing: TracingFeature) -> Self {
         let adapter = {
-            let type_ops_factory = Arc::new(DefaultTypeOpsFactoryImpl);
-            let adapter_factory: Arc<dyn AdapterFactory> = {
-                let stmt_splitter = Arc::new(DefaultStmtSplitter {});
-                Arc::new(DefaultAdapterFactoryImpl { stmt_splitter })
-            };
+            let type_ops_factory = Arc::new(DefaultTypeOpsFactory);
+            let adapter_factory = Arc::new(DefaultAdapterFactory);
 
             AdapterFeature {
                 type_ops_factory,
@@ -251,9 +111,9 @@ impl FeatureStackBuilder {
                 hooks_factory: Arc::new(DefaultTaskRunnerHooksFactory),
             }
         };
-        let cli_extension = {
+        let cli = {
             let hooks = Box::new(DefaultCliExtensionHooks);
-            CliExtensionFeatureBuilder::with_hooks(hooks).build()
+            CliFeatureBuilder::with_hooks(hooks).build()
         };
         Self {
             send_anonymous_usage_stats: false,
@@ -261,13 +121,12 @@ impl FeatureStackBuilder {
             adapter,
             antlr_parser: Default::default(),
             sidecar: SidecarFeature::default(),
-            cli_extension,
+            cli,
             task_runner,
             resolver: ResolverFeature::default(),
             loader: LoaderFeature::default(),
             license_fetcher: Arc::new(NoOpLicenseFetcher),
             dbt_distribution: "unknown-oss",
-            version_check_disabled: false,
         }
     }
 
@@ -286,11 +145,6 @@ impl FeatureStackBuilder {
         self
     }
 
-    pub fn disable_version_check(mut self) -> Self {
-        self.version_check_disabled = true;
-        self
-    }
-
     pub fn adapter(mut self, feature: AdapterFeature) -> Self {
         self.adapter = feature;
         self
@@ -301,8 +155,8 @@ impl FeatureStackBuilder {
         self
     }
 
-    pub fn cli_extension(mut self, feature: CliExtensionFeature) -> Self {
-        self.cli_extension = feature;
+    pub fn cli(mut self, feature: CliFeature) -> Self {
+        self.cli = feature;
         self
     }
 
@@ -334,7 +188,7 @@ impl FeatureStackBuilder {
         };
         let stack = FeatureStack {
             instrumentation,
-            cli_extension: self.cli_extension,
+            cli: self.cli,
             index,
             tracing: self.tracing,
             adapter: self.adapter,
@@ -345,9 +199,7 @@ impl FeatureStackBuilder {
             resolver: self.resolver,
             loader: self.loader,
             license_fetcher: self.license_fetcher,
-            version_check_disabled: self.version_check_disabled,
-            cancellation_token_source: CancellationTokenSource::new(),
-            fail_fast: FailFast::new(),
+            version_check_enabled: false,
         };
         Box::new(stack)
     }

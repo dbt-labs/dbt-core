@@ -1,6 +1,6 @@
 use dbt_clap_core::from_main;
 use dbt_common::tracing::{FsTraceConfig, init_tracing};
-use dbt_features::cli_extension::default_cli_parser_factory;
+use dbt_features::cli::default_cli_parser_factory;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::tracing::TracingFeature;
 use dbt_lib::print_trimmed_error;
@@ -45,7 +45,6 @@ fn main() -> ExitCode {
         dbt_features::feature_stack_builder::FeatureStackBuilder::new(tracing)
             .send_anonymous_usage_stats(arg.io.send_anonymous_usage_stats)
             .dbt_distribution("dbt-oss")
-            .disable_version_check()
             .build()
             .into();
 

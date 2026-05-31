@@ -250,15 +250,12 @@ impl<'a> CompilationPhasesExecutor<'a> {
         };
         self.token.check_cancellation()?;
 
-        feature_stack
-            .cli_extension
-            .hooks
-            .will_validate_compilation_cli_args(
-                self.cli.as_ref(),
-                &mut self.arg,
-                &dbt_state,
-                config,
-            )?;
+        feature_stack.cli.hooks.will_validate_compilation_cli_args(
+            self.cli.as_ref(),
+            &mut self.arg,
+            &dbt_state,
+            config,
+        )?;
         if let Some(static_analysis) = self.arg.static_analysis {
             check_deprecated_static_analysis_kind(
                 static_analysis,
@@ -272,7 +269,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
         *version_check_handle = spawn_version_check_if_possible(
             config,
             self.arg.local_execution_backend,
-            feature_stack.version_check_disabled,
+            !feature_stack.version_check_enabled,
         );
         self.token.check_cancellation()?;
 
@@ -1183,7 +1180,7 @@ impl DbtProjectCompilation {
         token.check_cancellation()?;
 
         feature_stack
-            .cli_extension
+            .cli
             .hooks
             .did_resolve_project(
                 executor.cli.as_ref(),
@@ -1235,7 +1232,7 @@ impl DbtProjectCompilation {
         if executor.arg.defer && executor.arg.state.is_none() && executor.arg.defer_state.is_none()
         {
             feature_stack
-                .cli_extension
+                .cli
                 .hooks
                 .will_load_deferred_state(
                     &executor.arg.io,
@@ -1456,7 +1453,7 @@ impl DbtProjectCompilation {
         checkpoint_error_count_maybe_exit(arg)?;
 
         feature_stack
-            .cli_extension
+            .cli
             .hooks
             .will_run_tasks(cli, arg, &self.resolved_state, token)?;
 
@@ -1661,7 +1658,7 @@ impl DbtProjectCompilation {
 
         let run_task_args: Arc<RunTasksArgs> = {
             let mut run_task_args =
-                RunTasksArgs::from_eval_args(arg, feature_stack.fail_fast.clone())
+                RunTasksArgs::from_eval_args(arg, feature_stack.cli.fail_fast.clone())
                     .with_resolved_profile(&self.resolved_state.dbt_profile);
             // This actually affect running tests quite a lot
             run_task_args.sample_renaming = BTreeMap::new();
@@ -1775,7 +1772,7 @@ impl DbtProjectCompilation {
         token.check_cancellation()?;
 
         let freshness_results = feature_stack
-            .cli_extension
+            .cli
             .hooks
             .did_pre_run(
                 arg,
@@ -1791,7 +1788,7 @@ impl DbtProjectCompilation {
         token.check_cancellation()?;
 
         feature_stack
-            .cli_extension
+            .cli
             .hooks
             .did_handle_defer(
                 arg,

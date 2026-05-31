@@ -389,8 +389,8 @@ where
     tracing_handle.with_tracing_consumer(middlewares, consumer_layers);
 
     let feature_stack = feature_stack_factory(feature_handle);
-    let cst = feature_stack.cancellation_token_source.clone();
-    let fail_fast = feature_stack.fail_fast.clone();
+    let cst = feature_stack.cli.cancellation_token_source.clone();
+    let fail_fast = feature_stack.cli.fail_fast.clone();
     let token = cst.token();
 
     let future = Box::pin(execute_fs(arg, cli, feature_stack, token));

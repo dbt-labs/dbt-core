@@ -148,8 +148,8 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
         }));
     }
 
-    let cst = feature_stack.cancellation_token_source.clone();
-    let fail_fast = feature_stack.fail_fast.clone();
+    let cst = feature_stack.cli.cancellation_token_source.clone();
+    let fail_fast = feature_stack.cli.fail_fast.clone();
     let token = cst.token();
 
     let future = tokio_rt.spawn(execute_fs_and_shutdown(

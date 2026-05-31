@@ -253,7 +253,7 @@ async fn do_execute_fs(
     }
 
     feature_stack
-        .cli_extension
+        .cli
         .hooks
         .will_execute(&cli, eval_arg, &feature_stack)
         .await?;
@@ -320,7 +320,7 @@ async fn do_execute_fs(
 
         // Notify the CLI extension hooks that we're initializing a project
         feature_stack
-            .cli_extension
+            .cli
             .hooks
             .will_init_project(eval_arg.io.invocation_id, &cli, init_args)
             .await?;
@@ -1057,7 +1057,7 @@ impl<'a> AllPhasesExecutor<'a> {
         }
 
         self.feature_stack
-            .cli_extension
+            .cli
             .hooks
             .did_schedule_and_run_tasks(
                 self.arg.as_ref(),
@@ -1239,7 +1239,7 @@ impl<'a> AllPhasesExecutor<'a> {
             Arc::clone(&compilation_cache_state.schema_store) as Arc<dyn SchemaStoreTrait>;
         let data_store = Arc::clone(&compilation_cache_state.data_store) as Arc<dyn DataStoreTrait>;
         self.feature_stack
-            .cli_extension
+            .cli
             .hooks
             .did_emit_selected_compile_output(
                 self.arg.as_ref(),
@@ -1266,7 +1266,7 @@ impl<'a> AllPhasesExecutor<'a> {
         }
 
         self.feature_stack
-            .cli_extension
+            .cli
             .hooks
             .did_compile(
                 self.arg.as_ref(),

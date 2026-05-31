@@ -23,11 +23,7 @@ default = ["embed-ui"]
 embed-ui = ["dep:rust-embed", "dep:mime_guess"]
 
 [dependencies]
-# Intentionally NO dependency on `dbt-index` or any other proprietary
-# (`crates/`) crate. The SA `dbt-index-core` crate provides the DuckDB-
-# views-over-parquet backend; proprietary feature surfaces (column lineage,
-# sample data, etc.) are layered on via dyn-compatible Provider traits and
-# wired in by the proprietary `dbt-docs-server-impl` crate.
+dbt-docs-core = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-index-core = { workspace = true }
 

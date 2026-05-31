@@ -12,8 +12,8 @@ use crate::warn_error_options::WarnErrorOptions;
 pub trait TracingConfigProvider: Send + Sync {
     fn set_warn_error_options(&self, warn_error_options: WarnErrorOptions);
     fn get_file_log_path(&self) -> Option<&Path>;
-    /// User-facing CLI brand name (e.g. "dbt-fusion", "dbt-core") for the
-    /// version banner and JSON log lines.
+    /// User-facing CLI brand name (e.g. "dbt-core") for the version banner
+    /// and JSON log lines.
     fn get_command_name(&self) -> &'static str;
 }
 
