@@ -1232,7 +1232,8 @@ impl DbtProjectCompilation {
         token.check_cancellation()?;
 
         let mut cloud_defer_path: Option<PathBuf> = None;
-        if executor.arg.defer {
+        if executor.arg.defer && executor.arg.state.is_none() && executor.arg.defer_state.is_none()
+        {
             feature_stack
                 .cli_extension
                 .hooks
