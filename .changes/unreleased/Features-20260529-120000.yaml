@@ -1,0 +1,5 @@
+kind: Features
+body: Expose `event-time-start` and `event-time-end` CLI values on the Jinja `flags` object (#12847)
+time: 2026-05-29T12:00:00.000000-00:00
+custom:
+    Issue: "12847"
