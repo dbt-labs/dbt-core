@@ -1,0 +1,6 @@
+kind: Fixes
+body: This change corrects incorrect behavior (sources missing from catalog.json on database-flat adapters). That’s a bug fix.
+time: 2026-05-15T18:51:49.676582-04:00
+custom:
+    Author: omarfarooq908
+    Issue: "12966"

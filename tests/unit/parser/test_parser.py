@@ -256,6 +256,15 @@ sources:
         - name: my_table
 """
 
+SOURCE_WITH_EXPLICIT_DATABASE = """
+sources:
+    - name: my_source
+      database: explicit_db
+      schema: my_schema
+      tables:
+        - name: my_table
+"""
+
 
 MULTIPLE_TABLE_SOURCE_META = """
 sources:
@@ -653,6 +662,31 @@ class SchemaParserSourceTest(SchemaParserTest):
         assert src.table.name == "my_table"
         assert src.resource_type == NodeType.Source
         assert src.fqn == ["snowplow", "my_source", "my_table"]
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_database_none_when_profile_has_no_database(self, mock_get_adapter):
+        block = self.file_block_for(SOURCE_WITH_EXPLICIT_DATABASE, "test_one.yml")
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+
+        with mock.patch.object(
+            self.root_project_config.credentials, "database", None, create=True
+        ):
+            parsed = self.source_patcher.parse_source(unpatched)
+
+        assert parsed.database is None
+        assert parsed.schema == "my_schema"
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_database_uses_yaml_when_profile_has_database(self, mock_get_adapter):
+        block = self.file_block_for(SOURCE_WITH_EXPLICIT_DATABASE, "test_one.yml")
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        parsed = self.source_patcher.parse_source(unpatched)
+
+        assert parsed.database == "explicit_db"
 
     @mock.patch("dbt.parser.sources.get_adapter")
     def test__parse_basic_source_meta(self, mock_get_adapter):

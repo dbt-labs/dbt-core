@@ -153,10 +153,17 @@ class SourcePatcher:
             )
 
         default_database = self.root_project.credentials.database
+        # On database-flat adapters (e.g. Teradata), credentials.database is None and
+        # catalog metadata uses NULL for table_database. Normalize explicit source YAML
+        # database values so manifest keys match catalog rows (see dbt-core#12966).
+        if default_database is None:
+            source_database = None
+        else:
+            source_database = source.database or default_database
 
         parsed_source = SourceDefinition(
             package_name=target.package_name,
-            database=(source.database or default_database),
+            database=source_database,
             unrendered_database=source.unrendered_database,
             schema=(source.schema or source.name),
             unrendered_schema=source.unrendered_schema,
