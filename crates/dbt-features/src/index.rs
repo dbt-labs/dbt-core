@@ -1,11 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::Path;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
+use dbt_docs_server::Providers;
+use dbt_docs_server::providers::{Backend, DefaultDistInfoProvider};
+use dbt_index_core::column_impact::UnavailableColumnImpact;
+use dbt_index_core::column_lineage::UnavailableColumnLineage;
 use dbt_lineage_core::{ColIdWithOp, PlanGrainInfo};
 use dbt_scheduler::node_selector::ColId;
 use dbt_schema_store::SchemaStoreTrait;
@@ -15,14 +19,6 @@ use dbt_tasks_core::RunTaskResults;
 
 #[async_trait]
 pub trait IndexHooks: Send + Sync {
-    fn create_docs_providers(
-        &self,
-        _index_dir: &Path,
-        _metadata_dir: Option<&Path>,
-    ) -> FsResult<Option<dbt_docs_server::Providers>> {
-        Ok(None)
-    }
-
     async fn lineage_grain_infos(
         &self,
         _run_task_results: &RunTaskResults,
@@ -41,6 +37,16 @@ pub trait IndexHooks: Send + Sync {
 
 pub struct IndexFeature {
     pub hooks: Box<dyn IndexHooks>,
+    pub providers_factory: fn(Arc<dyn Backend>) -> Providers,
+}
+
+pub fn default_providers_factory(backend: Arc<dyn Backend>) -> Providers {
+    Providers {
+        backend: backend.clone(),
+        column_lineage: Arc::new(UnavailableColumnLineage::new()),
+        column_impact: Arc::new(UnavailableColumnImpact::new()),
+        dist_info: Arc::new(DefaultDistInfoProvider),
+    }
 }
 
 fn unique_key_to_grain(uk: &Option<dbt_schemas::schemas::common::DbtUniqueKey>) -> Vec<String> {

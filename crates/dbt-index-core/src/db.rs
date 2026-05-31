@@ -1,7 +1,14 @@
 use std::fmt::Write;
 use std::path::Path;
 
+use adbc_core::error::{Error as AdbcError, Status};
+use dbt_xdbc::driver::Builder as DriverBuilder;
+use dbt_xdbc::driver::LoadStrategy;
+use dbt_xdbc::{Backend, Connection, Database, database};
+use std::sync::{Arc, Mutex};
+
 use crate::IndexError;
+use crate::format::{cell_to_string, first_nonempty};
 
 /// Tables in the `dbt` schema (snapshot semantics).
 pub const DBT_TABLES: &[&str] = &[
@@ -156,3 +163,125 @@ LEFT JOIN dbt_rt.run_results_latest r ON n.unique_id = r.unique_id
 LEFT JOIN dbt_rt.test_failures tf ON n.unique_id = tf.unique_id AND r.invocation_id = tf.invocation_id
 WHERE n.resource_type IN ('test');
 ";
+
+/// Manages an in-memory DuckDB connection via the ADBC adapter.
+///
+/// The `shared_database` field allows multiple connections to the same DuckDB
+/// catalog via [`Db::new_reader`] — enabling MVCC: readers on separate
+/// connections see a consistent committed snapshot and never block writers.
+pub struct Db {
+    /// Shared database handle — multiple connections can be created from it.
+    /// `Arc<Mutex<>>` because `new_connection()` takes `&mut self` on the Box.
+    shared_database: Arc<Mutex<Box<dyn Database>>>,
+    connection: Box<dyn Connection>,
+}
+
+impl Db {
+    /// Opens an in-memory DuckDB instance.
+    pub fn open_memory() -> Result<Self, IndexError> {
+        let mut driver =
+            DriverBuilder::new(Backend::DuckDBExtended, LoadStrategy::SystemThenCdnCache)
+                .try_load()
+                .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
+
+        let mut db_builder = database::Builder::new(Backend::DuckDBExtended);
+        db_builder
+            .with_named_option("path", ":memory:")
+            .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
+
+        let mut database = db_builder.build(&mut driver)?;
+        let connection = database.new_connection()?;
+
+        let mut db = Self {
+            shared_database: Arc::new(Mutex::new(database)),
+            connection,
+        };
+        db.disable_checkpoint()?;
+        Ok(db)
+    }
+
+    /// Opens (or creates) a DuckDB file at `path` and returns a ready connection.
+    pub fn open(path: &Path) -> Result<Self, IndexError> {
+        let mut driver =
+            DriverBuilder::new(Backend::DuckDBExtended, LoadStrategy::SystemThenCdnCache)
+                .try_load()
+                .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
+
+        let mut db_builder = database::Builder::new(Backend::DuckDBExtended);
+        db_builder
+            .with_named_option("path", path.to_string_lossy().as_ref())
+            .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
+
+        let mut database = db_builder.build(&mut driver)?;
+        let connection = database.new_connection()?;
+
+        Ok(Self {
+            shared_database: Arc::new(Mutex::new(database)),
+            connection,
+        })
+    }
+
+    /// Create a new read-only connection to the **same** DuckDB database.
+    ///
+    /// Shares the catalog via DuckDB MVCC: sees the last committed snapshot,
+    /// never blocks writers, multiple readers can run concurrently.
+    pub fn new_reader(&self) -> Result<Self, IndexError> {
+        let connection = self.shared_database.lock().unwrap().new_connection()?;
+        Ok(Self {
+            shared_database: self.shared_database.clone(),
+            connection,
+        })
+    }
+
+    /// Executes a DDL/DML statement that returns no rows.
+    pub fn execute_update(&mut self, sql: &str) -> Result<Option<i64>, IndexError> {
+        let conn = &mut self.connection;
+        let mut stmt = conn.new_statement()?;
+        stmt.set_sql_query(sql)?;
+        Ok(stmt.execute_update()?)
+    }
+
+    /// Suppress DuckDB's automatic checkpointing. For in-memory databases this
+    /// should already be a no-op, but `read_parquet()` scans can trick the buffer
+    /// manager into scheduling checkpoints whose internal pthread mutex then races
+    /// with catalog DDL.
+    fn disable_checkpoint(&mut self) -> Result<(), IndexError> {
+        self.execute_update("SET wal_autocheckpoint = '0 bytes'")?;
+        self.execute_update("PRAGMA disable_checkpoint_on_shutdown")?;
+        Ok(())
+    }
+
+    /// Query a single scalar from column `col_idx` of the first row.
+    pub fn query_scalar(&mut self, sql: &str, col_idx: usize) -> Option<String> {
+        self.execute_query(sql)
+            .ok()
+            .and_then(|b| first_nonempty(&b).map(|batch| cell_to_string(batch, 0, col_idx)))
+    }
+
+    /// Execute a `SELECT count(*)` query and return the scalar count as a string.
+    pub fn query_count(&mut self, sql: &str) -> String {
+        self.execute_query(sql)
+            .ok()
+            .and_then(|b| b.into_iter().find(|b| b.num_rows() > 0))
+            .map(|b| cell_to_string(&b, 0, 0))
+            .unwrap_or_else(|| "0".to_string())
+    }
+
+    /// Executes a query and collects all resulting record batches.
+    pub fn execute_query(
+        &mut self,
+        sql: &str,
+    ) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
+        let conn = &mut self.connection;
+        let mut stmt = conn.new_statement()?;
+        stmt.set_sql_query(sql)?;
+        let reader = stmt.execute()?;
+        let mut batches = Vec::new();
+        for batch in reader {
+            batches.push(batch.map_err(|e| {
+                AdbcError::with_message_and_status(e.to_string(), Status::Internal)
+            })?);
+        }
+        Ok(batches)
+    }
+}

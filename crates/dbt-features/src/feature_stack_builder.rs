@@ -330,6 +330,7 @@ impl FeatureStackBuilder {
         };
         let index = IndexFeature {
             hooks: Box::new(NoOpIndexHooks),
+            providers_factory: crate::index::default_providers_factory,
         };
         let stack = FeatureStack {
             instrumentation,

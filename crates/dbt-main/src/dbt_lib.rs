@@ -42,10 +42,14 @@ use dbt_common::{
 };
 use dbt_common::{FsError, io_args::FsCommand};
 use dbt_dag::schedule::Schedule;
+use dbt_docs_server::providers::Backend;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
+use dbt_index_core::backend::DuckDbViewsBackend;
 use dbt_index_core::ingest::ingest_state::IngestState;
-use dbt_index_core::ingest::metadata_to_parquet::ingest_from_metadata_direct;
+use dbt_index_core::ingest::metadata_to_parquet::{
+    apply_delta_direct, ingest_from_metadata_direct,
+};
 use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_init::init;
 use dbt_jinja_utils::{
@@ -1343,31 +1347,25 @@ async fn run_docs_serve(
         .clone()
         .unwrap_or_else(|| std::path::PathBuf::from("./target"));
     let metadata_dir = target.join("metadata");
-    let metadata_dir_opt = metadata_dir.exists().then_some(metadata_dir.as_path());
 
-    let providers = match feature_stack
-        .index
-        .hooks
-        .create_docs_providers(&index_dir, metadata_dir_opt)
-    {
-        Ok(Some(p)) => p,
-        Ok(None) => {
-            emit_error_log_message(
-                ErrorCode::Generic,
-                "dbt docs serve: no index providers available",
-                status_reporter,
-            );
-            return Err(FsError::exit_with_status(1));
+    if let Some(md) = metadata_dir.exists().then_some(metadata_dir.as_path()) {
+        if md.exists() {
+            let mut state = IngestState::default();
+            if let Err(err) = apply_delta_direct(md, &index_dir, &mut state) {
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    format!("dbt docs serve: failed to ingest metadata: {err}"),
+                    None,
+                );
+            }
         }
-        Err(err) => {
-            emit_error_log_message(
-                ErrorCode::Generic,
-                format!("dbt docs serve: {err}"),
-                status_reporter,
-            );
-            return Err(FsError::exit_with_status(1));
-        }
-    };
+    }
+
+    let backend: Arc<dyn Backend> = Arc::new(
+        DuckDbViewsBackend::open(&index_dir)
+            .map_err(|e| dbt_common::fs_err!(ErrorCode::Generic, "{e}"))?,
+    );
+    let providers = (feature_stack.index.providers_factory)(backend);
 
     dbt_docs_server::run_with_args(Arc::new(args), providers)
         .await

@@ -19,6 +19,10 @@ dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-main = { workspace = true }
 
+[features]
+default = ["embed-ui"]
+embed-ui = ["dbt-main/embed-ui"]
+
 [dev-dependencies]
 
 [[bin]]
