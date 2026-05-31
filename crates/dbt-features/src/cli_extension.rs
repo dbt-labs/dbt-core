@@ -1,14 +1,16 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use dbt_adapter::Adapter;
 use dbt_clap_core::commands::ExtensionCommandParser;
 use dbt_clap_core::{Cli, CliParser, CliParserFactory, InitArgs};
+use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::io_args::EvalArgs;
+use dbt_common::io_args::{EvalArgs, IoArgs};
 use dbt_compilation::config::CompilationConfig;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -209,6 +211,15 @@ pub trait CliExtensionHooks: Send + Sync {
         metricflow_client: Option<Arc<dyn MetricflowClient>>,
         token: &CancellationToken,
     ) -> FsResult<()>;
+
+    /// Called before deferred state is loaded. Implementations may populate
+    /// `manifest_path` with a locally cached manifest to use for deferral.
+    async fn will_load_deferred_state(
+        &self,
+        io: &IoArgs,
+        cloud_config: Option<&ResolvedCloudConfig>,
+        manifest_path: &mut Option<PathBuf>,
+    ) -> FsResult<()>;
 }
 
 pub(crate) struct DefaultCliExtensionHooks;
@@ -324,6 +335,15 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
         _schedule: &Schedule<String>,
         _metricflow_client: Option<Arc<dyn MetricflowClient>>,
         _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn will_load_deferred_state(
+        &self,
+        _io: &IoArgs,
+        _cloud_config: Option<&ResolvedCloudConfig>,
+        _manifest_path: &mut Option<PathBuf>,
     ) -> FsResult<()> {
         Ok(())
     }

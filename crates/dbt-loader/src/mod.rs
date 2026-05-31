@@ -1,6 +1,5 @@
 pub mod cloud_http_client;
 mod deps;
-mod download_manifest;
 mod load_packages;
 mod load_profiles;
 mod load_vars;
@@ -10,7 +9,6 @@ pub mod loader;
 pub mod loader_hooks;
 
 pub use deps::execute_deps_command;
-pub use download_manifest::CloudManifestDownloader;
 pub use load_packages::{
     construct_internal_packages, load_internal_packages, load_packages, persist_internal_packages,
 };

@@ -27,7 +27,7 @@ use dbt_jinja_utils::{
     node_resolver::NodeResolver,
     phases::{build_compile_and_run_base_context, configure_compile_and_run_jinja_environment},
 };
-use dbt_loader::{CloudManifestDownloader, args::*};
+use dbt_loader::args::*;
 use dbt_parser::args::ResolveArgs;
 use dbt_scheduler::args::SchedulerArgs;
 use dbt_schema_store::{
@@ -537,7 +537,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
     async fn try_load_previous_state(
         &self,
         root_project_quoting: ResolvedQuoting,
-        cloud_manifest_downloader: Option<&CloudManifestDownloader>,
+        cloud_defer_path: Option<PathBuf>,
         maybe_prev_compilation: &Option<Arc<DbtProjectCompilation>>,
     ) -> FsResult<Option<Arc<StateArtifacts>>> {
         let io = &self.arg.io;
@@ -572,15 +572,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 manifest_on_failure,
             )?)))
         } else {
-            let hydrated_state_manifest = if let Some(defer_state) = defer_state {
-                Some(defer_state.clone())
-            } else if let Some(downloader) = cloud_manifest_downloader
-                && self.arg.defer
-            {
-                downloader.download_manifest(io).await?
-            } else {
-                None
-            };
+            let hydrated_state_manifest = defer_state.clone().or(cloud_defer_path);
 
             match hydrated_state_manifest.as_ref() {
                 // A manifest path was resolved (via --defer-state or cloud download):
@@ -1239,14 +1231,23 @@ impl DbtProjectCompilation {
             .await?;
         token.check_cancellation()?;
 
-        let cloud_manifest_downloader = loaded_project
-            .dbt_cloud_config()
-            .and_then(CloudManifestDownloader::try_new);
+        let mut cloud_defer_path: Option<PathBuf> = None;
+        if executor.arg.defer {
+            feature_stack
+                .cli_extension
+                .hooks
+                .will_load_deferred_state(
+                    &executor.arg.io,
+                    loaded_project.dbt_cloud_config(),
+                    &mut cloud_defer_path,
+                )
+                .await?;
+        }
 
         let maybe_previous_state = executor
             .try_load_previous_state(
                 resolved_state.root_project_quoting,
-                cloud_manifest_downloader.as_ref(),
+                cloud_defer_path,
                 &maybe_prev_compilation,
             )
             .await?;
