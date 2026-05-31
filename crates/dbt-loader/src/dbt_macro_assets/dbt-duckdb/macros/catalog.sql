@@ -87,7 +87,7 @@
         columns.column_index,
         columns.column_type,
         columns.column_comment,
-        null as table_owner
+        cast(null as varchar) as table_owner
     from tables
     join columns using (table_database, table_schema, table_name)
     order by table_schema, table_name, column_index
