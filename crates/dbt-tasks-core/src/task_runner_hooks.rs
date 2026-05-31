@@ -10,8 +10,8 @@ use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schema_store::DataStoreTrait;
 use dbt_schema_store::store::SchemaStore;
-use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::schemas::ResolvedCloudConfig;
+use dbt_schemas::schemas::StateArtifacts;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
 use petgraph::Graph;
@@ -99,7 +99,7 @@ pub trait TaskRunnerHooksFactory: Send + Sync {
     fn create(
         &self,
         cloud_config: Option<ResolvedCloudConfig>,
-        previous_state: Option<Arc<PreviousState>>,
+        previous_state: Option<Arc<StateArtifacts>>,
         adapter: Arc<Adapter>,
         resolved_state: Arc<ResolverState>,
         jinja_env: Arc<JinjaEnv>,

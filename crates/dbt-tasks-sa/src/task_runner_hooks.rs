@@ -11,8 +11,8 @@ use dbt_pretty_table::batches_to_json_rows;
 use dbt_pretty_table::make_column_names;
 use dbt_schema_store::DataStoreTrait;
 use dbt_schema_store::store::SchemaStore;
-use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::schemas::ResolvedCloudConfig;
+use dbt_schemas::schemas::StateArtifacts;
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::Preview;
 use dbt_tasks_core::RunTasksArgs;
@@ -35,7 +35,7 @@ impl TaskRunnerHooksFactory for DefaultTaskRunnerHooksFactory {
     fn create(
         &self,
         _cloud_config: Option<ResolvedCloudConfig>,
-        _previous_state: Option<Arc<PreviousState>>,
+        _previous_state: Option<Arc<StateArtifacts>>,
         _adapter: Arc<Adapter>,
         resolved_state: Arc<ResolverState>,
         _jinja_env: Arc<JinjaEnv>,

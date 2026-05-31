@@ -30,6 +30,7 @@ dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }
 dbt-dag = { workspace = true }
+dbt-defer = { workspace = true }
 dbt-df-providers = { workspace = true }
 dbt-docs-server = { workspace = true }
 dbt-error = { workspace = true }

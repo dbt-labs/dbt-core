@@ -22,7 +22,7 @@ use dbt_schema_store::{
 use dbt_schemas::schemas::{DbtSource, InternalDbtNodeAttributes, Nodes, dbt_column::DbtColumnRef};
 use dbt_telemetry::NodeType;
 
-use crate::precompile::build_refresh_intervals;
+use crate::static_analysis_buckets::build_refresh_intervals;
 
 /// Converts YAML column definitions to an Arrow Schema.
 ///

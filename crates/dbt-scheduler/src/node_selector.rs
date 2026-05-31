@@ -11,7 +11,7 @@ use dbt_common::{
 use dbt_frontend_common::Dialect;
 use dbt_schemas::schemas::{
     CommonAttributes, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
-    ModificationType, Nodes, PreviousState, common::Access, telemetry::NodeType,
+    ModificationType, Nodes, StateArtifacts, common::Access, telemetry::NodeType,
 };
 use glob::Pattern;
 use std::{
@@ -64,7 +64,7 @@ impl StateModifiedSubType {
 pub fn filter_select(
     nodes: &Nodes,
     expr: &SelectExpression,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
 ) -> FsResult<BTreeSet<String>> {
     let project_name = nodes.project_name.as_deref();
@@ -88,7 +88,7 @@ pub fn filter_select(
 pub fn filter_select_criteria(
     nodes: &Nodes,
     criteria: &SelectionCriteria,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
 ) -> FsResult<BTreeSet<String>> {
     let project_name = nodes.project_name.as_deref();
@@ -120,7 +120,7 @@ pub fn filter_select_criteria(
 fn select_expression_include_node(
     expr: &SelectExpression,
     node: &dyn InternalDbtNodeAttributes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     project_name: Option<&str>,
     current_nodes: Option<&Nodes>,
     adapter_type: AdapterType,
@@ -318,7 +318,7 @@ fn match_state(
     pattern: &str,
     node: &dyn InternalDbtNode,
     common_attr: &CommonAttributes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     current_nodes: Option<&Nodes>,
     adapter_type: AdapterType,
 ) -> FsResult<bool> {
@@ -404,7 +404,7 @@ fn match_column(
     criteria: &SelectionCriteria,
     pattern: &str,
     node: &dyn InternalDbtNodeAttributes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     project_name: Option<&str>,
     current_nodes: Option<&Nodes>,
     adapter_type: AdapterType,
@@ -501,7 +501,7 @@ fn match_path(pattern: &str, common_attr: &CommonAttributes) -> FsResult<bool> {
 fn match_result(
     pattern: &str,
     common_attr: &CommonAttributes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
 ) -> FsResult<bool> {
     if let Some(prev_state) = previous_state {
         if let Some(run_results) = &prev_state.run_results {
@@ -750,7 +750,7 @@ fn match_tag(pattern: &str, tags: Vec<String>) -> FsResult<bool> {
 fn match_source_status(
     pattern: &str,
     node: &dyn InternalDbtNodeAttributes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
 ) -> FsResult<bool> {
     use dbt_schemas::schemas::{FreshnessResultsArtifact, serde::typed_struct_from_json_file};
 
@@ -843,7 +843,7 @@ fn match_source_status(
 fn predicate_include_identifier_node(
     criteria: &SelectionCriteria,
     node: &dyn InternalDbtNodeAttributes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     project_name: Option<&str>,
     current_nodes: Option<&Nodes>,
     adapter_type: AdapterType,
@@ -969,7 +969,7 @@ pub fn filter_select_column(
     nodes: &Nodes,
     dialect: &Dialect,
     select: &SelectExpression,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
 ) -> BTreeMap<ColId, SelectionType> {
     let mut selected_items = BTreeMap::new();
 
@@ -988,7 +988,7 @@ fn select_expression_include_node_column(
     selection: &SelectExpression,
     node: &dyn InternalDbtNode,
     dialect: &Dialect,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
 ) -> BTreeMap<ColId, SelectionType> {
     match selection {
         SelectExpression::Atom(criteria) => {
@@ -1034,7 +1034,7 @@ fn predicate_include_node_column(
     criteria: &SelectionCriteria,
     node: &dyn InternalDbtNode,
     dialect: &Dialect,
-    _previous_state: Option<&PreviousState>,
+    _previous_state: Option<&StateArtifacts>,
 ) -> BTreeMap<ColId, SelectionType> {
     let mut result = BTreeMap::new();
 
@@ -2414,8 +2414,8 @@ mod tests {
         )
         .unwrap();
 
-        // Create PreviousState with both state and target paths
-        let prev_state = PreviousState::new_for_source_freshness(
+        // Create StateArtifacts with both state and target paths
+        let prev_state = StateArtifacts::new_for_source_freshness(
             state_dir.path().to_path_buf(),
             Some(target_dir.path().to_path_buf()),
             Some(prev_results),

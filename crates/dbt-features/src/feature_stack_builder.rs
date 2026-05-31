@@ -40,7 +40,7 @@ use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::context::ExtendedCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
 use dbt_tasks_core::{PreTaskRunData, RunTasksArgs};
-use dbt_tasks_sa::schema_hydrator::DeferSchemaHydratorFactory;
+use dbt_tasks_sa::schema_hydrator::DefaultSchemaHydratorFactory;
 use dbt_tasks_sa::task::DefaultTasksForNodeFactory;
 use dbt_tasks_sa::task_runner_hooks::DefaultTaskRunnerHooksFactory;
 use minijinja::Value as MinijinjaValue;
@@ -243,7 +243,7 @@ impl FeatureStackBuilder {
             ))) as Arc<dyn TaskRunnerCtxFactory>;
 
             TaskRunnerFeature {
-                schema_hydrator_factory: Arc::new(DeferSchemaHydratorFactory),
+                schema_hydrator_factory: Arc::new(DefaultSchemaHydratorFactory),
                 tasks_for_node_factory: Arc::new(DefaultTasksForNodeFactory),
                 compare_task_graph_builder: None,
                 rendering_listener_factory,

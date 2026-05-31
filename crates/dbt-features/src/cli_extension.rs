@@ -13,7 +13,7 @@ use dbt_compilation::config::CompilationConfig;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
-use dbt_schemas::schemas::PreviousState;
+use dbt_schemas::schemas::StateArtifacts;
 use dbt_schemas::state::{DbtState, ResolverState};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::{PreTaskRunData, RunTaskResults};
@@ -140,7 +140,7 @@ pub trait CliExtensionHooks: Send + Sync {
         &self,
         arg: &EvalArgs,
         cli: &Cli,
-        previous_state: Option<&PreviousState>,
+        previous_state: Option<&StateArtifacts>,
         run_task_results: &RunTaskResults,
         resolved_state: &ResolverState,
         token: &CancellationToken,
@@ -267,7 +267,7 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
         &self,
         _arg: &EvalArgs,
         _cli: &Cli,
-        _previous_state: Option<&PreviousState>,
+        _previous_state: Option<&StateArtifacts>,
         _run_task_results: &RunTaskResults,
         _resolved_state: &ResolverState,
         _token: &CancellationToken,

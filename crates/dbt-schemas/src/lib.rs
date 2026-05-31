@@ -31,7 +31,7 @@ pub mod schemas {
     pub mod serde;
     mod sources;
     pub mod user_settings;
-    pub use prev_state::{ModificationType, OnManifestLoadFailure, PreviousState};
+    pub use prev_state::{ModificationType, OnManifestLoadFailure, StateArtifacts};
     pub use run_results::{
         ContextRunResult, RunResultOutput, RunResultsArgs, RunResultsArtifact, RunResultsMetadata,
         TimingInfo,

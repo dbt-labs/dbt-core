@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use dbt_adapter::Adapter;
 use dbt_adapter::engine::SidecarClient;
-use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -11,14 +10,12 @@ use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_dag::schedule::Schedule;
-use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_defer::DeferState;
 use dbt_schema_store::store::SchemaStore;
-use dbt_schemas::schemas::PreviousState;
-use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::metricflow::MetricflowClient;
-use dbt_tasks_core::precompile::StaticAnalysisBuckets;
+use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
 
 use crate::config::CompilationConfig;
 
@@ -54,9 +51,9 @@ pub trait SchemaHydrator: Send + Sync {
         self: Box<Self>,
         arg: &EvalArgs,
         schedule: &Schedule<String>,
-        jinja_env: &JinjaEnv,
         resolved_state: &mut ResolverState,
         schema_hydration_state: &mut SchemaHydrationState,
+        defer_state: &mut DeferState,
         token: CancellationToken,
     ) -> FsResult<Box<dyn StaticAnalysisBuckets>>;
 }
@@ -67,9 +64,6 @@ pub trait SchemaHydratorFactory: Send + Sync {
         adapter: Arc<Adapter>,
         execute_mode: Execute,
         compilation_config: CompilationConfig,
-        cloud_config: Option<&ResolvedCloudConfig>,
-        previous_state: Option<Arc<PreviousState>>,
-        root_project_quoting: ResolvedQuoting,
         schema_store: Arc<SchemaStore>,
         sidecar_client: Option<Arc<dyn SidecarClient>>,
         metricflow_server_client: Option<Arc<dyn MetricflowClient>>,

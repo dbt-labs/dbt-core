@@ -16,6 +16,7 @@ use dbt_common::{
 };
 use dbt_compilation::{core::DbtLoadedProject, schema_hydration::SchemaHydrationState};
 use dbt_dag::{deps_mgmt::reverse, schedule::Schedule};
+use dbt_defer::DeferState;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
 use dbt_index_core::{WriteSource, save_artifact_meta};
@@ -37,7 +38,7 @@ use dbt_tasks_core::{
     CompiledSqlCache, RunTaskResults,
     local_schema_builder::{init_data_store, init_schema_store},
     metricflow::MetricflowClient,
-    precompile::{StaticAnalysisBuckets, build_refresh_intervals},
+    static_analysis_buckets::{StaticAnalysisBuckets, build_refresh_intervals},
     utils::{write_run_results_json, write_run_results_json_or_warn},
 };
 
@@ -95,7 +96,7 @@ use tracing::Instrument;
 use vortex_events::{adapter_info_event, resource_counts_event};
 
 use dbt_schemas::schemas::{
-    OnManifestLoadFailure, PreviousState, legacy_catalog::DbtCatalog, manifest::build_manifest,
+    OnManifestLoadFailure, StateArtifacts, legacy_catalog::DbtCatalog, manifest::build_manifest,
 };
 
 use dbt_compilation::config::CompilationConfig;
@@ -538,17 +539,18 @@ impl<'a> CompilationPhasesExecutor<'a> {
         root_project_quoting: ResolvedQuoting,
         cloud_manifest_downloader: Option<&CloudManifestDownloader>,
         maybe_prev_compilation: &Option<Arc<DbtProjectCompilation>>,
-    ) -> FsResult<Option<Arc<PreviousState>>> {
+    ) -> FsResult<Option<Arc<StateArtifacts>>> {
         let io = &self.arg.io;
-        let state = &self.arg.state;
+        let path_to_state = &self.arg.state;
         let defer_state = &self.arg.defer_state;
 
+        // Only in LSP Mode
         if let Some(previous_state) = maybe_prev_compilation
             .as_ref()
             .and_then(|x| x.previous_state.clone())
         {
             Ok(Some(previous_state))
-        } else if let Some(state) = state {
+        } else if let Some(state) = path_to_state {
             // --state was explicitly provided. If manifest.json exists but is broken,
             // try_new_with_target_path always errors regardless of on_failure (issue #1319).
             // For a missing manifest.json, error only when the selector actually needs it
@@ -563,7 +565,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             } else {
                 OnManifestLoadFailure::Ignore
             };
-            Ok(Some(Arc::new(PreviousState::try_new_with_target_path(
+            Ok(Some(Arc::new(StateArtifacts::try_new_with_target_path(
                 state,
                 root_project_quoting,
                 Some(io.out_dir.clone()),
@@ -583,7 +585,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             match hydrated_state_manifest.as_ref() {
                 // A manifest path was resolved (via --defer-state or cloud download):
                 // a broken manifest is always an error regardless of the selector.
-                Some(state_path) => Ok(Some(Arc::new(PreviousState::try_new_with_target_path(
+                Some(state_path) => Ok(Some(Arc::new(StateArtifacts::try_new_with_target_path(
                     state_path,
                     root_project_quoting,
                     Some(io.out_dir.clone()),
@@ -639,7 +641,7 @@ pub struct DbtProjectCompilation {
     pub(crate) metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
     pub(crate) catalog_artifact: Option<DbtCatalog>,
     /// --state
-    pub(crate) previous_state: Option<Arc<PreviousState>>,
+    pub(crate) previous_state: Option<Arc<StateArtifacts>>,
     pub(crate) invocation_id: String,
     /// True when --partial-load actually applied a unique_id filter to the cache load
     /// (either via the fast path or filtered incremental load). False on a full parse
@@ -1686,29 +1688,55 @@ impl DbtProjectCompilation {
         // XXX: costly clone, but we need to enrich the resolved state now
         let mut resolved_state = self.resolved_state.deep_clone();
 
+        // Initialize Deferral State
+        let mut defer_state = if arg.defer {
+            DeferState::load(
+                arg,
+                adapter.clone(),
+                &schedule,
+                &mut resolved_state,
+                &jinja_env,
+                maybe_previous_state.clone(),
+                root_project_quoting,
+            )
+            .await?
+        } else {
+            DeferState::from_previous_state(maybe_previous_state.clone())
+        };
+
+        token.check_cancellation()?;
+
         // FEATURES: static_analysis build_cache test_runner csv_loader snapshot_strategy on_run_hooks freshness semantic_layer
         // Renders, Analyzes, and Runs Tasks (lineage is handled in background for lineage command)
         let schema_hydrator = feature_stack.task_runner.schema_hydrator_factory.create(
             adapter.clone(),
             execute_mode,
             self.loaded_project.config().clone(),
-            dbt_cloud_config.as_ref(),
-            maybe_previous_state.clone(),
-            root_project_quoting,
             schema_store.clone(),
             sidecar_client.clone(),
             metricflow_server_client.clone(),
         );
+
         let static_analysis_buckets = schema_hydrator
             .hydrate_schemas(
                 arg,
                 &schedule,
-                &jinja_env,
                 &mut resolved_state,
                 &mut schema_hydration_state,
+                &mut defer_state,
                 token.clone(),
             )
             .await?;
+
+        // Step 5: Fixup resolved state to store the defer nodes. Node resolver also gets fixed-up too.
+        if let Some(nodes) = defer_state.defer_nodes {
+            dbt_defer::set_defer_context_on_resolver(
+                &mut resolved_state,
+                &schedule.sorted_nodes,
+                &schedule.frontier_nodes,
+            );
+            resolved_state.defer_nodes = Some(nodes);
+        }
 
         if run_task_args.command == FsCommand::Clone && resolved_state.defer_nodes.is_none() {
             return Err(fs_err!(
@@ -1867,7 +1895,7 @@ impl DbtProjectCompilation {
 
         let hooks = task_runner_hooks_factory.create(
             dbt_cloud_config,
-            maybe_previous_state,
+            maybe_previous_state.clone(),
             adapter.clone(),
             Arc::clone(&resolved_state),
             Arc::clone(&jinja_env),

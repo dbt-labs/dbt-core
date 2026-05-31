@@ -18,7 +18,9 @@ dbt-adapter-core = { workspace = true }
 dbt-common = { workspace = true }
 dbt-dag = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }
+dbt-run-cache = { workspace = true }
 dbt-scheduler = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }

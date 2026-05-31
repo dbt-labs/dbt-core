@@ -23,7 +23,7 @@ use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::TaskRunnerStats;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
-use dbt_tasks_core::precompile::StaticAnalysisBuckets;
+use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooks;
 use dbt_tasks_core::test_aggregation::GenericTestRelationships;

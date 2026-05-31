@@ -20,7 +20,7 @@ use std::sync::Arc;
 #[cfg(test)]
 pub static TEST_SIG_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// Controls how a manifest load failure is handled in [`PreviousState::try_new_with_target_path`].
+/// Controls how a manifest load failure is handled in [`StateArtifacts::try_new_with_target_path`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnManifestLoadFailure {
     /// Propagate as a hard error. Use when `--state` is explicitly provided by the user.
@@ -34,7 +34,7 @@ pub enum OnManifestLoadFailure {
 }
 
 #[derive(Debug, Clone)]
-pub struct PreviousState {
+pub struct StateArtifacts {
     pub nodes: Option<Nodes>,
     pub run_results: Option<RunResultsArtifact>,
     pub source_freshness_results: Option<FreshnessResultsArtifact>,
@@ -73,13 +73,13 @@ struct TestSignature {
     kwargs: Vec<(String, String)>,
 }
 
-impl fmt::Display for PreviousState {
+impl fmt::Display for StateArtifacts {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PreviousState from {}", self.state_path.display())
+        write!(f, "StateArtifacts from {}", self.state_path.display())
     }
 }
 
-impl PreviousState {
+impl StateArtifacts {
     fn test_signature(test: &DbtTest) -> Option<TestSignature> {
         #[cfg(test)]
         TEST_SIG_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -248,7 +248,7 @@ impl PreviousState {
         None
     }
 
-    /// Constructs a minimal `PreviousState` for use in tests that only need source freshness data.
+    /// Constructs a minimal `StateArtifacts` for use in tests that only need source freshness data.
     pub fn new_for_source_freshness(
         state_path: PathBuf,
         target_path: Option<PathBuf>,
@@ -275,7 +275,7 @@ impl PreviousState {
         )
     }
 
-    /// Creates a new `PreviousState` from the given state path.
+    /// Creates a new `StateArtifacts` from the given state path.
     ///
     /// # Arguments
     /// * `state_path` - The path to the state directory containing manifest.json and other artifacts
@@ -927,9 +927,9 @@ mod tests {
             })
             .collect();
 
-        let test_sig_index = PreviousState::build_test_sig_index(&prev_nodes);
-        let test_full_name_index = PreviousState::build_test_full_name_index(&prev_nodes);
-        let state = PreviousState {
+        let test_sig_index = StateArtifacts::build_test_sig_index(&prev_nodes);
+        let test_full_name_index = StateArtifacts::build_test_full_name_index(&prev_nodes);
+        let state = StateArtifacts {
             nodes: Some(prev_nodes),
             run_results: None,
             source_freshness_results: None,

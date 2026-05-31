@@ -17,7 +17,7 @@ use dbt_scheduler::{
 };
 use dbt_schemas::{
     schemas::{
-        InternalDbtNodeAttributes, PreviousState, common::DbtMaterialization, profiles::Execute,
+        InternalDbtNodeAttributes, StateArtifacts, common::DbtMaterialization, profiles::Execute,
     },
     state::{CacheState, ResolverState},
 };
@@ -36,7 +36,7 @@ impl CompilationPipeline {
     pub async fn schedule_phase(
         schedule_args: SchedulerArgs,
         resolved_state: &ResolverState,
-        previous_state: Option<&PreviousState>,
+        previous_state: Option<&StateArtifacts>,
         atoms: Option<Vec<SelectExpression>>,
         local_execution_backend: LocalExecutionBackendKind,
         token: &CancellationToken,
@@ -178,7 +178,7 @@ impl CompilationPipeline {
 pub async fn schedule(
     resolved_state: &ResolverState,
     schedule_args: SchedulerArgs,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     local_execution_backend: LocalExecutionBackendKind,
     token: &CancellationToken,
 ) -> FsResult<Schedule<String>> {
@@ -199,7 +199,7 @@ pub async fn schedule(
 pub async fn schedule_with_select(
     resolved_state: &ResolverState,
     mut schedule_args: SchedulerArgs,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     select_expr: SelectExpression,
     exclude_expr: Option<SelectExpression>,
     local_execution_backend: LocalExecutionBackendKind,
@@ -239,7 +239,7 @@ pub async fn schedule_with_select(
 pub async fn schedule_with_unique_ids(
     resolved_state: &ResolverState,
     schedule_args: SchedulerArgs,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     unique_ids: &[String],
     include_parents: bool,
     include_children: bool,
@@ -265,7 +265,7 @@ pub async fn schedule_with_unique_ids(
 pub async fn schedule_with_cache_state(
     resolved_state: &ResolverState,
     schedule_args: SchedulerArgs,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     cache_state: &CacheState,
     local_execution_backend: LocalExecutionBackendKind,
     token: &CancellationToken,

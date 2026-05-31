@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use dbt_adapter::Adapter;
@@ -8,23 +8,24 @@ use dbt_adapter::errors::into_fs_error;
 use dbt_adapter::metadata::CatalogAndSchema;
 use dbt_adapter::relation::{create_relation, create_relation_from_node};
 use dbt_adapter_core::AdapterType;
-use dbt_common::FsResult;
 use dbt_common::create_info_span;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::FsCommand;
-use dbt_common::io_args::IoArgs;
-use dbt_common::node_selector::MethodName;
 use dbt_common::node_selector::SelectionCriteria;
+use dbt_common::node_selector::{MethodName, selectors_require_manifest};
 use dbt_common::static_analysis::is_strict_static_analysis;
+use dbt_common::tracing::emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
+use dbt_common::{ErrorCode, FsResult};
 use dbt_dag::schedule::Schedule;
-use dbt_loader::CloudManifestDownloader;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_run_cache::run_cache_defer::RunCacheProfileResolver;
 use dbt_scheduler::node_selector::filter_select_criteria;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::schemas::OnManifestLoadFailure;
-use dbt_schemas::schemas::PreviousState;
+use dbt_schemas::schemas::StateArtifacts;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::BaseRelation;
@@ -50,67 +51,133 @@ pub struct DeferralUpdate {
     pub relation_remap: HashMap<CanonicalFqn, Arc<dyn BaseRelation>>,
 }
 
-/// Load defer state from disk, cloud, or reuse a previously loaded state.
-/// Returns the previous state (if available) and the filtered defer nodes
-/// (ephemeral/inline models excluded from deferral consideration).
-pub async fn load_defer_state(
-    io: &IoArgs,
-    cloud_manifest_downloader: Option<CloudManifestDownloader>,
-    defer_state_arg: Option<&PathBuf>,
-    previous_state: Option<Arc<PreviousState>>,
-    root_project_quoting: ResolvedQuoting,
-    on_failure: OnManifestLoadFailure,
-) -> FsResult<(Option<Arc<PreviousState>>, Option<Nodes>)> {
-    let reuse_or_load = |path: &Path,
-                         reuse_candidate: Option<Arc<PreviousState>>|
-     -> FsResult<Option<Arc<PreviousState>>> {
-        if let Some(prev_state) = reuse_candidate
-            && prev_state.state_path.as_path() == path
-        {
-            return Ok(Some(prev_state));
-        }
-
-        PreviousState::try_new_with_target_path(
-            path,
-            root_project_quoting,
-            Some(io.out_dir.clone()),
-            on_failure,
-        )
-        .map(|state| Some(Arc::new(state)))
-    };
-
-    // Priority 1: explicit --defer-state path
-    let state = if let Some(path) = defer_state_arg {
-        reuse_or_load(path.as_path(), previous_state)?
-    } else if let Some(prev_state) = previous_state {
-        // Priority 2: reuse already loaded previous state when available
-        Some(prev_state)
-    } else if let Some(downloader) = cloud_manifest_downloader {
-        // Priority 3: auto-hydrate from dbt Cloud (primarily for LSP fallback)
-        let hydrated_path = downloader.download_manifest(io).await?;
-        match hydrated_path {
-            Some(path) => reuse_or_load(path.as_path(), None)?,
-            None => None,
-        }
-    } else {
-        None
-    };
-
-    // Extract and filter nodes: exclude ephemeral/inline models from deferral consideration
-    let nodes = state.as_ref().and_then(|s| s.nodes.clone()).map(|mut n| {
-        n.models.retain(|_, model| {
-            model.__base_attr__.materialized != DbtMaterialization::Ephemeral
-                && model.__base_attr__.materialized != DbtMaterialization::Inline
-        });
-        n
-    });
-
-    Ok((state, nodes))
+#[derive(Default)]
+pub struct DeferState {
+    pub state_artifacts: Option<Arc<StateArtifacts>>,
+    pub defer_nodes: Option<Nodes>,
+    pub deferred_unique_ids: HashMap<CanonicalFqn, String>,
 }
 
-// Deferral is done in two phases:
-// Phase 1 (defer_common): Frontier nodes + selected incrementals/snapshots - SA-independent
-// Phase 2 (defer_sa_upstreams): SA-dependent upstream deferral based on SA strictness
+impl DeferState {
+    /// Load defer state from disk, cloud, or reuse a previously loaded state.
+    /// Returns the previous state (if available) and the filtered defer nodes
+    /// (ephemeral/inline models excluded from deferral consideration).
+    // Deferral is done in two phases:
+    // Phase 1 (defer_common): Frontier nodes + selected incrementals/snapshots - SA-independent
+    // Phase 2 (defer_sa_upstreams): SA-dependent upstream deferral based on SA strictness
+    pub async fn load(
+        arg: &EvalArgs,
+        adapter: Arc<Adapter>,
+        schedule: &Schedule<String>,
+        resolved_state: &mut ResolverState,
+        jinja_env: &JinjaEnv,
+        previous_state: Option<Arc<StateArtifacts>>,
+        root_project_quoting: ResolvedQuoting,
+    ) -> FsResult<Self> {
+        let on_failure = if selectors_require_manifest(arg.select.as_ref(), arg.exclude.as_ref()) {
+            OnManifestLoadFailure::Warn
+        } else {
+            OnManifestLoadFailure::Ignore
+        };
+        let reuse_or_load = |path: &Path,
+                             reuse_candidate: Option<Arc<StateArtifacts>>|
+         -> FsResult<Option<Arc<StateArtifacts>>> {
+            if let Some(prev_state) = reuse_candidate
+                && prev_state.state_path.as_path() == path
+            {
+                return Ok(Some(prev_state));
+            }
+
+            StateArtifacts::try_new_with_target_path(
+                path,
+                root_project_quoting,
+                Some(arg.io.out_dir.clone()),
+                on_failure,
+            )
+            .map(|state| Some(Arc::new(state)))
+        };
+
+        // Priority 1: explicit --defer-state path
+        let state = if let Some(path) = arg.defer_state.as_ref() {
+            reuse_or_load(path.as_path(), previous_state)?
+        } else {
+            // Priority 2: reuse already loaded previous state when available
+            previous_state
+        };
+
+        // Extract and filter nodes: exclude ephemeral/inline models from deferral consideration
+        let mut nodes = state.as_ref().and_then(|s| s.nodes.clone()).map(|mut n| {
+            n.models.retain(|_, model| {
+                model.__base_attr__.materialized != DbtMaterialization::Ephemeral
+                    && model.__base_attr__.materialized != DbtMaterialization::Inline
+            });
+            n
+        });
+
+        // Sources, in priority order: manifest (--defer) wins over dbt State
+        // auto-deferral, which synthesizes profile-target defer nodes from the
+        // dbt State service config when no manifest-backed state is available.
+        // Auto-deferral is opt-in: synthesis failures degrade to "no defer"
+        // rather than aborting compilation.
+        if nodes.is_none() {
+            let run_cache_defer_nodes = match RunCacheProfileResolver::synthesize_defer_nodes(
+                arg,
+                resolved_state,
+                jinja_env,
+            ) {
+                Ok(Some(nodes)) => {
+                    let profile_target = resolved_state.dbt_profile.target.clone();
+                    emit_trace_log_message(|| {
+                        format!(
+                            "dbt State auto-deferral synthesized profile-target defer nodes for '{profile_target}'"
+                        )
+                    });
+                    Some(nodes)
+                }
+                Ok(None) => None,
+                Err(err) => {
+                    emit_warn_log_message(
+                        ErrorCode::StateServiceWarn,
+                        format!(
+                            "dbt State auto-deferral setup failed: {err}; continuing without synthesized defer state"
+                        ),
+                        None,
+                    );
+                    None
+                }
+            };
+            nodes = run_cache_defer_nodes.or(nodes);
+        }
+
+        let deferred: HashMap<CanonicalFqn, String> = if nodes.is_some() {
+            let deferred = defer_common(
+                arg,
+                resolved_state,
+                nodes.as_mut().unwrap(),
+                schedule,
+                &adapter,
+            )
+            .await?;
+            rewrite_recorded_relation_calls_with_deferral(resolved_state, &deferred.relation_remap);
+            deferred.deferred_unique_ids
+        } else {
+            HashMap::new()
+        };
+
+        Ok(DeferState {
+            state_artifacts: state,
+            defer_nodes: nodes,
+            deferred_unique_ids: deferred,
+        })
+    }
+
+    pub fn from_previous_state(previous_state: Option<Arc<StateArtifacts>>) -> Self {
+        Self {
+            state_artifacts: previous_state,
+            ..Default::default()
+        }
+    }
+}
 
 /// Helper to check if a node is deferrable (exists in both resolver_state and defer_nodes).
 fn is_deferrable(
@@ -662,7 +729,7 @@ fn rewrite_relation_call_map(
 
 fn modified_nodes(
     nodes: &Nodes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
 ) -> FsResult<BTreeSet<String>> {
     // find all modified nodes and all of their children
@@ -699,7 +766,7 @@ fn modified_nodes(
 pub fn get_deferred_semantic_manifest(
     arg: &EvalArgs,
     resolved_state: &ResolverState,
-    previous_state: Option<Arc<PreviousState>>,
+    previous_state: Option<Arc<StateArtifacts>>,
     defer_nodes: &Nodes,
 ) -> FsResult<SemanticManifest> {
     let modified_nodes = modified_nodes(

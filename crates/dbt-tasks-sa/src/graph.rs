@@ -21,7 +21,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use dbt_tasks_core::RunTasksArgs;
-use dbt_tasks_core::precompile::StaticAnalysisBuckets;
+use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task::{TP, TasksForNode};
 use dbt_tasks_core::test_aggregation::{

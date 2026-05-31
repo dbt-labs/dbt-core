@@ -27,7 +27,7 @@ use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::selectors::ResolvedSelector;
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
-use dbt_schemas::schemas::{InternalDbtNode, Nodes, PreviousState};
+use dbt_schemas::schemas::{InternalDbtNode, Nodes, StateArtifacts};
 
 use crate::{args::SchedulerArgs, node_selector::filter_select_criteria};
 
@@ -53,7 +53,7 @@ use crate::{args::SchedulerArgs, node_selector::filter_select_criteria};
 pub fn build_schedule(
     arg: &SchedulerArgs,
     nodes: &Nodes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     resolved_selectors: &ResolvedSelector,
     token: &CancellationToken,
     adapter_type: AdapterType,
@@ -164,7 +164,7 @@ pub fn derive_deps(
 fn schedule_graph(
     deps: &BTreeMap<String, BTreeSet<String>>,
     nodes: &Nodes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     resolved_selectors: &ResolvedSelector,
     args: &SchedulerArgs,
     adapter_type: AdapterType,
@@ -448,7 +448,7 @@ fn eval_selector(
     expr: &SelectExpression,
     deps: &BTreeMap<String, BTreeSet<String>>,
     nodes: &Nodes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
 ) -> FsResult<EvalResult> {
     use SelectExpression::*;
@@ -537,7 +537,7 @@ pub fn expand_selector(
     selector: &SelectExpression,
     deps: &BTreeMap<String, BTreeSet<String>>,
     nodes: &Nodes,
-    previous_state: Option<&PreviousState>,
+    previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
 ) -> FsResult<BTreeSet<String>> {
     let res = eval_selector(selector, deps, nodes, previous_state, adapter_type)?;
