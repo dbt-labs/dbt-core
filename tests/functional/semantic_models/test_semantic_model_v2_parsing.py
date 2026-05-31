@@ -303,6 +303,8 @@ class TestMetricOnModelParsingWorks:
         assert (
             simple_metric.type_params.metric_aggregation_params.agg_time_dimension == "second_dim"
         )
+        assert simple_metric.type_params.fill_nulls_with == 0
+        assert simple_metric.type_params.join_to_timespine is True
 
         simple_metric_pydantic = semantic_manifest_metrics["simple_metric"]
         assert simple_metric_pydantic.name == "simple_metric"

@@ -846,6 +846,8 @@ schema_yml_v2_simple_metric_on_model_1 = """
         type: simple
         agg: count
         expr: id
+        fill_nulls_with: 0
+        join_to_timespine: true
       - name: simple_metric_2
         description: This is our second simple metric.
         agg_time_dimension: ds

@@ -1,0 +1,7 @@
+kind: Fixes
+body: >-
+  Propagate fill_nulls_with from metric YAML into type_params.fill_nulls_with in
+  the manifest for v1 measure-level and v2 top-level metric configs.
+time: 2026-05-28T20:35:00.000000000Z
+custom:
+  Issue: "13037"

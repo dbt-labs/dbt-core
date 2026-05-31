@@ -456,8 +456,9 @@ class MetricParser(YamlReader):
                 # `cumulative_type_params.grain_to_date`
                 grain_to_date = TimeGranularity(type_params.grain_to_date)
 
+            measure = self._get_optional_input_measure(type_params.measure)
             return MetricTypeParams(
-                measure=self._get_optional_input_measure(type_params.measure),
+                measure=measure,
                 numerator=self._get_optional_metric_input(type_params.numerator),
                 denominator=self._get_optional_metric_input(type_params.denominator),
                 expr=str(type_params.expr) if type_params.expr is not None else None,
@@ -470,6 +471,7 @@ class MetricParser(YamlReader):
                 cumulative_type_params=self._get_optional_v1_cumulative_type_params(
                     unparsed_metric=unparsed_metric,
                 ),
+                fill_nulls_with=measure.fill_nulls_with if measure else None,
                 # input measures are calculated via metric processing post parsing
                 # input_measures=?,
             )
@@ -514,6 +516,7 @@ class MetricParser(YamlReader):
                 ),
                 metric_aggregation_params=metric_aggregation_params,
                 join_to_timespine=unparsed_metric.join_to_timespine or False,
+                fill_nulls_with=unparsed_metric.fill_nulls_with,
                 is_private=unparsed_metric.hidden,
             )
         else:

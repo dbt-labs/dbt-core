@@ -90,6 +90,10 @@ class TestSimpleMetrics:
         )
         assert manifest.metrics["metric.test.collective_tenure"].time_granularity is None
 
+        collective_tenure = manifest.metrics["metric.test.collective_tenure"]
+        assert collective_tenure.type_params.measure.fill_nulls_with == 0
+        assert collective_tenure.type_params.fill_nulls_with == 0
+
 
 class TestInvalidRefMetrics:
     @pytest.fixture(scope="class")
