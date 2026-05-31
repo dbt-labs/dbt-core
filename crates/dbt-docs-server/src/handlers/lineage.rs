@@ -30,7 +30,7 @@ use arrow_array::{Array, RecordBatch, StringArray};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Response};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::handlers::json::{bad_request, batches_as_value_array, internal_error, not_found};
 use crate::handlers::node_base::extract_str_list;
@@ -47,6 +47,30 @@ pub struct LineageParams {
     pub max_depth: Option<u32>,
 }
 
+#[derive(Serialize)]
+struct LineageNode {
+    unique_id: String,
+    name: String,
+    resource_type: String,
+    materialized: Option<String>,
+    depth: i32,
+}
+
+#[derive(Serialize)]
+struct LineageEdge {
+    from_id: String,
+    to_id: String,
+    edge_type: String,
+}
+
+#[derive(Serialize)]
+struct LineageResponse {
+    root: String,
+    max_depth: u32,
+    nodes: serde_json::Value,
+    edges: serde_json::Value,
+}
+
 pub async fn get_lineage(
     State(state): State<SharedState>,
     Path(unique_id): Path<String>,
@@ -61,70 +85,67 @@ pub async fn get_lineage(
         .clamp(1, HARD_MAX_DEPTH);
     let escaped = escape_str(&unique_id);
 
+    // Saved queries aren't in dbt.edges / dbt.nodes; their upstream deps live
+    // on dbt.saved_queries. The unique_id prefix guarantees this — skip the
+    // probe entirely for all other resource types.
+    if unique_id.starts_with("saved_query.") {
+        let saved_query_sql = build_saved_query_probe_sql(&escaped);
+        let backend = state.providers.backend.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            backend
+                .query_arrow(&saved_query_sql)
+                .map_err(|e| e.to_string())
+        })
+        .await;
+        let batches = match result {
+            Ok(Ok(b)) => b,
+            Ok(Err(e)) => return internal_error(e),
+            Err(e) => return internal_error(e.to_string()),
+        };
+        return match extract_saved_query_root(&batches) {
+            Some(root) => saved_query_response(&unique_id, max_depth, root),
+            None => not_found(format!("node {unique_id} not found")),
+        };
+    }
+
     let nodes_sql = build_nodes_sql(&escaped, max_depth);
     let edges_sql = build_edges_sql(&escaped, max_depth);
-    // Saved queries are absent from `dbt.edges` / `dbt.nodes` in current
-    // parquet output; their upstream deps live on `dbt.saved_queries`. Probe
-    // that table first so the recursive CTE path is reserved for nodes that
-    // can actually populate it.
-    let saved_query_sql = build_saved_query_probe_sql(&escaped);
 
     let backend = state.providers.backend.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let sq_batches = backend
-            .query_arrow(&saved_query_sql)
-            .map_err(|e| e.to_string())?;
-        if let Some(root) = extract_saved_query_root(&sq_batches) {
-            return Ok(LineageQueryOutput::SavedQuery(root));
-        }
         let nodes = backend.query_arrow(&nodes_sql).map_err(|e| e.to_string())?;
         let edges = backend.query_arrow(&edges_sql).map_err(|e| e.to_string())?;
-        Ok(LineageQueryOutput::Node { nodes, edges })
+        Ok((nodes, edges))
     })
     .await;
 
-    let output = match result {
+    let (node_batches, edge_batches) = match result {
         Ok(Ok(t)) => t,
         Ok(Err(err)) => return internal_error(err),
         Err(err) => return internal_error(err.to_string()),
     };
 
-    match output {
-        LineageQueryOutput::SavedQuery(root) => saved_query_response(&unique_id, max_depth, root),
-        LineageQueryOutput::Node { nodes, edges } => {
-            let nodes = match batches_as_value_array(&nodes) {
-                Ok(v) => v,
-                Err(err) => return internal_error(err.to_string()),
-            };
-            // The `nodes` query always returns the root row when the node exists
-            // in dbt.nodes, so an empty array means "node not found".
-            if nodes.as_array().is_some_and(|a| a.is_empty()) {
-                return not_found(format!("node {unique_id} not found"));
-            }
-            let edges = match batches_as_value_array(&edges) {
-                Ok(v) => v,
-                Err(err) => return internal_error(err.to_string()),
-            };
-
-            Json(serde_json::json!({
-                "root": unique_id,
-                "max_depth": max_depth,
-                "nodes": nodes,
-                "edges": edges,
-            }))
-            .into_response()
-        }
+    let nodes = match batches_as_value_array(&node_batches) {
+        Ok(v) => v,
+        Err(err) => return internal_error(err.to_string()),
+    };
+    // The `nodes` query always returns the root row when the node exists
+    // in the metadata union, so an empty array means "node not found".
+    if nodes.as_array().is_some_and(|a| a.is_empty()) {
+        return not_found(format!("node {unique_id} not found"));
     }
-}
+    let edges = match batches_as_value_array(&edge_batches) {
+        Ok(v) => v,
+        Err(err) => return internal_error(err.to_string()),
+    };
 
-/// Internal: which table the root was found in. Drives whether we serve the
-/// recursive-CTE response or the synthesized saved-query one.
-enum LineageQueryOutput {
-    SavedQuery(SavedQueryRoot),
-    Node {
-        nodes: Vec<RecordBatch>,
-        edges: Vec<RecordBatch>,
-    },
+    Json(LineageResponse {
+        root: unique_id,
+        max_depth,
+        nodes,
+        edges,
+    })
+    .into_response()
 }
 
 struct SavedQueryRoot {
@@ -141,17 +162,27 @@ fn build_saved_query_probe_sql(root_id: &str) -> String {
 
 fn extract_saved_query_root(batches: &[RecordBatch]) -> Option<SavedQueryRoot> {
     let batch = batches.iter().find(|b| b.num_rows() > 0)?;
-    let name = batch
-        .column_by_name("name")?
+    let uid_col = batch
+        .column_by_name("unique_id")?
         .as_any()
-        .downcast_ref::<StringArray>()
+        .downcast_ref::<StringArray>()?;
+    if uid_col.is_null(0) {
+        return None;
+    }
+    let unique_id = uid_col.value(0);
+    // `name` should always be present, but fall back to the last dotted segment
+    // of `unique_id` rather than returning None and producing a spurious 404.
+    let name = batch
+        .column_by_name("name")
+        .and_then(|c| c.as_any().downcast_ref::<StringArray>())
         .and_then(|c| {
             if c.is_null(0) {
                 None
             } else {
                 Some(c.value(0).to_owned())
             }
-        })?;
+        })
+        .unwrap_or_else(|| unique_id.rsplit('.').next().unwrap_or(unique_id).to_owned());
     Some(SavedQueryRoot {
         name,
         depends_on_nodes: extract_str_list(batch, "depends_on_nodes"),
@@ -168,39 +199,47 @@ fn extract_saved_query_root(batches: &[RecordBatch]) -> Option<SavedQueryRoot> {
 /// recursive CTE would need a multi-root variant; saved queries today are
 /// 1-hop deep in practice.
 fn saved_query_response(unique_id: &str, max_depth: u32, root: SavedQueryRoot) -> Response {
-    let mut nodes = Vec::with_capacity(root.depends_on_nodes.len() + 1);
-    nodes.push(serde_json::json!({
-        "unique_id": unique_id,
-        "name": root.name,
-        "resource_type": "saved_query",
-        "materialized": serde_json::Value::Null,
-        "depth": 0,
-    }));
-    let mut edges = Vec::with_capacity(root.depends_on_nodes.len());
-    for upstream_id in &root.depends_on_nodes {
+    let mut nodes: Vec<LineageNode> = Vec::with_capacity(root.depends_on_nodes.len() + 1);
+    nodes.push(LineageNode {
+        unique_id: unique_id.to_owned(),
+        name: root.name,
+        resource_type: "saved_query".to_owned(),
+        materialized: None,
+        depth: 0,
+    });
+    let mut edges: Vec<LineageEdge> = Vec::with_capacity(root.depends_on_nodes.len());
+    for upstream_id in root.depends_on_nodes {
         let resource_type = match upstream_id.split_once('.') {
             Some((prefix, _)) => prefix.to_owned(),
             None => "node".to_owned(),
         };
-        nodes.push(serde_json::json!({
-            "unique_id": upstream_id,
-            "name": upstream_id.rsplit('.').next().unwrap_or(upstream_id),
-            "resource_type": resource_type,
-            "materialized": serde_json::Value::Null,
-            "depth": -1,
-        }));
-        edges.push(serde_json::json!({
-            "from_id": upstream_id,
-            "to_id": unique_id,
-            "edge_type": "saved_query",
-        }));
+        let name = upstream_id
+            .rsplit('.')
+            .next()
+            .unwrap_or(&upstream_id)
+            .to_owned();
+        nodes.push(LineageNode {
+            unique_id: upstream_id.clone(),
+            name,
+            resource_type,
+            materialized: None,
+            depth: -1,
+        });
+        edges.push(LineageEdge {
+            from_id: upstream_id,
+            to_id: unique_id.to_owned(),
+            edge_type: "saved_query".to_owned(),
+        });
     }
-    Json(serde_json::json!({
-        "root": unique_id,
-        "max_depth": max_depth,
-        "nodes": nodes,
-        "edges": edges,
-    }))
+    // serde_json::to_value on a Vec<T: Serialize> of plain structs is infallible.
+    let nodes_val = serde_json::to_value(nodes).unwrap_or_default();
+    let edges_val = serde_json::to_value(edges).unwrap_or_default();
+    Json(LineageResponse {
+        root: unique_id.to_owned(),
+        max_depth,
+        nodes: nodes_val,
+        edges: edges_val,
+    })
     .into_response()
 }
 

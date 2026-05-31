@@ -1,9 +1,9 @@
 //! Tests for `GET /api/v1/nodes/:unique_id/lineage`.
 //!
 //! Covers the two code paths in [`get_lineage`]:
-//!   - Saved-query roots — probed via `dbt.saved_queries` and served from
-//!     synthesized `depends_on_nodes` rows (saved queries aren't in
-//!     `dbt.edges`).
+//!   - Saved-query roots — detected by the `saved_query.` unique_id prefix,
+//!     probed via `dbt.saved_queries`, and served from synthesized
+//!     `depends_on_nodes` rows (saved queries aren't in `dbt.edges`).
 //!   - Generic nodes — recursive CTE over `dbt.edges` joined with
 //!     `dbt.nodes`; 404 when the join is empty.
 //!
@@ -30,9 +30,9 @@ use crate::state::AppState;
 // ---------------------------------------------------------------------------
 
 /// Routes Arrow queries to fixture batches based on the table the SQL hits.
-/// `dbt.saved_queries` is probed first by the handler; if it returns rows the
-/// node/edge branches are never hit, so the `node_batches`/`edge_batches`
-/// fields can be empty for the saved-query tests.
+/// The saved-query path only issues a `dbt.saved_queries` query (gated by the
+/// `saved_query.` prefix check); the generic path only issues `dbt.nodes` /
+/// `dbt.edges` queries.
 struct LineageMockBackend {
     saved_query_batches: Vec<RecordBatch>,
     node_batches: Vec<RecordBatch>,
@@ -105,6 +105,26 @@ fn saved_query_probe_batch(unique_id: &str, name: &str, depends_on_nodes: &[&str
         ],
     )
     .expect("valid saved_query probe batch")
+}
+
+/// Build a single-row batch with a NULL `name` column, simulating a parquet
+/// row where the name field was not populated.
+fn saved_query_probe_batch_null_name(unique_id: &str, depends_on_nodes: &[&str]) -> RecordBatch {
+    let deps = make_str_list(depends_on_nodes);
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("unique_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, true),
+        Field::new("depends_on_nodes", deps.data_type().clone(), true),
+    ]));
+    RecordBatch::try_new(
+        schema,
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![None::<&str>])),
+            Arc::new(deps),
+        ],
+    )
+    .expect("valid saved_query probe batch with null name")
 }
 
 /// Build a batch shaped like the lineage `nodes` SQL output:
@@ -202,8 +222,9 @@ async fn empty_unique_id_returns_400() {
 
 #[tokio::test]
 async fn saved_query_with_deps_returns_root_plus_upstream_rows() {
+    let uid = "saved_query.jaffle_shop.dbt_invocations_by_billing_email";
     let probe = saved_query_probe_batch(
-        "dbt_invocations_by_billing_email",
+        uid,
         "dbt_invocations_by_billing_email",
         &[
             "metric.jaffle_shop.dbt_invocations",
@@ -216,21 +237,16 @@ async fn saved_query_with_deps_returns_root_plus_upstream_rows() {
         edge_batches: vec![],
     };
     let state = make_state(backend);
-    let r = get_lineage(
-        State(state),
-        Path("dbt_invocations_by_billing_email".to_owned()),
-        empty_params(),
-    )
-    .await;
+    let r = get_lineage(State(state), Path(uid.to_owned()), empty_params()).await;
     assert_eq!(r.status(), 200);
     let body = response_body(r).await;
 
-    assert_eq!(body["root"], "dbt_invocations_by_billing_email");
+    assert_eq!(body["root"], uid);
     let nodes = body["nodes"].as_array().expect("nodes is array");
     assert_eq!(nodes.len(), 3);
 
     // First row is the saved_query root at depth 0.
-    assert_eq!(nodes[0]["unique_id"], "dbt_invocations_by_billing_email");
+    assert_eq!(nodes[0]["unique_id"], uid);
     assert_eq!(nodes[0]["resource_type"], "saved_query");
     assert_eq!(nodes[0]["depth"], 0);
 
@@ -248,7 +264,7 @@ async fn saved_query_with_deps_returns_root_plus_upstream_rows() {
     let edges = body["edges"].as_array().expect("edges is array");
     assert_eq!(edges.len(), 2);
     assert_eq!(edges[0]["from_id"], "metric.jaffle_shop.dbt_invocations");
-    assert_eq!(edges[0]["to_id"], "dbt_invocations_by_billing_email");
+    assert_eq!(edges[0]["to_id"], uid);
     assert_eq!(edges[0]["edge_type"], "saved_query");
 }
 
@@ -258,19 +274,15 @@ async fn saved_query_with_no_deps_still_returns_root() {
     // (depends_on_nodes hasn't been populated for SL saved queries yet).
     // The handler must still succeed with a single-node graph rather than
     // 404, otherwise the detail page's lineage panel renders an error.
-    let probe = saved_query_probe_batch("lonely_query", "lonely_query", &[]);
+    let uid = "saved_query.jaffle_shop.lonely_query";
+    let probe = saved_query_probe_batch(uid, "lonely_query", &[]);
     let backend = LineageMockBackend {
         saved_query_batches: vec![probe],
         node_batches: vec![],
         edge_batches: vec![],
     };
     let state = make_state(backend);
-    let r = get_lineage(
-        State(state),
-        Path("lonely_query".to_owned()),
-        empty_params(),
-    )
-    .await;
+    let r = get_lineage(State(state), Path(uid.to_owned()), empty_params()).await;
     assert_eq!(r.status(), 200);
     let body = response_body(r).await;
 
@@ -281,18 +293,38 @@ async fn saved_query_with_no_deps_still_returns_root() {
 }
 
 #[tokio::test]
-async fn saved_query_upstream_without_prefix_falls_back_to_node_type() {
-    // Bare upstream ids (no dot) shouldn't crash; fall back to a sentinel
-    // resource_type rather than empty string, so the UI has something to
-    // render a generic icon for.
-    let probe = saved_query_probe_batch("q", "q", &["bare_upstream_id"]);
+async fn saved_query_null_name_falls_back_to_unique_id_suffix() {
+    // If `name` is NULL in the parquet row, the handler must not 404 —
+    // it falls back to the last dotted segment of `unique_id`.
+    let uid = "saved_query.jaffle_shop.my_query";
+    let probe = saved_query_probe_batch_null_name(uid, &[]);
     let backend = LineageMockBackend {
         saved_query_batches: vec![probe],
         node_batches: vec![],
         edge_batches: vec![],
     };
     let state = make_state(backend);
-    let r = get_lineage(State(state), Path("q".to_owned()), empty_params()).await;
+    let r = get_lineage(State(state), Path(uid.to_owned()), empty_params()).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    let nodes = body["nodes"].as_array().expect("nodes is array");
+    assert_eq!(nodes[0]["name"], "my_query");
+}
+
+#[tokio::test]
+async fn saved_query_upstream_without_prefix_falls_back_to_node_type() {
+    // Bare upstream ids (no dot) shouldn't crash; fall back to a sentinel
+    // resource_type rather than empty string, so the UI has something to
+    // render a generic icon for.
+    let uid = "saved_query.pkg.q";
+    let probe = saved_query_probe_batch(uid, "q", &["bare_upstream_id"]);
+    let backend = LineageMockBackend {
+        saved_query_batches: vec![probe],
+        node_batches: vec![],
+        edge_batches: vec![],
+    };
+    let state = make_state(backend);
+    let r = get_lineage(State(state), Path(uid.to_owned()), empty_params()).await;
     assert_eq!(r.status(), 200);
     let body = response_body(r).await;
 
@@ -302,14 +334,14 @@ async fn saved_query_upstream_without_prefix_falls_back_to_node_type() {
 }
 
 #[tokio::test]
-async fn saved_query_probe_short_circuits_generic_path() {
-    // When the saved_query probe finds a row, the generic node lookup must
-    // not run — otherwise a saved_query whose name happens to collide with
-    // a `dbt.nodes` row could double-report.
-    let probe = saved_query_probe_batch("my_query", "my_query", &[]);
+async fn saved_query_prefix_routes_to_saved_query_path() {
+    // The `saved_query.` prefix routes directly to the saved-query code path;
+    // the generic node/edge tables are never queried for these IDs.
+    let uid = "saved_query.pkg.my_query";
+    let probe = saved_query_probe_batch(uid, "my_query", &[]);
     let backend = LineageMockBackend {
         saved_query_batches: vec![probe],
-        // Decoy: if this batch were used the response would carry these rows.
+        // Decoy: if the generic path ran, the response would carry these rows.
         node_batches: vec![node_lineage_batch(&[(
             "model.x.collision",
             "collision",
@@ -320,12 +352,108 @@ async fn saved_query_probe_short_circuits_generic_path() {
         edge_batches: vec![],
     };
     let state = make_state(backend);
-    let r = get_lineage(State(state), Path("my_query".to_owned()), empty_params()).await;
+    let r = get_lineage(State(state), Path(uid.to_owned()), empty_params()).await;
     assert_eq!(r.status(), 200);
     let body = response_body(r).await;
     let nodes = body["nodes"].as_array().expect("nodes is array");
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0]["resource_type"], "saved_query");
+}
+
+// ---------------------------------------------------------------------------
+// Tests: routing gate
+// ---------------------------------------------------------------------------
+
+/// Backend that hard-errors if `dbt.saved_queries` is ever queried.
+/// Used to prove the `starts_with("saved_query.")` gate prevents the probe
+/// from running for non-saved-query IDs. Without the gate, any model/source/
+/// metric ID would issue a `dbt.saved_queries` query and get a 500 here.
+struct NoSavedQueriesBackend {
+    node_batches: Vec<RecordBatch>,
+    edge_batches: Vec<RecordBatch>,
+}
+
+impl Backend for NoSavedQueriesBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    fn query_scalar(&self, _sql: &str) -> Option<String> {
+        Some("0".to_owned())
+    }
+
+    fn query_arrow(&self, sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        if sql.contains("dbt.saved_queries") {
+            return Err(BackendError::Query(
+                "saved_queries must not be probed for non-saved-query IDs".to_owned(),
+            ));
+        }
+        if sql.contains("dbt.edges") && !sql.contains("dbt.nodes") {
+            return Ok(self.edge_batches.clone());
+        }
+        if sql.contains("dbt.nodes") {
+            return Ok(self.node_batches.clone());
+        }
+        Err(BackendError::Query(format!("unrouted query: {sql}")))
+    }
+}
+
+fn make_state_no_sq(backend: NoSavedQueriesBackend) -> Arc<AppState> {
+    let providers = Providers {
+        backend: Arc::new(backend),
+        ..Providers::default()
+    };
+    Arc::new(AppState {
+        index_dir: PathBuf::from("/tmp"),
+        providers,
+    })
+}
+
+#[tokio::test]
+async fn non_saved_query_id_never_probes_saved_queries_table() {
+    // Regression guard for the `starts_with("saved_query.")` gate.
+    // If the gate is removed, the backend errors → handler returns 500 →
+    // assertion on 200 fails, catching the regression immediately.
+    let backend = NoSavedQueriesBackend {
+        node_batches: vec![node_lineage_batch(&[(
+            "model.acme.orders",
+            "orders",
+            "model",
+            Some("table"),
+            0,
+        )])],
+        edge_batches: vec![],
+    };
+    let state = make_state_no_sq(backend);
+    let r = get_lineage(
+        State(state),
+        Path("model.acme.orders".to_owned()),
+        empty_params(),
+    )
+    .await;
+    assert_eq!(r.status(), 200);
+}
+
+#[tokio::test]
+async fn metric_id_never_probes_saved_queries_table() {
+    let backend = NoSavedQueriesBackend {
+        node_batches: vec![node_lineage_batch(&[(
+            "metric.acme.revenue",
+            "revenue",
+            "metric",
+            None,
+            0,
+        )])],
+        edge_batches: vec![],
+    };
+    let state = make_state_no_sq(backend);
+    let r = get_lineage(
+        State(state),
+        Path("metric.acme.revenue".to_owned()),
+        empty_params(),
+    )
+    .await;
+    assert_eq!(r.status(), 200);
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +552,24 @@ async fn unknown_node_returns_404() {
     let r = get_lineage(
         State(state),
         Path("model.acme.nonexistent".to_owned()),
+        empty_params(),
+    )
+    .await;
+    assert_eq!(r.status(), 404);
+}
+
+#[tokio::test]
+async fn unknown_saved_query_returns_404() {
+    // A `saved_query.` ID that isn't in dbt.saved_queries must 404, not 500.
+    let backend = LineageMockBackend {
+        saved_query_batches: vec![],
+        node_batches: vec![],
+        edge_batches: vec![],
+    };
+    let state = make_state(backend);
+    let r = get_lineage(
+        State(state),
+        Path("saved_query.pkg.nonexistent".to_owned()),
         empty_params(),
     )
     .await;
