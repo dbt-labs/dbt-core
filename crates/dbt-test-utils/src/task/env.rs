@@ -107,6 +107,22 @@ impl ProjectEnv {
         Err("Could not find dbt-cli directory".into())
     }
 
+    /// Creates a new environment (read-only). (The environment does not enforce
+    /// read-only at the moment.)  If `project_dir` does not exist, the run will
+    /// error. `project_dir` is relative to the crate of this file.
+    pub fn immutable_sa(project_dir: &str) -> TestResult<Self> {
+        let def_crate_root = env!("CARGO_MANIFEST_DIR");
+        // TODO: Make this more robust / parameterizeable
+        for ancestor in PathBuf::from(def_crate_root).ancestors() {
+            let dbt_sa_cli_path = ancestor.join("crates").join("dbt-sa-cli");
+            if dbt_sa_cli_path.exists() {
+                return Self::immutable_from(&dbt_sa_cli_path.to_string_lossy(), project_dir);
+            }
+        }
+
+        Err("Could not find dbt-cli directory".into())
+    }
+
     /// [`Self::immutable`] that finds the `project_dir` relative to
     /// the given (crate) root.
     pub fn immutable_from(root: &str, project_dir: &str) -> TestResult<Self> {

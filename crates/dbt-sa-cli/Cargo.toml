@@ -24,6 +24,9 @@ default = ["embed-ui"]
 embed-ui = ["dbt-main/embed-ui"]
 
 [dev-dependencies]
+dbt-test-primitives = { workspace = true }
+dbt-test-utils = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [[bin]]
 doctest = false
