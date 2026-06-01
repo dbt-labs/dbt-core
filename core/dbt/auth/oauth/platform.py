@@ -189,7 +189,7 @@ def resolve_from_callback(
         refresh_token=token_data.get("refresh_token"),
         id_token=token_data.get("id_token"),
         scopes=scopes,
-        expires_at=time.time() + expires_in,
+        expires_at=int(time.time() + expires_in),
         account_host=account_host,
         account_id=account_id,
         user_id=user_id,

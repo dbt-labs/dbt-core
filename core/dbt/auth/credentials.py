@@ -9,7 +9,7 @@ from typing import Optional
 class OAuthSession:
     access_token: str
     scopes: list[str]
-    expires_at: float  # unix timestamp
+    expires_at: int  # unix timestamp (seconds); integer for Rust u64 interop
     account_host: str
     account_id: int
     user_id: int
