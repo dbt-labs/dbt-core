@@ -18,6 +18,7 @@ from dbt.config.utils import normalize_warn_error_options
 from dbt.constants import (
     DBT_PROJECT_FILE_NAME,
     DEPENDENCIES_FILE_NAME,
+    OSI_DIRECTORY_NAME,
     PACKAGE_LOCK_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
     PACKAGES_FILE_NAME,
@@ -465,6 +466,7 @@ class PartialProject(RenderComponents):
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ["analyses"])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
         function_paths: List[str] = value_or(cfg.function_paths, ["functions"])
+        osi_paths: List[str] = value_or(cfg.osi_paths, [OSI_DIRECTORY_NAME])
 
         all_source_paths: List[str] = _all_source_paths(
             model_paths,
@@ -568,6 +570,7 @@ class PartialProject(RenderComponents):
             target_path=target_path,
             snapshot_paths=snapshot_paths,
             function_paths=function_paths,
+            osi_paths=osi_paths,
             clean_targets=clean_targets,
             log_path=log_path,
             packages_install_path=packages_install_path,
@@ -689,6 +692,7 @@ class Project:
     target_path: str
     snapshot_paths: List[str]
     function_paths: List[str]
+    osi_paths: List[str]
     clean_targets: List[str]
     log_path: str
     packages_install_path: str
@@ -783,6 +787,7 @@ class Project:
                 "asset-paths": self.asset_paths,
                 "target-path": self.target_path,
                 "snapshot-paths": self.snapshot_paths,
+                "osi-paths": self.osi_paths,
                 "clean-targets": self.clean_targets,
                 "log-path": self.log_path,
                 "quoting": self.quoting,

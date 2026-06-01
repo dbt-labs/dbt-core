@@ -6,7 +6,6 @@ from typing import Dict, List, Literal, Mapping, MutableMapping, Optional, Proto
 import pathspec  # type: ignore
 
 from dbt.config import Project
-from dbt.constants import OSI_DIRECTORY_NAME
 from dbt.contracts.files import (
     AnySourceFile,
     FileHash,
@@ -241,27 +240,28 @@ class ReadFilesFromFileSystem:
         self._read_osi_files_for_project(project)
 
     def _read_osi_files_for_project(self, project):
-        osi_dir = pathlib.Path(project.project_root) / OSI_DIRECTORY_NAME
-        if not osi_dir.is_dir():
-            return
-        for osi_path in sorted(osi_dir.rglob("*.json")):
-            rel_to_osi = osi_path.relative_to(osi_dir)
-            fp = FilePath(
-                searched_path=OSI_DIRECTORY_NAME,
-                relative_path=str(rel_to_osi),
-                modification_time=osi_path.stat().st_mtime,
-                project_root=project.project_root,
-            )
-            contents = load_file_contents(str(osi_path), strip=True)
-            checksum = FileHash.from_contents(normalize_file_contents(contents))
-            sf = OsiSourceFile(
-                path=fp,
-                checksum=checksum,
-                parse_file_type=ParseFileType.OSI,
-                project_name=project.project_name,
-                contents=contents,
-            )
-            self.files[sf.file_id] = sf
+        for osi_path_name in project.osi_paths:
+            osi_dir = pathlib.Path(project.project_root) / osi_path_name
+            if not osi_dir.is_dir():
+                continue
+            for osi_path in sorted(osi_dir.rglob("*.json")):
+                rel_to_osi = osi_path.relative_to(osi_dir)
+                fp = FilePath(
+                    searched_path=osi_path_name,
+                    relative_path=str(rel_to_osi),
+                    modification_time=osi_path.stat().st_mtime,
+                    project_root=project.project_root,
+                )
+                contents = load_file_contents(str(osi_path), strip=True)
+                checksum = FileHash.from_contents(normalize_file_contents(contents))
+                sf = OsiSourceFile(
+                    path=fp,
+                    checksum=checksum,
+                    parse_file_type=ParseFileType.OSI,
+                    project_name=project.project_name,
+                    contents=contents,
+                )
+                self.files[sf.file_id] = sf
 
 
 @dataclass
