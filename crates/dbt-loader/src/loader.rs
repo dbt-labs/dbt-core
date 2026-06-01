@@ -188,9 +188,33 @@ pub async fn load(
         load_simplified_project_and_profiles(arg).await?;
 
     // Parse dbt_cloud.yml (if it exists)
-    let dbt_cloud_yml = dbt_cloud_config::get_cloud_project_path()
-        .ok()
-        .and_then(|p| dbt_cloud_config::parse_cloud_config(&p).ok().flatten());
+    let dbt_cloud_yml = match dbt_cloud_config::get_cloud_project_path() {
+        Ok(path) => match dbt_cloud_config::parse_cloud_config(&path) {
+            Ok(config) => config,
+            Err(e) => {
+                emit_warn_log_message(
+                    ErrorCode::InvalidConfig,
+                    format!(
+                        "Ignoring dbt_cloud.yml: {}. Cloud credentials will not be available.",
+                        e
+                    ),
+                    arg.io.status_reporter.as_ref(),
+                );
+                None
+            }
+        },
+        Err(e) => {
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                format!(
+                    "Could not determine dbt_cloud.yml path: {}. Cloud credentials will not be available.",
+                    e
+                ),
+                arg.io.status_reporter.as_ref(),
+            );
+            None
+        }
+    };
 
     // Resolve cloud config with precedence: env > dbt_project.yml > dbt_cloud.yml
     let cloud_config = resolve_cloud_config(
