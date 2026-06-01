@@ -2689,6 +2689,86 @@
         "application"
       ]
     },
+    "ExternalPartition": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/ExternalPartitionConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
+    "ExternalPartitionConfig": {
+      "description": "Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L36",
+      "type": "object",
+      "properties": {
+        "data_type": {
+          "default": "",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "type": "string"
+        },
+        "meta": {
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExternalTable": {
+      "description": "Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L48 These always get serialized, even if none.",
+      "type": "object",
+      "properties": {
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ExternalPartition"
+          }
+        },
+        "row_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tbl_properties": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "FloatOrString": {
       "anyOf": [
         {
@@ -10487,7 +10567,7 @@
         "external": {
           "anyOf": [
             {
-              "$ref": "#/definitions/AnyValue"
+              "$ref": "#/definitions/ExternalTable"
             },
             {
               "type": "null"
