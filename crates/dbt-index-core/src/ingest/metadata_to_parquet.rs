@@ -348,6 +348,16 @@ fn i64_col<'a>(
         .and_then(|c| c.as_any().downcast_ref::<arrow_array::Int64Array>())
 }
 
+fn timestamp_micros_col<'a>(
+    batch: &'a arrow_array::RecordBatch,
+    name: &str,
+) -> Option<&'a arrow_array::TimestampMicrosecondArray> {
+    batch.column_by_name(name).and_then(|c| {
+        c.as_any()
+            .downcast_ref::<arrow_array::TimestampMicrosecondArray>()
+    })
+}
+
 fn i32_col<'a>(
     batch: &'a arrow_array::RecordBatch,
     name: &str,
@@ -380,6 +390,14 @@ fn get_str(col: Option<&arrow_array::StringArray>, i: usize) -> Option<String> {
 }
 
 fn get_i64(col: Option<&arrow_array::Int64Array>, i: usize) -> Option<i64> {
+    use arrow_array::Array;
+    col.filter(|c| !c.is_null(i)).map(|c| c.value(i))
+}
+
+fn get_timestamp_micros(
+    col: Option<&arrow_array::TimestampMicrosecondArray>,
+    i: usize,
+) -> Option<i64> {
     use arrow_array::Array;
     col.filter(|c| !c.is_null(i)).map(|c| c.value(i))
 }
@@ -476,6 +494,10 @@ fn micros_to_ts(micros: i64) -> String {
     let nanos = (micros % 1_000_000) * 1000;
     chrono::DateTime::<chrono::Utc>::from(UNIX_EPOCH + Duration::new(secs, nanos as u32))
         .to_rfc3339()
+}
+
+fn micros_to_datetime(micros: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::from_timestamp_micros(micros).unwrap_or_else(chrono::Utc::now)
 }
 
 // ---------------------------------------------------------------------------
@@ -2310,9 +2332,30 @@ fn write_run_invocations(
     writer: &mut IndexWriter,
     metadata_dir: &Path,
     state: &mut IngestState,
-    now: &str,
+    _now: &str,
     full: bool,
 ) -> Result<usize, IndexError> {
+    #[derive(serde::Serialize)]
+    struct InvocationOutputRow {
+        invocation_id: String,
+        command: Option<String>,
+        selector: Option<String>,
+        dbt_version: String,
+        generated_at: Option<chrono::DateTime<chrono::Utc>>,
+        elapsed_time: Option<f64>,
+        args: Option<String>,
+        node_count: Option<i64>,
+        target_name: Option<String>,
+        target_type: Option<String>,
+        target_database: Option<String>,
+        target_schema: Option<String>,
+        target_threads: Option<i64>,
+        vars_override: Option<String>,
+        git_sha: Option<String>,
+        git_branch: Option<String>,
+        git_is_dirty: Option<bool>,
+    }
+
     let dir = metadata_dir.join(RUN_INVOCATIONS_SUBDIR);
     if !dir.exists() {
         return Ok(0);
@@ -2322,19 +2365,14 @@ fn write_run_invocations(
     let last_saved = state.last_epoch_for(RUN_INVOCATIONS_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
     let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
-    let new_epochs: Vec<_> = if need_full {
-        epochs
-    } else {
-        let last = state.last_epoch_for(RUN_INVOCATIONS_SUBDIR);
-        epochs.into_iter().filter(|(n, _)| *n > last).collect()
-    };
-    if new_epochs.is_empty() {
+    let has_new_epochs = need_full || epochs.iter().any(|(n, _)| *n > last_saved);
+    if !has_new_epochs {
         return Ok(0);
     }
 
-    let mut rows: Vec<Value> = Vec::new();
+    let mut rows = Vec::new();
     let mut last_epoch = 0u32;
-    for (epoch_num, path) in &new_epochs {
+    for (epoch_num, path) in &epochs {
         let batches = read_parquet_batches(path)?;
         for batch in &batches {
             let inv_col = str_col(batch, "invocation_id");
@@ -2348,41 +2386,39 @@ fn write_run_invocations(
             let branch_col = str_col(batch, "git_branch");
             let dirty_col = i32_col(batch, "git_is_dirty");
             let elapsed_col = f64_col(batch, "elapsed_secs");
-            let ts_col = i64_col(batch, "ingested_at");
+            let ts_col = timestamp_micros_col(batch, "ingested_at");
             for i in 0..batch.num_rows() {
                 let Some(inv) = get_str(inv_col, i) else {
                     continue;
                 };
-                let ts = get_i64(ts_col, i)
-                    .map(micros_to_ts)
-                    .unwrap_or_else(|| now.to_string());
+                let generated_at = get_timestamp_micros(ts_col, i).map(micros_to_datetime);
                 let git_dirty = get_i32(dirty_col, i).map(|v| v == 1);
-                rows.push(json!({
-                    "invocation_id": inv,
-                    "command": get_str(cmd_col, i),
-                    "selector": get_str(sel_col, i),
-                    "dbt_version": get_str(ver_col, i).unwrap_or_default(),
-                    "generated_at": ts,
-                    "elapsed_time": get_f64(elapsed_col, i),
-                    "node_count": get_i64(nc_col, i),
-                    "target_name": get_str(tname_col, i),
-                    "target_type": get_str(atype_col, i),
-                    "git_sha": get_str(sha_col, i),
-                    "git_branch": get_str(branch_col, i),
-                    "git_is_dirty": git_dirty,
-                    "ingested_at": ts,
-                }));
+                rows.push(InvocationOutputRow {
+                    invocation_id: inv,
+                    command: get_str(cmd_col, i),
+                    selector: get_str(sel_col, i),
+                    dbt_version: get_str(ver_col, i).unwrap_or_default(),
+                    generated_at,
+                    elapsed_time: get_f64(elapsed_col, i),
+                    args: None,
+                    node_count: get_i64(nc_col, i),
+                    target_name: get_str(tname_col, i),
+                    target_type: get_str(atype_col, i),
+                    target_database: None,
+                    target_schema: None,
+                    target_threads: None,
+                    vars_override: None,
+                    git_sha: get_str(sha_col, i),
+                    git_branch: get_str(branch_col, i),
+                    git_is_dirty: git_dirty,
+                });
             }
         }
         last_epoch = *epoch_num;
     }
 
     let count = rows.len();
-    if need_full {
-        writer.write_rt_table("invocations", rows)?;
-    } else {
-        writer.write_rt_table_append("invocations", rows, "invocation_id")?;
-    }
+    writer.write_rt_items("invocations", &rows)?;
     state.set_epoch(RUN_INVOCATIONS_SUBDIR, last_epoch);
     Ok(count)
 }
@@ -2398,6 +2434,24 @@ fn write_run_results(
     _now: &str,
     full: bool,
 ) -> Result<usize, IndexError> {
+    #[derive(serde::Serialize)]
+    struct RunResultOutputRow {
+        unique_id: String,
+        invocation_id: String,
+        status: Option<String>,
+        execution_time: Option<f64>,
+        thread_id: Option<String>,
+        message: Option<String>,
+        failures: Option<i64>,
+        compiled: Option<bool>,
+        compiled_code_hash: Option<String>,
+        relation_name: Option<String>,
+        adapter_response: Option<String>,
+        timing: Option<String>,
+        batch_results: Option<String>,
+        created_at: Option<chrono::DateTime<chrono::Utc>>,
+    }
+
     let dir = metadata_dir.join(RUN_RESULTS_SUBDIR);
     if !dir.exists() {
         return Ok(0);
@@ -2407,19 +2461,14 @@ fn write_run_results(
     let last_saved = state.last_epoch_for(RUN_RESULTS_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
     let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
-    let new_epochs: Vec<_> = if need_full {
-        epochs
-    } else {
-        let last = state.last_epoch_for(RUN_RESULTS_SUBDIR);
-        epochs.into_iter().filter(|(n, _)| *n > last).collect()
-    };
-    if new_epochs.is_empty() {
+    let has_new_epochs = need_full || epochs.iter().any(|(n, _)| *n > last_saved);
+    if !has_new_epochs {
         return Ok(0);
     }
 
-    let mut rows: Vec<Value> = Vec::new();
+    let mut rows = Vec::new();
     let mut last_epoch = 0u32;
-    for (epoch_num, path) in &new_epochs {
+    for (epoch_num, path) in &epochs {
         let batches = read_parquet_batches(path)?;
         for batch in &batches {
             let uid_col = str_col(batch, "unique_id");
@@ -2433,6 +2482,7 @@ fn write_run_results(
             let rel_col = str_col(batch, "relation_name");
             let resp_col = str_col(batch, "adapter_response");
             let tim_col = str_col(batch, "timing");
+            let ts_col = timestamp_micros_col(batch, "ingested_at");
             for i in 0..batch.num_rows() {
                 let Some(uid) = get_str(uid_col, i) else {
                     continue;
@@ -2440,30 +2490,30 @@ fn write_run_results(
                 let Some(inv) = get_str(inv_col, i) else {
                     continue;
                 };
-                rows.push(json!({
-                    "unique_id": uid,
-                    "invocation_id": inv,
-                    "status": get_str(stat_col, i),
-                    "execution_time": get_f64(exec_col, i),
-                    "thread_id": get_str(thr_col, i),
-                    "message": get_str(msg_col, i),
-                    "failures": get_i64(fail_col, i),
-                    "compiled_code_hash": get_str(chash_col, i),
-                    "relation_name": get_str(rel_col, i),
-                    "adapter_response": get_str(resp_col, i),
-                    "timing": get_str(tim_col, i),
-                }));
+                let created_at = get_timestamp_micros(ts_col, i).map(micros_to_datetime);
+                rows.push(RunResultOutputRow {
+                    unique_id: uid,
+                    invocation_id: inv,
+                    status: get_str(stat_col, i),
+                    execution_time: get_f64(exec_col, i),
+                    thread_id: get_str(thr_col, i),
+                    message: get_str(msg_col, i),
+                    failures: get_i64(fail_col, i),
+                    compiled: None,
+                    compiled_code_hash: get_str(chash_col, i),
+                    relation_name: get_str(rel_col, i),
+                    adapter_response: get_str(resp_col, i),
+                    timing: get_str(tim_col, i),
+                    batch_results: None,
+                    created_at,
+                });
             }
         }
         last_epoch = *epoch_num;
     }
 
     let count = rows.len();
-    if need_full {
-        writer.write_rt_table("run_results", rows)?;
-    } else {
-        writer.write_rt_table_append("run_results", rows, "invocation_id")?;
-    }
+    writer.write_rt_items("run_results", &rows)?;
     state.set_epoch(RUN_RESULTS_SUBDIR, last_epoch);
     Ok(count)
 }
