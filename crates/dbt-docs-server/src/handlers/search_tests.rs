@@ -42,6 +42,8 @@ struct SearchMockBackend {
     node_columns_batches: Vec<RecordBatch>,
     /// When true, queries mentioning source_freshness fail (view absent).
     freshness_absent: bool,
+    /// When true, queries mentioning dbt_rt.run_results fail (view absent).
+    run_results_absent: bool,
     /// Fixed count to return for COUNT queries.
     count_override: Option<u64>,
     // Facets fixtures — two-column `(value varchar, cnt bigint)` batches routed by SQL comment.
@@ -65,6 +67,7 @@ impl SearchMockBackend {
             unit_tests_batches: vec![],
             node_columns_batches: vec![],
             freshness_absent: false,
+            run_results_absent: false,
             count_override: None,
             facet_access_batches: vec![],
             facet_layers_batches: vec![],
@@ -104,6 +107,11 @@ impl SearchMockBackend {
         self
     }
 
+    fn without_run_results(mut self) -> Self {
+        self.run_results_absent = true;
+        self
+    }
+
     fn with_count(mut self, count: u64) -> Self {
         self.count_override = Some(count);
         self
@@ -117,6 +125,9 @@ impl Backend for SearchMockBackend {
 
     fn query_scalar(&self, sql: &str) -> Option<String> {
         if self.freshness_absent && sql.contains("source_freshness") {
+            return None;
+        }
+        if self.run_results_absent && sql.contains("dbt_rt.run_results") {
             return None;
         }
         if let Some(count) = self.count_override {
@@ -169,6 +180,9 @@ impl Backend for SearchMockBackend {
     fn query_arrow(&self, sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
         if self.freshness_absent && sql.contains("source_freshness") {
             return Err(BackendError::Query("source_freshness view absent".into()));
+        }
+        if self.run_results_absent && sql.contains("dbt_rt.run_results") {
+            return Err(BackendError::Query("run_results view absent".into()));
         }
         // Route facets queries first — SQL comment discriminators prevent
         // collision with the search UNION SQL that also references these tables.
@@ -1237,4 +1251,49 @@ async fn search_facets_packages() {
     assert_eq!(pkgs.len(), 2);
     assert_eq!(pkgs[0]["value"], "dbt_utils");
     assert_eq!(pkgs[0]["count"], 3);
+}
+
+// ---------------------------------------------------------------------------
+// run_results absent regression tests (RED before fix, GREEN after)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn run_results_absent_returns_200_not_500() {
+    let row = make_model_row("model.jaffle_shop.orders", "orders");
+    let state = make_state(
+        SearchMockBackend::empty()
+            .without_run_results()
+            .with_nodes(vec![row]),
+    );
+    let response = search(State(state), Query(SearchQueryParams::default())).await;
+    assert_eq!(
+        response.status(),
+        200,
+        "search must not 500 when run_results view is absent"
+    );
+    let body = response_body(response).await;
+    assert!(
+        body["page_info"]["total_count"].as_u64().is_some(),
+        "must return a numeric total_count, got: {body}"
+    );
+}
+
+#[tokio::test]
+async fn run_results_absent_search_mode_returns_200() {
+    let row = make_model_row_matched("model.jaffle_shop.orders", "orders", "name");
+    let state = make_state(
+        SearchMockBackend::empty()
+            .without_run_results()
+            .with_nodes(vec![row]),
+    );
+    let params = SearchQueryParams {
+        q: Some("orders".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(
+        response.status(),
+        200,
+        "search ?q= must not 500 when run_results view is absent"
+    );
 }

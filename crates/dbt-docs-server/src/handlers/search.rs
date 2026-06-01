@@ -233,7 +233,7 @@ pub struct SearchQueryParams {
 
 /// Build the nodes branch (model/source/seed/snapshot/test) with optional
 /// freshness JOIN. Projects a uniform column set.
-fn nodes_branch_sql(types: &[&str], with_freshness: bool) -> String {
+fn nodes_branch_sql(types: &[&str], with_freshness: bool, with_run_results: bool) -> String {
     let type_list = types
         .iter()
         .map(|t| format!("'{}'", escape_str(t)))
@@ -251,6 +251,19 @@ fn nodes_branch_sql(types: &[&str], with_freshness: bool) -> String {
         "NULL::BOOLEAN"
     };
 
+    let (rr_join, executed_at_col) = if with_run_results {
+        (
+            "LEFT JOIN ( \
+           SELECT unique_id, CAST(MAX(created_at) AS VARCHAR) AS executed_at \
+           FROM dbt_rt.run_results \
+           GROUP BY unique_id \
+         ) rr ON rr.unique_id = n.unique_id",
+            "rr.executed_at",
+        )
+    } else {
+        ("", "NULL::VARCHAR")
+    };
+
     format!(
         "SELECT n.unique_id, n.name, n.resource_type, n.package_name, \
          n.fqn, n.tags, n.description, \
@@ -260,15 +273,11 @@ fn nodes_branch_sql(types: &[&str], with_freshness: bool) -> String {
               WHEN n.resource_type = 'unit_test' THEN 'unit_test' \
               ELSE NULL END AS test_type, \
          NULL::VARCHAR AS exposure_type, \
-         rr.executed_at AS executed_at, \
+         {executed_at_col} AS executed_at, \
          n.original_file_path \
          FROM dbt.nodes n \
          {freshness_join} \
-         LEFT JOIN ( \
-           SELECT unique_id, CAST(MAX(created_at) AS VARCHAR) AS executed_at \
-           FROM dbt_rt.run_results \
-           GROUP BY unique_id \
-         ) rr ON rr.unique_id = n.unique_id \
+         {rr_join} \
          WHERE n.resource_type IN ({type_list})"
     )
 }
@@ -374,6 +383,7 @@ fn unit_tests_branch_sql() -> String {
 fn build_base_union(
     requested_types: &BTreeSet<ResourceType>,
     with_freshness: bool,
+    with_run_results: bool,
 ) -> Option<String> {
     let mut branches: Vec<String> = Vec::new();
 
@@ -383,7 +393,11 @@ fn build_base_union(
         .map(|t| t.as_str())
         .collect();
     if !nodes_types.is_empty() {
-        branches.push(nodes_branch_sql(&nodes_types, with_freshness));
+        branches.push(nodes_branch_sql(
+            &nodes_types,
+            with_freshness,
+            with_run_results,
+        ));
     }
     if requested_types.contains(&ResourceType::Exposure) {
         branches.push(exposures_branch_sql());
@@ -589,10 +603,11 @@ fn build_search_sql(
     params: &SearchQueryParams,
     requested_types: &BTreeSet<ResourceType>,
     with_freshness: bool,
+    with_run_results: bool,
     first: u32,
     cursor: Option<&Cursor>,
 ) -> Result<SearchSql, String> {
-    let base_union = build_base_union(requested_types, with_freshness)
+    let base_union = build_base_union(requested_types, with_freshness, with_run_results)
         .ok_or_else(|| "no resource types to search".to_string())?;
 
     // Build base WHERE fragment (package, tag, modeling_layer filters).
@@ -1097,16 +1112,36 @@ pub async fn search(
         requested_types.retain(|t| *t == ResourceType::Model);
     }
 
-    // Build SQL with freshness JOIN, fallback without.
-    let sql_with = match build_search_sql(&params, &requested_types, true, first, cursor.as_ref()) {
+    // First call validates params; subsequent calls use .expect() per models.rs pattern.
+    let sql_full = match build_search_sql(
+        &params,
+        &requested_types,
+        true,
+        true,
+        first,
+        cursor.as_ref(),
+    ) {
         Ok(s) => s,
         Err(msg) => return bad_request(&msg),
     };
-    let sql_without =
-        match build_search_sql(&params, &requested_types, false, first, cursor.as_ref()) {
-            Ok(s) => s,
-            Err(msg) => return bad_request(&msg),
-        };
+    let sql_no_fresh = build_search_sql(
+        &params,
+        &requested_types,
+        false,
+        true,
+        first,
+        cursor.as_ref(),
+    )
+    .expect("params already validated");
+    let sql_no_rr = build_search_sql(
+        &params,
+        &requested_types,
+        false,
+        false,
+        first,
+        cursor.as_ref(),
+    )
+    .expect("params already validated");
 
     let is_search = params
         .q
@@ -1128,27 +1163,34 @@ pub async fn search(
 
     let backend = state.providers.backend.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let (total, batches) = match backend.query_scalar(&sql_with.count_sql) {
-            Some(count_str) => {
-                let total = count_str
-                    .parse::<u64>()
-                    .map_err(|e| format!("could not parse search count: {e}"))?;
-                let batches = backend
-                    .query_arrow(&sql_with.page_sql)
-                    .map_err(|e| e.to_string())?;
-                (total, batches)
-            }
-            None => {
-                let total = backend
-                    .query_scalar(&sql_without.count_sql)
-                    .ok_or_else(|| "count query returned no rows".to_string())?
-                    .parse::<u64>()
-                    .map_err(|e| format!("could not parse search count: {e}"))?;
-                let batches = backend
-                    .query_arrow(&sql_without.page_sql)
-                    .map_err(|e| e.to_string())?;
-                (total, batches)
-            }
+        let (total, batches) = if let Some(count_str) = backend.query_scalar(&sql_full.count_sql) {
+            let total = count_str
+                .parse::<u64>()
+                .map_err(|e| format!("could not parse search count: {e}"))?;
+            let batches = backend
+                .query_arrow(&sql_full.page_sql)
+                .map_err(|e| e.to_string())?;
+            (total, batches)
+        } else if let Some(count_str) = backend.query_scalar(&sql_no_fresh.count_sql) {
+            // freshness view absent but run_results present — keep executed_at.
+            let total = count_str
+                .parse::<u64>()
+                .map_err(|e| format!("could not parse search count: {e}"))?;
+            let batches = backend
+                .query_arrow(&sql_no_fresh.page_sql)
+                .map_err(|e| e.to_string())?;
+            (total, batches)
+        } else {
+            // run_results absent — retry without both optional joins.
+            let total = backend
+                .query_scalar(&sql_no_rr.count_sql)
+                .ok_or_else(|| "count query returned no rows".to_string())?
+                .parse::<u64>()
+                .map_err(|e| format!("could not parse search count: {e}"))?;
+            let batches = backend
+                .query_arrow(&sql_no_rr.page_sql)
+                .map_err(|e| e.to_string())?;
+            (total, batches)
         };
         // Generate highlights inline (column highlight needs backend).
         let mut raw_rows = batches_to_search_rows(&batches);
