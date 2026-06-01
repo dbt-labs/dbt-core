@@ -82,6 +82,15 @@ jobs:
     outputs:
       use_hatch: ${{ steps.use_hatch.outputs.use_hatch }}
     steps:
+      - name: "Guard: refuse to release from main"
+        # Post-cutover, `main` is the Rust branch. Python releases must target `1.latest`
+        # (or a `*.latest` release branch). This guard prevents a manual dispatch with
+        # `target_branch: main` from packaging Rust source as a Python wheel.
+        if: ${{ inputs.target_branch == 'main' }}
+        run: |
+          echo "::error title=Invalid target_branch::Releases cannot be cut from 'main' (Rust). Use '1.latest' or a '*.latest' release branch instead."
+          exit 1
+
       - name: "[DEBUG] Print Variables"
         run: |
           echo Inputs
