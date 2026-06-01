@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Bump the minimum `dbt-core-experimental-parser` to `2.0.0a1`
+time: 2026-06-01T12:00:00.000000000Z
+custom:
+    Author: tauhid621
+    Issue: "13065"
