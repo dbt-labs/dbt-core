@@ -1,0 +1,6 @@
+kind: Fixes
+body: Make sure that expires_at in oauth_sessions is int so that its rust interoperable
+time: 2026-06-01T11:19:46.729977+05:30
+custom:
+    Author: ash2shukla
+    Issue: "13032"
