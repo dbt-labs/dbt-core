@@ -1092,7 +1092,7 @@
             }
           ]
         },
-        "execute_hooks_on_reuse": {
+        "execute_hooks_on_any_reuse": {
           "anyOf": [
             {
               "type": [
