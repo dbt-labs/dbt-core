@@ -139,6 +139,47 @@ Released May 08, 2026
 - [@zhong-dbtlabs](https://github.com/zhong-dbtlabs) ([#1590](https://github.com/dbt-labs/dbt-fusion/issues/1590), [#884](https://github.com/dbt-labs/dbt-fusion/issues/884), [#1086](https://github.com/dbt-labs/dbt-fusion/issues/1086))
 
 
+## 2.0.0-preview.181
+
+Released June 01, 2026
+
+### Features
+
+- [dbt-fusion] (dbt-adapter) Switch to using richer sql types from dbt-adapter-sql for convert_{denegerate_data_type}_type dbt functions
+
+### Fixes
+
+- [dbt-fusion] Populate manifest raw_code with verbatim source at parse time, restoring parity with dbt-core for same_body/state:modified/this-ref scans ([#10378](https://github.com/dbt-labs/dbt-fusion/issues/10378))
+- [dbt-fusion] make Ctrl+C during `dbt login` exit instantly by wiring CancellationToken into both OAuth flows
+- [dbt-fusion] dbt-docs-server: return lineage for saved_query, metric, semantic_model, and exposure roots from GET /api/v1/nodes/:id/lineage. Saved queries are synthesized from dbt.saved_queries.depends_on_nodes (not in dbt.edges); the others are walked via dbt.edges but were dropped by the metadata join against dbt.nodes — the join now unions dbt.nodes with dbt.metrics, dbt.semantic_models, and dbt.exposures.
+- [dbt-fusion] Suppress misleading "new version available" message in dbt-sa-cli, since its version is not tracked by the Fusion CDN.
+- [dbt-fusion] dbt docs serve: /api/v1/distribution now returns correct name per binary ("dbt" for proprietary, "oss" for OSS); dbt-sa-cli can now run docs serve
+- [dbt-fusion] Fix `dbt compile --write-catalog` for DuckDB by casting null table_owner to varchar so it maps to a typed string column
+- [dbt-fusion] Fix cloud manifest download firing when --state or --defer-state is already provided
+
+### Under the Hood
+
+- [dbt-fusion] Propagate CliParser command_name through the tracing pipeline so the version banner, deps/clean banners, JSON logs, and OTLP service.name match the binary's brand (dbt-sa-cli emits dbt-core)
+- [dbt-fusion] Enable windows tests in merge queue
+- [dbt-fusion] dbt-docs-server: lineage endpoint uses typed response structs; saved_query probe is now gated on the unique_id prefix, eliminating an unnecessary query for all other resource types; NULL name in saved_queries no longer produces a spurious 404.
+- [dbt-fusion] Exclude snapshots failing due to on-run-start/on-run-end
+- [dbt-fusion] Exclude snapshots failing due to on-run-start/on-run-end
+- [internal] Move cloud manifest download out of fs/sa: gate behind CliExtensionHooks.will_load_deferred_state so dbt-sa-cli never auto-downloads a deferral manifest
+- [internal] Sync CONTRIBUTING-dbtcore.md to dbt-core as CONTRIBUTING.md via copybara
+- [dbt-fusion] Exclude snapshots failing due to on-run-start/on-run-end
+- [dbt-fusion] Time Machine replay: match dbt_artifacts on-run-end hook node IDs using the hyphenated form so non-deterministic model_executions INSERTs are correctly skip
+- [dbt-fusion]  Ignore the model object's raw_code field when replaying recorded submit_python_job events
+- [dbt-fusion] Fix state:modified false positives in snapshots from old fusion versions.
+
+### Contributors
+- [@aiguofer](https://github.com/aiguofer) ([#10378](https://github.com/dbt-labs/dbt-fusion/issues/10378))
+- [@kendru](https://github.com/kendru)
+- [@lottaquestions](https://github.com/lottaquestions)
+- [@tauhid621](https://github.com/tauhid621)
+- [@tauhidanjum](https://github.com/tauhidanjum)
+- [@varantes](https://github.com/varantes)
+
+
 ## 2.0.0-preview.180
 
 Released May 29, 2026
