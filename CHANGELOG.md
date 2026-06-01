@@ -139,6 +139,23 @@ Released May 08, 2026
 - [@zhong-dbtlabs](https://github.com/zhong-dbtlabs) ([#1590](https://github.com/dbt-labs/dbt-fusion/issues/1590), [#884](https://github.com/dbt-labs/dbt-fusion/issues/884), [#1086](https://github.com/dbt-labs/dbt-fusion/issues/1086))
 
 
+## 2.0.0-preview.182
+
+Released June 01, 2026
+
+### Fixes
+
+- [dbt-fusion] Guard Fusion-only macro divergences in dbt_macro_assets on `dbt_version.startswith('2.')` so dbt-core's v2-parser handoff produces macros compatible with both runtimes. Covers Snowflake (`use_catalogs_v2`, table drop), BigQuery (`load_csv_rows` arg count, schema management macros, `alter_relation_comment`), Databricks (`render_type`, `has_feature` -> `has_dbr_capability`, column masks, SHALLOW CLONE PK handling), Redshift (`has_feature("datasharing")`), and Spark (`sql_convert_columns_in_relation`). Consolidates and supersedes ([#10659](https://github.com/dbt-labs/dbt-fusion/issues/10659))
+
+### Under the Hood
+
+- [internal] Migrate JSON schema sync workflow from main to 1.latest branch in dbt-core
+
+### Contributors
+- [@aiguofer](https://github.com/aiguofer) ([#10659](https://github.com/dbt-labs/dbt-fusion/issues/10659))
+- [@tauhidanjum](https://github.com/tauhidanjum)
+
+
 ## 2.0.0-preview.181
 
 Released June 01, 2026
