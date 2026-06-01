@@ -1,6 +1,6 @@
 # **what?**
 # Cuts the `*.latest` branch, bumps dependencies on it, cleans up all files in `.changes/unreleased`
-# and `.changes/previous verion on 1.latest and bumps 1.latest to the input version.
+# and `.changes/previous` version on 1.latest and bumps 1.latest to the input version.
 
 # **why?**
 # Clean up the 1.latest branch after a release branch is cut and automate cutting the release branch.
