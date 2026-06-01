@@ -213,7 +213,7 @@ jobs:
           author: "Github Build Bot <buildbot@dbtlabs.com>"
           committer: "Github Build Bot <buildbot@dbtlabs.com>"
           branch: update-test-durations
-          base: main
+          base: 1.latest
           delete-branch: true
           title: "Update test durations for pytest-split"
           body: |
