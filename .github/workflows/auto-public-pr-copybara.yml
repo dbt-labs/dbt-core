@@ -10,14 +10,17 @@ name: Copybara - Auto Public PR Migration
 # land here need to flow back into fs so the two stay in sync.
 #
 # **when?**
-# On every PR open/reopen/synchronize. PRs from public forks must carry the
-# `ci:approve-public-fork-ci` label (a maintainer adds it) before the
-# secret-bearing dispatch runs — the label is stripped on each new push so
-# updates require re-approval.
+# On PRs targeting `main` (open/reopen/synchronize). Legacy branches like
+# `1.latest` have no copybara baseline, so the `branches` filter below skips
+# them. PRs from public forks must carry the `ci:approve-public-fork-ci`
+# label before the secret-bearing dispatch runs; it's stripped on each push
+# so updates require re-approval.
 
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, labeled, unlabeled]
+    branches:
+      - main
     paths-ignore:
       # Mirror the dbt_core_pr copybara profile's excludes: .github and the
       # private-anchored .rs files that cannot safely round-trip back to fs.
