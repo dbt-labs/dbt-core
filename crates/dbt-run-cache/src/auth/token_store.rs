@@ -7,7 +7,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
 use crate::auth::browser_flow::TokenResponse;
-use crate::auth::scope::{Scope, determine_org_id, jwt_claims};
+use crate::auth::scope::{Scope, jwt_claims};
 use crate::service_client::RunCacheServiceError;
 
 const AUTH_DIR_NAME: &str = ".dbt";
@@ -19,7 +19,6 @@ pub struct StoredToken {
     pub scope: String,
     pub token_type: String,
     pub id_token: String,
-    pub org_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -31,19 +30,17 @@ pub struct StoredToken {
 impl StoredToken {
     /// Build a `StoredToken` from a raw OAuth `TokenResponse`.
     ///
-    /// Decodes the JWT claims to extract the scope and derives the org ID via
-    /// `determine_org_id`. Pass `configured_org_id` when a specific org must be
-    /// selected; pass `None` to let the scope determine the org.
-    pub fn from_token_response(
-        response: TokenResponse,
-        configured_org_id: Option<&str>,
-    ) -> Result<Self, RunCacheServiceError> {
+    /// Decodes the JWT claims to extract and validate the scope, then stores the
+    /// raw token fields. The organization ID is intentionally not derived or
+    /// persisted here — it is always resolved from the live token scope and the
+    /// current configuration at request time (see `OAuthTokenSource::resolve_org_id`).
+    pub fn from_token_response(response: TokenResponse) -> Result<Self, RunCacheServiceError> {
         let claims = jwt_claims(&response.id_token)?;
         let scope_str = claims.scope.ok_or_else(|| {
             RunCacheServiceError::Auth("OAuth token is missing scope".to_string())
         })?;
-        let scope = Scope::from_string(&scope_str)?;
-        let org_id = determine_org_id(&scope, configured_org_id)?;
+        // Validate the scope is well-formed; org resolution is deferred to the caller.
+        Scope::from_string(&scope_str)?;
 
         let expires_at = expires_at_from(&response);
 
@@ -51,7 +48,6 @@ impl StoredToken {
             scope: scope_str,
             token_type: "Bearer".to_string(),
             id_token: response.id_token,
-            org_id,
             expires_at,
             access_token: response.access_token,
             refresh_token: response.refresh_token,
@@ -189,7 +185,6 @@ mod tests {
             scope: "runcache:scope:org:dev:admin".to_string(),
             token_type: "Bearer".to_string(),
             id_token: "fake.jwt.token".to_string(),
-            org_id: "dev".to_string(),
             expires_at: Some(1_700_000_000.0),
             access_token: Some("access".to_string()),
             refresh_token: Some("refresh".to_string()),

@@ -145,7 +145,8 @@ impl RunCacheAuth {
             Self::None => Ok(request),
             Self::OAuth(source) => {
                 let token = source.token().await?;
-                with_auth_metadata(request, &token.id_token, &token.org_id)
+                let org_id = source.resolve_org_id(&token)?;
+                with_auth_metadata(request, &token.id_token, &org_id)
             }
         }
     }

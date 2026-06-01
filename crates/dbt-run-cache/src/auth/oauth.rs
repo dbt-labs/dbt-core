@@ -20,7 +20,6 @@ const TOKEN_REFRESH_WINDOW: Duration = Duration::from_secs(300);
 pub struct CachedToken {
     pub id_token: String,
     pub scope: String,
-    pub org_id: String,
     pub expires_at: Option<SystemTime>,
     pub refresh_token: Option<String>,
 }
@@ -127,12 +126,12 @@ impl OAuthTokenSource {
         let mut guard = self.cached.lock().await;
 
         if let Some(token) = guard.as_ref() {
-            if token.is_fresh() && self.org_id_matches(&token.org_id) {
+            if token.is_fresh() {
                 return Ok(token.clone());
             }
         }
 
-        if let Some(token) = self.try_load_from_disk().await? {
+        if let Some(token) = self.get_or_refresh_from_disk().await? {
             *guard = Some(token.clone());
             return Ok(token);
         }
@@ -146,30 +145,48 @@ impl OAuthTokenSource {
         Ok(token)
     }
 
-    async fn try_load_from_disk(&self) -> Result<Option<CachedToken>, RunCacheServiceError> {
+    async fn get_or_refresh_from_disk(&self) -> Result<Option<CachedToken>, RunCacheServiceError> {
         if self.disk_loaded.swap(true, Ordering::AcqRel) {
             return Ok(None);
         }
         let Some(stored) = self.store.load().await? else {
             return Ok(None);
         };
-        if !self.org_id_matches(&stored.org_id) {
-            let _ = self.store.delete().await;
-            return Ok(None);
-        }
         let cached = stored.clone().into_cached();
-        if cached.is_fresh() {
+        let is_fresh = cached.is_fresh();
+
+        // If a configured org_id isn't in the cached scope, force a refresh in case the
+        // user's permissions changed since the cache was last saved.
+        let needs_scope_refresh = !self.scope_satisfies_config(&cached.scope);
+
+        if is_fresh && !needs_scope_refresh {
             return Ok(Some(cached));
         }
+
         let Some(refresh_token) = stored.refresh_token.clone() else {
-            return Ok(None);
+            // Without a refresh token we can't pick up scope changes. If the cached token
+            // is still valid, return it and let resolve_org_id surface any scope mismatch;
+            // otherwise fall through to re-login.
+            return Ok(if is_fresh { Some(cached) } else { None });
         };
+
         match self.fetch_refresh(&refresh_token).await {
             Ok(token) => Ok(Some(token)),
             Err(err) => {
-                tracing::warn!("dbt State token refresh failed, falling back to re-login: {err}");
-                let _ = self.store.delete().await;
-                Ok(None)
+                if is_fresh {
+                    // The token itself is still valid; return it and let resolve_org_id
+                    // surface any scope mismatch as a proper error instead of triggering
+                    // browser re-auth.
+                    Ok(Some(cached))
+                } else {
+                    // The token is expired and refresh failed; clear the cache and fall
+                    // through to re-login.
+                    tracing::warn!(
+                        "dbt State token refresh failed, falling back to re-login: {err}"
+                    );
+                    let _ = self.store.delete().await;
+                    Ok(None)
+                }
             }
         }
     }
@@ -193,11 +210,26 @@ impl OAuthTokenSource {
         self.process_response(response)
     }
 
-    fn org_id_matches(&self, token_org_id: &str) -> bool {
+    /// Whether a token whose scope is `scope_str` can serve the configured org_id.
+    /// When no org_id is configured this is always true — disambiguation is then
+    /// deferred to `resolve_org_id`.
+    fn scope_satisfies_config(&self, scope_str: &str) -> bool {
         match self.configured_org_id.as_deref() {
-            Some(configured) => configured == token_org_id,
             None => true,
+            Some(configured) => Scope::from_string(scope_str)
+                .map(|scope| scope.is_org_id_in_scope(configured))
+                .unwrap_or(false),
         }
+    }
+
+    /// Resolve the organization ID for a token from its scope and the configured
+    /// org_id. The org_id is always derived from the live token scope rather than a
+    /// value cached at write time, so the result is consistent with the current
+    /// configuration. Ambiguous or disabled scopes surface here as errors instead of
+    /// being treated as token acquisition failures.
+    pub fn resolve_org_id(&self, token: &CachedToken) -> Result<String, RunCacheServiceError> {
+        let scope = Scope::from_string(&token.scope)?;
+        determine_org_id(&scope, self.configured_org_id.as_deref())
     }
 
     fn token_type_or_default(&self) -> String {
@@ -296,26 +328,16 @@ impl OAuthTokenSource {
         let scope_str = claims.scope.ok_or_else(|| {
             RunCacheServiceError::Auth("OAuth token is missing scope".to_string())
         })?;
-        let scope = Scope::from_string(&scope_str)?;
-
-        // Detect the disabled-org case before determine_org_id so the configured
-        // org_id surfaces OrgDisabled instead of a generic Auth error when only
-        // the app scope is present.
-        if let Some(configured) = self.configured_org_id.as_deref() {
-            if scope.is_org_id_disabled(configured) {
-                return Err(RunCacheServiceError::OrgDisabled {
-                    org_id: configured.to_string(),
-                });
-            }
-        }
-
-        let org_id = determine_org_id(&scope, self.configured_org_id.as_deref())?;
+        // Validate the scope is well-formed. Org resolution is deferred to
+        // `resolve_org_id` so that an ambiguous or disabled scope surfaces a proper
+        // error at request time instead of being treated as a token acquisition
+        // failure (which would delete the cache and re-open the browser).
+        Scope::from_string(&scope_str)?;
         let expires_at = expires_at_from(&response);
 
         Ok(CachedToken {
             id_token: response.id_token,
             scope: scope_str,
-            org_id,
             expires_at,
             refresh_token: response.refresh_token,
         })
@@ -353,7 +375,6 @@ impl IntoStored for &CachedToken {
             scope: self.scope.clone(),
             token_type: token_type.to_string(),
             id_token: self.id_token.clone(),
-            org_id: self.org_id.clone(),
             expires_at: self
                 .expires_at
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
@@ -373,7 +394,6 @@ impl FromStored for StoredToken {
         CachedToken {
             id_token: self.id_token,
             scope: self.scope,
-            org_id: self.org_id,
             expires_at: self.expires_at.map(epoch_seconds_to_system_time),
             refresh_token: self.refresh_token,
         }
@@ -559,10 +579,10 @@ mod tests {
         .unwrap();
 
         let token = source.token().await.unwrap();
-        assert_eq!(token.org_id, "dev");
+        assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
 
         let stored = token_store_in(&dir).load().await.unwrap().unwrap();
-        assert_eq!(stored.org_id, "dev");
+        assert_eq!(stored.scope, scope);
 
         // Inspect server requests to confirm Basic auth header.
         let requests = server.received_requests().await.unwrap();
@@ -592,7 +612,7 @@ mod tests {
         .unwrap();
 
         let token = source.token().await.unwrap();
-        assert_eq!(token.org_id, "dev");
+        assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
         assert_eq!(token.refresh_token.as_deref(), Some("refresh-xyz"));
 
         let stored = token_store_in(&dir).load().await.unwrap().unwrap();
@@ -625,7 +645,6 @@ mod tests {
             scope: scope.to_string(),
             token_type: "Bearer".to_string(),
             id_token: make_jwt(scope),
-            org_id: "dev".to_string(),
             expires_at: Some(1.0), // ancient
             access_token: None,
             refresh_token: Some("refresh-old".to_string()),
@@ -672,12 +691,18 @@ mod tests {
         )
         .unwrap();
 
-        let err = source.token().await.unwrap_err();
+        // The token is acquired and persisted successfully; the disabled-org error
+        // surfaces from resolve_org_id, not from token acquisition.
+        let token = source.token().await.unwrap();
+        let err = source.resolve_org_id(&token).unwrap_err();
         assert!(matches!(err, RunCacheServiceError::OrgDisabled { ref org_id } if org_id == "dev"));
     }
 
     #[tokio::test]
-    async fn disk_token_with_mismatched_org_is_deleted() {
+    async fn disk_token_with_mismatched_org_is_refreshed() {
+        // A configured org_id that isn't in the cached scope forces a refresh so a
+        // permissions change is picked up without deleting the cache or re-opening the
+        // browser.
         let server = MockServer::start().await;
         let scope_new = "runcache:scope:org:primary:admin";
         let token_resp = serde_json::json!({
@@ -685,25 +710,26 @@ mod tests {
             "scope": scope_new,
             "token_type": "Bearer",
             "expires_in": 3600,
+            "refresh_token": "refresh-new",
         });
         Mock::given(method("POST"))
             .and(path("/token"))
+            .and(body_string_contains("grant_type=refresh_token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(token_resp))
             .mount(&server)
             .await;
 
         let dir = TempDir::new().unwrap();
         let store = token_store_in(&dir);
-        // Disk says "other" org.
+        // Disk grants only "other"; the configured org "primary" isn't in scope yet.
         store
             .save(&StoredToken {
                 scope: "runcache:scope:org:other:admin".to_string(),
                 token_type: "Bearer".to_string(),
                 id_token: make_jwt("runcache:scope:org:other:admin"),
-                org_id: "other".to_string(),
                 expires_at: Some(9_999_999_999.0),
                 access_token: None,
-                refresh_token: None,
+                refresh_token: Some("refresh-old".to_string()),
             })
             .await
             .unwrap();
@@ -718,7 +744,7 @@ mod tests {
         .unwrap();
 
         let token = source.token().await.unwrap();
-        assert_eq!(token.org_id, "primary");
+        assert_eq!(source.resolve_org_id(&token).unwrap(), "primary");
     }
 
     #[tokio::test]
@@ -732,7 +758,6 @@ mod tests {
                 scope: scope.to_string(),
                 token_type: "Bearer".to_string(),
                 id_token: make_jwt(scope),
-                org_id: "dev".to_string(),
                 expires_at: Some(9_999_999_999.0),
                 access_token: None,
                 refresh_token: None,
@@ -750,8 +775,139 @@ mod tests {
         .unwrap();
 
         let token = source.token().await.unwrap();
-        assert_eq!(token.org_id, "dev");
+        assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
         // No mock was set up; the FakeFlow would have errored. Implicit assertion.
+    }
+
+    #[tokio::test]
+    async fn ambiguous_fresh_cached_token_raises_when_no_org_configured() {
+        // A previous run used a configured org_id, so a valid multi-org token was cached.
+        // A subsequent run without a configured org_id must fail rather than silently
+        // reusing the org_id picked at write time.
+        let dir = TempDir::new().unwrap();
+        let store = token_store_in(&dir);
+        let scope = "runcache:scope:org:org1:admin runcache:scope:org:org2:admin";
+        store
+            .save(&StoredToken {
+                scope: scope.to_string(),
+                token_type: "Bearer".to_string(),
+                id_token: make_jwt(scope),
+                expires_at: Some(9_999_999_999.0),
+                access_token: None,
+                refresh_token: Some("refresh".to_string()),
+            })
+            .await
+            .unwrap();
+
+        let config = config_with("http://127.0.0.1:1", None, None); // no org configured
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        let err = source.resolve_org_id(&token).unwrap_err();
+        assert!(err.to_string().contains("state-org-id"));
+    }
+
+    #[tokio::test]
+    async fn ambiguity_during_refresh_raises_without_browser_flow() {
+        // A near-expiry token is refreshed and the refresh returns a multi-org scope.
+        // With no configured org_id the ambiguity must surface from resolve_org_id, not
+        // be treated as a token acquisition failure that re-opens the browser.
+        let server = MockServer::start().await;
+        let multi_org = "runcache:scope:org:org1:admin runcache:scope:org:org2:admin";
+        let token_resp = serde_json::json!({
+            "id_token": make_jwt(multi_org),
+            "scope": multi_org,
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "refresh_token": "new-refresh",
+        });
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .and(body_string_contains("grant_type=refresh_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(token_resp))
+            .mount(&server)
+            .await;
+
+        let dir = TempDir::new().unwrap();
+        let store = token_store_in(&dir);
+        let near_expiry = (SystemTime::now() + Duration::from_secs(200))
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        store
+            .save(&StoredToken {
+                scope: "runcache:scope:org:org1:admin".to_string(),
+                token_type: "Bearer".to_string(),
+                id_token: make_jwt("runcache:scope:org:org1:admin"),
+                expires_at: Some(near_expiry),
+                access_token: None,
+                refresh_token: Some("old-refresh".to_string()),
+            })
+            .await
+            .unwrap();
+
+        let config = config_with(&server.uri(), None, None);
+        // FakeFlow is empty: if the browser flow were reached it would error.
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        let err = source.resolve_org_id(&token).unwrap_err();
+        assert!(err.to_string().contains("state-org-id"));
+
+        // The refreshed token was persisted (refresh_token rotated) — cache must remain.
+        let saved = token_store_in(&dir).load().await.unwrap().unwrap();
+        assert_eq!(saved.refresh_token.as_deref(), Some("new-refresh"));
+    }
+
+    #[tokio::test]
+    async fn disabled_org_disk_token_surfaces_error_without_reauth() {
+        // When the cached token grants no active access to the configured org (the user
+        // was disabled), the cache must be kept and the disabled error surfaced from
+        // resolve_org_id rather than re-triggering the browser flow.
+        let dir = TempDir::new().unwrap();
+        let store = token_store_in(&dir);
+        let scope = "runcache:scope:app:org1:developer"; // app-only: org access disabled
+        store
+            .save(&StoredToken {
+                scope: scope.to_string(),
+                token_type: "Bearer".to_string(),
+                id_token: make_jwt(scope),
+                expires_at: Some(9_999_999_999.0),
+                access_token: None,
+                refresh_token: None,
+            })
+            .await
+            .unwrap();
+
+        let config = config_with("http://127.0.0.1:1", None, Some("org1"));
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        let err = source.resolve_org_id(&token).unwrap_err();
+        assert!(
+            matches!(err, RunCacheServiceError::OrgDisabled { ref org_id } if org_id == "org1")
+        );
+
+        // The cache must still be present — no deletion, no browser re-auth.
+        assert!(token_store_in(&dir).load().await.unwrap().is_some());
     }
 
     #[tokio::test]
@@ -789,7 +945,7 @@ mod tests {
         .unwrap();
 
         let token = source.token().await.unwrap();
-        assert_eq!(token.org_id, "dev");
+        assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
     }
 
     #[tokio::test]
@@ -819,7 +975,7 @@ mod tests {
         .unwrap();
 
         let token = source.token().await.unwrap();
-        assert_eq!(token.org_id, "dev");
+        assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
 
         // Verify only client_credentials was used — no token-exchange.
         let requests = server.received_requests().await.unwrap();

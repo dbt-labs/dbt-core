@@ -6,6 +6,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_platform_auth::resolver::{INTERACTIVE_TIMEOUT, OAuthInteractiveResolver};
 use dbt_platform_auth::{AuthError, OAUTH_CLIENT_ID};
+use dbt_run_cache::auth::scope::{Scope, determine_org_id};
 use dbt_run_cache::auth::{
     BrowserFlow, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, StoredToken, TokenStore,
 };
@@ -134,7 +135,7 @@ pub async fn execute_login(
         }
         Some(result) = state_result => {
             let response = result.map_err(|e| fs_err!(ErrorCode::AuthFailed, "{e}"))?;
-            let stored = StoredToken::from_token_response(response, None)
+            let stored = StoredToken::from_token_response(response)
                 .map_err(|e| fs_err!(ErrorCode::AuthFailed, "{e}"))?;
             let store = TokenStore::discover().ok_or_else(|| {
                 fs_err!(
@@ -147,7 +148,16 @@ pub async fn execute_login(
                 .await
                 .map_err(|e| fs_err!(ErrorCode::AuthFailed, "{e}"))?;
             run_state_guidance_after_state_login()?;
-            println!("dbt State login successful (org: {}).", stored.org_id);
+            // The org_id is resolved from the token scope only when it's unambiguous;
+            // for multi-org tokens disambiguation is deferred to run time (via the
+            // `state-org-id` config), so login still succeeds without selecting an org here.
+            let org = Scope::from_string(&stored.scope)
+                .ok()
+                .and_then(|scope| determine_org_id(&scope, None).ok());
+            match org {
+                Some(org_id) => println!("dbt State login successful (org: {org_id})."),
+                None => println!("dbt State login successful."),
+            }
         }
         result = platform_resolver.resolve() => {
             let cred = match result {

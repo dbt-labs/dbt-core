@@ -60,6 +60,23 @@ impl Scope {
             .filter_map(|s| extract_org_id(s))
             .any(|id| id == org_id)
     }
+
+    /// Organization IDs present in `:app:` scopes but absent from `:org:` scopes.
+    ///
+    /// These are organizations the user is associated with but whose access has
+    /// been disabled.
+    pub fn disabled_org_ids(&self) -> Vec<String> {
+        let active = self.org_ids();
+        let mut ids = Vec::new();
+        for s in &self.app_scopes {
+            if let Some(id) = extract_org_id(s) {
+                if !active.contains(&id) && !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+        }
+        ids
+    }
 }
 
 fn validate_scope_format(scope: &str) -> Result<(), RunCacheServiceError> {
@@ -85,24 +102,37 @@ pub fn determine_org_id(
     scope: &Scope,
     configured_org_id: Option<&str>,
 ) -> Result<String, RunCacheServiceError> {
-    let org_ids = scope.org_ids();
-
     if let Some(configured) = configured_org_id {
-        if org_ids.iter().any(|id| id == configured || id == "*") {
+        if scope.is_org_id_in_scope(configured) {
             return Ok(configured.to_string());
         }
+        if scope.is_org_id_disabled(configured) {
+            return Err(RunCacheServiceError::OrgDisabled {
+                org_id: configured.to_string(),
+            });
+        }
         return Err(RunCacheServiceError::Auth(format!(
-            "OAuth token does not grant access to configured org_id '{configured}'"
+            "OAuth token does not grant access to configured organization '{configured}'"
         )));
     }
 
+    let org_ids = scope.org_ids();
     match org_ids.as_slice() {
         [id] if id != "*" => Ok(id.clone()),
-        [] => Err(RunCacheServiceError::Auth(
-            "OAuth token does not include an organization scope".to_string(),
-        )),
+        [] => {
+            // A single disabled org and no configured org_id is unambiguous: surface
+            // the disabled error rather than the generic "specify an org" message.
+            if let [org_id] = scope.disabled_org_ids().as_slice() {
+                return Err(RunCacheServiceError::OrgDisabled {
+                    org_id: org_id.clone(),
+                });
+            }
+            Err(RunCacheServiceError::Auth(
+                "OAuth token does not include an organization scope".to_string(),
+            ))
+        }
         _ => Err(RunCacheServiceError::Auth(
-            "RUN_CACHE_ORG_ID is required when the OAuth token has multiple or wildcard organization scopes"
+            "The OAuth token grants access to multiple or wildcard organization scopes; specify which organization to use by setting 'state-org-id' in the 'dbt-cloud' config block"
                 .to_string(),
         )),
     }
@@ -151,7 +181,7 @@ mod tests {
         let err = determine_org_id(&scope, Some("test-org")).unwrap_err();
         assert!(
             err.to_string()
-                .contains("does not grant access to configured org_id")
+                .contains("does not grant access to configured organization")
         );
     }
 
@@ -162,7 +192,49 @@ mod tests {
         )
         .unwrap();
         let err = determine_org_id(&scope, None).unwrap_err();
-        assert!(err.to_string().contains("RUN_CACHE_ORG_ID"));
+        assert!(err.to_string().contains("state-org-id"));
+    }
+
+    #[test]
+    fn disabled_org_ids_lists_app_only_orgs() {
+        let scope = Scope::from_string(
+            "runcache:scope:app:active-org:developer runcache:scope:org:active-org:developer",
+        )
+        .unwrap();
+        assert!(scope.disabled_org_ids().is_empty());
+
+        let scope = Scope::from_string("runcache:scope:app:disabled-org:developer").unwrap();
+        assert_eq!(scope.disabled_org_ids(), vec!["disabled-org".to_string()]);
+
+        let scope = Scope::from_string(
+            "runcache:scope:app:active-org:developer runcache:scope:org:active-org:developer \
+             runcache:scope:app:disabled-org:developer",
+        )
+        .unwrap();
+        assert_eq!(scope.disabled_org_ids(), vec!["disabled-org".to_string()]);
+
+        let scope = Scope::from_string("").unwrap();
+        assert!(scope.disabled_org_ids().is_empty());
+    }
+
+    #[test]
+    fn determine_org_id_errors_when_configured_org_is_disabled() {
+        let scope = Scope::from_string("runcache:scope:app:disabled-org:developer").unwrap();
+        let err = determine_org_id(&scope, Some("disabled-org")).unwrap_err();
+        assert!(matches!(
+            err,
+            RunCacheServiceError::OrgDisabled { ref org_id } if org_id == "disabled-org"
+        ));
+    }
+
+    #[test]
+    fn determine_org_id_errors_when_single_disabled_org_and_no_config() {
+        let scope = Scope::from_string("runcache:scope:app:disabled-org:developer").unwrap();
+        let err = determine_org_id(&scope, None).unwrap_err();
+        assert!(matches!(
+            err,
+            RunCacheServiceError::OrgDisabled { ref org_id } if org_id == "disabled-org"
+        ));
     }
 
     #[test]

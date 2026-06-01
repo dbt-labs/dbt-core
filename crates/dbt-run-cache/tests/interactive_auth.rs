@@ -91,7 +91,7 @@ async fn browser_flow_end_to_end_writes_token_to_disk_with_600_perms() {
     let auth_chain = AuthChainBuilder::with_resolvers(vec![]).build();
     let source = OAuthTokenSource::with_components(&config, store, flow, auth_chain).unwrap();
     let token = source.token().await.unwrap();
-    assert_eq!(token.org_id, "dev");
+    assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
     assert_eq!(token.refresh_token.as_deref(), Some("refresh-end-to-end"));
 
     let saved = TokenStore::discover_from(Some(auth_home.to_string_lossy().into_owned()), None)
