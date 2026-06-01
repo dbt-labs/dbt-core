@@ -13,9 +13,11 @@ from tests.functional.defer_state.fixtures import (
     changed_table_model_sql,
     changed_view_model_sql,
     double_it_sql,
+    double_it_with_alias_yml,
     double_it_yml,
     ephemeral_model_sql,
     exposures_yml,
+    generate_alias_name_sql,
     infinite_macros_sql,
     macros_sql,
     schema_yml,
@@ -36,16 +38,18 @@ class BaseDeferState:
         "exposures.yml": exposures_yml,
     }
 
+    _macros = {
+        "macros.sql": macros_sql,
+        "infinite_macros.sql": infinite_macros_sql,
+    }
+
     @pytest.fixture(scope="class")
     def models(self):
         return self._models
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {
-            "macros.sql": macros_sql,
-            "infinite_macros.sql": infinite_macros_sql,
-        }
+        return self._macros
 
     @pytest.fixture(scope="class")
     def seeds(self):
@@ -363,13 +367,15 @@ class TestDeferStateFlag(BaseDeferState):
         assert results.results[0].adapter_response["rows_affected"] == 2
 
 
-class TestFunctionDeferral(BaseDeferState):
+class BaseFunctionDeferState(BaseDeferState):
+    _functions = {
+        "double_it.sql": double_it_sql,
+        "double_it.yml": double_it_yml,
+    }
+
     @pytest.fixture(scope="class")
     def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.sql": double_it_sql,
-            "double_it.yml": double_it_yml,
-        }
+        return self._functions
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -378,12 +384,12 @@ class TestFunctionDeferral(BaseDeferState):
             "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
         }
 
-    def test_build_with_other_schema_defer(self, project, other_schema):
+    def build_and_defer(self, project, other_schema):
         project.create_test_schema(other_schema)
         run_dbt(["build"])
         self.copy_state(project.project_root)
 
-        result = run_dbt(
+        return run_dbt(
             [
                 "run",
                 "-s",
@@ -395,5 +401,42 @@ class TestFunctionDeferral(BaseDeferState):
                 "otherschema",
             ]
         )
+
+
+class TestFunctionDeferral(BaseFunctionDeferState):
+    def test_build_with_other_schema_defer(self, project, other_schema):
+        result = self.build_and_defer(project, other_schema)
+        assert len(result.results) == 1
+        assert result.results[0].node.name == "double_it_model"
+
+
+class TestFunctionDeferralWithConfigAlias(BaseFunctionDeferState):
+    """Test that deferred function references use an alias set in config."""
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            **self._functions,
+            "double_it.yml": double_it_with_alias_yml,
+        }
+
+    def test_defer_uses_config_alias(self, project, other_schema):
+        result = self.build_and_defer(project, other_schema)
+        assert len(result.results) == 1
+        assert result.results[0].node.name == "double_it_model"
+
+
+class TestFunctionDeferralWithAlias(BaseFunctionDeferState):
+    """Test that deferred function references use the alias from generate_alias_name."""
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            **self._macros,
+            "generate_alias_name.sql": generate_alias_name_sql,
+        }
+
+    def test_defer_uses_function_alias(self, project, other_schema):
+        result = self.build_and_defer(project, other_schema)
         assert len(result.results) == 1
         assert result.results[0].node.name == "double_it_model"

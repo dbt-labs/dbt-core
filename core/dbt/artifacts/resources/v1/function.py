@@ -67,7 +67,7 @@ class DeferFunction(HasRelationMetadata):
 
     @property
     def identifier(self):
-        return self.name
+        return self.alias
 
 
 @dataclass
