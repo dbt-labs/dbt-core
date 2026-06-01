@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix deferred function references to use alias instead of bare name
+time: 2026-05-25T14:38:01.471555249+10:00
+custom:
+    Author: fothergill
+    Issue: "12895"

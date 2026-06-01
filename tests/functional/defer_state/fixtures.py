@@ -821,3 +821,29 @@ functions:
     returns:
       data_type: float
 """
+
+double_it_with_alias_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+      alias: my_custom_double
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+generate_alias_name_sql = """
+{% macro generate_alias_name(custom_alias_name=none, node=none) -%}
+    {%- if custom_alias_name -%}
+        {{ custom_alias_name | trim }}
+    {%- elif node.version -%}
+        {{ return("generated_" ~ node.name ~ "_v" ~ node.version) }}
+    {%- else -%}
+        {{ return("generated_" ~ node.name) }}
+    {%- endif -%}
+{%- endmacro %}
+"""
