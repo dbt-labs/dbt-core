@@ -138,6 +138,6 @@ Our request for all of you:
 - shape the future of dbt by joining [discussions on GitHub](https://github.com/dbt-labs/dbt-core/discussions) 
 - and, hey, [come hangout in Vegas this September](https://www.getdbt.com/dbt-summit/registration)
 
-HAGS,
+HAGS (have a great summer),
 
 JEG (jerco elias grace)
