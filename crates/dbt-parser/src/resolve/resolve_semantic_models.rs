@@ -270,7 +270,7 @@ pub async fn resolve_semantic_models(
                 patch_path: Some(mpe.relative_path.clone()),
                 unique_id: semantic_model_unique_id.clone(),
                 fqn: semantic_model_fqn.clone(),
-                description: model_props.description.clone(),
+                description: Some(model_props.description.clone().unwrap_or_default()),
                 checksum: DbtChecksum::default(),
                 raw_code: None,
                 language: None,

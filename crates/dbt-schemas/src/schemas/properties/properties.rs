@@ -125,7 +125,7 @@ pub struct GroupProperties {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Default, Serialize, Debug, Clone, DbtSchema)]
+#[derive(Deserialize, Default, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct GroupConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
 }

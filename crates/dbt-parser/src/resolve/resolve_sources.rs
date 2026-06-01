@@ -492,7 +492,7 @@ pub async fn resolve_sources(
                 ),
                 unique_id: unique_id.to_owned(),
                 fqn,
-                description: table.description.to_owned(),
+                description: Some(table.description.clone().unwrap_or_default()),
                 patch_path: Some(mpe.relative_path.clone()),
                 meta: source_config.meta.clone().unwrap_or_default(),
                 tags: source_config

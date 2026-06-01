@@ -38,6 +38,7 @@ impl From<Vec<String>> for WhereFilterIntersection {
 #[serde(rename_all = "snake_case")]
 pub struct DbtOwner {
     pub email: Option<StringOrArrayOfStrings>,
+    #[serialize_always]
     pub name: Option<String>,
     pub __other__: BTreeMap<String, YmlValue>,
 }

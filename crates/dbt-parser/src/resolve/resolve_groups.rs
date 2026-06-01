@@ -65,7 +65,7 @@ pub async fn resolve_groups(
                     original_file_path: mpe.relative_path.clone(),
                     unique_id: unique_id.clone(),
                     fqn: vec![],
-                    description: Some(group.description.unwrap_or_default()),
+                    description: group.description,
                     patch_path: None,
                     checksum: Default::default(),
                     language: None,

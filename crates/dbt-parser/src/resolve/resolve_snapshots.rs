@@ -432,7 +432,7 @@ pub async fn resolve_snapshots(
                     original_file_path: dbt_asset.original_path.clone(),
                     unique_id: unique_id.clone(),
                     fqn,
-                    description: properties.description.to_owned(),
+                    description: Some(properties.description.clone().unwrap_or_default()),
                     patch_path: patch_path.clone(),
                     checksum: recalculated_checksum,
                     language: Some("sql".to_string()),
