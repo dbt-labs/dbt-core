@@ -2,7 +2,7 @@
 
 *At last.*
 
-Okay, so you saw the [announcement](https://www.getdbt.com/blog/fivetran-and-dbt-are-one-company-now-here-s-what-that-means), and you read [the dev blog post](https://docs.getdbt.com/blog/dbt-core-v2-is-here), which explain in detail how we got from there (Fusion, new engine, ELv2) to here (it’s just dbt Core, v2.0).
+Okay, so you saw the [announcement](https://www.getdbt.com/blog/fivetran-and-dbt-are-one-company-now-here-s-what-that-means), and you read [the dev blog post](https://docs.getdbt.com/blog/dbt-core-v2-is-here), which explains in detail how we got from there (Fusion, new engine, ELv2) to here (it’s just dbt Core, v2.0).
 
 Last fall, we kicked off our big birthday party for the dbt community by saying that dbt was turning “2-dot-oh.”  Now we get to turn to each other, turn back to the audience, winking, “This was our plan all along!”
 
@@ -16,8 +16,8 @@ In the meantime, we actually did the two-engine thing. We triaged bugs and featu
 
 | **Version** | **When** | **Namesake** | **Stuff** |
 | --- | --- | --- | --- |
-| [v1.12](https://docs.getdbt.com/docs/dbt-versions/core-upgrade/upgrading-to-v1.10) | May (beta) | Alecia Beth Moore-Hart (P!NK) | UDF extensions. Easier specs for semantic layer, and Iceberg `catalogs`. Long-upvoted feature requests: `vars.yml`; `on_error` model config; [mix-and-match yaml selectors](https://docs.getdbt.com/reference/node-selection/methods?version=1.12#selector); `run-operation` for adhoc `—-sql`; jinja file extensions; `latest_version_pointer`. Improved exception handling and error messages. Dozens of bug fixes across core + adapters, including Python 3.14 support. `dbt login` to unlock paid platform features. `--use-v2-parser` to try out the speedy new Rust parser before you upgrade to v2.0. |
-| [v2.0](https://docs.getdbt.com/docs/dbt-versions/core-upgrade/upgrading-to-v1.11) | June (alpha) |  | Faster Rust rewrite, at full parity with v1. Strict codified language spec. New parquet metadata artifacts, built for speed & scale, powering new dbt-docs. |
+| [v1.12](https://docs.getdbt.com/docs/dbt-versions/core-upgrade/upgrading-to-v1.12) | May (beta) | Alecia Beth Moore-Hart (P!NK) | UDF extensions. Easier specs for semantic layer, and Iceberg `catalogs`. Long-upvoted feature requests: `vars.yml`; `on_error` model config; [mix-and-match yaml selectors](https://docs.getdbt.com/reference/node-selection/methods?version=1.12#selector); `run-operation` for adhoc `—-sql`; jinja file extensions; `latest_version_pointer`. Improved exception handling and error messages. Dozens of bug fixes across core + adapters, including Python 3.14 support. `dbt login` to unlock paid platform features. `--use-v2-parser` to try out the speedy new Rust parser before you upgrade to v2.0. |
+| v2.0 | June (alpha) |  | Faster Rust rewrite, at full parity with v1. Strict codified language spec. New parquet metadata artifacts, built for speed & scale, powering new dbt-docs. |
 
 ## Past
 
@@ -64,7 +64,7 @@ This is the future of the dbt framework:
 - fast and built for scale (Rust, ADBC, etc)
 - shared foundation - one donut, not two donuts
 - single adapter layer - all bundled in
-- and one more thing… a brand-new dbt-docs (!) This is a long-awaited refresh (something we talked about in our [very first roadmap post](https://github.com/dbt-labs/dbt-core/blob/main/docs/roadmap/2022-05-dbt-a-core-story.md#epilogue-whats-missing)) - check out the github discussion (link coming soon) for more details
+- and one more thing… a brand-new dbt-docs (!) This is a long-awaited refresh (something we talked about in our [very first roadmap post](https://github.com/dbt-labs/dbt-core/blob/main/docs/roadmap/2022-05-dbt-a-core-story.md#epilogue-whats-missing)) - check out [the github discussion](https://github.com/dbt-labs/dbt-core/discussions/13080) for more details
 
 If you want to read more about how our thinking and licensing strategy evolved over the past year, [Joel & Grace wrote a whole blog post](https://docs.getdbt.com/blog/dbt-core-v2-is-here).
 
@@ -74,7 +74,7 @@ We’ve spent the last 6+ months working hard on Fusion’s “conformance”: g
 
 That's why we need YOUR help to run and test v2.0 against the full population of dbt projects. We need YOUR ever-bigger DAGs, YOUR wacky package macros, YOUR bespoke override of the incremental materialization, and YOUR 2009 laptop running Windows Vista.
 
-The best way to help is by [testing out v2.0](https://docs.getdbt.com/docs/local/install-dbt) while it’s in alpha - try running it against your project, and let us know if you encounter any unexpected errors
+The best way to help is by [testing out v2.0](https://docs.getdbt.com/docs/local/install-dbt) while it’s in alpha - try running it against your project, and let us know if you encounter any unexpected errors.
 
 Did you know - you can get ready for v2.0, even while you’re still running on dbt Core v1.X?
 
@@ -103,7 +103,7 @@ If you (like most people) are still running Core v1 in all those places, what do
 We’re going to keep building the dbt framework — new capabilities and improvements of existing ones, on top of the v2.0 engine. As always, we'll be monitoring github for your comments and upvotes, but there are a handful of feature ideas already on our minds:
 
 1. **Model freshness:** Check to see if your models are as fresh as you think they should be, within *and across* projects, so that data product consumers can check if producers are meeting a promised SLA. (And before you ask - yes, we did talk about this in our last roadmap post as a thing we were planning to include in v1.12; we had to make some tricky trade-offs as part of doing the v2.0 effort, and this was one of them. But we’re still interested! If you are too, [give the issue a read](https://github.com/dbt-labs/dbt-core/issues/12719) and let us know what you think.)
-2. **Checks:** In the dbt-docs discussion (link coming soon), we describe how we’re powering fast local metadata queries with a new set of well-structured parquet files and an in-process database. Those same files could power *project quality checks* as metadata queries, folded into the task graph, executed during compile / before execution. You could prevent a `dbt build` if a model is missing an owner, messing up a naming convention, or selecting from a source it shouldn’t be. (For any SDF knowers out there, [this should sound familiar](https://docs.sdf.com/guide/data-quality/checks).) Imagine: a [v2.0 of the dbt-project-evaluator package](https://github.com/dbt-labs/dbt-project-evaluator) that ships our best practices as `checks`, written as simple SQL queries (instead of Jinja `{{ graph }}` manipulation that’s as impressive as it is illegible).
+2. **Checks:** In [the dbt-docs discussion](https://github.com/dbt-labs/dbt-core/discussions/13080), we describe how we’re powering fast local metadata queries with a new set of well-structured parquet files and an in-process database. Those same files could power *project quality checks* as metadata queries, folded into the task graph, executed during compile / before execution. You could prevent a `dbt build` if a model is missing an owner, messing up a naming convention, or selecting from a source it shouldn’t be. (For any SDF knowers out there, [this should sound familiar](https://docs.sdf.com/guide/data-quality/checks).) Imagine: a [v2.0 of the dbt-project-evaluator package](https://github.com/dbt-labs/dbt-project-evaluator) that ships our best practices as `checks`, written as simple SQL queries (instead of Jinja `{{ graph }}` manipulation that’s as impressive as it is illegible).
 3. **Unit testing macros:** [This feature](https://github.com/dbt-labs/dbt-core/issues/10547) would help us (dbt maintainers), adapter developers, external contributors, heroic maintainers of internal packages featuring load-bearing Jinja macros, and even (especially) the agent who hands you 1000 lines of level-9000 Jinja. “Write a unit test for that new macro, please.” The trickiest bit will be finding elegant ways to mock all the stateful inputs to dbt’s Jinja-rendering context: vars, env vars, `{{ target }}`, and (everyone’s favorite) introspection queries.
 4. **Installing agent skills from dbt packages**, as part of `dbt deps`: [We’ve already shown](https://github.com/dbt-labs/dbt-agent-skills) how `skills` can be a useful construct for making agents better at dbt in general, putting the standard workflows and best practices into structured prose. We think `skills` are also a mechanism by which users cant instruct agents on the nuances of *their* data, and *their* dbt project. dbt packages are already in the business of shipping around markdown files — we think this could be one more way that users move themselves [up the stack](https://www.getdbt.com/about-us/values#:~:text=We%20believe%20in%20moving%20up%20the%20stack.). [Discussion is open](https://github.com/dbt-labs/dbt-core/discussions/12521).
 
