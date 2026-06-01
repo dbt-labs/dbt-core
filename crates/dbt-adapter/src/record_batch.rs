@@ -5,9 +5,12 @@ use crate::AdapterResult;
 use crate::AdapterType;
 use crate::errors::{AdapterError, AdapterErrorKind};
 
-use arrow::array::{Array, Int64Array, StringBuilder};
+use arrow::array::{
+    Array, ArrayRef, AsArray, FixedSizeListArray, GenericListArray, Int64Array, MapArray,
+    StringArray, StringBuilder, StructArray,
+};
 use arrow::compute::{CastOptions, cast_with_options};
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::datatypes::{DataType, Field, FieldRef, Fields, Schema};
 use arrow::record_batch::RecordBatch;
 use arrow_json::writer::{EncoderOptions, make_encoder};
 
@@ -183,21 +186,9 @@ impl RecordBatchExt for RecordBatch {
 
         for (field, column) in fields.iter().zip(self.columns().iter()) {
             if field.data_type().is_nested() {
-                let mut encoder = make_encoder(field, column.as_ref(), &options)
-                    .expect("make_encoder for nested column should not fail");
-                let mut builder = StringBuilder::with_capacity(column.len(), column.len() * 32);
-                let mut buf: Vec<u8> = Vec::with_capacity(64);
-                for row in 0..column.len() {
-                    if encoder.is_null(row) {
-                        builder.append_null();
-                    } else {
-                        buf.clear();
-                        encoder.encode(row, &mut buf);
-                        let s = std::str::from_utf8(&buf).expect("arrow_json::Encoder emits UTF-8");
-                        builder.append_value(s);
-                    }
-                }
-                new_columns.push(Arc::new(builder.finish()));
+                let (encode_field, encode_column) = jsonify_map_keys(field, column, &options);
+                let string_col = encode_array_to_strings(&encode_field, &encode_column, &options);
+                new_columns.push(Arc::new(string_col));
                 new_fields.push(Arc::new(
                     Field::new(field.name(), DataType::Utf8, field.is_nullable())
                         .with_metadata(field.metadata().clone()),
@@ -233,6 +224,183 @@ impl SchemaExt for Schema {
     }
 }
 
+fn encode_array_to_strings(
+    field: &FieldRef,
+    array: &ArrayRef,
+    options: &EncoderOptions,
+) -> StringArray {
+    let mut encoder = make_encoder(field, array.as_ref(), options)
+        .expect("make_encoder for nested column should not fail");
+    let mut builder = StringBuilder::with_capacity(array.len(), array.len() * 32);
+    let mut buf: Vec<u8> = Vec::with_capacity(64);
+    for row in 0..array.len() {
+        if encoder.is_null(row) {
+            builder.append_null();
+        } else {
+            buf.clear();
+            encoder.encode(row, &mut buf);
+            let s = std::str::from_utf8(&buf).expect("arrow_json::Encoder emits UTF-8");
+            builder.append_value(s);
+        }
+    }
+    builder.finish()
+}
+
+/// Recursively rewrite every nested `Map` so its keys become `Utf8`.
+///
+/// arrow_json's map encoder only supports UTF-8 keys, while dbt Core stringifies any key via
+/// `json.dumps`. Non-string keys (integers, floats, structs, lists, ...) are JSON-encoded into
+/// their string form so the resulting map serializes to valid JSON.
+fn jsonify_map_keys(
+    field: &FieldRef,
+    array: &ArrayRef,
+    options: &EncoderOptions,
+) -> (FieldRef, ArrayRef) {
+    match field.data_type() {
+        DataType::Map(entries, ordered) => {
+            let map = array.as_map();
+            let DataType::Struct(entry_fields) = entries.data_type() else {
+                return (field.clone(), array.clone());
+            };
+            let (Some(key_field), Some(value_field)) = (entry_fields.first(), entry_fields.get(1))
+            else {
+                return (field.clone(), array.clone());
+            };
+
+            let (new_value_field, new_value_arr) =
+                jsonify_map_keys(value_field, map.values(), options);
+
+            let (new_key_field, new_key_arr): (FieldRef, ArrayRef) =
+                if matches!(key_field.data_type(), DataType::Utf8 | DataType::LargeUtf8) {
+                    (key_field.clone(), map.keys().clone())
+                } else {
+                    let (norm_key_field, norm_key_arr) =
+                        jsonify_map_keys(key_field, map.keys(), options);
+                    let key_strs = encode_array_to_strings(&norm_key_field, &norm_key_arr, options);
+                    (
+                        Arc::new(
+                            Field::new(key_field.name(), DataType::Utf8, key_field.is_nullable())
+                                .with_metadata(key_field.metadata().clone()),
+                        ),
+                        Arc::new(key_strs),
+                    )
+                };
+
+            let new_entry_fields = Fields::from(vec![new_key_field, new_value_field]);
+            let new_entries = StructArray::new(
+                new_entry_fields.clone(),
+                vec![new_key_arr, new_value_arr],
+                map.entries().nulls().cloned(),
+            );
+            let new_entries_field = Arc::new(
+                Field::new(
+                    entries.name(),
+                    DataType::Struct(new_entry_fields),
+                    entries.is_nullable(),
+                )
+                .with_metadata(entries.metadata().clone()),
+            );
+            let new_map = MapArray::new(
+                new_entries_field.clone(),
+                map.offsets().clone(),
+                new_entries,
+                map.nulls().cloned(),
+                *ordered,
+            );
+            let new_field = Arc::new(
+                Field::new(
+                    field.name(),
+                    DataType::Map(new_entries_field, *ordered),
+                    field.is_nullable(),
+                )
+                .with_metadata(field.metadata().clone()),
+            );
+            (new_field, Arc::new(new_map))
+        }
+        DataType::Struct(child_fields) => {
+            let struct_arr = array.as_struct();
+            let (new_fields, new_columns): (Vec<FieldRef>, Vec<ArrayRef>) = child_fields
+                .iter()
+                .zip(struct_arr.columns().iter())
+                .map(|(child_field, child_arr)| jsonify_map_keys(child_field, child_arr, options))
+                .unzip();
+            let new_fields = Fields::from(new_fields);
+            let new_struct =
+                StructArray::new(new_fields.clone(), new_columns, struct_arr.nulls().cloned());
+            let new_field = Arc::new(
+                Field::new(
+                    field.name(),
+                    DataType::Struct(new_fields),
+                    field.is_nullable(),
+                )
+                .with_metadata(field.metadata().clone()),
+            );
+            (new_field, Arc::new(new_struct))
+        }
+        DataType::List(child_field) => {
+            let list = array.as_list::<i32>();
+            let (new_child_field, new_values) =
+                jsonify_map_keys(child_field, list.values(), options);
+            let new_list = GenericListArray::<i32>::new(
+                new_child_field.clone(),
+                list.offsets().clone(),
+                new_values,
+                list.nulls().cloned(),
+            );
+            let new_field = Arc::new(
+                Field::new(
+                    field.name(),
+                    DataType::List(new_child_field),
+                    field.is_nullable(),
+                )
+                .with_metadata(field.metadata().clone()),
+            );
+            (new_field, Arc::new(new_list))
+        }
+        DataType::LargeList(child_field) => {
+            let list = array.as_list::<i64>();
+            let (new_child_field, new_values) =
+                jsonify_map_keys(child_field, list.values(), options);
+            let new_list = GenericListArray::<i64>::new(
+                new_child_field.clone(),
+                list.offsets().clone(),
+                new_values,
+                list.nulls().cloned(),
+            );
+            let new_field = Arc::new(
+                Field::new(
+                    field.name(),
+                    DataType::LargeList(new_child_field),
+                    field.is_nullable(),
+                )
+                .with_metadata(field.metadata().clone()),
+            );
+            (new_field, Arc::new(new_list))
+        }
+        DataType::FixedSizeList(child_field, size) => {
+            let list = array.as_fixed_size_list();
+            let (new_child_field, new_values) =
+                jsonify_map_keys(child_field, list.values(), options);
+            let new_list = FixedSizeListArray::new(
+                new_child_field.clone(),
+                *size,
+                new_values,
+                list.nulls().cloned(),
+            );
+            let new_field = Arc::new(
+                Field::new(
+                    field.name(),
+                    DataType::FixedSizeList(new_child_field, *size),
+                    field.is_nullable(),
+                )
+                .with_metadata(field.metadata().clone()),
+            );
+            (new_field, Arc::new(new_list))
+        }
+        _ => (field.clone(), array.clone()),
+    }
+}
+
 fn cast_column_to_i64(column: &dyn Array) -> Option<i64> {
     if column.is_empty() {
         return None;
@@ -258,9 +426,10 @@ fn cast_column_to_i64(column: &dyn Array) -> Option<i64> {
 mod tests {
     use super::*;
     use arrow::array::{
-        ArrayRef, Decimal128Array, Float64Array, Int32Array, Int64Array, ListArray, MapBuilder,
-        StringArray, StringBuilder, StructArray,
+        ArrayRef, Decimal128Array, Float64Array, Float64Builder, Int32Array, Int32Builder,
+        Int64Array, ListArray, MapBuilder, StringArray, StringBuilder, StructArray,
     };
+    use arrow::buffer::OffsetBuffer;
     use arrow::datatypes::{DataType, Field, Int32Type};
     use dbt_test_primitives::assert_contains;
 
@@ -702,5 +871,145 @@ mod tests {
 
         let result = batch.jsonify_nested_columns();
         assert_eq!(result.schema().metadata(), &metadata);
+    }
+
+    #[test]
+    fn jsonify_map_int_keys() {
+        let mut builder = MapBuilder::new(None, Int32Builder::new(), Int32Builder::new());
+        builder.keys().append_value(1);
+        builder.values().append_value(10);
+        builder.keys().append_value(2);
+        builder.values().append_value(20);
+        builder.append(true).unwrap();
+        let map_array = builder.finish();
+
+        let schema = Schema::new(vec![Field::new("m", map_array.data_type().clone(), false)]);
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(map_array) as ArrayRef]).unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Utf8);
+
+        let col = column_as_string(&result, "m");
+        let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
+        assert_eq!(row0, serde_json::json!({"1": 10, "2": 20}));
+    }
+
+    #[test]
+    fn jsonify_map_float_keys() {
+        let mut builder = MapBuilder::new(None, Float64Builder::new(), Int32Builder::new());
+        builder.keys().append_value(1.5);
+        builder.values().append_value(10);
+        builder.append(true).unwrap();
+        let map_array = builder.finish();
+
+        let schema = Schema::new(vec![Field::new("m", map_array.data_type().clone(), false)]);
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(map_array) as ArrayRef]).unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Utf8);
+
+        let col = column_as_string(&result, "m");
+        let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
+        assert_eq!(row0, serde_json::json!({"1.5": 10}));
+    }
+
+    #[test]
+    fn jsonify_map_struct_keys() {
+        // map<struct<a: int, b: int>, int> with one row holding two entries.
+        let key_struct_fields = Fields::from(vec![
+            Field::new("a", DataType::Int32, false),
+            Field::new("b", DataType::Int32, false),
+        ]);
+        let keys = StructArray::new(
+            key_struct_fields.clone(),
+            vec![
+                Arc::new(Int32Array::from(vec![1, 3])) as ArrayRef,
+                Arc::new(Int32Array::from(vec![2, 4])) as ArrayRef,
+            ],
+            None,
+        );
+        let values = Int32Array::from(vec![10, 20]);
+
+        let entries_fields = Fields::from(vec![
+            Field::new("key", DataType::Struct(key_struct_fields), false),
+            Field::new("value", DataType::Int32, true),
+        ]);
+        let entries = StructArray::new(
+            entries_fields.clone(),
+            vec![Arc::new(keys) as ArrayRef, Arc::new(values) as ArrayRef],
+            None,
+        );
+        let entries_field = Arc::new(Field::new(
+            "entries",
+            DataType::Struct(entries_fields),
+            false,
+        ));
+        let map_array = MapArray::new(
+            entries_field,
+            OffsetBuffer::from_lengths([2]),
+            entries,
+            None,
+            false,
+        );
+
+        let schema = Schema::new(vec![Field::new("m", map_array.data_type().clone(), false)]);
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(map_array) as ArrayRef]).unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Utf8);
+
+        let col = column_as_string(&result, "m");
+        let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
+        assert_eq!(
+            row0,
+            serde_json::json!({"{\"a\":1,\"b\":2}": 10, "{\"a\":3,\"b\":4}": 20}),
+        );
+    }
+
+    #[test]
+    fn jsonify_map_list_keys() {
+        // map<list<int>, int> with one row holding two entries.
+        let keys = ListArray::from_iter_primitive::<Int32Type, _, _>(vec![
+            Some(vec![Some(1), Some(2)]),
+            Some(vec![Some(3)]),
+        ]);
+        let values = Int32Array::from(vec![10, 20]);
+
+        let key_field = Arc::new(Field::new("key", keys.data_type().clone(), false));
+        let entries_fields = Fields::from(vec![
+            key_field.as_ref().clone(),
+            Field::new("value", DataType::Int32, true),
+        ]);
+        let entries = StructArray::new(
+            entries_fields.clone(),
+            vec![Arc::new(keys) as ArrayRef, Arc::new(values) as ArrayRef],
+            None,
+        );
+        let entries_field = Arc::new(Field::new(
+            "entries",
+            DataType::Struct(entries_fields),
+            false,
+        ));
+        let map_array = MapArray::new(
+            entries_field,
+            OffsetBuffer::from_lengths([2]),
+            entries,
+            None,
+            false,
+        );
+
+        let schema = Schema::new(vec![Field::new("m", map_array.data_type().clone(), false)]);
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(map_array) as ArrayRef]).unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Utf8);
+
+        let col = column_as_string(&result, "m");
+        let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
+        assert_eq!(row0, serde_json::json!({"[1,2]": 10, "[3]": 20}));
     }
 }
