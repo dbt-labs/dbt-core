@@ -69,4 +69,4 @@ runs:
           Write-Host "Signing $filepath"
           signtool sign /tr "http://timestamp.digicert.com" /td SHA256 /fd SHA256 /n "Dbt Labs, Inc." $filepath
           signtool verify /pa $filepath
-        } 
+        }

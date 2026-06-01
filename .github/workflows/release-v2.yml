@@ -232,7 +232,7 @@ jobs:
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
         with:
           version: "v0.12.0"
-      
+
       - name: Install Protocol Buffer Compiler (Linux)
         if: ${{ runner.os == 'Linux' }}
         run: |
@@ -674,15 +674,15 @@ jobs:
       # pyproject.toml (see crates/dbt-ci/src/publish.rs `discover_wheels`),
       # so to publish both distributions we publish once, swap pyproject in
       # place, then publish again. Mirrors the pack-job pattern.
-      # - name: Publish (dbt-core)
-      #   if: inputs.release_target != 'parser'
-      #   env:
-      #     DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-      #   run: |
-      #     cargo ci pypi publish \
-      #       --environment prod \
-      #       --version "${{ needs.prepare-release.outputs.version }}" \
-      #       --dist dist
+      - name: Publish (dbt-core)
+        if: inputs.release_target != 'parser'
+        env:
+          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          cargo ci pypi publish \
+            --environment prod \
+            --version "${{ needs.prepare-release.outputs.version }}" \
+            --dist dist
 
       - name: Rename pyproject for parser publish
         if: inputs.release_target != 'core'
