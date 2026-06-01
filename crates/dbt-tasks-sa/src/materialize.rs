@@ -95,6 +95,230 @@ fn execute_materialization_macro(
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeHookPhase {
+    Pre,
+    Post,
+}
+
+/// Describes how a node's materialization macro invokes pre/post hooks.
+///
+/// Reuse paths run hooks outside the normal materialization macro, so they must
+/// mirror the adapter macro's hook shape to avoid reuse-only hook side effects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeHookStyle {
+    SplitTransaction,
+    Plain,
+}
+
+/// Returns the hook invocation style used by a model's adapter materialization.
+pub fn model_hook_style(
+    adapter_type: AdapterType,
+    materialization: &DbtMaterialization,
+) -> NodeHookStyle {
+    use AdapterType::*;
+    use DbtMaterialization::*;
+
+    match (adapter_type, materialization) {
+        (Bigquery | Snowflake | Spark | Databricks, View | Table | Incremental) => {
+            NodeHookStyle::Plain
+        }
+        (Snowflake, DynamicTable) => NodeHookStyle::Plain,
+        _ => NodeHookStyle::SplitTransaction,
+    }
+}
+
+fn node_hook_expression(
+    context: &BTreeMap<String, Value>,
+    style: NodeHookStyle,
+    phase: NodeHookPhase,
+) -> Option<&'static str> {
+    match style {
+        NodeHookStyle::Plain => match phase {
+            NodeHookPhase::Pre => context
+                .contains_key("pre_hooks")
+                .then_some("run_hooks(pre_hooks)"),
+            NodeHookPhase::Post => context
+                .contains_key("post_hooks")
+                .then_some("run_hooks(post_hooks)"),
+        },
+        NodeHookStyle::SplitTransaction => match phase {
+            NodeHookPhase::Pre => context.contains_key("pre_hooks").then_some(
+                "run_hooks(pre_hooks, inside_transaction=False) ~ run_hooks(pre_hooks, inside_transaction=True)",
+            ),
+            NodeHookPhase::Post => {
+                if context.contains_key("post_hooks") {
+                    Some(
+                        "run_hooks(post_hooks, inside_transaction=True) ~ adapter.commit() ~ run_hooks(post_hooks, inside_transaction=False)",
+                    )
+                } else {
+                    Some("adapter.commit()")
+                }
+            }
+        },
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn execute_node_hooks<S: serde::Serialize>(
+    node: &dyn InternalDbtNode,
+    deprecated_config: &S,
+    adapter_type: AdapterType,
+    runtime_config: &DbtRuntimeConfig,
+    jinja_env: Arc<JinjaEnv>,
+    base_context: &BTreeMap<String, Value>,
+    io_args: &IoArgs,
+    sql: Option<&str>,
+    style: NodeHookStyle,
+    phase: NodeHookPhase,
+) -> FsResult<()> {
+    let mut context = build_run_node_context(
+        node,
+        deprecated_config,
+        adapter_type,
+        None,
+        base_context,
+        io_args,
+        None,
+        runtime_config.dependencies.keys().cloned().collect(),
+    );
+
+    if let Some(sql) = sql {
+        context.insert("sql".to_string(), Value::from(sql));
+        context.insert("compiled_code".to_string(), Value::from(sql));
+    }
+
+    let hook_name = match phase {
+        NodeHookPhase::Pre => "pre_hooks",
+        NodeHookPhase::Post => "post_hooks",
+    };
+    let Some(hook_expression) = node_hook_expression(&context, style, phase) else {
+        return Ok(());
+    };
+    let expr = jinja_env.compile_expression(hook_expression)?;
+    expr.eval(&context, &[]).map(|_| ()).map_err(|e| {
+        let resource_type = node.resource_type().as_static_ref();
+        let message = format!(
+            "Error executing {hook_name} for {resource_type} {}: {}",
+            node.common().unique_id,
+            e.context
+        );
+        Box::new(
+            e.with_location(node.get_node_path_abs(
+                NodePathKind::Compiled,
+                &io_args.in_dir,
+                &io_args.out_dir,
+            ))
+            .with_context(message),
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NodeHookPhase, NodeHookStyle, model_hook_style, node_hook_expression};
+    use dbt_adapter_core::AdapterType;
+    use dbt_schemas::schemas::common::DbtMaterialization;
+    use minijinja::Value;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn split_transaction_post_hooks_commit_even_when_post_hooks_are_absent() {
+        let mut context = BTreeMap::new();
+        context.insert("pre_hooks".to_string(), Value::from(Vec::<Value>::new()));
+
+        assert_eq!(
+            node_hook_expression(
+                &context,
+                NodeHookStyle::SplitTransaction,
+                NodeHookPhase::Post
+            ),
+            Some("adapter.commit()")
+        );
+    }
+
+    #[test]
+    fn split_transaction_post_hooks_preserve_post_hook_execution_when_configured() {
+        let mut context = BTreeMap::new();
+        context.insert("post_hooks".to_string(), Value::from(Vec::<Value>::new()));
+
+        assert_eq!(
+            node_hook_expression(
+                &context,
+                NodeHookStyle::SplitTransaction,
+                NodeHookPhase::Post
+            ),
+            Some(
+                "run_hooks(post_hooks, inside_transaction=True) ~ adapter.commit() ~ run_hooks(post_hooks, inside_transaction=False)"
+            )
+        );
+    }
+
+    #[test]
+    fn split_transaction_pre_hooks_skip_when_pre_hooks_are_absent() {
+        assert_eq!(
+            node_hook_expression(
+                &BTreeMap::new(),
+                NodeHookStyle::SplitTransaction,
+                NodeHookPhase::Pre
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn plain_hooks_match_non_transactional_adapter_materializations() {
+        let mut context = BTreeMap::new();
+        context.insert("pre_hooks".to_string(), Value::from(Vec::<Value>::new()));
+        context.insert("post_hooks".to_string(), Value::from(Vec::<Value>::new()));
+
+        assert_eq!(
+            node_hook_expression(&context, NodeHookStyle::Plain, NodeHookPhase::Pre),
+            Some("run_hooks(pre_hooks)")
+        );
+        assert_eq!(
+            node_hook_expression(&context, NodeHookStyle::Plain, NodeHookPhase::Post),
+            Some("run_hooks(post_hooks)")
+        );
+    }
+
+    #[test]
+    fn plain_post_hooks_skip_when_post_hooks_are_absent() {
+        assert_eq!(
+            node_hook_expression(&BTreeMap::new(), NodeHookStyle::Plain, NodeHookPhase::Post),
+            None
+        );
+    }
+
+    #[test]
+    fn model_hook_style_matches_adapter_materialization_macros() {
+        assert_eq!(
+            model_hook_style(AdapterType::Bigquery, &DbtMaterialization::Table),
+            NodeHookStyle::Plain
+        );
+        assert_eq!(
+            model_hook_style(AdapterType::Snowflake, &DbtMaterialization::Incremental),
+            NodeHookStyle::Plain
+        );
+        assert_eq!(
+            model_hook_style(AdapterType::Spark, &DbtMaterialization::View),
+            NodeHookStyle::Plain
+        );
+        assert_eq!(
+            model_hook_style(AdapterType::Databricks, &DbtMaterialization::Table),
+            NodeHookStyle::Plain
+        );
+        assert_eq!(
+            model_hook_style(AdapterType::Redshift, &DbtMaterialization::Table),
+            NodeHookStyle::SplitTransaction
+        );
+        assert_eq!(
+            model_hook_style(AdapterType::Bigquery, &DbtMaterialization::MaterializedView),
+            NodeHookStyle::SplitTransaction
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn materialize_clone<S: serde::Serialize>(
     node: &dyn InternalDbtNode,

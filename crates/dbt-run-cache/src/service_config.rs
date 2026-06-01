@@ -72,6 +72,10 @@ impl RunCacheServiceConfig {
         Self::is_explicitly_requested_from_env_getter(|name| env::var(name).ok())
     }
 
+    pub fn is_explicitly_disabled_from_env() -> bool {
+        Self::is_explicitly_disabled_from_env_getter(|name| env::var(name).ok())
+    }
+
     pub fn is_explicitly_requested_from_env_getter<F>(mut get_env: F) -> bool
     where
         F: FnMut(&str) -> Option<String>,
@@ -80,6 +84,24 @@ impl RunCacheServiceConfig {
             .filter(|value| !value.trim().is_empty())
             .map(|value| parse_bool(STATE_MANAGE_ENV, &value).unwrap_or(true))
             .unwrap_or(false)
+    }
+
+    pub fn is_explicitly_disabled_from_env_getter<F>(mut get_env: F) -> bool
+    where
+        F: FnMut(&str) -> Option<String>,
+    {
+        match get_env(STATE_MANAGE_ENV).filter(|value| !value.trim().is_empty()) {
+            Some(value) => parse_bool(STATE_MANAGE_ENV, &value)
+                .map(|enabled| !enabled)
+                .unwrap_or(false),
+            None => config_value(&mut get_env, "ENABLED")
+                .map(|value| {
+                    parse_bool("ENABLED", &value)
+                        .map(|enabled| !enabled)
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false),
+        }
     }
 
     pub fn from_env_getter<F>(mut get_env: F) -> Result<Self, RunCacheServiceConfigError>
@@ -439,6 +461,11 @@ mod tests {
                 (name == "DBT_ENGINE_MANAGE_STATE").then(|| "false".to_string())
             })
         );
+        assert!(
+            RunCacheServiceConfig::is_explicitly_disabled_from_env_getter(|name| {
+                (name == "RUN_CACHE_ENABLED").then(|| "false".to_string())
+            })
+        );
     }
 
     #[test]
@@ -461,10 +488,20 @@ mod tests {
                 (name == "DBT_ENGINE_MANAGE_STATE").then(|| "true".to_string())
             })
         );
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_disabled_from_env_getter(|name| {
+                (name == "RUN_CACHE_ENABLED").then(|| "true".to_string())
+            })
+        );
 
         assert!(
             RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
                 (name == "DBT_ENGINE_MANAGE_STATE").then(|| "not-a-bool".to_string())
+            })
+        );
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_disabled_from_env_getter(|name| {
+                (name == "RUN_CACHE_ENABLED").then(|| "not-a-bool".to_string())
             })
         );
     }

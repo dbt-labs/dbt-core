@@ -86,6 +86,8 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
         &clone,
         ctx.adapter_type(),
         ctx.dbt_profile().threads,
+        None,
+        false,
     )
     .await
     {
@@ -574,7 +576,7 @@ mod tests {
             require_fresh_data_from: None,
             evaluate_volatile_sql: None,
             pre_clone: Some(StatePreClone::Always),
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         });
         let candidate = DevCloneCandidate::Model {
             local: Arc::new(local),

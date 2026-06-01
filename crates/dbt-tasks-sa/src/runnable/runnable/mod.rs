@@ -4,16 +4,19 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Instant;
 
+use crate::materialize::{NodeHookPhase, NodeHookStyle, execute_node_hooks, model_hook_style};
 use crate::runnable::function::execute_function_remote;
 use crate::runnable::snapshot::execute_snapshot_remote;
 use crate::runnable::test::execute_test_remote;
 use dbt_adapter::time_machine::{SaoStatus, global_recorder, global_replayer};
+use dbt_adapter_core::AdapterType;
 use dbt_common::constants::RUNNING;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::status_reporter::report_completed;
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_message};
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_jinja_utils::utils::add_task_context;
 use dbt_schemas::schemas::manifest::saved_query::DbtSavedQuery;
 use dbt_schemas::schemas::{
     DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
@@ -36,10 +39,11 @@ use crate::runnable::model::{
 use crate::runnable::seed::{execute_seed_remote, maybe_resolve_remote_seed_column_hint};
 use crate::runnable::unit_test::execute_unit_test_remote;
 use dbt_tasks_core::run_cache::run_cache_service::{
-    RunCacheAfterSuccess, RunCacheServiceDecision, confirm_run_cache_service_execution,
+    RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError, RunCacheReuseHookExecutor,
+    RunCacheReuseHookPhase, RunCacheServiceDecision, confirm_run_cache_service_execution,
     execute_run_cache_service_clone, insert_compiled_view_definition,
     record_run_cache_service_execution, refresh_final_last_modified_epoch_for_node,
-    run_cache_service_before_execution,
+    run_cache_service_before_execution, should_execute_hooks_for_skip_reuse,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -231,6 +235,12 @@ impl Task for RunTask {
                             record_cache_skip(&unique_id, status, source);
                             status.clone()
                         };
+                        execute_hooks_for_run_cache_skip_reuse(
+                            ctx,
+                            self.node.as_ref(),
+                            Some(&task_result),
+                        )
+                        .await?;
                         Ok(final_status)
                     } else {
                         // Clone case is handled inline so the Err path can surface
@@ -239,12 +249,13 @@ impl Task for RunTask {
                         let mut clone_status: Option<NodeStatus> = None;
                         let after_success_inner = match &decision {
                             RunCacheServiceDecision::Clone { clone } => {
-                                match execute_run_cache_service_clone(
+                                match execute_run_cache_service_clone_with_hooks(
                                     ctx,
                                     self.node.as_ref(),
                                     clone,
                                     adapter_type,
                                     max_threads,
+                                    Some(&task_result),
                                 )
                                 .await
                                 {
@@ -259,7 +270,7 @@ impl Task for RunTask {
                                         clone_status = Some(status);
                                         RunCacheAfterSuccess::None
                                     }
-                                    Err(err) => {
+                                    Err(RunCacheCloneError::Recoverable(err)) => {
                                         emit_warn_log_message(
                                             ErrorCode::StateServiceWarn,
                                             format!(
@@ -273,6 +284,7 @@ impl Task for RunTask {
                                             .map(RunCacheAfterSuccess::Confirm)
                                             .unwrap_or(RunCacheAfterSuccess::None)
                                     }
+                                    Err(err) => return Err(err.into_error()),
                                 }
                             }
                             RunCacheServiceDecision::Execute { after_success, .. } => {
@@ -542,6 +554,179 @@ fn maybe_replay_remote_run(unique_id: &str) -> Option<NodeStatus> {
     Some(sao_event.to_node_status())
 }
 
+async fn execute_run_cache_service_clone_with_hooks(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    clone: &RunCacheCloneDecision,
+    adapter_type: AdapterType,
+    max_threads: Option<usize>,
+    task_result: Option<&TaskResult>,
+) -> Result<NodeStatus, RunCacheCloneError> {
+    let hook_node = run_cache_clone_hook_node(node);
+    let pre_hooks_configured = hook_node
+        .as_ref()
+        .is_some_and(RunCacheReuseHookNode::has_pre_hooks);
+    let hook_executor =
+        hook_node.map(|hook_node| build_reuse_hook_executor(ctx, node, task_result, hook_node));
+    execute_run_cache_service_clone(
+        ctx,
+        node,
+        clone,
+        adapter_type,
+        max_threads,
+        hook_executor,
+        pre_hooks_configured,
+    )
+    .await
+}
+
+async fn execute_hooks_for_run_cache_skip_reuse(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    task_result: Option<&TaskResult>,
+) -> FsResult<()> {
+    let service_default = ctx
+        .inner
+        .run_cache_ctx
+        .run_cache_service_config
+        .as_ref()
+        .map(|config| config.run_hooks_on_no_op)
+        .unwrap_or(false);
+    let Some(hook_node) = run_cache_reuse_hook_node(node, service_default) else {
+        return Ok(());
+    };
+    let hook_executor = build_reuse_hook_executor(ctx, node, task_result, hook_node);
+    let ctx_inner = ctx.clone();
+    TaskOp::BlockingWithConnection {
+        f: Box::new(move || {
+            hook_executor(&ctx_inner, RunCacheReuseHookPhase::Pre)?;
+            hook_executor(&ctx_inner, RunCacheReuseHookPhase::Post)
+        }),
+        adapter_type: ctx.adapter_type(),
+        max_threads: ctx.dbt_profile().threads,
+    }
+    .run()
+    .await??;
+    Ok(())
+}
+
+fn run_cache_reuse_hook_node(
+    node: &dyn InternalDbtNodeAttributes,
+    service_default: bool,
+) -> Option<RunCacheReuseHookNode> {
+    should_execute_hooks_for_skip_reuse(node, service_default)
+        .then(|| RunCacheReuseHookNode::from_node(node))
+        .flatten()
+}
+
+fn run_cache_clone_hook_node(
+    node: &dyn InternalDbtNodeAttributes,
+) -> Option<RunCacheReuseHookNode> {
+    RunCacheReuseHookNode::from_node(node)
+}
+
+enum RunCacheReuseHookNode {
+    Model(Box<DbtModel>),
+    Snapshot(Box<DbtSnapshot>),
+    Seed(Box<DbtSeed>),
+}
+
+impl RunCacheReuseHookNode {
+    fn from_node(node: &dyn InternalDbtNodeAttributes) -> Option<Self> {
+        if let Some(model) = node.as_any().downcast_ref::<DbtModel>() {
+            Some(Self::Model(Box::new(model.clone())))
+        } else if let Some(snapshot) = node.as_any().downcast_ref::<DbtSnapshot>() {
+            Some(Self::Snapshot(Box::new(snapshot.clone())))
+        } else {
+            node.as_any()
+                .downcast_ref::<DbtSeed>()
+                .map(|seed| Self::Seed(Box::new(seed.clone())))
+        }
+    }
+
+    fn has_pre_hooks(&self) -> bool {
+        match self {
+            Self::Model(model) => hooks_are_configured(model.deprecated_config.pre_hook.as_ref()),
+            Self::Snapshot(snapshot) => {
+                hooks_are_configured(snapshot.deprecated_config.pre_hook.as_ref())
+            }
+            Self::Seed(seed) => hooks_are_configured(seed.deprecated_config.pre_hook.as_ref()),
+        }
+    }
+}
+
+fn build_reuse_hook_executor(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    task_result: Option<&TaskResult>,
+    hook_node: RunCacheReuseHookNode,
+) -> RunCacheReuseHookExecutor {
+    let mut base_context = ctx.inner.base_context.clone();
+    add_task_context(&mut base_context, node.common(), &ctx.thread_id);
+    let sql = task_result.map(|task_result| task_result.sql_instruction.sql.clone());
+    Arc::new(move |ctx, phase| {
+        let sql = sql.as_deref();
+        execute_hook_node_blocking(&hook_node, ctx, &base_context, sql, phase)
+    })
+}
+
+fn hooks_are_configured(hooks: &Option<dbt_schemas::schemas::common::Hooks>) -> bool {
+    hooks
+        .as_ref()
+        .is_some_and(|hooks| !hooks.to_hook_config_array().is_empty())
+}
+
+fn execute_hook_node_blocking(
+    hook_node: &RunCacheReuseHookNode,
+    ctx: &TaskRunnerCtx,
+    base_context: &std::collections::BTreeMap<String, minijinja::Value>,
+    sql: Option<&str>,
+    phase: RunCacheReuseHookPhase,
+) -> FsResult<()> {
+    let phase = match phase {
+        RunCacheReuseHookPhase::Pre => NodeHookPhase::Pre,
+        RunCacheReuseHookPhase::Post => NodeHookPhase::Post,
+    };
+    match hook_node {
+        RunCacheReuseHookNode::Model(model) => execute_node_hooks(
+            model.as_ref(),
+            &model.deprecated_config,
+            ctx.adapter_type(),
+            ctx.runtime_config(),
+            ctx.env.clone(),
+            base_context,
+            &ctx.inner.arg.io,
+            sql,
+            model_hook_style(ctx.adapter_type(), &model.__base_attr__.materialized),
+            phase,
+        ),
+        RunCacheReuseHookNode::Snapshot(snapshot) => execute_node_hooks(
+            snapshot.as_ref(),
+            &snapshot.deprecated_config,
+            ctx.adapter_type(),
+            ctx.runtime_config(),
+            ctx.env.clone(),
+            base_context,
+            &ctx.inner.arg.io,
+            sql,
+            NodeHookStyle::SplitTransaction,
+            phase,
+        ),
+        RunCacheReuseHookNode::Seed(seed) => execute_node_hooks(
+            seed.as_ref(),
+            &seed.deprecated_config,
+            ctx.adapter_type(),
+            ctx.runtime_config(),
+            ctx.env.clone(),
+            base_context,
+            &ctx.inner.arg.io,
+            None,
+            NodeHookStyle::SplitTransaction,
+            phase,
+        ),
+    }
+}
+
 async fn run_cache_after_success_action(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
@@ -776,7 +961,7 @@ pub fn prefer_sql_for_node(node: &dyn InternalDbtNodeAttributes, ctx: &TaskRunne
     if node.as_any().is::<DbtSnapshot>() {
         true
     } else if node.as_any().is::<DbtModel>() {
-        ctx.adapter_type() == dbt_adapter::AdapterType::DuckDB
+        ctx.adapter_type() == AdapterType::DuckDB
     } else {
         false
     }
@@ -810,9 +995,64 @@ pub fn runnable_remote_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::schemas::common::Hooks;
+    use dbt_schemas::schemas::properties::ModelState;
+    use dbt_yaml::Verbatim;
+
+    fn model_with_pre_hook_and_reuse_hook_config(
+        execute_hooks_on_any_reuse: Option<bool>,
+    ) -> DbtModel {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.test.orders".to_string();
+        model.__model_attr__.state = Some(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse,
+        });
+        model.deprecated_config.pre_hook =
+            Verbatim::from(Some(Hooks::String("select 1".to_string())));
+        model
+    }
 
     #[test]
     fn elapsed_millis_saturates_for_large_durations() {
         assert!(elapsed_millis(Instant::now()) >= 0);
+    }
+
+    #[test]
+    fn clone_sql_failure_is_recoverable_until_pre_hooks_are_configured() {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.test.orders".to_string();
+        let hook_node = RunCacheReuseHookNode::from_node(&model).expect("model supports hooks");
+        assert!(!hook_node.has_pre_hooks());
+
+        model.deprecated_config.pre_hook =
+            Verbatim::from(Some(Hooks::String("select 1".to_string())));
+        let hook_node = RunCacheReuseHookNode::from_node(&model).expect("model supports hooks");
+        assert!(hook_node.has_pre_hooks());
+    }
+
+    #[test]
+    fn reuse_hook_node_honors_state_hook_execution_override() {
+        let model = model_with_pre_hook_and_reuse_hook_config(Some(false));
+
+        assert!(run_cache_reuse_hook_node(&model, true).is_none());
+    }
+
+    #[test]
+    fn clone_hook_node_ignores_state_hook_execution_override() {
+        let model = model_with_pre_hook_and_reuse_hook_config(Some(false));
+
+        assert!(run_cache_clone_hook_node(&model).is_some());
+    }
+
+    #[test]
+    fn reuse_hook_node_falls_back_to_service_default() {
+        let model = model_with_pre_hook_and_reuse_hook_config(None);
+
+        assert!(run_cache_reuse_hook_node(&model, true).is_some());
+        assert!(run_cache_reuse_hook_node(&model, false).is_none());
     }
 }

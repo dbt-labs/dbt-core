@@ -70,6 +70,17 @@ pub enum RunCacheServiceError {
     Timeout(u64),
 }
 
+impl RunCacheServiceError {
+    pub fn is_transient_transport_rpc(&self) -> bool {
+        match self {
+            Self::Rpc(status) => {
+                status.code() == tonic::Code::Unknown && status.message() == "transport error"
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RunCacheClientMetadata {
     pub session_id: String,
@@ -555,6 +566,19 @@ mod tests {
             err.to_string(),
             "Access to organization 'test-org' has been disabled"
         );
+    }
+
+    #[test]
+    fn transient_transport_rpc_is_identified() {
+        let err = RunCacheServiceError::Rpc(tonic::Status::unknown("transport error"));
+        assert!(err.is_transient_transport_rpc());
+
+        let unavailable = RunCacheServiceError::Rpc(tonic::Status::unavailable("transport error"));
+        assert!(!unavailable.is_transient_transport_rpc());
+
+        let application_unknown =
+            RunCacheServiceError::Rpc(tonic::Status::unknown("application error"));
+        assert!(!application_unknown.is_transient_transport_rpc());
     }
 
     #[test]

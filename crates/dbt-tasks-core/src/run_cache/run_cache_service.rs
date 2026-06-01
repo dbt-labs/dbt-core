@@ -27,7 +27,7 @@ use dbt_common::cancellation::never_cancels;
 use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::emit::{emit_trace_log_message, emit_warn_log_message};
-use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_frontend_common::Dialect;
 use dbt_frontend_common::ident::FullyQualifiedName;
 use dbt_run_cache::node_session::ExecutionGuard;
@@ -690,14 +690,22 @@ pub async fn confirm_run_cache_service_execution(
 
     let request_id = request.request_id.clone();
     if let Err(err) = client.confirm_execution(request).await {
-        emit_warn_log_message(
-            ErrorCode::StateServiceWarn,
-            format!(
-                "dbt State service confirmation failed for node {} (request_id {request_id}): {err}; command remains successful",
-                node.unique_id()
-            ),
-            None,
-        );
+        let unique_id = node.unique_id();
+        if err.is_transient_transport_rpc() {
+            emit_trace_log_message(|| {
+                format!(
+                    "dbt State service confirmation transport failed for node {unique_id} (request_id {request_id}): {err}; command remains successful"
+                )
+            });
+        } else {
+            emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "dbt State service confirmation failed for node {unique_id} (request_id {request_id}): {err}; command remains successful"
+                ),
+                None,
+            );
+        }
     } else {
         let unique_id = node.unique_id();
         emit_trace_log_message(|| {
@@ -755,14 +763,22 @@ pub async fn record_run_cache_service_execution(
     };
 
     if let Err(err) = client.record_executions(request).await {
-        emit_warn_log_message(
-            ErrorCode::StateServiceWarn,
-            format!(
-                "dbt State service record failed for node {}: {err}; command remains successful",
-                node.unique_id()
-            ),
-            None,
-        );
+        let unique_id = node.unique_id();
+        if err.is_transient_transport_rpc() {
+            emit_trace_log_message(|| {
+                format!(
+                    "dbt State service record transport failed for node {unique_id}: {err}; command remains successful"
+                )
+            });
+        } else {
+            emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "dbt State service record failed for node {unique_id}: {err}; command remains successful"
+                ),
+                None,
+            );
+        }
     } else {
         let unique_id = node.unique_id();
         emit_trace_log_message(|| {
@@ -777,38 +793,92 @@ pub async fn execute_run_cache_service_clone(
     clone: &RunCacheCloneDecision,
     adapter_type: AdapterType,
     max_threads: Option<usize>,
-) -> FsResult<NodeStatus> {
-    verify_clone_source_freshness(ctx, node, clone).await?;
+    hook_executor: Option<RunCacheReuseHookExecutor>,
+    pre_hooks_configured: bool,
+) -> FsResult<NodeStatus, RunCacheCloneError> {
+    verify_clone_source_freshness(ctx, node, clone)
+        .await
+        .map_err(RunCacheCloneError::Recoverable)?;
     if clone.clone_sqls.is_empty() {
-        return Err(fs_err!(
+        return Err(RunCacheCloneError::Recoverable(fs_err!(
             ErrorCode::Generic,
             "dbt State service clone response did not include clone SQL"
-        ));
+        )));
     }
 
-    // TODO: Honor model_config.state.execute_hooks_on_reuse once Fusion has a
-    // narrow node-level hook lifecycle for service no-op/clone paths.
-    // Materialization hooks are currently embedded in normal node execution
-    // macros.
     let clone_sqls = clone.clone_sqls.clone();
     let node_unique_id = node.unique_id();
     let ctx_inner = ctx.clone();
-    TaskOp::BlockingWithConnection {
-        f: Box::new(move || execute_clone_sqls_blocking(&ctx_inner, &node_unique_id, &clone_sqls)),
+    let clone_result = TaskOp::BlockingWithConnection {
+        f: Box::new(move || {
+            if let Some(hook_executor) = &hook_executor {
+                hook_executor(&ctx_inner, RunCacheReuseHookPhase::Pre)
+                    .map_err(RunCacheCloneError::Fatal)?;
+            }
+
+            execute_clone_sqls_blocking(&ctx_inner, &node_unique_id, &clone_sqls).map_err(
+                |err| {
+                    if pre_hooks_configured {
+                        RunCacheCloneError::Fatal(err)
+                    } else {
+                        RunCacheCloneError::Recoverable(err)
+                    }
+                },
+            )?;
+
+            if let Some(hook_executor) = &hook_executor {
+                hook_executor(&ctx_inner, RunCacheReuseHookPhase::Post)
+                    .map_err(RunCacheCloneError::Fatal)?;
+            }
+            Ok(())
+        }),
         adapter_type,
         max_threads,
     }
     .run()
-    .await??;
+    .await
+    .map_err(RunCacheCloneError::Recoverable)?;
+    clone_result?;
 
-    let target_relation = create_relation_from_node(ctx.adapter_type(), node, None)?;
+    let target_relation = create_relation_from_node(ctx.adapter_type(), node, None)
+        .map_err(RunCacheCloneError::Fatal)?;
     let target_relation: Arc<dyn BaseRelation> = target_relation.into();
     ctx.inner
         .run_cache_ctx
         .run_cache_metadata
         .invalidate_relation_metadata(&target_relation.semantic_fqn());
-    cache_cloned_relation(ctx, node)?;
+    cache_cloned_relation(ctx, node).map_err(RunCacheCloneError::Fatal)?;
     Ok(clone.success_status())
+}
+
+pub enum RunCacheCloneError {
+    Recoverable(Box<FsError>),
+    Fatal(Box<FsError>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunCacheReuseHookPhase {
+    Pre,
+    Post,
+}
+
+pub type RunCacheReuseHookExecutor =
+    Arc<dyn Fn(&TaskRunnerCtx, RunCacheReuseHookPhase) -> FsResult<()> + Send + Sync>;
+
+impl RunCacheCloneError {
+    pub fn into_error(self) -> Box<FsError> {
+        match self {
+            Self::Recoverable(err) | Self::Fatal(err) => err,
+        }
+    }
+}
+
+impl std::fmt::Display for RunCacheCloneError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Recoverable(err) | Self::Fatal(err) => err.fmt(f),
+        }
+    }
 }
 
 struct RunCacheSubmitOutcome {
@@ -1328,6 +1398,15 @@ fn model_state_for_node(node: &dyn InternalDbtNodeAttributes) -> Option<&ModelSt
     node.as_any()
         .downcast_ref::<DbtModel>()
         .and_then(|model| model.__model_attr__.state.as_ref())
+}
+
+pub fn should_execute_hooks_for_skip_reuse(
+    node: &dyn InternalDbtNodeAttributes,
+    service_default: bool,
+) -> bool {
+    model_state_for_node(node)
+        .and_then(|state| state.execute_hooks_on_any_reuse)
+        .unwrap_or(service_default)
 }
 
 fn freshness_tolerance_seconds_for_node(
@@ -2503,6 +2582,32 @@ mod tests {
     }
 
     #[test]
+    fn execute_hooks_on_any_reuse_uses_state_config_for_skip_reuse() {
+        let model = model_with_state(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: Some(true),
+        });
+
+        assert!(should_execute_hooks_for_skip_reuse(&model, false));
+    }
+
+    #[test]
+    fn skip_reuse_hooks_fall_back_to_service_default() {
+        let model = model_with_state(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: None,
+        });
+
+        assert!(should_execute_hooks_for_skip_reuse(&model, true));
+    }
+
+    #[test]
     fn freshness_tolerance_uses_state_lag_tolerance() {
         let model = model_with_state(ModelState {
             lag_tolerance: Some(ModelFreshnessRules {
@@ -2513,7 +2618,7 @@ mod tests {
             require_fresh_data_from: None,
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         });
 
         assert_eq!(freshness_tolerance_seconds_for_node(&model, 2700), 7200);
@@ -2526,7 +2631,7 @@ mod tests {
             require_fresh_data_from: None,
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         });
         model.__model_attr__.freshness = Some(ModelFreshness {
             build_after: Some(ModelFreshnessRules {
@@ -2550,7 +2655,7 @@ mod tests {
             require_fresh_data_from: None,
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         });
         model.__model_attr__.freshness = Some(ModelFreshness {
             build_after: Some(ModelFreshnessRules {
@@ -2570,7 +2675,7 @@ mod tests {
             require_fresh_data_from: Some(UpdatesOn::Any),
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         });
         model.__model_attr__.freshness = Some(ModelFreshness {
             build_after: Some(ModelFreshnessRules {
@@ -2593,7 +2698,7 @@ mod tests {
             require_fresh_data_from: None,
             evaluate_volatile_sql: Some(false),
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         });
         model.__common_attr__.meta.insert(
             "run_cache_tolerate_nondeterminism".to_string(),

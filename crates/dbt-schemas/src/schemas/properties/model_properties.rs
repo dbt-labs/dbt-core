@@ -185,7 +185,8 @@ pub struct ModelState {
     pub require_fresh_data_from: Option<UpdatesOn>,
     pub evaluate_volatile_sql: Option<bool>,
     pub pre_clone: Option<StatePreClone>,
-    pub execute_hooks_on_reuse: Option<bool>,
+    #[serde(alias = "execute_hooks_on_reuse")]
+    pub execute_hooks_on_any_reuse: Option<bool>,
 }
 
 impl PartialEq for ModelState {
@@ -197,7 +198,7 @@ impl PartialEq for ModelState {
             )
             && self.evaluate_volatile_sql == other.evaluate_volatile_sql
             && self.pre_clone == other.pre_clone
-            && self.execute_hooks_on_reuse == other.execute_hooks_on_reuse
+            && self.execute_hooks_on_any_reuse == other.execute_hooks_on_any_reuse
     }
 }
 
@@ -265,14 +266,14 @@ mod tests {
             lag_tolerance: None,
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         };
         let other = ModelState {
             require_fresh_data_from: Some(UpdatesOn::Any),
             lag_tolerance: None,
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         };
 
         assert_eq!(base, other);
@@ -285,17 +286,27 @@ mod tests {
             lag_tolerance: None,
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         };
         let other = ModelState {
             require_fresh_data_from: Some(UpdatesOn::All),
             lag_tolerance: None,
             evaluate_volatile_sql: None,
             pre_clone: None,
-            execute_hooks_on_reuse: None,
+            execute_hooks_on_any_reuse: None,
         };
 
         assert_ne!(base, other);
+    }
+
+    #[test]
+    fn model_state_accepts_legacy_execute_hooks_on_reuse_key() {
+        let yaml = r#"
+execute_hooks_on_reuse: true
+"#;
+        let state: ModelState = dbt_yaml::from_str(yaml).unwrap();
+
+        assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
     }
 
     #[test]

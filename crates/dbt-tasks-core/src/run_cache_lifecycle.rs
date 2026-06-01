@@ -64,6 +64,11 @@ async fn initialize_run_cache_service(
             FusionMetricKey::RunCacheService(RunCacheServiceMetricKey::Disabled),
             1,
         );
+        if execute == Execute::Remote && RunCacheServiceConfig::is_explicitly_disabled_from_env() {
+            emit_debug_log_message(
+                "dbt State service disabled by configuration; executing normally",
+            );
+        }
         return RunCacheServiceLifecycle {
             requested: false,
             config: None,

@@ -1728,7 +1728,7 @@ state:
   require_fresh_data_from: all
   evaluate_volatile_sql: true
   pre_clone: if_missing
-  execute_hooks_on_reuse: true
+  execute_hooks_on_any_reuse: true
 __warehouse_specific_config__: {}
 "#,
         )
@@ -1741,7 +1741,7 @@ __warehouse_specific_config__: {}
         assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
         assert_eq!(state.evaluate_volatile_sql, Some(true));
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
-        assert_eq!(state.execute_hooks_on_reuse, Some(true));
+        assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
     }
 
     #[test]
@@ -1755,7 +1755,7 @@ __warehouse_specific_config__: {}
   require_fresh_data_from: any
   evaluate_volatile_sql: false
   pre_clone: always
-  execute_hooks_on_reuse: false
+  execute_hooks_on_any_reuse: false
 __additional_properties__: {}
 "#,
         )
@@ -1768,7 +1768,7 @@ __additional_properties__: {}
         assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::Any));
         assert_eq!(state.evaluate_volatile_sql, Some(false));
         assert_eq!(state.pre_clone, Some(StatePreClone::Always));
-        assert_eq!(state.execute_hooks_on_reuse, Some(false));
+        assert_eq!(state.execute_hooks_on_any_reuse, Some(false));
     }
 
     #[test]
