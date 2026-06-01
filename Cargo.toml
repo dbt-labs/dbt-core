@@ -93,7 +93,7 @@ homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "Elastic-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
-version = "2.0.0-alpha.1"
+version = "2.0.0-dev.1"
 
 [patch.crates-io]
 
