@@ -366,9 +366,13 @@ insert into {{ glue_relation }}
     - For existing tables, we must DROP the table first before creating the new one
 -#}
 
-{# DIVERGENCE BEGIN: v1/v2 behavior shim; upstream uses catalog_relation.linked_catalog_provider.is_glue directly; remove once use_catalogs_v2 is on by default #}
+{# DIVERGENCE BEGIN: v1/v2 behavior shim; upstream uses catalog_relation.linked_catalog_provider.is_glue directly; remove once use_catalogs_v2 is on by default.
+   `adapter.behavior.use_catalogs_v2` is a Fusion-only behavior flag; accessing it under
+   dbt-core raises a CompilationError that `is defined` does not catch. Fusion is dbt 2.x
+   and dbt-core is 1.x, so gate the access on `dbt_version.startswith('2.')`.
+   See dbt-labs/fs#10659. #}
 {% macro is_glue_catalog_linked_database(catalog_relation) -%}
-  {% if adapter.behavior.use_catalogs_v2.no_warn %}
+  {% if dbt_version.startswith('2.') and adapter.behavior.use_catalogs_v2.no_warn %}
     {{ return(catalog_relation.linked_catalog_provider.is_glue) }}
   {% elif catalog_relation.catalog_linked_database_type is defined %}
     {# -- v1 fallback: use the legacy catalog_linked_database_type surface -- #}
@@ -420,10 +424,15 @@ insert into {{ glue_relation }}
         {%- if contract_config.enforced %}
         {{ get_table_columns_and_constraints() }}
         {%- endif %}
+        {# DIVERGENCE BEGIN: `adapter.behavior.use_catalogs_v2` is a Fusion-only behavior flag.
+           Accessing it under dbt-core (e.g. the v2-parser handoff) raises a CompilationError
+           that `is defined` does not catch. Fusion is dbt 2.x and dbt-core is 1.x, so gate
+           the access on `dbt_version.startswith('2.')`. See dbt-labs/fs#10659. #}
         {%- if not (
-            (adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database'))
+            (dbt_version.startswith('2.') and adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database'))
             or catalog_relation|attr('catalog_linked_database')
         ) -%}
+        {# DIVERGENCE END #}
         {{ optional('external_volume', catalog_relation.external_volume, "'") }}
         catalog = '{{ catalog_relation.catalog_name }}'  -- external REST catalog name
         {{ optional('base_location', catalog_relation.base_location, "'") }}

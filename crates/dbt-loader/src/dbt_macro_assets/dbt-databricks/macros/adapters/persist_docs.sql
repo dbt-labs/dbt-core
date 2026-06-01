@@ -13,12 +13,22 @@
 {% endmacro %}
 
 {% macro comment_on_column_sql(column_path, escaped_comment) %}
-  {# DIVERGENCE: upstream uses adapter.has_dbr_capability('comment_on_column'); we use the platform-agnostic method has_feature #}
-  {%- if adapter.has_feature('comment_on_column') -%}
-    COMMENT ON COLUMN {{ column_path }} IS '{{ escaped_comment }}'
-  {%- else -%}
-    {{ alter_table_change_column_comment_sql(column_path, escaped_comment) }}
-  {%- endif -%}
+  {# DIVERGENCE: upstream uses adapter.has_dbr_capability('comment_on_column'); we use the
+     platform-agnostic method has_feature. Gate on dbt_version so Fusion uses has_feature
+     and dbt-core (1.x) uses the v1 method has_dbr_capability. #}
+  {% if dbt_version.startswith('2.') %}
+    {%- if adapter.has_feature('comment_on_column') -%}
+      COMMENT ON COLUMN {{ column_path }} IS '{{ escaped_comment }}'
+    {%- else -%}
+      {{ alter_table_change_column_comment_sql(column_path, escaped_comment) }}
+    {%- endif -%}
+  {% else %}
+    {%- if adapter.has_dbr_capability('comment_on_column') -%}
+      COMMENT ON COLUMN {{ column_path }} IS '{{ escaped_comment }}'
+    {%- else -%}
+      {{ alter_table_change_column_comment_sql(column_path, escaped_comment) }}
+    {%- endif -%}
+  {% endif %}
 {% endmacro %}
 
 {% macro alter_table_change_column_comment_sql(column_path, escaped_comment) %}

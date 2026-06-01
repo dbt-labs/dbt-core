@@ -12,9 +12,11 @@
     {%- set file_format = adapter.resolve_file_format(config) -%}
   {% endif %}
   
-  {#-- v2: managed iceberg is default; use_uniform=true opts into delta+tblprops --#}
-  {#-- v1: use_managed_iceberg behavior flag drives the iceberg DDL form       --#}
-  {% if adapter.behavior.use_catalogs_v2.no_warn %}
+  {#-- DIVERGENCE BEGIN: v2: managed iceberg is default; use_uniform=true opts into
+       delta+tblprops. v1: use_managed_iceberg behavior flag drives the iceberg DDL form.
+       `adapter.behavior.use_catalogs_v2` is a Fusion-only behavior flag; accessing it
+       under dbt-core (1.x) raises "flag has not been registered". Gate on dbt_version. --#}
+  {% if dbt_version.startswith('2.') and adapter.behavior.use_catalogs_v2.no_warn %}
     {% if table_format == 'iceberg' %}
       {% if catalog_relation is not none and catalog_relation.use_uniform %}
         using delta
@@ -31,6 +33,7 @@
       using {{ file_format }}
     {% endif %}
   {% endif %}
+  {#-- DIVERGENCE END --#}
 {%- endmacro -%}
 
 

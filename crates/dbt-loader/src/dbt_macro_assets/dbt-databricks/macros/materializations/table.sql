@@ -25,7 +25,8 @@
       {% if safe_create and existing_relation.can_be_renamed %}
         {{ safe_relation_replace(existing_relation, staging_relation, intermediate_relation, compiled_code) }}
       {% else %}
-        {# DIVERGENCE BEGIN: upstream uses relation.type != 'table' #}
+        {# DIVERGENCE BEGIN: upstream uses relation.type != 'table'. No
+       dbt_version guard needed: v1 BaseRelation also exposes the `is_table` property. #}
         {% if existing_relation and (not existing_relation.is_table or not (existing_relation.can_be_replaced and adapter.resolve_file_format(config) in ('delta', 'iceberg'))) -%}
         {# DIVERGENCE END #}
           {{ adapter.drop_relation(existing_relation) }}
@@ -47,7 +48,8 @@
     -- setup: if the target relation already exists, drop it
     -- in case if the existing and future table is delta or iceberg, we want to do a
     -- create or replace table instead of dropping, so we don't have the table unavailable
-    {# DIVERGENCE BEGIN: upstream uses existing_relation.type != 'table' #}
+    {# DIVERGENCE BEGIN: upstream uses existing_relation.type != 'table'. No
+       dbt_version guard needed: v1 BaseRelation also exposes the `is_table` property. #}
     {% if existing_relation and (not existing_relation.is_table or not (existing_relation.can_be_replaced and adapter.resolve_file_format(config) in ('delta', 'iceberg'))) -%}
     {# DIVERGENCE END #}
       {{ adapter.drop_relation(existing_relation) }}

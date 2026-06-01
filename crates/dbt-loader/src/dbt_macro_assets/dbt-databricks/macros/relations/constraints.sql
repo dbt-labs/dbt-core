@@ -23,8 +23,9 @@
           model constraints. SHALLOW CLONE preserves and renames the source's primary key,
           so a subsequent ALTER TABLE ADD CONSTRAINT fails with "table already has a PRIMARY
           KEY constraint". Upstream dbt-databricks is not affected because it does not use
-          SHALLOW CLONE. Only applicable to Unity Catalog (not Hive Metastore). -#}
-      {% if not relation.is_hive_metastore() %}
+          SHALLOW CLONE. Only applicable to Unity Catalog (not Hive Metastore).
+          Gated on dbt_version: under dbt-core (1.x) SHALLOW CLONE is not used, so no-op. -#}
+      {% if dbt_version.startswith('2.') and not relation.is_hive_metastore() %}
         {% set existing_pks = fetch_primary_key_constraints(relation) %}
         {% if existing_pks.rows | length > 0 %}
           {% for row in existing_pks %}
@@ -58,12 +59,15 @@
 {% macro databricks__alter_table_add_constraints(relation, model) %}
     {% set constraints = get_model_constraints(model) %}
     {#- DIVERGENCE BEGIN: skip model-level PK constraints that already exist, for the
-        same SHALLOW CLONE reason as in databricks__persist_constraints above. -#}
-    {% set wants_pk = constraints | selectattr('type', 'eq', 'primary_key') | list | length > 0 %}
-    {% if wants_pk and not relation.is_hive_metastore() %}
-      {% set existing_pks = fetch_primary_key_constraints(relation) %}
-      {% if existing_pks.rows | length > 0 %}
-        {% set constraints = constraints | rejectattr('type', 'eq', 'primary_key') | list %}
+        same SHALLOW CLONE reason as in databricks__persist_constraints above.
+        Gated on dbt_version: under dbt-core (1.x) SHALLOW CLONE is not used, so no-op. -#}
+    {% if dbt_version.startswith('2.') %}
+      {% set wants_pk = constraints | selectattr('type', 'eq', 'primary_key') | list | length > 0 %}
+      {% if wants_pk and not relation.is_hive_metastore() %}
+        {% set existing_pks = fetch_primary_key_constraints(relation) %}
+        {% if existing_pks.rows | length > 0 %}
+          {% set constraints = constraints | rejectattr('type', 'eq', 'primary_key') | list %}
+        {% endif %}
       {% endif %}
     {% endif %}
     {#- DIVERGENCE END -#}

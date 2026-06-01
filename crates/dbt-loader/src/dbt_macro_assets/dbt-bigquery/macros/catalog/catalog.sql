@@ -2,6 +2,10 @@
     parameter `information_schema` is now `dbschema`,
     the diffs are due to in Fusion, we do not have the InformationSchema objects implemented the same way as in the Python adapter.
     But the rendered SQL should be the same.
+
+    NOTE: no `dbt_version` guard needed — these `_bigquery__*` catalog helpers are only
+    invoked from other Fusion-diverged callers in this same crate (by_schema.sql / by_relation.sql).
+    They are not reached by dbt-core (1.x), which runs the upstream catalog flow.
 #}
 {% macro _bigquery__get_table_shards_sql(db_schema) %}
     {% set region = "region-%s"|format(db_schema.identifier)%}

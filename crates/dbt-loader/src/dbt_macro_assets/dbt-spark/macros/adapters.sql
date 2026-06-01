@@ -302,9 +302,14 @@
       describe extended {{ relation.render() }}
   {% endcall %}
   {% set table = load_result('get_columns_in_relation').table %}
-  {#- DIVERGENCE BEGIN: dbt-core Spark does not cast table to Column. All other adapters do it -#}
-  {% do return(sql_convert_columns_in_relation(table)) %}
-  {#- DIVERGENCE END: dbt-core Spark does not cast table to Column. All other adapters do it -#}
+  {#- DIVERGENCE BEGIN: dbt-core Spark does not cast table to Column. All other adapters do it.
+      Gate on dbt_version: under dbt-core (1.x) return the raw table to match upstream behavior. -#}
+  {% if dbt_version.startswith('2.') %}
+    {% do return(sql_convert_columns_in_relation(table)) %}
+  {% else %}
+    {% do return(table) %}
+  {% endif %}
+  {#- DIVERGENCE END -#}
 {% endmacro %}
 
 {% macro spark__list_relations_without_caching(relation) %}

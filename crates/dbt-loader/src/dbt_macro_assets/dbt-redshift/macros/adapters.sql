@@ -95,7 +95,12 @@
 {% endmacro %}
 
 
+{# DIVERGENCE BEGIN: Fusion uses adapter.has_feature("datasharing") to choose between
+   SQL DDL and the postgres__ fallback. `has_feature` is a Fusion-only API; under
+   dbt-core (1.x) it is unavailable. v1 dbt-redshift unconditionally delegates to the
+   postgres__ macro, so do that in the else branch. #}
 {% macro redshift__create_schema(relation) -%}
+  {%- if not dbt_version.startswith('2.') -%}{{ return(postgres__create_schema(relation)) }}{%- endif -%}
   {%- if adapter.has_feature("datasharing") -%}
     {%- call statement('create_schema') -%}
       create schema if not exists {{ relation.without_identifier() }}
@@ -107,6 +112,7 @@
 
 
 {% macro redshift__drop_schema(relation) -%}
+  {%- if not dbt_version.startswith('2.') -%}{{ return(postgres__drop_schema(relation)) }}{%- endif -%}
   {%- if adapter.has_feature("datasharing") -%}
     {%- call statement('drop_schema') -%}
       drop schema if exists {{ relation.without_identifier() }} cascade
@@ -115,19 +121,24 @@
     {{ postgres__drop_schema(relation) }}
   {%- endif -%}
 {% endmacro %}
+{# DIVERGENCE END #}
 
 
 {% macro redshift__get_columns_in_relation(relation) -%}
   {# relation from temp tables does not have a database or schema. #}
   {# use legacy pattern until SHOW COLUMNS supports temp tables #}
 
-  {#- DIVERGENCE BEGIN: upstream uses redshift__use_show_apis(); Fusion uses adapter.has_feature("datasharing") -#}
+  {#- DIVERGENCE BEGIN: upstream v1 dbt-redshift unconditionally runs the legacy
+      information_schema query; Fusion gates on adapter.has_feature("datasharing").
+      `has_feature` is a Fusion-only API, so under dbt-core (1.x) short-circuit to
+      the legacy path; the Fusion branch is preserved unchanged. -#}
+  {%- if not dbt_version.startswith('2.') -%}{{ return(redshift__get_columns_in_relation_legacy(relation)) }}{%- endif -%}
   {% if adapter.has_feature("datasharing") and relation.database and relation.schema %}
-  {#- DIVERGENCE END -#}
     {{ return(redshift__get_columns_in_relation_show(relation)) }}
   {% else %}
     {{ return(redshift__get_columns_in_relation_legacy(relation)) }}
   {% endif %}
+  {#- DIVERGENCE END -#}
 {% endmacro %}
 
 
@@ -304,6 +315,10 @@
 
 
 {% macro redshift__list_schemas(database) %}
+  {# DIVERGENCE: `adapter.has_feature` is Fusion-only; under dbt-core (1.x) short-circuit
+     to postgres__list_schemas (matches upstream v1 behavior). Fusion path preserved
+     unchanged so xdbc replay hashes stay stable. #}
+  {%- if not dbt_version.startswith('2.') -%}{{ return(postgres__list_schemas(database)) }}{%- endif -%}
   {% if adapter.has_feature('datasharing') %}
     {# dbt-core's create_schemas passes a pre-quoted identifier via str(relation);
        other callers pass the raw database name. Only quote when the input is not

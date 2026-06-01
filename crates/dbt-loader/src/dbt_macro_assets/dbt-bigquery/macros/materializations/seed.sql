@@ -9,19 +9,34 @@
 
 {% macro bigquery__load_csv_rows(model, agate_table) %}
 
-  {# DIVERGENCE BEGIN: Need to pass path to the dataframe file #}
+  {# DIVERGENCE BEGIN: Fusion's adapter.load_dataframe takes an extra `file_path`
+     argument so it can read the CSV from disk; the upstream Python dbt-bigquery
+     adapter's load_dataframe only accepts 6 args. Gate on `dbt_version` (Fusion
+     reports a `2.x` version, Python dbt-core reports `1.x`) so the same macro
+     works under both runtimes (Fusion parser + Python adapter execution path
+     included). #}
   {%- set column_override = model['config'].get('column_types', {}) -%}
-
   {%- set delimiter = model['config'].get('delimiter', ',') -%}
-  {{ adapter.load_dataframe(
-      model['database'],
-      model['schema'],
-      model['alias'],
-      model['project_root'] | string ~ model['original_file_path'] | string,
-      agate_table,
-      column_override,
-      delimiter,
-  ) }}
+  {% if dbt_version.startswith('2.') %}
+    {{ adapter.load_dataframe(
+        model['database'],
+        model['schema'],
+        model['alias'],
+        model['project_root'] | string ~ model['original_file_path'] | string,
+        agate_table,
+        column_override,
+        delimiter,
+    ) }}
+  {% else %}
+    {{ adapter.load_dataframe(
+        model['database'],
+        model['schema'],
+        model['alias'],
+        agate_table,
+        column_override,
+        delimiter,
+    ) }}
+  {% endif %}
   {# DIVERGENCE END #}
 
   {% call statement() %}

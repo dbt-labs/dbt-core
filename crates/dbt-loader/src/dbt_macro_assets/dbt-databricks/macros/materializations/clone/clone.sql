@@ -29,7 +29,9 @@
 
   {% set can_clone_table = can_clone_table() %}
 
-  {# DIVERGENCE BEGIN: relation.type is an Object in Fusion; upstream uses StrEnum. Use '.is_table' instead of `== 'table'`#}
+  {# DIVERGENCE BEGIN: relation.type is an Object in Fusion; upstream uses StrEnum.
+     Use '.is_table' instead of `== 'table'`. No dbt_version guard needed: v1
+     BaseRelation also exposes the `is_table` property. #}
   {%- if other_existing_relation and other_existing_relation.is_table and can_clone_table -%}
   {# DIVERGENCE END #}
 

@@ -163,7 +163,9 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__drop_relation(relation) -%}
-  {% set fmt = adapter.table_format(relation) %}
+  {# DIVERGENCE: adapter.table_format is Fusion-only (see issue #10659). Under dbt-core
+     (1.x) treat as non-iceberg/non-ducklake and always cascade. #}
+  {% set fmt = adapter.table_format(relation) if dbt_version.startswith('2.') else none %}
   {% call statement('drop_relation', auto_begin=False) -%}
     {% if fmt == 'ducklake' or fmt == 'iceberg' %}
       drop {{ relation.type }} if exists {{ relation }}
@@ -174,7 +176,9 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__rename_relation(from_relation, to_relation) -%}
-  {% set fmt = adapter.table_format(from_relation) %}
+  {# DIVERGENCE: adapter.table_format is Fusion-only (see issue #10659). Under dbt-core
+     (1.x) treat as non-iceberg and use the plain ALTER TABLE RENAME path. #}
+  {% set fmt = adapter.table_format(from_relation) if dbt_version.startswith('2.') else none %}
   {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
   {% call statement('rename_relation') -%}
     {% if fmt == 'iceberg' %}

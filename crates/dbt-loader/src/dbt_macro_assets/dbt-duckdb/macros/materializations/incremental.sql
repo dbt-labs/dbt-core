@@ -2,8 +2,13 @@
 
   {%- set language = model['language'] -%}
   -- only create temp tables if using local duckdb, as it is not currently supported for remote databases
-  {# DIVERGENCE: we use adapter.has_feature instead of adapter.is_motherduck #}
-  {%- set temporary = not adapter.has_feature("motherduck") -%}
+  {# DIVERGENCE: Fusion uses adapter.has_feature("motherduck"); v1 dbt-duckdb exposes
+     adapter.is_motherduck. Gate on dbt_version. #}
+  {%- if dbt_version.startswith('2.') -%}
+    {%- set temporary = not adapter.has_feature("motherduck") -%}
+  {%- else -%}
+    {%- set temporary = not adapter.is_motherduck() -%}
+  {%- endif -%}
 
   -- relations
   {%- set existing_relation = load_cached_relation(this) -%}
@@ -40,8 +45,10 @@
     {%- endif -%}
     {% set temp_relation = temp_relation.incorporate(path=adapter.get_temp_relation_path(this, batch_id)) %}
     {% do run_query(create_schema(temp_relation)) %}
-    {# DIVERGENCE: we use adapter.has_feature instead of adapter.disable_transactions #}
-    {% if adapter.has_feature("transactions") %}
+    {# DIVERGENCE: Fusion uses adapter.has_feature("transactions"); v1 dbt-duckdb exposes
+       adapter.disable_transactions (note inverted polarity). Gate on dbt_version. #}
+    {% if (dbt_version.startswith('2.') and adapter.has_feature("transactions"))
+          or (not dbt_version.startswith('2.') and not adapter.disable_transactions()) %}
       {% do adapter.commit() %}
     {% endif %}
     -- then drop the temp relation after we insert the incremental data into the target relation
@@ -115,8 +122,10 @@
   {% do adapter.commit() %}
 
   {% for rel in to_drop %}
-      {# On MotherDuck the temp relation is a real table; dropping it cascades indexes. Avoid extra ALTERs. #}
-      {% if not adapter.has_feature("motherduck") %}
+      {# On MotherDuck the temp relation is a real table; dropping it cascades indexes. Avoid extra ALTERs.
+         DIVERGENCE: Fusion uses adapter.has_feature("motherduck"); v1 uses adapter.is_motherduck. #}
+      {% set _is_motherduck = adapter.has_feature("motherduck") if dbt_version.startswith('2.') else adapter.is_motherduck() %}
+      {% if not _is_motherduck %}
         {% do drop_indexes_on_relation(rel) %}
       {% endif %}
       {% do adapter.drop_relation(rel) %}

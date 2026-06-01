@@ -248,7 +248,12 @@
     {# DIVERGENCE BEGIN: there is supposed to be a relation.catalog based arm here. This is a core hack that does not work in Fusion. #}
     {%- if catalog_relation is not none -%}
         {#-- Direct catalog_relation object provided --#}
-        {%- if adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database') -%}
+        {# DIVERGENCE BEGIN: `adapter.behavior.use_catalogs_v2` is a Fusion-only behavior flag.
+           Accessing it under dbt-core (e.g. via the v2-parser handoff) raises a CompilationError,
+           which `is defined` does NOT swallow. Fusion is dbt 2.x and dbt-core is 1.x, so gate
+           the access on `dbt_version.startswith('2.')`. See dbt-labs/fs#10659. #}
+        {%- if dbt_version.startswith('2.') and adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database') -%}
+        {# DIVERGENCE END #}
             {{ return(true) }}
         {%- elif catalog_relation|attr('catalog_linked_database') -%}
             {{ return(true) }}
@@ -257,10 +262,15 @@
         {%- endif -%}
     {%- elif relation and relation.config -%}
         {%- set catalog_relation = adapter.build_catalog_relation(relation) -%}
+        {# DIVERGENCE BEGIN: `adapter.behavior.use_catalogs_v2` is a Fusion-only behavior flag.
+           Accessing it under dbt-core (e.g. via the v2-parser handoff) raises a CompilationError,
+           which `is defined` does NOT swallow. Fusion is dbt 2.x and dbt-core is 1.x, so gate
+           the access on `dbt_version.startswith('2.')`. See dbt-labs/fs#10659. #}
         {%- if catalog_relation is not none and (
-            (adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database'))
+            (dbt_version.startswith('2.') and adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database'))
             or catalog_relation|attr('catalog_linked_database')
         ) -%}
+        {# DIVERGENCE END #}
             {{ return(true) }}
         {%- else -%}
             {{ return(false) }}

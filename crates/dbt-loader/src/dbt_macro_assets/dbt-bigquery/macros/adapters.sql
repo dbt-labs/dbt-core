@@ -85,8 +85,11 @@
 
 {% endmacro %}
 
-{# DIVERGENCE: in core, drop_schema is implemented via the googleapi inside the adapter.drop_schema method. #}
+{# DIVERGENCE: in core, drop_schema is implemented via the googleapi inside the adapter.drop_schema method.
+   Under dbt-core (1.x), short-circuit to the adapter call; under Fusion (2.x) the SQL path is preserved
+   byte-for-byte to keep xdbc replay hashes stable. #}
 {% macro bigquery__drop_schema(relation) -%}
+  {%- if not dbt_version.startswith('2.') -%}{{ return(adapter.drop_schema(relation)) }}{%- endif -%}
   {%- call statement('drop_schema') -%}
     drop schema if exists {{ relation.without_identifier().include(database=False) }} cascade
   {%- endcall -%}
@@ -98,8 +101,11 @@
 {%- endmacro %}
 
 
-{# DIVERGENCE: in core, list_schemas is implemented via the googleapi inside the adapter.list_schemas method. #}
+{# DIVERGENCE: in core, list_schemas is implemented via the googleapi inside the adapter.list_schemas method.
+   Under dbt-core (1.x), short-circuit to the adapter call; under Fusion (2.x) the SQL path is preserved
+   byte-for-byte to keep xdbc replay hashes stable. #}
 {% macro bigquery__list_schemas(database) -%}
+  {%- if not dbt_version.startswith('2.') -%}{{ return(adapter.list_schemas(database)) }}{%- endif -%}
   {% call statement('list_schemas', fetch_result=True, auto_begin=False) %}
     select distinct schema_name from {{ database }}.INFORMATION_SCHEMA.SCHEMATA;
   {% endcall %}
@@ -122,8 +128,14 @@
 {% endmacro %}
 
 {% macro bigquery__alter_relation_comment(relation, relation_comment) -%}
-  {# DIVERGENCE BEGIN #}
-  {# In BigQuery a DDL already sets the description #}
+  {# DIVERGENCE BEGIN: In BigQuery a DDL already sets the description, so Fusion may skip the
+     redundant update via the `bigquery_noop_alter_relation_comment` behavior flag — a
+     Fusion-only behavior surface. Under dbt-core (1.x), call update_table_description
+     unconditionally (matches v1 dbt-bigquery behavior); Fusion path preserved unchanged. #}
+  {%- if not dbt_version.startswith('2.') -%}
+    {% do adapter.update_table_description(relation.database, relation.schema, relation.identifier, relation_comment) %}
+    {{ return('') }}
+  {%- endif -%}
   {%- set noop = (relation.type in ['table', 'view'] and not is_incremental()) or adapter.behavior.bigquery_noop_alter_relation_comment.no_warn -%}
   {%- if not noop -%}
     {% do adapter.update_table_description(relation.database, relation.schema, relation.identifier, relation_comment) %}
@@ -233,8 +245,11 @@ having count(*) > 1
 {% endmacro %}
 
 
-{# DIVERGENCE #}
+{# DIVERGENCE: in core, create_schema dispatches to the default global macro.
+   Under dbt-core (1.x), short-circuit to the adapter call; under Fusion (2.x) the SQL path is preserved
+   byte-for-byte to keep xdbc replay hashes stable. #}
 {% macro bigquery__create_schema(relation) -%}
+  {%- if not dbt_version.startswith('2.') -%}{{ return(adapter.create_schema(relation)) }}{%- endif -%}
   {%- call statement('create_schema') -%}
     create schema if not exists {{ relation.without_identifier().include(database=False) }}
   {%- endcall -%}
