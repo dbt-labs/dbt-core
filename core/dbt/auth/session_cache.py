@@ -33,7 +33,12 @@ class OAuthSessionCache:
 
     @staticmethod
     def from_dict(data: dict) -> OAuthSessionCache:
-        sessions = [OAuthSession(**s) for s in data.get("sessions", [])]
+        sessions = []
+        for s in data.get("sessions", []):
+            # Coerce legacy float timestamps to int so rewrites stay u64-compatible
+            # for the Rust dbt-platform-auth crate, which deserializes expires_at as u64.
+            s = {**s, "expires_at": int(s["expires_at"])}
+            sessions.append(OAuthSession(**s))
         return OAuthSessionCache(
             version=data.get("version", 1),
             sessions=sessions,
