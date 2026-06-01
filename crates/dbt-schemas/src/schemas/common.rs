@@ -284,6 +284,44 @@ impl std::fmt::Display for FreshnessPeriod {
     }
 }
 
+/// Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L36
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+pub struct ExternalPartitionConfig {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub data_type: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub meta: IndexMap<String, YmlValue>,
+
+    pub __other__: IndexMap<String, YmlValue>,
+}
+
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
+#[serde(untagged)]
+pub enum ExternalPartition {
+    String(String),
+    ExternalPartitionConfig(ExternalPartitionConfig),
+}
+
+/// Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L48
+/// These always get serialized, even if none.
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+pub struct ExternalTable {
+    pub location: Option<String>,
+    pub file_format: Option<String>,
+    pub row_format: Option<String>,
+    pub tbl_properties: Option<String>,
+    // TODO: Add external partition validation as seen here:
+    // https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L36
+    pub partitions: Option<Vec<ExternalPartition>>,
+
+    // `external` allows arbitrary, externally typed additional properties.
+    pub __other__: IndexMap<String, YmlValue>,
+}
+
 // We don't skip serializing none here because dbt project evaluator checks for the presence of either error_after or warn_after
 // https://github.com/dbt-labs/dbt-project-evaluator/blob/94768b117573705e95a9456273de8e358efadb00/macros/unpack/get_source_values.sql#L27-L28
 #[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]

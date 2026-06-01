@@ -459,17 +459,6 @@ pub async fn resolve_sources(
             }
         }
 
-        // Add any other non-standard dbt keys that might be used by dbt packages under
-        // the "other" key. This needs to be untyped since it's up to the packages to define
-        // what is a valid configuration entry.
-        //
-        // For example, dbt-external-tables have their own definition of what are valid
-        // values for the `external` property of a source: https://github.com/dbt-labs/dbt-external-tables
-        let other = match &table.external {
-            None => BTreeMap::new(),
-            Some(external) => BTreeMap::from([("external".to_owned(), external.clone())]),
-        };
-
         let static_analysis = source_config.static_analysis.clone();
 
         let unrendered_config = build_source_unrendered_config(
@@ -543,9 +532,10 @@ pub async fn resolve_sources(
                 sync: source_config.sync.clone(),
                 unrendered_database,
                 unrendered_schema,
+                external: table.external.clone(),
             },
             deprecated_config: source_config.clone().into(),
-            __other__: other,
+            __other__: BTreeMap::new(),
         };
         let status = if source_config.enabled {
             ModelStatus::Enabled

@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Serialize, de::Deserializer};
 use serde_with::skip_serializing_none;
 
+use crate::schemas::common::ExternalTable;
 use crate::schemas::serde::OmissibleGrantConfig;
 use dbt_common::io_args::ComputeArg;
 use dbt_common::serde_utils::Omissible;
@@ -656,6 +657,9 @@ pub struct ManifestSource {
     #[serialize_always]
     pub freshness: Option<FreshnessDefinition>,
 
+    #[serialize_always]
+    pub external: Option<ExternalTable>,
+
     pub __other__: BTreeMap<String, YmlValue>,
 }
 
@@ -690,6 +694,7 @@ impl From<DbtSource> for ManifestSource {
             loaded_at_field: source.__source_attr__.loaded_at_field,
             loaded_at_query: source.__source_attr__.loaded_at_query,
             freshness: source.__source_attr__.freshness,
+            external: source.__source_attr__.external,
             __other__: source.__other__,
         }
     }

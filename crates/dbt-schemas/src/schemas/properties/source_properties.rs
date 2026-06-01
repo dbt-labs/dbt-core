@@ -1,4 +1,5 @@
 use crate::schemas::common::DbtQuoting;
+use crate::schemas::common::ExternalTable;
 use crate::schemas::common::FreshnessDefinition;
 use crate::schemas::common::SchemaOrigin;
 use crate::schemas::common::SyncConfig;
@@ -39,7 +40,7 @@ pub struct Tables {
     pub config: Option<TablesConfig>,
     pub data_tests: Option<Vec<DataTests>>,
     pub description: Option<String>,
-    pub external: Option<YmlValue>,
+    pub external: Option<ExternalTable>,
     pub identifier: Option<String>,
     pub loader: Option<String>,
     pub name: String,
