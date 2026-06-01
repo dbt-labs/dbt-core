@@ -345,6 +345,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     log_format_file: Optional[str] = None
     log_level: Optional[str] = None
     log_level_file: Optional[str] = None
+    maximum_seed_size_mib: Optional[int] = None
     # Opt-in for the bundled dbt-state plugin. Default None defers to the CLI/env-var
     # default (False). Set true in dbt_project.yml's `flags:` block (or profiles.yml's
     # `config:` block) to enable plugin auto-discovery. Also settable via

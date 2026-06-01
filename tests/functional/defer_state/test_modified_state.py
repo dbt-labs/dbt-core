@@ -236,7 +236,7 @@ class TestChangedSeedContents(BaseModifiedState):
                     "./state",
                 ]
             )
-        assert ">1MB" in str(exc.value)
+        assert ">1MiB" in str(exc.value)
 
         # now check if unmodified returns none
         results = run_dbt(
@@ -1261,3 +1261,102 @@ class TestUnversionedContractVarcharSizeChange(BaseModifiedState):
         assert "breaking change" not in logs.lower()
         # Model should still be detected as modified and run successfully
         assert "Completed successfully" in logs
+
+
+class TestSeedHashMigration(BaseModifiedState):
+    """Tests for seamless migration from old (binary-mode) seed hashing to new (text-mode)."""
+
+    @staticmethod
+    def _patch_seed_checksum_in_state(project, seed_name, checksum_dict):
+        """Replace a seed's checksum in state/manifest.json."""
+        import json
+
+        manifest_path = os.path.join(project.project_root, "state", "manifest.json")
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        for node_id, node in manifest["nodes"].items():
+            if node["resource_type"] == "seed" and node["name"] == seed_name:
+                node["checksum"] = checksum_dict
+                break
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f)
+
+    def test_seed_hash_migration_no_false_modified(self, project):
+        """Upgrading from old hash to new hash should not falsely flag seed as modified."""
+        from dbt.artifacts.resources.base import FileHash
+
+        self.run_and_save_state()
+
+        # Compute the legacy hash for the seed file
+        seed_path = os.path.join(project.project_root, "seeds", "seed.csv")
+        legacy_hash = FileHash.from_path_legacy(seed_path)
+
+        # Patch the saved state with the legacy hash (simulating an old manifest)
+        self._patch_seed_checksum_in_state(
+            project, "seed", {"name": legacy_hash.name, "checksum": legacy_hash.checksum}
+        )
+
+        # The seed should NOT be reported as modified
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"]
+        )
+        assert len(results) == 0
+
+    def test_seed_actual_change_still_detected(self, project):
+        """Real seed changes are still detected even with fallback logic."""
+        from dbt.artifacts.resources.base import FileHash
+
+        self.run_and_save_state()
+
+        # Patch with legacy hash
+        seed_path = os.path.join(project.project_root, "seeds", "seed.csv")
+        legacy_hash = FileHash.from_path_legacy(seed_path)
+        self._patch_seed_checksum_in_state(
+            project, "seed", {"name": legacy_hash.name, "checksum": legacy_hash.checksum}
+        )
+
+        # Now actually modify the seed
+        changed_seed = seed_csv + "\n" + "3,carl"
+        write_file(changed_seed, "seeds", "seed.csv")
+
+        # The seed SHOULD be reported as modified
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"]
+        )
+        assert len(results) == 1
+        assert results[0] == "test.seed"
+
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="CRLF/LF hash divergence and the Windows-only fallback only apply on Windows",
+    )
+    def test_seed_crlf_migration(self, project):
+        """On Windows: seed with CRLF endings and legacy hash in state should not be flagged.
+
+        Python's text-mode open() normalises \\r\\n → \\n on all platforms (universal newlines),
+        so from_path() and from_path_legacy() produce different hashes for CRLF files everywhere.
+        But the migration fallback in same_seeds() is guarded by os.name == 'nt', so this test
+        only exercises the real end-to-end scenario on Windows CI.
+        """
+        from dbt.artifacts.resources.base import FileHash
+
+        # Write the seed file with explicit CRLF line endings
+        seed_path = os.path.join(project.project_root, "seeds", "seed.csv")
+        with open(seed_path, "wb") as f:
+            f.write(b"id,name\r\n1,Alice\r\n2,Bob\r\n")
+
+        run_dbt(["seed"])
+        run_dbt(["run"])
+        self.copy_state()
+
+        # Compute legacy hash (preserves \r\n) and patch into state
+        legacy_hash = FileHash.from_path_legacy(seed_path)
+        self._patch_seed_checksum_in_state(
+            project, "seed", {"name": legacy_hash.name, "checksum": legacy_hash.checksum}
+        )
+
+        # Seed should NOT be reported as modified — fallback recognises the legacy hash
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"]
+        )
+        assert len(results) == 0
