@@ -18,9 +18,10 @@ use serde_json::{Value, json};
 use crate::IndexError;
 use crate::epoch_layers;
 use crate::ingest::ingest_state::{
-    COMPILE_CLL_SUBDIR, COMPILE_COLUMNS_SUBDIR, COMPILE_NODES_SUBDIR, IngestState, PARSE_ALIVE,
-    PARSE_COLUMNS_SUBDIR, PARSE_GENERATION, PARSE_NODES_SUBDIR, PARSE_PROJECT,
-    PARSE_RESOLVER_STATE, RUN_FRESHNESS_SUBDIR, RUN_INVOCATIONS_SUBDIR, RUN_RESULTS_SUBDIR,
+    CATALOG_COLUMNS_SUBDIR, COMPILE_CLL_SUBDIR, COMPILE_COLUMNS_SUBDIR, COMPILE_NODES_SUBDIR,
+    IngestState, PARSE_ALIVE, PARSE_COLUMNS_SUBDIR, PARSE_GENERATION, PARSE_NODES_SUBDIR,
+    PARSE_PROJECT, PARSE_RESOLVER_STATE, RUN_FRESHNESS_SUBDIR, RUN_INVOCATIONS_SUBDIR,
+    RUN_RESULTS_SUBDIR,
 };
 use crate::ingest::payload::{
     ParsedDoc, ParsedExposure, ParsedGroup, ParsedMacro, ParsedMetric, ParsedSavedQuery,
@@ -193,6 +194,14 @@ fn cold_ingest(
         true,
         alive_ids.as_ref(),
     )?;
+    total += write_catalog_columns(
+        &mut writer,
+        metadata_dir,
+        state,
+        &now,
+        true,
+        alive_ids.as_ref(),
+    )?;
     total += write_compile_cll(
         &mut writer,
         metadata_dir,
@@ -265,6 +274,14 @@ pub fn apply_delta_direct(
     total += write_parse_project(&mut writer, metadata_dir, &now)?;
     total += write_parse_generation(&mut writer, metadata_dir, &now)?;
     total += write_compile_columns(
+        &mut writer,
+        metadata_dir,
+        state,
+        &now,
+        false,
+        alive_ids.as_ref(),
+    )?;
+    total += write_catalog_columns(
         &mut writer,
         metadata_dir,
         state,
@@ -1996,6 +2013,172 @@ fn write_compile_columns(
     let last = new_epochs.last().map(|(n, _)| *n).unwrap_or(0);
     state.set_epoch(COMPILE_COLUMNS_SUBDIR, last);
     Ok(total)
+}
+
+// ---------------------------------------------------------------------------
+// catalog/columns — warehouse-fetched column types and comments
+// ---------------------------------------------------------------------------
+
+fn write_catalog_columns(
+    writer: &mut IndexWriter,
+    metadata_dir: &Path,
+    state: &mut IngestState,
+    _now: &str,
+    full: bool,
+    alive_ids: Option<&HashSet<String>>,
+) -> Result<usize, IndexError> {
+    let dir = metadata_dir.join(CATALOG_COLUMNS_SUBDIR);
+    if !dir.exists() {
+        return Ok(0);
+    }
+
+    let epochs = epoch_layers::existing_epochs(&dir);
+    let last_saved = state.last_epoch_for(CATALOG_COLUMNS_SUBDIR);
+    let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
+    let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
+    let new_epochs: Vec<_> = if need_full {
+        epochs
+    } else {
+        epochs
+            .into_iter()
+            .filter(|(n, _)| *n > last_saved)
+            .collect()
+    };
+    if new_epochs.is_empty() {
+        return Ok(0);
+    }
+
+    let out_schema = crate::parquet::schema_for("node_columns");
+    let mut seen_ids: HashSet<String> = HashSet::new();
+    let mut batches: Vec<arrow_array::RecordBatch> = Vec::new();
+
+    for (_epoch_num, path) in new_epochs.iter().rev() {
+        for batch in read_parquet_batches(path)? {
+            use arrow_array::Array;
+            let uid_col = str_col(&batch, "unique_id");
+            let mut keep = Vec::with_capacity(batch.num_rows());
+            let mut any_keep = false;
+            for i in 0..batch.num_rows() {
+                let Some(uid) = uid_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
+                    keep.push(false);
+                    continue;
+                };
+                if alive_ids.map(|ids| !ids.contains(uid)).unwrap_or(false) {
+                    keep.push(false);
+                    continue;
+                }
+                if seen_ids.contains(uid) {
+                    keep.push(false);
+                    continue;
+                }
+                seen_ids.insert(uid.to_string());
+                keep.push(true);
+                any_keep = true;
+            }
+            if !any_keep {
+                continue;
+            }
+            let mask = arrow_array::BooleanArray::from(keep);
+            if let Ok(filtered) = arrow_select::filter::filter_record_batch(&batch, &mask) {
+                batches.push(filtered);
+            }
+        }
+    }
+
+    let total: usize = batches.iter().map(|b| b.num_rows()).sum();
+    if total == 0 {
+        let last = new_epochs.last().map(|(n, _)| *n).unwrap_or(0);
+        state.set_epoch(CATALOG_COLUMNS_SUBDIR, last);
+        return Ok(0);
+    }
+
+    let projected = project_catalog_columns_batches(batches, &out_schema)?;
+
+    writer.merge_catalog_columns_into_node_columns(projected)?;
+
+    let last = new_epochs.last().map(|(n, _)| *n).unwrap_or(0);
+    state.set_epoch(CATALOG_COLUMNS_SUBDIR, last);
+    Ok(total)
+}
+
+fn project_catalog_columns_batches(
+    batches: Vec<arrow_array::RecordBatch>,
+    out_schema: &arrow_schema::SchemaRef,
+) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
+    use arrow_array::{Int64Array, new_null_array};
+    use arrow_schema::DataType;
+    use std::sync::Arc;
+
+    batches
+        .into_iter()
+        .map(|batch| {
+            let nrows = batch.num_rows();
+
+            let uid_out = col_or_null(&batch, "unique_id", &DataType::Utf8, nrows);
+            let cname_out = col_or_null(&batch, "column_name", &DataType::Utf8, nrows);
+            let catalog_type_out = col_or_null(&batch, "catalog_type", &DataType::Utf8, nrows);
+            let catalog_comment_out =
+                col_or_null(&batch, "catalog_comment", &DataType::Utf8, nrows);
+
+            // column_index: cast i32 → i64
+            let idx_out: arrow_array::ArrayRef =
+                if let Ok(ki) = batch.schema().index_of("column_index") {
+                    let col = batch.column(ki);
+                    arrow_cast::cast_with_options(
+                        col,
+                        &DataType::Int64,
+                        &arrow_cast::CastOptions::default(),
+                    )
+                    .map(|a| a as arrow_array::ArrayRef)
+                    .unwrap_or_else(|_| Arc::new(Int64Array::from(vec![None::<i64>; nrows])))
+                } else {
+                    Arc::new(Int64Array::from(vec![None::<i64>; nrows]))
+                };
+
+            // ingested_at: pass through from input
+            let ingested_at: arrow_array::ArrayRef = batch
+                .schema()
+                .index_of("ingested_at")
+                .ok()
+                .map(|i| batch.column(i).clone())
+                .unwrap_or_else(|| {
+                    use arrow_array::TimestampMicrosecondArray;
+                    let now_micros = chrono::Utc::now().timestamp_micros();
+                    Arc::new(
+                        TimestampMicrosecondArray::from(vec![now_micros; nrows])
+                            .with_timezone("UTC"),
+                    )
+                });
+
+            let null_str = new_null_array(&DataType::Utf8, nrows);
+            let null_bool = new_null_array(&DataType::Boolean, nrows);
+            let null_list = empty_list_array(nrows);
+
+            let columns: Vec<arrow_array::ArrayRef> = vec![
+                uid_out,                  // unique_id
+                cname_out,                // column_name
+                idx_out,                  // column_index
+                null_str.clone(),         // declared_type
+                null_str.clone(),         // inferred_type
+                catalog_type_out.clone(), // catalog_type
+                catalog_type_out, // data_type (initially set to catalog_type, merge refines)
+                null_str.clone(), // description
+                null_str.clone(), // label
+                null_str.clone(), // expression
+                null_bool,        // quote
+                null_str.clone(), // granularity
+                null_list,        // tags
+                null_str.clone(), // meta
+                null_str.clone(), // column_constraints
+                null_str.clone(), // tests
+                catalog_comment_out, // catalog_comment
+                ingested_at,      // ingested_at
+            ];
+
+            arrow_array::RecordBatch::try_new(out_schema.clone(), columns)
+                .map_err(|e| IndexError::Other(format!("project_catalog_columns: {e}")))
+        })
+        .collect()
 }
 
 /// Collect RecordBatches from a list of epoch (num, path) pairs.

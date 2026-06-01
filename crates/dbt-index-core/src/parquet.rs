@@ -993,6 +993,137 @@ impl IndexWriter {
         Ok(())
     }
 
+    /// Merge catalog columns into the existing `node_columns` parquet file.
+    ///
+    /// For matching `(unique_id, column_name)` pairs: sets `catalog_type`,
+    /// `catalog_comment`, and computes `data_type = coalesce(catalog_type, inferred_type)`.
+    /// New columns discovered only via catalog are appended as new rows.
+    pub fn merge_catalog_columns_into_node_columns(
+        &mut self,
+        catalog_batches: Vec<arrow_array::RecordBatch>,
+    ) -> Result<(), IndexError> {
+        use arrow_array::Array;
+        use std::collections::HashMap;
+
+        let table = "node_columns";
+        let path = self.index_dir.join(format!("dbt.{table}.parquet"));
+
+        struct CatalogInfo {
+            column_index: Option<i64>,
+            catalog_type: Option<String>,
+            catalog_comment: Option<String>,
+        }
+        let mut catalog_map: HashMap<(String, String), CatalogInfo> = HashMap::new();
+        for batch in &catalog_batches {
+            let uid_col = batch
+                .column_by_name("unique_id")
+                .and_then(|c| c.as_any().downcast_ref::<arrow_array::StringArray>());
+            let cname_col = batch
+                .column_by_name("column_name")
+                .and_then(|c| c.as_any().downcast_ref::<arrow_array::StringArray>());
+            let idx_col = batch
+                .column_by_name("column_index")
+                .and_then(|c| c.as_any().downcast_ref::<arrow_array::Int64Array>());
+            let ctype_col = batch
+                .column_by_name("catalog_type")
+                .and_then(|c| c.as_any().downcast_ref::<arrow_array::StringArray>());
+            let ccomment_col = batch
+                .column_by_name("catalog_comment")
+                .and_then(|c| c.as_any().downcast_ref::<arrow_array::StringArray>());
+            for i in 0..batch.num_rows() {
+                let Some(uid) = uid_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
+                    continue;
+                };
+                let Some(cname) = cname_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
+                    continue;
+                };
+                catalog_map.insert(
+                    (uid.to_string(), cname.to_string()),
+                    CatalogInfo {
+                        column_index: idx_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)),
+                        catalog_type: ctype_col
+                            .filter(|c| !c.is_null(i))
+                            .map(|c| c.value(i).to_string()),
+                        catalog_comment: ccomment_col
+                            .filter(|c| !c.is_null(i))
+                            .map(|c| c.value(i).to_string()),
+                    },
+                );
+            }
+        }
+
+        let mut rows: Vec<Value> = Vec::new();
+        let mut seen_keys: HashSet<(String, String)> = HashSet::new();
+
+        if let Some(existing) = read_parquet_rows(&path)? {
+            for mut map in existing {
+                let uid = map
+                    .get("unique_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let cname = map
+                    .get("column_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let key = (uid, cname);
+                if let Some(ci) = catalog_map.get(&key) {
+                    if let Some(idx) = ci.column_index {
+                        map.insert("column_index".to_string(), Value::Number(idx.into()));
+                    }
+                    if let Some(ref ct) = ci.catalog_type {
+                        map.insert("catalog_type".to_string(), Value::String(ct.clone()));
+                        // data_type = coalesce(catalog_type, inferred_type)
+                        map.insert("data_type".to_string(), Value::String(ct.clone()));
+                    } else {
+                        // No catalog_type: data_type = inferred_type (preserve existing)
+                        let inferred = map
+                            .get("inferred_type")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        if let Some(it) = inferred {
+                            map.insert("data_type".to_string(), Value::String(it));
+                        }
+                    }
+                    if let Some(ref cc) = ci.catalog_comment {
+                        map.insert("catalog_comment".to_string(), Value::String(cc.clone()));
+                    }
+                }
+                seen_keys.insert(key);
+                rows.push(Value::Object(map));
+            }
+        }
+
+        // Append catalog rows that had no existing match
+        for ((uid, cname), ci) in &catalog_map {
+            if seen_keys.contains(&(uid.clone(), cname.clone())) {
+                continue;
+            }
+            let mut obj = Map::new();
+            obj.insert("unique_id".to_string(), Value::String(uid.clone()));
+            obj.insert("column_name".to_string(), Value::String(cname.clone()));
+            if let Some(idx) = ci.column_index {
+                obj.insert("column_index".to_string(), Value::Number(idx.into()));
+            }
+            if let Some(ref ct) = ci.catalog_type {
+                obj.insert("catalog_type".to_string(), Value::String(ct.clone()));
+                obj.insert("data_type".to_string(), Value::String(ct.clone()));
+            }
+            if let Some(ref cc) = ci.catalog_comment {
+                obj.insert("catalog_comment".to_string(), Value::String(cc.clone()));
+            }
+            obj.insert("tags".to_string(), Value::Array(vec![]));
+            obj.insert("ingested_at".to_string(), Value::String(self.now.clone()));
+            rows.push(Value::Object(obj));
+        }
+
+        let schema = schema_for(table);
+        write_table(&path, schema, &rows)?;
+        self.count += 1;
+        Ok(())
+    }
+
     /// Write a `dbt_rt.*` snapshot table from typed Serialize rows.
     pub fn write_rt_items<T: serde::Serialize>(
         &mut self,

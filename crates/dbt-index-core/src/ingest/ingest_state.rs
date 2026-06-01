@@ -17,6 +17,7 @@ pub const PARSE_GENERATION: &str = "parse/generation.parquet";
 pub const COMPILE_NODES_SUBDIR: &str = "compile/nodes";
 pub const COMPILE_COLUMNS_SUBDIR: &str = "compile/columns";
 pub const COMPILE_CLL_SUBDIR: &str = "compile/column_lineage";
+pub const CATALOG_COLUMNS_SUBDIR: &str = "catalog/columns";
 pub const RUN_INVOCATIONS_SUBDIR: &str = "run/invocations";
 pub const RUN_RESULTS_SUBDIR: &str = "run/results";
 pub const RUN_FRESHNESS_SUBDIR: &str = "run/freshness";

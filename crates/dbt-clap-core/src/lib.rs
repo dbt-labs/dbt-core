@@ -336,6 +336,9 @@ got {:?}, expected an instance of {}",
         if arg.local_execution_backend != LocalExecutionBackendKind::Remote {
             arg.static_analysis = Some(StaticAnalysisKind::Strict);
         }
+        if arg.write_index && arg.static_analysis == Some(StaticAnalysisKind::Strict) {
+            arg.write_lineage = true;
+        }
         Ok(arg)
     }
 
@@ -2207,12 +2210,12 @@ impl CommonArgs {
             project_dir: self.project_dir.clone(),
             quiet: self.get_quiet(),
             send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
-            write_json: if self.write_metadata || self.write_index || self.no_write_json {
+            write_json: if (self.write_metadata && !self.write_index) || self.no_write_json {
                 false
             } else {
                 self.write_json
             },
-            write_catalog: self.write_catalog,
+            write_catalog: self.write_catalog || self.write_index,
             write_metadata: self.write_metadata || self.write_index,
             write_index: self.write_index,
             index_dir: self.index_dir.clone(),

@@ -882,7 +882,7 @@ impl<'a> AllPhasesExecutor<'a> {
     ) -> FsResult<()> {
         debug_assert!(self.arg.write_json);
 
-        if self.arg.write_catalog {
+        if self.arg.write_catalog && !self.arg.write_metadata {
             let metadata_adapter = adapter
                 .metadata_adapter()
                 .expect("Expected implements MetadataAdapter");
@@ -1178,6 +1178,44 @@ impl<'a> AllPhasesExecutor<'a> {
                             Some(&empty_lineage),
                             &empty_targets,
                             &grain_infos,
+                        );
+                    }
+                }
+            }
+
+            // Fetch catalog and write catalog/columns epoch BEFORE write_index so the
+            // index ingestion can consume it. Only for Run/Build (need executed nodes).
+            if self.arg.write_catalog
+                && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
+            {
+                let base_context = build_base_context(&resolved_state, &jinja_env);
+                let metadata_adapter = adapter
+                    .metadata_adapter()
+                    .expect("Expected implements MetadataAdapter");
+                let relations = metadata_adapter.create_relations_from_executed_nodes(
+                    &resolved_state,
+                    &run_task_results.stats.run,
+                );
+                match write_catalog_json(
+                    &adapter,
+                    &resolved_state,
+                    relations,
+                    &jinja_env,
+                    compilation.root_project_name(),
+                    &base_context,
+                    self.arg.as_ref(),
+                    20,
+                )
+                .await
+                {
+                    Ok(catalog) => {
+                        write_catalog_columns_epoch(&catalog, self.arg.as_ref());
+                    }
+                    Err(e) => {
+                        emit_warn_log_message(
+                            ErrorCode::Generic,
+                            format!("catalog: {e}"),
+                            self.arg.io.status_reporter.as_ref(),
                         );
                     }
                 }
@@ -1774,4 +1812,36 @@ pub async fn write_catalog_json(
     )?;
     emit_info_log_message("Successfully wrote catalog.json");
     Ok(catalog)
+}
+
+fn write_catalog_columns_epoch(catalog: &DbtCatalog, arg: &EvalArgs) {
+    use chrono::Utc;
+    use dbt_metadata_parquet::catalog_columns::CatalogColumnRow;
+
+    let ingested_at = Utc::now().timestamp_micros();
+    let mut rows = Vec::new();
+
+    for (unique_id, table) in catalog.nodes.iter().chain(catalog.sources.iter()) {
+        for (idx, (_col_name, col)) in table.columns.iter().enumerate() {
+            rows.push(CatalogColumnRow {
+                unique_id: unique_id.clone(),
+                column_name: col.name.clone(),
+                column_index: idx as i32,
+                catalog_type: Some(col.data_type.clone()),
+                catalog_comment: col.comment.clone(),
+                ingested_at,
+            });
+        }
+    }
+
+    let dir = arg.metadata_dir().join("catalog").join("columns");
+    if let Err(e) =
+        dbt_metadata_parquet::catalog_columns::write_catalog_columns(&dir, rows, None, None, None)
+    {
+        emit_warn_log_message(
+            ErrorCode::Generic,
+            format!("metadata: catalog_columns: {e}"),
+            arg.io.status_reporter.as_ref(),
+        );
+    }
 }
