@@ -194,6 +194,7 @@ pub struct ManifestSeed {
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     // Test Specific Attributes
+    #[serde(default)]
     pub config: ManifestSeedConfig,
     pub root_path: Option<PathBuf>,
 
@@ -256,6 +257,7 @@ pub struct ManifestUnitTest {
 
     pub __base_attr__: ManifestNodeBaseAttributes,
     /// Unit Test Specific Attributes
+    #[serde(default)]
     pub config: UnitTestConfig,
     pub model: String,
     pub given: Vec<Given>,
@@ -335,6 +337,7 @@ pub struct ManifestDataTest {
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     /// Test Specific Attributes
+    #[serde(default)]
     pub config: DataTestConfig,
     pub column_name: Option<String>,
     pub attached_node: Option<String>,
@@ -576,6 +579,7 @@ pub struct ManifestSnapshot {
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     /// Snapshot Specific Attributes
+    #[serde(default)]
     pub config: ManifestSnapshotConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
@@ -643,6 +647,7 @@ pub struct ManifestSource {
         deserialize_with = "deserialize_dbt_columns"
     )]
     pub columns: Vec<DbtColumnRef>,
+    #[serde(default)]
     pub config: SourceConfig,
     pub quoting: Option<DbtQuoting>,
     pub source_description: String,
@@ -778,6 +783,7 @@ pub struct ManifestModel {
     // Model Specific Attributes
     pub access: Option<Access>,
     pub group: Option<String>,
+    #[serde(default)]
     pub config: ManifestModelConfig,
     pub version: Option<StringOrInteger>,
     pub latest_version: Option<StringOrInteger>,
@@ -1268,6 +1274,7 @@ pub struct ManifestAnalysis {
     #[serde(default)]
     pub quoting_ignore_case: bool,
     pub persist_docs: Option<PersistDocsConfig>,
+    #[serde(default)]
     pub config: AnalysesConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
@@ -1387,6 +1394,7 @@ pub struct ManifestFunction {
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     // Function Specific Attributes
+    #[serde(default)]
     pub config: FunctionConfig,
     pub access: Access,
     pub group: Option<String>,
@@ -1406,6 +1414,7 @@ struct ManifestFunctionCompat {
 
     pub __base_attr__: ManifestNodeBaseAttributes,
 
+    #[serde(default)]
     pub config: FunctionConfig,
     pub access: Option<Access>,
     pub group: Option<String>,
@@ -1524,6 +1533,7 @@ pub struct ManifestExposure {
     #[serde(rename = "type")]
     pub type_: ExposureType,
     pub url: Option<String>,
+    #[serde(default)]
     pub config: ExposureConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
@@ -1598,6 +1608,7 @@ pub struct ManifestMetric {
     pub time_granularity: Option<Granularity>,
     pub group: Option<String>,
 
+    #[serde(default)]
     pub config: ManifestMetricConfig,
 
     #[serde(default)]
@@ -1654,6 +1665,17 @@ pub struct ManifestMetricConfig {
     pub group: Option<String>,
 }
 
+impl Default for ManifestMetricConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            meta: None,
+            tags: vec![],
+            group: None,
+        }
+    }
+}
+
 impl From<MetricConfig> for ManifestMetricConfig {
     fn from(config: MetricConfig) -> Self {
         Self {
@@ -1696,6 +1718,16 @@ pub struct ManifestSemanticModelConfig {
     pub group: Option<String>,
 }
 
+impl Default for ManifestSemanticModelConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            meta: None,
+            group: None,
+        }
+    }
+}
+
 impl From<SemanticModelConfig> for ManifestSemanticModelConfig {
     fn from(config: SemanticModelConfig) -> Self {
         Self {
@@ -1735,6 +1767,7 @@ pub struct ManifestSemanticModel {
     pub primary_entity: Option<String>,
     pub group: Option<String>,
 
+    #[serde(default)]
     pub config: ManifestSemanticModelConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,

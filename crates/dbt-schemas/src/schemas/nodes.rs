@@ -4502,7 +4502,7 @@ pub struct NodeBaseAttributes {
     #[serde(default)]
     pub compute: Option<ComputeArg>,
     pub enabled: bool,
-    #[serde(skip_serializing, default = "default_false")]
+    #[serde(skip_serializing, default = "crate::schemas::common::default_false")]
     pub extended_model: bool,
 
     // Documentation persistence configuration
@@ -5593,10 +5593,6 @@ pub struct RedshiftAttr {
     pub dist: Option<String>,
     pub sort: Option<StringOrArrayOfStrings>,
     pub sort_type: Option<String>,
-}
-
-fn default_false() -> bool {
-    false
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

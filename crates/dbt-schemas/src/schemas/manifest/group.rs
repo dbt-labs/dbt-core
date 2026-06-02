@@ -20,6 +20,7 @@ pub struct ManifestGroup {
     pub original_file_path: PathBuf,
     pub unique_id: String,
     pub owner: DbtOwner,
+    #[serde(default)]
     pub config: GroupConfig,
 }
 

@@ -1297,8 +1297,12 @@ pub struct Dimension {
     pub config: Option<SemanticLayerElementConfig>,
 }
 
-fn default_false() -> bool {
+pub fn default_false() -> bool {
     false
+}
+
+pub fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, DbtSchema, PartialEq, Eq, Default)]

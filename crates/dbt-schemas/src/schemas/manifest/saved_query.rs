@@ -52,6 +52,7 @@ pub struct SavedQueryParams {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct SavedQueryExport {
     pub name: String,
+    #[serde(default)]
     pub config: SavedQueryExportConfig,
     pub unrendered_config: BTreeMap<String, YmlValue>,
 }
