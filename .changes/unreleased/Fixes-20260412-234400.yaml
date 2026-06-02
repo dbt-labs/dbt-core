@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add warning when load_result() returns None during parse phase (execute=False) to guide users to wrap code in if-execute block
+time: 2026-04-12T23:44:00.000000-04:00
+custom:
+    Author: psaikaushik
+    Issue: "11070"
