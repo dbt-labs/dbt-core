@@ -110,10 +110,14 @@ enum SnowflakeAuthIR<'a> {
         client_secret: &'a str,
         refresh_token: &'a str,
     },
+    // Despite the name, this is an OAuth access token passthrough — not a self-signed
+    // keypair JWT. The profile field is called `jwt_token` (method: snowflake_oauth_jwt)
+    // or `token` (authenticator: jwt), but the value must be a valid OAuth access token
+    // obtained from Snowflake's managed OAuth or an external IDP token exchange.
     NativeOauthJWT {
         user: Option<&'a str>,
         password: Option<&'a str>,
-        jwt_token: &'a str,
+        access_token: &'a str,
     },
     Sso {
         user: &'a str,
@@ -142,9 +146,8 @@ impl<'a> SnowflakeAuthIR<'a> {
             Self::NativeOauthJWT {
                 user,
                 password,
-                jwt_token,
+                access_token,
             } => {
-                // TODO: Verify whether Snowflake JWT needs stubbed user/password when absent.
                 if let Some(user) = user {
                     builder.with_username(user);
                 }
@@ -152,7 +155,7 @@ impl<'a> SnowflakeAuthIR<'a> {
                     builder.with_password(password);
                 }
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
-                builder.with_named_option(snowflake::AUTH_TOKEN, jwt_token)?;
+                builder.with_named_option(snowflake::AUTH_TOKEN, access_token)?;
                 builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
             }
             Self::Sso { user, password } => {
@@ -345,11 +348,11 @@ fn parse_auth_inner<'a>(
                 }
             }
             "snowflake_oauth_jwt" => {
-                if let Some(jwt_token) = config.get_str("jwt_token") {
+                if let Some(access_token) = config.get_str("jwt_token") {
                     Ok(SnowflakeAuthIR::NativeOauthJWT {
                         user: config.get_str("user"),
                         password: config.get_str("password"),
-                        jwt_token,
+                        access_token,
                     })
                 } else {
                     Err(AuthError::config(
@@ -543,10 +546,10 @@ fn parse_auth_inner<'a>(
                         } else if value == "jwt" {
                             config
                                 .get_str("token")
-                                .map(|jwt_token| SnowflakeAuthIR::NativeOauthJWT {
+                                .map(|access_token| SnowflakeAuthIR::NativeOauthJWT {
                                     user: config.get_str("user"),
                                     password: config.get_str("password"),
-                                    jwt_token,
+                                    access_token,
                                 })
                                 .ok_or_else(|| {
                                     AuthError::config("Legacy 'authenticator: jwt' requires token")

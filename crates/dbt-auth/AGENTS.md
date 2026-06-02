@@ -142,6 +142,7 @@ Before proposing or finalizing code, clearly report:
 
 If any of the above occurs, the agent must explicitly state:
 
-**“Human verification is required before committing this change.”**
+**”Human verification is required before committing this change.”**
 
-Do not present such changes as harmless refactors.
+Do not present such changes as harmless refactors. Prompt the user to run the
+live smoke tests in `crates/dbt-auth-tests` — see its README for setup.
