@@ -290,7 +290,7 @@ async fn do_execute_fs(
     } else if let Command::Core(Login(login_args)) = &cli.command {
         return match login_args.subcommand {
             Some(LoginSubcommand::Status) => execute_login_status().await,
-            None => execute_login(Arc::clone(&feature_stack.license_fetcher), token).await,
+            None => execute_login(Arc::clone(&feature_stack.login_hooks), token).await,
         };
     } else if let Command::Core(Docs(docs_args)) = cli.command {
         return match docs_args.subcommand {

@@ -84,7 +84,7 @@ const CLI_HELP_TEMPLATE: &str = "\
 {subcommands}{after-help}";
 
 pub trait CliParserFactory: Send + Sync {
-    fn create(&self) -> CliParser;
+    fn create(&self, command_name: &'static str) -> CliParser;
 }
 
 /// An equivalent of [clap::Parser] that produces a [Cli] instead of parsing into itself.

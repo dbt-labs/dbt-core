@@ -4,7 +4,7 @@ version.workspace = true
 homepage.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "dbt login command: traits, no-op implementations, and command execution logic"
+description = "dbt login command extensible via hooks"
 license.workspace = true
 keywords.workspace = true
 edition.workspace = true
@@ -13,15 +13,16 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-async-trait = { workspace = true }
-base64 = { workspace = true }
-console = { workspace = true }
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-platform-auth = { workspace = true }
 dbt-run-cache = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-yaml = { workspace = true }
+
+async-trait = { workspace = true }
+base64 = { workspace = true }
+console = { workspace = true }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
 open = { workspace = true }

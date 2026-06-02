@@ -25,7 +25,6 @@ windows = { version = "0.61", features = [
 dbt-adapter = { workspace = true }
 dbt-adapter-core = { workspace = true }
 dbt-clap-core = { workspace = true }
-dbt-cli-lib = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }

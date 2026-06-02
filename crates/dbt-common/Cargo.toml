@@ -48,13 +48,11 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 
-
 arc-swap = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 
+normalize-path = { workspace = true }
 pathdiff = { workspace = true }
-
-normalize-path = { version = "0.2.1" }
 
 dbt-tui-progress = { workspace = true }
 rust-embed = { workspace = true }

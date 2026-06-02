@@ -20,7 +20,6 @@ pub trait SidecarClientFactory: Send + Sync {
 }
 
 /// Sidecar feature slot on [`FeatureStack`](super::feature_stack::FeatureStack).
-#[derive(Default)]
 pub struct SidecarFeature {
     pub factory: Option<Arc<dyn SidecarClientFactory>>,
 }

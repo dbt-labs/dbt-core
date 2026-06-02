@@ -27,6 +27,7 @@ use crate::feature_stack::FeatureStack;
 use crate::metricflow::MetricflowClient;
 
 pub struct CliFeature {
+    pub command_name: &'static str,
     pub hooks: Box<dyn CliExtensionHooks>,
     pub cli_parser_factory: Arc<dyn CliParserFactory>,
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
@@ -40,47 +41,55 @@ pub struct CliFeature {
 }
 
 pub struct CliFeatureBuilder {
-    pub hooks: Box<dyn CliExtensionHooks>,
-    pub cli_parser_factory: Arc<dyn CliParserFactory>,
+    command_name: &'static str,
+    hooks: Option<Box<dyn CliExtensionHooks>>,
+    cli_parser_factory: Option<Arc<dyn CliParserFactory>>,
 }
 
 impl CliFeatureBuilder {
-    pub fn with_hooks(hooks: Box<dyn CliExtensionHooks>) -> Self {
+    pub fn new(command_name: &'static str) -> Self {
         Self {
-            hooks,
-            cli_parser_factory: Arc::new(DefaultCliParserFactory {
-                command_name: "dbt-fusion",
-            }),
+            command_name,
+            hooks: None,
+            cli_parser_factory: None,
         }
     }
 
+    pub fn hooks(mut self, hooks: Box<dyn CliExtensionHooks>) -> Self {
+        self.hooks = Some(hooks);
+        self
+    }
+
     pub fn cli_parser_factory(mut self, factory: Arc<dyn CliParserFactory>) -> Self {
-        self.cli_parser_factory = factory;
+        self.cli_parser_factory = Some(factory);
         self
     }
 
     pub fn build(self) -> CliFeature {
+        let hooks = self
+            .hooks
+            .unwrap_or_else(|| Box::new(DefaultCliExtensionHooks));
+
+        let cli_parser_factory = self
+            .cli_parser_factory
+            .unwrap_or_else(|| Arc::new(DefaultCliParserFactory));
+
         CliFeature {
-            hooks: self.hooks,
-            cli_parser_factory: self.cli_parser_factory,
+            command_name: self.command_name,
+            hooks,
+            cli_parser_factory,
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         }
     }
 }
 
-struct DefaultCliParserFactory {
-    command_name: &'static str,
-}
+pub struct DefaultCliParserFactory;
 
 impl CliParserFactory for DefaultCliParserFactory {
-    fn create(&self) -> CliParser {
-        CliParser::new(self.command_name, Box::new(NoopExtensionCommandParser))
+    fn create(&self, command_name: &'static str) -> CliParser {
+        CliParser::new(command_name, Box::new(NoopExtensionCommandParser))
     }
-}
-
-pub fn default_cli_parser_factory(command_name: &'static str) -> Box<dyn CliParserFactory> {
-    Box::new(DefaultCliParserFactory { command_name })
 }
 
 struct NoopExtensionCommandParser;

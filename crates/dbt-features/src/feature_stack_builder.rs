@@ -2,7 +2,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use dbt_adapter::adapter::DefaultAdapterFactory;
 use dbt_adapter::sql_types::DefaultTypeOpsFactory;
 use dbt_common::FsError;
@@ -12,7 +11,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
     DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
 };
-use dbt_login::{LicenseFetcher, NoOpLicenseFetcher};
+use dbt_login::DefaultLoginHooks;
+use dbt_parser::resolver_hooks::NoOpResolverHooks;
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::context::ExtendedCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
@@ -23,9 +23,9 @@ use dbt_tasks_sa::task_runner_hooks::DefaultTaskRunnerHooksFactory;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
-use crate::cli::{CliFeature, CliFeatureBuilder, DefaultCliExtensionHooks};
+use crate::cli::CliFeatureBuilder;
 use crate::feature_stack::{FeatureStack, InstrumentationFeature};
-use crate::index::{IndexFeature, IndexHooks};
+use crate::index::{IndexFeature, NoOpIndexHooks};
 use crate::loader::LoaderFeature;
 use crate::metricflow::MetricflowFeature;
 use crate::resolver::ResolverFeature;
@@ -64,27 +64,42 @@ impl TaskRunnerCtxFactory for DefaultTaskRunnerCtxFactory {
     }
 }
 
-struct NoOpIndexHooks;
-
-#[async_trait]
-impl IndexHooks for NoOpIndexHooks {}
-
 pub struct FeatureStackBuilder {
     send_anonymous_usage_stats: bool,
     tracing: TracingFeature,
-    adapter: AdapterFeature,
-    antlr_parser: AntlrParserFeature,
-    sidecar: SidecarFeature,
-    cli: CliFeature,
-    task_runner: TaskRunnerFeature,
-    resolver: ResolverFeature,
-    loader: LoaderFeature,
-    license_fetcher: Arc<dyn LicenseFetcher>,
-    dbt_distribution: &'static str,
 }
 
 impl FeatureStackBuilder {
     pub fn new(tracing: TracingFeature) -> Self {
+        Self {
+            send_anonymous_usage_stats: false,
+            tracing,
+        }
+    }
+
+    pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
+        self.send_anonymous_usage_stats = enabled;
+        self
+    }
+
+    pub fn build(self) -> Box<FeatureStack> {
+        let dbt_distribution = "dbt-oss";
+        let version_check_enabled = false;
+
+        let instrumentation = InstrumentationFeature {
+            event_emitter: vortex_events::fusion_sa_event_emitter(
+                self.send_anonymous_usage_stats,
+                dbt_distribution,
+            ),
+        };
+
+        let cli = CliFeatureBuilder::new("dbt-core").build();
+
+        let index = IndexFeature {
+            hooks: Box::new(NoOpIndexHooks),
+            providers_factory: crate::index::default_providers_factory,
+        };
+
         let adapter = {
             let type_ops_factory = Arc::new(DefaultTypeOpsFactory);
             let adapter_factory = Arc::new(DefaultAdapterFactory);
@@ -94,6 +109,11 @@ impl FeatureStackBuilder {
                 adapter_factory,
             }
         };
+
+        let antlr_parser = AntlrParserFeature::default();
+        let sidecar = SidecarFeature { factory: None };
+        let metricflow = MetricflowFeature::default();
+
         let task_runner = {
             let rendering_listener_factory: Arc<dyn RenderingEventListenerFactory> =
                 Arc::new(DefaultRenderingEventListenerFactory::default());
@@ -111,95 +131,30 @@ impl FeatureStackBuilder {
                 hooks_factory: Arc::new(DefaultTaskRunnerHooksFactory),
             }
         };
-        let cli = {
-            let hooks = Box::new(DefaultCliExtensionHooks);
-            CliFeatureBuilder::with_hooks(hooks).build()
+
+        let resolver = {
+            let hooks = Arc::new(NoOpResolverHooks);
+            ResolverFeature { hooks }
         };
-        Self {
-            send_anonymous_usage_stats: false,
-            tracing,
-            adapter,
-            antlr_parser: Default::default(),
-            sidecar: SidecarFeature::default(),
-            cli,
-            task_runner,
-            resolver: ResolverFeature::default(),
-            loader: LoaderFeature::default(),
-            license_fetcher: Arc::new(NoOpLicenseFetcher),
-            dbt_distribution: "unknown-oss",
-        }
-    }
 
-    pub fn license_fetcher(mut self, fetcher: Arc<dyn LicenseFetcher>) -> Self {
-        self.license_fetcher = fetcher;
-        self
-    }
+        let loader = LoaderFeature::default();
 
-    pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
-        self.send_anonymous_usage_stats = enabled;
-        self
-    }
+        let login_hooks = Arc::new(DefaultLoginHooks);
 
-    pub fn dbt_distribution(mut self, dbt_distribution: &'static str) -> Self {
-        self.dbt_distribution = dbt_distribution;
-        self
-    }
-
-    pub fn adapter(mut self, feature: AdapterFeature) -> Self {
-        self.adapter = feature;
-        self
-    }
-
-    pub fn antlr_parser(mut self, feature: AntlrParserFeature) -> Self {
-        self.antlr_parser = feature;
-        self
-    }
-
-    pub fn cli(mut self, feature: CliFeature) -> Self {
-        self.cli = feature;
-        self
-    }
-
-    pub fn task_runner(mut self, feature: TaskRunnerFeature) -> Self {
-        self.task_runner = feature;
-        self
-    }
-
-    pub fn resolver(mut self, feature: ResolverFeature) -> Self {
-        self.resolver = feature;
-        self
-    }
-
-    pub fn loader(mut self, feature: LoaderFeature) -> Self {
-        self.loader = feature;
-        self
-    }
-
-    pub fn build(self) -> Box<FeatureStack> {
-        let instrumentation = InstrumentationFeature {
-            event_emitter: vortex_events::fusion_sa_event_emitter(
-                self.send_anonymous_usage_stats,
-                self.dbt_distribution,
-            ),
-        };
-        let index = IndexFeature {
-            hooks: Box::new(NoOpIndexHooks),
-            providers_factory: crate::index::default_providers_factory,
-        };
         let stack = FeatureStack {
             instrumentation,
-            cli: self.cli,
+            cli,
             index,
             tracing: self.tracing,
-            adapter: self.adapter,
-            antlr_parser: self.antlr_parser,
-            sidecar: self.sidecar,
-            metricflow: MetricflowFeature::default(),
-            task_runner: self.task_runner,
-            resolver: self.resolver,
-            loader: self.loader,
-            license_fetcher: self.license_fetcher,
-            version_check_enabled: false,
+            adapter,
+            antlr_parser,
+            sidecar,
+            metricflow,
+            task_runner,
+            resolver,
+            loader,
+            login_hooks,
+            version_check_enabled,
         };
         Box::new(stack)
     }

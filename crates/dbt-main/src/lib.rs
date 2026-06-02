@@ -1,3 +1,6 @@
+/// Support for graceful shutdown on Ctrl+C or fail-fast trigger.
+pub mod ctrl_c;
+
 // Re-export the main library functionality
 pub mod compilation;
 pub mod dbt_lib;

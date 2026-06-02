@@ -35,6 +35,11 @@ pub trait IndexHooks: Send + Sync {
     }
 }
 
+pub struct NoOpIndexHooks;
+
+#[async_trait]
+impl IndexHooks for NoOpIndexHooks {}
+
 pub struct IndexFeature {
     pub hooks: Box<dyn IndexHooks>,
     pub providers_factory: fn(Arc<dyn Backend>) -> Providers,

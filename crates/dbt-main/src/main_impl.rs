@@ -1,8 +1,8 @@
+use crate::ctrl_c::run_future_with_ctrlc_support;
 use clap::error::ErrorKind;
 use dbt_clap_core::Cli;
 use dbt_clap_core::CliParser;
 use dbt_clap_core::commands::CoreCommand;
-use dbt_cli_lib::ctrl_c::run_future_with_ctrlc_support;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationReport;
 use dbt_common::io_args::SystemArgs;

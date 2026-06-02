@@ -15,13 +15,10 @@ use dbt_run_cache::service_config::{
     DEFAULT_OAUTH_AUTH_URL, DEFAULT_OAUTH_CLIENT_ID, DEFAULT_OAUTH_TOKEN_URL,
 };
 
-use crate::LicenseFetcher;
+use crate::LoginHooks;
 use crate::state_guidance::{run_state_guidance, run_state_guidance_after_state_login};
 
-pub async fn execute_login(
-    fetcher: Arc<dyn LicenseFetcher>,
-    token: &CancellationToken,
-) -> FsResult<()> {
+pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken) -> FsResult<()> {
     // Each opener captures its URL via a oneshot and returns immediately.
     // A separate task joins both URLs, combines them into a single browser open.
     let (state_url_tx, state_url_rx) = tokio::sync::oneshot::channel::<String>();
@@ -172,21 +169,14 @@ pub async fn execute_login(
                 }
             };
 
-            // Fire off license fetch in background; join it after state guidance so
-            // the process doesn't exit before it completes.
-            let license_handle = {
-                let f = Arc::clone(&fetcher);
-                tokio::spawn(async move {
-                    if let Err(e) = f.fetch_and_cache_license().await {
-                        tracing::warn!("license fetch failed: {e}");
-                    }
-                })
-            };
+            // Fire-off post-login hooks in parallel to the rest of the flow here.
+            let post_login_fut = hooks.did_login();
 
             let http = reqwest::Client::new();
             run_state_guidance(&cred, &http).await?;
 
-            let _ = license_handle.await;
+            // TODO: don't ignore errors here
+            let _ = post_login_fut.await;
 
             println!("Congratulations! You are now signed in.");
         }

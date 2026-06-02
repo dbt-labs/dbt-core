@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use dbt_features::{
-    cli::default_cli_parser_factory, feature_stack_builder::FeatureStackBuilder,
-    tracing::TracingFeature,
-};
+use dbt_clap_core::CliParserFactory as _;
+use dbt_features::cli::DefaultCliParserFactory;
+use dbt_features::feature_stack_builder::FeatureStackBuilder;
+use dbt_features::tracing::TracingFeature;
+use dbt_test_utils::task::utils::exec_fs;
 use dbt_test_utils::task::{
     CommandFn, ExecuteAndCompare, G_DBT_TEST_UTILS_FEATURE_STACK, TaskSeq, fs_cmd_vec,
-    utils::exec_fs,
 };
 
 fn make_fs_command_fn() -> Arc<CommandFn> {
@@ -15,13 +15,12 @@ fn make_fs_command_fn() -> Arc<CommandFn> {
             let tracing = TracingFeature::default().with_config_provider(tracing_config);
             FeatureStackBuilder::new(tracing)
                 .send_anonymous_usage_stats(false)
-                .dbt_distribution("dbt-oss")
                 .build()
                 .into()
         })
     });
 
-    let parser = default_cli_parser_factory("dbt-core").create();
+    let parser = DefaultCliParserFactory.create("dbt-core");
     Arc::new(
         move |cmd_vec, project_dir, target_dir, stdout, stderr, tracing_handle| {
             exec_fs(

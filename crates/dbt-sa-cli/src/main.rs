@@ -1,6 +1,6 @@
-use dbt_clap_core::from_main;
+use dbt_clap_core::{CliParserFactory as _, from_main};
 use dbt_common::tracing::{FsTraceConfig, init_tracing};
-use dbt_features::cli::default_cli_parser_factory;
+use dbt_features::cli::DefaultCliParserFactory;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::tracing::TracingFeature;
 use dbt_lib::print_trimmed_error;
@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 fn main() -> ExitCode {
-    let cli_parser = default_cli_parser_factory("dbt-core").create();
+    let cli_parser = DefaultCliParserFactory.create("dbt-core");
     let cli = dbt_lib::prepare_cli_or_exit(&cli_parser);
 
     let mut arg = from_main(&cli);
@@ -44,7 +44,6 @@ fn main() -> ExitCode {
     let feature_stack: Arc<FeatureStack> =
         dbt_features::feature_stack_builder::FeatureStackBuilder::new(tracing)
             .send_anonymous_usage_stats(arg.io.send_anonymous_usage_stats)
-            .dbt_distribution("dbt-oss")
             .build()
             .into();
 

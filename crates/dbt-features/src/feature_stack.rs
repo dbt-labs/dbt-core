@@ -2,7 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use dbt_common::DiscreteEventEmitter;
-use dbt_login::LicenseFetcher;
+use dbt_login::LoginHooks;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
@@ -45,9 +45,9 @@ pub struct InstrumentationFeature {
 /// [1] https://martinfowler.com/articles/injection.html
 pub struct FeatureStack {
     pub instrumentation: InstrumentationFeature,
+    pub tracing: TracingFeature,
     pub cli: CliFeature,
     pub index: IndexFeature,
-    pub tracing: TracingFeature,
     pub adapter: AdapterFeature,
     pub antlr_parser: AntlrParserFeature,
     pub sidecar: SidecarFeature,
@@ -55,7 +55,7 @@ pub struct FeatureStack {
     pub task_runner: TaskRunnerFeature,
     pub resolver: ResolverFeature,
     pub loader: LoaderFeature,
-    pub license_fetcher: Arc<dyn LicenseFetcher>,
+    pub login_hooks: Arc<dyn LoginHooks>,
     pub version_check_enabled: bool,
     // TODO: add more features here
 }

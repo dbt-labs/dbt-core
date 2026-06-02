@@ -8,7 +8,6 @@ members = [
   "crates/dbt-auth",
   "crates/dbt-base",
   "crates/dbt-clap-core",
-  "crates/dbt-cli-lib",
   "crates/dbt-docs-core",
   "crates/dbt-docs-server",
   "crates/dbt-adapter-core",
@@ -214,7 +213,6 @@ dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
 dbt-base = { path = "crates/dbt-base" }
 dbt-clap-core = { path = "crates/dbt-clap-core" }
-dbt-cli-lib = { path = "crates/dbt-cli-lib" }
 dbt-cloud-api = { path = "crates/dbt-cloud-api" }
 dbt-cloud-config = { path = "crates/dbt-cloud-config" }
 dbt-common = { path = "crates/dbt-common" }
@@ -404,6 +402,7 @@ reqwest = { version = "0.12.9", default-features = false, features = [
   "charset",
   "gzip",
   "http2",
+  "json",
   "rustls-tls",
   "macos-system-configuration",
 ] }
@@ -490,7 +489,7 @@ tokio = { version = "1.41.1", features = [
   "time",
 ] }
 tokio-stream = "0.1.17"
-tokio-util = { version = "0.7", features = ["io"] }
+tokio-util = { version = "0.7", features = ["io", "compat"] }
 
 # atomic
 arc-swap = { version = "1.7.1" }
@@ -530,6 +529,8 @@ libc = "0.2"
 linked-hash-map = "0.5.6"
 linked_hash_set = "0.1.4"
 md5 = "0.7.0"
+normalize-path = "0.2.1"
+num-integer = "0.1.46"
 percent-encoding = "2.3.1"
 petgraph = "0.8.1"
 pkcs8 = { version = "0.10", features = ["pkcs5", "3des"] }
@@ -543,6 +544,7 @@ similar = "2.6"
 siphasher = { version = "1.0.1" }
 url = "2.5.4"
 ustr = "1.0.0"
+weak-table = "0.3.2"
 zstd-safe = "7"
 
 # testing
@@ -627,6 +629,7 @@ unicode-segmentation = "1.12"
 
 # axum dependency
 axum = "0.8.5"
+tower = "0.5.2"
 tower-http = { version = "0.6", features = ["trace"] }
 
 # system browser opener
