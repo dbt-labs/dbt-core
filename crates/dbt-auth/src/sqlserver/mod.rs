@@ -9,24 +9,61 @@ use dbt_xdbc::{
     database::{self, Builder as DatabaseBuilder},
 };
 
-const DEFAULT_AUTH: &str = "ServicePrincipal";
+const DEFAULT_AUTH: &str = "ActiveDirectoryServicePrincipal";
 const DEFAULT_PORT: &str = "1433";
 
+/// Parsed Microsoft Entra authentication settings for SQL Server / Fabric.
+///
+/// Each variant maps profile fields onto [`go-mssqldb`](https://github.com/microsoft/go-mssqldb)
+/// connection URI query parameters consumed by the MSSQL ADBC driver. See upstream
+/// [dbt-fabric `fabric_credentials.py`](https://github.com/microsoft/dbt-fabric/blob/main/dbt/adapters/fabric/fabric_credentials.py)
+/// for supported `authentication` profile values.
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
 enum SQLServerAuthIR<'a> {
-    // TODO: we have a few different auth methods to support.
-    // For simplicity, we can start with just ServicePrincipal, which is the default in the core adapter.
+    /// Unattended service-principal auth (default for Fabric).
+    ///
+    /// Profile: `authentication: ActiveDirectoryServicePrincipal` (alias: `ServicePrincipal`),
+    /// `client_id`, `client_secret`, optional `tenant_id`.
+    ///
+    /// URI: `fedauth=ActiveDirectoryServicePrincipal`, `user id={client_id}[@{tenant_id}]`,
+    /// `password={client_secret}`.
     ActiveDirectoryServicePrincipal {
+        /// When set, appended to `client_id` as `{client_id}@{tenant_id}` in `user id`.
         tenant_id: Option<&'a str>,
+        /// Entra application (client) ID.
         client_id: &'a str,
+        /// Entra application client secret.
         client_secret: &'a str,
     },
+
+    /// user/password auth via the resource-owner password credentials flow.
+    ///
+    /// Profile: `authentication: ActiveDirectoryPassword`, `UID`, `PWD`, and `client_id`.
+    ///
+    /// URI: `fedauth=ActiveDirectoryPassword`, `user id={UID}`, `password={PWD}`,
+    /// `applicationclientid={client_id}`.
+    ///
+    /// Note: `client_id` here is the Entra app used to obtain the user token
+    /// (`applicationclientid` in go-mssqldb), not the service principal identity.
+    /// The Entra user must also be provisioned in the target warehouse
+    /// (`CREATE USER ... FROM EXTERNAL PROVIDER`) and hold a Fabric workspace role.
     ActiveDirectoryPassword {
+        /// Entra app registration allowed to request tokens for SQL (`applicationclientid`).
         client_id: &'a str,
+        /// Entra user principal name (`UID` in profile).
         user: &'a str,
+        /// Entra user password (`PWD` in profile).
         password: &'a str,
     },
+
+    /// Auth via [`EnvironmentCredential`](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#EnvironmentCredential).
+    ///
+    /// Profile: `authentication: environment`. No secrets in the profile; credentials come
+    /// from standard `AZURE_*` environment variables (for example `AZURE_CLIENT_ID`,
+    /// `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`).
+    ///
+    /// URI: `fedauth=ActiveDirectoryEnvironment`.
     ActiveDirectoryEnvironment,
 }
 
@@ -81,9 +118,15 @@ impl<'a> SQLServerAuthIR<'a> {
 }
 
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SQLServerAuthIR<'a>, AuthError> {
-    let authentication = config.get_str("authentication").unwrap_or(DEFAULT_AUTH);
+    let mut authentication = config.get_str("authentication").unwrap_or(DEFAULT_AUTH);
+
+    // https://github.com/microsoft/dbt-fabric/blob/0de219082282724a789b0d1b18509d39899da8e1/dbt/adapters/fabric/fabric_credentials.py#L78-L79
+    if authentication.eq_ignore_ascii_case("serviceprincipal") {
+        authentication = "ActiveDirectoryServicePrincipal";
+    }
+
     match authentication {
-        "ServicePrincipal" => Ok(SQLServerAuthIR::ActiveDirectoryServicePrincipal {
+        "ActiveDirectoryServicePrincipal" => Ok(SQLServerAuthIR::ActiveDirectoryServicePrincipal {
             tenant_id: config.get_str("tenant_id"),
             client_id: config.require_str("client_id")?,
             client_secret: config.require_str("client_secret")?,
@@ -98,7 +141,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SQLServerAuthIR<'a>, Auth
             unimplemented!("authentication method {} not implemented", authentication)
         }
         _ => Err(AuthError::config(format!(
-            "Invalid authentication method: {authentication} must be one of: [ServicePrincipal, ActiveDirectoryPassword, environment]"
+            "Invalid authentication method: {authentication} must be one of: [ActiveDirectoryServicePrincipal, ActiveDirectoryPassword, environment]"
         ))),
     }
 }
@@ -126,12 +169,13 @@ fn apply_connection_args(
             .finish();
     }
 
-    // Other parameters, i.e.
+    // TODO: other parameters, i.e.
     // - connection timeout
     // - dial timeout
     // - encrypt
     // - app name
     // - log
+    // - retries
     //
     // See: https://github.com/microsoft/go-mssqldb/tree/main?tab=readme-ov-file#less-common-parameters
     Ok(builder)
@@ -172,7 +216,7 @@ mod tests {
     #[test]
     fn test_service_principal_with_tenant_id() {
         let config = make_config([
-            ("authentication", "ServicePrincipal"),
+            ("authentication", "serviceprincipal"),
             ("host", "myserver.database.windows.net"),
             ("database", "mydb"),
             ("tenant_id", "my-tenant"),
@@ -193,7 +237,7 @@ mod tests {
     #[test]
     fn test_service_principal_without_tenant_id() {
         let config = make_config([
-            ("authentication", "ServicePrincipal"),
+            ("authentication", "ActiveDirectoryServicePrincipal"),
             ("host", "myserver.database.windows.net"),
             ("database", "mydb"),
             ("client_id", "my-client"),
