@@ -46,6 +46,7 @@ fn middleware_modifies_drops_and_updates_metrics() {
                     flags: TelemetryOutputFlags::ALL,
                     has_sensitive: false,
                     was_scrubbed: true,
+                    ..Default::default()
                 }
                 .into();
                 span.span_name = "Mock Dyn Span Event: mutated-child".to_string();

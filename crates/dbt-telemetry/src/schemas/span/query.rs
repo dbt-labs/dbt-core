@@ -6,8 +6,9 @@ use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
 use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, SpanStatus, TelemetryContext,
-    TelemetryEventRecType, TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+    ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent, SpanStatus,
+    TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
+    serialize::arrow::ArrowAttributes,
 };
 
 impl ProtoTelemetryEvent for QueryExecuted {
@@ -45,6 +46,10 @@ impl ProtoTelemetryEvent for QueryExecuted {
     }
 
     fn with_context(&mut self, context: &TelemetryContext) {
+        let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
+            return;
+        };
+
         // TODO: as of tody we do not inject unique_id from tracing context into
         // query executed event - we assume that all adapter code knows better when
         // to set it or not. However, this may be changed as an laternative for QueryCtx

@@ -3,7 +3,10 @@ use super::super::{
     layer::{TelemetryConsumer, TelemetryMiddleware},
     shared_writer::SharedWriter,
 };
-use dbt_telemetry::{AnyTelemetryEvent, TelemetryEventRecType, TelemetryOutputFlags};
+use dbt_telemetry::{
+    AnyTelemetryEvent, RecordCodeLocation, TelemetryContext, TelemetryEventRecType,
+    TelemetryOutputFlags,
+};
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
@@ -15,6 +18,12 @@ where
     serializer.serialize_u32(flags.bits())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TestTelemetryContext {
+    pub workflow_name: String,
+    pub attempt: u32,
+}
+
 // Mock dynamic span event with instance-based export flags
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct MockDynSpanEvent {
@@ -23,6 +32,7 @@ pub struct MockDynSpanEvent {
     pub flags: TelemetryOutputFlags,
     pub has_sensitive: bool,
     pub was_scrubbed: bool,
+    pub context: Option<TestTelemetryContext>,
 }
 
 impl AnyTelemetryEvent for MockDynSpanEvent {
@@ -49,6 +59,10 @@ impl AnyTelemetryEvent for MockDynSpanEvent {
             .is_some_and(|rhs| rhs == self)
     }
 
+    fn context(&self) -> Option<TelemetryContext> {
+        self.context.clone().map(TelemetryContext::new)
+    }
+
     fn has_sensitive_data(&self) -> bool {
         self.has_sensitive
     }
@@ -59,6 +73,7 @@ impl AnyTelemetryEvent for MockDynSpanEvent {
             flags: self.flags,
             has_sensitive: self.has_sensitive,
             was_scrubbed: true,
+            context: self.context.clone(),
         }))
     }
 
@@ -85,8 +100,12 @@ pub struct MockDynLogEvent {
     pub code: i32,
     #[serde(serialize_with = "serialize_flags")]
     pub flags: TelemetryOutputFlags,
+    pub file: Option<String>,
+    pub line: Option<u32>,
     pub has_sensitive: bool,
     pub was_scrubbed: bool,
+    pub workflow_name: Option<String>,
+    pub attempt: Option<u32>,
 }
 
 impl AnyTelemetryEvent for MockDynLogEvent {
@@ -113,6 +132,38 @@ impl AnyTelemetryEvent for MockDynLogEvent {
             .is_some_and(|rhs| rhs == self)
     }
 
+    fn code_location(&self) -> Option<RecordCodeLocation> {
+        Some(RecordCodeLocation {
+            file: self.file.clone(),
+            line: self.line,
+            ..Default::default()
+        })
+    }
+
+    fn with_code_location(&mut self, location: RecordCodeLocation) {
+        if self.file.is_none() {
+            self.file = location.file;
+        }
+
+        if self.line.is_none() {
+            self.line = location.line;
+        }
+    }
+
+    fn with_context(&mut self, context: &TelemetryContext) {
+        let Some(context) = context.downcast_ref::<TestTelemetryContext>() else {
+            return;
+        };
+
+        if self.workflow_name.is_none() {
+            self.workflow_name = Some(context.workflow_name.clone());
+        }
+
+        if self.attempt.is_none() {
+            self.attempt = Some(context.attempt);
+        }
+    }
+
     fn has_sensitive_data(&self) -> bool {
         self.has_sensitive
     }
@@ -121,8 +172,12 @@ impl AnyTelemetryEvent for MockDynLogEvent {
         Some(Box::new(Self {
             code: self.code,
             flags: self.flags,
+            file: self.file.clone(),
+            line: self.line,
             has_sensitive: self.has_sensitive,
             was_scrubbed: true,
+            workflow_name: self.workflow_name.clone(),
+            attempt: self.attempt,
         }))
     }
 

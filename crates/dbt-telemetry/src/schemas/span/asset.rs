@@ -1,6 +1,6 @@
 use crate::proto::v1::public::events::fusion::phase::ExecutionPhase;
 use crate::{
-    TelemetryOutputFlags,
+    DbtTelemetryContext, TelemetryOutputFlags,
     attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
@@ -22,6 +22,10 @@ impl ProtoTelemetryEvent for AssetParsed {
     }
 
     fn with_context(&mut self, context: &crate::TelemetryContext) {
+        let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
+            return;
+        };
+
         // Inject phase from context if not set
         if let Some(ctx_phase) = context.phase
             && self.phase() == ExecutionPhase::Unspecified

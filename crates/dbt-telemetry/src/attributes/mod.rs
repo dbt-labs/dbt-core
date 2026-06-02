@@ -10,7 +10,7 @@ mod registry;
 mod traits;
 mod wrapper;
 
-pub use context::TelemetryContext;
+pub use context::{DbtTelemetryContext, TelemetryContext};
 pub use export::TelemetryOutputFlags;
 pub use registry::TelemetryEventTypeRegistry;
 pub use traits::{

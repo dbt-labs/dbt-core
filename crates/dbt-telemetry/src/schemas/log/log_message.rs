@@ -3,8 +3,9 @@ pub use crate::proto::v1::public::events::fusion::log::{
     LogMessage, ProgressMessage, UserLogMessage,
 };
 use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext, TelemetryEventRecType,
-    TelemetryOutputFlags, schemas::RecordCodeLocation, serialize::arrow::ArrowAttributes,
+    ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent, TelemetryContext,
+    TelemetryEventRecType, TelemetryOutputFlags, schemas::RecordCodeLocation,
+    serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 use serde_with::skip_serializing_none;
@@ -43,6 +44,10 @@ impl ProtoTelemetryEvent for LogMessage {
     }
 
     fn with_context(&mut self, context: &TelemetryContext) {
+        let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
+            return;
+        };
+
         // Inject unique_id if not set and provided by context
         if self.unique_id.is_none() {
             self.unique_id = context.unique_id.clone();
@@ -178,6 +183,10 @@ impl ProtoTelemetryEvent for UserLogMessage {
     }
 
     fn with_context(&mut self, context: &TelemetryContext) {
+        let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
+            return;
+        };
+
         // Inject unique_id if not set and provided by context
         if self.unique_id.is_none() {
             self.unique_id = context.unique_id.clone();
@@ -300,6 +309,10 @@ impl ProtoTelemetryEvent for ProgressMessage {
     }
 
     fn with_context(&mut self, context: &TelemetryContext) {
+        let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
+            return;
+        };
+
         // Inject unique_id if not set and provided by context
         if self.unique_id.is_none() {
             self.unique_id = context.unique_id.clone();

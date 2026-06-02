@@ -1,8 +1,8 @@
 use crate::{
     SpanStatus, TelemetryOutputFlags,
     attributes::{
-        ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
-        TelemetryEventRecType,
+        ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent,
+        TelemetryContext, TelemetryEventRecType,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -67,10 +67,13 @@ impl ProtoTelemetryEvent for NodeEvaluated {
     }
 
     fn context(&self) -> Option<TelemetryContext> {
-        Some(TelemetryContext {
-            phase: Some(self.phase()),
-            unique_id: Some(self.unique_id.clone()),
-        })
+        Some(
+            DbtTelemetryContext {
+                phase: Some(self.phase()),
+                unique_id: Some(self.unique_id.clone()),
+            }
+            .into(),
+        )
     }
 }
 
@@ -296,11 +299,14 @@ impl ProtoTelemetryEvent for NodeProcessed {
     }
 
     fn context(&self) -> Option<TelemetryContext> {
-        Some(TelemetryContext {
-            // This span cuts across multiple phases, so we don't set a single phase here
-            phase: None,
-            unique_id: Some(self.unique_id.clone()),
-        })
+        Some(
+            DbtTelemetryContext {
+                // This span cuts across multiple phases, so we don't set a single phase here
+                phase: None,
+                unique_id: Some(self.unique_id.clone()),
+            }
+            .into(),
+        )
     }
 }
 

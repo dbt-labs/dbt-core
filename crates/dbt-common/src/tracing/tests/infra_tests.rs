@@ -1,9 +1,8 @@
 use dbt_telemetry::{
-    ExecutionPhase, Invocation, LogMessage, LogRecordInfo, NodeEvaluated, RecordCodeLocation,
-    SeverityNumber, SpanEndInfo, SpanStartInfo, TelemetryAttributes, TelemetryOutputFlags, Unknown,
+    Invocation, LogMessage, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo,
+    TelemetryAttributes, TelemetryOutputFlags, Unknown,
 };
-use std::panic::Location;
-use std::sync::Arc;
+use std::{panic::Location, sync::Arc};
 
 use crate::tracing::{
     data_provider::DataProvider,
@@ -14,7 +13,7 @@ use crate::tracing::{
 
 use super::{
     super::{init::create_tracing_subcriber_with_layer, layer::TelemetryConsumer},
-    mocks::{MockDynSpanEvent, TestLayer},
+    mocks::{MockDynLogEvent, MockDynSpanEvent, TestLayer, TestTelemetryContext},
 };
 
 #[test]
@@ -37,33 +36,18 @@ fn test_emit_event_and_apply_context() {
         ),
     );
 
-    let mut test_attrs: TelemetryAttributes = LogMessage {
-        code: Some(42),
-        code_name: None,
-        dbt_core_event_code: Some("test_code".to_string()),
-        original_severity_number: SeverityNumber::Warn as i32,
-        original_severity_text: "WARN".to_string(),
-        package_name: None,
-        // The rest will be auto injected
-        // This is important. Our infra will auto-populate the location from the callsite,
-        // as well as context (phase & unique_id)
-        // and we want to test that it works correctly, capturing real callsite
-        unique_id: None,
-        phase: None,
-        file: None,
-        line: None,
-        relative_path: None,
-        code_line: None,
-        code_column: None,
-        expanded_relative_path: None,
-        expanded_line: None,
-        expanded_column: None,
+    let mut test_attrs: TelemetryAttributes = MockDynLogEvent {
+        code: 42,
+        flags: TelemetryOutputFlags::ALL,
+        ..Default::default()
     }
     .into();
 
-    let mut test_location = Location::caller();
-    let expected_node_unique_id = "model.test.my_model";
-    let expected_node_phase = ExecutionPhase::Render;
+    let expected_context = TestTelemetryContext {
+        workflow_name: "mock-workflow".to_string(),
+        attempt: 7,
+    };
+    let mut mock_log_location = Location::caller();
 
     tracing::subscriber::with_default(subscriber, || {
         let _rs = create_root_info_span(MockDynSpanEvent {
@@ -73,14 +57,14 @@ fn test_emit_event_and_apply_context() {
         })
         .entered();
 
-        let node_span = create_info_span(NodeEvaluated {
-            unique_id: expected_node_unique_id.into(),
-            phase: expected_node_phase as i32,
+        let child_span = create_info_span(MockDynSpanEvent {
+            name: "context-provider".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            context: Some(expected_context.clone()),
             ..Default::default()
         });
-        node_span.in_scope(|| {
-            // Emit the event & save the location (almost, one line off)
-            test_location = Location::caller();
+        child_span.in_scope(|| {
+            mock_log_location = Location::caller();
             emit_info_event(test_attrs.clone(), Some("Test info event"));
         });
     });
@@ -95,12 +79,20 @@ fn test_emit_event_and_apply_context() {
     };
 
     // Verify captured data
-    assert_eq!(span_ends.len(), 2, "Expected 2 span end record");
+    assert_eq!(span_ends.len(), 2, "Expected 2 span end records");
 
     let (span_id, span_name) = (span_ends[0].span_id, span_ends[0].span_name.clone());
 
     assert_eq!(log_records.len(), 1, "Expected 1 log record");
-    let log_record = &log_records[0];
+    let log_record = log_records
+        .iter()
+        .find(|record| {
+            record
+                .attributes
+                .downcast_ref::<MockDynLogEvent>()
+                .is_some()
+        })
+        .expect("expected mock log record");
 
     assert_eq!(log_record.trace_id, trace_id);
     assert_eq!(log_record.span_id, Some(span_id));
@@ -109,19 +101,12 @@ fn test_emit_event_and_apply_context() {
     assert_eq!(log_record.severity_text, "INFO".to_string());
     assert_eq!(log_record.body, "Test info event".to_string());
 
-    // Now, the actual attributes that we should get back must include the location
-    let expected_location = RecordCodeLocation {
-        file: Some(test_location.file().to_string()),
-        line: Some(test_location.line() + 1),
-        module_path: Some(std::module_path!().to_string()),
-        target: Some(std::module_path!().to_string()),
-    };
-    test_attrs.inner_mut().with_code_location(expected_location);
-
-    // Also expect unique_id (and phase) to be injected from the NodeEvaluated context
-    if let Some(lm) = test_attrs.downcast_mut::<LogMessage>() {
-        lm.unique_id = Some(expected_node_unique_id.into());
-        lm.phase = Some(expected_node_phase as i32);
+    // The log event applies a test-owned context by downcasting the boxed wrapper.
+    if let Some(log) = test_attrs.downcast_mut::<MockDynLogEvent>() {
+        log.file = Some(mock_log_location.file().to_string());
+        log.line = Some(mock_log_location.line() + 1);
+        log.workflow_name = Some(expected_context.workflow_name);
+        log.attempt = Some(expected_context.attempt);
     }
 
     assert_eq!(log_record.attributes, test_attrs);

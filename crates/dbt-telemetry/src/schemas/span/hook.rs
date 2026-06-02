@@ -1,8 +1,8 @@
 use crate::{
     ExecutionPhase, SpanStatus, TelemetryOutputFlags,
     attributes::{
-        ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
-        TelemetryEventRecType,
+        ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent,
+        TelemetryContext, TelemetryEventRecType,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -33,13 +33,20 @@ impl ProtoTelemetryEvent for HookProcessed {
     }
 
     fn context(&self) -> Option<TelemetryContext> {
-        Some(TelemetryContext {
-            phase: Some(self.phase()),
-            unique_id: Some(self.unique_id.clone()),
-        })
+        Some(
+            DbtTelemetryContext {
+                phase: Some(self.phase()),
+                unique_id: Some(self.unique_id.clone()),
+            }
+            .into(),
+        )
     }
 
     fn with_context(&mut self, context: &TelemetryContext) {
+        let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
+            return;
+        };
+
         // Inject phase from context if not set
         if let Some(ctx_phase) = context.phase
             && self.phase() == ExecutionPhase::Unspecified

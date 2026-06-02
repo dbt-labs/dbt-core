@@ -1,8 +1,8 @@
 use crate::{
     SpanStatus, StatusCode, TelemetryOutputFlags,
     attributes::{
-        ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
-        TelemetryEventRecType,
+        ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent,
+        TelemetryContext, TelemetryEventRecType,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -52,10 +52,13 @@ impl ProtoTelemetryEvent for PhaseExecuted {
     }
 
     fn context(&self) -> Option<TelemetryContext> {
-        Some(TelemetryContext {
-            phase: Some(self.phase()),
-            unique_id: None,
-        })
+        Some(
+            DbtTelemetryContext {
+                phase: Some(self.phase()),
+                unique_id: None,
+            }
+            .into(),
+        )
     }
 }
 

@@ -1,7 +1,7 @@
 pub use crate::proto::v1::public::events::fusion::log::StateModifiedDiff;
 use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext, TelemetryEventRecType,
-    TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+    ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent, TelemetryContext,
+    TelemetryEventRecType, TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 use serde_with::skip_serializing_none;
@@ -23,6 +23,10 @@ impl ProtoTelemetryEvent for StateModifiedDiff {
     }
 
     fn with_context(&mut self, context: &TelemetryContext) {
+        let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
+            return;
+        };
+
         if self.unique_id.is_none() {
             self.unique_id = context.unique_id.clone();
         }
