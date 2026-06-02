@@ -462,7 +462,7 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
             listener.warn("Expected a string argument for try_or_compiler_error function");
             return Ok(Type::Any { hard: false });
         }
-        if let Type::Object(_loc) = &args[1] {
+        if let Type::Object(_callable) = &args[1] {
             // It is not possible to resolve the module here.
         } else if !&args[1].is_none() {
             listener.warn(&format!(
@@ -488,7 +488,6 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
     fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
             ArgSpec::new("message_if_exception", false),
-            ArgSpec::new("loc", false),
             ArgSpec::new("func", false),
             ArgSpec::new("args", false), // TODO: arg number depends on the function
         ]

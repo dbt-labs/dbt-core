@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use minijinja::Value;
 
+pub mod bound_method;
 pub mod date;
 pub mod datetime;
 pub mod strptime;

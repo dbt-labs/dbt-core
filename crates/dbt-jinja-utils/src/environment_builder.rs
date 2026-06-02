@@ -847,6 +847,34 @@ all okay!");
             rv.trim()
         );
     }
+
+    // from https://github.com/dbt-labs/scratch/tree/main/repros/fusion-789
+    #[test]
+    fn test_try_or_compiler_error_with_bound_method() {
+        let env = JinjaEnvBuilder::new().build();
+        let rv = env
+            .render_str(
+                "{%- set res = try_or_compiler_error('bad date', modules.datetime.datetime.strptime, '20240504', '%Y%m%d') -%}{{ res.strftime('%Y-%m-%d') }}",
+                context! {},
+                &[],
+            )
+            .unwrap();
+        assert_eq!(rv.trim(), "2024-05-04");
+    }
+
+    #[test]
+    fn test_try_or_compiler_error_raises_on_failure() {
+        let env = JinjaEnvBuilder::new().build();
+        let err = env
+            .render_str(
+                "{%- set res = try_or_compiler_error('partition date mismatch', modules.datetime.datetime.strptime, 'not-a-date', '%Y-%m-%d') -%}{{ res }}",
+                context! {},
+                &[],
+            )
+            .unwrap_err();
+        assert_contains!(format!("{err}"), "partition date mismatch");
+    }
+
     #[test]
     fn test_root_package_in_non_internal_packages() {
         // Create macro units with macros only in other packages, not in root

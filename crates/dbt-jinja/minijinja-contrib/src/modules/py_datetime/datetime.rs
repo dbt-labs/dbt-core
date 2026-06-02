@@ -10,6 +10,7 @@ use chrono_tz::Tz;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::{arg_utils::ArgParser, value::Object, Error, ErrorKind, Value};
 
+use crate::modules::py_datetime::bound_method::BoundMethod;
 use crate::modules::py_datetime::date::PyDate;
 use crate::modules::py_datetime::strptime;
 use crate::modules::py_datetime::time::PyTime;
@@ -573,6 +574,19 @@ impl Object for PyDateTimeClass {
                 ErrorKind::UnknownMethod,
                 format!("datetime has no method named '{method}'"),
             )),
+        }
+    }
+
+    // Expose class methods as attributes so they can be referenced as
+    // callables (e.g. `modules.datetime.datetime.strptime`).
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        let name = key.as_str()?;
+        match name {
+            "now" | "utcnow" | "today" | "fromtimestamp" | "combine" | "strptime"
+            | "fromisoformat" | "fromisocalendar" | "strftime" => Some(Value::from_object(
+                BoundMethod::new(Value::from_object(PyDateTimeClass), name),
+            )),
+            _ => None,
         }
     }
 }
