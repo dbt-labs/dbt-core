@@ -236,6 +236,7 @@ impl ConfigProcessor {
                 // For passwords, we don't show existing values as defaults for security
                 let value = Password::new()
                     .with_prompt(&field.prompt)
+                    .allow_empty_password(!field.required)
                     .interact()
                     .map_err(|e| {
                         fs_err!(

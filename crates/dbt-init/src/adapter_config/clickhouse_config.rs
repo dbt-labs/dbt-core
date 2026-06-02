@@ -32,48 +32,40 @@ impl InteractiveSetup for ClickHouseDbConfig {
                 required: false,
             },
             ConfigField {
-                name: "database".to_string(),
+                name: "schema".to_string(),
+                field_type: FieldType::Input {
+                    default: Some("default".to_string()),
+                },
+                condition: FieldCondition::Always,
+                prompt: "Schema (ClickHouse database for this project)".to_string(),
+                required: true,
+            },
+            ConfigField {
+                name: "port".to_string(),
                 field_type: FieldType::Input { default: None },
                 condition: FieldCondition::Always,
-                prompt: "Database name".to_string(),
+                prompt: "Port (leave blank for default: 8123 HTTP / 8443 HTTPS)".to_string(),
                 required: false,
             },
             ConfigField {
-                name: "schema".to_string(),
-                field_type: FieldType::Input { default: None },
-                condition: FieldCondition::Always,
-                prompt: "Schema (dbt schema)".to_string(),
+                name: "secure".to_string(),
+                field_type: FieldType::Confirm { default: true },
+                condition: FieldCondition::IfFieldEquals {
+                    field_name: "port".to_string(),
+                    value: FieldValue::String("8443".to_string()),
+                },
+                prompt: "Enable HTTPS (secure)? (port 8443 is the ClickHouse HTTPS default)"
+                    .to_string(),
                 required: true,
             },
             ConfigField {
                 name: "secure".to_string(),
                 field_type: FieldType::Confirm { default: false },
-                condition: FieldCondition::Always,
+                condition: FieldCondition::IfFieldNotEquals {
+                    field_name: "port".to_string(),
+                    value: FieldValue::String("8443".to_string()),
+                },
                 prompt: "Enable HTTPS (secure)?".to_string(),
-                required: true,
-            },
-            ConfigField {
-                name: "port".to_string(),
-                field_type: FieldType::Input {
-                    default: Some("8123".to_string()),
-                },
-                condition: FieldCondition::IfFieldEquals {
-                    field_name: "secure".to_string(),
-                    value: FieldValue::Boolean(false),
-                },
-                prompt: "Port".to_string(),
-                required: true,
-            },
-            ConfigField {
-                name: "port".to_string(),
-                field_type: FieldType::Input {
-                    default: Some("8443".to_string()),
-                },
-                condition: FieldCondition::IfFieldEquals {
-                    field_name: "secure".to_string(),
-                    value: FieldValue::Boolean(true),
-                },
-                prompt: "Port".to_string(),
                 required: true,
             },
         ]
@@ -105,11 +97,6 @@ impl InteractiveSetup for ClickHouseDbConfig {
             "password" => {
                 if let FieldValue::String(val) = value {
                     self.password = Some(val);
-                }
-            }
-            "database" => {
-                if let FieldValue::String(val) = value {
-                    self.database = Some(val);
                 }
             }
             "schema" => {
@@ -145,10 +132,6 @@ impl InteractiveSetup for ClickHouseDbConfig {
                 .password
                 .as_ref()
                 .map(|v| FieldValue::String(v.clone())),
-            "database" => self
-                .database
-                .as_ref()
-                .map(|v| FieldValue::String(v.clone())),
             "schema" => self.schema.as_ref().map(|v| FieldValue::String(v.clone())),
             "secure" => self.secure.map(FieldValue::Boolean),
             _ => None,
@@ -161,7 +144,6 @@ impl InteractiveSetup for ClickHouseDbConfig {
             "port" => self.port.is_some(),
             "user" => self.user.is_some(),
             "password" => self.password.is_some(),
-            "database" => self.database.is_some(),
             "schema" => self.schema.is_some(),
             "secure" => self.secure.is_some(),
             _ => false,
