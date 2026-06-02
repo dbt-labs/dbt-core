@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix ADO 3-part cross-project resolution to use correct project name
+time: 2026-06-02T01:16:23.000000-04:00
+custom:
+    author: kuishou68
+    issue: "12989"
+    project: dbt-core
