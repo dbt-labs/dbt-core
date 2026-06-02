@@ -316,6 +316,21 @@ fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
                 );
             }
 
+            // Serialize the nested exclude (if any). dbt-core represents `exclude` as a
+            // list of selector definitions. Our runtime stores them as a single
+            // SelectExpression (multiple excludes are combined into an Or), so wrap the
+            // serialized inner expression in a single-element sequence to match the
+            // dbt-core manifest shape. Without this the exclude is dropped from the manifest.
+            if let Some(exclude) = &criteria.exclude {
+                map.insert(
+                    YmlValue::String("exclude".to_string(), Default::default()),
+                    YmlValue::Sequence(
+                        vec![select_expression_to_yaml(exclude)],
+                        Default::default(),
+                    ),
+                );
+            }
+
             YmlValue::Mapping(map, Default::default())
         }
         SelectExpression::Or(expressions) => {
@@ -357,4 +372,86 @@ fn validate_default_selectors(resolved_selectors: &HashMap<String, SelectorEntry
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_common::node_selector::{MethodName, SelectionCriteria};
+
+    fn atom(method: MethodName, value: &str) -> SelectExpression {
+        SelectExpression::Atom(SelectionCriteria::new(
+            method,
+            vec![],
+            value.to_string(),
+            false,
+            None,
+            None,
+            Some(IndirectSelection::default()),
+            None,
+        ))
+    }
+
+    /// Regression test for FUSION-319963455669 Bug 2: a method atom with a
+    /// nested exclude must serialize the `exclude` block (as a list) into the
+    /// manifest. Previously the exclude was silently dropped.
+    #[test]
+    fn test_serialize_atom_with_nested_exclude() {
+        let expr = SelectExpression::Atom(SelectionCriteria::new(
+            MethodName::Fqn,
+            vec![],
+            "*".to_string(),
+            false,
+            None,
+            None,
+            Some(IndirectSelection::default()),
+            Some(Box::new(SelectExpression::Or(vec![
+                atom(MethodName::Tag, "usage"),
+                atom(MethodName::Tag, "feed_service_now"),
+            ]))),
+        ));
+
+        let yaml = select_expression_to_yaml(&expr);
+
+        assert_eq!(yaml.get("method").and_then(|v| v.as_str()), Some("fqn"));
+        assert_eq!(yaml.get("value").and_then(|v| v.as_str()), Some("*"));
+
+        // `exclude` must be a single-element list wrapping the union.
+        let exclude = yaml
+            .get("exclude")
+            .and_then(|v| v.as_sequence())
+            .expect("expected `exclude` sequence in serialized atom");
+        assert_eq!(exclude.len(), 1);
+
+        let union = exclude[0]
+            .get("union")
+            .and_then(|v| v.as_sequence())
+            .expect("expected `union` sequence inside exclude");
+        let mut tags: Vec<String> = union
+            .iter()
+            .map(|item| {
+                assert_eq!(item.get("method").and_then(|v| v.as_str()), Some("tag"));
+                item.get("value")
+                    .and_then(|v| v.as_str())
+                    .unwrap()
+                    .to_string()
+            })
+            .collect();
+        tags.sort();
+        assert_eq!(tags, vec!["feed_service_now", "usage"]);
+    }
+
+    /// An atom without a nested exclude must not emit an `exclude` key (no
+    /// spurious empty `exclude: []`).
+    #[test]
+    fn test_serialize_atom_without_exclude() {
+        let expr = atom(MethodName::Fqn, "*");
+        let yaml = select_expression_to_yaml(&expr);
+        assert_eq!(yaml.get("method").and_then(|v| v.as_str()), Some("fqn"));
+        assert_eq!(yaml.get("value").and_then(|v| v.as_str()), Some("*"));
+        assert!(
+            yaml.get("exclude").is_none(),
+            "did not expect an `exclude` key when criteria.exclude is None"
+        );
+    }
 }

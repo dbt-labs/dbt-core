@@ -195,7 +195,11 @@ impl<'a> SelectorParser<'a> {
                     indirect_selection: Some(IndirectSelection::default()),
                     exclude: None,
                 });
-                self.atom_to_select_expression(wrapper)
+                // Route through parse_atom (not atom_to_select_expression directly) so the
+                // `method == "selector"` inheritance path is applied to the shorthand form
+                // (`selector: <name>`) just like the longhand (`method: selector`). For all
+                // other methods this is equivalent to the previous direct call.
+                self.parse_atom(&wrapper)
             }
 
             AtomExpr::Exclude(_) => {
@@ -1164,6 +1168,167 @@ mod tests {
             panic!("Expected Atom expression");
         }
 
+        Ok(())
+    }
+
+    #[test]
+    /// Test that the `selector: <name>` shorthand (a single-key MethodKey atom)
+    /// resolves via selector inheritance, identically to the longhand
+    /// `method: selector` / `value: <name>` form.
+    ///
+    /// Regression test for FUSION-319963455669 Bug 1: the shorthand was
+    /// previously parsed as `fqn:<name>` (matching nothing) and silently ignored.
+    fn test_selector_shorthand_inheritance() -> FsResult<()> {
+        let mut defs = BTreeMap::new();
+        defs.insert(
+            "usage_build".to_string(),
+            SelectorDefinition {
+                name: "usage_build".to_string(),
+                description: None,
+                default: None.into(),
+                definition: SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(
+                    MethodAtomExpr {
+                        method: "tag".to_string(),
+                        value: SelectorValue::from("usage"),
+                        childrens_parents: SelectorDefaultSpec::from(false),
+                        parents: SelectorDefaultSpec::from(false),
+                        children: SelectorDefaultSpec::from(false),
+                        parents_depth: None,
+                        children_depth: None,
+                        indirect_selection: None,
+                        exclude: None,
+                    },
+                ))),
+            },
+        );
+
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        // Shorthand form: `selector: usage_build`
+        let mut method_value = BTreeMap::new();
+        method_value.insert("selector".to_string(), SelectorValue::from("usage_build"));
+        let shorthand = parser.parse_atom(&AtomExpr::MethodKey(method_value))?;
+
+        // Longhand form: `method: selector` / `value: usage_build`
+        let longhand = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
+            method: "selector".to_string(),
+            value: SelectorValue::from("usage_build"),
+            childrens_parents: SelectorDefaultSpec::from(false),
+            parents: SelectorDefaultSpec::from(false),
+            children: SelectorDefaultSpec::from(false),
+            parents_depth: None,
+            children_depth: None,
+            indirect_selection: None,
+            exclude: None,
+        }))?;
+
+        // Both must resolve to the referenced selector (tag:usage), not fqn:usage_build.
+        assert_eq!(shorthand, longhand);
+        if let SelectExpression::Atom(criteria) = shorthand {
+            assert_eq!(criteria.method, MethodName::Tag);
+            assert_eq!(criteria.value, "usage");
+        } else {
+            panic!("Expected Atom expression from selector shorthand inheritance");
+        }
+        Ok(())
+    }
+
+    #[test]
+    /// Test the exact FUSION-319963455669 shape: a `union` whose items are
+    /// `selector: <name>` shorthands, wrapped in a top-level `exclude`.
+    /// The excluded expression must contain the resolved tag atoms, not stray
+    /// fqn atoms (which would silently exclude nothing).
+    fn test_selector_shorthand_in_union_exclude() -> FsResult<()> {
+        let mut defs = BTreeMap::new();
+        for (sel_name, tag) in [
+            ("usage_build", "usage"),
+            ("feed_service_now", "feed_service_now"),
+        ] {
+            defs.insert(
+                sel_name.to_string(),
+                SelectorDefinition {
+                    name: sel_name.to_string(),
+                    description: None,
+                    default: None.into(),
+                    definition: SelectorDefinitionValue::Full(SelectorExpr::Atom(
+                        AtomExpr::Method(MethodAtomExpr {
+                            method: "tag".to_string(),
+                            value: SelectorValue::from(tag),
+                            childrens_parents: SelectorDefaultSpec::from(false),
+                            parents: SelectorDefaultSpec::from(false),
+                            children: SelectorDefaultSpec::from(false),
+                            parents_depth: None,
+                            children_depth: None,
+                            indirect_selection: None,
+                            exclude: None,
+                        }),
+                    )),
+                },
+            );
+        }
+
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        // Build the shorthand atoms `selector: usage_build` and `selector: feed_service_now`.
+        let shorthand_atom = |name: &str| {
+            let mut m = BTreeMap::new();
+            m.insert("selector".to_string(), SelectorValue::from(name));
+            SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::MethodKey(m)))
+        };
+
+        // definition:
+        //   method: fqn
+        //   value: "*"
+        //   exclude:
+        //     - union:
+        //         - selector: usage_build
+        //         - selector: feed_service_now
+        let def =
+            SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(MethodAtomExpr {
+                method: "fqn".to_string(),
+                value: SelectorValue::from("*"),
+                childrens_parents: SelectorDefaultSpec::from(false),
+                parents: SelectorDefaultSpec::from(false),
+                children: SelectorDefaultSpec::from(false),
+                parents_depth: None,
+                children_depth: None,
+                indirect_selection: None,
+                exclude: Some(vec![SelectorDefinitionValue::Full(
+                    SelectorExpr::Composite(CompositeExpr::union(vec![
+                        shorthand_atom("usage_build"),
+                        shorthand_atom("feed_service_now"),
+                    ])),
+                )]),
+            })));
+
+        let result = parser.parse_definition(&def)?;
+
+        // Result: Atom(fqn:* with nested exclude Or([tag:usage, tag:feed_service_now]))
+        if let SelectExpression::Atom(criteria) = result {
+            assert_eq!(criteria.method, MethodName::Fqn);
+            assert_eq!(criteria.value, "*");
+            let exclude = criteria.exclude.expect("expected nested exclude");
+            if let SelectExpression::Or(exprs) = *exclude {
+                let mut tags: Vec<String> = exprs
+                    .iter()
+                    .map(|e| match e {
+                        SelectExpression::Atom(c) => {
+                            assert_eq!(c.method, MethodName::Tag, "expected resolved tag atom");
+                            c.value.clone()
+                        }
+                        _ => panic!("Expected Atom inside exclude union"),
+                    })
+                    .collect();
+                tags.sort();
+                assert_eq!(tags, vec!["feed_service_now", "usage"]);
+            } else {
+                panic!("Expected Or inside nested exclude");
+            }
+        } else {
+            panic!("Expected Atom expression");
+        }
         Ok(())
     }
 
