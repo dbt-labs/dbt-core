@@ -430,8 +430,10 @@ impl Task for RunTask {
                 .await;
             }
 
+            let mut span_rows_affected: Option<i64> = None;
             find_and_update_span_attrs(|attrs: &mut NodeEvaluated| {
                 attrs.sao_enabled = Some(cache_enabled);
+                span_rows_affected = attrs.rows_affected.map(|n| n as i64);
             });
 
             // Get status and insert stats
@@ -453,17 +455,16 @@ impl Task for RunTask {
                     // Insert stats for success case if not already inserted by inner implementation
                     // This ensures stats are present even if inner code didn't insert them
                     if !ctx.inner.run_stats.contains_key(&unique_id) {
-                        ctx.inner.run_stats.insert(
+                        let mut stat = Stat::new(
                             unique_id.clone(),
-                            Stat::new(
-                                unique_id.clone(),
-                                start_time.into(),
-                                None,
-                                node_status.clone(),
-                                None,
-                                ctx.thread_id,
-                            ),
+                            start_time.into(),
+                            None,
+                            node_status.clone(),
+                            None,
+                            ctx.thread_id,
                         );
+                        stat.rows_affected = span_rows_affected;
+                        ctx.inner.run_stats.insert(unique_id.clone(), stat);
                     }
 
                     node_status

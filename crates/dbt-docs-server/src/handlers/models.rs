@@ -55,13 +55,28 @@ fn modeling_layer_case_sql() -> String {
     sql
 }
 
-/// SQL for the run-results CTE (executed_at per model).
-const RUN_RESULTS_CTE: &str = "\
-WITH last_run AS (\
+const RR_CTE_BODY: &str = "last_run AS (\
   SELECT unique_id, MAX(created_at) AS executed_at \
   FROM dbt_rt.run_results \
-  GROUP BY unique_id\
-)\n";
+  GROUP BY unique_id)";
+
+const CAT_CTES_BODY: &str = "cat_tables AS (\
+  SELECT unique_id FROM dbt.catalog_tables\
+), row_count_cte AS (\
+  SELECT unique_id, TRY_CAST(stat_value AS BIGINT) AS row_count_stat \
+  FROM dbt.catalog_stats WHERE stat_id IN ('row_count', 'num_rows')\
+), bytes_cte AS (\
+  SELECT unique_id, TRY_CAST(stat_value AS BIGINT) AS bytes_stat \
+  FROM dbt.catalog_stats WHERE stat_id IN ('bytes', 'num_bytes')\
+), last_modified_cte AS (\
+  SELECT unique_id, stat_value AS last_modified_stat \
+  FROM dbt.catalog_stats WHERE stat_id = 'last_modified'\
+)";
+
+const ROW_COUNT_CTE_BODY: &str = "row_count_cte AS (\
+  SELECT unique_id, TRY_CAST(stat_value AS BIGINT) AS row_count_stat \
+  FROM dbt.catalog_stats WHERE stat_id IN ('row_count', 'num_rows')\
+)";
 
 const OWNERS_FACET_SQL: &str = "\
 SELECT DISTINCT name AS owner \
@@ -92,6 +107,25 @@ const SORTABLE_COLUMNS: &[(&str, &str)] = &[
 
 const VALID_ACCESS_LEVELS: &[&str] = &["private", "protected", "public"];
 
+/// Catalog statistics subset returned in `GET /api/v1/models` list rows.
+///
+/// Mirrors `SnapshotListCatalogInfo`. `null` for all three fields is possible
+/// when the adapter did not emit the corresponding stat; the object itself is
+/// `null` when no catalog row exists for this model.
+#[derive(Serialize)]
+pub struct ModelListCatalogInfo {
+    /// Approximate row count from `dbt.catalog_stats` (`stat_id` in
+    /// `row_count`, `num_rows`); `null` when absent or adapter emitted none.
+    pub row_count_stat: Option<i64>,
+    /// Size in bytes from `dbt.catalog_stats` (`stat_id` in `bytes`,
+    /// `num_bytes`); `null` same as `row_count_stat`.
+    pub bytes_stat: Option<i64>,
+    /// Last-modified timestamp from `dbt.catalog_stats`
+    /// (`stat_id = 'last_modified'`). Snowflake-only; always `null` on other
+    /// adapters.
+    pub last_modified_stat: Option<String>,
+}
+
 /// A single row in the `/api/v1/models` response.
 ///
 /// All fields are always present in the JSON output. Optional fields serialize
@@ -112,6 +146,11 @@ pub struct ModelSummary {
     pub owner: Option<String>,
     /// ISO-8601 timestamp of the last dbt run; `null` when never run.
     pub executed_at: Option<String>,
+    /// Materialization strategy (`view`, `table`, `incremental`, etc.); `null` when unknown.
+    pub materialized: Option<String>,
+    /// Warehouse catalog stats; `null` when `dbt docs generate` has not run
+    /// or when no catalog row exists for this model.
+    pub catalog: Option<ModelListCatalogInfo>,
 }
 
 /// Response body for `GET /api/v1/models`.
@@ -213,6 +252,19 @@ fn batches_to_model_rows(batches: &[RecordBatch]) -> Vec<ModelSummary> {
         let contract_enforced = bool_col(batch, "contract_enforced");
         let owner = str_col(batch, "owner");
         let executed_at = str_col(batch, "executed_at");
+        let materialized = str_col(batch, "materialized");
+
+        // Catalog stat columns — always present (as NULL when with_catalog=false).
+        let row_count_col = batch
+            .column_by_name("row_count_stat")
+            .and_then(|c| c.as_any().downcast_ref::<Int64Array>());
+        let bytes_col = batch
+            .column_by_name("bytes_stat")
+            .and_then(|c| c.as_any().downcast_ref::<Int64Array>());
+        let last_modified = str_col(batch, "last_modified_stat");
+        let has_catalog_col = batch
+            .column_by_name("has_catalog")
+            .and_then(|c| c.as_any().downcast_ref::<arrow_array::Int32Array>());
 
         let opt = |col: &StringArray, i: usize| -> Option<String> {
             if col.is_null(i) {
@@ -223,6 +275,21 @@ fn batches_to_model_rows(batches: &[RecordBatch]) -> Vec<ModelSummary> {
         };
 
         for i in 0..batch.num_rows() {
+            let has_cat = has_catalog_col
+                .map(|c| !c.is_null(i) && c.value(i) != 0)
+                .unwrap_or(false);
+            let catalog = if has_cat {
+                Some(ModelListCatalogInfo {
+                    row_count_stat: row_count_col
+                        .and_then(|c| if c.is_null(i) { None } else { Some(c.value(i)) }),
+                    bytes_stat: bytes_col
+                        .and_then(|c| if c.is_null(i) { None } else { Some(c.value(i)) }),
+                    last_modified_stat: opt(last_modified, i),
+                })
+            } else {
+                None
+            };
+
             rows.push(ModelSummary {
                 unique_id: unique_id.value(i).to_owned(),
                 name: name.value(i).to_owned(),
@@ -233,6 +300,8 @@ fn batches_to_model_rows(batches: &[RecordBatch]) -> Vec<ModelSummary> {
                 contract_enforced: contract_enforced.value(i),
                 owner: opt(owner, i),
                 executed_at: opt(executed_at, i),
+                materialized: opt(materialized, i),
+                catalog,
             });
         }
     }
@@ -360,7 +429,10 @@ fn modeling_layer_where(layers: &[&str]) -> String {
 /// Build and return `(count_sql, rows_sql, sort)` for the models list query.
 ///
 /// `with_run_results` controls whether the `last_run` CTE referencing
-/// `dbt_rt.run_results` is included. Pass `false` when that view is absent.
+/// `dbt_rt.run_results` is included. `with_catalog` controls whether the
+/// `cat_tables` / `row_count_cte` / `bytes_cte` / `last_modified_cte` CTEs
+/// and their LEFT JOINs are included. Pass `false` for either when the
+/// corresponding parquet view is absent.
 ///
 /// `cursor` is the decoded `?after` cursor, if any. When present, the rows
 /// query carries a cursor predicate (see [`cursor_where_fragment`]). The
@@ -370,6 +442,7 @@ fn modeling_layer_where(layers: &[&str]) -> String {
 fn build_list_sql(
     params: &ModelListParams,
     with_run_results: bool,
+    with_catalog: bool,
     first: u32,
     cursor: Option<&Cursor>,
 ) -> Result<(String, String, SortSelection), &'static str> {
@@ -432,23 +505,74 @@ fn build_list_sql(
         let _ = write!(where_clause, " AND {frag}");
     }
 
-    // --- CTE + executed_at column ---
-    // Cast to VARCHAR so the Arrow column type is always StringArray regardless
-    // of whether the CTE is present. batches_to_model_rows expects StringArray.
-    let (cte, lr_join, executed_at_col) = if with_run_results {
+    // --- CTE prefix (run_results × catalog combos) ---
+    // CAT_CTES_BODY includes row_count_cte (from dbt.catalog_stats).
+    // ROW_COUNT_CTE_BODY is the same CTE used when with_catalog=false but
+    // catalog_stats still exists (e.g. compile-only index with no catalog_tables).
+    // Only include one of them per path to avoid duplicate CTE names.
+    let cte_prefix = match (with_run_results, with_catalog) {
+        (false, false) => String::new(),
+        (true, false) => format!("WITH {RR_CTE_BODY}, {ROW_COUNT_CTE_BODY}\n"),
+        (false, true) => format!("WITH {CAT_CTES_BODY}\n"),
+        (true, true) => format!("WITH {RR_CTE_BODY}, {CAT_CTES_BODY}\n"),
+    };
+
+    // --- run_results: executed_at column + join ---
+    let lr_join = if with_run_results {
+        "LEFT JOIN last_run lr ON lr.unique_id = n.unique_id"
+    } else {
+        ""
+    };
+    // Cast to VARCHAR so Arrow column type is always StringArray regardless of
+    // which fallback path is active.
+    let executed_at_col = if with_run_results {
+        "CAST(lr.executed_at AS VARCHAR) AS executed_at"
+    } else {
+        "NULL::VARCHAR AS executed_at"
+    };
+
+    // --- catalog: stat joins + columns ---
+    // with_catalog=true:  cat_tables + row_count_cte (CAT_CTES_BODY) — rcc is defined
+    // with_catalog=false, with_run_results=true: ROW_COUNT_CTE_BODY is in the prefix,
+    //   so rcc is defined and can be joined; bytes/last_modified stay NULL
+    // with_catalog=false, with_run_results=false: bare path — prefix is empty,
+    //   rcc is NOT defined; must not reference it or the SQL fails
+    let (cat_joins, catalog_cols) = if with_catalog {
         (
-            RUN_RESULTS_CTE,
-            "LEFT JOIN last_run lr ON lr.unique_id = n.unique_id",
-            "CAST(lr.executed_at AS VARCHAR) AS executed_at",
+            "LEFT JOIN cat_tables ct ON ct.unique_id = n.unique_id \
+             LEFT JOIN row_count_cte rcc ON rcc.unique_id = n.unique_id \
+             LEFT JOIN bytes_cte bc ON bc.unique_id = n.unique_id \
+             LEFT JOIN last_modified_cte lm ON lm.unique_id = n.unique_id",
+            "CASE WHEN ct.unique_id IS NOT NULL OR rcc.row_count_stat IS NOT NULL \
+                  THEN 1 ELSE 0 END AS has_catalog, \
+             rcc.row_count_stat, \
+             bc.bytes_stat, \
+             lm.last_modified_stat",
+        )
+    } else if with_run_results {
+        // ROW_COUNT_CTE_BODY is in the (true, false) prefix arm — rcc is safe to join
+        (
+            "LEFT JOIN row_count_cte rcc ON rcc.unique_id = n.unique_id",
+            "CASE WHEN rcc.row_count_stat IS NOT NULL THEN 1 ELSE 0 END AS has_catalog, \
+             rcc.row_count_stat, \
+             NULL::BIGINT AS bytes_stat, \
+             NULL::VARCHAR AS last_modified_stat",
         )
     } else {
-        ("", "", "NULL::VARCHAR AS executed_at")
+        // Bare path (false, false): no CTEs at all — must not reference rcc
+        (
+            "",
+            "0 AS has_catalog, \
+             NULL::BIGINT AS row_count_stat, \
+             NULL::BIGINT AS bytes_stat, \
+             NULL::VARCHAR AS last_modified_stat",
+        )
     };
 
     let count_sql = format!(
-        "{cte}SELECT count(*) \
+        "{cte_prefix}SELECT count(*) \
          FROM dbt.nodes n \
-         {lr_join} \
+         {lr_join} {cat_joins} \
          {where_clause}"
     );
     let ml_case = modeling_layer_case_sql();
@@ -456,14 +580,16 @@ fn build_list_sql(
     let order_expr = &sort.sql_expr;
     let order_dir = sort.dir.as_sql();
     let rows_sql = format!(
-        "{cte}SELECT \
+        "{cte_prefix}SELECT \
            n.unique_id, n.name, n.package_name, n.original_file_path, \
            {ml_case} AS modeling_layer, \
            n.access_level, n.contract_enforced, \
            n.group_name AS owner, \
-           {executed_at_col} \
+           {executed_at_col}, \
+           n.materialized, \
+           {catalog_cols} \
          FROM dbt.nodes n \
-         {lr_join} \
+         {lr_join} {cat_joins} \
          {where_clause} \
          ORDER BY {order_expr} {order_dir} NULLS LAST, n.unique_id ASC \
          LIMIT {peek}"
@@ -527,40 +653,65 @@ pub async fn list_models(
         None => None,
     };
 
-    let (count_sql, rows_sql, sort) = match build_list_sql(&params, true, first, cursor.as_ref()) {
-        Ok(triple) => triple,
-        Err(msg) => return bad_request(msg),
-    };
-    // build_list_sql only varies on `with_run_results`; since params already
-    // validated above, this second call cannot fail.
-    let (count_sql_no_rr, rows_sql_no_rr, _) =
-        build_list_sql(&params, false, first, cursor.as_ref()).expect("params already validated");
+    // Build all four fallback variants. Params are validated by the first call;
+    // subsequent calls reuse already-validated params so they cannot fail.
+    let (count_sql, rows_sql, sort) =
+        match build_list_sql(&params, true, true, first, cursor.as_ref()) {
+            Ok(triple) => triple,
+            Err(msg) => return bad_request(msg),
+        };
+    let (count_sql_rr_only, rows_sql_rr_only, _) =
+        build_list_sql(&params, true, false, first, cursor.as_ref())
+            .expect("params already validated");
+    let (count_sql_cat_only, rows_sql_cat_only, _) =
+        build_list_sql(&params, false, true, first, cursor.as_ref())
+            .expect("params already validated");
+    let (count_sql_bare, rows_sql_bare, _) =
+        build_list_sql(&params, false, false, first, cursor.as_ref())
+            .expect("params already validated");
 
     let backend = state.providers.backend.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        // Try with run_results CTE first. query_scalar returns None when the
-        // underlying SQL query fails (e.g. dbt_rt.run_results view absent).
-        // COUNT(*) always returns a row, so None unambiguously means a query error.
-        let (total, batches) = match backend.query_scalar(&count_sql) {
-            Some(count_str) => {
-                let total = count_str
-                    .parse::<u64>()
-                    .map_err(|e| format!("could not parse model count: {e}"))?;
-                let batches = backend.query_arrow(&rows_sql).map_err(|e| e.to_string())?;
-                (total, batches)
-            }
-            None => {
-                // run_results view absent; retry without the CTE.
-                let total = backend
-                    .query_scalar(&count_sql_no_rr)
-                    .ok_or_else(|| "count query returned no rows".to_string())?
-                    .parse::<u64>()
-                    .map_err(|e| format!("could not parse model count: {e}"))?;
-                let batches = backend
-                    .query_arrow(&rows_sql_no_rr)
-                    .map_err(|e| e.to_string())?;
-                (total, batches)
-            }
+        // Probe in order: both → rr-only → cat-only → bare.
+        // query_scalar returns None when the underlying view is absent (COUNT(*)
+        // always returns a row otherwise, so None unambiguously means a view error).
+        // The rr-only path preserves executed_at when only the catalog is absent —
+        // a case the bare path would silently regress.
+        let (total, batches) = if let Some(count_str) = backend.query_scalar(&count_sql) {
+            let total = count_str
+                .parse::<u64>()
+                .map_err(|e| format!("could not parse model count: {e}"))?;
+            let batches = backend.query_arrow(&rows_sql).map_err(|e| e.to_string())?;
+            (total, batches)
+        } else if let Some(count_str) = backend.query_scalar(&count_sql_rr_only) {
+            // catalog absent; run_results present
+            let total = count_str
+                .parse::<u64>()
+                .map_err(|e| format!("could not parse model count: {e}"))?;
+            let batches = backend
+                .query_arrow(&rows_sql_rr_only)
+                .map_err(|e| e.to_string())?;
+            (total, batches)
+        } else if let Some(count_str) = backend.query_scalar(&count_sql_cat_only) {
+            // run_results absent; catalog present
+            let total = count_str
+                .parse::<u64>()
+                .map_err(|e| format!("could not parse model count: {e}"))?;
+            let batches = backend
+                .query_arrow(&rows_sql_cat_only)
+                .map_err(|e| e.to_string())?;
+            (total, batches)
+        } else {
+            // both absent; bare query must succeed
+            let total = backend
+                .query_scalar(&count_sql_bare)
+                .ok_or_else(|| "count query returned no rows".to_string())?
+                .parse::<u64>()
+                .map_err(|e| format!("could not parse model count: {e}"))?;
+            let batches = backend
+                .query_arrow(&rows_sql_bare)
+                .map_err(|e| e.to_string())?;
+            (total, batches)
         };
         Ok((total, batches))
     })

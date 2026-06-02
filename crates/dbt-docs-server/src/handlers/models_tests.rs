@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use arrow_array::builder::{ListBuilder, StringBuilder};
-use arrow_array::{BooleanArray, Float64Array, Int64Array, ListArray, RecordBatch, StringArray};
+use arrow_array::{
+    BooleanArray, Float64Array, Int32Array, Int64Array, ListArray, RecordBatch, StringArray,
+};
 use arrow_schema::{DataType, Field, Schema};
 use axum::extract::{Path, Query, State};
 use axum::response::Response;
@@ -92,10 +94,13 @@ fn parse_modeling_layers_accepts_all_valid() {
 ///
 /// When `fail_if_sql_contains` is set, `query_scalar` returns `None` for any
 /// SQL containing that substring — simulating a missing DuckDB view.
+/// When `fail_catalog` is true, `query_scalar` returns `None` for any SQL
+/// containing `"catalog_tables"` — simulating an absent catalog parquet view.
 struct MockBackend {
     scalar_result: Option<String>,
     arrow_result: Result<Vec<RecordBatch>, BackendError>,
     fail_if_sql_contains: Option<&'static str>,
+    fail_catalog: bool,
     /// When set, returned for SQL containing `"materialized AS value"` (the
     /// materialization facets query). Allows `list_model_facets` tests to return
     /// a different batch for owners vs. materializations within one spawn_blocking.
@@ -108,6 +113,7 @@ impl MockBackend {
             scalar_result: Some(count.to_string()),
             arrow_result: Ok(rows),
             fail_if_sql_contains: None,
+            fail_catalog: false,
             materialization_result: None,
         }
     }
@@ -119,6 +125,18 @@ impl MockBackend {
             scalar_result: Some(count.to_string()),
             arrow_result: Ok(rows),
             fail_if_sql_contains: Some("run_results"),
+            fail_catalog: false,
+            materialization_result: None,
+        }
+    }
+
+    /// Simulates `dbt.catalog_tables` view being absent.
+    fn without_catalog(count: u64, rows: Vec<RecordBatch>) -> Self {
+        Self {
+            scalar_result: Some(count.to_string()),
+            arrow_result: Ok(rows),
+            fail_if_sql_contains: None,
+            fail_catalog: true,
             materialization_result: None,
         }
     }
@@ -139,6 +157,9 @@ impl Backend for MockBackend {
             if sql.contains(marker) {
                 return None;
             }
+        }
+        if self.fail_catalog && sql.contains("catalog_tables") {
+            return None;
         }
         self.scalar_result.clone()
     }
@@ -165,7 +186,11 @@ fn make_state(backend: MockBackend) -> Arc<AppState> {
     Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers))
 }
 
-/// Schema shared by both batch builders — keeps field order in sync.
+/// Schema shared by all list-endpoint batch builders — keeps field order in sync.
+///
+/// Includes the catalog columns (`has_catalog`, `row_count_stat`, `bytes_stat`,
+/// `last_modified_stat`) which are always present in the rows SQL regardless of
+/// the fallback path (they are `NULL`-typed when `with_catalog=false`).
 fn model_schema() -> Arc<Schema> {
     Arc::new(Schema::new(vec![
         Field::new("unique_id", DataType::Utf8, false),
@@ -177,10 +202,16 @@ fn model_schema() -> Arc<Schema> {
         Field::new("contract_enforced", DataType::Boolean, false),
         Field::new("owner", DataType::Utf8, true),
         Field::new("executed_at", DataType::Utf8, true),
+        Field::new("materialized", DataType::Utf8, true),
+        Field::new("has_catalog", DataType::Int32, false),
+        Field::new("row_count_stat", DataType::Int64, true),
+        Field::new("bytes_stat", DataType::Int64, true),
+        Field::new("last_modified_stat", DataType::Utf8, true),
     ]))
 }
 
 /// RecordBatch with every model field non-null — used to verify full hydration.
+/// `has_catalog=1` and non-null stat fields simulate a warehouse with catalog stats.
 fn all_fields_batch() -> RecordBatch {
     RecordBatch::try_new(
         model_schema(),
@@ -194,14 +225,20 @@ fn all_fields_batch() -> RecordBatch {
             Arc::new(BooleanArray::from(vec![true])),
             Arc::new(StringArray::from(vec![Some("Team X")])),
             Arc::new(StringArray::from(vec![Some("2026-05-11T14:10:00")])),
+            Arc::new(StringArray::from(vec![Some("table")])), // materialized
+            Arc::new(Int32Array::from(vec![1_i32])),          // has_catalog
+            Arc::new(Int64Array::from(vec![Some(10_500_i64)])), // row_count_stat
+            Arc::new(Int64Array::from(vec![Some(2_048_000_i64)])), // bytes_stat
+            Arc::new(StringArray::from(vec![None::<&str>])),  // last_modified_stat (Snowflake-only)
         ],
     )
     .expect("valid batch")
 }
 
 /// RecordBatch where nullable fields are null — simulates a model with no
-/// group (owner=null), no run history (executed_at=null), and a path that
-/// matches no layer convention (modeling_layer=null).
+/// group (owner=null), no run history (executed_at=null), a path that
+/// matches no layer convention (modeling_layer=null), and no catalog row
+/// (has_catalog=0).
 fn null_fields_batch() -> RecordBatch {
     RecordBatch::try_new(
         model_schema(),
@@ -215,6 +252,11 @@ fn null_fields_batch() -> RecordBatch {
             Arc::new(BooleanArray::from(vec![false])),
             Arc::new(StringArray::from(vec![None::<&str>])), // owner = null
             Arc::new(StringArray::from(vec![None::<&str>])), // executed_at = null
+            Arc::new(StringArray::from(vec![None::<&str>])), // materialized = null
+            Arc::new(Int32Array::from(vec![0_i32])),         // has_catalog = 0
+            Arc::new(Int64Array::from(vec![None::<i64>])),   // row_count_stat = null
+            Arc::new(Int64Array::from(vec![None::<i64>])),   // bytes_stat = null
+            Arc::new(StringArray::from(vec![None::<&str>])), // last_modified_stat = null
         ],
     )
     .expect("valid batch")
@@ -242,6 +284,12 @@ async fn all_fields_hydrated() {
     assert_eq!(m["contract_enforced"], true);
     assert_eq!(m["owner"], "Team X");
     assert_eq!(m["executed_at"], "2026-05-11T14:10:00");
+    assert_eq!(
+        m["catalog"]["row_count_stat"],
+        serde_json::json!(10_500_i64)
+    );
+    assert_eq!(m["catalog"]["bytes_stat"], serde_json::json!(2_048_000_i64));
+    assert_eq!(m["catalog"]["last_modified_stat"], serde_json::Value::Null);
     assert_eq!(body["page_info"]["total_count"], 1);
     assert_eq!(body["page_info"]["has_next_page"], false);
     // Single-row page: start_cursor is set, end_cursor is null (no more pages).
@@ -377,6 +425,40 @@ async fn run_results_absent_falls_back_to_null_executed_at() {
 }
 
 #[tokio::test]
+async fn catalog_absent_returns_null_catalog_not_500() {
+    // Backend returns None for count queries containing "catalog_tables" (view absent).
+    // Handler probes (rr,cat) → (rr,no-cat). The rr-only SQL emits has_catalog=0,
+    // so the mock must return a batch with has_catalog=0 (null_fields_batch).
+    // Response must be 200 with catalog=null.
+    let state = make_state(MockBackend::without_catalog(1, vec![null_fields_batch()]));
+    let response = list_models(State(state), Query(ModelListParams::default())).await;
+    assert_eq!(
+        response.status(),
+        200,
+        "must not 500 when catalog is absent"
+    );
+    let body = response_body(response).await;
+    assert_eq!(
+        body["data"][0]["catalog"],
+        serde_json::Value::Null,
+        "catalog must be null when catalog parquet is absent"
+    );
+}
+
+#[tokio::test]
+async fn run_results_present_catalog_absent_yields_200() {
+    // run_results present + catalog absent → the rr-only fallback path runs.
+    // catalog must be null; response must be 200 (not 500).
+    // The 4-way probe preserves executed_at in the rr-only path — the bare path
+    // would silence it, hence the two-step chain matters.
+    let state = make_state(MockBackend::without_catalog(1, vec![null_fields_batch()]));
+    let body =
+        response_body(list_models(State(state), Query(ModelListParams::default())).await).await;
+    assert_eq!(body["data"][0]["catalog"], serde_json::Value::Null);
+    assert_eq!(body["page_info"]["total_count"], serde_json::json!(1_u64));
+}
+
+#[tokio::test]
 async fn empty_result_returns_200() {
     let state = make_state(MockBackend::with_rows(0, vec![]));
     let body =
@@ -419,6 +501,13 @@ async fn null_fields_present_as_null_not_absent() {
     assert_eq!(m["access_level"], "protected");
     assert_eq!(m["contract_enforced"], false);
 
+    // catalog must be null (not absent) when has_catalog=0.
+    assert_eq!(
+        m["catalog"],
+        serde_json::Value::Null,
+        "catalog must be null when no catalog row, not absent"
+    );
+
     // All contract fields must be present — the struct definition is the
     // authoritative list, this mirrors it for the JSON assertion.
     for field in [
@@ -431,6 +520,8 @@ async fn null_fields_present_as_null_not_absent() {
         "contract_enforced",
         "owner",
         "executed_at",
+        "materialized",
+        "catalog",
     ] {
         assert!(
             m.get(field).is_some(),

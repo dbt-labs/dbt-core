@@ -103,7 +103,7 @@ use crate::{
     retry::{RETRIABLE_COMMANDS, RetryState},
     uninstall::exec_uninstall,
     update::exec_update,
-    utils::{InvocationContext, write_runtime_results_parquet},
+    utils::{InvocationContext, write_catalog_stats_parquet, write_runtime_results_parquet},
     vars::validate_engine_env_vars,
 };
 
@@ -1010,6 +1010,7 @@ impl<'a> AllPhasesExecutor<'a> {
                                     .map(|uid| dbt_common::stats::Stat {
                                         unique_id: uid.clone(),
                                         num_rows: None,
+                                        rows_affected: None,
                                         start_time: now,
                                         end_time: now,
                                         status: dbt_common::stats::NodeStatus::Errored,
@@ -1048,6 +1049,47 @@ impl<'a> AllPhasesExecutor<'a> {
         }
         if self.arg.write_metadata {
             write_runtime_results_parquet(&run_task_results.stats.run, self.arg.as_ref());
+        }
+
+        // When writing metadata epochs (--write-index), fetch catalog stats from the
+        // warehouse for executed TABLE nodes and write to run/catalog_stats parquet.
+        // This is intentionally separate from the write_json / write_catalog path:
+        // --write-index sets write_json=false so write_catalog_json is never called.
+        if self.arg.write_metadata && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
+        {
+            let metadata_adapter = adapter.metadata_adapter();
+            if let Some(metadata_adapter) = metadata_adapter {
+                let relations = metadata_adapter.create_relations_from_executed_nodes(
+                    &resolved_state,
+                    &run_task_results.stats.run,
+                );
+                if !relations.is_empty() {
+                    let base_context = build_base_context(&resolved_state, &jinja_env);
+                    match fetch_catalog_data(
+                        &adapter,
+                        &resolved_state,
+                        relations,
+                        &jinja_env,
+                        compilation.root_project_name(),
+                        &base_context,
+                        self.arg.as_ref(),
+                        20,
+                    )
+                    .await
+                    {
+                        Ok(catalog) => {
+                            write_catalog_stats_parquet(&catalog, self.arg.as_ref()).await;
+                        }
+                        Err(e) => {
+                            emit_warn_log_message(
+                                ErrorCode::Generic,
+                                format!("Failed to fetch catalog data for metadata epoch: {e}"),
+                                self.arg.io.status_reporter.as_ref(),
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         for s in &run_task_results.storeables {
@@ -1534,8 +1576,13 @@ pub fn check_options(io_args: &IoArgs, cli: &Cli) {
     }
 }
 
+/// Fetches catalog data from the warehouse without writing any artifact.
+/// Returns the populated `DbtCatalog` (nodes keyed by unique_id with stats).
+///
+/// Extracted from `write_catalog_json` so both the JSON path and the parquet
+/// metadata epoch path can share the same warehouse query logic.
 #[allow(clippy::too_many_arguments)]
-pub async fn write_catalog_json(
+async fn fetch_catalog_data(
     adapter: &Arc<Adapter>,
     resolved_state: &ResolverState,
     relations: Vec<Arc<dyn BaseRelation>>,
@@ -1802,7 +1849,32 @@ pub async fn write_catalog_json(
         );
         catalog.errors = Some(catalog_errors);
     }
-    // write catalog.json
+    Ok(catalog)
+}
+
+/// Fetches catalog data from the warehouse and writes `catalog.json`.
+#[allow(clippy::too_many_arguments)]
+pub async fn write_catalog_json(
+    adapter: &Arc<Adapter>,
+    resolved_state: &ResolverState,
+    relations: Vec<Arc<dyn BaseRelation>>,
+    jinja_env: &JinjaEnv,
+    project_name: &str,
+    context: &BTreeMap<String, Value>,
+    arg: &EvalArgs,
+    batches: usize,
+) -> FsResult<DbtCatalog> {
+    let catalog = fetch_catalog_data(
+        adapter,
+        resolved_state,
+        relations,
+        jinja_env,
+        project_name,
+        context,
+        arg,
+        batches,
+    )
+    .await?;
     write_artifact_to_file(
         &catalog,
         ArtifactType::Catalog,

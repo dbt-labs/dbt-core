@@ -78,6 +78,9 @@ impl From<NodeStatus> for NodeOutcome {
 pub struct Stat {
     pub unique_id: String,
     pub num_rows: Option<usize>,
+    /// Rows affected by the warehouse DML (e.g. `CREATE TABLE AS SELECT`).
+    /// Set from the NodeEvaluated OTel span after execution; `None` for views.
+    pub rows_affected: Option<i64>,
     pub start_time: SystemTime,
     pub end_time: SystemTime,
     pub status: NodeStatus,
@@ -100,6 +103,7 @@ impl Stat {
         Stat {
             unique_id,
             num_rows,
+            rows_affected: None,
             start_time,
             end_time,
             status,

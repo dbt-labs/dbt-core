@@ -141,6 +141,72 @@ pub(crate) fn write_runtime_results_parquet(stats: &Stats, arg: &EvalArgs) {
     }
 }
 
+/// Write catalog stat rows to the metadata/run/catalog_stats parquet directory.
+/// Called after a catalog fetch when `write_metadata=true`.
+pub(crate) async fn write_catalog_stats_parquet(
+    catalog: &dbt_schemas::schemas::legacy_catalog::DbtCatalog,
+    arg: &EvalArgs,
+) {
+    use chrono::Utc;
+    use dbt_metadata_parquet::catalog_stats::{CatalogStatEpochRow, write_catalog_stats};
+
+    let dir = arg.metadata_dir().join("run").join("catalog_stats");
+    let ingested_at: i64 = Utc::now().timestamp_micros();
+
+    let rows: Vec<CatalogStatEpochRow> = catalog
+        .nodes
+        .iter()
+        .chain(catalog.sources.iter())
+        .filter_map(|(uid, table)| {
+            let row_count = table.stats.get("row_count").and_then(|s| {
+                s.value
+                    .as_i64()
+                    .or_else(|| s.value.as_f64().map(|f| f as i64))
+            });
+            let bytes = table.stats.get("bytes").and_then(|s| {
+                s.value
+                    .as_i64()
+                    .or_else(|| s.value.as_f64().map(|f| f as i64))
+            });
+            let last_modified = table
+                .stats
+                .get("last_modified")
+                .and_then(|s| s.value.as_str().map(|v| v.to_string()));
+
+            // Only write rows where we have at least one useful stat
+            if row_count.is_none() && bytes.is_none() && last_modified.is_none() {
+                return None;
+            }
+
+            let meta = &table.metadata;
+            Some(CatalogStatEpochRow {
+                unique_id: uid.clone(),
+                table_type: Some(meta.materialization_type.clone()).filter(|s| !s.is_empty()),
+                table_owner: meta.owner.clone(),
+                database_name: meta.database.clone(),
+                schema_name: Some(meta.schema.clone()).filter(|s| !s.is_empty()),
+                table_name: Some(meta.name.clone()).filter(|s| !s.is_empty()),
+                row_count,
+                bytes,
+                last_modified,
+                ingested_at,
+            })
+        })
+        .collect();
+
+    if rows.is_empty() {
+        return;
+    }
+
+    if let Err(e) = write_catalog_stats(&dir, &rows) {
+        emit_warn_log_message(
+            ErrorCode::IoError,
+            format!("Failed to write catalog stats parquet: {e}"),
+            arg.io.status_reporter.as_ref(),
+        );
+    }
+}
+
 pub(crate) fn update_manifest_with_macro_depends_on(
     dbt_manifest: &mut DbtManifest,
     macro_depends_on: &BTreeMap<String, BTreeSet<String>>,

@@ -21,6 +21,7 @@ pub const CATALOG_COLUMNS_SUBDIR: &str = "catalog/columns";
 pub const RUN_INVOCATIONS_SUBDIR: &str = "run/invocations";
 pub const RUN_RESULTS_SUBDIR: &str = "run/results";
 pub const RUN_FRESHNESS_SUBDIR: &str = "run/freshness";
+pub const RUN_CATALOG_STATS_SUBDIR: &str = "run/catalog_stats";
 
 // ---------------------------------------------------------------------------
 // IngestState — tracks what epochs have been applied

@@ -1,4 +1,5 @@
 pub mod catalog_columns;
+pub mod catalog_stats;
 pub mod cll_epoch;
 pub mod compile_columns;
 pub mod compiled_node;

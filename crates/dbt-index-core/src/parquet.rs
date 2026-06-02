@@ -1889,6 +1889,7 @@ define_row! {
         [utf8]  pub adapter_response: Option<String>,
         [utf8]  pub timing: Option<String>,
         [utf8]  pub batch_results: Option<String>,
+        [int]   pub rows_affected: Option<i64>,
         [timestamp] pub created_at: Option<String>,
     }
 }

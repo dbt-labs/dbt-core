@@ -45,7 +45,15 @@ pub fn stats_to_results(stat: &Stat, nodes: &Nodes) -> ContextRunResult {
         timing,
         thread_id: stat.thread_id.clone(),
         execution_time,
-        adapter_response: BTreeMap::new(), // Required, provide empty map for now
+        adapter_response: {
+            let mut map = BTreeMap::new();
+            if let Some(ra) = stat.rows_affected {
+                if let Ok(v) = dbt_yaml::to_value(ra) {
+                    map.insert("rows_affected".to_string(), v);
+                }
+            }
+            map
+        },
         message: stat.message.clone(),
         failures,
         node: node_arc,

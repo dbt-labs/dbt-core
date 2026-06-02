@@ -504,6 +504,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             .map(|uid| Stat {
                                 unique_id: uid.clone(),
                                 num_rows: None,
+                                rows_affected: None,
                                 start_time: now,
                                 end_time: now,
                                 status: NodeStatus::Errored,

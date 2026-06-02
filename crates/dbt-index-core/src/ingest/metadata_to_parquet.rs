@@ -8,7 +8,7 @@
 //! Speed: parquet→parquet with Arrow = no SQL parse/exec overhead.
 //! Expected: ~200ms cold for 6k nodes vs 4.5s through DuckDB ADBC.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -20,8 +20,8 @@ use crate::epoch_layers;
 use crate::ingest::ingest_state::{
     CATALOG_COLUMNS_SUBDIR, COMPILE_CLL_SUBDIR, COMPILE_COLUMNS_SUBDIR, COMPILE_NODES_SUBDIR,
     IngestState, PARSE_ALIVE, PARSE_COLUMNS_SUBDIR, PARSE_GENERATION, PARSE_NODES_SUBDIR,
-    PARSE_PROJECT, PARSE_RESOLVER_STATE, RUN_FRESHNESS_SUBDIR, RUN_INVOCATIONS_SUBDIR,
-    RUN_RESULTS_SUBDIR,
+    PARSE_PROJECT, PARSE_RESOLVER_STATE, RUN_CATALOG_STATS_SUBDIR, RUN_FRESHNESS_SUBDIR,
+    RUN_INVOCATIONS_SUBDIR, RUN_RESULTS_SUBDIR,
 };
 use crate::ingest::payload::{
     ParsedDoc, ParsedExposure, ParsedGroup, ParsedMacro, ParsedMetric, ParsedSavedQuery,
@@ -67,11 +67,11 @@ pub struct PersistedState {
     /// micros-since-epoch for alive.parquet mtime
     pub alive_mtime_us: Option<u64>,
     /// last epoch number per subdir
-    pub last_epoch: std::collections::HashMap<String, u32>,
+    pub last_epoch: HashMap<String, u32>,
     // base_mtime_us removed: compaction detection now uses curr_max < last_epoch comparison.
     // Old persisted state files may still have this field — ignored via #[serde(default)].
     #[serde(default)]
-    pub base_mtime_us: std::collections::HashMap<String, u64>,
+    pub base_mtime_us: HashMap<String, u64>,
 }
 
 pub fn save_state(index_dir: &Path, state: &IngestState) {
@@ -113,7 +113,7 @@ pub fn load_state(index_dir: &Path) -> Option<IngestState> {
         RUN_RESULTS_SUBDIR,
         RUN_FRESHNESS_SUBDIR,
     ];
-    let mut last_epoch = std::collections::HashMap::new();
+    let mut last_epoch = HashMap::new();
     for &subdir in ALL_SUBDIRS {
         if let Some(&epoch) = ps.last_epoch.get(subdir) {
             last_epoch.insert(subdir, epoch);
@@ -212,6 +212,9 @@ fn cold_ingest(
     )?;
     total += write_run_invocations(&mut writer, metadata_dir, state, &now, true)?;
     total += write_run_results(&mut writer, metadata_dir, state, &now, true)?;
+    total += write_column_stats(&mut writer, index_dir, &now)?;
+    total += write_seed_catalog_stats(&mut writer, index_dir, metadata_dir, &now)?;
+    total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, true)?;
     total += write_run_freshness(&mut writer, metadata_dir, state, &now, true)?;
     writer.finish_for_ingest()?;
 
@@ -299,6 +302,9 @@ pub fn apply_delta_direct(
     )?;
     total += write_run_invocations(&mut writer, metadata_dir, state, &now, false)?;
     total += write_run_results(&mut writer, metadata_dir, state, &now, false)?;
+    total += write_column_stats(&mut writer, index_dir, &now)?;
+    total += write_seed_catalog_stats(&mut writer, index_dir, metadata_dir, &now)?;
+    total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, false)?;
     total += write_run_freshness(&mut writer, metadata_dir, state, &now, false)?;
     writer.finish_for_ingest()?;
 
@@ -531,7 +537,7 @@ pub struct CompileFields {
     pub table_role: Option<String>,
 }
 
-pub type CompileMap = std::collections::HashMap<String, CompileFields>;
+pub type CompileMap = HashMap<String, CompileFields>;
 
 /// Load alive.parquet → set of live unique_ids (None if file absent).
 pub fn load_alive_ids(metadata_dir: &Path) -> Option<HashSet<String>> {
@@ -1775,8 +1781,7 @@ fn write_parse_project(
         let legacy_path = metadata_dir.join(PARSE_PROJECT);
         if legacy_path.exists() {
             let batches = read_parquet_batches(&legacy_path)?;
-            let mut kv: std::collections::HashMap<String, String> =
-                std::collections::HashMap::new();
+            let mut kv: HashMap<String, String> = HashMap::new();
             for batch in &batches {
                 let key_col = str_col(batch, "key");
                 let val_col = str_col(batch, "value");
@@ -2632,6 +2637,7 @@ fn write_run_results(
         adapter_response: Option<String>,
         timing: Option<String>,
         batch_results: Option<String>,
+        rows_affected: Option<i64>,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
     }
 
@@ -2688,6 +2694,7 @@ fn write_run_results(
                     adapter_response: get_str(resp_col, i),
                     timing: get_str(tim_col, i),
                     batch_results: None,
+                    rows_affected: None,
                     created_at,
                 });
             }
@@ -2781,5 +2788,293 @@ fn write_run_freshness(
         writer.write_dbt_table_append("source_freshness", rows, "unique_id")?;
     }
     state.set_epoch(RUN_FRESHNESS_SUBDIR, last_epoch);
+    Ok(count)
+}
+
+// ---------------------------------------------------------------------------
+// Column stats → dbt.column_stats
+// ---------------------------------------------------------------------------
+
+fn write_column_stats(
+    writer: &mut IndexWriter,
+    index_dir: &Path,
+    now: &str,
+) -> Result<usize, IndexError> {
+    let rr_path = index_dir.join("dbt_rt.run_results.parquet");
+    let nc_path = index_dir.join("dbt.node_columns.parquet");
+    if !rr_path.exists() || !nc_path.exists() {
+        return Ok(0);
+    }
+
+    let mut row_counts: HashMap<String, i64> = HashMap::new();
+    for batch in read_parquet_batches(&rr_path)? {
+        let uid_col = str_col(&batch, "unique_id");
+        let ra_col = i64_col(&batch, "rows_affected");
+        for i in 0..batch.num_rows() {
+            let Some(uid) = get_str(uid_col, i) else {
+                continue;
+            };
+            let Some(ra) = get_i64(ra_col, i) else {
+                continue;
+            };
+            row_counts.insert(uid, ra);
+        }
+    }
+    if row_counts.is_empty() {
+        return Ok(0);
+    }
+
+    let mut entries: Vec<(String, String)> = Vec::new();
+    for batch in read_parquet_batches(&nc_path)? {
+        let uid_col = str_col(&batch, "unique_id");
+        let col_name_col = str_col(&batch, "column_name");
+        for i in 0..batch.num_rows() {
+            let Some(uid) = get_str(uid_col, i) else {
+                continue;
+            };
+            let Some(col) = get_str(col_name_col, i) else {
+                continue;
+            };
+            if row_counts.contains_key(&uid) {
+                entries.push((uid, col));
+            }
+        }
+    }
+
+    let typed_rows: Vec<crate::parquet::ColumnStatRow<'_>> = entries
+        .iter()
+        .map(|(uid, col)| crate::parquet::ColumnStatRow {
+            unique_id: uid.as_str(),
+            column_name: Some(col.as_str()),
+            column_type: None,
+            row_count: row_counts.get(uid.as_str()).copied(),
+            distinct_count: None,
+            null_pct: None,
+            min_value: None,
+            max_value: None,
+            avg_value: None,
+            std_value: None,
+            q25: None,
+            q50: None,
+            q75: None,
+            top_values: None,
+            ingested_at: now,
+        })
+        .collect();
+
+    let count = typed_rows.len();
+    writer.write_dbt_items("column_stats", &typed_rows)?;
+    Ok(count)
+}
+
+// ---------------------------------------------------------------------------
+// Seed catalog stats → dbt.catalog_tables + dbt.catalog_stats
+// ---------------------------------------------------------------------------
+
+fn write_seed_catalog_stats(
+    writer: &mut IndexWriter,
+    index_dir: &Path,
+    metadata_dir: &Path,
+    now: &str,
+) -> Result<usize, IndexError> {
+    let nodes_path = index_dir.join("dbt.nodes.parquet");
+    if !nodes_path.exists() {
+        return Ok(0);
+    }
+    let target_dir = metadata_dir.parent().unwrap_or(metadata_dir);
+    let data_dir = target_dir.join("data");
+    if !data_dir.exists() {
+        return Ok(0);
+    }
+
+    let mut catalog_table_rows: Vec<Value> = Vec::new();
+    let mut catalog_stat_rows: Vec<Value> = Vec::new();
+
+    for batch in read_parquet_batches(&nodes_path)? {
+        let uid_col = str_col(&batch, "unique_id");
+        let rt_col = str_col(&batch, "resource_type");
+        let rn_col = str_col(&batch, "relation_name");
+
+        for i in 0..batch.num_rows() {
+            let Some(resource_type) = get_str(rt_col, i) else {
+                continue;
+            };
+            if resource_type != "seed" {
+                continue;
+            }
+            let Some(uid) = get_str(uid_col, i) else {
+                continue;
+            };
+            let Some(relation_name) = get_str(rn_col, i) else {
+                continue;
+            };
+
+            let parts: Vec<&str> = relation_name.splitn(3, '.').collect();
+            if parts.len() != 3 {
+                continue;
+            }
+            let data_path = data_dir
+                .join(parts[0])
+                .join(parts[1])
+                .join(parts[2])
+                .join("output.parquet");
+            if !data_path.exists() {
+                continue;
+            }
+
+            let row_count = read_parquet_batches(&data_path)?
+                .iter()
+                .map(|b| b.num_rows() as i64)
+                .sum::<i64>();
+
+            catalog_table_rows.push(json!({
+                "unique_id": uid,
+                "table_type": "TABLE",
+                "database_name": parts[0],
+                "schema_name": parts[1],
+                "table_name": parts[2],
+                "table_owner": null,
+                "table_comment": null,
+                "ingested_at": now,
+            }));
+            catalog_stat_rows.push(json!({
+                "unique_id": uid,
+                "stat_id": "row_count",
+                "stat_label": "Row Count",
+                "stat_value": row_count.to_string(),
+                "description": "Row count derived from seed data parquet",
+                "include_in_stats": true,
+                "ingested_at": now,
+            }));
+        }
+    }
+
+    let count = catalog_stat_rows.len();
+    if count > 0 {
+        writer.write_dbt_table("catalog_tables", catalog_table_rows)?;
+        writer.write_dbt_table("catalog_stats", catalog_stat_rows)?;
+    }
+    Ok(count)
+}
+
+// ---------------------------------------------------------------------------
+// Warehouse catalog stats → dbt.catalog_tables + dbt.catalog_stats
+// ---------------------------------------------------------------------------
+
+fn write_warehouse_catalog_stats(
+    writer: &mut IndexWriter,
+    metadata_dir: &Path,
+    state: &mut IngestState,
+    now: &str,
+    full: bool,
+) -> Result<usize, IndexError> {
+    let dir = metadata_dir.join(RUN_CATALOG_STATS_SUBDIR);
+    if !dir.exists() {
+        return Ok(0);
+    }
+
+    let epochs = epoch_layers::existing_epochs(&dir);
+    let last_saved = state.last_epoch_for(RUN_CATALOG_STATS_SUBDIR);
+    let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
+    let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
+    let new_epochs: Vec<_> = if need_full {
+        epochs
+    } else {
+        let last = state.last_epoch_for(RUN_CATALOG_STATS_SUBDIR);
+        epochs.into_iter().filter(|(n, _)| *n > last).collect()
+    };
+    if new_epochs.is_empty() {
+        return Ok(0);
+    }
+
+    let mut catalog_table_rows: Vec<Value> = Vec::new();
+    let mut catalog_stat_rows: Vec<Value> = Vec::new();
+    let mut last_epoch = 0u32;
+
+    for (epoch_num, path) in &new_epochs {
+        let batches = read_parquet_batches(path)?;
+        for batch in &batches {
+            let uid_col = str_col(batch, "unique_id");
+            let tt_col = str_col(batch, "table_type");
+            let owner_col = str_col(batch, "table_owner");
+            let db_col = str_col(batch, "database_name");
+            let schema_col = str_col(batch, "schema_name");
+            let tname_col = str_col(batch, "table_name");
+            let rc_col = i64_col(batch, "row_count");
+            let bytes_col = i64_col(batch, "bytes");
+            let lm_col = str_col(batch, "last_modified");
+
+            for i in 0..batch.num_rows() {
+                let Some(uid) = get_str(uid_col, i) else {
+                    continue;
+                };
+
+                let table_type = get_str(tt_col, i);
+                let table_owner = get_str(owner_col, i);
+                let database_name = get_str(db_col, i);
+                let schema_name = get_str(schema_col, i);
+                let table_name = get_str(tname_col, i);
+                let row_count = get_i64(rc_col, i);
+                let bytes = get_i64(bytes_col, i);
+                let last_modified = get_str(lm_col, i);
+
+                catalog_table_rows.push(json!({
+                    "unique_id": uid,
+                    "table_type": table_type,
+                    "database_name": database_name,
+                    "schema_name": schema_name,
+                    "table_name": table_name,
+                    "table_owner": table_owner,
+                    "table_comment": null,
+                    "ingested_at": now,
+                }));
+
+                if let Some(rc) = row_count {
+                    catalog_stat_rows.push(json!({
+                        "unique_id": uid,
+                        "stat_id": "row_count",
+                        "stat_label": "Row Count",
+                        "stat_value": rc.to_string(),
+                        "description": "Row count from warehouse catalog",
+                        "include_in_stats": true,
+                        "ingested_at": now,
+                    }));
+                }
+                if let Some(b) = bytes {
+                    catalog_stat_rows.push(json!({
+                        "unique_id": uid,
+                        "stat_id": "bytes",
+                        "stat_label": "Bytes",
+                        "stat_value": b.to_string(),
+                        "description": "Table size in bytes from warehouse catalog",
+                        "include_in_stats": true,
+                        "ingested_at": now,
+                    }));
+                }
+                if let Some(lm) = last_modified {
+                    catalog_stat_rows.push(json!({
+                        "unique_id": uid,
+                        "stat_id": "last_modified",
+                        "stat_label": "Last Modified",
+                        "stat_value": lm,
+                        "description": "Last modified timestamp from warehouse catalog",
+                        "include_in_stats": true,
+                        "ingested_at": now,
+                    }));
+                }
+            }
+        }
+        last_epoch = *epoch_num;
+    }
+
+    let count = catalog_stat_rows.len();
+    if need_full {
+        writer.write_dbt_table("catalog_tables", catalog_table_rows)?;
+        writer.write_dbt_table("catalog_stats", catalog_stat_rows)?;
+    } else {
+        writer.write_dbt_table_append("catalog_tables", catalog_table_rows, "unique_id")?;
+        writer.write_dbt_table_append("catalog_stats", catalog_stat_rows, "unique_id")?;
+    }
+    state.set_epoch(RUN_CATALOG_STATS_SUBDIR, last_epoch);
     Ok(count)
 }
