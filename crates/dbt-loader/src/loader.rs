@@ -446,7 +446,8 @@ pub async fn load(
         persist_internal_packages(
             &internal_packages_install_path,
             adapter_type,
-            arg.enable_persist_compare_package,
+            &arg,
+            loader_hooks.clone(),
         )?;
     }
 
@@ -516,6 +517,9 @@ pub async fn load(
             InternalPackageMode::Embedded => {
                 #[allow(unused_mut)]
                 let mut pkgs = construct_internal_packages(adapter_type, &arg.io.in_dir)?;
+                loader_hooks
+                    .will_load_internal_packages(&arg, &mut pkgs)
+                    .await?;
                 // Register vars for each internal package
                 for pkg in &pkgs {
                     load_vars(&pkg.dbt_project.name, None, &mut collected_vars)?;

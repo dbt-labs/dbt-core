@@ -10,6 +10,7 @@ use walkdir::WalkDir;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use dbt_common::constants::DBT_PROJECT_YML;
 
@@ -23,6 +24,7 @@ use dbt_schemas::state::{DbtAsset, DbtPackage, DbtProfile, ResourcePathKind};
 
 use crate::args::LoadArgs;
 use crate::loader::load_inner;
+use crate::loader_hooks::LoaderHooks;
 
 mod assets {
     #![allow(clippy::disallowed_methods)] // RustEmbed generates calls to std::path::Path::canonicalize
@@ -115,7 +117,8 @@ pub async fn load_internal_packages(
 pub fn persist_internal_packages(
     internal_packages_install_path: &Path,
     adapter_type: AdapterType,
-    #[allow(unused)] enable_persist_compare_package: bool,
+    arg: &LoadArgs,
+    loader_hooks: Arc<dyn LoaderHooks>,
 ) -> FsResult<()> {
     // Copy the dbt-adapters and dbt-{adapter_type} to the packages_install_path
     let internal_packages = internal_package_names(adapter_type);
@@ -207,6 +210,8 @@ pub fn persist_internal_packages(
         }
     }
 
+    loader_hooks.did_persist_packages(arg, internal_packages_install_path)?;
+
     Ok(())
 }
 
@@ -265,7 +270,7 @@ pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
 }
 
 /// Check if a file path is under macros/ or tests/ directories
-fn is_under_macros_or_tests(path: &Path) -> bool {
+pub fn is_under_macros_or_tests(path: &Path) -> bool {
     if let Some(first_component) = path.components().next() {
         let dir_name = first_component.as_os_str().to_str().unwrap_or("");
         return dir_name == "macros" || dir_name == "tests";
@@ -274,7 +279,7 @@ fn is_under_macros_or_tests(path: &Path) -> bool {
 }
 
 /// Check if a file is a metadata/config file that should be ignored
-fn is_metadata_file(path: &Path) -> bool {
+pub fn is_metadata_file(path: &Path) -> bool {
     matches!(
         path.to_str().unwrap_or(""),
         "dbt_project.yml" | "packages.yml" | "profile_template.yml" | "__init__.py"
@@ -409,7 +414,7 @@ pub fn construct_internal_packages(
 }
 
 /// Fill default paths and clean targets for a parsed DbtProject.
-pub(crate) fn build_internal_dbt_project(mut dbt_project: DbtProject) -> FsResult<DbtProject> {
+pub fn build_internal_dbt_project(mut dbt_project: DbtProject) -> FsResult<DbtProject> {
     fill_default(&mut dbt_project.analysis_paths, &["analysis", "analyses"]);
     fill_default(&mut dbt_project.asset_paths, &["assets"]);
     fill_default(&mut dbt_project.function_paths, &["functions"]);

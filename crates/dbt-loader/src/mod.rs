@@ -10,7 +10,8 @@ pub mod loader_hooks;
 
 pub use deps::execute_deps_command;
 pub use load_packages::{
-    construct_internal_packages, load_internal_packages, load_packages, persist_internal_packages,
+    build_internal_dbt_project, construct_internal_packages, is_metadata_file,
+    is_under_macros_or_tests, load_internal_packages, load_packages, persist_internal_packages,
 };
 pub use load_profiles::load_profiles;
 pub use load_vars::load_vars;
