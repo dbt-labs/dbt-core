@@ -209,15 +209,9 @@ pub async fn resolve_snapshots(
 
                 // Preserve directory structure from the properties file path
                 // This ensures FQN includes directory components for proper selector matching
-                let default_snapshots_path = vec![DBT_SNAPSHOTS_DIR_NAME.to_string()];
-                let original_relative_path = strip_resource_paths_from_ref_path(
-                    &mpe.relative_path,
-                    package
-                        .dbt_project
-                        .snapshot_paths
-                        .as_ref()
-                        .unwrap_or(&default_snapshots_path),
-                );
+                let resource_paths: Vec<String> = package.dbt_project.all_source_paths().clone();
+                let original_relative_path =
+                    strip_resource_paths_from_ref_path(&mpe.relative_path, &resource_paths);
                 let target_path = PathBuf::from(DBT_SNAPSHOTS_DIR_NAME)
                     .join(
                         original_relative_path
