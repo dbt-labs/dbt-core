@@ -42,6 +42,7 @@ def project(selector_config: SelectorConfig) -> Project:
         asset_paths=["assets"],
         target_path="target",
         snapshot_paths=["snapshots"],
+        osi_paths=["OSI"],
         clean_targets=["target"],
         log_path="path/to/project/logs",
         packages_install_path="dbt_packages",

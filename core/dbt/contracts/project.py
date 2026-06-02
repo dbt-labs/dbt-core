@@ -244,6 +244,7 @@ class Project(dbtClassMixin):
     docs_paths: Optional[List[str]] = None
     asset_paths: Optional[List[str]] = None
     function_paths: Optional[List[str]] = None
+    osi_paths: Optional[List[str]] = None
     target_path: Optional[str] = None
     snapshot_paths: Optional[List[str]] = None
     clean_targets: Optional[List[str]] = None
@@ -295,6 +296,7 @@ class Project(dbtClassMixin):
             "docs_paths": "docs-paths",
             "asset_paths": "asset-paths",
             "function_paths": "function-paths",
+            "osi_paths": "osi-paths",
             "target_path": "target-path",
             "snapshot_paths": "snapshot-paths",
             "clean_targets": "clean-targets",
