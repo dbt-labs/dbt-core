@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support lowercase "osi" directory
+time: 2026-06-02T15:36:07.870205-07:00
+custom:
+  Author: QMalcolm
+  Issue: "13087"
