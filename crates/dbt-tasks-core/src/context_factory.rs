@@ -70,8 +70,12 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
         );
         Box::pin(async move {
             let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
-            let run_cache_lifecycle =
-                RunCacheLifecycle::initialize(run_task_args.as_ref(), execute).await;
+            let run_cache_lifecycle = RunCacheLifecycle::initialize(
+                run_task_args.as_ref(),
+                execute,
+                resolver_state.adapter_type,
+            )
+            .await;
 
             let extended_ctx = extended_ctx_factory
                 .build(run_cache_lifecycle.is_requested())

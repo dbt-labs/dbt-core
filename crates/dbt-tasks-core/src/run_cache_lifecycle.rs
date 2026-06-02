@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_common::ErrorCode;
 use dbt_common::io_args::FsCommand;
 use dbt_common::tracing::dbt_metrics::{FusionMetricKey, RunCacheServiceMetricKey};
@@ -30,8 +31,12 @@ pub struct RunCacheLifecycle {
 }
 
 impl RunCacheLifecycle {
-    pub async fn initialize(arg: &RunTasksArgs, execute: Execute) -> Self {
-        let service = initialize_run_cache_service(arg, execute).await;
+    pub async fn initialize(
+        arg: &RunTasksArgs,
+        execute: Execute,
+        adapter_type: AdapterType,
+    ) -> Self {
+        let service = initialize_run_cache_service(arg, execute, adapter_type).await;
         let metadata_ttl_seconds = service
             .config
             .as_ref()
@@ -54,11 +59,13 @@ impl RunCacheLifecycle {
 async fn initialize_run_cache_service(
     arg: &RunTasksArgs,
     execute: Execute,
+    adapter_type: AdapterType,
 ) -> RunCacheServiceLifecycle {
     if !should_initialize_run_cache_service(
         arg,
         execute,
         RunCacheServiceConfig::is_explicitly_requested_from_env(),
+        adapter_type,
     ) {
         increment_metric(
             FusionMetricKey::RunCacheService(RunCacheServiceMetricKey::Disabled),
@@ -211,8 +218,23 @@ fn should_initialize_run_cache_service(
     arg: &RunTasksArgs,
     execute: Execute,
     env_requested: bool,
+    adapter_type: AdapterType,
 ) -> bool {
-    execute == Execute::Remote && (arg.run_cache_service || env_requested)
+    execute == Execute::Remote
+        && adapter_supports_dbt_state(adapter_type)
+        && (arg.run_cache_service || env_requested)
+}
+
+/// Returns true when the adapter is supported by the dbt State service.
+pub fn adapter_supports_dbt_state(adapter_type: AdapterType) -> bool {
+    matches!(
+        adapter_type,
+        AdapterType::Snowflake
+            | AdapterType::Databricks
+            | AdapterType::Spark
+            | AdapterType::Redshift
+            | AdapterType::Bigquery
+    )
 }
 
 pub fn run_cache_auto_defer_command(command: FsCommand) -> bool {
@@ -229,9 +251,10 @@ pub fn run_cache_auto_defer_command(command: FsCommand) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::profiles::Execute;
 
-    use super::{RunTasksArgs, should_initialize_run_cache_service};
+    use super::{RunTasksArgs, adapter_supports_dbt_state, should_initialize_run_cache_service};
 
     fn args() -> RunTasksArgs {
         RunTasksArgs::default()
@@ -242,7 +265,8 @@ mod tests {
         assert!(!should_initialize_run_cache_service(
             &args(),
             Execute::Remote,
-            false
+            false,
+            AdapterType::Snowflake,
         ));
     }
 
@@ -251,7 +275,8 @@ mod tests {
         assert!(should_initialize_run_cache_service(
             &args(),
             Execute::Remote,
-            true
+            true,
+            AdapterType::Snowflake,
         ));
     }
 
@@ -263,7 +288,8 @@ mod tests {
         assert!(should_initialize_run_cache_service(
             &args,
             Execute::Remote,
-            false
+            false,
+            AdapterType::Snowflake,
         ));
     }
 
@@ -272,7 +298,8 @@ mod tests {
         assert!(!should_initialize_run_cache_service(
             &args(),
             Execute::Local,
-            true
+            true,
+            AdapterType::Snowflake,
         ));
 
         let mut args = args();
@@ -281,7 +308,42 @@ mod tests {
         assert!(!should_initialize_run_cache_service(
             &args,
             Execute::Local,
-            false
+            false,
+            AdapterType::Snowflake,
         ));
+    }
+
+    #[test]
+    fn lifecycle_requires_supported_adapter() {
+        let mut requested_args = args();
+        requested_args.run_cache_service = true;
+
+        assert!(!should_initialize_run_cache_service(
+            &requested_args,
+            Execute::Remote,
+            false,
+            AdapterType::DuckDB,
+        ));
+        assert!(!should_initialize_run_cache_service(
+            &args(),
+            Execute::Remote,
+            true,
+            AdapterType::DuckDB,
+        ));
+    }
+
+    #[test]
+    fn dbt_state_supported_adapters_are_explicit() {
+        assert!(adapter_supports_dbt_state(AdapterType::Snowflake));
+        assert!(adapter_supports_dbt_state(AdapterType::Databricks));
+        assert!(adapter_supports_dbt_state(AdapterType::Spark));
+        assert!(adapter_supports_dbt_state(AdapterType::Redshift));
+        assert!(adapter_supports_dbt_state(AdapterType::Bigquery));
+
+        assert!(!adapter_supports_dbt_state(AdapterType::DuckDB));
+        assert!(!adapter_supports_dbt_state(AdapterType::Postgres));
+        assert!(!adapter_supports_dbt_state(AdapterType::ClickHouse));
+        assert!(!adapter_supports_dbt_state(AdapterType::Fabric));
+        assert!(!adapter_supports_dbt_state(AdapterType::Salesforce));
     }
 }
