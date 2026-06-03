@@ -52,6 +52,7 @@ pub struct DbtMacro {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct MacroDependsOn {
+    #[serde(default)]
     pub macros: Vec<String>,
 }
 

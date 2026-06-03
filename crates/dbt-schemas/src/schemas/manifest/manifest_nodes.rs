@@ -149,6 +149,7 @@ pub struct ManifestNodeBaseAttributes {
         deserialize_with = "deserialize_dbt_columns"
     )]
     pub columns: Vec<DbtColumnRef>,
+    #[serde(default)]
     pub depends_on: NodeDependsOn,
     #[serde(default)]
     pub refs: Vec<DbtRef>,
@@ -643,6 +644,7 @@ pub struct ManifestSource {
     pub identifier: String,
     pub source_name: String,
     #[serde(
+        default,
         serialize_with = "serialize_dbt_columns",
         deserialize_with = "deserialize_dbt_columns"
     )]
@@ -716,8 +718,10 @@ pub struct ManifestMacro {
     pub original_file_path: PathBuf,
     pub unique_id: String,
     pub macro_sql: String,
+    #[serde(default)]
     pub depends_on: MacroDependsOn,
     pub description: String,
+    #[serde(default)]
     pub meta: BTreeMap<String, YmlValue>,
     pub docs: Option<DocsConfig>,
     pub patch_path: Option<PathBuf>,
@@ -1502,6 +1506,7 @@ impl From<DbtFunction> for ManifestFunction {
 #[serde(rename_all = "snake_case")]
 pub struct ManifestExposureNodeBaseAttributes {
     // Derived
+    #[serde(default)]
     pub depends_on: NodeDependsOn,
     #[serde(default)]
     pub refs: Vec<DbtRef>,
@@ -1577,6 +1582,7 @@ impl From<DbtExposure> for ManifestExposure {
 #[serde(rename_all = "snake_case")]
 pub struct ManifestMetricNodeBaseAttributes {
     // Derived
+    #[serde(default)]
     pub depends_on: NodeDependsOn,
 
     #[serde(default)]
@@ -1696,6 +1702,7 @@ impl From<MetricConfig> for ManifestMetricConfig {
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSemanticModelNodeBaseAttributes {
     // Derived
+    #[serde(default)]
     pub depends_on: NodeDependsOn,
 
     #[serde(default)]
@@ -1760,8 +1767,11 @@ pub struct ManifestSemanticModel {
     pub node_relation: Option<NodeRelation>,
     pub label: Option<String>,
     pub defaults: Option<SemanticModelDefaults>,
+    #[serde(default)]
     pub entities: Vec<SemanticEntity>,
+    #[serde(default)]
     pub measures: Vec<ManifestSemanticModelMeasure>,
+    #[serde(default)]
     pub dimensions: Vec<crate::schemas::common::Dimension>,
     pub metadata: Option<SourceFileMetadata>,
     pub primary_entity: Option<String>,
@@ -1911,6 +1921,7 @@ impl From<ManifestSemanticModelMeasure> for SemanticMeasure {
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSavedQueryNodeBaseAttributes {
     // Derived
+    #[serde(default)]
     pub depends_on: NodeDependsOn,
 
     #[serde(default)]

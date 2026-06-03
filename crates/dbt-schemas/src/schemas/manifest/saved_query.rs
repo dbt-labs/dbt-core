@@ -44,6 +44,7 @@ pub struct SavedQueryParams {
     pub group_by: Vec<String>,
     #[serde(rename = "where")]
     pub where_: Option<WhereFilterIntersection>,
+    #[serde(default)]
     pub order_by: Vec<String>,
     pub limit: Option<i32>,
 }

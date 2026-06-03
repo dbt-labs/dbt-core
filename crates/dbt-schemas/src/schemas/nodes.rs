@@ -4733,6 +4733,7 @@ pub struct DbtTestAttr {
 #[serde(rename_all = "snake_case")]
 pub struct TestMetadata {
     pub name: String,
+    #[serde(default)]
     pub kwargs: BTreeMap<String, YmlValue>,
     pub namespace: Option<String>,
 }

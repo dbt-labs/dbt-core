@@ -41,8 +41,11 @@ pub struct DbtColumn {
     #[serialize_always]
     #[serde(serialize_with = "serialize_dbt_column_desc")]
     pub description: Option<String>,
+    #[serde(default)]
     pub constraints: Vec<Constraint>,
+    #[serde(default)]
     pub meta: IndexMap<String, YmlValue>,
+    #[serde(default)]
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
