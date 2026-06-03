@@ -166,7 +166,7 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 (id.clone(), {
                     let mut model_node: ManifestModel = (**node).clone().into();
 
-                    if is_external_public_model(resolver_state, &model_node) {
+                    if is_public_model_from_publication(resolver_state, &model_node) {
                         model_node.__common_attr__.path = PathBuf::new();
                         model_node.__common_attr__.original_file_path = PathBuf::new();
                     } else {
@@ -424,9 +424,16 @@ fn path_config_for_package<'a>(
         .expect("manifest path config missing for manifest node package")
 }
 
-fn is_external_public_model(resolver_state: &ResolverState, model: &ManifestModel) -> bool {
+/// True only for public models imported via a publication artifact (cross-project
+/// mesh), whose source files don't exist locally. Public models from a
+/// locally-parsed package (`local:` / `git:` / `registry:`) always have a
+/// `ManifestPathConfig` registered and must keep their real paths so dbt-core
+/// can locate the compiled output — matches mantle's behaviour.
+fn is_public_model_from_publication(resolver_state: &ResolverState, model: &ManifestModel) -> bool {
+    let package = &model.__common_attr__.package_name;
     model.access == Some(Access::Public)
-        && resolver_state.root_project_name != model.__common_attr__.package_name
+        && &resolver_state.root_project_name != package
+        && !resolver_state.manifest_path_configs.contains_key(package)
 }
 
 /// dbt-core manifest conformance: `original_file_path` stays project-relative,
