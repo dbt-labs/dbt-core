@@ -387,15 +387,23 @@ pub async fn resolve_sources(
         table_quoting.default_to(&source_config.quoting);
         let quoting_ignore_case = table_quoting.snowflake_ignore_case.unwrap_or(false);
 
+        // Preserve the raw user-provided identifier (including any embedded quote
+        // characters) for `__source_attr__.identifier`. dbt-core stores this verbatim
+        // and packages such as `zendesk` rely on `source(...).identifier` round-tripping
+        // through Jinja — see `union_zendesk_connections` calling
+        // `adapter.get_relation(identifier=source(...).identifier)`. Stripping the
+        // quotes here would turn `"GROUP"` into `GROUP` and produce SQL that fails on
+        // reserved-keyword tables in Snowflake.
+        let raw_identifier = table
+            .identifier
+            .clone()
+            .unwrap_or_else(|| table_name.to_owned());
         let (database, schema, identifier, quoting) = normalize_quoting(
             &table_quoting.try_into()?,
             adapter_type,
             &database,
             &schema,
-            &table
-                .identifier
-                .clone()
-                .unwrap_or_else(|| table_name.to_owned()),
+            &raw_identifier,
         );
 
         let parse_adapter = jinja_env
@@ -521,7 +529,7 @@ pub async fn resolve_sources(
                     Omissible::Present(f) => f.clone(),
                     Omissible::Omitted => None,
                 },
-                identifier,
+                identifier: raw_identifier,
                 source_name: source_name.to_owned(),
                 source_description: source.description.clone().unwrap_or_default(), // needs to be some or empty string per dbt spec
                 loader: source.loader.clone().unwrap_or_default(),
