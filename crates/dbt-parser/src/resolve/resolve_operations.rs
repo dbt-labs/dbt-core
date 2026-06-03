@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
-use crate::utils::{NoOpConfig, get_original_file_path};
+use crate::utils::NoOpConfig;
 use dbt_adapter_core::AdapterType;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_common::{
@@ -93,8 +93,8 @@ fn new_operation(
     operation_type: &str,
     operations: &[Spanned<String>],
     dbt_project: &DbtProject,
-    package_base_path: &Path,
-    project_root: &Path,
+    _package_base_path: &Path,
+    _project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
     io: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
@@ -105,10 +105,14 @@ fn new_operation(
     root_runtime_config: &Arc<DbtRuntimeConfig>,
 ) -> FsResult<Vec<Spanned<DbtOperation>>> {
     let project_name = &dbt_project.name;
-    // Calculate the original file path for dbt_project.yml
-    let dbt_project_yml_path = PathBuf::from("dbt_project.yml");
-    let original_file_path =
-        get_original_file_path(package_base_path, project_root, &dbt_project_yml_path);
+    // Hook operations always anchor on the package's own dbt_project.yml, regardless
+    // of whether the package is the root project or imported via dbt_packages. dbt-core
+    // emits `./dbt_project.yml` here verbatim — package-internal, not root-relative —
+    // so the compiled output lands at `target/compiled/<pkg>/dbt_project.yml/hooks/…`.
+    // Mirror that to keep manifest parity (downstream consumers of `original_file_path`,
+    // e.g. dbt-core's `--use-v2-parser` path, otherwise nest compiled hooks at the
+    // wrong location).
+    let original_file_path = PathBuf::from("./dbt_project.yml");
 
     // Map with index
     let mut resolved_operations = Vec::new();
@@ -123,7 +127,11 @@ fn new_operation(
             __common_attr__: CommonAttributes {
                 name: name.clone(),
                 package_name: project_name.to_string(),
-                path: PathBuf::from("hooks").join(&name),
+                // Hook `path` carries the `.sql` extension in dbt-core's manifest so
+                // compiled output writes to `hooks/<name>.sql`. Without it, fusion's
+                // path renders as a directory and the compiled file lands at
+                // `hooks/<name>` with no extension.
+                path: PathBuf::from("hooks").join(format!("{name}.sql")),
                 original_file_path: original_file_path.clone(),
                 unique_id,
                 fqn: vec![project_name.to_string(), "hooks".to_string(), name],
