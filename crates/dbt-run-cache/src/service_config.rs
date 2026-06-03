@@ -109,8 +109,15 @@ impl RunCacheServiceConfig {
         F: FnMut(&str) -> Option<String>,
     {
         let enabled = match get_env(STATE_MANAGE_ENV).filter(|value| !value.trim().is_empty()) {
-            Some(value) => parse_bool(STATE_MANAGE_ENV, &value)?,
-            None => true,
+            Some(value) => {
+                let manage_state_enabled = parse_bool(STATE_MANAGE_ENV, &value)?;
+                if manage_state_enabled {
+                    config_enabled(&mut get_env)?.unwrap_or(true)
+                } else {
+                    false
+                }
+            }
+            None => config_enabled(&mut get_env)?.unwrap_or(true),
         };
         let api_url =
             config_value(&mut get_env, "API_URL").unwrap_or_else(|| DEFAULT_API_URL.to_string());
@@ -303,6 +310,15 @@ where
 {
     let primary = format!("RUN_CACHE_{name}");
     get_env(&primary).filter(|value| !value.trim().is_empty())
+}
+
+fn config_enabled<F>(get_env: &mut F) -> Result<Option<bool>, RunCacheServiceConfigError>
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    config_value(get_env, "ENABLED")
+        .map(|value| parse_bool("ENABLED", &value))
+        .transpose()
 }
 
 fn state_config_value<F>(
@@ -551,6 +567,28 @@ mod tests {
         let config = config_from_pairs(&[
             ("DBT_ENGINE_MANAGE_STATE", "false"),
             ("RUN_CACHE_API_URL", "localhost:50051"),
+        ])
+        .unwrap();
+
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn legacy_enabled_false_can_disable_managed_state() {
+        let config = config_from_pairs(&[
+            ("DBT_ENGINE_MANAGE_STATE", "true"),
+            ("RUN_CACHE_ENABLED", "false"),
+        ])
+        .unwrap();
+
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn manage_state_false_overrides_legacy_enabled_true() {
+        let config = config_from_pairs(&[
+            ("DBT_ENGINE_MANAGE_STATE", "false"),
+            ("RUN_CACHE_ENABLED", "true"),
         ])
         .unwrap();
 
