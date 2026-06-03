@@ -1,24 +1,13 @@
-use dbt_common::{FsResult, stdfs};
-use dbt_schemas::schemas::packages::{
-    DbtPackageLock, DbtPackages, DbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,
-    PackageVersion, PrivatePackageLock, TarballPackageLock,
-};
+use dbt_common::FsResult;
+use dbt_schemas::schemas::packages::{DbtPackages, DbtPackagesLock};
 use std::collections::HashSet;
 
-use crate::{
-    git_client::download_git_like_package,
-    notices::{PackageNotice, PackageNoticeKind},
-    package_listing::UnpinnedPackage,
-    tarball_client::download_tarball_package,
-    types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage, TarballPinnedPackage},
-    utils::{ensure_dir, fusion_sha1_hash_packages, make_tempdir, read_and_validate_dbt_project},
-};
-
-use crate::package_listing::PackageListing;
+use crate::notices::{PackageNotice, PackageNoticeKind};
+use crate::package_listing::{PackageListing, UnpinnedPackage};
+use crate::package_resolver::ResolvedPackage;
+use crate::utils::{fusion_sha1_hash_packages, max_resolve_concurrency};
 
 use crate::context::DepsOperationContext;
-
-use super::load_dbt_packages;
 
 pub async fn compute_package_lock(
     ctx: &DepsOperationContext<'_>,
@@ -28,7 +17,6 @@ pub async fn compute_package_lock(
         &dbt_packages.packages,
         ctx.use_v2_compatible_package_downloads,
     );
-    // First step, is to flatten into a single list of packages
     let mut dbt_packages_lock = DbtPackagesLock::default();
     let mut package_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
@@ -38,79 +26,16 @@ pub async fn compute_package_lock(
     let mut final_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
     resolve_packages(ctx, &mut final_listing, &mut package_listing).await?;
-    for package in final_listing.packages.values() {
-        match package {
-            UnpinnedPackage::Hub(hub_unpinned_package) => {
-                let pinned = hub_unpinned_package
-                    .resolved(&ctx.hub_registry)
-                    .await?
-                    .pinned;
-                dbt_packages_lock
-                    .packages
-                    .push(DbtPackageLock::Hub(HubPackageLock {
-                        package: pinned.package,
-                        name: pinned.name,
-                        version: PackageVersion::String(pinned.version),
-                    }));
-            }
-            UnpinnedPackage::Git(git_unpinned_package) => {
-                let pinned_package: GitPinnedPackage = git_unpinned_package.clone().try_into()?;
-                dbt_packages_lock
-                    .packages
-                    .push(DbtPackageLock::Git(GitPackageLock {
-                        // Using the original entry to ensure that we preserve the original git url
-                        // to be stored in the `package-lock.yml` file (despite this being horrible practice)
-                        git: git_unpinned_package.original_entry.git.clone(),
-                        name: pinned_package.name,
-                        revision: pinned_package.revision,
-                        warn_unpinned: pinned_package.warn_unpinned,
-                        subdirectory: pinned_package.subdirectory,
-                        __unrendered__: pinned_package.unrendered,
-                    }));
-            }
-            UnpinnedPackage::Local(local_package) => {
-                let pinned_package: LocalPinnedPackage = local_package.clone().try_into()?;
-                dbt_packages_lock
-                    .packages
-                    .push(DbtPackageLock::Local(LocalPackageLock {
-                        name: pinned_package.name,
-                        local: stdfs::diff_paths(&local_package.local, &ctx.io.in_dir)?,
-                    }));
-            }
-            UnpinnedPackage::Private(private_unpinned_package) => {
-                let pinned_package: PrivatePinnedPackage =
-                    private_unpinned_package.clone().try_into()?;
-                dbt_packages_lock
-                    .packages
-                    .push(DbtPackageLock::Private(PrivatePackageLock {
-                        // Using the original entry to ensure that we preserve the original git url
-                        // to be stored in the `package-lock.yml` file (despite this being horrible practice)
-                        private: private_unpinned_package.original_entry.private.clone(),
-                        name: pinned_package.name,
-                        provider: pinned_package.provider,
-                        revision: pinned_package.revision,
-                        warn_unpinned: pinned_package.warn_unpinned,
-                        subdirectory: pinned_package.subdirectory,
-                        __unrendered__: pinned_package.unrendered,
-                    }));
-            }
-            UnpinnedPackage::Tarball(tarball_unpinned_package) => {
-                let pinned_package: TarballPinnedPackage =
-                    tarball_unpinned_package.clone().try_into()?;
-                let mut unrendered = pinned_package.unrendered;
-                // We remove the 'name' from unrendered so that we don't
-                // end up with two 'name' fields in the package lock.
-                unrendered.remove("name");
-                dbt_packages_lock
-                    .packages
-                    .push(DbtPackageLock::Tarball(TarballPackageLock {
-                        tarball: tarball_unpinned_package.original_entry.tarball.clone(),
-                        name: pinned_package.name,
-                        __unrendered__: unrendered,
-                    }));
-            }
-        }
+
+    let mut final_keys: Vec<_> = final_listing.packages.keys().cloned().collect();
+    final_keys.sort();
+    for key in final_keys {
+        let package = final_listing.packages.get(&key).expect("sorted key exists");
+        dbt_packages_lock
+            .packages
+            .push(package.to_lock_entry(ctx).await?);
     }
+
     dbt_packages_lock.sha1_hash = sha1_hash;
     // Note: This is currently sorting by package name, but there's more to do here
     dbt_packages_lock.packages.sort_by_key(|a| a.package_name());
@@ -139,7 +64,6 @@ pub async fn compute_package_lock(
     Ok(dbt_packages_lock)
 }
 
-#[allow(clippy::cognitive_complexity)]
 async fn resolve_packages(
     ctx: &DepsOperationContext<'_>,
     final_listing: &mut PackageListing<'_>,
@@ -147,119 +71,53 @@ async fn resolve_packages(
 ) -> FsResult<()> {
     let mut next_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(package_listing.skip_private_deps);
-    for unpinned_package in package_listing.packages.values_mut() {
-        ctx.cancellation.check_cancellation()?;
-        match unpinned_package {
-            UnpinnedPackage::Hub(hub_unpinned_package) => {
-                let resolved = hub_unpinned_package.resolved(&ctx.hub_registry).await?;
-                ctx.notices.collect(&resolved);
-                next_listing
-                    .update_from(&resolved.version.packages, ctx.jinja_env)
-                    .await?;
-            }
-            UnpinnedPackage::Git(git_unpinned_package) => {
-                let tmp_dir = make_tempdir(None)?;
-                let download_dir = tmp_dir.path().join("git_pkg");
-                ensure_dir(&download_dir).await?;
-                let (checkout_path, commit_sha) = download_git_like_package(
-                    ctx,
-                    &git_unpinned_package.git,
-                    &git_unpinned_package.revisions,
-                    &git_unpinned_package.subdirectory,
-                    git_unpinned_package.warn_unpinned.unwrap_or_default(),
-                    &download_dir,
-                )
-                .await?;
-                git_unpinned_package.revisions = vec![commit_sha];
-                let dbt_project = read_and_validate_dbt_project(
-                    ctx.io,
-                    &checkout_path,
-                    true,
-                    ctx.jinja_env,
-                    ctx.vars,
-                )
-                .await?;
-                git_unpinned_package.name = Some(dbt_project.name);
-                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
-                    ctx.notices.collect(&dbt_packages);
-                    next_listing
-                        .update_from(&dbt_packages.packages, ctx.jinja_env)
-                        .await?;
-                }
-                // Keep tmp_dir alive until we're done with checkout_path
-                drop(tmp_dir);
-            }
-            UnpinnedPackage::Local(local_unpinned_package) => {
-                let (dbt_packages, _) =
-                    load_dbt_packages(ctx.io, &local_unpinned_package.local).await?;
-                if let Some(dbt_packages) = dbt_packages {
-                    ctx.notices.collect(&dbt_packages);
-                    next_listing
-                        .update_from(&dbt_packages.packages, ctx.jinja_env)
-                        .await?;
-                }
-            }
-            UnpinnedPackage::Private(private_unpinned_package) => {
-                let tmp_dir = make_tempdir(None)?;
-                let download_dir = tmp_dir.path().join("git_pkg");
-                ensure_dir(&download_dir).await?;
-                let (checkout_path, commit_sha) = download_git_like_package(
-                    ctx,
-                    &private_unpinned_package.private,
-                    &private_unpinned_package.revisions,
-                    &private_unpinned_package.subdirectory,
-                    private_unpinned_package.warn_unpinned.unwrap_or_default(),
-                    &download_dir,
-                )
-                .await?;
-                private_unpinned_package.revisions = vec![commit_sha];
-                let dbt_project = read_and_validate_dbt_project(
-                    ctx.io,
-                    &checkout_path,
-                    true,
-                    ctx.jinja_env,
-                    ctx.vars,
-                )
-                .await?;
-                private_unpinned_package.name = Some(dbt_project.name);
-                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
-                    ctx.notices.collect(&dbt_packages);
-                    next_listing
-                        .update_from(&dbt_packages.packages, ctx.jinja_env)
-                        .await?;
-                }
-                // Keep tmp_dir alive until we're done with checkout_path
-                drop(tmp_dir);
-            }
-            UnpinnedPackage::Tarball(tarball_unpinned_package) => {
-                let tmp_dir = make_tempdir(None)?;
-                let download_dir = tmp_dir.path().join("package");
-                ensure_dir(&download_dir).await?;
 
-                let checkout_path =
-                    download_tarball_package(ctx, &tarball_unpinned_package.tarball, &download_dir)
-                        .await?;
-                let dbt_project = read_and_validate_dbt_project(
-                    ctx.io,
-                    &checkout_path,
-                    true,
-                    ctx.jinja_env,
-                    ctx.vars,
-                )
+    let mut keys: Vec<_> = package_listing.packages.keys().cloned().collect();
+    keys.sort();
+    ctx.check_cancellation()?;
+
+    // Resolve concurrently within the level; apply results in sorted order
+    // so next/final listings stay deterministic.
+    let mut taken: Vec<UnpinnedPackage> = keys
+        .iter()
+        .map(|k| {
+            package_listing
+                .packages
+                .remove(k)
+                .expect("sorted key exists")
+        })
+        .collect();
+    let resolved = resolve_level(ctx, &mut taken).await?;
+
+    for (pkg, resolved) in taken.iter().zip(resolved) {
+        ctx.check_cancellation()?;
+        if !resolved.transitive_deps.is_empty() {
+            next_listing
+                .update_from(&resolved.transitive_deps, ctx.jinja_env)
                 .await?;
-                tarball_unpinned_package.name = Some(dbt_project.name);
-                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
-                    ctx.notices.collect(&dbt_packages);
-                    next_listing
-                        .update_from(&dbt_packages.packages, ctx.jinja_env)
-                        .await?;
-                }
-            }
         }
-        final_listing.incorporate_unpinned_package(unpinned_package)?;
+        final_listing.incorporate_unpinned_package(pkg)?;
     }
+
     if !next_listing.packages.is_empty() {
         Box::pin(resolve_packages(ctx, final_listing, &mut next_listing)).await?;
     }
     Ok(())
+}
+
+async fn resolve_level(
+    ctx: &DepsOperationContext<'_>,
+    packages: &mut [UnpinnedPackage],
+) -> FsResult<Vec<ResolvedPackage>> {
+    let max_concurrency = max_resolve_concurrency();
+    let mut results = Vec::with_capacity(packages.len());
+
+    for chunk in packages.chunks_mut(max_concurrency) {
+        ctx.check_cancellation()?;
+        let chunk_results =
+            futures::future::try_join_all(chunk.iter_mut().map(|pkg| pkg.resolve(ctx))).await?;
+        results.extend(chunk_results);
+    }
+
+    Ok(results)
 }

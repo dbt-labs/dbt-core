@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{CancellationToken, CancelledError};
 use dbt_common::io_args::IoArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
@@ -72,5 +72,10 @@ impl<'a> DepsOperationContext<'a> {
         for n in prepare_for_emit(self.notices.drain(), lock) {
             n.emit(self);
         }
+    }
+
+    #[inline]
+    pub fn check_cancellation(&self) -> Result<(), CancelledError> {
+        self.cancellation.check_cancellation()
     }
 }

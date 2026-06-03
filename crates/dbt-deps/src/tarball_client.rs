@@ -225,6 +225,7 @@ pub async fn download_tarball_package(
     tarball_url: &str,
     download_dir: &Path,
 ) -> FsResult<PathBuf> {
+    context.check_cancellation()?;
     context
         .tarball_client
         .download_and_extract_tarball(tarball_url, download_dir, true, None, &[])

@@ -13,6 +13,22 @@ use sha1::Digest;
 use dbt_common::{
     ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs, tokiofs,
 };
+
+const DEFAULT_DEPS_MAX_CONCURRENCY: usize = 8;
+const MAX_DEPS_CONCURRENCY: usize = 16;
+
+/// Max concurrent package resolutions within one BFS level.
+///
+/// Override with `DBT_DEPS_MAX_CONCURRENCY` (clamped to 1..=16).
+pub fn max_resolve_concurrency() -> usize {
+    match std::env::var("DBT_DEPS_MAX_CONCURRENCY") {
+        Ok(raw) => raw
+            .parse::<usize>()
+            .map(|n| n.clamp(1, MAX_DEPS_CONCURRENCY))
+            .unwrap_or(DEFAULT_DEPS_MAX_CONCURRENCY),
+        Err(_) => DEFAULT_DEPS_MAX_CONCURRENCY,
+    }
+}
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     phases::load::LoadContext,

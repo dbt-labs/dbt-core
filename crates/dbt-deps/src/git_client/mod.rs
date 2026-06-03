@@ -251,6 +251,7 @@ pub async fn download_git_like_package(
     warn_unpinned: bool,
     download_dir: &Path,
 ) -> FsResult<(PathBuf, String)> {
+    context.check_cancellation()?;
     if let Some(subdir) = subdirectory {
         validate_subdirectory(subdir).map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", e))?;
     }
@@ -297,6 +298,7 @@ pub async fn install_git_like_package(
     subdirectory: &Option<String>,
     download_dir: &Path,
 ) -> FsResult<(PathBuf, String)> {
+    context.check_cancellation()?;
     if let Some(subdir) = subdirectory {
         validate_subdirectory(subdir).map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", e))?;
     }

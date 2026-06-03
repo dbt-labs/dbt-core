@@ -7,6 +7,7 @@ mod hub_client;
 mod network_client;
 mod notices;
 pub mod package_listing;
+mod package_resolver;
 
 pub mod private_package;
 pub mod semver;

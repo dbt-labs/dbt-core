@@ -69,11 +69,14 @@ pub struct HubUnpinnedPackage {
     pub package: String,
     pub versions: Vec<Version>, // Semver Versions
     pub install_prerelease: Option<bool>,
+    /// Set by [`crate::package_resolver::PackageResolver::resolve`]; reused for lock entries.
+    pub(crate) resolved_hub: Option<ResolvedHubPackage>,
 }
 
 /// Pinned hub package paired with the hub metadata used to pin it. Lets
 /// callers (notice recording, transitive resolution, v2-download substitution)
 /// reuse what [`HubUnpinnedPackage::resolved`] already had to fetch.
+#[derive(Clone, Debug)]
 pub struct ResolvedHubPackage {
     pub pinned: HubPinnedPackage,
     pub hub_package: HubPackageJson,
@@ -94,6 +97,7 @@ impl crate::notices::NoticeSource for ResolvedHubPackage {
 impl HubUnpinnedPackage {
     pub fn incorporate(&mut self, other: Self) {
         self.versions.extend(other.versions);
+        self.resolved_hub = None;
     }
 
     pub async fn resolved(&self, hub_registry: &HubClient) -> FsResult<ResolvedHubPackage> {
@@ -174,6 +178,7 @@ impl TryFrom<HubPackage> for HubUnpinnedPackage {
             package: hub_package.package,
             versions: versions.into_iter().map(Version::Spec).collect(),
             install_prerelease: hub_package.install_prerelease,
+            resolved_hub: None,
         })
     }
 }
