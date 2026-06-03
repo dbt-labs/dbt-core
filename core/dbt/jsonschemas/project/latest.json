@@ -1092,7 +1092,7 @@
             }
           ]
         },
-        "execute_hooks_on_reuse": {
+        "execute_hooks_on_any_reuse": {
           "anyOf": [
             {
               "type": [
@@ -4025,15 +4025,6 @@
     "ProjectSeedConfig": {
       "type": "object",
       "properties": {
-        "+adapter_properties": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/AnyValue"
-          }
-        },
         "+alias": {
           "type": [
             "string",
@@ -4082,20 +4073,6 @@
             }
           ]
         },
-        "+automatic_clustering": {
-          "anyOf": [
-            {
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
-            }
-          ]
-        },
         "+backup": {
           "anyOf": [
             {
@@ -4108,18 +4085,6 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
-          ]
-        },
-        "+base_location_root": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "+base_location_subpath": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+bind": {
@@ -4196,20 +4161,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "+copy_grants": {
-          "anyOf": [
-            {
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
-            }
           ]
         },
         "+copy_tags": {
@@ -4303,12 +4254,6 @@
             "null"
           ]
         },
-        "+external_volume": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+file_format": {
           "type": [
             "string",
@@ -4363,12 +4308,6 @@
             }
           ]
         },
-        "+immutable_where": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+include_full_name_in_path": {
           "anyOf": [
             {
@@ -4389,12 +4328,6 @@
             {
               "$ref": "#/definitions/IndexesConfig"
             }
-          ]
-        },
-        "+initialize": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+job_execution_timeout_seconds": {
@@ -4626,12 +4559,6 @@
             }
           ]
         },
-        "+refresh_mode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+refresh_warehouse": {
           "type": [
             "string",
@@ -4652,12 +4579,6 @@
             }
           ]
         },
-        "+row_access_policy": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+schedule": {
           "anyOf": [
             {
@@ -4668,30 +4589,10 @@
             }
           ]
         },
-        "+scheduler": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+schema": {
           "type": [
             "string",
             "null"
-          ]
-        },
-        "+secure": {
-          "anyOf": [
-            {
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
-            }
           ]
         },
         "+skip_matched_step": {
@@ -4720,18 +4621,6 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
-          ]
-        },
-        "+snowflake_initialization_warehouse": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "+snowflake_warehouse": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+sort": {
@@ -4766,12 +4655,6 @@
             }
           ]
         },
-        "+table_tag": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+table_type": {
           "type": [
             "string",
@@ -4794,12 +4677,6 @@
             "null"
           ]
         },
-        "+target_lag": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+tblproperties": {
           "type": [
             "object",
@@ -4808,26 +4685,6 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
-        },
-        "+tmp_relation_type": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "+transient": {
-          "anyOf": [
-            {
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
-            }
-          ]
         }
       },
       "additionalProperties": {
