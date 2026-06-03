@@ -45,8 +45,6 @@ use crate::schemas::serde::{
 pub struct ProjectSeedConfig {
     #[serde(rename = "+column_types")]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
-    #[serde(rename = "+copy_grants")]
-    pub copy_grants: Option<bool>,
     #[serde(rename = "+copy_tags")]
     pub copy_tags: Option<bool>,
     #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
@@ -81,56 +79,18 @@ pub struct ProjectSeedConfig {
     pub quote_columns: Option<bool>,
     #[serde(rename = "+schema", alias = "+dataset")]
     pub schema: Option<String>,
-    #[serde(rename = "+snowflake_initialization_warehouse")]
-    pub snowflake_initialization_warehouse: Option<String>,
-    #[serde(rename = "+immutable_where")]
-    pub immutable_where: Option<String>,
-    #[serde(rename = "+snowflake_warehouse")]
-    pub snowflake_warehouse: Option<String>,
     #[serde(rename = "+refresh_warehouse")]
     pub refresh_warehouse: Option<String>,
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+transient")]
-    pub transient: Option<bool>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+delimiter")]
     pub delimiter: Option<Spanned<String>>,
-    #[serde(rename = "+external_volume")]
-    pub external_volume: Option<String>,
-    #[serde(rename = "+adapter_properties")]
-    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
-    #[serde(rename = "+base_location_root")]
-    pub base_location_root: Option<String>,
-    #[serde(rename = "+base_location_subpath")]
-    pub base_location_subpath: Option<String>,
-    #[serde(rename = "+target_lag")]
-    pub target_lag: Option<String>,
-    #[serde(rename = "+refresh_mode")]
-    pub refresh_mode: Option<String>,
-    #[serde(rename = "+initialize")]
-    pub initialize: Option<String>,
-    #[serde(rename = "+scheduler")]
-    pub scheduler: Option<String>,
-    #[serde(rename = "+tmp_relation_type")]
-    pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
-    #[serde(rename = "+table_tag")]
-    pub table_tag: Option<String>,
-    #[serde(rename = "+row_access_policy")]
-    pub row_access_policy: Option<String>,
-    #[serde(
-        default,
-        rename = "+automatic_clustering",
-        deserialize_with = "bool_or_string_bool"
-    )]
-    pub automatic_clustering: Option<bool>,
-    #[serde(default, rename = "+secure", deserialize_with = "bool_or_string_bool")]
-    pub secure: Option<bool>,
     #[serde(rename = "+partition_by")]
     pub partition_by: Option<PartitionConfig>,
     #[serde(rename = "+cluster_by")]
@@ -367,32 +327,32 @@ impl From<ProjectSeedConfig> for SeedConfig {
             materialized: Some(DbtMaterialization::Seed),
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: None, // Only for BigQuery models
-                adapter_properties: config.adapter_properties,
-                external_volume: config.external_volume,
-                base_location_root: config.base_location_root,
-                base_location_subpath: config.base_location_subpath,
+                adapter_properties: None,
+                external_volume: None,
+                base_location_root: None,
+                base_location_subpath: None,
                 change_tracking: None,
                 data_retention_time_in_days: None,
                 max_data_extension_time_in_days: None,
                 storage_serialization_policy: None,
                 target_file_size: None,
-                target_lag: config.target_lag,
-                snowflake_initialization_warehouse: config.snowflake_initialization_warehouse,
-                immutable_where: config.immutable_where,
-                snowflake_warehouse: config.snowflake_warehouse,
+                target_lag: None,
+                snowflake_initialization_warehouse: None,
+                immutable_where: None,
+                snowflake_warehouse: None,
                 refresh_warehouse: config.refresh_warehouse,
-                refresh_mode: config.refresh_mode,
-                initialize: config.initialize,
-                scheduler: config.scheduler,
-                tmp_relation_type: config.tmp_relation_type,
+                refresh_mode: None,
+                initialize: None,
+                scheduler: None,
+                tmp_relation_type: None,
                 query_tag: config.query_tag,
-                table_tag: config.table_tag,
-                row_access_policy: config.row_access_policy,
-                automatic_clustering: config.automatic_clustering,
-                copy_grants: config.copy_grants,
+                table_tag: None,
+                row_access_policy: None,
+                automatic_clustering: None,
+                copy_grants: None,
                 copy_tags: config.copy_tags,
-                secure: config.secure,
-                transient: config.transient,
+                secure: None,
+                transient: None,
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
@@ -487,29 +447,9 @@ impl From<SeedConfig> for ProjectSeedConfig {
             tags: config.tags,
             quoting: config.quoting,
             // Snowflake fields
-            adapter_properties: config.__warehouse_specific_config__.adapter_properties,
-            snowflake_initialization_warehouse: config
-                .__warehouse_specific_config__
-                .snowflake_initialization_warehouse,
-            immutable_where: config.__warehouse_specific_config__.immutable_where,
-            snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
             refresh_warehouse: config.__warehouse_specific_config__.refresh_warehouse,
-            transient: config.__warehouse_specific_config__.transient,
-            copy_grants: config.__warehouse_specific_config__.copy_grants,
             copy_tags: config.__warehouse_specific_config__.copy_tags,
-            external_volume: config.__warehouse_specific_config__.external_volume,
-            base_location_root: config.__warehouse_specific_config__.base_location_root,
-            base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,
-            target_lag: config.__warehouse_specific_config__.target_lag,
-            refresh_mode: config.__warehouse_specific_config__.refresh_mode,
-            initialize: config.__warehouse_specific_config__.initialize,
-            scheduler: config.__warehouse_specific_config__.scheduler,
-            tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
-            table_tag: config.__warehouse_specific_config__.table_tag,
-            row_access_policy: config.__warehouse_specific_config__.row_access_policy,
-            automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
-            secure: config.__warehouse_specific_config__.secure,
             // BigQuery fields
             partition_by: config.__warehouse_specific_config__.partition_by,
             cluster_by: config.__warehouse_specific_config__.cluster_by,
