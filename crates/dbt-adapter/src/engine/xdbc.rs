@@ -513,6 +513,12 @@ fn build_duckdb_catalog_attach_stmt(
     for (key, sql_key) in [
         ("support_nested_namespaces", "SUPPORT_NESTED_NAMESPACES"),
         ("support_stage_create", "SUPPORT_STAGE_CREATE"),
+        ("use_transaction_commit", "USE_TRANSACTION_COMMIT"),
+        (
+            "skip_create_table_metadata_updates",
+            "SKIP_CREATE_TABLE_METADATA_UPDATES",
+        ),
+        ("allow_deletes", "ALLOW_DELETES"),
         ("purge_requested", "PURGE_REQUESTED"),
     ] {
         if let Some(val) = duckdb_get_bool(duckdb, key) {

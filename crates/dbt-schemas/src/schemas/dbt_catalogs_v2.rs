@@ -48,6 +48,9 @@
 //!         access_delegation_mode: VENDED_CREDENTIALS|NONE         # optional
 //!         support_nested_namespaces: <boolean>                    # optional
 //!         support_stage_create: <boolean>                         # optional
+//!         use_transaction_commit: <boolean>                        # optional
+//!         skip_create_table_metadata_updates: <boolean>            # optional
+//!         allow_deletes: <boolean>                                 # optional
 //!         purge_requested: <boolean>                              # optional
 //!         encode_entire_prefix: <boolean>                         # optional
 //!
@@ -116,6 +119,9 @@
 //!         access_delegation_mode: VENDED_CREDENTIALS|NONE         # optional
 //!         support_nested_namespaces: <boolean>                    # optional
 //!         support_stage_create: <boolean>                         # optional
+//!         use_transaction_commit: <boolean>                        # optional
+//!         skip_create_table_metadata_updates: <boolean>            # optional
+//!         allow_deletes: <boolean>                                 # optional
 //!         purge_requested: <boolean>                              # optional
 //!         encode_entire_prefix: <boolean>                         # optional
 //!
@@ -697,6 +703,9 @@ const DUCKDB_KEYS: &[&str] = &[
     "access_delegation_mode",
     "support_nested_namespaces",
     "support_stage_create",
+    "use_transaction_commit",
+    "skip_create_table_metadata_updates",
+    "allow_deletes",
     "purge_requested",
     "encode_entire_prefix",
 ];
@@ -961,6 +970,9 @@ fn validate_duckdb_config(
     for key in [
         "support_nested_namespaces",
         "support_stage_create",
+        "use_transaction_commit",
+        "skip_create_table_metadata_updates",
+        "allow_deletes",
         "purge_requested",
         "encode_entire_prefix",
     ] {
@@ -2341,6 +2353,9 @@ catalogs:
         access_delegation_mode: VENDED_CREDENTIALS
         support_nested_namespaces: true
         support_stage_create: false
+        use_transaction_commit: false
+        skip_create_table_metadata_updates: true
+        allow_deletes: false
         purge_requested: true
         encode_entire_prefix: true
 "#;

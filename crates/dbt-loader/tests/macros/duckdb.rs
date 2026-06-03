@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
+use dbt_jinja_utils::mock_object::MockJinjaObject;
 use dbt_schemas::dbt_types::RelationType;
 use minijinja::Value;
 
@@ -153,5 +155,67 @@ fn rename_relation_commits_before_iceberg_rename() {
     assert!(
         !executed.contains("create table") && !executed.contains("drop table"),
         "rename should not use DROP/CREATE fallback, got: {executed}"
+    );
+}
+
+#[test]
+fn table_materialization_writes_iceberg_target_directly() {
+    let harness = build_harness("iceberg_demo", "ducklake_demo");
+    harness
+        .mock()
+        .on("table_format", |_| Ok(Value::from("iceberg")));
+    harness.mock().on("get_relation", |_| Ok(Value::from(())));
+    harness
+        .mock()
+        .on("rename_relation", |_| Ok(Value::UNDEFINED));
+    harness
+        .mock()
+        .on("drop_indexes_on_relation", |_| Ok(Value::UNDEFINED));
+
+    let model = Value::from_serialize(BTreeMap::from([
+        ("alias", Value::from("orders")),
+        ("unique_id", Value::from("model.test_project.orders")),
+        ("columns", Value::from(BTreeMap::<String, Value>::new())),
+        ("language", Value::from("sql")),
+        ("compiled_code", Value::from("select 1 as id")),
+    ]));
+    let config = Arc::new(MockJinjaObject::new());
+    config.on("get", |args| {
+        let key = args.first().and_then(|v| v.as_str());
+        let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
+        match key {
+            Some("contract") => Ok(Value::from_serialize(BTreeMap::from([(
+                "enforced".to_string(),
+                Value::from(false),
+            )]))),
+            Some("indexes") => Ok(Value::from(Vec::<Value>::new())),
+            _ => Ok(default),
+        }
+    });
+    config.on("persist_column_docs", |_| Ok(Value::from(false)));
+    config.on("persist_relation_docs", |_| Ok(Value::from(false)));
+
+    let ctx = harness
+        .materialization_context("orders", "select 1 as id")
+        .database("iceberg_demo")
+        .schema("main")
+        .relation_type(RelationType::Table)
+        .config(Value::from_dyn_object(config))
+        .with("model", model)
+        .build();
+
+    harness
+        .render("{{ materialization_table_duckdb() }}", ctx)
+        .expect("render should succeed");
+
+    harness
+        .mock()
+        .observed_calls()
+        .assert_not_called("rename_relation");
+    assert_executed_contains(harness.mock(), "create  table");
+    let executed = executed_sql(harness.mock()).join("\n");
+    assert!(
+        !executed.contains("__dbt_tmp"),
+        "Iceberg table materialization should not use an intermediate relation, got: {executed}"
     );
 }

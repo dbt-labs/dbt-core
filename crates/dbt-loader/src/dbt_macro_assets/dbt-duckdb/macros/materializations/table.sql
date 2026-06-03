@@ -19,6 +19,30 @@
   -- grab current tables grants config for comparision later on
   {% set grant_config = config.get('grants') %}
 
+  {% if adapter.table_format(target_relation) == 'iceberg' %}
+    {{ drop_relation_if_exists(existing_relation) }}
+
+    {{ run_hooks(pre_hooks, inside_transaction=False) }}
+    {{ run_hooks(pre_hooks, inside_transaction=True) }}
+
+    {% call statement('main', language=language) -%}
+      {{- create_table_as(False, target_relation, compiled_code, language) }}
+    {%- endcall %}
+
+    {{ run_hooks(post_hooks, inside_transaction=True) }}
+
+    {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
+    {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
+
+    {% do persist_docs(target_relation, model) %}
+
+    {{ adapter.commit() }}
+
+    {{ run_hooks(post_hooks, inside_transaction=False) }}
+
+    {{ return({'relations': [target_relation]}) }}
+  {% else %}
+
   -- drop the temp relations if they exist already in the database
   {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
   {{ drop_relation_if_exists(preexisting_backup_relation) }}
@@ -60,4 +84,5 @@
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 
   {{ return({'relations': [target_relation]}) }}
+  {% endif %}
 {% endmaterialization %}
