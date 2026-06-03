@@ -370,7 +370,10 @@ fn compose_v2_catalog_attach_stmts(view: &DbtCatalogsV2View<'_>) -> AdapterResul
         .filter(|catalog| {
             matches!(
                 catalog.catalog_type,
-                V2CatalogType::Glue | V2CatalogType::IcebergRest | V2CatalogType::DuckLake
+                V2CatalogType::Horizon
+                    | V2CatalogType::Glue
+                    | V2CatalogType::IcebergRest
+                    | V2CatalogType::DuckLake
             )
         })
         .filter_map(|catalog| {
@@ -510,6 +513,14 @@ fn build_duckdb_catalog_attach_stmt(
             opts.push(format!("{sql_key} '{}'", escape_duckdb_single_quotes(val)));
         }
     }
+    if catalog.catalog_type == V2CatalogType::Horizon {
+        if duckdb_get_str(duckdb, "authorization_type").is_none() {
+            opts.push("AUTHORIZATION_TYPE 'OAUTH2'".to_string());
+        }
+        if duckdb_get_str(duckdb, "access_delegation_mode").is_none() {
+            opts.push("ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS'".to_string());
+        }
+    }
     for (key, sql_key) in [
         ("support_nested_namespaces", "SUPPORT_NESTED_NAMESPACES"),
         ("support_stage_create", "SUPPORT_STAGE_CREATE"),
@@ -523,6 +534,22 @@ fn build_duckdb_catalog_attach_stmt(
     ] {
         if let Some(val) = duckdb_get_bool(duckdb, key) {
             opts.push(format!("{sql_key} {val}"));
+        }
+    }
+    if catalog.catalog_type == V2CatalogType::Horizon {
+        for (key, sql_key, default) in [
+            ("support_stage_create", "SUPPORT_STAGE_CREATE", false),
+            ("use_transaction_commit", "USE_TRANSACTION_COMMIT", false),
+            (
+                "skip_create_table_metadata_updates",
+                "SKIP_CREATE_TABLE_METADATA_UPDATES",
+                true,
+            ),
+            ("allow_deletes", "ALLOW_DELETES", false),
+        ] {
+            if duckdb_get_bool(duckdb, key).is_none() {
+                opts.push(format!("{sql_key} {default}"));
+            }
         }
     }
     if duckdb_get_bool(duckdb, "encode_entire_prefix").unwrap_or(false) {

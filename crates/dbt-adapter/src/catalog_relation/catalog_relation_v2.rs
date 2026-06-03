@@ -171,7 +171,8 @@ pub(super) fn from_model_config_and_catalogs_v2(
             CatalogRelation::build_bigquery_biglake_with_catalogs_v2(model, catalog, &catalog_name)
         }
         (AdapterType::DuckDB, V2CatalogType::Glue)
-        | (AdapterType::DuckDB, V2CatalogType::IcebergRest) => {
+        | (AdapterType::DuckDB, V2CatalogType::IcebergRest)
+        | (AdapterType::DuckDB, V2CatalogType::Horizon) => {
             CatalogRelation::build_duckdb_with_catalogs_v2(model, catalog, &catalog_name)
         }
         (AdapterType::DuckDB, V2CatalogType::DuckLake) => {
@@ -187,7 +188,7 @@ pub(super) fn from_model_config_and_catalogs_v2(
         (AdapterType::DuckDB, other) => Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             format!(
-                "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'glue', 'iceberg_rest', 'ducklake', and 'local_filesystem'",
+                "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'horizon', 'glue', 'iceberg_rest', 'ducklake', and 'local_filesystem'",
                 other.as_str()
             ),
         )),
@@ -796,6 +797,7 @@ impl CatalogRelation {
         let warehouse = get_yaml_str(duckdb, "warehouse").map(|s| s.to_string());
         let secret = get_yaml_str(duckdb, "secret").map(|s| s.to_string());
         let attach_as = get_yaml_str(duckdb, "attach_as").map(|s| s.to_string());
+        let support_stage_create = get_yaml_bool(duckdb, "support_stage_create");
         // Use same sanitization as ATTACH SQL generation so routing and attachment stay in sync
         let alias = sanitize_duckdb_identifier(attach_as.as_deref().unwrap_or(catalog_name));
 
@@ -820,6 +822,12 @@ impl CatalogRelation {
         }
         if let Some(ref secret) = secret {
             adapter_properties.insert("secret".to_string(), secret.clone());
+        }
+        if let Some(support_stage_create) = support_stage_create {
+            adapter_properties.insert(
+                "support_stage_create".to_string(),
+                support_stage_create.to_string(),
+            );
         }
         adapter_properties.insert("attached_database".to_string(), alias);
 
@@ -1655,19 +1663,107 @@ catalogs:
     }
 
     #[test]
+    fn duckdb_v2_horizon_catalog_builds_relation() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://snowflake.example.com/polaris/api/catalog"
+        warehouse: "HORIZON_CATALOG"
+        secret: "horizon_secret"
+        attach_as: "horizon_db"
+"#,
+        );
+        let conf = json!({ "catalog_name": "horizon_demo" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
+
+        assert_eq!(r.catalog_type, "horizon");
+        assert_eq!(r.table_format, ICEBERG_TABLE_FORMAT);
+        assert_eq!(
+            r.adapter_properties.get("endpoint").map(|s| s.as_str()),
+            Some("https://snowflake.example.com/polaris/api/catalog")
+        );
+        assert_eq!(
+            r.adapter_properties.get("warehouse").map(|s| s.as_str()),
+            Some("HORIZON_CATALOG")
+        );
+        assert_eq!(
+            r.adapter_properties
+                .get("attached_database")
+                .map(|s| s.as_str()),
+            Some("horizon_db")
+        );
+        assert!(!r.supports_stage_create());
+    }
+
+    #[test]
+    fn duckdb_v2_horizon_support_stage_create_override_true() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://snowflake.example.com/polaris/api/catalog"
+        warehouse: "HORIZON_CATALOG"
+        support_stage_create: true
+"#,
+        );
+        let conf = json!({ "catalog_name": "horizon_demo" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
+
+        assert!(r.supports_stage_create());
+    }
+
+    #[test]
+    fn duckdb_v2_iceberg_rest_support_stage_create_override_false() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: rest_demo
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://rest.example.com"
+        support_stage_create: false
+"#,
+        );
+        let conf = json!({ "catalog_name": "rest_demo" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
+
+        assert!(!r.supports_stage_create());
+    }
+
+    #[test]
     fn duckdb_v2_unsupported_catalog_type_errors() {
         let catalogs = load_catalogs_yaml(
             r#"
 catalogs:
-  - name: my_horizon
-    type: horizon
+  - name: my_unity
+    type: unity
     table_format: iceberg
     config:
       snowflake:
-        external_volume: "EV"
+        catalog_database: "UC_DB"
 "#,
         );
-        let conf = json!({ "catalog_name": "my_horizon" });
+        let conf = json!({ "catalog_name": "my_unity" });
         let m = model(AdapterType::DuckDB, conf);
 
         let err = from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs))
@@ -1675,7 +1771,7 @@ catalogs:
 
         assert!(
             format!("{err}").contains(
-                "DuckDB v2 mapping supports only 'glue', 'iceberg_rest', 'ducklake', and 'local_filesystem'"
+                "DuckDB v2 mapping supports only 'horizon', 'glue', 'iceberg_rest', 'ducklake', and 'local_filesystem'"
             )
         );
     }

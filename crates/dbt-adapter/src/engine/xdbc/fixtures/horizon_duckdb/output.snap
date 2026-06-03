@@ -1,0 +1,5 @@
+---
+source: fs/sa/crates/dbt-adapter/src/engine/xdbc/duckdb_attach_snapshot_tests.rs
+input_file: fs/sa/crates/dbt-adapter/src/engine/xdbc/fixtures/horizon_duckdb/catalogs.yml
+---
+ATTACH IF NOT EXISTS 'HORIZON_CATALOG' AS horizon_db (TYPE ICEBERG, SECRET horizon_secret, ENDPOINT 'https://snowflake.example.com/polaris/api/catalog', DEFAULT_SCHEMA 'demo', AUTHORIZATION_TYPE 'OAUTH2', ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS', SUPPORT_STAGE_CREATE false, USE_TRANSACTION_COMMIT false, SKIP_CREATE_TABLE_METADATA_UPDATES true, ALLOW_DELETES false)

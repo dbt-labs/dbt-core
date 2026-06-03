@@ -1431,6 +1431,33 @@ impl CatalogRelation {
             Value::from(())
         }
     }
+
+    pub fn supports_stage_create(&self) -> bool {
+        // Adapter-generic Jinja surface for materializations. DuckDB catalogs
+        // can opt out when the underlying catalog cannot create directly from
+        // SELECT and needs create-then-insert writes instead.
+        if let Some(support_stage_create) = self.adapter_properties.get("support_stage_create") {
+            return support_stage_create.eq_ignore_ascii_case("true");
+        }
+
+        if self.adapter_type == AdapterType::DuckDB {
+            if self
+                .catalog_type
+                .eq_ignore_ascii_case(V2CatalogType::Horizon.as_str())
+            {
+                return false;
+            }
+
+            if let Some(endpoint_type) = self.adapter_properties.get("endpoint_type")
+                && (endpoint_type.eq_ignore_ascii_case("GLUE")
+                    || endpoint_type.eq_ignore_ascii_case("S3_TABLES"))
+            {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 #[inline]
@@ -1469,6 +1496,10 @@ impl Object for CatalogRelation {
 
             "catalog_type" => Self::map_str_val(self.catalog_type.as_str()),
             "table_format" => Self::map_str_val(self.table_format.as_str()),
+            "supports_stage_create" => Value::from(self.supports_stage_create()),
+            // ATTACH/YAML use the singular option name, while macro code reads this
+            // as a catalog capability predicate.
+            "support_stage_create" => Value::from(self.supports_stage_create()),
 
             // common optional
             "base_location" => Self::map_opt_str(self.base_location.clone()),

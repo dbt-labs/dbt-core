@@ -1,0 +1,13 @@
+# Scenario: Snowflake Horizon catalog attached from DuckDB.
+# Exercises: Horizon-specific DuckDB REST options are inferred from type=horizon.
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://snowflake.example.com/polaris/api/catalog"
+        warehouse: "HORIZON_CATALOG"
+        secret: "horizon_secret"
+        attach_as: "horizon_db"
+        default_schema: "demo"

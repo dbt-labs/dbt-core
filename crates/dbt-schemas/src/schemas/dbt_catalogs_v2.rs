@@ -712,7 +712,7 @@ const DUCKDB_KEYS: &[&str] = &[
 
 fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     let catalog_platforms = match catalog.catalog_type {
-        V2CatalogType::Horizon => &["snowflake"][..],
+        V2CatalogType::Horizon => &["snowflake", "duckdb"][..],
         V2CatalogType::Glue => &["snowflake", "duckdb"],
         V2CatalogType::IcebergRest => &["snowflake", "duckdb"],
         V2CatalogType::Unity => &["snowflake", "databricks"],
@@ -761,67 +761,100 @@ fn parse_horizon_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
             catalog.name
         );
     }
-    let Some(snowflake) = catalog.config_block("snowflake") else {
+    let snowflake = catalog.config_block("snowflake");
+    let duckdb = catalog.config_block("duckdb");
+    if snowflake.is_none() && duckdb.is_none() {
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' type 'horizon' requires config.snowflake",
+            "Catalog '{}' type 'horizon' requires at least one config block: snowflake or duckdb",
             catalog.name
         );
     };
-    if field_span(snowflake, "base_location_subpath").is_some() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "base_location_subpath").cloned(),
-            "Catalog '{}' horizon/snowflake base_location_subpath is model-config only and may not be specified in catalogs.yml",
-            catalog.name
-        );
-    }
-    check_unknown_keys(
-        snowflake,
-        SNOWFLAKE_MANAGED_SNOWFLAKE_KEYS,
-        "catalogs[].config.snowflake (horizon)",
-    )?;
 
-    let Some(external_volume) = get_str(snowflake, "external_volume")? else {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' horizon/snowflake config requires 'external_volume'",
-            catalog.name
-        );
-    };
-    if external_volume.is_empty_or_whitespace() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "external_volume").cloned(),
-            "Catalog '{}' horizon/snowflake 'external_volume' must be non-empty",
-            catalog.name
-        );
+    if let Some(snowflake) = snowflake {
+        if field_span(snowflake, "base_location_subpath").is_some() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "base_location_subpath").cloned(),
+                "Catalog '{}' horizon/snowflake base_location_subpath is model-config only and may not be specified in catalogs.yml",
+                catalog.name
+            );
+        }
+        check_unknown_keys(
+            snowflake,
+            SNOWFLAKE_MANAGED_SNOWFLAKE_KEYS,
+            "catalogs[].config.snowflake (horizon)",
+        )?;
+
+        let Some(external_volume) = get_str(snowflake, "external_volume")? else {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => catalog.field_span("type").cloned(),
+                "Catalog '{}' horizon/snowflake config requires 'external_volume'",
+                catalog.name
+            );
+        };
+        if external_volume.is_empty_or_whitespace() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "external_volume").cloned(),
+                "Catalog '{}' horizon/snowflake 'external_volume' must be non-empty",
+                catalog.name
+            );
+        }
+        if let Some(base_location_root) = get_str(snowflake, "base_location_root")?
+            && base_location_root.is_empty_or_whitespace()
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "base_location_root").cloned(),
+                "Catalog '{}' horizon/snowflake base_location_root cannot be blank",
+                catalog.name
+            );
+        }
+        if let Some(policy) = get_str(snowflake, "storage_serialization_policy")?
+            && !is_valid_storage_serialization_policy(policy)
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "storage_serialization_policy").cloned(),
+                "storage_serialization_policy '{}' invalid (COMPATIBLE|OPTIMIZED)",
+                policy
+            );
+        }
+        validate_u32_range(snowflake, "data_retention_time_in_days", 90)?;
+        validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
+        validate_optional_bool(snowflake, "change_tracking")?;
     }
-    if let Some(base_location_root) = get_str(snowflake, "base_location_root")?
-        && base_location_root.is_empty_or_whitespace()
-    {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "base_location_root").cloned(),
-            "Catalog '{}' horizon/snowflake base_location_root cannot be blank",
-            catalog.name
-        );
+
+    if let Some(duckdb) = duckdb {
+        validate_duckdb_config(duckdb, catalog, "horizon")?;
+        if get_str(duckdb, "endpoint_type")?.is_some() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                "Catalog '{}' horizon/duckdb config requires 'endpoint', not 'endpoint_type'",
+                catalog.name
+            );
+        }
+        let Some(warehouse) = get_str(duckdb, "warehouse")? else {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => catalog.field_span("type").cloned(),
+                "Catalog '{}' horizon/duckdb config requires 'warehouse'",
+                catalog.name
+            );
+        };
+        if warehouse.is_empty_or_whitespace() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "warehouse").cloned(),
+                "Catalog '{}' horizon/duckdb 'warehouse' must be non-empty",
+                catalog.name
+            );
+        }
     }
-    if let Some(policy) = get_str(snowflake, "storage_serialization_policy")?
-        && !is_valid_storage_serialization_policy(policy)
-    {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "storage_serialization_policy").cloned(),
-            "storage_serialization_policy '{}' invalid (COMPATIBLE|OPTIMIZED)",
-            policy
-        );
-    }
-    validate_u32_range(snowflake, "data_retention_time_in_days", 90)?;
-    validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
-    validate_optional_bool(snowflake, "change_tracking")?;
 
     Ok(())
 }
@@ -1587,6 +1620,44 @@ catalogs:
         change_tracking: false
 "#;
         parse_and_validate(yaml).expect("v2 horizon should validate");
+    }
+
+    #[test]
+    fn horizon_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_duck
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://snowflake.example.com/polaris/api/catalog"
+        warehouse: "HORIZON_CATALOG"
+        secret: "horizon_secret"
+        attach_as: "horizon_db"
+        default_schema: "demo"
+"#;
+        parse_and_validate(yaml).expect("horizon + duckdb should validate");
+    }
+
+    #[test]
+    fn horizon_duckdb_rejects_endpoint_type() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_duck
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: GLUE
+        warehouse: "HORIZON_CATALOG"
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected endpoint_type rejection");
+        assert!(
+            format!("{res:?}").contains("requires 'endpoint', not 'endpoint_type'"),
+            "unexpected: {res:?}"
+        );
     }
 
     #[test]
