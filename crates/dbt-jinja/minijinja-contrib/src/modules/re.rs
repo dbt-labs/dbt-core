@@ -9,7 +9,7 @@ use fancy_regex::{Captures, Expander, Regex}; // like python regex, fancy_regex 
 use indexmap::IndexMap;
 use minijinja::{
     arg_utils::ArgsIter,
-    value::{Object, ValueMap},
+    value::{Enumerator, Object, ObjectRepr, ValueMap},
     Error, ErrorKind, Value,
 };
 use std::{collections::BTreeMap, fmt, iter, sync::Arc};
@@ -379,7 +379,7 @@ fn re_findall(args: &[Value]) -> Result<Value, Error> {
                             IndexMap::from_iter(names.enumerate().skip(1).filter_map(
                                 |(idx, name)| name.map(|name| (name.to_string(), idx)),
                             ));
-                        let capture = Capture::new(
+                        let capture = Capture::new_findall(
                             groups,
                             named_groups,
                             input_string.clone(),
@@ -576,6 +576,10 @@ pub struct Capture {
     pattern: String,
     pos: usize,
     endpos: usize,
+    /// True when created by re.findall (groups already skip group 0).
+    /// Only findall captures expose sequence semantics; match/search captures
+    /// behave like Python Match objects and do not support index access.
+    is_findall: bool,
 }
 
 impl Capture {
@@ -593,7 +597,19 @@ impl Capture {
             pattern,
             pos: 0,
             endpos,
+            is_findall: false,
         }
+    }
+
+    pub fn new_findall(
+        groups: Vec<(Value, Option<Span>)>,
+        named_groups: IndexMap<String, usize>,
+        input_string: String,
+        pattern: String,
+    ) -> Self {
+        let mut capture = Self::new(groups, named_groups, input_string, pattern);
+        capture.is_findall = true;
+        capture
     }
 
     /// Helper: parse the [group] argument, which could be an index or the name of a group
@@ -756,6 +772,11 @@ impl Object for Capture {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        if self.is_findall {
+            if let Some(idx) = key.as_usize() {
+                return self.groups.get(idx).map(|(v, _)| v.clone());
+            }
+        }
         match key.as_str()? {
             "pos" => Some(Value::from(self.pos)),
             "endpos" => Some(Value::from(self.endpos)),
@@ -802,6 +823,31 @@ impl Object for Capture {
             }
             "string" => Some(Value::from(self.input_string.clone())),
             _ => None,
+        }
+    }
+
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        if self.is_findall {
+            ObjectRepr::Seq
+        } else {
+            ObjectRepr::Map
+        }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        if self.is_findall {
+            let values: Vec<Value> = self.groups.iter().map(|(v, _)| v.clone()).collect();
+            Enumerator::Values(values)
+        } else {
+            Enumerator::NonEnumerable
+        }
+    }
+
+    fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
+        if self.is_findall {
+            Some(self.groups.len())
+        } else {
+            None
         }
     }
 
@@ -949,5 +995,77 @@ mod tests {
     fn test_re_escape_missing_argument() {
         let result = re_escape(&[]);
         assert!(result.is_err());
+    }
+
+    // Regression test: Capture objects returned by re.findall with 3+ groups must be
+    // sliceable sequences (Python returns N-tuples, not mappings).
+    #[test]
+    fn test_re_findall_capture_is_sliceable_seq() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_global("re", Value::from(create_re_namespace()));
+
+        // Pattern with 3 capture groups → findall returns Capture objects.
+        // `match[1:]|join(",")` is the exact pattern used by dbt-project-evaluator.
+        let result = env
+            .render_str(
+                r#"{% set matches = re.findall('(a)(b)(c)', 'abc') %}{{ matches[0][1:]|join(",") }}"#,
+                (),
+                &[],
+            )
+            .expect("slicing a multi-group findall result should not fail");
+        assert_eq!(result, "b,c");
+
+        // Index access: match[0] → first capture group (group 1 in regex terms)
+        let result = env
+            .render_str(
+                r#"{% set matches = re.findall('(\w+):(\w+):(\w+)', 'foo:bar:baz') %}{{ matches[0][0] }},{{ matches[0][1] }},{{ matches[0][2] }}"#,
+                (),
+                &[],
+            )
+            .expect("integer index access should work");
+        assert_eq!(result, "foo,bar,baz");
+
+        // Length via `|length` filter
+        let result = env
+            .render_str(
+                r#"{% set matches = re.findall('(x)(y)(z)', 'xyz') %}{{ matches[0]|length }}"#,
+                (),
+                &[],
+            )
+            .expect("length filter should work on Capture");
+        assert_eq!(result, "3");
+    }
+
+    // Match/search captures must NOT expose sequence semantics: slicing should fail
+    // because Python's Match object is not a sequence.
+    #[test]
+    fn test_re_match_capture_is_not_sliceable() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_global("re", Value::from(create_re_namespace()));
+
+        // re.match with groups returns a Match object — slicing must be an error
+        let result = env.render_str(
+            r#"{% set m = re.match('(a)(b)(c)', 'abc') %}{{ m[1:] }}"#,
+            (),
+            &[],
+        );
+        assert!(
+            result.is_err(),
+            "slicing a match/search Capture should fail, got: {result:?}"
+        );
+
+        // But Match object methods still work normally
+        let result = env
+            .render_str(
+                r#"{% set m = re.match('(a)(b)(c)', 'abc') %}{{ m.group(1) }},{{ m.group(2) }}"#,
+                (),
+                &[],
+            )
+            .expect("match.group() should still work");
+        assert_eq!(result, "a,b");
     }
 }
