@@ -1,6 +1,7 @@
 use crate::AdapterEngine;
 use crate::adapter::adapter_impl::AdapterImpl;
 use crate::connection::AdapterConnectionFactory;
+use crate::load_catalogs;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch::RecordBatchExt};
@@ -12,7 +13,11 @@ use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::dbt_catalogs_v2::{
+    CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType, V2TableFormat,
+};
 use dbt_schemas::schemas::{
+    common::ResolvedQuoting,
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
@@ -289,6 +294,44 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     }
 }
 
+/// Build the `information_schema.tables` query used to list relations in a
+/// schema.
+///
+/// `information_schema.tables` unions every attached database, so the query is
+/// constrained to the target catalog. This keeps the result correct (no rows
+/// leak in from other attached catalogs, including misreported Iceberg REST
+/// ones) and matches the per-catalog scope dbt expects when warming the relation
+/// cache. When the catalog is unknown (empty), the catalog predicate is omitted.
+fn list_relations_sql(quoting: ResolvedQuoting, db_schema: &CatalogAndSchema) -> String {
+    let query_schema = if quoting.schema {
+        db_schema.resolved_schema.clone()
+    } else {
+        db_schema.resolved_schema.to_lowercase()
+    };
+
+    let catalog_predicate = if db_schema.resolved_catalog.is_empty() {
+        String::new()
+    } else {
+        let query_catalog = if quoting.database {
+            db_schema.resolved_catalog.clone()
+        } else {
+            db_schema.resolved_catalog.to_lowercase()
+        };
+        format!(
+            " AND lower(table_catalog) = lower('{}')",
+            query_catalog.replace('\'', "''"),
+        )
+    };
+
+    format!(
+        "SELECT table_catalog, table_schema, table_name, table_type \
+         FROM information_schema.tables \
+         WHERE table_schema = '{}'{}",
+        query_schema.replace('\'', "''"),
+        catalog_predicate,
+    )
+}
+
 /// List all relations (tables, views) in a given schema.
 ///
 /// Queries DuckDB's `information_schema.tables` and maps the results to
@@ -300,17 +343,22 @@ pub fn list_relations(
     db_schema: &CatalogAndSchema,
     token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-    let query_schema = if engine.quoting().schema {
-        db_schema.resolved_schema.clone()
-    } else {
-        db_schema.resolved_schema.to_lowercase()
-    };
+    // Schema-wide listing is only unreliable for external Iceberg REST catalogs
+    // (their information_schema coverage is incomplete), so bail to the targeted
+    // DESCRIBE-based get_relation path only when the *target* catalog is one of
+    // them. A regular DuckDB catalog is still listed even while Iceberg catalogs
+    // are attached — see the catalog scoping below.
+    if is_duckdb_v2_external_iceberg_catalog_database(&db_schema.resolved_catalog) {
+        return Err(AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            format!(
+                "DuckDB schema-wide relation listing is disabled while v2 Iceberg REST catalogs are attached; use targeted get_relation introspection instead for '{}'",
+                db_schema.resolved_catalog
+            ),
+        ));
+    }
 
-    let sql = format!(
-        "SELECT table_catalog, table_schema, table_name, table_type \
-         FROM information_schema.tables \
-         WHERE table_schema = '{query_schema}'"
-    );
+    let sql = list_relations_sql(engine.quoting(), db_schema);
 
     let batch = engine.execute(None, conn, ctx, &sql, token)?;
 
@@ -352,6 +400,76 @@ pub fn list_relations(
     Ok(relations)
 }
 
+pub(crate) fn is_duckdb_v2_external_iceberg_catalog_database(database: &str) -> bool {
+    if database.is_empty() {
+        return false;
+    }
+
+    with_duckdb_v2_external_iceberg_catalogs(|view| {
+        is_duckdb_v2_external_iceberg_catalog_database_in_view(database, view)
+    })
+}
+
+fn with_duckdb_v2_external_iceberg_catalogs(
+    f: impl FnOnce(&DbtCatalogsV2View<'_>) -> bool,
+) -> bool {
+    if !load_catalogs::fetch_use_catalogs_v2() {
+        return false;
+    }
+
+    let Some(catalogs) = load_catalogs::fetch_catalogs() else {
+        return false;
+    };
+    let Ok(view) = catalogs.view_v2() else {
+        return false;
+    };
+
+    f(&view)
+}
+
+#[cfg(test)]
+fn has_duckdb_v2_external_iceberg_catalogs_in_view(view: &DbtCatalogsV2View<'_>) -> bool {
+    view.catalogs
+        .iter()
+        .any(is_duckdb_v2_external_iceberg_catalog)
+}
+
+fn is_duckdb_v2_external_iceberg_catalog_database_in_view(
+    database: &str,
+    view: &DbtCatalogsV2View<'_>,
+) -> bool {
+    if database.is_empty() {
+        return false;
+    }
+
+    view.catalogs.iter().any(|catalog| {
+        if !is_duckdb_v2_external_iceberg_catalog(catalog) {
+            return false;
+        }
+        let Some(duckdb_block) = catalog.config_block("duckdb") else {
+            return false;
+        };
+
+        let alias = duckdb_block
+            .get(dbt_yaml::Value::from("attach_as"))
+            .and_then(|value| value.as_str())
+            .unwrap_or(catalog.name);
+        let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
+        alias.eq_ignore_ascii_case(database)
+    })
+}
+
+fn is_duckdb_v2_external_iceberg_catalog(catalog: &CatalogSpecV2View<'_>) -> bool {
+    // DuckDB exposes these catalogs through Iceberg REST-style attachments.
+    // Their information_schema coverage is incomplete, so schema-wide listing
+    // is avoided while targeted DESCRIBE-based get_relation remains available.
+    matches!(
+        catalog.catalog_type,
+        V2CatalogType::Horizon | V2CatalogType::Glue | V2CatalogType::IcebergRest
+    ) && matches!(catalog.table_format, V2TableFormat::Iceberg)
+        && catalog.config_block("duckdb").is_some()
+}
+
 /// Build an Arrow Schema from DuckDB's DESCRIBE output.
 ///
 /// DuckDB's DESCRIBE returns columns: column_name, column_type, null, key, default, extra
@@ -382,4 +500,117 @@ fn build_schema_from_duckdb_describe(
 
     let schema = Schema::new(fields);
     Ok(Arc::new(schema))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+
+    fn catalog_and_schema(catalog: &str, schema: &str) -> CatalogAndSchema {
+        CatalogAndSchema {
+            rendered_catalog: catalog.to_string(),
+            rendered_schema: schema.to_string(),
+            resolved_catalog: catalog.to_string(),
+            resolved_schema: schema.to_string(),
+        }
+    }
+
+    #[test]
+    fn list_relations_sql_scopes_to_target_catalog() {
+        // With a catalog present the listing must be constrained to it, so rows
+        // from other attached databases (e.g. remote Iceberg REST catalogs that
+        // `information_schema.tables` would otherwise union in) cannot leak.
+        let sql = list_relations_sql(
+            ResolvedQuoting::trues(),
+            &catalog_and_schema("aws_cloud_cost_demo", "aws_cloud_cost"),
+        );
+        assert_eq!(
+            sql,
+            "SELECT table_catalog, table_schema, table_name, table_type \
+             FROM information_schema.tables \
+             WHERE table_schema = 'aws_cloud_cost' \
+             AND lower(table_catalog) = lower('aws_cloud_cost_demo')",
+        );
+    }
+
+    #[test]
+    fn list_relations_sql_lowercases_unquoted_identifiers() {
+        // Unquoted identifiers fold to lowercase in DuckDB, so the predicates
+        // must be lowercased to match.
+        let sql = list_relations_sql(
+            ResolvedQuoting::falses(),
+            &catalog_and_schema("My_Catalog", "My_Schema"),
+        );
+        assert!(sql.contains("table_schema = 'my_schema'"));
+        assert!(sql.contains("lower(table_catalog) = lower('my_catalog')"));
+    }
+
+    #[test]
+    fn list_relations_sql_omits_catalog_predicate_when_unknown() {
+        // No catalog means we cannot scope; fall back to the schema-only filter
+        // rather than emitting an empty/incorrect catalog predicate.
+        let sql = list_relations_sql(ResolvedQuoting::trues(), &catalog_and_schema("", "main"));
+        assert!(sql.ends_with("WHERE table_schema = 'main'"));
+        assert!(!sql.contains("lower(table_catalog)"));
+        assert!(!sql.contains(" AND "));
+    }
+
+    fn with_v2_view(yaml: &str, test: impl FnOnce(&DbtCatalogsV2View<'_>)) {
+        let parsed: dbt_yaml::Value = dbt_yaml::from_str(yaml).expect("valid YAML");
+        let dbt_yaml::Value::Mapping(repr, span) = parsed else {
+            panic!("expected YAML mapping");
+        };
+        let catalogs = DbtCatalogs::new(repr, span);
+        let view = catalogs.view_v2().expect("valid catalogs v2 view");
+        test(&view);
+    }
+
+    #[test]
+    fn duckdb_v2_external_iceberg_catalogs_disable_schema_listing() {
+        with_v2_view(
+            r#"
+catalogs:
+  - name: lakekeeper
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: http://localhost:8181/catalog
+        warehouse: demo
+        attach_as: iceberg_demo
+  - name: horizon
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: https://snowflake.example.com/polaris/api/catalog
+        warehouse: HORIZON_CATALOG
+  - name: files
+    type: local_filesystem
+    table_format: default
+    config:
+      duckdb:
+        root_path: local_files
+        file_format: csv
+"#,
+            |view| {
+                assert!(has_duckdb_v2_external_iceberg_catalogs_in_view(view));
+                assert!(is_duckdb_v2_external_iceberg_catalog_database_in_view(
+                    "iceberg_demo",
+                    view
+                ));
+                assert!(is_duckdb_v2_external_iceberg_catalog_database_in_view(
+                    "horizon", view
+                ));
+                assert!(!is_duckdb_v2_external_iceberg_catalog_database_in_view(
+                    "local_files",
+                    view
+                ));
+                assert!(!is_duckdb_v2_external_iceberg_catalog_database_in_view(
+                    "", view
+                ));
+            },
+        );
+    }
 }

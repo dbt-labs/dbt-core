@@ -61,7 +61,7 @@ use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
-use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
+use dbt_schemas::schemas::dbt_catalogs_v2::{DbtCatalogsV2View, V2CatalogType, V2TableFormat};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
@@ -430,22 +430,10 @@ impl AdapterImpl {
         // return the appropriate table format so that macros can skip CASCADE / ALTER TABLE RENAME.
         if load_catalogs::fetch_use_catalogs_v2() {
             if let Some(catalogs) = load_catalogs::fetch_catalogs() {
-                if let Ok(view) = catalogs.view_v2() {
-                    for catalog in &view.catalogs {
-                        if let Some(duckdb_block) = catalog.config_block("duckdb") {
-                            let alias = duckdb_block
-                                .get(dbt_yaml::Value::from("attach_as"))
-                                .and_then(|v| v.as_str())
-                                .unwrap_or(catalog.name);
-                            let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
-                            if alias.eq_ignore_ascii_case(database) {
-                                return match catalog.catalog_type {
-                                    V2CatalogType::DuckLake => TableFormat::DuckLake,
-                                    _ => TableFormat::Iceberg,
-                                };
-                            }
-                        }
-                    }
+                if let Ok(view) = catalogs.view_v2()
+                    && let Some(format) = table_format_for_database_from_v2(database, &view)
+                {
+                    return format;
                 }
             }
         }
@@ -4333,6 +4321,34 @@ impl AdapterImpl {
     }
 }
 
+fn table_format_for_database_from_v2(
+    database: &str,
+    view: &DbtCatalogsV2View<'_>,
+) -> Option<TableFormat> {
+    // Used by adapter.table_format(relation) when a Jinja relation only gives
+    // us its database/catalog. The attached DuckDB alias is the bridge back to
+    // catalogs.yml, which tells macros whether DuckDB needs Iceberg/DuckLake
+    // DDL behavior for that relation.
+    for catalog in &view.catalogs {
+        let Some(duckdb_block) = catalog.config_block("duckdb") else {
+            continue;
+        };
+        let alias = duckdb_block
+            .get(dbt_yaml::Value::from("attach_as"))
+            .and_then(|v| v.as_str())
+            .unwrap_or(catalog.name);
+        let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
+        if alias.eq_ignore_ascii_case(database) {
+            return Some(match catalog.catalog_type {
+                V2CatalogType::DuckLake => TableFormat::DuckLake,
+                _ if matches!(catalog.table_format, V2TableFormat::Iceberg) => TableFormat::Iceberg,
+                _ => TableFormat::Default,
+            });
+        }
+    }
+    None
+}
+
 /// Reads `job_execution_timeout_seconds` from the BigQuery adapter attr of the current
 /// model or snapshot in the Jinja state. Returns `None` if the state has no model or the
 /// model has no BigQuery timeout configured.
@@ -4828,12 +4844,23 @@ mod tests {
     use dbt_adapter_core::AdapterType;
     use dbt_auth::auth_for_backend;
     use dbt_common::AdapterResult;
+    use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
     use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};
     use dbt_yaml::Mapping;
 
     use minijinja::{Environment, State, Value};
+
+    fn with_catalogs_v2_view(yaml: &str, test: impl FnOnce(&DbtCatalogsV2View<'_>)) {
+        let parsed: dbt_yaml::Value = dbt_yaml::from_str(yaml).expect("valid YAML");
+        let dbt_yaml::Value::Mapping(repr, span) = parsed else {
+            panic!("expected YAML mapping");
+        };
+        let catalogs = DbtCatalogs::new(repr, span);
+        let view = catalogs.view_v2().expect("valid catalogs v2 view");
+        test(&view);
+    }
 
     fn engine(adapter_type: AdapterType) -> Arc<dyn AdapterEngine> {
         let config = match adapter_type {
@@ -5011,6 +5038,40 @@ mod tests {
         assert_eq!(
             adapter.table_format_for_database("demo"),
             TableFormat::Default
+        );
+    }
+
+    #[test]
+    fn test_table_format_v2_uses_catalog_table_format() {
+        with_catalogs_v2_view(
+            r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: https://snowflake.example.com/polaris/api/catalog
+        warehouse: HORIZON_CATALOG
+  - name: remote_catalog
+    type: local_filesystem
+    table_format: default
+    config:
+      duckdb:
+        root_path: /tmp/remote
+        attach_as: remote_db
+"#,
+            |view| {
+                assert_eq!(
+                    table_format_for_database_from_v2("horizon_demo", view),
+                    Some(TableFormat::Iceberg)
+                );
+                assert_eq!(
+                    table_format_for_database_from_v2("remote_db", view),
+                    Some(TableFormat::Default)
+                );
+                assert_eq!(table_format_for_database_from_v2("missing", view), None);
+            },
         );
     }
 

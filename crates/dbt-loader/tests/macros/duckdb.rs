@@ -178,6 +178,7 @@ fn table_materialization_writes_iceberg_target_directly() {
         .mock()
         .on("table_format", |_| Ok(Value::from("iceberg")));
     harness.mock().on("get_relation", |_| Ok(Value::from(())));
+    harness.mock().on("drop_relation", |_| Ok(Value::UNDEFINED));
     harness
         .mock()
         .on("rename_relation", |_| Ok(Value::UNDEFINED));
@@ -226,11 +227,26 @@ fn table_materialization_writes_iceberg_target_directly() {
         .mock()
         .observed_calls()
         .assert_not_called("rename_relation");
-    assert_executed_contains(harness.mock(), "create  table");
+    harness
+        .mock()
+        .observed_calls()
+        .assert_not_called("get_relation");
     let executed = executed_sql(harness.mock()).join("\n");
+    assert!(
+        executed.contains("create table"),
+        "Iceberg table materialization should create the target relation, got: {executed}"
+    );
     assert!(
         !executed.contains("__dbt_tmp"),
         "Iceberg table materialization should not use an intermediate relation, got: {executed}"
+    );
+    assert!(
+        executed.contains("insert into"),
+        "Iceberg table materialization should create then insert, got: {executed}"
+    );
+    assert!(
+        !executed.contains(" as ("),
+        "Iceberg table materialization should not use CTAS, got: {executed}"
     );
 }
 
@@ -244,6 +260,7 @@ fn table_materialization_uses_create_insert_when_stage_create_is_unsupported() {
         .mock()
         .on("build_catalog_relation", |_| Ok(catalog_relation(false)));
     harness.mock().on("get_relation", |_| Ok(Value::from(())));
+    harness.mock().on("drop_relation", |_| Ok(Value::UNDEFINED));
     harness
         .mock()
         .on("rename_relation", |_| Ok(Value::UNDEFINED));
@@ -271,6 +288,10 @@ fn table_materialization_uses_create_insert_when_stage_create_is_unsupported() {
         .render("{{ materialization_table_duckdb() }}", ctx)
         .expect("render should succeed");
 
+    harness
+        .mock()
+        .observed_calls()
+        .assert_not_called("get_relation");
     let executed = executed_sql(harness.mock()).join("\n").to_lowercase();
     assert!(
         executed.contains("create table"),

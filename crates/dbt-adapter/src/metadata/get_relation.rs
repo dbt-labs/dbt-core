@@ -762,15 +762,53 @@ fn duckdb_get_relation(
         identifier.to_lowercase()
     };
 
+    if !schema.is_empty()
+        && !identifier.is_empty()
+        && crate::metadata::duckdb::is_duckdb_v2_external_iceberg_catalog_database(database)
+    {
+        // DuckDB's information_schema can omit or misreport Iceberg REST
+        // attached-catalog tables. A targeted DESCRIBE is the narrow fallback:
+        // it reuses the normal relation construction after proving the table
+        // exists, without enabling broad schema listing for these catalogs.
+        let relation_name = format!(
+            "{}.{}.{}",
+            quote_duckdb_identifier(database),
+            quote_duckdb_identifier(&query_schema),
+            quote_duckdb_identifier(&query_identifier),
+        );
+        let sql = format!("DESCRIBE {relation_name}");
+        let result = adapter
+            .engine()
+            .execute(Some(state), conn, ctx, &sql, token);
+
+        match result {
+            Ok(_) => {
+                let relation = do_create_relation(
+                    adapter.adapter_type(),
+                    database.to_string(),
+                    schema.to_string(),
+                    Some(identifier.to_string()),
+                    Some(RelationType::Table),
+                    adapter.quoting(),
+                )?;
+                return Ok(Some(relation));
+            }
+            Err(err) if is_duckdb_missing_relation_error(&err, identifier) => return Ok(None),
+            Err(err) => return Err(err),
+        }
+    }
+
     // Query INFORMATION_SCHEMA.TABLES for relation metadata
     // DuckDB's table_type values: BASE TABLE, VIEW, LOCAL TEMPORARY
     let sql = format!(
         r#"
             SELECT table_type as type
             FROM information_schema.tables
-            WHERE table_schema = '{query_schema}'
-              AND table_name = '{query_identifier}'
+            WHERE table_schema = '{}'
+              AND table_name = '{}'
         "#,
+        query_schema.replace('\'', "''"),
+        query_identifier.replace('\'', "''"),
     );
 
     let batch = adapter
@@ -810,6 +848,18 @@ fn duckdb_get_relation(
         adapter.quoting(),
     )?;
     Ok(Some(relation))
+}
+
+fn is_duckdb_missing_relation_error(err: &AdapterError, identifier: &str) -> bool {
+    let msg = err.to_string().to_lowercase();
+    let identifier = identifier.to_lowercase();
+    (msg.contains("does not exist") || msg.contains("not found"))
+        && (msg.contains("table") || msg.contains("view"))
+        && msg.contains(&identifier)
+}
+
+fn quote_duckdb_identifier(identifier: &str) -> String {
+    format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
 #[allow(clippy::too_many_arguments)]

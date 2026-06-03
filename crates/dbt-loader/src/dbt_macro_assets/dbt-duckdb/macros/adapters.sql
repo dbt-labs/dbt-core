@@ -59,8 +59,11 @@
 
 
 {% macro duckdb__create_table_as(temporary, relation, compiled_code, language='sql') -%}
-  {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
-  {%- set supports_stage_create = catalog_relation.supports_stage_create -%}
+  {# DIVERGENCE: adapter.build_catalog_relation / adapter.table_format are Fusion-only
+     (see issue #10659). Under dbt-core (1.x) there is no catalog routing, so treat as a
+     stage-create-capable, non-iceberg target and use the plain CTAS path below. #}
+  {%- set supports_stage_create = adapter.build_catalog_relation(config.model).supports_stage_create if dbt_version.startswith('2.') else true -%}
+  {%- set table_format = adapter.table_format(relation) if dbt_version.startswith('2.') else none -%}
   {%- if language == 'sql' -%}
     {% set contract_config = config.get('contract') %}
     {% if contract_config.enforced %}
@@ -70,7 +73,7 @@
 
     {{ sql_header if sql_header is not none }}
 
-    {%- if not temporary and not supports_stage_create %}
+    {%- if not temporary and (table_format == 'iceberg' or not supports_stage_create) %}
       {% if contract_config.enforced %}
         {#-- DuckDB doesnt support constraints on temp tables --#}
         create table
@@ -113,8 +116,8 @@
   {% endif %}
     {% endif %}
   {%- elif language == 'python' -%}
-    {% if not temporary and not supports_stage_create %}
-      {% do exceptions.raise_compiler_error("DuckDB Python models cannot materialize to a catalog that does not support Iceberg REST staged create. Use a SQL model or a catalog with support_stage_create: true.") %}
+    {% if not temporary and (table_format == 'iceberg' or not supports_stage_create) %}
+      {% do exceptions.raise_compiler_error("DuckDB Python models cannot materialize to an Iceberg catalog that requires create-then-insert writes. Use a SQL model.") %}
     {% endif %}
     {{ py_write_table(temporary=temporary, relation=relation, compiled_code=compiled_code) }}
   {%- else -%}
@@ -155,10 +158,12 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__get_columns_in_relation(relation) -%}
-  {% set fmt = adapter.table_format(relation) %}
+  {# DIVERGENCE: adapter.table_format is Fusion-only (see issue #10659). Under dbt-core
+     (1.x) fmt is none, so we use the standard information_schema.columns query. #}
+  {% set fmt = adapter.table_format(relation) if dbt_version.startswith('2.') else none %}
   {% if fmt == 'iceberg' %}
     {# information_schema.columns returns incorrect metadata for Iceberg REST catalog tables. #}
-    {% call statement('get_columns_in_relation', fetch_result=True) %}
+    {% set get_columns_sql %}
       select
           column_name,
           column_type                as data_type,
@@ -166,9 +171,9 @@ def materialize(df, con):
           null::integer              as numeric_precision,
           null::integer              as numeric_scale
       from (describe {{ relation }})
-    {% endcall %}
+    {% endset %}
   {% else %}
-    {% call statement('get_columns_in_relation', fetch_result=True) %}
+    {% set get_columns_sql %}
       select
           column_name,
           data_type,
@@ -186,8 +191,11 @@ def materialize(df, con):
       {% endif %}
       order by ordinal_position
 
-    {% endcall %}
+    {% endset %}
   {% endif %}
+  {% call statement('get_columns_in_relation', fetch_result=True) %}
+    {{ get_columns_sql }}
+  {% endcall %}
   {% set table = load_result('get_columns_in_relation').table %}
   {{ return(sql_convert_columns_in_relation(table)) }}
 {% endmacro %}
@@ -224,11 +232,8 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__rename_relation(from_relation, to_relation) -%}
-  {# DIVERGENCE: adapter.table_format is Fusion-only (see issue #10659). Under dbt-core
-     (1.x) treat as non-iceberg and use the plain ALTER TABLE RENAME path. #}
-  {% set fmt = adapter.table_format(from_relation) if dbt_version.startswith('2.') else none %}
   {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
-  {% if fmt == 'iceberg' %}
+  {% if adapter.table_format(from_relation) == 'iceberg' %}
     {# Iceberg REST: CTAS and ALTER...RENAME cannot share a transaction. #}
     {{ adapter.commit() }}
   {% endif %}
