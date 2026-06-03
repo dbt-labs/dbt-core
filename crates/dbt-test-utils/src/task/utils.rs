@@ -367,8 +367,47 @@ where
     }
 
     let cli = parser.parse_from(cmd_vec);
+    exec_cli(
+        feature_stack_factory,
+        cli,
+        project_dir,
+        target_dir,
+        stdout_file,
+        stderr_file,
+        execute_fs,
+        from_lib,
+        tracing_handle,
+    )
+}
+
+// Util function to execute fusion commands in tests from an already-parsed
+// `Cli`. This is everything `exec_fs` does *after* argv parsing; `exec_fs`
+// delegates to it. It exists so callers whose argv does not parse into the
+// platform `Cli` directly can still reuse
+// the redirect / ctrl-c / telemetry-shutdown plumbing.
+//
+// Unlike `exec_fs`, this does NOT load `.env.conformance`: that has to happen
+// before argv parsing, which by definition is already done by the time a `Cli`
+// exists. Callers that need it must load it before parsing.
+#[allow(clippy::too_many_arguments)]
+pub fn exec_cli<'a, Fut>(
+    feature_stack_factory: Arc<FeatureStackFactory>,
+    cli: Box<Cli>,
+    project_dir: PathBuf,
+    target_dir: PathBuf,
+    stdout_file: File,
+    stderr_file: File,
+    execute_fs: impl FnOnce(SystemArgs, Box<Cli>, Arc<FeatureStack>, CancellationToken) -> Fut,
+    from_lib: impl FnOnce(&Cli) -> SystemArgs,
+    tracing_handle: TracingReloadHandle,
+) -> Pin<Box<dyn Future<Output = FsResult<()>> + Send + 'a>>
+where
+    Fut: Future<Output = FsResult<()>> + Send + 'a,
+{
     let arg = from_lib(&cli);
-    let warn_error_options = parser.warn_error_options(&cli);
+    // Equivalent to `CliParser::warn_error_options(&cli)`, computed directly so
+    // this helper does not need a `CliParser`.
+    let warn_error_options = Some(cli.common_args.get_cli_warn_error_options());
     let fail_fast_flag = cli.common_args.fail_fast;
     let trace_config = FsTraceConfig::new_from_io_args(
         arg.command,
