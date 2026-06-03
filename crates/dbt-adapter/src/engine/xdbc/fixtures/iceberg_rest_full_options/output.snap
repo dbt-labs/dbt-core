@@ -2,4 +2,4 @@
 source: fs/sa/crates/dbt-adapter/src/engine/xdbc/duckdb_attach_snapshot_tests.rs
 input_file: fs/sa/crates/dbt-adapter/src/engine/xdbc/fixtures/iceberg_rest_full_options/catalogs.yml
 ---
-ATTACH IF NOT EXISTS 'warehouse_name' AS iceberg_db (TYPE ICEBERG, SECRET iceberg_secret, ENDPOINT 'https://rest.example.com', DEFAULT_REGION 'us-east-1', DEFAULT_SCHEMA 'demo', MAX_TABLE_STALENESS '10 minutes', AUTHORIZATION_TYPE 'OAUTH2', ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS', SUPPORT_NESTED_NAMESPACES false, SUPPORT_STAGE_CREATE true, USE_TRANSACTION_COMMIT false, SKIP_CREATE_TABLE_METADATA_UPDATES true, ALLOW_DELETES false, PURGE_REQUESTED false, ENCODE_ENTIRE_PREFIX true)
+ATTACH IF NOT EXISTS 'warehouse_name' AS iceberg_db (TYPE ICEBERG, SECRET iceberg_secret, ENDPOINT 'https://rest.example.com', DEFAULT_REGION 'us-east-1', DEFAULT_SCHEMA 'demo', MAX_TABLE_STALENESS '10 minutes', AUTHORIZATION_TYPE 'OAUTH2', ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS', SUPPORT_NESTED_NAMESPACES false, STAGE_CREATE_TABLES true, DISABLE_MULTI_TABLE_COMMIT true, SKIP_CREATE_TABLE_METADATA_UPDATES true, REMOVE_FILES_ON_DELETE false, PURGE_REQUESTED false, ENCODE_ENTIRE_PREFIX true)

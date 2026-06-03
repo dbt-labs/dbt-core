@@ -328,7 +328,7 @@ impl XdbcEngine {
     }
 
     /// Build v2 catalog-driven `ATTACH IF NOT EXISTS` statements for DuckDB
-    /// Glue, Iceberg REST, and DuckLake catalogs.
+    /// Horizon, Glue, Iceberg REST, Unity Catalog, and DuckLake catalogs.
     ///
     /// Reads the global catalogs v2 state, extracts every catalog that has a
     /// `config.duckdb` block, and emits one ATTACH per catalog. Duplicate
@@ -373,6 +373,7 @@ fn compose_v2_catalog_attach_stmts(view: &DbtCatalogsV2View<'_>) -> AdapterResul
                 V2CatalogType::Horizon
                     | V2CatalogType::Glue
                     | V2CatalogType::IcebergRest
+                    | V2CatalogType::Unity
                     | V2CatalogType::DuckLake
             )
         })
@@ -467,6 +468,49 @@ fn build_duckdb_ducklake_attach_stmt(
     Ok((alias, stmt))
 }
 
+/// DuckDB Iceberg `ATTACH` option defaults per catalog type, encoding dbt's
+/// maintainer knowledge of each backend so common catalogs work out of the box.
+///
+/// Each entry is `(config.duckdb key, full SQL option clause)`. The clause is
+/// emitted only when the user has not set that key in `config.duckdb`, so
+/// explicit user values always win. Generic `iceberg_rest` (and `glue`) catalogs
+/// get no opinionated defaults — callers opt in to any of these options
+/// explicitly.
+fn catalog_attach_defaults(catalog_type: V2CatalogType) -> &'static [(&'static str, &'static str)] {
+    match catalog_type {
+        // Snowflake Horizon (Polaris) Iceberg REST: OAuth2 + vended credentials,
+        // and a write path that supports neither staged creates nor multi-table
+        // commits.
+        V2CatalogType::Horizon => &[
+            ("authorization_type", "AUTHORIZATION_TYPE 'OAUTH2'"),
+            (
+                "access_delegation_mode",
+                "ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS'",
+            ),
+            ("stage_create_tables", "STAGE_CREATE_TABLES false"),
+            (
+                "disable_multi_table_commit",
+                "DISABLE_MULTI_TABLE_COMMIT true",
+            ),
+            (
+                "skip_create_table_metadata_updates",
+                "SKIP_CREATE_TABLE_METADATA_UPDATES true",
+            ),
+            ("remove_files_on_delete", "REMOVE_FILES_ON_DELETE false"),
+        ],
+        // Databricks Unity Catalog's Iceberg REST endpoint does not support the
+        // REST multi-table commit, so default it off; single-table commits work.
+        // (Other write-path options are left to DuckDB's defaults pending
+        // confirmation against a live Unity catalog.)
+        V2CatalogType::Unity => &[(
+            "disable_multi_table_commit",
+            "DISABLE_MULTI_TABLE_COMMIT true",
+        )],
+        // Generic iceberg_rest / glue: no opinionated defaults.
+        _ => &[],
+    }
+}
+
 fn build_duckdb_catalog_attach_stmt(
     catalog: &CatalogSpecV2View<'_>,
     duckdb: &dbt_yaml::Mapping,
@@ -513,43 +557,29 @@ fn build_duckdb_catalog_attach_stmt(
             opts.push(format!("{sql_key} '{}'", escape_duckdb_single_quotes(val)));
         }
     }
-    if catalog.catalog_type == V2CatalogType::Horizon {
-        if duckdb_get_str(duckdb, "authorization_type").is_none() {
-            opts.push("AUTHORIZATION_TYPE 'OAUTH2'".to_string());
-        }
-        if duckdb_get_str(duckdb, "access_delegation_mode").is_none() {
-            opts.push("ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS'".to_string());
-        }
-    }
     for (key, sql_key) in [
         ("support_nested_namespaces", "SUPPORT_NESTED_NAMESPACES"),
-        ("support_stage_create", "SUPPORT_STAGE_CREATE"),
-        ("use_transaction_commit", "USE_TRANSACTION_COMMIT"),
+        ("stage_create_tables", "STAGE_CREATE_TABLES"),
+        ("disable_multi_table_commit", "DISABLE_MULTI_TABLE_COMMIT"),
         (
             "skip_create_table_metadata_updates",
             "SKIP_CREATE_TABLE_METADATA_UPDATES",
         ),
-        ("allow_deletes", "ALLOW_DELETES"),
+        ("remove_files_on_delete", "REMOVE_FILES_ON_DELETE"),
         ("purge_requested", "PURGE_REQUESTED"),
     ] {
         if let Some(val) = duckdb_get_bool(duckdb, key) {
             opts.push(format!("{sql_key} {val}"));
         }
     }
-    if catalog.catalog_type == V2CatalogType::Horizon {
-        for (key, sql_key, default) in [
-            ("support_stage_create", "SUPPORT_STAGE_CREATE", false),
-            ("use_transaction_commit", "USE_TRANSACTION_COMMIT", false),
-            (
-                "skip_create_table_metadata_updates",
-                "SKIP_CREATE_TABLE_METADATA_UPDATES",
-                true,
-            ),
-            ("allow_deletes", "ALLOW_DELETES", false),
-        ] {
-            if duckdb_get_bool(duckdb, key).is_none() {
-                opts.push(format!("{sql_key} {default}"));
-            }
+    // Apply catalog-type preset defaults for any option the user did not set in
+    // config.duckdb. Explicit user values (emitted above) always win, and
+    // generic iceberg_rest / glue catalogs get no opinionated defaults.
+    for (config_key, default_clause) in catalog_attach_defaults(catalog.catalog_type) {
+        let user_set = duckdb_get_str(duckdb, config_key).is_some()
+            || duckdb_get_bool(duckdb, config_key).is_some();
+        if !user_set {
+            opts.push((*default_clause).to_string());
         }
     }
     if duckdb_get_bool(duckdb, "encode_entire_prefix").unwrap_or(false) {

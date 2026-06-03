@@ -1,8 +1,8 @@
 # Scenario: iceberg_rest catalog exercising every supported option.
 # Exercises: SECRET, ENDPOINT, DEFAULT_REGION, DEFAULT_SCHEMA,
 # MAX_TABLE_STALENESS, AUTHORIZATION_TYPE, ACCESS_DELEGATION_MODE,
-# SUPPORT_NESTED_NAMESPACES, SUPPORT_STAGE_CREATE, USE_TRANSACTION_COMMIT,
-# SKIP_CREATE_TABLE_METADATA_UPDATES, ALLOW_DELETES, PURGE_REQUESTED, ENCODE_ENTIRE_PREFIX.
+# SUPPORT_NESTED_NAMESPACES, STAGE_CREATE_TABLES, DISABLE_MULTI_TABLE_COMMIT,
+# SKIP_CREATE_TABLE_METADATA_UPDATES, REMOVE_FILES_ON_DELETE, PURGE_REQUESTED, ENCODE_ENTIRE_PREFIX.
 catalogs:
   - name: rest_full
     type: iceberg_rest
@@ -19,9 +19,9 @@ catalogs:
         authorization_type: "OAUTH2"
         access_delegation_mode: "VENDED_CREDENTIALS"
         support_nested_namespaces: false
-        support_stage_create: true
-        use_transaction_commit: false
+        stage_create_tables: true
+        disable_multi_table_commit: true
         skip_create_table_metadata_updates: true
-        allow_deletes: false
+        remove_files_on_delete: false
         purge_requested: false
         encode_entire_prefix: true

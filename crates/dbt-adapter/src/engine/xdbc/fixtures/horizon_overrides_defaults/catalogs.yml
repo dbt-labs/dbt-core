@@ -1,0 +1,17 @@
+# Scenario: Horizon catalog where the user overrides preset defaults.
+# Exercises: explicit config.duckdb values win over the type=horizon presets
+# (e.g. disable_multi_table_commit:false and stage_create_tables:true are
+# emitted as set, not as the Horizon defaults of true/false).
+catalogs:
+  - name: horizon_override
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://snowflake.example.com/polaris/api/catalog"
+        warehouse: "HORIZON_CATALOG"
+        secret: "horizon_secret"
+        attach_as: "horizon_db"
+        default_schema: "demo"
+        disable_multi_table_commit: false
+        stage_create_tables: true

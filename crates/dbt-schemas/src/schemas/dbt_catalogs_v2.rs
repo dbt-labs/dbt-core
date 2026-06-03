@@ -47,15 +47,15 @@
 //!         authorization_type: OAUTH2|SIGV4|NONE                   # optional
 //!         access_delegation_mode: VENDED_CREDENTIALS|NONE         # optional
 //!         support_nested_namespaces: <boolean>                    # optional
-//!         support_stage_create: <boolean>                         # optional
-//!         use_transaction_commit: <boolean>                        # optional
+//!         stage_create_tables: <boolean>                          # optional
+//!         disable_multi_table_commit: <boolean>                   # optional
 //!         skip_create_table_metadata_updates: <boolean>            # optional
-//!         allow_deletes: <boolean>                                 # optional
+//!         remove_files_on_delete: <boolean>                       # optional
 //!         purge_requested: <boolean>                              # optional
 //!         encode_entire_prefix: <boolean>                         # optional
 //!
 //!   # type: unity
-//!   # supported platforms: snowflake, databricks
+//!   # supported platforms: snowflake, databricks, duckdb
 //!   # at least one supported platform block is required
 //!   - name: unity_catalog
 //!     type: unity
@@ -71,7 +71,17 @@
 //!         file_format: delta                                      # required if databricks block exists
 //!         location_root: <path string>                            # optional, non-empty if present
 //!         use_uniform: <boolean>                                  # optional, defaults to false
-//!         # Both managed and UniForm paths currently use delta.
+//!         # Managed external paths use parquet; UniForm paths use delta.
+//!       duckdb:
+//!         endpoint: https://<workspace>/api/2.1/unity-catalog/iceberg-rest
+//!         warehouse: <unity catalog name>                         # optional, non-empty if present
+//!         secret: <string>                                        # optional DuckDB secret name from profiles.yml
+//!         attach_as: <string>                                     # optional, non-empty if present
+//!         default_schema: <string>                                # optional, non-empty if present
+//!         authorization_type: OAUTH2|NONE                         # optional
+//!         access_delegation_mode: VENDED_CREDENTIALS|NONE         # optional
+//!         # DuckDB UC support uses the Iceberg REST ATTACH surface; managed reads
+//!         # and Java Iceberg-compatible writes depend on duckdb-iceberg fixes.
 //!
 //!   # type: hive_metastore
 //!   # supported platforms: databricks
@@ -118,10 +128,10 @@
 //!         authorization_type: OAUTH2|SIGV4|NONE                   # optional
 //!         access_delegation_mode: VENDED_CREDENTIALS|NONE         # optional
 //!         support_nested_namespaces: <boolean>                    # optional
-//!         support_stage_create: <boolean>                         # optional
-//!         use_transaction_commit: <boolean>                        # optional
+//!         stage_create_tables: <boolean>                          # optional
+//!         disable_multi_table_commit: <boolean>                   # optional
 //!         skip_create_table_metadata_updates: <boolean>            # optional
-//!         allow_deletes: <boolean>                                 # optional
+//!         remove_files_on_delete: <boolean>                       # optional
 //!         purge_requested: <boolean>                              # optional
 //!         encode_entire_prefix: <boolean>                         # optional
 //!
@@ -702,10 +712,10 @@ const DUCKDB_KEYS: &[&str] = &[
     "authorization_type",
     "access_delegation_mode",
     "support_nested_namespaces",
-    "support_stage_create",
-    "use_transaction_commit",
+    "stage_create_tables",
+    "disable_multi_table_commit",
     "skip_create_table_metadata_updates",
-    "allow_deletes",
+    "remove_files_on_delete",
     "purge_requested",
     "encode_entire_prefix",
 ];
@@ -715,15 +725,19 @@ fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
         V2CatalogType::Horizon => &["snowflake", "duckdb"][..],
         V2CatalogType::Glue => &["snowflake", "duckdb"],
         V2CatalogType::IcebergRest => &["snowflake", "duckdb"],
-        V2CatalogType::Unity => &["snowflake", "databricks"],
+        V2CatalogType::Unity => &["snowflake", "databricks", "duckdb"],
         V2CatalogType::HiveMetastore => &["databricks"],
         V2CatalogType::BiglakeMetastore => &["bigquery"],
         V2CatalogType::DuckLake => &["duckdb"],
         V2CatalogType::LocalFilesystem => &["duckdb"],
     };
 
+    let mut has_supported_config = false;
     for &platform in ALL_V2_PLATFORMS {
-        if catalog.config_block(platform).is_some() && !catalog_platforms.contains(&platform) {
+        if catalog.config_block(platform).is_none() {
+            continue;
+        }
+        if !catalog_platforms.contains(&platform) {
             return err!(
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => catalog.field_span("type").cloned(),
@@ -732,8 +746,33 @@ fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
                 catalog.catalog_type.as_str()
             );
         }
+        has_supported_config = true;
+    }
+    if !has_supported_config {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' of type '{}' requires at least one config block: {}",
+            catalog.name,
+            catalog.catalog_type.as_str(),
+            format_config_block_choices(catalog_platforms)
+        );
     }
     Ok(())
+}
+
+fn format_config_block_choices(platforms: &[&str]) -> String {
+    match platforms {
+        [] => String::new(),
+        [only] => (*only).to_string(),
+        [first, second] => format!("{first} or {second}"),
+        _ => {
+            let mut choices = platforms[..platforms.len() - 1].join(", ");
+            choices.push_str(", or ");
+            choices.push_str(platforms[platforms.len() - 1]);
+            choices
+        }
+    }
 }
 
 fn validate_u32_range(map: &yml::Mapping, field: &str, max: u32) -> FsResult<()> {
@@ -763,14 +802,6 @@ fn parse_horizon_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     }
     let snowflake = catalog.config_block("snowflake");
     let duckdb = catalog.config_block("duckdb");
-    if snowflake.is_none() && duckdb.is_none() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' type 'horizon' requires at least one config block: snowflake or duckdb",
-            catalog.name
-        );
-    };
 
     if let Some(snowflake) = snowflake {
         if field_span(snowflake, "base_location_subpath").is_some() {
@@ -1002,10 +1033,10 @@ fn validate_duckdb_config(
 
     for key in [
         "support_nested_namespaces",
-        "support_stage_create",
-        "use_transaction_commit",
+        "stage_create_tables",
+        "disable_multi_table_commit",
         "skip_create_table_metadata_updates",
-        "allow_deletes",
+        "remove_files_on_delete",
         "purge_requested",
         "encode_entire_prefix",
     ] {
@@ -1022,15 +1053,6 @@ fn parse_glue_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("table_format").cloned(),
             "Catalog '{}' type 'glue' requires table_format='iceberg'",
-            catalog.name
-        );
-    }
-
-    if catalog.config_block("snowflake").is_none() && catalog.config_block("duckdb").is_none() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' of type 'glue' requires at least one config block: snowflake or duckdb",
             catalog.name
         );
     }
@@ -1086,15 +1108,6 @@ fn parse_linked_catalog(catalog: &CatalogSpecV2View<'_>, type_name: &str) -> FsR
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("table_format").cloned(),
             "Catalog '{}' type '{}' requires table_format='iceberg'",
-            catalog.name,
-            type_name
-        );
-    }
-    if catalog.config_block("snowflake").is_none() && catalog.config_block("databricks").is_none() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' of type '{}' requires at least one config block: snowflake or databricks",
             catalog.name,
             type_name
         );
@@ -1195,6 +1208,10 @@ fn parse_linked_catalog(catalog: &CatalogSpecV2View<'_>, type_name: &str) -> FsR
                 type_name
             );
         }
+    }
+
+    if let Some(duckdb) = catalog.config_block("duckdb") {
+        validate_duckdb_config(duckdb, catalog, "unity")?;
     }
 
     Ok(())
@@ -1341,15 +1358,6 @@ fn parse_iceberg_rest_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("table_format").cloned(),
             "Catalog '{}' type 'iceberg_rest' requires table_format='iceberg'",
-            catalog.name
-        );
-    }
-
-    if catalog.config_block("snowflake").is_none() && catalog.config_block("duckdb").is_none() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' of type 'iceberg_rest' requires at least one config block: snowflake or duckdb",
             catalog.name
         );
     }
@@ -1780,6 +1788,24 @@ iceberg_catalogs:
     }
 
     #[test]
+    fn v2_rejects_missing_supported_platform_block() {
+        let yaml = r#"
+catalogs:
+  - name: linked_catalog
+    type: unity
+    table_format: iceberg
+    config: {}
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("requires at least one config block: snowflake, databricks, or duckdb"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
     fn unity_rejects_bigquery_block_in_config() {
         let yaml = r#"
 catalogs:
@@ -2175,15 +2201,35 @@ catalogs:
     table_format: iceberg
     config:
       duckdb:
-        endpoint: "https://example.com"
+        endpoint: ""
 "#;
         let res = parse_and_validate(yaml);
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("does not support duckdb on the unity"),
+            msg.contains("'endpoint' must be non-empty"),
             "unexpected error: {msg}"
         );
+    }
+
+    #[test]
+    fn unity_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: unity_duck
+    type: unity
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://dbc.example.com/api/2.1/unity-catalog/iceberg-rest"
+        warehouse: "main"
+        secret: "databricks_pat"
+        attach_as: "uc"
+        default_schema: "analytics"
+        authorization_type: "OAUTH2"
+        access_delegation_mode: "VENDED_CREDENTIALS"
+"#;
+        parse_and_validate(yaml).expect("unity + duckdb should validate");
     }
 
     // -----------------------------------------------------------------------
@@ -2423,10 +2469,10 @@ catalogs:
         authorization_type: OAUTH2
         access_delegation_mode: VENDED_CREDENTIALS
         support_nested_namespaces: true
-        support_stage_create: false
-        use_transaction_commit: false
+        stage_create_tables: false
+        disable_multi_table_commit: true
         skip_create_table_metadata_updates: true
-        allow_deletes: false
+        remove_files_on_delete: false
         purge_requested: true
         encode_entire_prefix: true
 "#;
@@ -2463,12 +2509,12 @@ catalogs:
     config:
       duckdb:
         endpoint: "https://example.com"
-        support_stage_create: "yes"
+        stage_create_tables: "yes"
 "#;
         let res = parse_and_validate(yaml);
         assert!(res.is_err(), "expected error for non-boolean attach option");
         assert!(
-            format!("{res:?}").contains("support_stage_create"),
+            format!("{res:?}").contains("stage_create_tables"),
             "unexpected: {res:?}"
         );
     }

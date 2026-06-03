@@ -1,0 +1,5 @@
+---
+source: fs/sa/crates/dbt-adapter/src/engine/xdbc.rs
+input_file: fs/sa/crates/dbt-adapter/src/engine/xdbc/fixtures/unity_catalog_databricks/catalogs.yml
+---
+ATTACH IF NOT EXISTS 'main' AS uc (TYPE ICEBERG, SECRET databricks_pat, ENDPOINT 'https://dbc.example.com/api/2.1/unity-catalog/iceberg-rest', DEFAULT_SCHEMA 'analytics', AUTHORIZATION_TYPE 'OAUTH2', ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS', DISABLE_MULTI_TABLE_COMMIT true)

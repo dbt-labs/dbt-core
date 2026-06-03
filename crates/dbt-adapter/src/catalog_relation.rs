@@ -1436,8 +1436,8 @@ impl CatalogRelation {
         // Adapter-generic Jinja surface for materializations. DuckDB catalogs
         // can opt out when the underlying catalog cannot create directly from
         // SELECT and needs create-then-insert writes instead.
-        if let Some(support_stage_create) = self.adapter_properties.get("support_stage_create") {
-            return support_stage_create.eq_ignore_ascii_case("true");
+        if let Some(stage_create_tables) = self.adapter_properties.get("stage_create_tables") {
+            return stage_create_tables.eq_ignore_ascii_case("true");
         }
 
         if self.adapter_type == AdapterType::DuckDB {
@@ -1497,9 +1497,9 @@ impl Object for CatalogRelation {
             "catalog_type" => Self::map_str_val(self.catalog_type.as_str()),
             "table_format" => Self::map_str_val(self.table_format.as_str()),
             "supports_stage_create" => Value::from(self.supports_stage_create()),
-            // ATTACH/YAML use the singular option name, while macro code reads this
-            // as a catalog capability predicate.
-            "support_stage_create" => Value::from(self.supports_stage_create()),
+            // ATTACH/YAML use the duckdb-iceberg option name, while macro code reads
+            // this as a catalog capability predicate.
+            "stage_create_tables" => Value::from(self.supports_stage_create()),
 
             // common optional
             "base_location" => Self::map_opt_str(self.base_location.clone()),

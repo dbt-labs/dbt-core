@@ -1,0 +1,5 @@
+---
+source: fs/sa/crates/dbt-adapter/src/engine/xdbc.rs
+input_file: fs/sa/crates/dbt-adapter/src/engine/xdbc/fixtures/horizon_overrides_defaults/catalogs.yml
+---
+ATTACH IF NOT EXISTS 'HORIZON_CATALOG' AS horizon_db (TYPE ICEBERG, SECRET horizon_secret, ENDPOINT 'https://snowflake.example.com/polaris/api/catalog', DEFAULT_SCHEMA 'demo', STAGE_CREATE_TABLES true, DISABLE_MULTI_TABLE_COMMIT false, AUTHORIZATION_TYPE 'OAUTH2', ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS', SKIP_CREATE_TABLE_METADATA_UPDATES true, REMOVE_FILES_ON_DELETE false)

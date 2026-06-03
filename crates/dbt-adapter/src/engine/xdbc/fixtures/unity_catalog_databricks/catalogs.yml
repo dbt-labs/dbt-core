@@ -1,0 +1,17 @@
+# Scenario: Unity Catalog through DuckDB's Iceberg REST ATTACH surface.
+# Exercises: Databricks UC endpoint, warehouse/catalog name, secret, alias,
+# OAUTH2 auth, and vended credentials. Managed reads and Java-compatible writes
+# still depend on duckdb-iceberg fixes.
+catalogs:
+  - name: uc_managed
+    type: unity
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://dbc.example.com/api/2.1/unity-catalog/iceberg-rest"
+        warehouse: "main"
+        secret: "databricks_pat"
+        attach_as: "uc"
+        default_schema: "analytics"
+        authorization_type: "OAUTH2"
+        access_delegation_mode: "VENDED_CREDENTIALS"

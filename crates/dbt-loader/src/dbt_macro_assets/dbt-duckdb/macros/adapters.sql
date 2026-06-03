@@ -232,8 +232,11 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__rename_relation(from_relation, to_relation) -%}
+  {# DIVERGENCE: adapter.table_format is Fusion-only (see issue #10659). Under dbt-core
+     (1.x) fmt is none, so we skip the iceberg-specific commit and just ALTER RENAME. #}
+  {% set fmt = adapter.table_format(from_relation) if dbt_version.startswith('2.') else none %}
   {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
-  {% if adapter.table_format(from_relation) == 'iceberg' %}
+  {% if fmt == 'iceberg' %}
     {# Iceberg REST: CTAS and ALTER...RENAME cannot share a transaction. #}
     {{ adapter.commit() }}
   {% endif %}
