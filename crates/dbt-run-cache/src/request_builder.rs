@@ -30,6 +30,9 @@ pub const SQL_SEMANTIC_EXTRA_KEYS: &[&str] = &[
     "error_if",
     "store_failures",
     "store_failures_as",
+    // Databricks attributes
+    "auto_liquid_cluster",
+    "databricks_tags",
 ];
 
 pub const SEED_SEMANTIC_EXTRA_KEYS: &[&str] = &["column_types", "quote_columns", "delimiter"];
@@ -373,6 +376,24 @@ mod tests {
         );
         assert_eq!(extras.get("merge_update_columns").unwrap(), "");
         assert!(!extras.contains_key("unique_key"));
+    }
+
+    #[test]
+    fn sql_semantic_extras_include_databricks_attributes() {
+        let mut config = SemanticExtraConfig::new();
+        config.insert("auto_liquid_cluster".to_string(), Some(json!(true)));
+        config.insert(
+            "databricks_tags".to_string(),
+            Some(json!({"team": "analytics"})),
+        );
+
+        let extras = sql_semantic_extras(&config).unwrap();
+
+        assert_eq!(extras.get("auto_liquid_cluster").unwrap(), "true");
+        assert_eq!(
+            extras.get("databricks_tags").unwrap(),
+            "{\"team\":\"analytics\"}"
+        );
     }
 
     #[test]
