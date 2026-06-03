@@ -617,6 +617,33 @@ fn validate_update_package(package: Option<&str>) -> FsResult<()> {
     Ok(())
 }
 
+/// Returns the error message explaining why an in-place self-update is refused,
+/// or `None` if the update may proceed. Self-update is blocked when the binary
+/// is owned by a package manager, unless `force` is set.
+fn blocked_self_update_message(
+    install_method: crate::install_method::InstallMethod,
+    force: bool,
+) -> Option<String> {
+    if install_method.is_self_updatable() || force {
+        return None;
+    }
+    let message = match install_method.upgrade_command(None) {
+        Some(command) => format!(
+            "dbt was installed via {}. To upgrade, run:\n\n    {}\n\n\
+             (Self-updating here would overwrite the binary {} manages. \
+             Pass --force to self-update anyway.)",
+            install_method.label(),
+            command,
+            install_method.label(),
+        ),
+        None => "dbt was installed by another package manager, so it can't self-update. \
+             Please upgrade dbt using the package manager you installed it with, \
+             or pass --force to self-update anyway."
+            .to_string(),
+    };
+    Some(message)
+}
+
 /// Inner implementation that accepts an injectable HTTP client.
 /// Production code calls this via `exec_update`; tests inject a mock.
 pub(crate) async fn exec_update_with_client(
@@ -624,6 +651,11 @@ pub(crate) async fn exec_update_with_client(
     client: &dyn UpdateHttpClient,
 ) -> FsResult<()> {
     validate_update_package(args.package.as_deref())?;
+
+    let install_method = crate::install_method::InstallMethod::detect();
+    if let Some(message) = blocked_self_update_message(install_method, args.force) {
+        return err!(ErrorCode::NotSupported, "{}", message);
+    }
 
     let curr_path = match env::current_exe() {
         Ok(exe_path) => {
@@ -937,6 +969,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: None,
             package: None,
+            force: false,
         };
         let version = resolve_target_version(&args, &client).await.unwrap();
         assert_eq!(version, "2.0.0-preview.154");
@@ -951,6 +984,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: Some("canary".to_string()),
             package: None,
+            force: false,
         };
         let version = resolve_target_version(&args, &client).await.unwrap();
         assert_eq!(version, "2.0.0-preview.157");
@@ -975,6 +1009,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: None,
             package: Some("dbt".to_string()),
+            force: false,
         };
         exec_update_native(&args, tmp.path(), &client)
             .await
@@ -1009,6 +1044,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: Some("canary".to_string()),
             package: Some("all".to_string()),
+            force: false,
         };
         exec_update_native(&args, tmp.path(), &client)
             .await
@@ -1023,6 +1059,36 @@ mod tests {
             std::fs::read(tmp.path().join("dbt")).unwrap(),
             b"dbt-binary"
         );
+    }
+
+    #[test]
+    fn test_blocked_self_update_message() {
+        use crate::install_method::InstallMethod;
+
+        // Self-updatable installs are never blocked.
+        assert!(blocked_self_update_message(InstallMethod::Direct, false).is_none());
+
+        // Package-manager installs are blocked with a method-specific command.
+        let msg = blocked_self_update_message(InstallMethod::Homebrew, false).unwrap();
+        assert!(msg.contains("brew upgrade dbt"), "got: {msg}");
+        assert!(msg.contains("--force"), "got: {msg}");
+
+        // The catch-all `Other` has no command but still mentions --force.
+        let msg = blocked_self_update_message(InstallMethod::Other, false).unwrap();
+        assert!(msg.contains("--force"), "got: {msg}");
+
+        // --force overrides the block for every method.
+        for method in [
+            InstallMethod::Homebrew,
+            InstallMethod::Pip,
+            InstallMethod::Winget,
+            InstallMethod::Other,
+        ] {
+            assert!(
+                blocked_self_update_message(method, true).is_none(),
+                "--force should bypass block for {method:?}"
+            );
+        }
     }
 
     #[test]
@@ -1047,6 +1113,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: None,
             package: Some("bogus".to_string()),
+            force: false,
         };
         let result = exec_update_native(&args, tmp.path(), &client).await;
         assert!(result.is_err());
@@ -1069,6 +1136,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: None,
             package: Some("dbt".to_string()),
+            force: false,
         };
         let result = exec_update_native(&args, tmp.path(), &client).await;
         assert!(result.is_err());
@@ -1099,6 +1167,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: None,
             package: Some("dbt".to_string()),
+            force: false,
         };
         exec_update_native(&args, tmp.path(), &client)
             .await
@@ -1116,6 +1185,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: None,
             package: None,
+            force: false,
         };
         let result = resolve_target_version(&args, &client).await;
         assert!(result.is_err());
@@ -1256,6 +1326,7 @@ mod tests {
         let args = SystemUpdateArgs {
             version: None,
             package: Some("dbt".to_string()),
+            force: false,
         };
         exec_update_native(&args, tmp.path(), &client)
             .await

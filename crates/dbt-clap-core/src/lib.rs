@@ -2315,6 +2315,11 @@ pub struct SystemUpdateArgs {
     /// Package to update (e.g. dbt) [default: dbt]
     #[arg(long)]
     pub package: Option<String>,
+
+    /// Self-update in place even when dbt was installed by a package manager.
+    /// This overwrites the package-manager-owned binary.
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
