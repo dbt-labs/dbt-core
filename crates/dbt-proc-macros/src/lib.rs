@@ -104,7 +104,10 @@ pub fn include_frontend_error_codes(
 ///   to `manifest.config`), so **do not** also fill the field in
 ///   `ResolvableConfig::apply_resolve_defaults` — that is redundant.
 /// - `#[resolved(promote, expect = "msg")]` → `self.field.expect("msg")`
-/// - `#[resolved(or_else = expr)]` → `self.field.or_else(|| expr)` (stays `Option<T>`)
+/// - `#[resolved(or_else = expr)]` — two behaviors depending on field type:
+///   - `Option<T>`: `self.field.or_else(|| expr)` (stays `Option<T>` in resolved struct)
+///   - `Omissible<T>`: unwraps to `T` in resolved struct; `Present(v)` passes through as `v`,
+///     `Omitted` evaluates `expr`
 ///
 /// **Static vs. dynamic defaults:** `default = expr` and `unwrap_or_default()` are evaluated
 /// inside `finalize_resolved` and are therefore fully static — they cannot depend on runtime
@@ -180,7 +183,7 @@ pub fn resolvable_derive(item: proc_macro::TokenStream) -> proc_macro::TokenStre
         }
     } else if let Some(ref sa_outer_ty) = static_analysis_verbatim_ty {
         // Generate accessor based on whether the inner Option type is Spanned<T> or T directly
-        let inner_ty = extract_option_inner(sa_outer_ty);
+        let inner_ty = extract_generic_inner(sa_outer_ty, "Option");
         if inner_ty.is_some_and(is_spanned_type) {
             quote! {
                 fn get_static_analysis(&self) -> ::core::option::Option<dbt_yaml::Spanned<dbt_common::io_args::StaticAnalysisKind>> {
@@ -298,7 +301,7 @@ impl FieldCollector {
             });
 
             if promote {
-                let Some(inner_ty) = extract_option_inner(field_ty) else {
+                let Some(inner_ty) = extract_generic_inner(field_ty, "Option") else {
                     return Err(syn::Error::new_spanned(
                         field_ty,
                         "#[resolved(promote)] requires an Option<T> field type",
@@ -340,8 +343,8 @@ impl FieldCollector {
                 return Ok(());
             }
 
-            // Handle or_else: field stays Option<T> in resolved struct but gets a
-            // .or_else(|| #expr) transform in finalize_resolved.
+            // Handle or_else: field stays Option<T> (or T for Omissible<T>) in resolved struct
+            // but gets a default-filling transform in finalize_resolved.
             if let Some(or_else) = &or_else_expr {
                 self.track_special_field(field_name, field_ty);
                 let other_attrs: Vec<_> = field
@@ -349,12 +352,29 @@ impl FieldCollector {
                     .iter()
                     .filter(|a| !a.path().is_ident("serde") && !a.path().is_ident("schemars"))
                     .collect();
-                self.resolved_field_defs
-                    .push(quote! { #(#other_attrs)* #vis #field_name: #field_ty });
-                self.from_assignments
-                    .push(quote! { #field_name: r.#field_name });
-                self.finalize_assignments
-                    .push(quote! { #field_name: self.#field_name.or_else(|| #or_else) });
+
+                if let Some(inner_ty) = extract_generic_inner(field_ty, "Omissible") {
+                    // Omissible<T>: unwrap to T in resolved struct.
+                    // or_else fires only for Omitted; Present(v) passes through as v.
+                    self.resolved_field_defs
+                        .push(quote! { #(#other_attrs)* #vis #field_name: #inner_ty });
+                    self.from_assignments
+                        .push(quote! { #field_name: dbt_common::serde_utils::Omissible::Present(r.#field_name) });
+                    self.finalize_assignments.push(quote! {
+                        #field_name: match self.#field_name {
+                            dbt_common::serde_utils::Omissible::Omitted => #or_else,
+                            dbt_common::serde_utils::Omissible::Present(v) => v,
+                        }
+                    });
+                } else {
+                    // Original Option<T> behaviour unchanged.
+                    self.resolved_field_defs
+                        .push(quote! { #(#other_attrs)* #vis #field_name: #field_ty });
+                    self.from_assignments
+                        .push(quote! { #field_name: r.#field_name });
+                    self.finalize_assignments
+                        .push(quote! { #field_name: self.#field_name.or_else(|| #or_else) });
+                }
                 return Ok(());
             }
         }
@@ -398,14 +418,13 @@ fn is_spanned_type(ty: &Type) -> bool {
     false
 }
 
-fn extract_option_inner(ty: &Type) -> Option<&Type> {
+fn extract_generic_inner<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
     if let Type::Path(type_path) = ty {
         if type_path.qself.is_none() {
-            let segments = &type_path.path.segments;
-            if segments.len() == 1 && segments[0].ident == "Option" {
-                if let PathArguments::AngleBracketed(args) = &segments[0].arguments {
-                    if args.args.len() == 1 {
-                        if let GenericArgument::Type(inner) = &args.args[0] {
+            if let Some(last) = type_path.path.segments.last() {
+                if last.ident == wrapper {
+                    if let PathArguments::AngleBracketed(args) = &last.arguments {
+                        if let Some(GenericArgument::Type(inner)) = args.args.first() {
                             return Some(inner);
                         }
                     }

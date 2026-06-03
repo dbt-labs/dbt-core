@@ -1,5 +1,6 @@
 use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::serde_utils::Omissible;
 use dbt_yaml::{DbtSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
@@ -9,6 +10,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
+use super::omissible_utils::handle_omissible_override;
 use crate::default_to;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{
@@ -54,7 +56,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+meta")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+schema", alias = "+dataset")]
-    pub schema: Option<String>,
+    pub schema: Omissible<Option<String>>,
     #[serde(rename = "+severity")]
     pub severity: Option<Severity>,
     #[serde(
@@ -322,7 +324,7 @@ pub struct DataTestConfig {
     pub database: Option<String>,
     #[resolved(or_else = Some(minijinja::constants::DEFAULT_TEST_SCHEMA.to_string()))]
     #[serde(alias = "dataset")]
-    pub schema: Option<String>,
+    pub schema: Omissible<Option<String>>,
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -695,6 +697,13 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
+        // Unlike other node configs where schema: null means "use target schema directly",
+        // DataTestConfig has a non-null default ("dbt_test__audit") applied during finalization.
+        // Omissible lets us distinguish an explicit null (opt out of the suffix) from an absent
+        // key (inherit the default). handle_omissible_override preserves that signal across
+        // config inheritance, so Present(None) from a child wins over a parent's Present(Some(_)).
+        #[allow(unused, clippy::let_unit_value)]
+        let schema = handle_omissible_override(schema, &parent.schema);
 
         default_to!(
             parent,
@@ -712,7 +721,6 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
                 full_refresh,
                 alias,
                 database,
-                schema,
                 group,
                 where_,
                 static_analysis,
