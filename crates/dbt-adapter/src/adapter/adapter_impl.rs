@@ -103,7 +103,12 @@ static CREDENTIAL_IN_COPY_INTO_REGEX: Lazy<Regex> = Lazy::new(|| {
 
 /// Returns true if all non-null values in a Float64 column have zero fractional parts.
 /// Equivalent to Python adapter's `convert_number_type` implementation.
+///
+/// An empty (or all-null) column returns `false`
 fn try_to_int_col(col: &arrow_array::Float64Array) -> bool {
+    if col.len() == col.null_count() {
+        return false;
+    }
     col.iter().all(|v| match v {
         None => true,
         Some(f) if f.is_nan() || f.is_infinite() => true,
@@ -5178,8 +5183,12 @@ mod tests {
             f64::NEG_INFINITY,
             1.0
         ])));
-        // empty column → true
-        assert!(try_to_int_col(&Float64Array::from(Vec::<f64>::new())));
+        assert!(!try_to_int_col(&Float64Array::from(Vec::<f64>::new())));
+        assert!(!try_to_int_col(&Float64Array::from(vec![
+            None::<f64>,
+            None,
+            None
+        ])));
     }
 
     #[test]

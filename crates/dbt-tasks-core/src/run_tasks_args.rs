@@ -81,6 +81,8 @@ pub struct RunTasksArgs {
     pub long_living: bool,
     /// Whether to perform a full refresh (rebuild incremental models from scratch)
     pub full_refresh: bool,
+    /// Whether to run with `--empty` (creates relations with schema only, no data).
+    pub empty: bool,
     /// If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).
     pub event_time_end: Option<String>,
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
@@ -137,6 +139,7 @@ impl RunTasksArgs {
             skip_post_hooks: arg.skip_post_hooks,
             run_cache_service: arg.run_cache_service,
             warn_error_options: arg.warn_error_options.clone(),
+            empty: arg.empty,
         };
         Box::new(run_tasks_args)
     }

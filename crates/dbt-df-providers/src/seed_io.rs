@@ -9,6 +9,7 @@ use arrow_schema::{ArrowError, DataType, Field, Schema};
 use datafusion_common::DataFusionError;
 use dbt_adapter_core::AdapterType;
 use futures::TryStreamExt;
+use parquet::arrow::ArrowWriter;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use std::fs::File;
 use std::io::{BufReader, Seek, SeekFrom};
@@ -114,6 +115,24 @@ pub fn read_parquet_seed_physical(
         .collect::<Result<_, _>>()
         .map_err(|e| DataFusionError::External(Box::new(e)))?;
     Ok((schema, batches))
+}
+
+/// Build a zero-row parquet file in memory that preserves the given schema.
+/// Used by `--empty` to ship a schema-only seed payload to the db-runner.
+pub fn write_empty_parquet_bytes(schema: &Arc<Schema>) -> Result<Vec<u8>, String> {
+    let empty_batch = RecordBatch::new_empty(schema.clone());
+    let mut buf: Vec<u8> = Vec::new();
+    {
+        let mut writer = ArrowWriter::try_new(&mut buf, schema.clone(), None)
+            .map_err(|e| format!("ArrowWriter init failed: {e}"))?;
+        writer
+            .write(&empty_batch)
+            .map_err(|e| format!("ArrowWriter write failed: {e}"))?;
+        writer
+            .close()
+            .map_err(|e| format!("ArrowWriter close failed: {e}"))?;
+    }
+    Ok(buf)
 }
 
 /// Rebuild `batch` under `target_schema`, casting columns where types differ.

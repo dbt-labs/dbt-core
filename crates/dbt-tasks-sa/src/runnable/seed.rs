@@ -192,6 +192,21 @@ pub fn execute_seed_remote(seed: &DbtSeed, ctx: &TaskRunnerCtx) -> FsResult<Node
     let had_warning = check_and_warn_missing_column_types(seed, physical_schema_entry.inner());
     let agate_table = read_parquet_to_agate_table(&parquet_path)?;
 
+    // Under `--empty` we zero out the rows here so the materialization Jinja
+    // can gate on row count rather than the CLI flag. The schema is preserved.
+    let agate_table = if ctx.inner.arg.empty {
+        agate_table.limit(0).map_err(|e| {
+            fs_err!(
+                ErrorCode::IoError,
+                "Failed to build empty agate for seed {}: {}",
+                seed.name(),
+                e
+            )
+        })?
+    } else {
+        agate_table
+    };
+
     let is_full_refresh =
         ctx.inner.arg.full_refresh || seed.deprecated_config.full_refresh.unwrap_or(false);
     // Capture the CSV columns now so we can still reference them after `materialize_seed`

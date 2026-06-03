@@ -31,7 +31,10 @@
 
   {% set code = 'CREATE' if full_refresh_mode else 'INSERT' %}
   {% set rows_affected = (agate_table.rows | length) %}
-  {% set sql = load_csv_rows(model, agate_table) %}
+  {% set sql = "" %}
+  {% if rows_affected > 0 %}
+    {% set sql = load_csv_rows(model, agate_table) %}
+  {% endif %}
 
   {% call noop_statement('main', code ~ ' ' ~ rows_affected, code, rows_affected) %} -- noqa: Should accept a string instead of a integer
     {{ get_csv_sql(create_table_sql, sql) }};

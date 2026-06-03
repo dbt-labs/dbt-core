@@ -279,6 +279,17 @@ impl TableRepr {
         todo!("index_of_value_in_row")
     }
 
+    pub(crate) fn limit(&self, n: i64) -> Result<TableRepr, ArrowError> {
+        if n < 0 {
+            return Err(ArrowError::ComputeError(
+                "Table.limit: count must be non-negative".to_string(),
+            ));
+        }
+        let take = (n as u64).min(self.num_rows() as u64);
+        let indices = UInt64Array::from_iter_values(0..take);
+        self.select_rows(&indices, None)
+    }
+
     pub(crate) fn select_rows(
         &self,
         indices: &UInt64Array,
@@ -501,6 +512,12 @@ impl AgateTable {
         let indices = self.repr.column_indices(keys);
         let repr = self.repr.select(indices);
         AgateTable::from_repr(repr)
+    }
+
+    /// Return a new table containing the first `n` rows.
+    pub fn limit(&self, n: i64) -> Result<AgateTable, ArrowError> {
+        let repr = self.repr.limit(n)?;
+        Ok(AgateTable::from_repr(Arc::new(repr)))
     }
 
     pub fn grouper(&self, column_names: &[String]) -> Result<Grouper, ArrowError> {
@@ -1137,6 +1154,23 @@ impl Object for AgateTable {
             //     A new :class:`.Table`.
             //     """
             // ```
+            // ```python
+            // def limit(self, start_or_stop=None, stop=None, step=None):
+            //     """
+            //     Filter data to a subset of all rows.
+            //     """
+            // ```
+            //
+            // Only the single-arg `limit(n)` form is supported on the rust port.
+            "limit" => {
+                let iter = ArgsIter::new("Table.limit", &["n"], args);
+                let n = iter.next_arg::<i64>()?;
+                iter.finish()?;
+                let table = self.as_ref().limit(n).map_err(|e| {
+                    Error::new(ErrorKind::InvalidOperation, format!("Table.limit: {e}"))
+                })?;
+                Ok(Value::from_object(table))
+            }
             "distinct" => {
                 let iter = ArgsIter::new("Table.distinct", &[], args);
                 let key = iter.next_kwarg::<Option<&Value>>("key")?;
@@ -1187,6 +1221,7 @@ mod tests {
     use arrow_array::{Array, ListArray, RecordBatchOptions, UInt64Array};
     use arrow_schema::Fields;
     use minijinja::Environment;
+    use minijinja::value::Kwargs;
     use minijinja::value::ValueMap;
     use minijinja::value::mutable_map::MutableMap;
     use std::io;
@@ -1290,6 +1325,99 @@ mod tests {
         let rows = table.rows();
         let values = rows.values();
         assert_eq!(values.len(), 3);
+    }
+
+    fn country_at(table: &AgateTable, idx: usize) -> String {
+        let table_arc = Arc::new(table.clone());
+        let cols = table_arc.columns().values();
+        let country = cols.get(1).unwrap();
+        country
+            .get_item_by_index(idx)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn test_limit_zero_preserves_schema() {
+        let table = AgateTable::from_record_batch(simple_record_batch());
+        assert_eq!(table.num_rows(), 3);
+        let empty = table.limit(0).unwrap();
+        assert_eq!(empty.num_rows(), 0);
+        assert_eq!(empty.num_columns(), 2);
+        assert_eq!(
+            empty.column_names(),
+            vec!["id".to_string(), "country".to_string()]
+        );
+        assert_eq!(empty.column_types().len(), 2);
+    }
+
+    #[test]
+    fn test_limit_single_arg_takes_first_n() {
+        let table = AgateTable::from_record_batch(simple_record_batch());
+        let limited = table.limit(2).unwrap();
+        assert_eq!(limited.num_rows(), 2);
+        assert_eq!(country_at(&limited, 0), "Brazil");
+        assert_eq!(country_at(&limited, 1), "USA");
+    }
+
+    #[test]
+    fn test_limit_exceeds_returns_all_rows() {
+        let table = AgateTable::from_record_batch(simple_record_batch());
+        let limited = table.limit(100).unwrap();
+        assert_eq!(limited.num_rows(), 3);
+    }
+
+    #[test]
+    fn test_limit_negative_errors() {
+        let table = AgateTable::from_record_batch(simple_record_batch());
+        let err = table.limit(-1).unwrap_err();
+        assert!(err.to_string().contains("non-negative"));
+    }
+
+    #[test]
+    fn test_limit_via_jinja_call_method() {
+        let table = AgateTable::from_record_batch(simple_record_batch()).into_value();
+
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        // Single positional: limit(0) -> empty
+        let limited = table
+            .call_method(&state, "limit", &[Value::from(0)], &[])
+            .unwrap()
+            .downcast_object::<AgateTable>()
+            .unwrap();
+        assert_eq!(limited.num_rows(), 0);
+        assert_eq!(limited.num_columns(), 2);
+
+        // Single positional: limit(2) -> first two rows
+        let limited = table
+            .call_method(&state, "limit", &[Value::from(2)], &[])
+            .unwrap()
+            .downcast_object::<AgateTable>()
+            .unwrap();
+        assert_eq!(limited.num_rows(), 2);
+
+        // Keyword: limit(n=2)
+        let limited = table
+            .call_method(
+                &state,
+                "limit",
+                &[Kwargs::from_iter([("n", Value::from(2))]).into()],
+                &[],
+            )
+            .unwrap()
+            .downcast_object::<AgateTable>()
+            .unwrap();
+        assert_eq!(limited.num_rows(), 2);
+
+        // Multi-arg form is not supported on the rust port.
+        let err = table
+            .call_method(&state, "limit", &[Value::from(1), Value::from(3)], &[])
+            .unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::TooManyArguments);
     }
 
     #[test]

@@ -40,7 +40,10 @@
     {% set create_table_sql = create_csv_table(model, agate_table) %}
   {% endif %}
 
-  {% set sql = load_csv_rows(model, agate_table) %}
+  {% set sql = "" %}
+  {% if (agate_table.rows | length) > 0 %}
+    {% set sql = load_csv_rows(model, agate_table) %}
+  {% endif %}
 
   {{ log_seed_operation(agate_table, full_refresh_mode, create_table_sql, sql) }}
 
@@ -87,7 +90,10 @@
 
   {% set code = 'CREATE' if full_refresh_mode else 'INSERT' %}
   {% set rows_affected = (agate_table.rows | length) %}
-  {% set sql = load_csv_rows(model, agate_table) %}
+  {% set sql = "" %}
+  {% if rows_affected > 0 %}
+    {% set sql = load_csv_rows(model, agate_table) %}
+  {% endif %}
 
   {% call noop_statement('main', code ~ ' ' ~ rows_affected, code, rows_affected) %}
     {{ get_csv_sql(create_table_sql, sql) }};

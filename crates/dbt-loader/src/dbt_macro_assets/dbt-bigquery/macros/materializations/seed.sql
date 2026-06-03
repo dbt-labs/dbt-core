@@ -1,10 +1,19 @@
 
 {% macro bigquery__create_csv_table(model, agate_table) %}
+    {% if (agate_table.rows | length) == 0 %}
+        {# `bigquery__load_csv_rows` (which normally creates the table via
+           `adapter.load_dataframe`) is skipped when the agate has no rows,
+           so we have to emit a real CREATE TABLE here. #}
+        {{ return(dbt.default__create_csv_table(model, agate_table)) }}
+    {% endif %}
     -- no-op
 {% endmacro %}
 
 {% macro bigquery__reset_csv_table(model, full_refresh, old_relation, agate_table) %}
     {{ adapter.drop_relation(old_relation) }}
+    {% if (agate_table.rows | length) == 0 %}
+        {{ return(dbt.default__create_csv_table(model, agate_table)) }}
+    {% endif %}
 {% endmacro %}
 
 {% macro bigquery__load_csv_rows(model, agate_table) %}

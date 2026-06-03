@@ -1,6 +1,9 @@
 -- funcsign: (model, bool, relation, agate_table) -> string
 {% macro snowflake__reset_csv_table(model, full_refresh, old_relation, agate_table) %}
-    {% if full_refresh %}
+    {% if full_refresh or (agate_table.rows | length) == 0 %}
+        {# When the agate has zero rows there is no INSERT OVERWRITE to atomically
+           replace data, so we drop + recreate to leave the table empty with the
+           current schema. This also handles column-drift on --empty re-seeds. #}
         {{ adapter.drop_relation(old_relation) }}
         {% set sql = create_csv_table(model, agate_table) %}
         {{ return(sql) }}
