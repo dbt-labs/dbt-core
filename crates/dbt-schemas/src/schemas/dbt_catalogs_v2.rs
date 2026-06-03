@@ -741,9 +741,11 @@ fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
             return err!(
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => catalog.field_span("type").cloned(),
-                "dbt does not support {} on the {} 'type'",
+                "Catalog '{}' (type '{}') does not support a '{}' config block; valid config blocks are: {}",
+                catalog.name,
+                catalog.catalog_type.as_str(),
                 platform,
-                catalog.catalog_type.as_str()
+                catalog_platforms.join(", ")
             );
         }
         has_supported_config = true;
@@ -1717,7 +1719,8 @@ catalogs:
         let res = parse_and_validate(yaml);
         assert!(res.is_err(), "expected error");
         assert!(
-            format!("{res:?}").contains("does not support databricks on the iceberg_rest"),
+            format!("{res:?}")
+                .contains("(type 'iceberg_rest') does not support a 'databricks' config block"),
             "unexpected error: {res:?}"
         );
     }
@@ -1823,7 +1826,7 @@ catalogs:
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("does not support bigquery on the unity"),
+            msg.contains("(type 'unity') does not support a 'bigquery' config block"),
             "unexpected error: {msg}"
         );
     }
@@ -1844,7 +1847,7 @@ catalogs:
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("does not support bigquery on the horizon"),
+            msg.contains("(type 'horizon') does not support a 'bigquery' config block"),
             "unexpected error: {msg}"
         );
     }
@@ -2647,7 +2650,7 @@ catalogs:
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("does not support snowflake on the ducklake"),
+            msg.contains("(type 'ducklake') does not support a 'snowflake' config block"),
             "unexpected error: {msg}"
         );
     }

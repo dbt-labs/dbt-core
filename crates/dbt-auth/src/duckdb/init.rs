@@ -305,8 +305,8 @@ fn generate_setting_sql(config: &AdapterConfig, stmts: &mut Vec<String>) {
     if let YmlValue::Mapping(map, _) = val {
         for (k, v) in map.iter() {
             if let Some(key_str) = k.as_str() {
-                // motherduck_token must be set at database init, not via SET
-                if key_str == "motherduck_token" {
+                // These settings must be applied at database init, not via SET.
+                if key_str == "motherduck_token" || key_str == "allow_unsigned_extensions" {
                     continue;
                 }
                 let key = sanitize_identifier(key_str);
@@ -752,6 +752,19 @@ settings:
         assert_eq!(stmts.len(), 2);
         assert!(stmts.contains(&"SET memory_limit = '4GB'".to_owned()));
         assert!(stmts.contains(&"SET threads = 8".to_owned()));
+    }
+
+    #[test]
+    fn test_allow_unsigned_extensions_not_emitted_as_sql_setting() {
+        let config = config_from_yaml(
+            r#"
+settings:
+  allow_unsigned_extensions: true
+  memory_limit: "4GB"
+"#,
+        );
+        let stmts = generate_duckdb_init_sql(&config);
+        assert_eq!(stmts, vec!["SET memory_limit = '4GB'"]);
     }
 
     // -----------------------------------------------------------------------
