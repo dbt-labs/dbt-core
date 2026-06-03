@@ -1,6 +1,39 @@
 use dbt_scheduler::node_selector::ColId;
 use std::fmt;
 
+/// Flat CLL edge
+#[derive(Debug, Clone)]
+pub struct CllEdge {
+    pub from_node: String,
+    pub from_col: String,
+    pub to_node: String,
+    pub to_col: Option<String>,
+    pub op: &'static str,
+}
+
+impl CllEdge {
+    /// `to_col` treats an empty string as `None`.
+    pub fn new(
+        from_node: &str,
+        from_col: &str,
+        to_node: &str,
+        to_col: &str,
+        op: &'static str,
+    ) -> Self {
+        Self {
+            from_node: from_node.to_string(),
+            from_col: from_col.to_string(),
+            to_node: to_node.to_string(),
+            to_col: if to_col.is_empty() {
+                None
+            } else {
+                Some(to_col.to_string())
+            },
+            op,
+        }
+    }
+}
+
 /// Grain columns inferred from a logical plan, with the source that produced them.
 #[derive(Debug, Clone)]
 pub struct PlanGrainInfo {

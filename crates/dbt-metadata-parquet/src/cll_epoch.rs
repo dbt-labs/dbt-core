@@ -233,9 +233,13 @@ pub fn write_cll_epoch(
     let path = cll_dir.join(epoch_filename(epoch));
     epoch_io::write_rows(&path, &cll_row_fields(), &filtered)?;
 
-    let epoch_count = existing_epochs(cll_dir).len();
-    if epoch_io::should_compact(filtered.len(), alive_node_count.unwrap_or(0), epoch_count) {
-        let _ = compact_epochs(cll_dir, alive_ids);
+    // Skip compaction when epoch == 0: we just wrote the full compact form.
+    // Compacting immediately would pointlessly re-read + re-write it.
+    if epoch > 0 {
+        let epoch_count = existing_epochs(cll_dir).len();
+        if epoch_io::should_compact(filtered.len(), alive_node_count.unwrap_or(0), epoch_count) {
+            let _ = compact_epochs(cll_dir, alive_ids);
+        }
     }
 
     Ok(())

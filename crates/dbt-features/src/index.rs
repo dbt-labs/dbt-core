@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -10,8 +10,7 @@ use dbt_docs_server::Providers;
 use dbt_docs_server::providers::{Backend, DefaultDistInfoProvider};
 use dbt_index_core::column_impact::UnavailableColumnImpact;
 use dbt_index_core::column_lineage::UnavailableColumnLineage;
-use dbt_lineage_core::{ColIdWithOp, PlanGrainInfo};
-use dbt_scheduler::node_selector::ColId;
+use dbt_lineage_core::{CllEdge, PlanGrainInfo};
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::manifest::{DbtManifest, DbtNode};
 use dbt_schemas::state::ResolverState;
@@ -30,8 +29,8 @@ pub trait IndexHooks: Send + Sync {
         &self,
         _resolved_state: &ResolverState,
         _run_task_results: &RunTaskResults,
-    ) -> FsResult<BTreeMap<ColId, BTreeSet<ColIdWithOp>>> {
-        Ok(BTreeMap::new())
+    ) -> FsResult<Vec<CllEdge>> {
+        Ok(Vec::new())
     }
 }
 
@@ -73,7 +72,7 @@ pub fn write_metadata_parquet(
     manifest: &DbtManifest,
     resolved_state: Option<&ResolverState>,
     schema_store: Option<&dyn SchemaStoreTrait>,
-    column_lineage: Option<&BTreeMap<ColId, BTreeSet<ColIdWithOp>>>,
+    column_lineage: Option<&[CllEdge]>,
     recomputed_column_lineage_targets: &HashSet<String>,
     grain_infos: &HashMap<String, PlanGrainInfo>,
 ) {
@@ -94,7 +93,7 @@ fn write_metadata_parquet_impl(
     manifest: &DbtManifest,
     resolved_state: Option<&ResolverState>,
     schema_store: Option<&dyn SchemaStoreTrait>,
-    column_lineage: Option<&BTreeMap<ColId, BTreeSet<ColIdWithOp>>>,
+    column_lineage: Option<&[CllEdge]>,
     recomputed_column_lineage_targets: &HashSet<String>,
     grain_infos: &HashMap<String, PlanGrainInfo>,
 ) {
@@ -248,55 +247,9 @@ fn write_metadata_parquet_impl(
         }
     }
 
-    // CLL epoch rows
+    // CLL edges arrive pre-deduped from cll_edges_from_lineage_results.
     let cll_ingested_at = ingested_at;
-    let mut cll_epoch_rows: Vec<dbt_metadata_parquet::cll_epoch::CllRow> = Vec::new();
-    if let Some(lineage) = column_lineage {
-        // Deduplicate per (from_node, from_col, to_node, to_col): keep strongest kind.
-        // Priority: copy=0 > mod=1 > scan=2. One pass with a HashMap, O(n).
-        fn kind_rank(k: &str) -> u8 {
-            match k {
-                "copy" => 0,
-                "mod" => 1,
-                _ => 2, // scan and anything unknown
-            }
-        }
-        type BestKey<'a> = (&'a str, &'a str, &'a str, &'a str);
-        type BestVal<'a> = (&'a str, Option<&'a str>);
-        let mut best: HashMap<BestKey<'_>, BestVal<'_>> = HashMap::new();
-        for (to_col, from_cols) in lineage {
-            let to_node = to_col.table.as_str();
-            let to_col_name = if to_col.column.is_empty() {
-                None
-            } else {
-                Some(to_col.column.as_str())
-            };
-            for from_col in from_cols {
-                let key = (
-                    from_col.col_id.table.as_str(),
-                    from_col.col_id.column.as_str(),
-                    to_node,
-                    to_col_name.unwrap_or(""),
-                );
-                let rank = kind_rank(&from_col.op);
-                let entry = best.entry(key).or_insert((&from_col.op, to_col_name));
-                if rank < kind_rank(entry.0) {
-                    *entry = (&from_col.op, to_col_name);
-                }
-            }
-        }
-        for ((from_node, from_col_name, to_node, to_col_str), (kind, to_col_name)) in &best {
-            cll_epoch_rows.push(dbt_metadata_parquet::cll_epoch::CllRow {
-                from_node_unique_id: (*from_node).to_string(),
-                from_column_name: (*from_col_name).to_string(),
-                to_node_unique_id: (*to_node).to_string(),
-                to_column_name: to_col_name.map(|s| s.to_string()),
-                lineage_kind: (*kind).to_string(),
-                ingested_at: 0, // overwritten by write_cll_epoch
-            });
-            let _ = to_col_str; // key stores "" for None; to_col_name is authoritative
-        }
-    }
+    let cll_edges: &[CllEdge] = column_lineage.unwrap_or(&[]);
 
     let targets_opt = if recomputed_column_lineage_targets.is_empty() {
         None
@@ -312,11 +265,23 @@ fn write_metadata_parquet_impl(
 
     let alive_node_count = manifest.nodes.len();
 
+    let t_write = std::time::Instant::now();
     let errors: Vec<String> = std::thread::scope(|s| {
         let t_cll = s.spawn(|| {
+            let cll_rows: Vec<dbt_metadata_parquet::cll_epoch::CllRow> = cll_edges
+                .iter()
+                .map(|e| dbt_metadata_parquet::cll_epoch::CllRow {
+                    from_node_unique_id: e.from_node.clone(),
+                    from_column_name: e.from_col.clone(),
+                    to_node_unique_id: e.to_node.clone(),
+                    to_column_name: e.to_col.clone(),
+                    lineage_kind: e.op.to_string(),
+                    ingested_at: cll_ingested_at,
+                })
+                .collect();
             dbt_metadata_parquet::cll_epoch::write_cll_epoch(
                 &cll_dir,
-                cll_epoch_rows,
+                cll_rows,
                 cll_ingested_at,
                 targets_opt,
                 Some(alive_node_count),
@@ -356,6 +321,13 @@ fn write_metadata_parquet_impl(
         .flatten()
         .collect()
     });
+
+    if std::env::var_os("DBT_LINEAGE_TIMING").is_some() {
+        eprintln!(
+            "[lineage] {:>8.1}ms  thread::scope write parquet (3 parallel)",
+            t_write.elapsed().as_secs_f64() * 1000.0
+        );
+    }
 
     for e in errors {
         emit_warn_log_message(ErrorCode::Generic, e, arg.io.status_reporter.as_ref());

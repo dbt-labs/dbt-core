@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -57,12 +57,10 @@ use dbt_jinja_utils::{
     listener::{DefaultJinjaTypeCheckEventListenerFactory, JinjaTypeCheckingEventListenerFactory},
     utils::get_catalog_by_relations,
 };
-use dbt_lineage_core::ColIdWithOp;
 use dbt_loader::{
     clean::execute_clean_command, execute_deps_command, upload_artifacts_ingest_if_enabled,
 };
 use dbt_login::{execute_login, execute_login_status};
-use dbt_scheduler::node_selector::ColId;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::{
     man::execute_man_command,
@@ -1180,17 +1178,23 @@ impl<'a> AllPhasesExecutor<'a> {
                     &grain_infos,
                 );
             } else if !self.arg.write_lineage {
-                let empty_lineage: BTreeMap<ColId, BTreeSet<ColIdWithOp>> = BTreeMap::new();
                 write_metadata_parquet(
                     self.arg.as_ref(),
                     &dbt_manifest,
                     Some(resolved_state.as_ref()),
                     Some(schema_store.as_ref()),
-                    Some(&empty_lineage),
+                    Some(&[]),
                     &recomputed_targets,
                     &grain_infos,
                 );
             } else {
+                let t_ble = {
+                    let timing = std::env::var_os("DBT_LINEAGE_TIMING").is_some();
+                    if timing {
+                        eprintln!("[lineage] column_lineage hook start");
+                    }
+                    Instant::now()
+                };
                 match self
                     .feature_stack
                     .index
@@ -1199,6 +1203,20 @@ impl<'a> AllPhasesExecutor<'a> {
                     .await
                 {
                     Ok(column_lineage) => {
+                        if std::env::var_os("DBT_LINEAGE_TIMING").is_some() {
+                            eprintln!(
+                                "[lineage] {:>8.1}ms  cll_edges_from_lineage_results ({})",
+                                t_ble.elapsed().as_secs_f64() * 1000.0,
+                                column_lineage.len()
+                            );
+                        }
+                        if column_lineage.is_empty() {
+                            emit_warn_log_message(
+                                ErrorCode::Generic,
+                                "--lineage requires --static-analysis strict; no column lineage written.",
+                                self.arg.io.status_reporter.as_ref(),
+                            );
+                        }
                         write_metadata_parquet(
                             self.arg.as_ref(),
                             &dbt_manifest,
@@ -1215,14 +1233,13 @@ impl<'a> AllPhasesExecutor<'a> {
                             format!("dbt-index: column_lineage: {e}"),
                             self.arg.io.status_reporter.as_ref(),
                         );
-                        let empty_lineage: BTreeMap<ColId, BTreeSet<ColIdWithOp>> = BTreeMap::new();
                         let empty_targets: HashSet<String> = HashSet::new();
                         write_metadata_parquet(
                             self.arg.as_ref(),
                             &dbt_manifest,
                             Some(resolved_state.as_ref()),
                             Some(schema_store.as_ref()),
-                            Some(&empty_lineage),
+                            Some(&[]),
                             &empty_targets,
                             &grain_infos,
                         );

@@ -150,9 +150,12 @@ pub fn write_compile_columns(
         }
     }
 
-    let file_count = existing_epochs(dir).len();
-    if epoch_io::should_compact(rows.len(), alive_node_count.unwrap_or(0), file_count) {
-        compact_epochs(dir, valid_ids)?;
+    // Skip compaction when epoch == 0: we just wrote the full compact form.
+    if epoch > 0 {
+        let file_count = existing_epochs(dir).len();
+        if epoch_io::should_compact(rows.len(), alive_node_count.unwrap_or(0), file_count) {
+            compact_epochs(dir, valid_ids)?;
+        }
     }
     Ok(())
 }
