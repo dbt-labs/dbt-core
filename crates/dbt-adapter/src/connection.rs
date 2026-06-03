@@ -22,7 +22,7 @@ use crossbeam_utils::CachePadded;
 use tracing::Span;
 
 use crate::AdapterEngine;
-use crate::errors::AdapterError;
+use crate::errors::{AdapterError, adbc_error_to_adapter_error};
 
 /// Global atomic for generating unique connection IDs.
 static CONN_SEQ_NUM: AtomicU64 = AtomicU64::new(0);
@@ -112,6 +112,19 @@ pub fn recycle_thread_local_connection() {
     if let Some(conn) = conn {
         sort_for_recycling(conn)
     }
+}
+
+pub(crate) fn commit_thread_local_connection_if_present() -> AdapterResult<bool> {
+    // The DuckDB adapter stores the active blocking-task connection in a
+    // thread-local slot, so Jinja `adapter.commit()` has to temporarily take it
+    // out, commit, then put it back for the rest of the materialization.
+    let Some(mut conn) = CONNECTION.with(|c| c.take()) else {
+        return Ok(false);
+    };
+
+    let result = conn.commit().map_err(adbc_error_to_adapter_error);
+    CONNECTION.with(|c| c.replace(Some(conn)));
+    result.map(|_| true)
 }
 
 /// Drop guard that recycles this thread's cached adapter connection.

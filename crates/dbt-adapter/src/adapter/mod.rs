@@ -16,7 +16,7 @@ use crate::sql_types::TypeOps;
 use crate::stmt_splitter::DefaultStmtSplitter;
 use crate::time_machine::TimeMachine;
 use crate::value::*;
-use crate::{AdapterResponse, AdapterResult};
+use crate::{AdapterResponse, AdapterResult, connection};
 
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
@@ -240,7 +240,11 @@ impl Adapter {
     /// def commit(self) -> None
     /// ```
     pub fn commit(&self) -> Result<Value, minijinja::Error> {
-        Ok(Value::from(true))
+        if self.adapter_type() == AdapterType::DuckDB && matches!(self.inner, Typed { .. }) {
+            connection::commit_thread_local_connection_if_present()
+                .map_err(minijinja::Error::from)?;
+        }
+        Ok(none_value())
     }
 
     /// Execute a statement, expect no results.

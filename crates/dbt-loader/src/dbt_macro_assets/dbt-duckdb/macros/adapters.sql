@@ -121,7 +121,20 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__get_columns_in_relation(relation) -%}
-  {% call statement('get_columns_in_relation', fetch_result=True) %}
+  {% set fmt = adapter.table_format(relation) %}
+  {% if fmt == 'iceberg' %}
+    {# information_schema.columns returns incorrect metadata for Iceberg REST catalog tables. #}
+    {% call statement('get_columns_in_relation', fetch_result=True) %}
+      select
+          column_name,
+          column_type                as data_type,
+          null::integer              as character_maximum_length,
+          null::integer              as numeric_precision,
+          null::integer              as numeric_scale
+      from (describe {{ relation }})
+    {% endcall %}
+  {% else %}
+    {% call statement('get_columns_in_relation', fetch_result=True) %}
       select
           column_name,
           data_type,
@@ -139,7 +152,8 @@ def materialize(df, con):
       {% endif %}
       order by ordinal_position
 
-  {% endcall %}
+    {% endcall %}
+  {% endif %}
   {% set table = load_result('get_columns_in_relation').table %}
   {{ return(sql_convert_columns_in_relation(table)) }}
 {% endmacro %}
@@ -180,16 +194,12 @@ def materialize(df, con):
      (1.x) treat as non-iceberg and use the plain ALTER TABLE RENAME path. #}
   {% set fmt = adapter.table_format(from_relation) if dbt_version.startswith('2.') else none %}
   {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
+  {% if fmt == 'iceberg' %}
+    {# Iceberg REST: CTAS and ALTER...RENAME cannot share a transaction. #}
+    {{ adapter.commit() }}
+  {% endif %}
   {% call statement('rename_relation') -%}
-    {% if fmt == 'iceberg' %}
-      {# DuckDB Iceberg REST does not support ALTER TABLE RENAME.
-         Use DROP + CREATE AS SELECT instead. #}
-      drop table if exists {{ to_relation }};
-      create table {{ to_relation }} as select * from {{ from_relation }};
-      drop table if exists {{ from_relation }}
-    {% else %}
-      alter {{ to_relation.type }} {{ from_relation }} rename to {{ target_name }}
-    {% endif %}
+    alter {{ to_relation.type }} {{ from_relation }} rename to {{ target_name }}
   {%- endcall %}
 {% endmacro %}
 

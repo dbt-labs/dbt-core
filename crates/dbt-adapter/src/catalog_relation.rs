@@ -21,7 +21,7 @@ mod catalog_relation_v2;
 /// Keep only ASCII alphanumeric and underscore characters (SQL identifier safety).
 /// Used for DuckDB ATTACH aliases so that the routing database name matches the
 /// attached alias exactly.
-pub(crate) fn sanitize_duckdb_identifier(name: &str) -> String {
+pub fn sanitize_duckdb_identifier(name: &str) -> String {
     name.chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
         .collect()

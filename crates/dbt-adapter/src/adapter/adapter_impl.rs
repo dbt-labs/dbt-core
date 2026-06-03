@@ -464,12 +464,18 @@ impl AdapterImpl {
             let Some(path) = map.get("path").and_then(|v| v.as_str()) else {
                 continue;
             };
+            let explicit_type = map
+                .get("type")
+                .and_then(|v| v.as_str())
+                .map(str::to_ascii_lowercase);
             let attach_info = DuckDBPathInfo::parse_path(Some(path));
             let explicit_ducklake = map
                 .get("is_ducklake")
                 .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            if !explicit_ducklake && !attach_info.is_ducklake {
+                .unwrap_or(false)
+                || explicit_type.as_deref() == Some("ducklake");
+            let explicit_iceberg = explicit_type.as_deref() == Some("iceberg");
+            if !explicit_ducklake && !attach_info.is_ducklake && !explicit_iceberg {
                 continue;
             }
 
@@ -479,6 +485,9 @@ impl AdapterImpl {
                 .map(ToOwned::to_owned)
                 .unwrap_or_else(|| attach_info.database.to_owned());
             if attachment_db.eq_ignore_ascii_case(database) {
+                if explicit_iceberg {
+                    return TableFormat::Iceberg;
+                }
                 return TableFormat::DuckLake;
             }
         }
@@ -4972,6 +4981,35 @@ mod tests {
         );
         assert_eq!(
             adapter.table_format_for_database("main"),
+            TableFormat::Default
+        );
+    }
+
+    #[test]
+    fn test_table_format_profile_level_iceberg_attachment() {
+        let attach = YmlValue::Sequence(
+            vec![YmlValue::Mapping(
+                Mapping::from_iter([
+                    ("path".into(), "demo".into()),
+                    ("alias".into(), "iceberg_demo".into()),
+                    ("type".into(), "iceberg".into()),
+                ]),
+                Default::default(),
+            )],
+            Default::default(),
+        );
+        let config = Mapping::from_iter([
+            ("path".into(), "demo.duckdb".into()),
+            ("attach".into(), attach),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(DuckDB, config), None);
+
+        assert_eq!(
+            adapter.table_format_for_database("iceberg_demo"),
+            TableFormat::Iceberg
+        );
+        assert_eq!(
+            adapter.table_format_for_database("demo"),
             TableFormat::Default
         );
     }
