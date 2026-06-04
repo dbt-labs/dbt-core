@@ -331,7 +331,7 @@ pub fn build_relation_clauses(
 pub fn find_matching_relation(
     schema: &str,
     table: &str,
-    relations: &Vec<Arc<dyn BaseRelation>>,
+    relations: &[Arc<dyn BaseRelation>],
 ) -> AdapterResult<BTreeSet<String>> {
     let mut out = BTreeSet::new();
     // Find the matching relation

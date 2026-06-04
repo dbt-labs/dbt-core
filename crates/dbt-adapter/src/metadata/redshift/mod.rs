@@ -1,4 +1,4 @@
-use crate::adapter::adapter_impl::{AdapterImpl, get_bool_config};
+use crate::adapter::adapter_impl::{AdapterImpl, get_bool_config, quote_ident};
 use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::*;
@@ -351,6 +351,21 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
+        // datasharing sources can span databases; pg_class is single-db, SHOW TABLES isn't.
+        match get_bool_config(self.adapter.engine().as_ref(), "datasharing") {
+            Ok(true) => self.run_via_show_tables(relations, token),
+            Ok(false) => self.run_via_pg_class(relations, token),
+            Err(e) => Box::pin(async move { Err(Cancellable::Error(e)) }),
+        }
+    }
+}
+
+impl RedshiftFreshnessStrategy {
+    fn run_via_pg_class(
+        &self,
+        relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
         // Group relations by (catalog, schema) to batch one query per schema.
         let mut by_schema: BTreeMap<(String, String), Vec<Arc<dyn BaseRelation>>> = BTreeMap::new();
         for relation in relations {
@@ -492,6 +507,100 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
         let keys: Vec<_> = by_schema.into_iter().collect();
         map_reduce.run(Arc::new(keys), token)
     }
+
+    /// Datasharing freshness path. Group sources by (database, schema), issue one
+    /// `SHOW TABLES FROM SCHEMA "<db>"."<schema>"` per group, and read
+    /// `last_modified_time` from the response.
+    ///
+    /// Note: per the Redshift docs, `last_modified_time` can lag table writes by
+    /// up to ~20 minutes, so freshness here is best-effort, not exact.
+    fn run_via_show_tables(
+        &self,
+        relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
+        let mut relations_by_schema: BTreeMap<(String, String), Vec<Arc<dyn BaseRelation>>> =
+            BTreeMap::new();
+        for relation in relations {
+            let database = relation.database_as_str().unwrap_or_default();
+            let schema = relation.schema_as_str().unwrap_or_default();
+            relations_by_schema
+                .entry((database, schema))
+                .or_default()
+                .push(Arc::clone(relation));
+        }
+        let keys: Vec<(String, String)> = relations_by_schema.keys().cloned().collect();
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          (database, schema): &(String, String)|
+              -> AdapterResult<Arc<RecordBatch>> {
+            let sql = format!(
+                "SHOW TABLES FROM SCHEMA {}.{}",
+                quote_ident(AdapterType::Redshift, database),
+                quote_ident(AdapterType::Redshift, schema),
+            );
+            let ctx = QueryCtx::default().with_desc("Extracting freshness via SHOW TABLES");
+            let (_, agate_table) =
+                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
+            Ok(agate_table.original_record_batch())
+        };
+
+        type Acc = BTreeMap<String, MetadataFreshness>;
+        let reduce_f = move |acc: &mut Acc,
+                             key: (String, String),
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            // `key` came from `relations_by_schema.keys()`, so it is always present.
+            let relations = relations_by_schema
+                .get(&key)
+                .expect("reduce key originates from relations_by_schema");
+            acc.extend(parse_show_tables_freshness_batch(&batch, relations)?);
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(keys), token)
+    }
+}
+
+/// Parse a `SHOW TABLES FROM SCHEMA` result batch into a freshness map keyed by
+/// each matching relation's semantic FQN. Rows whose table is not in the
+/// requested set are ignored.
+fn parse_show_tables_freshness_batch(
+    batch: &RecordBatch,
+    relations: &[Arc<dyn BaseRelation>],
+) -> AdapterResult<BTreeMap<String, MetadataFreshness>> {
+    let mut out = BTreeMap::new();
+    if batch.num_rows() == 0 {
+        return Ok(out);
+    }
+
+    let schema_name = batch.column_values::<StringArray>("schema_name")?;
+    let table_name = batch.column_values::<StringArray>("table_name")?;
+    let table_type = batch.column_values::<StringArray>("table_type")?;
+    let last_modified = batch.column_values::<TimestampMicrosecondArray>("last_modified_time")?;
+
+    for i in 0..batch.num_rows() {
+        if last_modified.is_null(i) {
+            continue;
+        }
+        let schema = schema_name.value(i);
+        let table = table_name.value(i);
+        let timestamp = last_modified.value(i);
+        let is_view = table_type.value(i).trim().eq_ignore_ascii_case("VIEW");
+        for fqn in find_matching_relation(schema, table, relations)? {
+            out.insert(fqn, MetadataFreshness::from_micros(timestamp, is_view)?);
+        }
+    }
+    Ok(out)
 }
 
 pub struct RedshiftMetadataAdapter {
@@ -1336,5 +1445,85 @@ mod tests {
             Some(RelationType::MaterializedView)
         );
         assert_eq!(relations[1].relation_type(), Some(RelationType::View));
+    }
+
+    fn show_tables_freshness_batch(rows: &[(&str, &str, &str, Option<i64>)]) -> Arc<RecordBatch> {
+        let schema_col: Vec<&str> = rows.iter().map(|r| r.0).collect();
+        let table_col: Vec<&str> = rows.iter().map(|r| r.1).collect();
+        let type_col: Vec<&str> = rows.iter().map(|r| r.2).collect();
+        let lm_col: Vec<Option<i64>> = rows.iter().map(|r| r.3).collect();
+
+        let arrow_schema = Arc::new(ArrowSchema::new(vec![
+            Field::new("schema_name", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+            Field::new(
+                "last_modified_time",
+                DataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
+                true,
+            ),
+        ]));
+        Arc::new(
+            RecordBatch::try_new(
+                arrow_schema,
+                vec![
+                    Arc::new(StringArray::from(schema_col)),
+                    Arc::new(StringArray::from(table_col)),
+                    Arc::new(StringArray::from(type_col)),
+                    Arc::new(TimestampMicrosecondArray::from(lm_col)),
+                ],
+            )
+            .unwrap(),
+        )
+    }
+
+    fn relation(database: &str, schema: &str, identifier: &str) -> Arc<dyn BaseRelation> {
+        build_redshift_relation(
+            database.to_string(),
+            schema.to_string(),
+            identifier.to_string(),
+            RelationType::Table,
+            quoting(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_parse_show_tables_freshness_matches_requested_identifiers_only() {
+        // Two requested sources, plus a third unrelated table in the same
+        // schema that SHOW TABLES will also return — that one must be ignored.
+        let relations = vec![
+            relation("dev", "s1", "orders"),
+            relation("dev", "s1", "customers"),
+        ];
+        let batch = show_tables_freshness_batch(&[
+            ("s1", "orders", "TABLE", Some(1_700_000_000_000_000)),
+            ("s1", "customers", "VIEW", Some(1_700_000_001_000_000)),
+            ("s1", "unrelated", "TABLE", Some(1_700_000_002_000_000)),
+        ]);
+
+        let freshness = parse_show_tables_freshness_batch(&batch, &relations).unwrap();
+        assert_eq!(freshness.len(), 2);
+        let orders = &freshness[&relations[0].semantic_fqn()];
+        assert_eq!(
+            orders.last_altered.timestamp_micros(),
+            1_700_000_000_000_000
+        );
+        assert!(!orders.is_view);
+        let customers = &freshness[&relations[1].semantic_fqn()];
+        assert_eq!(
+            customers.last_altered.timestamp_micros(),
+            1_700_000_001_000_000
+        );
+        assert!(customers.is_view);
+    }
+
+    #[test]
+    fn test_parse_show_tables_freshness_skips_null_last_modified() {
+        let relations = vec![relation("dev", "s1", "orders")];
+        let batch = show_tables_freshness_batch(&[("s1", "orders", "TABLE", None)]);
+
+        let freshness = parse_show_tables_freshness_batch(&batch, &relations).unwrap();
+        assert!(freshness.is_empty());
     }
 }
