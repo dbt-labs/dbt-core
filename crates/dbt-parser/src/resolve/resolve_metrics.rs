@@ -6,7 +6,7 @@ use crate::utils::{
     extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
 };
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_error_log_message};
+use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_error_log_message};
 use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_error;

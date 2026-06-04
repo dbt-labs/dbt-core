@@ -5,7 +5,7 @@ use dbt_error::ErrorCode;
 use crate::{
     io_args::StaticAnalysisKind,
     io_utils::StatusReporter,
-    tracing::emit::{emit_error_log_message, emit_error_log_message_package_scoped},
+    tracing::dbt_emit::{emit_error_log_message, emit_error_log_message_package_scoped},
 };
 
 pub enum StaticAnalysisDeprecationOrigin<'a> {

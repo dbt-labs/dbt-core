@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use super::{
-    convert::log_level_filter_to_tracing,
+    dbt_convert::log_level_filter_to_tracing,
     layer::{ConsumerLayer, MiddlewareLayer},
     layers::{
         file_log_layer::build_file_log_layer_with_background_writer,

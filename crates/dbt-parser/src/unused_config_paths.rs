@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::io_args::IoArgs;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::serde::value_from_file;
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};

@@ -26,7 +26,7 @@ use dbt_common::adapter::dialect_of;
 use dbt_common::cancellation::never_cancels;
 use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
-use dbt_common::tracing::emit::{emit_trace_log_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_frontend_common::Dialect;
 use dbt_frontend_common::ident::FullyQualifiedName;

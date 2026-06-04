@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use dbt_common::ErrorCode;
 use dbt_common::err;
 use dbt_common::fs_err;
-use dbt_common::tracing::emit::{emit_warn_log_message, println};
+use dbt_common::tracing::dbt_emit::{emit_warn_log_message, println};
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_telemetry::PackageUpdate;
 use rand::Rng as _;

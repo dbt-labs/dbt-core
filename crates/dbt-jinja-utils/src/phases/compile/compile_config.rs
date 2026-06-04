@@ -9,7 +9,7 @@ use std::{
 
 use dbt_common::dashmap::DashMap;
 use dbt_common::{
-    CodeLocationWithFile, ErrorCode, fs_err, tracing::emit::emit_warn_log_from_fs_error,
+    CodeLocationWithFile, ErrorCode, fs_err, tracing::dbt_emit::emit_warn_log_from_fs_error,
 };
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,

@@ -5,7 +5,7 @@ use dbt_agate::MappedSequence;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, LocalExecutionBackendKind};
 use dbt_common::io_utils::StatusReporter;
-use dbt_common::tracing::emit::emit_info_progress_message;
+use dbt_common::tracing::dbt_emit::emit_info_progress_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_compilation::core::DbtLoadedProject;
 use dbt_schemas::schemas::profiles::{DbConfig, Execute};

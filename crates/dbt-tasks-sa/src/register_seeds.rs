@@ -6,7 +6,7 @@ use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter::sql_types::TypeOps;
 use dbt_adapter_core::AdapterType;
-use dbt_common::tracing::{emit::emit_warn_log_message, spawn_blocking_traced, spawn_traced};
+use dbt_common::tracing::{dbt_emit::emit_warn_log_message, spawn_blocking_traced, spawn_traced};
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_csv::{CustomCsvOptions, read_to_arrow_records};
 use dbt_df_providers::seed_io::{

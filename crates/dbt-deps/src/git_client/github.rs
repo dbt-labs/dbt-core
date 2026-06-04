@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use async_trait::async_trait;
-use dbt_common::tracing::emit::emit_debug_log_message;
+use dbt_common::tracing::dbt_emit::emit_debug_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use reqwest_middleware::ClientWithMiddleware;
 

@@ -5,7 +5,7 @@ use dbt_adapter::AdapterType;
 use dbt_common::collections::DashMap;
 use dbt_common::io_args::FsCommand;
 use dbt_common::stats::Stat;
-use dbt_common::tracing::emit::{
+use dbt_common::tracing::dbt_emit::{
     emit_error_log_from_fs_error, emit_error_log_message, emit_warn_log_message,
 };
 use dbt_common::tracing::event_info::store_event_attributes;

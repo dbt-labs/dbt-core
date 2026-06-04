@@ -3,7 +3,7 @@ use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_utils::try_read_yml_to_str;
-use dbt_common::tracing::emit::{emit_strict_parse_error, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;

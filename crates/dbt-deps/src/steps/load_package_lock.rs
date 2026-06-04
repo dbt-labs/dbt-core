@@ -1,5 +1,5 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::from_yaml_raw;

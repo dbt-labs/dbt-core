@@ -15,7 +15,7 @@ use tracing::Instrument;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::stats::{NodeStatus, Stat};
-use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_trace_log_message};
+use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_trace_log_message};
 use dbt_common::{ErrorCode, FsError, fs_err, status_reporter::report_completed};
 use dbt_common::{FsResult, io_args::IoArgs, unexpected_err};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;

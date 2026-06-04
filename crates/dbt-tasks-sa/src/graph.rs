@@ -1,6 +1,6 @@
 use dbt_common::io_args::FsCommand;
 use dbt_common::static_analysis::is_strict_static_analysis;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_dag::deps_mgmt::{find_all_upstream_deps, restrict_with_transitive};
 use dbt_dag::schedule::Schedule;

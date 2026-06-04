@@ -7,8 +7,9 @@ use std::sync::mpsc;
 
 use dbt_common::pretty_string::make_title;
 use dbt_common::stats::NodeStatus;
-use dbt_common::tracing::emit::{
-    emit_error_log_from_fs_error, emit_info_event, emit_warn_log_message,
+use dbt_common::tracing::{
+    dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_message},
+    emit::emit_info_event,
 };
 use dbt_common::{ErrorCode, FsResult, err, io_args};
 use dbt_jinja_utils::utils::{macro_spans_to_macro_span_vec, render_sql};

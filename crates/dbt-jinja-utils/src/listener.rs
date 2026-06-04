@@ -15,7 +15,7 @@ use minijinja::{
 use dbt_common::{
     ErrorCode,
     io_args::IoArgs,
-    tracing::emit::{emit_error_log_message, emit_warn_log_message},
+    tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message},
 };
 
 /// Trait for creating and destroying rendering event listeners

@@ -3,7 +3,7 @@ use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::DbtPath;
 use dbt_common::stdfs::diff_paths;
-use dbt_common::tracing::emit::{emit_warn_log_from_fs_error, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_warn_log_from_fs_error, emit_warn_log_message};
 use dbt_common::{err, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;

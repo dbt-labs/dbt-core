@@ -13,7 +13,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err,
     io_args::IoArgs,
-    tracing::emit::{
+    tracing::dbt_emit::{
         emit_error_log_from_fs_error, emit_warn_log_from_fs_error, emit_warn_log_message,
     },
     unexpected_err,

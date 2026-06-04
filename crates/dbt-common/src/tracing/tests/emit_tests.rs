@@ -8,10 +8,10 @@ use std::collections::BTreeMap;
 use std::panic::Location;
 
 use crate::tracing::{
+    dbt_emit::{emit_error_log_from_fs_error, emit_error_log_message, emit_warn_log_message},
     emit::{
         create_info_span, create_root_info_span, emit_debug_event, emit_error_event,
-        emit_error_log_from_fs_error, emit_error_log_message, emit_info_event, emit_trace_event,
-        emit_warn_event, emit_warn_log_message,
+        emit_info_event, emit_trace_event, emit_warn_event,
     },
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},

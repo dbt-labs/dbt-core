@@ -9,7 +9,7 @@ use dbt_adapter_core::{AdapterType, adapter_type_supports_microbatch_concurrency
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::{get_snapshot_compiled_path, get_target_write_path};
-use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};

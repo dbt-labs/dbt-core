@@ -1,5 +1,5 @@
 use dbt_common::io_utils::StatusReporter;
-use dbt_common::tracing::emit::emit_info_log_message;
+use dbt_common::tracing::dbt_emit::emit_info_log_message;
 use dbt_common::tracing::formatters::deps::get_package_display_name;
 use dbt_common::tracing::span_info::{
     SpanStatusRecorder as _, find_and_update_span_attrs, update_span_attrs,

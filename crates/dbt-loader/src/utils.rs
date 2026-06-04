@@ -187,7 +187,7 @@ fn process_package_file(
             // Package not found in lookup map - this can happen when loading from package-lock.yml
             // without packages.yml, and an installed package has dependencies not in the lock file.
             // We skip this dependency rather than error out.
-            use dbt_common::tracing::emit::emit_warn_log_message;
+            use dbt_common::tracing::dbt_emit::emit_warn_log_message;
             emit_warn_log_message(
                 ErrorCode::InvalidConfig,
                 format!(

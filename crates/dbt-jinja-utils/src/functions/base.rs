@@ -13,9 +13,8 @@ use dbt_common::{
     CodeLocationWithFile, ErrorCode, fs_err,
     io_args::IoArgs,
     io_utils::StatusReporter,
-    tracing::emit::{
-        emit_debug_event, emit_info_event, emit_warn_log_from_fs_error, emit_warn_log_message,
-    },
+    tracing::dbt_emit::{emit_warn_log_from_fs_error, emit_warn_log_message},
+    tracing::emit::{emit_debug_event, emit_info_event},
     warn_error_options::{WarnErrorDecision, WarnErrorOptions},
 };
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};

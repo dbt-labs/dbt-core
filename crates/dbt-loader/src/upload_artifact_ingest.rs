@@ -8,7 +8,7 @@ use dbt_common::constants::{
     DBT_SOURCES_JSON,
 };
 use dbt_common::io_args::IoArgs;
-use dbt_common::tracing::emit::{
+use dbt_common::tracing::dbt_emit::{
     emit_debug_log_message, emit_info_progress_message, emit_warn_log_message,
 };
 use dbt_common::{ErrorCode, FsResult, fs_err, tokiofs};

@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::Utc;
 use dbt_common::ErrorCode;
 use dbt_common::io_args::EvalArgs;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_schemas::schemas::RunResultOutput;
 use dbt_schemas::schemas::manifest::{DbtManifest, DbtNode};
 use dbt_schemas::stats::Stats;

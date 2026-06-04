@@ -4,7 +4,10 @@ mod config;
 pub mod constants;
 pub mod convert;
 pub mod data_provider;
+pub mod dbt_convert;
 mod dbt_data_layer;
+pub mod dbt_emit;
+pub mod dbt_init;
 pub mod dbt_metrics;
 pub mod emit;
 pub mod error;
@@ -35,7 +38,7 @@ pub use emit::{
     create_debug_span, create_debug_span_with_parent, create_info_span,
     create_info_span_with_parent, create_root_info_span, is_trace_enabled,
 };
-pub use init::{BaseSubscriber, TelemetryHandle, init_tracing, init_tracing_with_consumer_layer};
+pub use init::{BaseSubscriber, TelemetryHandle, init_tracing_with_consumer_layer};
 pub use tracing_feature_handles::{TracingConfigProvider, noop_tracing_config_provider};
 
 #[cfg(test)]

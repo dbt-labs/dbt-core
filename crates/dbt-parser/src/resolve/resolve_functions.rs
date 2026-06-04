@@ -6,7 +6,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
 };
-use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{FsResult, error::AbstractLocation};
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;

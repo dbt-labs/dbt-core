@@ -76,7 +76,7 @@ pub trait MetadataAdapter: Send + Sync {
     fn is_permission_error(&self, e: &AdapterError) -> bool {
         #[cfg(debug_assertions)]
         {
-            dbt_common::tracing::emit::println(format!(
+            dbt_common::tracing::dbt_emit::println(format!(
                 "is_permission_error: {:?}: {}",
                 e,
                 e.sqlstate()

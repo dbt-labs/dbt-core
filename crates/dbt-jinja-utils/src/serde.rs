@@ -77,7 +77,7 @@ use std::{
 
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str, tokiofs, tracing::emit::emit_strict_parse_error,
+    io_utils::try_read_yml_to_str, tokiofs, tracing::dbt_emit::emit_strict_parse_error,
 };
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_yaml::Value;

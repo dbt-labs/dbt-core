@@ -6,7 +6,7 @@ use crate::utils::{
 };
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::tracing::emit::emit_error_log_message;
+use dbt_common::tracing::dbt_emit::emit_error_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;

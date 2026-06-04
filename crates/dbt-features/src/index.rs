@@ -4,7 +4,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use dbt_common::io_args::EvalArgs;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_docs_server::Providers;
 use dbt_docs_server::providers::{Backend, DefaultDistInfoProvider};

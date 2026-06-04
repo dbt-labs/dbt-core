@@ -13,7 +13,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::constants::RUNNING;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::status_reporter::report_completed;
-use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_message};
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::utils::add_task_context;

@@ -8,7 +8,7 @@ use dbt_adapter_core::AdapterType;
 use indexmap::IndexMap;
 
 use crate::args::ResolveArgs;
-use dbt_common::{FsResult, io_args::IoArgs, tracing::emit::emit_strict_parse_error};
+use dbt_common::{FsResult, io_args::IoArgs, tracing::dbt_emit::emit_strict_parse_error};
 use dbt_schemas::schemas::{
     common::DbtQuoting, project::DbtProject, relations::default_dbt_quoting_for,
 };

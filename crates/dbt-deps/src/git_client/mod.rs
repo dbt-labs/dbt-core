@@ -17,7 +17,7 @@ mod traits;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err, tokiofs};
 use reqwest_middleware::ClientWithMiddleware;
 use traits::GitHostClient as _;

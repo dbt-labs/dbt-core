@@ -32,7 +32,7 @@ use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
-use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
+use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;

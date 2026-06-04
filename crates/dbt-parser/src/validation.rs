@@ -5,7 +5,7 @@ use dbt_common::{
     io_args::StaticAnalysisKind,
     io_utils::StatusReporter,
     static_analysis::{StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind},
-    tracing::emit::emit_warn_log_from_fs_error,
+    tracing::dbt_emit::emit_warn_log_from_fs_error,
 };
 use dbt_schemas::schemas::project::ResolvedConfig;
 

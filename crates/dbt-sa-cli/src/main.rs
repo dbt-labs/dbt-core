@@ -1,5 +1,5 @@
 use dbt_clap_core::{CliParserFactory as _, from_main};
-use dbt_common::tracing::{FsTraceConfig, init_tracing};
+use dbt_common::tracing::{FsTraceConfig, dbt_init::init_tracing};
 use dbt_features::cli::DefaultCliParserFactory;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::tracing::TracingFeature;

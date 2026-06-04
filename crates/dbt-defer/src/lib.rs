@@ -14,7 +14,7 @@ use dbt_common::io_args::FsCommand;
 use dbt_common::node_selector::SelectionCriteria;
 use dbt_common::node_selector::{MethodName, selectors_require_manifest};
 use dbt_common::static_analysis::is_strict_static_analysis;
-use dbt_common::tracing::emit::{emit_trace_log_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_dag::schedule::Schedule;

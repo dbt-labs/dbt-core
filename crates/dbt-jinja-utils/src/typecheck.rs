@@ -2,7 +2,7 @@ use crate::{jinja_environment::JinjaEnv, listener};
 use dbt_adapter::AdapterType;
 use dbt_common::{
     ErrorCode, FsError, FsResult, io_args::IoArgs, path::DbtPath,
-    tracing::emit::emit_error_log_message,
+    tracing::dbt_emit::emit_error_log_message,
 };
 use minijinja::{
     AdapterDispatchFunction, ErrorKind, Value,

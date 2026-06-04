@@ -1,5 +1,5 @@
 use dbt_common::io_utils::StatusReporter;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::warn_error_options::project_flags_get_value;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::{

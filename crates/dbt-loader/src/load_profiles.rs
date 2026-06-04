@@ -1,4 +1,4 @@
-use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_info_progress_message, emit_warn_log_message};
 use dbt_telemetry::ProgressMessage;
 
 use dbt_common::stdfs::canonicalize;

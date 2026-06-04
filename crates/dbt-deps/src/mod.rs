@@ -19,7 +19,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::create_info_span;
 use dbt_common::io_args::{IoArgs, ReplayMode, TimeMachineMode};
-use dbt_common::tracing::emit::emit_info_progress_message;
+use dbt_common::tracing::dbt_emit::emit_info_progress_message;
 use dbt_common::tracing::span_info::{
     SpanStatusRecorder as _, record_span_status, record_span_status_with_attrs,
 };
@@ -162,7 +162,7 @@ pub async fn get_or_install_packages(
 
         // If upgrade flag is set but no packages.yml exists, we can't upgrade
         if upgrade {
-            use dbt_common::tracing::emit::emit_warn_log_message;
+            use dbt_common::tracing::dbt_emit::emit_warn_log_message;
             emit_warn_log_message(
                 ErrorCode::InvalidConfig,
                 "Cannot upgrade packages without packages.yml or dependencies.yml. Using existing package-lock.yml.",

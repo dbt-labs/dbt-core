@@ -26,14 +26,15 @@ use dbt_common::{
     pretty_string::{GREEN, RED, color_quotes},
     stdfs,
     tracing::{
+        dbt_emit::{
+            emit_error_log_from_fs_error, emit_error_log_message, emit_info_log_message,
+            emit_info_progress_message, emit_warn_log_message,
+        },
         dbt_metrics::{
             FusionMetricKey, NodeSubOutcome, OutcomeCountsKey, OutcomeKind, error_count_checkpoint,
             get_error_count, return_exit_code_from_error_counter,
         },
-        emit::{
-            emit_error_log_from_fs_error, emit_error_log_message, emit_info_event,
-            emit_info_log_message, emit_info_progress_message, emit_warn_log_message,
-        },
+        emit::emit_info_event,
         invocation::create_invocation_attributes,
         metrics::get_metric,
         span_info::record_span_status,

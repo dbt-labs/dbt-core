@@ -6,7 +6,7 @@ use std::{
 
 use crate::utils::NoOpConfig;
 use dbt_adapter_core::AdapterType;
-use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
+use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsResult, fs_err,
     io_args::{IoArgs, StaticAnalysisKind},

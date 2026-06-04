@@ -6,7 +6,7 @@ use dbt_common::FsResult;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;
-use dbt_common::tracing::emit::emit_strict_parse_error;
+use dbt_common::tracing::dbt_emit::emit_strict_parse_error;
 use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;

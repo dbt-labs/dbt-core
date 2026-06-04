@@ -1,7 +1,8 @@
 use crate::tracing::{
     data_provider::DataProvider,
+    dbt_emit::emit_warn_log_message,
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
-    emit::{create_info_span, create_root_info_span, emit_info_event, emit_warn_log_message},
+    emit::{create_info_span, create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer, TelemetryMiddleware},
     metrics::get_metric,

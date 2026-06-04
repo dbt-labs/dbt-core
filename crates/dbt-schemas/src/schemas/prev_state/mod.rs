@@ -10,7 +10,7 @@ use crate::schemas::{
 };
 use dbt_adapter_core::AdapterType;
 use dbt_common::string_utils::test_name_from_uid;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON, fs_err};
 use dbt_telemetry::NodeType;
 use std::fmt;

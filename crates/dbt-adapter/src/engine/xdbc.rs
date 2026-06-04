@@ -223,7 +223,7 @@ impl XdbcEngine {
                 .map_err(crate::errors::auth_error_to_adapter_error)?;
 
             for warning in &auth_result.warnings {
-                dbt_common::tracing::emit::emit_warn_log_message(
+                dbt_common::tracing::dbt_emit::emit_warn_log_message(
                     dbt_common::ErrorCode::InvalidConfig,
                     warning,
                     None,

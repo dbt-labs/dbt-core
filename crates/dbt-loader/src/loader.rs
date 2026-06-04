@@ -11,7 +11,7 @@ use dbt_common::io_utils::StatusReporter;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::TracingConfigProvider;
-use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_common::warn_error_options::{
     WarnErrorOptions, project_flags_get_value, resolve_warn_error_options,

@@ -7,7 +7,7 @@ use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from
 use dbt_adapter_core::AdapterType;
 use dbt_common::constants::DBT_PACKAGES_DIR_NAME;
 use dbt_common::pretty_string::GREEN;
-use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};

@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use dbt_common::{ErrorCode, io_args::IoArgs, tracing::emit::emit_warn_log_message};
+use dbt_common::{ErrorCode, io_args::IoArgs, tracing::dbt_emit::emit_warn_log_message};
 use minijinja::{CodeLocation, OutputTrackerLocation, listener::RenderingEventListener};
 
 use minijinja::machinery::Span;

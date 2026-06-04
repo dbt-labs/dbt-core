@@ -10,7 +10,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_TARGET_DIR_NAME, PARSING};
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
-use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
+use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsError, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;

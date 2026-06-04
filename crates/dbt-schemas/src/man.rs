@@ -10,7 +10,7 @@ use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::JsonSchemaTypes;
-use dbt_common::tracing::emit::println;
+use dbt_common::tracing::dbt_emit::println;
 
 use strum::IntoEnumIterator;
 

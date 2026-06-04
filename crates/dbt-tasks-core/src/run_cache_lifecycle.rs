@@ -1,10 +1,10 @@
 use dbt_adapter_core::AdapterType;
 use dbt_common::ErrorCode;
 use dbt_common::io_args::FsCommand;
-use dbt_common::tracing::dbt_metrics::{FusionMetricKey, RunCacheServiceMetricKey};
-use dbt_common::tracing::emit::{
+use dbt_common::tracing::dbt_emit::{
     emit_debug_log_message, emit_info_log_message, emit_warn_log_message,
 };
+use dbt_common::tracing::dbt_metrics::{FusionMetricKey, RunCacheServiceMetricKey};
 use dbt_common::tracing::metrics::increment_metric;
 use dbt_run_cache::metadata_cache::RunCacheMetadataCache;
 use dbt_run_cache::service_client::{

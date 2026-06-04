@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, time::SystemTime};
 
 use chrono::{DateTime, Utc};
 use dbt_common::{
-    ErrorCode, FsResult, io_args::EvalArgs, stdfs::File, tracing::emit::emit_warn_log_message,
+    ErrorCode, FsResult, io_args::EvalArgs, stdfs::File, tracing::dbt_emit::emit_warn_log_message,
 };
 use dbt_schemas::{
     schemas::{RunResultOutput, RunResultsArgs, RunResultsArtifact, RunResultsMetadata},

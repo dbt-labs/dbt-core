@@ -1,4 +1,4 @@
-use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
+use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, io_utils::StatusReporter};
 use minijinja::TypecheckingEventListener;
 use minijinja::machinery::Span;

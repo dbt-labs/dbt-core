@@ -13,7 +13,7 @@ use dbt_common::constants::DBT_MANIFEST_JSON;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::DbtPath;
 use dbt_common::path::{get_snapshot_compiled_path, get_target_write_path};
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::unexpected_err;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, stdfs};
 use dbt_dag::schedule::Schedule;

@@ -3,7 +3,7 @@ use dbt_cloud_api::{
     apis::{configuration::Configuration, connections_api, users_api, whoami_api},
     models,
 };
-use dbt_common::tracing::emit::{
+use dbt_common::tracing::dbt_emit::{
     emit_debug_log_message, emit_info_log_message, emit_warn_log_message,
 };
 use dbt_common::{ErrorCode, FsResult, fs_err};

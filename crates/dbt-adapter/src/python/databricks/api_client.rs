@@ -2,7 +2,7 @@ use crate::adapter::adapter_impl::AdapterImpl;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use dbt_common::tracing::emit::{emit_warn_log_message, print_err};
+use dbt_common::tracing::dbt_emit::{emit_warn_log_message, print_err};
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;

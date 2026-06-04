@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use dbt_common::tracing::emit::emit_info_log_message;
+use dbt_common::tracing::dbt_emit::emit_info_log_message;
 use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs, unexpected_fs_err};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, phases::load::LoadContext, serde::into_typed_with_jinja,

@@ -14,7 +14,7 @@ use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_frontend_common::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::{

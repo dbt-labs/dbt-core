@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::stdfs::{create_dir_all, diff_paths, read_to_string, remove_file};
 use crate::time::{current_time_micros, time_micros};
-use crate::tracing::emit::emit_info_log_message;
+use crate::tracing::dbt_emit::emit_info_log_message;
 use crate::{ErrorCode, FsError, FsResult};
 
 use std::path::{Component, Path};

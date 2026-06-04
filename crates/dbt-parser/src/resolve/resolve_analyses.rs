@@ -5,7 +5,7 @@ use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
+use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;

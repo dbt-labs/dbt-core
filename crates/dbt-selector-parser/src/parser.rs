@@ -11,7 +11,7 @@ use dbt_common::{
     node_selector::{
         IndirectSelection, MethodName, SelectExpression, SelectionCriteria, parse_model_specifiers,
     },
-    tracing::emit::emit_warn_log_message,
+    tracing::dbt_emit::emit_warn_log_message,
 };
 
 use dbt_schemas::schemas::selectors::{

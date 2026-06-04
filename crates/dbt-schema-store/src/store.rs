@@ -220,7 +220,7 @@ impl SchemaStoreState {
                     continue;
                 }
 
-                dbt_common::tracing::emit::emit_debug_log_message(format!(
+                dbt_common::tracing::dbt_emit::emit_debug_log_message(format!(
                     "Initializing schema store with entry: {:?} and interval: {:?}",
                     entry, interval
                 ));
@@ -526,7 +526,7 @@ impl SchemaStoreState {
                 .as_millis();
             let age = Duration::from_millis(now_millis.saturating_sub(timestamp) as u64);
             if age > interval {
-                dbt_common::tracing::emit::emit_debug_log_message(format!(
+                dbt_common::tracing::dbt_emit::emit_debug_log_message(format!(
                     "Schema cache entry {:?} is stale (age: {:?}, refresh_interval: {:?})",
                     entry, age, interval
                 ));

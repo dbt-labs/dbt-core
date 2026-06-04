@@ -1,7 +1,7 @@
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::path::DbtPath;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use indexmap::IndexMap;
 use sha2::{Digest, Sha256};

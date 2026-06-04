@@ -12,7 +12,7 @@ use crate::service_config::RunCacheServiceConfig;
 use dbt_common::{
     ErrorCode, FsResult, fs_err,
     io_args::{EvalArgs, FsCommand},
-    tracing::emit::{emit_trace_log_message, emit_warn_log_message},
+    tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message},
     warn_error_options::WarnErrorOptions,
 };
 use dbt_jinja_utils::{

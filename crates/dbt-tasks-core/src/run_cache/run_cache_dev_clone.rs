@@ -3,7 +3,7 @@ use std::sync::Arc;
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::adapter::dialect_of;
-use dbt_common::tracing::emit::{emit_trace_log_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_run_cache::proto::query_cache::{CloneResponse, ReadyToCloneResponse, clone_response};
 use dbt_run_cache::request_builder::{CloneRequestInput, execution_type_from_input};

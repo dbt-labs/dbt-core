@@ -7,7 +7,7 @@ use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args::FsCommand;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::stdfs;
-use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
+use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::invocation_args::InvocationArgs;

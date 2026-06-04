@@ -51,7 +51,8 @@ use dbt_common::{
     io_args::{EvalArgs, EvalArgsBuilder, ListOutputFormat, Phases, ShowOptions},
     io_utils::{checkpoint_error_count_maybe_exit, checkpoint_maybe_exit},
     path::DbtPath,
-    tracing::emit::{emit_info_event, emit_info_log_message, emit_warn_log_message},
+    tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message},
+    tracing::emit::emit_info_event,
 };
 use dbt_common::{
     io_args::FsCommand, node_selector::selectors_require_manifest, stats::Stat, stdfs,
@@ -1570,7 +1571,7 @@ impl DbtProjectCompilation {
             let evicted = store.evict_stale_entries(&refresh_intervals);
 
             if evicted > 0 {
-                dbt_common::tracing::emit::emit_debug_log_message(format!(
+                dbt_common::tracing::dbt_emit::emit_debug_log_message(format!(
                     "Evicted {} stale schema cache entries",
                     evicted
                 ));
@@ -1968,7 +1969,7 @@ impl DbtProjectCompilation {
 
         // Flush the parquet schema cache to disk (no-op for non-ParquetCache stores).
         if let Err(e) = schema_store.save(&arg.io.out_dir) {
-            dbt_common::tracing::emit::emit_debug_log_message(format!(
+            dbt_common::tracing::dbt_emit::emit_debug_log_message(format!(
                 "Failed to save schema cache: {e}"
             ));
         }

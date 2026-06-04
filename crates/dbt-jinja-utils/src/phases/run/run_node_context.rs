@@ -18,7 +18,7 @@ use dbt_common::serde_utils::convert_yml_to_value_map;
 
 use dbt_adapter::load_store::ResultStore;
 use dbt_common::stdfs;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::schemas::NodePathKind;
 use dbt_schemas::schemas::telemetry::NodeType;
