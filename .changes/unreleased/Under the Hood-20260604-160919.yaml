@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Publish a dbt-core Homebrew formula to dbt-labs/homebrew-dbt as part of release-v2.
+time: 2026-06-04T16:09:19.780163+05:30
+custom:
+    author: itsnamangoyal
+    issue: ""
+    project: dbt-fusion
