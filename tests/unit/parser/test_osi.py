@@ -122,6 +122,15 @@ class TestScanOsiDirectories:
         result = _scan_osi_directories(str(tmp_path), ["osi", "OSI"])
         assert {p.name for p in result} == {"lower.json", "upper.json"}
 
+    def test_duplicate_resolved_path_is_scanned_once(self, tmp_path):
+        # On case-insensitive filesystems "osi" and "OSI" resolve to the same
+        # directory; deduplication must prevent files from appearing twice.
+        osi_dir = tmp_path / "osi"
+        osi_dir.mkdir(exist_ok=True)
+        (osi_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi", "OSI"])
+        assert [p.name for p in result] == ["orders.json"]
+
 
 class TestBuildModelLookup:
     def test_indexes_model_by_alias_schema_database(self):
