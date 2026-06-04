@@ -319,12 +319,32 @@ impl Relation {
             identifier: identifier.into(),
         };
         let include_policy = include_policy(adapter_type, &path);
+        let location = match adapter_type {
+            // People set the BigQuery region as database (i.e BigQuery "project") sometimes.
+            // In that case, set the location AND database to have the same value.
+            AdapterType::Bigquery => {
+                if let Some(db) = &path.database
+                    && db.starts_with(bigquery_metadata::BIGQUERY_REGION_PREFIX)
+                {
+                    Some(
+                        db.strip_prefix(bigquery_metadata::BIGQUERY_REGION_PREFIX)
+                            .unwrap()
+                            .to_string(),
+                    )
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
         Self {
             is_parse_time: false,
             is_information_schema: false,
             adapter_type,
             include_policy,
             path,
+            location,
             relation_type: None,
             quote_policy: ResolvedQuoting::trues(),
             native_schema: None,
@@ -333,7 +353,6 @@ impl Relation {
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
             temporary: false,
-            location: None,
             external: None,
             table_format: TableFormat::Default,
         }
@@ -444,30 +463,19 @@ impl Relation {
         view_name: &str,
         location: Option<&str>,
     ) -> Self {
-        Self {
+        let mut r = Self::new(
             adapter_type,
-            is_information_schema: true,
-            location: location.map(|l| l.to_string()),
-            path: RelationPath {
-                database: project.map(|p| p.to_string()),
-                schema: Some(dataset.to_string()),
-                identifier: Some(view_name.to_string()),
-            },
-            include_policy: Policy::trues(),
-            relation_type: None,
-            // FIXME: This `false` in the "database" field is due to the hack
-            // above where we shove project.dataset in the same field.
-            quote_policy: Policy::falses(),
-            is_parse_time: false,
-            native_schema: None,
-            metadata: None,
-            is_delta: false,
-            create_constraints: Vec::default(),
-            alter_constraints: Vec::default(),
-            temporary: false,
-            external: None,
-            table_format: TableFormat::Default,
+            project.map(|p| p.to_string()),
+            Some(dataset.to_string()),
+            Some(view_name.to_string()),
+        )
+        .with_include_policy(Policy::trues())
+        .with_quoting(Policy::falses());
+        r.is_information_schema = true;
+        if let Some(loc) = location {
+            r = r.with_location(loc);
         }
+        r
     }
 
     pub fn new_fabric(
@@ -1011,6 +1019,13 @@ impl BaseRelation for Relation {
                 .expect("INFORMATION_SCHEMA relation needs dataset");
             let view_name = self.path.identifier.as_deref();
 
+            // Detect if user has set `project == location` and normalize
+            let project = self
+                .path
+                .database
+                .as_deref()
+                .filter(|proj| !proj.starts_with(bigquery_metadata::BIGQUERY_REGION_PREFIX));
+
             let fqn_no_project = if let Some(view_name) = view_name {
                 bigquery_metadata::generate_system_table_fqn(
                     dataset,
@@ -1024,7 +1039,7 @@ impl BaseRelation for Relation {
                 "INFORMATION_SCHEMA".to_string()
             };
 
-            let fqn = if let Some(project) = &self.path.database {
+            let fqn = if let Some(project) = &project {
                 format!("`{project}`.{fqn_no_project}")
             } else {
                 fqn_no_project
@@ -1798,6 +1813,65 @@ mod tests {
 
             let rendered = info_schema.render_self_as_str();
             assert_eq!(rendered, "test_schema.INFORMATION_SCHEMA.TABLES");
+        }
+
+        #[test]
+        fn test_information_schema_with_dataset_and_region_prefer_region() {
+            let relation = Relation::new(
+                AdapterType::Bigquery,
+                "test-project".to_string(),
+                "test_dataset".to_string(),
+                "test_relation".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING)
+            .with_location("eu");
+
+            // dataset or region view
+            let info_schema = relation.information_schema("COLUMNS").unwrap();
+            let rendered = info_schema.render_self_as_str();
+            assert_eq!(
+                rendered,
+                "`test-project`.`region-eu`.INFORMATION_SCHEMA.COLUMNS"
+            );
+        }
+
+        #[test]
+        fn test_information_schema_with_dataset_and_region_prefer_dataset() {
+            let relation = Relation::new(
+                AdapterType::Bigquery,
+                "test-project".to_string(),
+                "test_dataset".to_string(),
+                "test_relation".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING)
+            .with_location("eu");
+
+            // dataset-only view
+            let info_schema = relation.information_schema("TABLE_SNAPSHOTS").unwrap();
+            let rendered = info_schema.render_self_as_str();
+            assert_eq!(
+                rendered,
+                "`test-project`.test_dataset.INFORMATION_SCHEMA.TABLE_SNAPSHOTS"
+            );
+        }
+
+        /// See: https://github.com/dbt-labs/dbt-core/issues/15157
+        #[test]
+        fn test_information_schema_with_region_as_database_regression_15157() {
+            let relation = Relation::new(
+                AdapterType::Bigquery,
+                "region-eu".to_string(),
+                "test_schema".to_string(),
+                "my_relation".to_string(),
+            )
+            .with_relation_type(RelationType::Table)
+            .with_quoting(DEFAULT_RESOLVED_QUOTING);
+
+            let info_schema = relation.information_schema("SCHEMATA").unwrap();
+            let rendered = info_schema.render_self_as_str();
+            assert_eq!(rendered, "`region-eu`.INFORMATION_SCHEMA.SCHEMATA");
         }
     }
 
