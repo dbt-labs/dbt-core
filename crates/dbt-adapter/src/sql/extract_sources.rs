@@ -33,7 +33,7 @@ impl std::error::Error for ExtractSourcesError {}
 /// fully qualified are completed using `default_catalog`/`default_schema`.
 ///
 /// References to in-scope CTE aliases are excluded from the result.
-pub fn extract_sources_from_str(
+pub(crate) fn extract_sources_from_str(
     sql: &str,
     dialect: Dialect,
     default_catalog: &str,

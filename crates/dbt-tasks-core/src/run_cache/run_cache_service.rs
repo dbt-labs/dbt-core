@@ -2088,7 +2088,7 @@ fn parse_sql_relations_for_adapter(
         return Ok(BTreeMap::new());
     };
 
-    let upstreams = type_ops.try_extract_identifiers(
+    let upstreams = type_ops.extract_upstreams(
         sql,
         default_catalog,
         default_schema,

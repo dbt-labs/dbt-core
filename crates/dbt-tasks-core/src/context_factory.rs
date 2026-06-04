@@ -123,9 +123,12 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                 run_cache_service_requested: run_cache_service.requested,
                 run_cache_service_config: run_cache_service.config,
                 run_cache_service_client: run_cache_service.client,
-                view_traverser: adapter
-                    .metadata_adapter()
-                    .map(|adapter| Arc::new(ViewDefinitionTraverser::new(Arc::from(adapter)))),
+                view_traverser: adapter.metadata_adapter().map(|metadata_adapter| {
+                    Arc::new(ViewDefinitionTraverser::new(
+                        Arc::from(metadata_adapter),
+                        Arc::clone(adapter.engine().type_ops()),
+                    ))
+                }),
             };
 
             Ok(TaskRunnerCtx {
