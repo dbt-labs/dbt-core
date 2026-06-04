@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use dbt_telemetry::create_process_event_data;
+use dbt_telemetry::TelemetryAttributes;
 use tracing::{Subscriber, level_filters::LevelFilter, span};
 
 use tracing_subscriber::{
@@ -12,6 +12,7 @@ use tracing_subscriber::{
 use super::{
     config::FsTraceConfig,
     constants::PROCESS_SPAN_NAME,
+    dbt_data_layer::{dbt_data_layer_config, dbt_process_span_attributes},
     error::{TracingError, TracingResult},
     event_info::store_event_attributes,
     layers::data_layer::TelemetryDataLayer,
@@ -25,9 +26,9 @@ use dbt_error::{FsError, FsResult};
 // if any logs or spans are emitted outside of the context of our infrastructure.
 //
 // This may happen for two reasons:
-// - some library used in the code flow before "Invocation" span is created that
+// - some library used in the code flow before the root operation span is created that
 // is not filtered by our `tracing` filters.
-// - Intentionally emitted logs outside of the "Invocation" span
+// - Intentionally emitted logs outside of the root operation span
 //
 // Normally any binary using our infra should go through initialisation
 // that will assign this span. However, in some scenarios, such as unit
@@ -114,8 +115,7 @@ pub fn init_tracing(
     let strip_code_location = !cfg!(debug_assertions);
 
     let data_layer = TelemetryDataLayer::new(
-        trace_id,
-        config.parent_span_id,
+        dbt_data_layer_config(trace_id, config.parent_span_id),
         strip_code_location,
         middlewares.into_iter(),
         consumer_layers.into_iter(),
@@ -126,9 +126,12 @@ pub fn init_tracing(
     let effective_max_verbosity =
         std::cmp::max(config.max_log_verbosity, config.max_file_log_verbosity);
 
-    let process_span =
-        init_tracing_with_consumer_layer(effective_max_verbosity, config.package, data_layer)
-            .map_err(FsError::from)?;
+    let process_span = init_tracing_with_consumer_layer(
+        effective_max_verbosity,
+        dbt_process_span_attributes(config.package),
+        data_layer,
+    )
+    .map_err(FsError::from)?;
 
     Ok((
         TelemetryHandle::new(shutdown_items, process_span),
@@ -140,6 +143,9 @@ pub fn init_tracing(
 /// composed of middleware and consumer layers.
 ///
 /// This function will set up a global tracing subscriber and will fail on re-entry.
+///
+/// The caller provides process span attributes so this generic initializer does not
+/// construct application-specific telemetry data.
 ///
 /// If you need to change or add layers after initialization, use `super::reload::create_realodable_data_layer`,
 /// to get a reloadable data layer.
@@ -159,7 +165,7 @@ pub fn init_tracing(
 /// in data layer for events (but not for spans!).
 pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync + 'static>(
     max_log_verbosity: LevelFilter,
-    package: &str,
+    process_attributes: TelemetryAttributes,
     data_layer: D,
 ) -> TracingResult<span::Span> {
     // Check if tracing is already initialized
@@ -173,7 +179,7 @@ pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync +
         .map_err(|_| TracingError::SetGlobalSubscriber)?;
 
     // Create the process span and store it in the global PROCESS_SPAN
-    store_event_attributes(create_process_event_data(package));
+    store_event_attributes(process_attributes);
     let process_span = tracing::info_span!(PROCESS_SPAN_NAME);
 
     PROCESS_SPAN

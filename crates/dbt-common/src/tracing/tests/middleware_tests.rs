@@ -4,13 +4,12 @@ use crate::tracing::{
     emit::{create_info_span, create_root_info_span, emit_info_event, emit_warn_log_message},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer, TelemetryMiddleware},
-    layers::data_layer::TelemetryDataLayer,
     metrics::get_metric,
     middlewares::{
         metric_aggregator::TelemetryMetricAggregator,
         warn_error_options::TelemetryWarnErrorOptionsMiddleware,
     },
-    tests::mocks::{MockDynLogEvent, MockDynSpanEvent, MockMiddleware, TestLayer},
+    tests::mocks::{MockDynLogEvent, MockDynSpanEvent, MockMiddleware, TestLayer, test_data_layer},
 };
 
 use crate::ErrorCode;
@@ -69,7 +68,7 @@ fn middleware_modifies_drops_and_updates_metrics() {
     let middlewares: Vec<MiddlewareLayer> = vec![Box::new(middleware)];
     let consumers: Vec<ConsumerLayer> = vec![Box::new(test_layer)];
 
-    let mut data_layer = TelemetryDataLayer::new(
+    let mut data_layer = test_data_layer(
         trace_id,
         None, // parent_span_id not needed in tests
         false,
@@ -212,7 +211,7 @@ fn warn_error_options_middleware_updates_runtime_decisions() {
     ];
     let consumers: Vec<ConsumerLayer> = vec![Box::new(test_layer)];
 
-    let mut data_layer = TelemetryDataLayer::new(
+    let mut data_layer = test_data_layer(
         trace_id,
         None,
         false,
@@ -350,7 +349,7 @@ fn middleware_invocations_do_not_block_across_threads() {
     let middlewares: Vec<MiddlewareLayer> = vec![Box::new(cooperative_middleware)];
     let consumers: Vec<ConsumerLayer> = vec![Box::new(test_layer)];
 
-    let mut data_layer = TelemetryDataLayer::new(
+    let mut data_layer = test_data_layer(
         trace_id,
         None, // parent_span_id not needed in tests
         false,

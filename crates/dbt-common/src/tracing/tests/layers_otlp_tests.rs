@@ -4,14 +4,11 @@ use crate::tracing::{
     emit::{create_info_span, create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
-    layers::{
-        data_layer::TelemetryDataLayer,
-        otlp::{OTLPExporterLayer, OtlpResourceConfig},
-    },
+    layers::otlp::{OTLPExporterLayer, OtlpResourceConfig},
 };
 
-use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
-use dbt_telemetry::{Invocation, TelemetryOutputFlags};
+use super::mocks::{MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, test_data_layer};
+use dbt_telemetry::TelemetryOutputFlags;
 use opentelemetry::{Key, KeyValue, Value as OtelValue};
 use opentelemetry_sdk as sdk;
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
@@ -141,7 +138,7 @@ fn test_otlp_layer_exports_only_marked_records() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -248,7 +245,7 @@ fn test_otlp_export_with_links() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -323,8 +320,8 @@ fn test_otlp_export_with_links() {
 
 #[test]
 fn test_otlp_export_includes_parent_span_id_on_root_span() {
-    // Test that when a parent_span_id is provided, the root Invocation span
-    // is exported to OTLP with that parent span ID set
+    // Test that when a parent_span_id is provided, the root span is exported
+    // to OTLP with that parent span ID set.
     let trace_id = rand::random::<u128>();
     let expected_parent_span_id: u64 = 0xdeadbeefcafebabe;
 
@@ -340,7 +337,7 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             Some(expected_parent_span_id),
             false,
@@ -350,15 +347,13 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
     );
 
     tracing::subscriber::with_default(subscriber, || {
-        let invocation_span = create_root_info_span(Invocation {
-            invocation_id: uuid::Uuid::new_v4().to_string(),
+        let root_span = create_root_info_span(MockRootSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::EXPORT_OTLP,
+            trace_id: Some(trace_id),
             parent_span_id: Some(expected_parent_span_id),
-            raw_command: "test".to_string(),
-            eval_args: None,
-            process_info: None,
-            metrics: Default::default(),
         });
-        invocation_span.in_scope(|| {
+        root_span.in_scope(|| {
             // Create a child span to verify parent-child relationships still work
             let _child = create_info_span(MockDynSpanEvent {
                 name: "child".to_string(),
@@ -377,21 +372,22 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
 
     let exported_spans = spans.lock().unwrap().clone();
 
-    // Should have 2 spans: invocation and child
+    // Should have 2 spans: root and child
     assert_eq!(exported_spans.len(), 2, "Should have exported 2 spans");
 
-    // Find the invocation span (the one with invocation_id attribute)
-    let invocation_span = exported_spans
+    // Find the root span by the mock root span name attribute.
+    let root_span = exported_spans
         .iter()
         .find(|s| {
-            s.attributes
-                .iter()
-                .any(|kv| kv.key.as_str() == "invocation_id")
+            s.attributes.iter().any(|kv| {
+                kv.key.as_str() == "name"
+                    && matches!(&kv.value, OtelValue::String(s) if s.as_ref() == "root")
+            })
         })
-        .expect("Should find invocation span");
+        .expect("Should find root span");
 
-    // Verify the invocation span has the expected parent_span_id
-    let parent_span_id = invocation_span.parent_span_id;
+    // Verify the root span has the expected parent_span_id
+    let parent_span_id = root_span.parent_span_id;
 
     // Convert the expected parent span ID to the format used by OTLP
     let expected_span_id_bytes = expected_parent_span_id.to_be_bytes();
@@ -399,10 +395,10 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
 
     assert_eq!(
         parent_span_id, expected_otel_span_id,
-        "Invocation span should have the provided parent_span_id"
+        "Root span should have the provided parent_span_id"
     );
 
-    // Find the child span and verify it has the invocation span as parent
+    // Find the child span and verify it has the root span as parent
     let child_span = exported_spans
         .iter()
         .find(|s| {
@@ -415,7 +411,7 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
 
     assert_eq!(
         child_span.parent_span_id,
-        invocation_span.span_context.span_id(),
-        "Child span should have invocation span as parent"
+        root_span.span_context.span_id(),
+        "Child span should have root span as parent"
     );
 }

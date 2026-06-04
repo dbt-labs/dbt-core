@@ -3,13 +3,12 @@ use crate::tracing::{
     emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
-    layers::data_layer::TelemetryDataLayer,
     metrics::{MetricKey, get_metric, increment_metric},
 };
 use dbt_telemetry::TelemetryOutputFlags;
 use tracing_subscriber::{Registry, registry::LookupSpan};
 
-use super::mocks::{MockDynSpanEvent, TestLayer};
+use super::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 const TOTAL_ERRORS_KEY: MetricKey = MetricKey::from_raw(1);
 const TOTAL_WARNINGS_KEY: MetricKey = MetricKey::from_raw(2);
@@ -25,7 +24,7 @@ fn metrics_are_scoped_to_root_span() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

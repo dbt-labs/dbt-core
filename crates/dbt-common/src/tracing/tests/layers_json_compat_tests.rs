@@ -8,9 +8,9 @@ use crate::{
             emit_error_event, emit_info_event,
         },
         init::create_tracing_subcriber_with_layer,
-        layers::{data_layer::TelemetryDataLayer, json_compat_layer::build_json_compat_layer},
+        layers::json_compat_layer::build_json_compat_layer,
         span_info::{record_span_status_from_attrs, update_span_attrs},
-        tests::mocks::MockDynSpanEvent,
+        tests::mocks::{MockDynSpanEvent, test_data_layer},
     },
 };
 use dbt_telemetry::{
@@ -54,7 +54,7 @@ where
 
     let subscriber = create_tracing_subcriber_with_layer(
         LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

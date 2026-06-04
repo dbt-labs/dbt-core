@@ -2,9 +2,8 @@ use super::super::{
     emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
-    layers::data_layer::TelemetryDataLayer,
     metrics::{MetricKey, get_metric},
-    tests::mocks::{MockDynSpanEvent, MockMiddleware, TestLayer},
+    tests::mocks::{MockDynSpanEvent, MockMiddleware, TestLayer, test_data_layer},
 };
 use dbt_telemetry::TelemetryOutputFlags;
 
@@ -66,7 +65,7 @@ fn data_provider_isolates_roots_and_shares_within_tree() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -217,7 +216,7 @@ fn data_provider_with_root_and_with_mut() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -284,7 +283,7 @@ fn data_provider_init_replaces_existing() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -338,7 +337,7 @@ fn data_provider_init_ancestor_data_on_matching_span() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -419,7 +418,7 @@ fn data_provider_with_ancestor_ext_finds_closest() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -493,7 +492,7 @@ fn data_provider_with_ancestor_ext_mut_modifies_closest() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -564,7 +563,7 @@ fn data_provider_with_ancestor_attrs_accesses_closest_attrs() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -628,7 +627,7 @@ fn data_provider_ancestor_apis_return_none_when_not_found() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

@@ -1,15 +1,85 @@
 use super::super::{
     data_provider::DataProvider,
-    layer::{TelemetryConsumer, TelemetryMiddleware},
+    layer::{ConsumerLayer, MiddlewareLayer, TelemetryConsumer, TelemetryMiddleware},
+    layers::data_layer::{
+        RootSpanTraceContext, TelemetryDataLayer, TelemetryDataLayerConfig,
+        UnstructuredLogAttributesInput, UnstructuredSpanAttributesInput,
+    },
     shared_writer::SharedWriter,
 };
 use dbt_telemetry::{
-    AnyTelemetryEvent, RecordCodeLocation, TelemetryContext, TelemetryEventRecType,
-    TelemetryOutputFlags,
+    AnyTelemetryEvent, RecordCodeLocation, TelemetryAttributes, TelemetryContext,
+    TelemetryEventRecType, TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
 use serde::Serialize;
+use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
+use tracing::Subscriber;
+use tracing_subscriber::registry::LookupSpan;
+
+pub(in crate::tracing) fn test_data_layer<S>(
+    trace_id: u128,
+    parent_span_id: Option<u64>,
+    strip_code_location: bool,
+    middlewares: impl Iterator<Item = MiddlewareLayer>,
+    consumers: impl Iterator<Item = ConsumerLayer>,
+) -> TelemetryDataLayer<S>
+where
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+{
+    TelemetryDataLayer::new(
+        test_data_layer_config(trace_id, parent_span_id),
+        strip_code_location,
+        middlewares,
+        consumers,
+    )
+}
+
+fn test_data_layer_config(trace_id: u128, parent_span_id: Option<u64>) -> TelemetryDataLayerConfig {
+    TelemetryDataLayerConfig::new(
+        trace_id,
+        parent_span_id,
+        test_unstructured_span_attributes,
+        test_unstructured_log_attributes,
+        test_root_span_trace_context,
+    )
+}
+
+fn test_unstructured_span_attributes(
+    input: UnstructuredSpanAttributesInput<'_>,
+) -> TelemetryAttributes {
+    MockUnknown {
+        name: input.name.to_string(),
+        file: input
+            .location
+            .file
+            .unwrap_or_else(|| "<unknown>".to_string()),
+        line: input.location.line.unwrap_or_default(),
+        flags: TelemetryOutputFlags::ALL,
+    }
+    .into()
+}
+
+fn test_unstructured_log_attributes(input: UnstructuredLogAttributesInput) -> TelemetryAttributes {
+    MockDynLogEvent {
+        code: input.severity_number as i32,
+        flags: TelemetryOutputFlags::EXPORT_JSONL_AND_OTLP,
+        file: input.location.file,
+        line: input.location.line,
+        ..Default::default()
+    }
+    .into()
+}
+
+fn test_root_span_trace_context(attributes: &TelemetryAttributes) -> Option<RootSpanTraceContext> {
+    let root = attributes.downcast_ref::<MockRootSpanEvent>()?;
+
+    Some(RootSpanTraceContext {
+        trace_id: root.trace_id?,
+        parent_span_id: root.parent_span_id,
+    })
+}
 
 fn serialize_flags<S>(flags: &TelemetryOutputFlags, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -33,6 +103,186 @@ pub struct MockDynSpanEvent {
     pub has_sensitive: bool,
     pub was_scrubbed: bool,
     pub context: Option<TestTelemetryContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+pub struct MockUnknown {
+    pub name: String,
+    pub file: String,
+    pub line: u32,
+    #[serde(serialize_with = "serialize_flags")]
+    pub flags: TelemetryOutputFlags,
+}
+
+impl MockUnknown {
+    pub const EVENT_TYPE: &'static str = "v1.public.events.fusion.dev.MockUnknown";
+
+    pub fn from_arrow_record(
+        attrs: &ArrowAttributes,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+        Ok(Box::new(Self {
+            name: attrs
+                .dev_name
+                .as_deref()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!("Missing `dev_name` for event type \"{}\"", Self::EVENT_TYPE)
+                })?,
+            file: attrs
+                .file
+                .as_deref()
+                .map(str::to_string)
+                .unwrap_or_default(),
+            line: attrs.line.unwrap_or_default(),
+            flags: TelemetryOutputFlags::ALL,
+        }))
+    }
+
+    #[cfg(test)]
+    pub fn faker(_seed: &str) -> Vec<Box<dyn AnyTelemetryEvent>> {
+        vec![Box::new(Self::default())]
+    }
+}
+
+impl AnyTelemetryEvent for MockUnknown {
+    fn event_type(&self) -> &'static str {
+        Self::EVENT_TYPE
+    }
+
+    fn event_display_name(&self) -> String {
+        format!(
+            "Mock Unknown Span: {} ({}:{})",
+            self.name, self.file, self.line
+        )
+    }
+
+    fn record_category(&self) -> TelemetryEventRecType {
+        TelemetryEventRecType::Span
+    }
+
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        self.flags
+    }
+
+    fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|rhs| rhs == self)
+    }
+
+    fn code_location(&self) -> Option<RecordCodeLocation> {
+        Some(RecordCodeLocation {
+            file: Some(self.file.clone()),
+            line: Some(self.line),
+            ..Default::default()
+        })
+    }
+
+    fn with_code_location(&mut self, location: RecordCodeLocation) {
+        if let Some(file) = location.file {
+            self.file = file;
+        }
+
+        if let Some(line) = location.line {
+            self.line = line;
+        }
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
+        Some(Box::new(self.clone()))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn AnyTelemetryEvent> {
+        Box::new(self.clone())
+    }
+
+    fn to_json(&self) -> Result<serde_json::Value, String> {
+        serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+    }
+
+    fn to_arrow(&self) -> Option<ArrowAttributes<'_>> {
+        self.flags
+            .contains(TelemetryOutputFlags::EXPORT_PARQUET)
+            .then(|| ArrowAttributes {
+                dev_name: Some(Cow::Borrowed(self.name.as_str())),
+                file: Some(Cow::Borrowed(self.file.as_str())),
+                line: Some(self.line),
+                ..Default::default()
+            })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+pub struct MockRootSpanEvent {
+    pub name: String,
+    #[serde(serialize_with = "serialize_flags")]
+    pub flags: TelemetryOutputFlags,
+    #[serde(skip)]
+    pub trace_id: Option<u128>,
+    #[serde(skip)]
+    pub parent_span_id: Option<u64>,
+}
+
+impl AnyTelemetryEvent for MockRootSpanEvent {
+    fn event_type(&self) -> &'static str {
+        "v1.public.events.fusion.dev.MockRootSpanEvent"
+    }
+
+    fn event_display_name(&self) -> String {
+        format!("Mock Root Span Event: {}", self.name)
+    }
+
+    fn record_category(&self) -> TelemetryEventRecType {
+        TelemetryEventRecType::Span
+    }
+
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        self.flags
+    }
+
+    fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|rhs| rhs == self)
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
+        Some(Box::new(self.clone()))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn AnyTelemetryEvent> {
+        Box::new(self.clone())
+    }
+
+    fn to_json(&self) -> Result<serde_json::Value, String> {
+        serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+    }
 }
 
 impl AnyTelemetryEvent for MockDynSpanEvent {

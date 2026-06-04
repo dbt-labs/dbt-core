@@ -7,10 +7,9 @@ use crate::tracing::{
     filter::TelemetryFilterFn,
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, TelemetryConsumer},
-    layers::data_layer::TelemetryDataLayer,
 };
 
-use super::mocks::{MockDynLogEvent, MockDynSpanEvent, TestLayer};
+use super::mocks::{MockDynLogEvent, MockDynSpanEvent, TestLayer, test_data_layer};
 use dbt_telemetry::TelemetryOutputFlags;
 use tracing::level_filters::LevelFilter;
 
@@ -97,7 +96,7 @@ fn filtered_middle_span_reparents_grandchild() {
 
     let consumers: Vec<ConsumerLayer> = vec![Box::new(baseline_layer), Box::new(filtered_consumer)];
 
-    let mut data_layer = TelemetryDataLayer::new(
+    let mut data_layer = test_data_layer(
         trace_id,
         None,
         false,
@@ -189,7 +188,7 @@ fn level_filter_respects_span_and_log_levels() {
 
     let consumers: Vec<ConsumerLayer> = vec![Box::new(baseline_layer), Box::new(filtered_consumer)];
 
-    let mut data_layer = TelemetryDataLayer::new(
+    let mut data_layer = test_data_layer(
         trace_id,
         None,
         false,
@@ -303,7 +302,7 @@ fn filter_combines_with_consumer_predicates() {
     let filtered_consumer = consumer.with_filter(telemetry_filter);
     let consumers: Vec<ConsumerLayer> = vec![Box::new(filtered_consumer)];
 
-    let mut data_layer = TelemetryDataLayer::new(
+    let mut data_layer = test_data_layer(
         trace_id,
         None,
         false,

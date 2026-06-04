@@ -4,10 +4,8 @@ use crate::{
         emit::{create_root_info_span, emit_info_event},
         init::create_tracing_subcriber_with_layer,
         invocation::create_invocation_attributes,
-        layers::{
-            data_layer::TelemetryDataLayer,
-            file_log_layer::build_file_log_layer_with_background_writer,
-        },
+        layers::file_log_layer::build_file_log_layer_with_background_writer,
+        tests::mocks::test_data_layer,
     },
 };
 use dbt_telemetry::{LogMessage, SeverityNumber};
@@ -31,7 +29,7 @@ fn file_log_layer_creates_invocation_and_log_stub() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

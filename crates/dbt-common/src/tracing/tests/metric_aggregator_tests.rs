@@ -1,14 +1,13 @@
 use super::super::{
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
-    emit::create_root_info_span,
+    emit::{create_root_info_span, emit_warn_event},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
-    layers::data_layer::TelemetryDataLayer,
     metrics::get_metric,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
-    tests::mocks::{MockDynSpanEvent, TestLayer},
+    tests::mocks::{MockDynSpanEvent, TestLayer, test_data_layer},
 };
-use dbt_telemetry::TelemetryOutputFlags;
+use dbt_telemetry::{LogMessage, TelemetryOutputFlags};
 
 #[test]
 fn warning_logs_increment_warning_metric() {
@@ -18,7 +17,7 @@ fn warning_logs_increment_warning_metric() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -39,7 +38,10 @@ fn warning_logs_increment_warning_metric() {
 
         assert_eq!(get_metric(test_metric_key), 0);
 
-        tracing::warn!("test warning");
+        emit_warn_event(
+            LogMessage::new_from_level(tracing::Level::WARN),
+            Some("test warning"),
+        );
 
         assert_eq!(get_metric(test_metric_key), 1);
 

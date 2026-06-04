@@ -9,7 +9,9 @@ use super::{ProjectEnv, Task, TestEnv, TestResult};
 use dbt_common::error::FsResult;
 use dbt_common::string_utils::split_into_whitespace_and_brackets;
 use dbt_common::tracing::reload::create_data_layer_for_tests;
-use dbt_common::tracing::{TracingConfigProvider, init_tracing_with_consumer_layer};
+use dbt_common::tracing::{
+    TracingConfigProvider, dbt_data_layer_config, init_tracing_with_consumer_layer,
+};
 use dbt_features::feature_stack::FeatureStack;
 use once_cell::sync::OnceCell;
 use std::future::Future;
@@ -163,13 +165,14 @@ impl TaskSeq {
         // sets global subscriber. We initialize with a special reloadable data layer
         // that can be populated with actual consumer layers by individual tasks.
         // We use fixed fallback trace ID of 1 for all tests for reproducibility.
-        let (data_layer, reload_handle) = create_data_layer_for_tests(1u128, vec![], vec![]);
+        let (data_layer, reload_handle) =
+            create_data_layer_for_tests(dbt_data_layer_config(1u128, None), vec![], vec![]);
 
         // Keep the guard alive for the duration of the test run so the process span
         // remains available to worker threads emitting telemetry.
         let process_span_guard = init_tracing_with_consumer_layer(
             tracing::level_filters::LevelFilter::TRACE,
-            "dbt-tests",
+            dbt_common::tracing::dbt_process_span_attributes("dbt-tests"),
             data_layer,
         )?;
 

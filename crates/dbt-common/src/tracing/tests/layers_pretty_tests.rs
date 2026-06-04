@@ -1,9 +1,9 @@
-use super::mocks::{TestLayer, TestWriter};
+use super::mocks::{TestLayer, TestWriter, test_data_layer};
 use crate::tracing::{
     emit::{create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, TelemetryConsumer},
-    layers::{data_layer::TelemetryDataLayer, pretty_writer::TelemetryPrettyWriterLayer},
+    layers::pretty_writer::TelemetryPrettyWriterLayer,
 };
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
@@ -46,7 +46,7 @@ fn pretty_layer_applies_filter_and_formatting() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

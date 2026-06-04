@@ -15,11 +15,10 @@ use crate::tracing::{
     },
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
-    layers::data_layer::TelemetryDataLayer,
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
 };
 
-use super::mocks::{MockDynSpanEvent, TestLayer};
+use super::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 #[test]
 fn test_create_span() {
@@ -32,7 +31,7 @@ fn test_create_span() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -240,7 +239,7 @@ fn test_emit_level_functions() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -392,7 +391,7 @@ fn test_convenience_log_message_functions() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -498,7 +497,7 @@ fn test_emit_error_log_from_fs_error_md_reports_warning() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -546,7 +545,7 @@ fn test_emit_error_log_from_fs_error_sql_reports_error() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

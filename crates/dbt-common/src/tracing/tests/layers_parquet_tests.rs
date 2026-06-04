@@ -3,11 +3,10 @@ use crate::tracing::{
     event_info::store_event_attributes,
     init::create_tracing_subcriber_with_layer,
     layers::{
-        data_layer::{TelemetryDataLayer, get_span_start_info_from_span},
-        parquet_writer::build_parquet_writer_layer,
+        data_layer::get_span_start_info_from_span, parquet_writer::build_parquet_writer_layer,
     },
     span_info,
-    tests::mocks::{MockDynLogEvent, MockDynSpanEvent},
+    tests::mocks::{MockDynLogEvent, MockDynSpanEvent, test_data_layer},
 };
 use dbt_telemetry::{
     CallTrace, LogMessage, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo,
@@ -34,7 +33,7 @@ fn test_tracing_parquet_filtering() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

@@ -11,7 +11,7 @@ use super::super::{
 };
 use rand::RngCore;
 
-use std::{sync::atomic::AtomicU64, time::SystemTime};
+use std::{collections::BTreeMap, sync::atomic::AtomicU64, time::SystemTime};
 
 use tracing::{Level, Subscriber, span};
 use tracing_subscriber::{
@@ -21,10 +21,89 @@ use tracing_subscriber::{
 };
 
 use dbt_telemetry::{
-    CallTrace, Invocation, LogMessage, LogRecordInfo, RecordCodeLocation, SeverityNumber,
-    SpanEndInfo, SpanLinkInfo, SpanStartInfo, SpanStatus, TelemetryAttributes, TelemetryContext,
-    TelemetryEventRecType, Unknown,
+    DebugValue, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanLinkInfo,
+    SpanStartInfo, SpanStatus, TelemetryAttributes, TelemetryContext, TelemetryEventRecType,
 };
+
+/// Builds span attributes for spans that were not created through the structured emit/span helpers.
+///
+/// The data layer passes the tracing metadata it has available here, and the application
+/// provides the fallback attributes to use for unstructured spans.
+pub(in crate::tracing) type UnstructuredSpanAttributesCallback =
+    for<'a> fn(UnstructuredSpanAttributesInput<'a>) -> TelemetryAttributes;
+
+/// Builds log attributes for events that were not created through the structured emit helpers.
+pub(in crate::tracing) type UnstructuredLogAttributesCallback =
+    fn(UnstructuredLogAttributesInput) -> TelemetryAttributes;
+
+/// Extracts trace correlation data from attributes when a root span defines its own trace context.
+pub(in crate::tracing) type RootSpanTraceContextCallback =
+    fn(&TelemetryAttributes) -> Option<RootSpanTraceContext>;
+
+/// Metadata available when constructing fallback span attributes.
+pub(in crate::tracing) struct UnstructuredSpanAttributesInput<'a> {
+    /// The tracing metadata name for the unstructured span.
+    pub name: &'a str,
+    /// The tracing severity level for the unstructured span.
+    pub level: &'a Level,
+    /// Code location calculated from tracing metadata or explicit span fields.
+    pub location: RecordCodeLocation,
+    /// Extra trace-level span fields, when the caller wants a dev-internal fallback.
+    pub debug_extra_attrs: Option<BTreeMap<String, DebugValue>>,
+}
+
+/// Metadata available when constructing fallback log attributes.
+pub(in crate::tracing) struct UnstructuredLogAttributesInput {
+    /// The normalized telemetry severity for the log event.
+    pub severity_number: SeverityNumber,
+    /// Code location calculated from tracing metadata or explicit event fields.
+    pub location: RecordCodeLocation,
+}
+
+/// Trace correlation data supplied by structured root span attributes.
+pub(in crate::tracing) struct RootSpanTraceContext {
+    /// The trace ID that should be used for this root span and its children.
+    pub trace_id: u128,
+    /// Optional parent span ID for trace correlation.
+    pub parent_span_id: Option<u64>,
+}
+
+/// Fallback IDs and callbacks used when tracing calls do not carry structured telemetry attributes.
+#[derive(Clone, Copy)]
+pub struct TelemetryDataLayerConfig {
+    /// The trace ID used for spans & events lacking a proper parent span
+    /// (essentially the root span and any tracing calls missing the expected
+    /// root operation span tree in their context).
+    fallback_trace_id: u128,
+    /// Optional parent span ID for trace correlation, used as fallback when creating
+    /// root spans without an explicit parent.
+    fallback_parent_span_id: Option<u64>,
+    /// Callback used for fallback span attributes.
+    unstructured_span_attributes: UnstructuredSpanAttributesCallback,
+    /// Callback used for fallback log attributes.
+    unstructured_log_attributes: UnstructuredLogAttributesCallback,
+    /// Callback used to detect root spans with structured trace context.
+    root_span_trace_context: RootSpanTraceContextCallback,
+}
+
+impl TelemetryDataLayerConfig {
+    /// Creates a new data layer configuration for fallback telemetry behavior.
+    pub(in crate::tracing) fn new(
+        fallback_trace_id: u128,
+        fallback_parent_span_id: Option<u64>,
+        unstructured_span_attributes: UnstructuredSpanAttributesCallback,
+        unstructured_log_attributes: UnstructuredLogAttributesCallback,
+        root_span_trace_context: RootSpanTraceContextCallback,
+    ) -> Self {
+        Self {
+            fallback_trace_id,
+            fallback_parent_span_id,
+            unstructured_span_attributes,
+            unstructured_log_attributes,
+            root_span_trace_context,
+        }
+    }
+}
 
 /// A bitmask used to represent which consumers are not interested in a given
 /// telemetry span. Consumers are indexed by their position in the consumer list
@@ -116,13 +195,8 @@ pub struct TelemetryDataLayer<S>
 where
     S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
-    /// The trace ID used for spans & events lacking a proper parent span
-    /// (essentially the root span and any buggy tracing calls missing proper invocation
-    /// span tree in their context).
-    fallback_trace_id: u128,
-    /// Optional parent span ID for trace correlation, used as fallback when creating
-    /// root spans without an explicit parent.
-    fallback_parent_span_id: Option<u64>,
+    /// Fallback IDs and callback configuration for telemetry data construction.
+    config: TelemetryDataLayerConfig,
     /// Whether to strip code location from span & log attributes.
     strip_code_location: bool,
     /// The telemetry middlewares to apply before notifying consumers.
@@ -142,21 +216,24 @@ where
     S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
     pub(in crate::tracing) fn new(
-        fallback_trace_id: u128,
-        fallback_parent_span_id: Option<u64>,
+        config: TelemetryDataLayerConfig,
         strip_code_location: bool,
         middlewares: impl Iterator<Item = MiddlewareLayer>,
         consumers: impl Iterator<Item = ConsumerLayer>,
     ) -> Self {
         Self {
-            fallback_trace_id,
-            fallback_parent_span_id,
+            config,
             strip_code_location,
             middlewares: middlewares.collect(),
             consumers: consumers.collect(),
             next_id: None,
             __phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Returns a copy of the data layer fallback configuration.
+    pub(in crate::tracing) fn config(&self) -> TelemetryDataLayerConfig {
+        self.config
     }
 
     /// For testing and debugging purposes, enables sequential span IDs
@@ -237,26 +314,16 @@ where
         let mut attributes = if let Some(mut attrs) = take_event_attributes() {
             attrs.inner_mut().with_code_location(location);
             attrs
-        } else if metadata.level() == &Level::TRACE {
-            // Trace spans without explicit attributes considered dev internal
-            CallTrace {
-                name: metadata.name().to_string(),
-                file: location.file.clone(),
-                line: location.line,
-                extra: get_span_debug_extra_attrs(attrs.values().into()),
-            }
-            .into()
         } else {
-            Unknown {
-                name: metadata.name().to_string(),
-                file: location
-                    .file
-                    .as_ref()
-                    .map_or_else(|| "<unknown>", |v| v)
-                    .to_string(),
-                line: location.line.unwrap_or_default(),
-            }
-            .into()
+            // Fallback to configured default attributes based on metadata
+            // (shouldn't happen for properly instrumented spans).
+            (self.config.unstructured_span_attributes)(UnstructuredSpanAttributesInput {
+                name: metadata.name(),
+                level: metadata.level(),
+                location,
+                debug_extra_attrs: (metadata.level() == &Level::TRACE)
+                    .then(|| get_span_debug_extra_attrs(attrs.values().into())),
+            })
         };
 
         // check that attributes are of expected record type
@@ -286,31 +353,24 @@ where
             })
             .unwrap_or_else(|| {
                 // If no parent span is found, we have a couple possible scenarios:
-                // 1. This is the root span of the trace, in which case we use the fallback trace ID, and no parent span ID
-                // 2. This is an invocation span and we calculate the trace ID from `invocation_id` of the span,
-                //    and optionally use the parent_span_id if provided via --parent-span-id CLI argument
-                // 3. This is a buggy tracing call missing proper invocation span tree in their context,
-                //  in which case we fallback to the fallback trace ID and no parent span ID
-                if let Some(Invocation {
-                    invocation_id,
-                    parent_span_id,
-                    ..
-                }) = &attributes.downcast_ref::<Invocation>()
+                // 1. This is the root span of the trace, in which case we use the fallback trace ID,
+                //    and optionally the fallback parent span ID if one was configured
+                // 2. This is a configured root telemetry span. The application callback recognizes
+                //    structured root span attributes and supplies the trace context to use
+                // 3. This is a tracing call missing the expected root operation span tree in its
+                //    context, in which case we fall back to the configured trace and parent span IDs
+                if let Some(root_span_context) = (self.config.root_span_trace_context)(&attributes)
                 {
                     (
-                        // We use proto's to define event structures, which doesn't allow
-                        // storing u128/uuid directly, so we store UUID string and convert it back here
-                        uuid::Uuid::parse_str(invocation_id)
-                            .expect("invocation_id Must be a valid UUID string")
-                            .as_u128(),
-                        *parent_span_id,
+                        root_span_context.trace_id,
+                        root_span_context.parent_span_id,
                         None,
                         FilterMask::empty(),
                     )
                 } else {
                     (
-                        self.fallback_trace_id,
-                        self.fallback_parent_span_id,
+                        self.config.fallback_trace_id,
+                        self.config.fallback_parent_span_id,
                         None,
                         FilterMask::empty(),
                     )
@@ -340,7 +400,7 @@ where
             attributes: attributes.clone(),
         };
 
-        // If this is the root span, initialize invocation-level metrics storage.
+        // If this is the root span, initialize root-level metrics storage.
         // We have to do it early to ensure it is available to middlewares
         if span.parent().is_none() {
             init_metrics_storage_on_root_span(&span);
@@ -358,7 +418,7 @@ where
         debug_assert!(
             root_span.name() == ROOT_SPAN_NAME || span.name() == PROCESS_SPAN_NAME || cfg!(test),
             "Expected root span created via `create_root_info_span`. Got: {}.
-            Are you running code not instrumented under an invocation span tree?",
+            Are you running code not instrumented under a root operation span tree?",
             root_span.name()
         );
 
@@ -507,7 +567,7 @@ where
         let link = SpanLinkInfo {
             trace_id: followed_trace_id,
             span_id: followed_span_id,
-            attributes: std::collections::BTreeMap::new(),
+            attributes: BTreeMap::new(),
         };
 
         // Update the current span's DLSpanStartInfo to include this link
@@ -570,23 +630,20 @@ where
                 let location = self.get_location(metadata, None);
 
                 (
-                    self.fallback_trace_id,
+                    self.config.fallback_trace_id,
                     self.next_span_id(),
                     None,
                     None, // No links in fallback case
                     SystemTime::now(),
                     severity_number,
                     severity_number.as_str().to_string(),
-                    Unknown {
-                        name: metadata.name().to_string(),
-                        file: location
-                            .file
-                            .as_ref()
-                            .map_or_else(|| "<unknown>", |v| v)
-                            .to_string(),
-                        line: location.line.unwrap_or_default(),
-                    }
-                    .into(),
+                    // Fallback. Should not happen: spans should have a start record by close time.
+                    (self.config.unstructured_span_attributes)(UnstructuredSpanAttributesInput {
+                        name: metadata.name(),
+                        level: metadata.level(),
+                        location,
+                        debug_extra_attrs: None,
+                    }),
                 ) // Fallback. Should not happen
             };
 
@@ -653,7 +710,7 @@ where
         debug_assert!(
             root_span.name() == ROOT_SPAN_NAME || span.name() == PROCESS_SPAN_NAME || cfg!(test),
             "Expected root span created via `create_root_info_span`. Got: {}.
-            Are you running code not instrumented under an invocation span tree?",
+            Are you running code not instrumented under a root operation span tree?",
             root_span.name()
         );
 
@@ -754,7 +811,7 @@ where
             })
             .unwrap_or_else(||
                 // If no parent is found this is definitely a buggy tracing call (before our init & outside of any span)
-                (self.fallback_trace_id, None, None, None, FilterMask::empty(), None));
+                (self.config.fallback_trace_id, None, None, None, FilterMask::empty(), None));
 
         // Get event metadata
         let metadata = event.metadata();
@@ -775,25 +832,11 @@ where
             attrs.inner_mut().with_code_location(location);
             attrs
         } else {
-            LogMessage {
-                code: None,
-                code_name: None,
-                dbt_core_event_code: None,
-                original_severity_number: severity_number as i32,
-                original_severity_text: severity_number.as_str().to_string(),
-                package_name: None,
-                unique_id: None,
-                phase: None,
-                file: location.file,
-                line: location.line,
-                relative_path: None,
-                code_line: None,
-                code_column: None,
-                expanded_relative_path: None,
-                expanded_line: None,
-                expanded_column: None,
-            }
-            .into()
+            // Fallback to configured default log attributes.
+            (self.config.unstructured_log_attributes)(UnstructuredLogAttributesInput {
+                severity_number,
+                location,
+            })
         };
 
         // check that attributes are of expected record type
@@ -825,9 +868,9 @@ where
         // Unlike spans, where we expect that they are set-up corerctly and rooted under our special root span,
         // there are multiple valid use-cases for events being logged outside of any span context:
         // 1. Third-party libraries may log events on worker threads
-        // 2. Worker threads that emit traces not tied to the main invocation (e.g. vortex client)
-        // 3. Apps using this infrastructure that do not have a concept of invocation
-        // 4. Errors during initialization before invocation span is created
+        // 2. Worker threads that emit traces not tied to the main root operation
+        // 3. Apps using this infrastructure that do not have a concept of root operations
+        // 4. Errors during initialization before the root operation span is created
         //
         // In order to accommodate these use-cases, we allow events as long as at least process
         // span is present as a fallback. The lack of process span would indicate that a worker
@@ -835,7 +878,7 @@ where
         // will cause unexpected behavior in consumers.
         //
         // The main downside of a lax check here, is that middlewares that rely on data_provider
-        // scoped to invocation context will instead get a process-level data provider, which will
+        // scoped to root operation context will instead get a process-level data provider, which will
         // lead to incorrect behavior. E.g. error metric counts and related exit code calculation will
         // ignore such events. These scenarios should be covered by tests to avoid regressions.
         debug_assert!(

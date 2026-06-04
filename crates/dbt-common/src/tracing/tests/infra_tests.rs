@@ -1,6 +1,6 @@
 use dbt_telemetry::{
-    Invocation, LogMessage, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo,
-    TelemetryAttributes, TelemetryOutputFlags, Unknown,
+    LogMessage, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, TelemetryAttributes,
+    TelemetryOutputFlags,
 };
 use std::{panic::Location, sync::Arc};
 
@@ -8,12 +8,14 @@ use crate::tracing::{
     data_provider::DataProvider,
     emit::{create_info_span, create_root_info_span, emit_info_event},
     layer::ConsumerLayer,
-    layers::data_layer::TelemetryDataLayer,
 };
 
 use super::{
     super::{init::create_tracing_subcriber_with_layer, layer::TelemetryConsumer},
-    mocks::{MockDynLogEvent, MockDynSpanEvent, TestLayer, TestTelemetryContext},
+    mocks::{
+        MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, MockUnknown, TestLayer,
+        TestTelemetryContext, test_data_layer,
+    },
 };
 
 #[test]
@@ -27,7 +29,7 @@ fn test_emit_event_and_apply_context() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -123,7 +125,7 @@ fn test_tracing_with_custom_layer() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -176,11 +178,11 @@ fn test_tracing_with_custom_layer() {
         } = r
         {
             let name = attributes
-                .downcast_ref::<Unknown>()
-                .expect("Must be of Unknown type")
+                .downcast_ref::<MockUnknown>()
+                .expect("Must be of MockUnknown type")
                 .name
                 .as_str();
-            span_name.starts_with("Unknown")
+            span_name.starts_with("Mock Unknown Span")
                 && name == "test_root_span"
                 && *deserialized_trace_id == trace_id
         } else {
@@ -197,11 +199,11 @@ fn test_tracing_with_custom_layer() {
         } = r
         {
             let name = attributes
-                .downcast_ref::<Unknown>()
-                .expect("Must be of Unknown type")
+                .downcast_ref::<MockUnknown>()
+                .expect("Must be of MockUnknown type")
                 .name
                 .as_str();
-            span_name.starts_with("Unknown")
+            span_name.starts_with("Mock Unknown Span")
                 && name == "test_root_span"
                 && *deserialized_trace_id == trace_id
         } else {
@@ -220,8 +222,8 @@ fn test_tracing_with_custom_layer() {
             } = r;
 
             let name = attributes
-                .downcast_ref::<Unknown>()
-                .expect("Must be of Unknown type")
+                .downcast_ref::<MockUnknown>()
+                .expect("Must be of MockUnknown type")
                 .name
                 .as_str();
             if name == "test_root_span" {
@@ -243,11 +245,11 @@ fn test_tracing_with_custom_layer() {
         } = r
         {
             let name = attributes
-                .downcast_ref::<Unknown>()
-                .expect("Must be of Unknown type")
+                .downcast_ref::<MockUnknown>()
+                .expect("Must be of MockUnknown type")
                 .name
                 .as_str();
-            span_name.starts_with("Unknown")
+            span_name.starts_with("Mock Unknown Span")
                 && name == "test_child_span"
                 && *deserialized_trace_id == trace_id
                 && *parent_id == root_span_id
@@ -265,11 +267,11 @@ fn test_tracing_with_custom_layer() {
         } = r
         {
             let name = attributes
-                .downcast_ref::<Unknown>()
-                .expect("Must be of Unknown type")
+                .downcast_ref::<MockUnknown>()
+                .expect("Must be of MockUnknown type")
                 .name
                 .as_str();
-            span_name.starts_with("Unknown")
+            span_name.starts_with("Mock Unknown Span")
                 && name == "test_child_span"
                 && *deserialized_trace_id == trace_id
                 && *parent_id == root_span_id
@@ -287,7 +289,7 @@ fn test_tracing_with_custom_layer() {
             body,
             span_id: Some(span_id),
             ..
-        } if *deserialized_trace_id == trace_id && span_name.starts_with("Unknown") && body == "Log message in root span" && *span_id == root_span_id
+        } if *deserialized_trace_id == trace_id && span_name.starts_with("Mock Unknown Span") && body == "Log message in root span" && *span_id == root_span_id
     )));
 
     assert!(log_records.iter().any(|r| matches!(
@@ -298,7 +300,7 @@ fn test_tracing_with_custom_layer() {
             body,
             span_id: Some(span_id),
             ..
-        } if *deserialized_trace_id == trace_id && span_name.starts_with("Unknown") && body == "Log message in child span" && *span_id != root_span_id
+        } if *deserialized_trace_id == trace_id && span_name.starts_with("Mock Unknown Span") && body == "Log message in child span" && *span_id != root_span_id
     )));
 }
 
@@ -324,7 +326,7 @@ fn test_tracing_log_record_poisoning() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -365,19 +367,21 @@ fn test_tracing_log_record_poisoning() {
 }
 
 #[test]
-fn test_parent_span_id_captured_on_root_invocation_span() {
-    // Test that when a parent_span_id is provided to TelemetryDataLayer,
-    // it is correctly captured on the root Invocation span
-    let trace_id = rand::random::<u128>();
+fn test_parent_span_id_captured_on_root_span() {
+    // Test that when a parent_span_id is provided by root span attributes,
+    // it is correctly captured on the root span.
+    let fallback_trace_id: u128 = 0x11112222333344445555666677778888;
+    let fallback_parent_span_id: u64 = 0x1111222233334444;
+    let root_trace_id: u128 = 0x9999aaaabbbbccccddddeeeeffff0000;
     let expected_parent_span_id: u64 = 0xdeadbeefcafebabe;
 
     let (test_layer, span_starts, span_ends, _) = TestLayer::new();
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
-            trace_id,
-            Some(expected_parent_span_id),
+        test_data_layer(
+            fallback_trace_id,
+            Some(fallback_parent_span_id),
             false,
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -385,15 +389,13 @@ fn test_parent_span_id_captured_on_root_invocation_span() {
     );
 
     tracing::subscriber::with_default(subscriber, || {
-        let invocation_span = create_root_info_span(Invocation {
-            invocation_id: uuid::Uuid::new_v4().to_string(),
+        let root_span = create_root_info_span(MockRootSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            trace_id: Some(root_trace_id),
             parent_span_id: Some(expected_parent_span_id),
-            raw_command: "test".to_string(),
-            eval_args: None,
-            process_info: None,
-            metrics: Default::default(),
         });
-        invocation_span.in_scope(|| {
+        root_span.in_scope(|| {
             // Create a child span to verify parent-child relationships still work
             let _child = create_info_span(MockDynSpanEvent {
                 name: "child".to_string(),
@@ -406,31 +408,34 @@ fn test_parent_span_id_captured_on_root_invocation_span() {
     let span_starts = span_starts.lock().expect("Should have no locks").clone();
     let span_ends = span_ends.lock().expect("Should have no locks").clone();
 
-    // Should have 2 spans: root invocation and child
+    // Should have 2 spans: root and child
     assert_eq!(span_starts.len(), 2, "Expected 2 span starts");
     assert_eq!(span_ends.len(), 2, "Expected 2 span ends");
 
-    // Find the root invocation span (the one with Invocation attributes)
+    // Find the root span (the one with mock root span attributes)
     let root_span_start = span_starts
         .iter()
-        .find(|s| s.attributes.downcast_ref::<Invocation>().is_some())
-        .expect("Should find invocation span start");
+        .find(|s| s.attributes.downcast_ref::<MockRootSpanEvent>().is_some())
+        .expect("Should find root span start");
 
     let root_span_end = span_ends
         .iter()
-        .find(|s| s.attributes.downcast_ref::<Invocation>().is_some())
-        .expect("Should find invocation span end");
+        .find(|s| s.attributes.downcast_ref::<MockRootSpanEvent>().is_some())
+        .expect("Should find root span end");
 
-    // Verify the root span has the expected parent_span_id
+    // Verify the root span uses trace context extracted from attributes, not fallback IDs.
+    assert_eq!(root_span_start.trace_id, root_trace_id);
+    assert_eq!(root_span_end.trace_id, root_trace_id);
+    assert_ne!(root_span_start.trace_id, fallback_trace_id);
     assert_eq!(
         root_span_start.parent_span_id,
         Some(expected_parent_span_id),
-        "Root span start should have the provided parent_span_id"
+        "Root span start should have the configured parent_span_id"
     );
     assert_eq!(
         root_span_end.parent_span_id,
         Some(expected_parent_span_id),
-        "Root span end should have the provided parent_span_id"
+        "Root span end should have the configured parent_span_id"
     );
 
     // Find the child span
@@ -444,7 +449,19 @@ fn test_parent_span_id_captured_on_root_invocation_span() {
         })
         .expect("Should find child span start");
 
-    // Child span should have the root span as its parent (not the external parent_span_id)
+    let child_span_end = span_ends
+        .iter()
+        .find(|s| {
+            s.attributes
+                .downcast_ref::<MockDynSpanEvent>()
+                .map(|e| e.name == "child")
+                .unwrap_or(false)
+        })
+        .expect("Should find child span end");
+
+    // Child span should inherit the root trace ID and use the root span as its parent.
+    assert_eq!(child_span_start.trace_id, root_trace_id);
+    assert_eq!(child_span_end.trace_id, root_trace_id);
     assert_eq!(
         child_span_start.parent_span_id,
         Some(root_span_start.span_id),

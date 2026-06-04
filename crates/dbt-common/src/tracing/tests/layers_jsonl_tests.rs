@@ -1,9 +1,8 @@
 use std::fs;
 
-use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
+use super::mocks::{MockDynLogEvent, MockDynSpanEvent, MockUnknown, test_data_layer};
 use crate::tracing::emit::{create_root_info_span, emit_info_event};
 use crate::tracing::init::create_tracing_subcriber_with_layer;
-use crate::tracing::layers::data_layer::TelemetryDataLayer;
 use crate::tracing::layers::jsonl_writer::build_jsonl_layer_with_background_writer;
 use dbt_telemetry::TelemetryOutputFlags;
 use tracing::Level;
@@ -28,7 +27,7 @@ fn test_tracing_jsonl() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -87,13 +86,13 @@ fn test_tracing_jsonl() {
                 && r["span_name"]
                     .as_str()
                     .expect("span_name must be set")
-                    .starts_with("Unknown")
+                    .starts_with("Mock Unknown Span")
                 && r["attributes"]["name"] == "test_root_span"
                 && r["trace_id"] == trace_id_hex
                 && r["parent_span_id"].is_null()
                 && r["event_type"]
                     .as_str()
-                    .map(|s| s.ends_with(".dev.Unknown"))
+                    .map(|s| s == MockUnknown::EVENT_TYPE)
                     .unwrap_or(false)
         })
         .expect("Root SpanStart record not found");
@@ -105,7 +104,7 @@ fn test_tracing_jsonl() {
                 && r["span_name"]
                     .as_str()
                     .expect("span_name must be set")
-                    .starts_with("Unknown")
+                    .starts_with("Mock Unknown Span")
                 && r["attributes"]["name"] == "test_root_span"
                 && r["trace_id"] == trace_id_hex
                 && r["parent_span_id"].is_null()
@@ -126,7 +125,7 @@ fn test_tracing_jsonl() {
                 && r["span_name"]
                     .as_str()
                     .expect("span_name must be set")
-                    .starts_with("Unknown")
+                    .starts_with("Mock Unknown Span")
                 && r["attributes"]["name"] == "test_child_span"
                 && r["trace_id"] == trace_id_hex
                 && r["parent_span_id"] == root_span_id
@@ -140,7 +139,7 @@ fn test_tracing_jsonl() {
                 && r["span_name"]
                     .as_str()
                     .expect("span_name must be set")
-                    .starts_with("Unknown")
+                    .starts_with("Mock Unknown Span")
                 && r["attributes"]["name"] == "test_child_span"
                 && r["trace_id"] == trace_id_hex
                 && r["parent_span_id"] == root_span_id
@@ -160,7 +159,7 @@ fn test_tracing_jsonl() {
                 && r["span_name"]
                     .as_str()
                     .expect("span_name must be set")
-                    .starts_with("Unknown")
+                    .starts_with("Mock Unknown Span")
                 && r["body"] == "Log message in root span"
                 && r["trace_id"] == trace_id_hex
                 && r["span_id"] == root_span_id
@@ -175,7 +174,7 @@ fn test_tracing_jsonl() {
                 && r["span_name"]
                     .as_str()
                     .expect("span_name must be set")
-                    .starts_with("Unknown")
+                    .starts_with("Mock Unknown Span")
                 && r["body"] == "Log message in child span"
                 && r["trace_id"] == trace_id_hex
                 && r["span_id"] == child_span_id
@@ -204,7 +203,7 @@ fn test_jsonl_dynamic_output_flags_filtering() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -296,7 +295,7 @@ fn test_jsonl_basic_follows_from() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -374,7 +373,7 @@ fn test_jsonl_multiple_follows_from() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,
@@ -433,7 +432,7 @@ fn test_jsonl_missing_followed_span() {
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None,
             false,

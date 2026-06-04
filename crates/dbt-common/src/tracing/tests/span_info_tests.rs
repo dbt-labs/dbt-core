@@ -2,7 +2,6 @@ use crate::tracing::{
     emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
-    layers::data_layer::TelemetryDataLayer,
     span_info::{
         get_root_span_ref, record_current_span_status_from_attrs, record_span_status,
         record_span_status_from_attrs, record_span_status_with_attrs,
@@ -13,7 +12,7 @@ use dbt_telemetry::{AnyTelemetryEvent, SpanStatus, TelemetryAttributes, Telemetr
 use serde::Serialize;
 use tracing_subscriber::{Registry, registry::LookupSpan as _};
 
-use super::mocks::TestLayer;
+use super::mocks::{TestLayer, test_data_layer};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 struct TestStatusEvent {
@@ -101,7 +100,7 @@ fn test_record_span_attrs_and_status() {
     // This avoids collisions with other unit tests
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
-        TelemetryDataLayer::new(
+        test_data_layer(
             trace_id,
             None, // parent_span_id not needed in tests
             false,

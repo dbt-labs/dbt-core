@@ -327,12 +327,11 @@ impl Drop for TelemetryParquetWriterHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::super::data_layer::TelemetryDataLayer;
     use super::*;
+    use crate::tracing::tests::mocks::{MockUnknown, test_data_layer};
     use arrow_schema::Schema;
     use dbt_telemetry::{
         LogMessage, LogRecordInfo, SeverityNumber, TelemetryEventTypeRegistry, TelemetryRecord,
-        Unknown,
         serialize::arrow::{deserialize_from_arrow, get_telemetry_arrow_schema},
     };
     use std::io::{self, Cursor, Write};
@@ -448,12 +447,17 @@ mod tests {
         .build()
         .unwrap();
 
+        let mut registry = TelemetryEventTypeRegistry::public().clone();
+        registry.register(
+            MockUnknown::EVENT_TYPE,
+            MockUnknown::from_arrow_record,
+            #[cfg(test)]
+            MockUnknown::faker,
+        );
+
         let mut records = Vec::new();
         for batch in arrow_reader {
-            records.extend(
-                deserialize_from_arrow(&batch.unwrap(), TelemetryEventTypeRegistry::public())
-                    .unwrap(),
-            );
+            records.extend(deserialize_from_arrow(&batch.unwrap(), &registry).unwrap());
         }
 
         records
@@ -554,7 +558,7 @@ mod tests {
         let trace_id = uuid::Uuid::new_v4().as_u128();
         let subscriber = crate::tracing::init::create_tracing_subcriber_with_layer(
             tracing::level_filters::LevelFilter::TRACE,
-            TelemetryDataLayer::new(
+            test_data_layer(
                 trace_id,
                 None,
                 false,
@@ -621,12 +625,12 @@ mod tests {
             };
 
             let name = attributes
-                .downcast_ref::<Unknown>()
-                .expect("Must be of Unknown type")
+                .downcast_ref::<MockUnknown>()
+                .expect("Must be of MockUnknown type")
                 .name
                 .as_str();
             assert_eq!(trace_id_val, &trace_id);
-            assert!(span_name.starts_with("Unknown"));
+            assert!(span_name.starts_with("Mock Unknown Span"));
 
             if name == "child_span" {
                 // Child span should have root span as parent
