@@ -3,14 +3,11 @@ use std::borrow::Cow;
 use super::super::{
     data_provider::DataProvider,
     error::{TracingError, TracingResult},
-    layer::{ConsumerLayer, TelemetryConsumer},
+    layer::{ConsumerLayer, LogPreprocessorHook, TelemetryConsumer},
     shutdown::{TelemetryShutdown, TelemetryShutdownItem},
 };
 
-use dbt_telemetry::{
-    LogMessage,
-    serialize::otlp::{export_log, export_span},
-};
+use dbt_telemetry::serialize::otlp::{export_log, export_span};
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags};
 
 use opentelemetry::{KeyValue, logs::LoggerProvider, trace::TracerProvider};
@@ -60,8 +57,9 @@ impl OtlpResourceConfig {
 /// it will return None.
 pub fn build_otlp_layer(
     resource_config: OtlpResourceConfig,
+    log_preprocessor_hook: Option<LogPreprocessorHook>,
 ) -> Option<(ConsumerLayer, Vec<TelemetryShutdownItem>)> {
-    let layer = OTLPExporterLayer::new_with_http_export(resource_config)?;
+    let layer = OTLPExporterLayer::new_with_http_export(resource_config, log_preprocessor_hook)?;
 
     let shutdown_items: Vec<TelemetryShutdownItem> = vec![
         Box::new(layer.tracer_provider()),
@@ -77,6 +75,7 @@ pub struct OTLPExporterLayer {
     logger_provider: SdkLoggerProvider,
     tracer: SdkTracer,
     logger: SdkLogger,
+    log_preprocessor_hook: Option<LogPreprocessorHook>,
 }
 
 impl OTLPExporterLayer {
@@ -85,8 +84,15 @@ impl OTLPExporterLayer {
         trace_exporter: impl sdk_trace::SpanExporter + 'static,
         log_exporter: impl sdk_logs::LogExporter + 'static,
         resource_config: OtlpResourceConfig,
+        log_preprocessor_hook: Option<LogPreprocessorHook>,
     ) -> Self {
-        Self::new_with_exporters(trace_exporter, log_exporter, resource_config, true)
+        Self::new_with_exporters(
+            trace_exporter,
+            log_exporter,
+            resource_config,
+            true,
+            log_preprocessor_hook,
+        )
     }
 
     #[cfg(test)]
@@ -94,11 +100,18 @@ impl OTLPExporterLayer {
         trace_exporter: impl sdk_trace::SpanExporter + 'static,
         log_exporter: impl sdk_logs::LogExporter + 'static,
         resource_config: OtlpResourceConfig,
+        log_preprocessor_hook: Option<LogPreprocessorHook>,
     ) -> Self {
         // These tests validate OTLP layer filtering/serialization, not the OpenTelemetry
         // SDK's batch processor lifecycle. Using simple exporters avoids flaky shutdown
         // interactions when libtest runs adjacent tracing tests with high parallelism.
-        Self::new_with_exporters(trace_exporter, log_exporter, resource_config, false)
+        Self::new_with_exporters(
+            trace_exporter,
+            log_exporter,
+            resource_config,
+            false,
+            log_preprocessor_hook,
+        )
     }
 
     fn new_with_exporters(
@@ -106,6 +119,7 @@ impl OTLPExporterLayer {
         log_exporter: impl sdk_logs::LogExporter + 'static,
         resource_config: OtlpResourceConfig,
         use_batch_exporters: bool,
+        log_preprocessor_hook: Option<LogPreprocessorHook>,
     ) -> Self {
         let service_name = resource_config.service_name;
 
@@ -152,6 +166,7 @@ impl OTLPExporterLayer {
             logger_provider,
             tracer,
             logger,
+            log_preprocessor_hook,
         }
     }
 
@@ -166,7 +181,10 @@ impl OTLPExporterLayer {
     ///   be used to specify a full endpoint for traces, with non-default routes.
     /// - the environment variable `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` - can
     ///   be used to specify a full endpoint for logs, with non-default routes.
-    pub(crate) fn new_with_http_export(resource_config: OtlpResourceConfig) -> Option<Self> {
+    pub(crate) fn new_with_http_export(
+        resource_config: OtlpResourceConfig,
+        log_preprocessor_hook: Option<LogPreprocessorHook>,
+    ) -> Option<Self> {
         // Add OTLP trace HTTP exporter
         let trace_exporter = match opentelemetry_otlp::SpanExporter::builder()
             .with_http()
@@ -187,7 +205,12 @@ impl OTLPExporterLayer {
             Err(_) => return None,
         };
 
-        Some(Self::new(trace_exporter, log_exporter, resource_config))
+        Some(Self::new(
+            trace_exporter,
+            log_exporter,
+            resource_config,
+            log_preprocessor_hook,
+        ))
     }
 
     pub(crate) fn tracer_provider(&self) -> SdkTracerProvider {
@@ -241,19 +264,9 @@ impl TelemetryConsumer for OTLPExporterLayer {
     }
 
     fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
-        // Unfortunately, we do not currently enforce log body to not contain ANSI codes,
-        // so we need to make sure to strip them
-        if record.attributes.is::<LogMessage>()
-            && let Cow::Owned(stripped) = console::strip_ansi_codes(record.body.as_str())
-        {
-            let stripped_record = LogRecordInfo {
-                body: stripped,
-                ..record.clone()
-            };
-            export_log(&self.logger, &stripped_record);
-            return;
-        }
-
-        export_log(&self.logger, record);
+        let record = self
+            .log_preprocessor_hook
+            .map_or(Cow::Borrowed(record), |hook| hook(record));
+        export_log(&self.logger, record.as_ref());
     }
 }

@@ -16,6 +16,8 @@
 //! - `DataLayer`. They have less general purpose API than `tracing-subscriber` layers,
 //!   but provide all the capabilities we need, and in a more performant way to boot.
 
+use std::borrow::Cow;
+
 use super::{
     data_provider::DataProvider,
     filter::{
@@ -91,6 +93,9 @@ pub trait TelemetryConsumer {
 }
 
 pub type ConsumerLayer = Box<dyn TelemetryConsumer + Send + Sync + 'static>;
+
+/// Optional hook for consumers that need to rewrite log records before export.
+pub type LogPreprocessorHook = for<'a> fn(&'a LogRecordInfo) -> Cow<'a, LogRecordInfo>;
 
 /// A middleware that can modify telemetry data as it passes through the system.
 ///

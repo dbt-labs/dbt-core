@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 
 use crate::tracing::{
     emit::{create_info_span, create_root_info_span, emit_info_event},
@@ -8,8 +11,8 @@ use crate::tracing::{
 };
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, test_data_layer};
-use dbt_telemetry::TelemetryOutputFlags;
-use opentelemetry::{Key, KeyValue, Value as OtelValue};
+use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
+use opentelemetry::{Key, KeyValue, Value as OtelValue, logs::AnyValue};
 use opentelemetry_sdk as sdk;
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
 
@@ -35,6 +38,12 @@ fn assert_resource_string_attribute(resource: &SharedResource, key: &'static str
         matches!(&value, OtelValue::String(s) if s.as_ref() == expected),
         "expected resource attribute {key}={expected}, got {value:?}"
     );
+}
+
+fn prepend_test_marker(record: &LogRecordInfo) -> Cow<'_, LogRecordInfo> {
+    let mut record = record.clone();
+    record.body = format!("preprocessed: {}", record.body);
+    Cow::Owned(record)
 }
 
 #[derive(Debug)]
@@ -125,6 +134,7 @@ fn test_otlp_layer_exports_only_marked_records() {
         log_exporter,
         test_otlp_resource_config()
             .with_resource_attributes([KeyValue::new("test.attribute", "present")]),
+        None,
     );
     // Keep both provider handles alive across with_default and shut them down
     // explicitly after it returns. If the OTLP layer owns the last provider
@@ -222,10 +232,61 @@ fn test_otlp_layer_exports_only_marked_records() {
         Some("v1.public.events.fusion.dev.MockDynLogEvent"),
         "expected event name on log record"
     );
-    let has_code_1 = log.attributes_iter().any(|(k, v)| {
-        k.as_str() == "code" && matches!(v, opentelemetry::logs::AnyValue::Int(i) if *i == 1)
-    });
+    let has_code_1 = log
+        .attributes_iter()
+        .any(|(k, v)| k.as_str() == "code" && matches!(v, AnyValue::Int(i) if *i == 1));
     assert!(has_code_1, "expected log attributes to contain code=1");
+}
+
+#[test]
+fn test_otlp_configured_log_preprocessor_hook() {
+    let trace_id = rand::random::<u128>();
+    let (trace_exporter, _spans, _trace_resource) = TestSpanExporter::new();
+    let (log_exporter, logs, _log_resource) = TestLogExporter::new();
+
+    let otlp_layer = OTLPExporterLayer::new_for_tests(
+        trace_exporter,
+        log_exporter,
+        test_otlp_resource_config(),
+        Some(prepend_test_marker),
+    );
+    let trace_provider = otlp_layer.tracer_provider();
+    let log_provider = otlp_layer.logger_provider();
+
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        test_data_layer(
+            trace_id,
+            None,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(otlp_layer) as ConsumerLayer),
+        ),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        emit_info_event(
+            MockDynLogEvent {
+                flags: TelemetryOutputFlags::EXPORT_OTLP,
+                ..Default::default()
+            },
+            Some("red"),
+        );
+    });
+
+    trace_provider
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
+    log_provider
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
+
+    let exported_logs = logs.lock().unwrap().clone();
+    assert_eq!(exported_logs.len(), 1, "expected one OTLP-exported log");
+    assert!(
+        matches!(exported_logs[0].body(), Some(AnyValue::String(body)) if body.as_ref() == "preprocessed: red"),
+        "expected OTLP log body to be preprocessed"
+    );
 }
 
 #[test]
@@ -236,8 +297,12 @@ fn test_otlp_export_with_links() {
     let (trace_exporter, spans, _trace_resource) = TestSpanExporter::new();
     let (log_exporter, _logs, _log_resource) = TestLogExporter::new();
 
-    let otlp_layer =
-        OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter, test_otlp_resource_config());
+    let otlp_layer = OTLPExporterLayer::new_for_tests(
+        trace_exporter,
+        log_exporter,
+        test_otlp_resource_config(),
+        None,
+    );
     // Keep both provider handles alive across with_default and shut them down
     // explicitly after it returns. See test_otlp_layer_exports_only_marked_records.
     let trace_provider = otlp_layer.tracer_provider();
@@ -328,8 +393,12 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
     let (trace_exporter, spans, _trace_resource) = TestSpanExporter::new();
     let (log_exporter, _logs, _log_resource) = TestLogExporter::new();
 
-    let otlp_layer =
-        OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter, test_otlp_resource_config());
+    let otlp_layer = OTLPExporterLayer::new_for_tests(
+        trace_exporter,
+        log_exporter,
+        test_otlp_resource_config(),
+        None,
+    );
     // Keep both provider handles alive across with_default and shut them down
     // explicitly after it returns. See test_otlp_layer_exports_only_marked_records.
     let trace_provider = otlp_layer.tracer_provider();

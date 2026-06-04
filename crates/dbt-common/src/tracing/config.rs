@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 use super::{
     dbt_convert::log_level_filter_to_tracing,
@@ -37,6 +37,7 @@ use crate::{
     warn_error_options::WarnErrorOptions,
 };
 use dbt_error::{ErrorCode, FsError, FsResult};
+use dbt_telemetry::{LogMessage, LogRecordInfo};
 use tracing::level_filters::LevelFilter;
 
 /// Configuration for tracing.
@@ -141,6 +142,20 @@ fn calculate_trace_dirs(
         .unwrap_or_else(|| in_dir.join(DBT_TARGET_DIR_NAME));
 
     (in_dir, out_dir)
+}
+
+fn dbt_log_preprocessor_hook(record: &LogRecordInfo) -> Cow<'_, LogRecordInfo> {
+    if !record.attributes.is::<LogMessage>() {
+        return Cow::Borrowed(record);
+    }
+
+    match console::strip_ansi_codes(record.body.as_str()) {
+        Cow::Owned(stripped) => Cow::Owned(LogRecordInfo {
+            body: stripped,
+            ..record.clone()
+        }),
+        Cow::Borrowed(_) => Cow::Borrowed(record),
+    }
 }
 
 pub struct FsTraceLayers {
@@ -384,8 +399,11 @@ impl FsTraceConfig {
                     )
                 })?;
 
-            let (layer, handle) =
-                build_jsonl_layer_with_background_writer(file, self.max_file_log_verbosity);
+            let (layer, handle) = build_jsonl_layer_with_background_writer(
+                file,
+                self.max_file_log_verbosity,
+                Some(dbt_log_preprocessor_hook),
+            );
 
             // Keep a handle for shutdown
             shutdown_items.push(handle);
@@ -444,8 +462,11 @@ impl FsTraceConfig {
                 LogFormat::Otel => {
                     // Create jsonl writer layer on stdout if log format is OTEL
                     // No shutdown logic as we flushing to stdout as we write anyway
-                    consumer_layers
-                        .push(build_jsonl_layer(std::io::stdout(), self.max_log_verbosity));
+                    consumer_layers.push(build_jsonl_layer(
+                        std::io::stdout(),
+                        self.max_log_verbosity,
+                        Some(dbt_log_preprocessor_hook),
+                    ));
                 }
             }
         };
@@ -518,10 +539,10 @@ impl FsTraceConfig {
 
         // Create OTLP layer - if enabled and endpoint is set via env vars
         if self.export_to_otlp
-            && let Some((otlp_layer, mut handles)) = build_otlp_layer(OtlpResourceConfig::new(
-                self.command_name,
-                env!("CARGO_PKG_VERSION"),
-            ))
+            && let Some((otlp_layer, mut handles)) = build_otlp_layer(
+                OtlpResourceConfig::new(self.command_name, env!("CARGO_PKG_VERSION")),
+                Some(dbt_log_preprocessor_hook),
+            )
         {
             shutdown_items.append(&mut handles);
             consumer_layers.push(otlp_layer)

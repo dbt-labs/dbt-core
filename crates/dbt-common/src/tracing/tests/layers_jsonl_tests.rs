@@ -1,11 +1,86 @@
-use std::fs;
+use std::{borrow::Cow, fs};
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent, MockUnknown, test_data_layer};
 use crate::tracing::emit::{create_root_info_span, emit_info_event};
 use crate::tracing::init::create_tracing_subcriber_with_layer;
 use crate::tracing::layers::jsonl_writer::build_jsonl_layer_with_background_writer;
-use dbt_telemetry::TelemetryOutputFlags;
+use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
 use tracing::Level;
+
+fn prepend_test_marker(record: &LogRecordInfo) -> Cow<'_, LogRecordInfo> {
+    let mut record = record.clone();
+    record.body = format!("preprocessed: {}", record.body);
+    Cow::Owned(record)
+}
+
+fn jsonl_log_body_for_mock_log(preprocessor_enabled: bool) -> String {
+    let trace_id = rand::random::<u128>();
+    let temp_file_path =
+        std::env::temp_dir().join(format!("test_jsonl_preprocessor_hook_{trace_id}.jsonl"));
+    let file = fs::File::create(&temp_file_path).expect("create jsonl test file");
+
+    let (jsonl_layer, mut shutdown_handle) = if preprocessor_enabled {
+        build_jsonl_layer_with_background_writer(
+            file,
+            tracing::level_filters::LevelFilter::TRACE,
+            Some(prepend_test_marker),
+        )
+    } else {
+        build_jsonl_layer_with_background_writer(
+            file,
+            tracing::level_filters::LevelFilter::TRACE,
+            None,
+        )
+    };
+
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        test_data_layer(
+            trace_id,
+            None,
+            false,
+            std::iter::empty(),
+            std::iter::once(jsonl_layer),
+        ),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        emit_info_event(
+            MockDynLogEvent {
+                flags: TelemetryOutputFlags::EXPORT_JSONL,
+                ..Default::default()
+            },
+            Some("mock log body"),
+        );
+    });
+
+    shutdown_handle.shutdown().expect("shutdown jsonl writer");
+    let file_contents = fs::read_to_string(&temp_file_path).expect("read jsonl");
+    fs::remove_file(&temp_file_path).expect("remove jsonl");
+
+    let record: serde_json::Value = dbt_yaml::from_str(
+        file_contents
+            .lines()
+            .find(|line| !line.is_empty())
+            .expect("jsonl record"),
+    )
+    .expect("parse jsonl");
+
+    record["body"].as_str().expect("jsonl log body").to_string()
+}
+
+#[test]
+fn test_jsonl_configured_log_preprocessor_hook() {
+    assert_eq!(
+        jsonl_log_body_for_mock_log(true),
+        "preprocessed: mock log body"
+    );
+}
+
+#[test]
+fn test_jsonl_default_keeps_log_body_unchanged() {
+    assert_eq!(jsonl_log_body_for_mock_log(false), "mock log body");
+}
 
 #[test]
 fn test_tracing_jsonl() {
@@ -23,6 +98,7 @@ fn test_tracing_jsonl() {
     let (jsonl_layer, mut shutdown_handle) = build_jsonl_layer_with_background_writer(
         fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
         max_log_verbosity,
+        None,
     );
 
     let subscriber = create_tracing_subcriber_with_layer(
@@ -199,6 +275,7 @@ fn test_jsonl_dynamic_output_flags_filtering() {
     let (jsonl_layer, mut shutdown_handle) = build_jsonl_layer_with_background_writer(
         fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
         max_log_verbosity,
+        None,
     );
 
     let subscriber = create_tracing_subcriber_with_layer(
@@ -291,6 +368,7 @@ fn test_jsonl_basic_follows_from() {
     let (jsonl_layer, mut shutdown_handle) = build_jsonl_layer_with_background_writer(
         fs::File::create(&temp_file_path).expect("Failed to create temporary file"),
         tracing::level_filters::LevelFilter::TRACE,
+        None,
     );
 
     let subscriber = create_tracing_subcriber_with_layer(
@@ -369,6 +447,7 @@ fn test_jsonl_multiple_follows_from() {
     let (jsonl_layer, mut shutdown_handle) = build_jsonl_layer_with_background_writer(
         fs::File::create(&temp_file_path).expect("Failed to create temporary file"),
         tracing::level_filters::LevelFilter::TRACE,
+        None,
     );
 
     let subscriber = create_tracing_subcriber_with_layer(
@@ -428,6 +507,7 @@ fn test_jsonl_missing_followed_span() {
     let (jsonl_layer, mut shutdown_handle) = build_jsonl_layer_with_background_writer(
         fs::File::create(&temp_file_path).expect("Failed to create temporary file"),
         tracing::level_filters::LevelFilter::TRACE,
+        None,
     );
 
     let subscriber = create_tracing_subcriber_with_layer(

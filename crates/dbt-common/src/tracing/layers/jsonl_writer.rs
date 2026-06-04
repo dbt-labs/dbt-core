@@ -1,14 +1,14 @@
 use std::borrow::Cow;
 
 use dbt_telemetry::{
-    LogMessage, LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
+    LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
 };
 use tracing::level_filters::LevelFilter;
 
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
-    layer::{ConsumerLayer, TelemetryConsumer},
+    layer::{ConsumerLayer, LogPreprocessorHook, TelemetryConsumer},
     shared_writer::SharedWriter,
     shutdown::TelemetryShutdownItem,
 };
@@ -18,8 +18,12 @@ use super::super::{
 pub fn build_jsonl_layer<W: SharedWriter + 'static>(
     writer: W,
     max_log_verbosity: LevelFilter,
+    log_preprocessor_hook: Option<LogPreprocessorHook>,
 ) -> ConsumerLayer {
-    Box::new(TelemetryJsonlWriterLayer::new(writer).with_filter(max_log_verbosity))
+    Box::new(
+        TelemetryJsonlWriterLayer::new(writer, log_preprocessor_hook)
+            .with_filter(max_log_verbosity),
+    )
 }
 
 /// Build jsonl layer with a background writer. This is preferred for writing to
@@ -27,11 +31,12 @@ pub fn build_jsonl_layer<W: SharedWriter + 'static>(
 pub fn build_jsonl_layer_with_background_writer<W: std::io::Write + Send + 'static>(
     writer: W,
     max_log_verbosity: LevelFilter,
+    log_preprocessor_hook: Option<LogPreprocessorHook>,
 ) -> (ConsumerLayer, TelemetryShutdownItem) {
     let (writer, handle) = BackgroundWriter::new(writer);
 
     (
-        build_jsonl_layer(writer, max_log_verbosity),
+        build_jsonl_layer(writer, max_log_verbosity, log_preprocessor_hook),
         Box::new(handle),
     )
 }
@@ -42,12 +47,17 @@ pub fn build_jsonl_layer_with_background_writer<W: std::io::Write + Send + 'stat
 /// it to JSON using the provided writer.
 pub struct TelemetryJsonlWriterLayer {
     writer: Box<dyn SharedWriter>,
+    log_preprocessor_hook: Option<LogPreprocessorHook>,
 }
 
 impl TelemetryJsonlWriterLayer {
-    pub fn new<W: SharedWriter + 'static>(writer: W) -> Self {
+    pub fn new<W: SharedWriter + 'static>(
+        writer: W,
+        log_preprocessor_hook: Option<LogPreprocessorHook>,
+    ) -> Self {
         Self {
             writer: Box::new(writer),
+            log_preprocessor_hook,
         }
     }
 }
@@ -79,25 +89,10 @@ impl TelemetryConsumer for TelemetryJsonlWriterLayer {
     }
 
     fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
-        // Unfortunately, we do not currently enforce log body to not contain ANSI codes,
-        // so we need to make sure to strip them
-        if record.attributes.is::<LogMessage>()
-            && let Cow::Owned(stripped) = console::strip_ansi_codes(record.body.as_str())
-        {
-            let stripped_record = LogRecordInfo {
-                body: stripped,
-                ..record.clone()
-            };
-
-            if let Ok(json) =
-                serde_json::to_string(&TelemetryRecordRef::LogRecord(&stripped_record))
-            {
-                self.writer.writeln(json.as_str());
-            }
-            return;
-        }
-
-        if let Ok(json) = serde_json::to_string(&TelemetryRecordRef::LogRecord(record)) {
+        let record = self
+            .log_preprocessor_hook
+            .map_or(Cow::Borrowed(record), |hook| hook(record));
+        if let Ok(json) = serde_json::to_string(&TelemetryRecordRef::LogRecord(record.as_ref())) {
             self.writer.writeln(json.as_str());
         }
     }
