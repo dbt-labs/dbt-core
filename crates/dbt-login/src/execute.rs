@@ -4,7 +4,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_platform_auth::resolver::{INTERACTIVE_TIMEOUT, OAuthInteractiveResolver};
+use dbt_platform_auth::resolver::{INTERACTIVE_TIMEOUT, OAUTH_SCOPES, OAuthInteractiveResolver};
 use dbt_platform_auth::{AuthError, OAUTH_CLIENT_ID};
 use dbt_run_cache::auth::scope::{Scope, determine_org_id};
 use dbt_run_cache::auth::{
@@ -17,6 +17,22 @@ use dbt_run_cache::service_config::{
 
 use crate::LoginHooks;
 use crate::state_guidance::{run_state_guidance, run_state_guidance_after_state_login};
+
+/// Returns the space-separated scope string for the interactive login flow:
+/// the default `OAUTH_SCOPES` unioned with any scopes from `DBT_OAUTH_SCOPES`.
+/// De-duplicates while preserving first-seen order.
+fn interactive_login_scopes(default_scopes: &str, env_scopes: Option<&str>) -> String {
+    let mut seen: Vec<&str> = Vec::new();
+    for tok in default_scopes
+        .split_whitespace()
+        .chain(env_scopes.unwrap_or("").split_whitespace())
+    {
+        if !tok.is_empty() && !seen.contains(&tok) {
+            seen.push(tok);
+        }
+    }
+    seen.join(" ")
+}
 
 pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken) -> FsResult<()> {
     // Each opener captures its URL via a oneshot and returns immediately.
@@ -106,7 +122,11 @@ pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken
         abort_signal: Mutex::new(Some(state_abort_rx)),
     };
 
+    let env_scopes = std::env::var("DBT_OAUTH_SCOPES").ok();
+    let requested_scopes = interactive_login_scopes(OAUTH_SCOPES, env_scopes.as_deref());
+
     let platform_resolver = OAuthInteractiveResolver::builder(OAUTH_CLIENT_ID)
+        .scopes(requested_scopes)
         .opener(platform_opener)
         .abort_signal(platform_abort_rx)
         .build();
@@ -183,4 +203,49 @@ pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use dbt_platform_auth::resolver::OAUTH_SCOPES;
+
+    use super::interactive_login_scopes;
+
+    #[test]
+    fn test_no_env_scopes_returns_defaults() {
+        assert_eq!(interactive_login_scopes(OAUTH_SCOPES, None), OAUTH_SCOPES);
+    }
+
+    #[test]
+    fn test_empty_env_scopes_returns_defaults() {
+        assert_eq!(
+            interactive_login_scopes(OAUTH_SCOPES, Some("")),
+            OAUTH_SCOPES
+        );
+    }
+
+    #[test]
+    fn test_extra_scopes_are_unioned_and_deduped() {
+        let result =
+            interactive_login_scopes(OAUTH_SCOPES, Some("jobs:run catalog:read account:read"));
+        let result_scopes: Vec<&str> = result.split_whitespace().collect();
+        // All default scopes must be present
+        for s in OAUTH_SCOPES.split_whitespace() {
+            assert!(
+                result_scopes.contains(&s),
+                "missing default scope {s} in {result}"
+            );
+        }
+        // Extra scopes must be present
+        assert!(result_scopes.contains(&"jobs:run"));
+        assert!(result_scopes.contains(&"catalog:read"));
+        // account:read appears exactly once (deduplication)
+        assert_eq!(
+            result_scopes
+                .iter()
+                .filter(|&&s| s == "account:read")
+                .count(),
+            1
+        );
+    }
 }

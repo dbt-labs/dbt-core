@@ -5,7 +5,7 @@ mod oauth;
 pub use cloud_yaml::CloudYamlResolver;
 pub use env_var::EnvVarResolver;
 pub use oauth::{
-    INTERACTIVE_TIMEOUT, OAuthAbortHandle, OAuthInteractiveResolver,
+    INTERACTIVE_TIMEOUT, OAUTH_SCOPES, OAuthAbortHandle, OAuthInteractiveResolver,
     OAuthInteractiveResolverBuilder, OAuthPassiveResolver, Opener,
 };
 
