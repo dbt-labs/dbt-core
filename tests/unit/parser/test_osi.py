@@ -110,6 +110,11 @@ class TestScanOsiDirectories:
         result = _scan_osi_directories(str(tmp_path), ["OSI"])
         assert [p.name for p in result] == ["orders.json"]
 
+    # This test requires a case-sensitive filesystem: it creates osi/ and OSI/
+    # as two distinct directories, which is impossible on macOS where they map
+    # to the same physical directory and the second mkdir() raises FileExistsError.
+    # The case where one physical directory is reachable via both names is covered
+    # by test_duplicate_resolved_path_is_scanned_once.
     @pytest.mark.skipif(
         __import__("sys").platform == "darwin",
         reason="macOS uses a case-insensitive filesystem by default",
