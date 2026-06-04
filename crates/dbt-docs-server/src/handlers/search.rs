@@ -592,6 +592,121 @@ fn build_field_matches_cte(tokens: &[String]) -> String {
     }
 }
 
+/// Concatenate ranking tiers into one fixed-width, lexicographically-sortable key.
+///
+/// Each tier is `(width, expr)`: the expr is left-padded with `'0'` to `width` chars
+/// so byte-wise string ordering matches numeric ordering (`'01' < '02' < … < '10'`).
+/// Widening a digit field that can exceed `9` is a one-place change to its `width`.
+/// A `width` of `0` appends the expr unpadded — the variable-width tail (raw name).
+fn join_fixed_width_sort_key(tiers: &[(usize, &str)]) -> String {
+    tiers
+        .iter()
+        .map(|(width, expr)| match *width {
+            // width 0 → variable-width tail (raw name), appended unpadded.
+            0 => format!("({expr})"),
+            // Left-pad to `width` so e.g. '01' < '02' < … sorts numerically.
+            w => format!("LPAD(CAST(({expr}) AS VARCHAR), {w}, '0')"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n          || ")
+}
+
+/// Build the composite `cursor_key` SQL expression for search-mode ranking.
+///
+/// Encodes multiple ranking tiers into a single lexicographically-sortable VARCHAR so
+/// the existing single-key cursor machinery (`cursor_where_fragment`) needs no structural
+/// change — only the sort expression changes.
+///
+/// Tier order (strongest → weakest); each tier is left-padded to a declared
+/// fixed width by `join_fixed_width_sort_key` so byte-wise string ordering matches
+/// numeric ordering. All ranking tiers are single-digit (width 1) today — widening
+/// one (e.g. if a digit field can exceed `9`) is a one-place change to its width:
+///   0. NULL name sentinel — sorts last (`'9~9999'`, no name suffix).
+///   1. Exact name match — `lower(b.name) = lower(q)` → `'0'`/`'1'`.
+///   2. Prefix name match — `lower(b.name) LIKE lower(q) || '%'` → `'0'`/`'1'`.
+///   3. Field-match priority — `w.match_priority` (1–5: name < column < tag < fqn < desc).
+///   4. Resource type — model first, test/other last.
+///   5. Modeling layer — marts first, none last.
+///   6. Raw name — case-sensitive byte-for-byte tiebreak (width 0, unpadded tail),
+///      preserving today's alphabetical order within any tier.
+///
+/// Note: `unique_id` remains the final tiebreak via the existing cursor uid slot.
+///
+/// # Divergence from dbt Catalog (codex-api)
+/// dbt Catalog (codex-api `catalog.search`) weights resource type (`×1000`) ABOVE
+/// match quality (`×100`), so an exact name match is not guaranteed first — a known
+/// limitation tracked as a TODO to better rank exact matches (`search.ts:455`). Here we
+/// invert that priority: **exact/prefix name match outranks resource type** because
+/// when viewing docs for a stateless run, the user-typed name matters more than the
+/// type hierarchy. Resource type is a tiebreak among otherwise-equal matches, not a
+/// dominant signal.
+///
+/// # TODO(META-7529 follow-up): parity signals not yet portable
+/// - **Full-text / stemming** (dbt Catalog uses `tsvector` / OpenSearch BM25): DuckDB
+///   has an FTS extension but it is out of scope; matching stays `ILIKE` substring.
+/// - **Popularity** (dbt Catalog: `NTILE(5)` over 30-day query counts): requires
+///   query-usage telemetry not present in the parquet index.
+/// - **Fuzzy / prefix on non-name fields**: dbt Catalog OpenSearch-only; stays
+///   substring-only here.
+///
+/// A multi-column typed cursor (sort each tier as its own `ORDER BY` column rather
+/// than packing them into one padded string) is the structurally cleaner long-term
+/// design, but it changes the `(sort_value, unique_id)` cursor contract shared by
+/// every paginated endpoint — out of scope here.
+fn ranking_cursor_key_expr(q: &str) -> String {
+    let q_lit = escape_str(q); // safe for `= 'q'`
+    let q_ilike = escape_ilike(q); // safe for `LIKE 'q%'`
+
+    // Staging / Intermediate / Marts conditions come from LAYER_CONDITIONS, which are
+    // already `b.`-qualified and path-based (`lower(b.original_file_path) LIKE …`).
+    // Order: marts → intermediate → staging → none (best-to-worst, digit 0/1/2/3).
+    let (_, marts_cond) = LAYER_CONDITIONS
+        .iter()
+        .find(|(n, _)| *n == "Marts")
+        .unwrap();
+    let (_, inter_cond) = LAYER_CONDITIONS
+        .iter()
+        .find(|(n, _)| *n == "Intermediate")
+        .unwrap();
+    let (_, staging_cond) = LAYER_CONDITIONS
+        .iter()
+        .find(|(n, _)| *n == "Staging")
+        .unwrap();
+
+    let exact_match = format!("CASE WHEN lower(b.name) = lower('{q_lit}') THEN '0' ELSE '1' END");
+    let prefix_match = format!(
+        "CASE WHEN lower(b.name) LIKE lower('{q_ilike}') || '%' ESCAPE '\\' THEN '0' ELSE '1' END"
+    );
+    let resource_rank = "CASE b.resource_type \
+           WHEN 'model'          THEN '0' \
+           WHEN 'source'         THEN '1' \
+           WHEN 'metric'         THEN '2' \
+           WHEN 'exposure'       THEN '3' \
+           WHEN 'snapshot'       THEN '4' \
+           WHEN 'semantic_model' THEN '5' \
+           WHEN 'seed'           THEN '6' \
+           WHEN 'saved_query'    THEN '7' \
+           WHEN 'test'           THEN '8' \
+           ELSE '9' END";
+    let layer_rank = format!(
+        "CASE WHEN {marts_cond} THEN '0' \
+              WHEN {inter_cond} THEN '1' \
+              WHEN {staging_cond} THEN '2' \
+              ELSE '3' END"
+    );
+
+    let key = join_fixed_width_sort_key(&[
+        (1, &exact_match),
+        (1, &prefix_match),
+        (1, "w.match_priority"),
+        (1, resource_rank),
+        (1, &layer_rank),
+        (0, "b.name"),
+    ]);
+
+    format!("CASE WHEN b.name IS NULL THEN '9~9999' ELSE {key} END")
+}
+
 /// Build the full SQL for a search query.
 /// Returns `(page_sql, count_sql)`.
 struct SearchSql {
@@ -680,9 +795,14 @@ fn build_search_sql(
             (ctes_str, "field_matches".to_owned(), None)
         };
 
+        // Build the ranking cursor-key expression once; reused in SELECT and WHERE.
+        // Using the expression directly in WHERE avoids DuckDB's restriction that
+        // SELECT aliases cannot appear in WHERE clauses.
+        let cursor_key_expr = ranking_cursor_key_expr(q_str);
+
         let cursor_cond = if let Some(c) = cursor {
             let frag = cursor_where_fragment(
-                "b.name",
+                &cursor_key_expr,
                 "b.unique_id",
                 crate::handlers::pagination::SortDir::Asc,
                 c.sort_value.as_deref(),
@@ -693,8 +813,16 @@ fn build_search_sql(
             String::new()
         };
 
+        // The valid-ids JOIN AND-filters multi-token results. It must reference the
+        // left-side alias of the query it lands in: `base b` in page_sql, `winners w`
+        // in count_sql (which has no `base`).
         let valid_join = if let Some(ref vname) = valid_ids_name {
             format!("JOIN {vname} vuid ON vuid.unique_id = b.unique_id")
+        } else {
+            String::new()
+        };
+        let valid_join_count = if let Some(ref vname) = valid_ids_name {
+            format!("JOIN {vname} vuid ON vuid.unique_id = w.unique_id")
         } else {
             String::new()
         };
@@ -706,16 +834,17 @@ fn build_search_sql(
              ),\n\
              {middle_ctes},\n\
              winners AS (\n\
-               SELECT unique_id, arg_min(matched_field, priority) AS matched_field\n\
+               SELECT unique_id, arg_min(matched_field, priority) AS matched_field,\n\
+                      min(priority) AS match_priority\n\
                FROM {field_matches_name}\n\
                GROUP BY unique_id\n\
              )\n\
-             SELECT b.*, w.matched_field\n\
+             SELECT b.*, w.matched_field, ({cursor_key_expr}) AS cursor_key\n\
              FROM base b\n\
              JOIN winners w ON w.unique_id = b.unique_id\n\
              {valid_join}\n\
              WHERE 1=1{cursor_cond}\n\
-             ORDER BY b.name ASC NULLS LAST, b.unique_id ASC\n\
+             ORDER BY cursor_key ASC, b.unique_id ASC\n\
              LIMIT {peek}"
         );
 
@@ -732,7 +861,7 @@ fn build_search_sql(
              )\n\
              SELECT COUNT(*)\n\
              FROM winners w\n\
-             {valid_join}"
+             {valid_join_count}"
         );
 
         Ok(SearchSql {
@@ -819,7 +948,12 @@ fn extract_bool_opt(batch: &RecordBatch, col_name: &str, row: usize) -> Option<b
 }
 
 /// Convert Arrow batches into `SearchEdge` rows (without highlight — that is added later).
-fn batches_to_search_rows(batches: &[RecordBatch]) -> Vec<(SearchEdge, String)> {
+/// Returns `(SearchEdge, Option<cursor_key>)` pairs.
+///
+/// The `cursor_key` column is only present in search-mode SQL (where the composite
+/// ranking expression is projected). Browse-mode SQL and mock-backend tests never emit
+/// it, so its absence is treated as `None` — the handler falls back to `e.hit.name`.
+fn batches_to_search_rows(batches: &[RecordBatch]) -> Vec<(SearchEdge, Option<String>)> {
     let mut rows = Vec::new();
     for batch in batches {
         if batch.num_rows() == 0 {
@@ -837,6 +971,8 @@ fn batches_to_search_rows(batches: &[RecordBatch]) -> Vec<(SearchEdge, String)> 
         let exposure_type = str_col(batch, "exposure_type");
         let executed_at = str_col(batch, "executed_at");
         let matched_field = str_col(batch, "matched_field");
+        // Present in search mode, absent in browse mode and mock tests.
+        let cursor_key_col = batch.column_by_name("cursor_key");
 
         let opt = |col: &StringArray, i: usize| -> Option<String> {
             if col.is_null(i) {
@@ -880,7 +1016,16 @@ fn batches_to_search_rows(batches: &[RecordBatch]) -> Vec<(SearchEdge, String)> 
                 hit,
             };
 
-            rows.push((edge, uid));
+            // Read the composite cursor key when present (search mode only).
+            let ck: Option<String> = cursor_key_col.and_then(|col| {
+                if col.is_null(i) {
+                    None
+                } else {
+                    col.as_string_opt::<i32>().map(|a| a.value(i).to_owned())
+                }
+            });
+
+            rows.push((edge, ck));
         }
     }
     rows
@@ -1210,31 +1355,33 @@ pub async fn search(
         Err(err) => return internal_error(err.to_string()),
     };
 
-    let mut edges: Vec<SearchEdge> = raw_rows.into_iter().map(|(e, _)| e).collect();
+    let mut pairs: Vec<(SearchEdge, Option<String>)> = raw_rows;
 
-    let has_next_page = edges.len() as u32 > first;
+    let has_next_page = pairs.len() as u32 > first;
     if has_next_page {
-        edges.truncate(first as usize);
+        pairs.truncate(first as usize);
     }
 
-    let start_cursor = edges.first().map(|e| {
+    // Build cursors from the (edge, cursor_key) pairs BEFORE converting to plain edges.
+    // The cursor's sort_value is the composite cursor_key when present (search mode),
+    // or the raw name when absent (browse mode / mock-backed tests).
+    let cursor_from_pair = |(e, ck): &(SearchEdge, Option<String>)| {
+        let sort_value = ck.clone().or_else(|| e.hit.name.clone());
         Cursor {
-            sort_value: e.hit.name.clone(),
+            sort_value,
             unique_id: e.hit.unique_id.clone(),
         }
         .encode()
-    });
+    };
+
+    let start_cursor = pairs.first().map(&cursor_from_pair);
     let end_cursor = if has_next_page {
-        edges.last().map(|e| {
-            Cursor {
-                sort_value: e.hit.name.clone(),
-                unique_id: e.hit.unique_id.clone(),
-            }
-            .encode()
-        })
+        pairs.last().map(&cursor_from_pair)
     } else {
         None
     };
+
+    let edges: Vec<SearchEdge> = pairs.into_iter().map(|(e, _)| e).collect();
 
     Json(SearchResponse {
         data: edges,

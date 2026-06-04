@@ -1297,3 +1297,387 @@ async fn run_results_absent_search_mode_returns_200() {
         "search ?q= must not 500 when run_results view is absent"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Behavioral ranking tests (real DuckDB, in-memory fixtures)
+// ---------------------------------------------------------------------------
+//
+// `SearchMockBackend` routes by SQL text and returns canned Arrow batches, so
+// it cannot verify `ORDER BY` behavior.  The tests below build a real in-memory
+// DuckDB via `dbt_index_core::db::Db`, insert fixture rows, wrap it in a thin
+// `Backend` impl, and drive the full HTTP handler — validating that the
+// multi-tier `cursor_key` ranking produces the expected result ordering.
+//
+// All fixtures use `dbt.nodes`-resident resource types (Model, Snapshot) only.
+// Mixing in Metric/Exposure/Macro/etc. would require their separate branch
+// tables in the fixture, and those resource types are irrelevant to the ranking
+// tiers under test (per constraint #4 in the plan).
+
+/// A thin `Backend` wrapper around a real in-memory `Db`.
+///
+/// Mirrors the pattern of `DuckDbViewsBackend` (`dbt-index-core/src/backend.rs:89-142`).
+struct InMemoryDuckDbBackend {
+    inner: std::sync::Mutex<dbt_index_core::db::Db>,
+}
+
+impl InMemoryDuckDbBackend {
+    /// Open an in-memory DuckDB, create the minimal schema the search handler
+    /// needs, and return a `Backend`-wrapped instance.
+    fn new() -> Self {
+        let mut db =
+            dbt_index_core::db::Db::open_memory().expect("open in-memory DuckDB for ranking tests");
+
+        // Minimal DDL — only the columns the search SQL references.
+        for ddl in [
+            "CREATE SCHEMA IF NOT EXISTS dbt",
+            "CREATE TABLE dbt.nodes (
+                unique_id           VARCHAR NOT NULL,
+                name                VARCHAR,
+                resource_type       VARCHAR NOT NULL,
+                package_name        VARCHAR,
+                fqn                 VARCHAR[],
+                tags                VARCHAR[],
+                description         VARCHAR,
+                materialized        VARCHAR,
+                access_level        VARCHAR,
+                source_name         VARCHAR,
+                original_file_path  VARCHAR,
+                test_type           VARCHAR,
+                exposure_type       VARCHAR
+             )",
+            "CREATE TABLE dbt.node_columns (
+                unique_id   VARCHAR NOT NULL,
+                column_name VARCHAR NOT NULL
+             )",
+        ] {
+            db.execute_update(ddl)
+                .unwrap_or_else(|e| panic!("DDL failed: {ddl}\n{e}"));
+        }
+
+        Self {
+            inner: std::sync::Mutex::new(db),
+        }
+    }
+
+    /// Insert a row into `dbt.nodes`.
+    ///
+    /// `original_file_path` should NOT match any `LAYER_CONDITIONS` pattern (i.e. no
+    /// `/staging/`, `/intermediate/`, or `/marts/` segment) so that every fixture row
+    /// lands in the "none" layer — keeping the layer tier constant and letting the other
+    /// tiers decide order.
+    fn insert_node(&self, unique_id: &str, name: &str, resource_type: &str, package_name: &str) {
+        let sql = format!(
+            "INSERT INTO dbt.nodes \
+             (unique_id, name, resource_type, package_name, fqn, tags, \
+              description, materialized, access_level, source_name, \
+              original_file_path, test_type, exposure_type) \
+             VALUES \
+             ('{unique_id}', '{name}', '{resource_type}', '{package_name}', \
+              [], [], NULL, NULL, NULL, NULL, \
+              'models/{name}.sql', NULL, NULL)"
+        );
+        self.inner.lock().unwrap().execute_update(&sql).unwrap();
+    }
+
+    /// Insert a row into `dbt.node_columns`.
+    fn insert_column(&self, unique_id: &str, column_name: &str) {
+        let sql = format!(
+            "INSERT INTO dbt.node_columns (unique_id, column_name) \
+             VALUES ('{unique_id}', '{column_name}')"
+        );
+        self.inner.lock().unwrap().execute_update(&sql).unwrap();
+    }
+}
+
+impl Backend for InMemoryDuckDbBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    fn table_has_rows(&self, table: &str) -> bool {
+        let mut db = self.inner.lock().unwrap();
+        db.query_count(&format!("SELECT COUNT(*) FROM {table}")) != "0"
+    }
+
+    fn query_scalar(&self, sql: &str) -> Option<String> {
+        self.inner.lock().ok()?.query_scalar(sql, 0)
+    }
+
+    fn query_arrow(&self, sql: &str) -> Result<Vec<arrow_array::RecordBatch>, BackendError> {
+        let mut db = self
+            .inner
+            .lock()
+            .map_err(|e| BackendError::Query(format!("lock: {e}")))?;
+        db.execute_query(sql)
+            .map_err(|e| BackendError::Query(e.to_string()))
+    }
+}
+
+fn make_ranking_state() -> (Arc<AppState>, Arc<InMemoryDuckDbBackend>) {
+    let backend = Arc::new(InMemoryDuckDbBackend::new());
+
+    // Fixtures for tests #2 and #3 (`type=model`):
+    //   orders        — model, exact match
+    //   customer_orders — model, substring (alphabetically before `orders`)
+    //   orders_snapshot — model, substring
+    //   orders_v2     — model, substring
+    //   revenue       — model, column-only match via `orders_count`
+    //
+    // Fixture for test #4 (`type=model,snapshot`):
+    //   orders_archive — snapshot, substring (type tiebreak vs `orders_v2`)
+    for (uid, name, rtype) in [
+        ("model.pkg.orders", "orders", "model"),
+        ("model.pkg.customer_orders", "customer_orders", "model"),
+        ("model.pkg.orders_snapshot", "orders_snapshot", "model"),
+        ("model.pkg.orders_v2", "orders_v2", "model"),
+        ("model.pkg.revenue", "revenue", "model"),
+        ("snapshot.pkg.orders_archive", "orders_archive", "snapshot"),
+    ] {
+        backend.insert_node(uid, name, rtype, "pkg");
+    }
+    // Column that makes `revenue` a column-tier match for `q=orders`.
+    backend.insert_column("model.pkg.revenue", "orders_count");
+
+    let providers = Providers {
+        backend: backend.clone() as Arc<dyn Backend>,
+        ..Providers::default()
+    };
+    let state = Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers));
+    (state, backend)
+}
+
+/// RED before this PR, GREEN after: exact name match `orders` must rank first.
+///
+/// Current code (before the fix) returns alphabetical order: `customer_orders`
+/// first (alphabetically before `orders`).  After the fix the exact match is tier 0
+/// and must sort before all partial matches regardless of alphabetical position.
+#[tokio::test]
+async fn search_exact_name_match_ranks_first() {
+    let (state, _backend) = make_ranking_state();
+    let params = SearchQueryParams {
+        q: Some("orders".into()),
+        type_filter: Some("model".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let names: Vec<&str> = body["data"]
+        .as_array()
+        .expect("data array")
+        .iter()
+        .map(|r| r["hit"]["name"].as_str().expect("name str"))
+        .collect();
+    assert!(
+        !names.is_empty(),
+        "expected search results for q=orders, got none"
+    );
+    assert_eq!(
+        names[0], "orders",
+        "exact match 'orders' must be first; got: {names:?}"
+    );
+    // Partial matches must still appear (just ranked below).
+    assert!(
+        names.contains(&"customer_orders"),
+        "partial match 'customer_orders' missing; got: {names:?}"
+    );
+}
+
+/// Cursor pagination with the new composite key must not duplicate or skip rows.
+///
+/// Fetches `type=model` results one row at a time using `end_cursor` to advance,
+/// then asserts that the complete set of 5 model rows (all `orders`-matching models)
+/// is returned exactly once, in the expected ranking order.
+#[tokio::test]
+async fn search_exact_match_pagination_no_dup_or_skip() {
+    let (state, _backend) = make_ranking_state();
+
+    let mut collected: Vec<String> = Vec::new();
+    let mut after_cursor: Option<String> = None;
+
+    // We have 5 model rows that match `q=orders` (revenue matches via column `orders_count`).
+    // Page one at a time through all of them.
+    for _ in 0..6 {
+        // extra iteration to confirm has_next_page=false at the end
+        let params = SearchQueryParams {
+            q: Some("orders".into()),
+            type_filter: Some("model".into()),
+            first: Some(1),
+            after: after_cursor.clone(),
+            ..Default::default()
+        };
+        let response = search(State(state.clone()), Query(params)).await;
+        assert_eq!(response.status(), 200);
+        let body = response_body(response).await;
+
+        let rows = body["data"].as_array().expect("data array");
+        for r in rows {
+            collected.push(r["hit"]["name"].as_str().expect("name str").to_owned());
+        }
+
+        let has_next = body["page_info"]["has_next_page"]
+            .as_bool()
+            .expect("has_next_page bool");
+        if !has_next {
+            break;
+        }
+        after_cursor = body["page_info"]["end_cursor"]
+            .as_str()
+            .map(|s| s.to_owned());
+    }
+
+    // Assert first result is the exact match.
+    assert_eq!(
+        collected.first().map(|s| s.as_str()),
+        Some("orders"),
+        "first paginated result must be exact match; got: {collected:?}"
+    );
+
+    // Assert no duplicates.
+    let mut seen = std::collections::HashSet::new();
+    for name in &collected {
+        assert!(
+            seen.insert(name.clone()),
+            "duplicate row '{name}' in paginated results"
+        );
+    }
+
+    // Assert all 5 model rows are present (not 6 — `orders_archive` is a snapshot, excluded).
+    let expected: std::collections::HashSet<_> = [
+        "orders",
+        "customer_orders",
+        "orders_snapshot",
+        "orders_v2",
+        "revenue",
+    ]
+    .iter()
+    .copied()
+    .collect();
+    let got: std::collections::HashSet<_> = collected.iter().map(|s| s.as_str()).collect();
+    assert_eq!(
+        got, expected,
+        "paginated results differ; got: {collected:?}"
+    );
+}
+
+/// Validates that the full multi-tier ranking signal fires correctly.
+///
+/// Uses `type=model,snapshot` (both `dbt.nodes`-resident, single UNION branch) so
+/// the fixture needs no extra tables.  Each row's composite `cursor_key` is shown
+/// below to explain the expected order:
+///
+/// ```text
+/// Key format: exact(0/1) || prefix(0/1) || field(1-5) || type(0-9) || layer(0-3) || name
+///
+/// orders          → 00 + 1 + 0 + 3 + orders          = "0013orders"
+/// orders_snapshot → 10 + 1 + 0 + 3 + orders_snapshot = "1013orders_snapshot"
+/// orders_v2       → 10 + 1 + 0 + 3 + orders_v2       = "1013orders_v2"
+/// orders_archive  → 10 + 1 + 4 + 3 + orders_archive  = "1014orders_archive"  (snapshot, type='4')
+/// customer_orders → 11 + 1 + 0 + 3 + customer_orders = "1113customer_orders" (no prefix)
+/// revenue         → 11 + 2 + 0 + 3 + revenue         = "1120revenue"         (column-only, field=2)
+/// ```
+///
+/// Key observations:
+/// - **Tier 1 (exact):** `orders` wins with `'0'` prefix.
+/// - **Tier 2 (prefix):** `orders_*` (starts with "orders") gets `'0'`; `customer_orders` gets `'1'`.
+///   This is why `orders_snapshot`, `orders_v2`, and even `orders_archive` (snapshot)
+///   all precede `customer_orders` despite `customer_orders` being alphabetically first.
+/// - **Tier 4 (resource type):** within prefix-matching rows, models (`'0'`) precede the snapshot
+///   (`'4'`), so `orders_archive` (snapshot, key `1014…`) follows the model rows even though
+///   `archive` < `snapshot` and `archive` < `v2` alphabetically.  This is the deliberate
+///   divergence from dbt Catalog, which places type ABOVE match quality; here, type is a
+///   tiebreak BELOW exact/prefix.
+/// - **Tier 3 (field):** `revenue` has field=2 (column-only) vs field=1 for all name-matching
+///   rows, so it lands last regardless of resource type or name.
+#[tokio::test]
+async fn search_ranking_tier_order() {
+    let (state, _backend) = make_ranking_state();
+    let params = SearchQueryParams {
+        q: Some("orders".into()),
+        type_filter: Some("model,snapshot".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    assert_eq!(response.status(), 200);
+    let body = response_body(response).await;
+    let names: Vec<&str> = body["data"]
+        .as_array()
+        .expect("data array")
+        .iter()
+        .map(|r| r["hit"]["name"].as_str().expect("name str"))
+        .collect();
+
+    let expected = vec![
+        "orders",          // exact match → tier '0'
+        "orders_snapshot", // prefix match, model, name 'orders_s…'
+        "orders_v2",       // prefix match, model, name 'orders_v…'
+        "orders_archive",  // prefix match, snapshot (type '4' > '0'), name 'orders_a…'
+        "customer_orders", // no prefix match → tier '1', model
+        "revenue",         // column-only match (field=2), last
+    ];
+    assert_eq!(
+        names, expected,
+        "multi-tier ranking order wrong; got: {names:?}"
+    );
+}
+
+/// Multi-token ranking: AND-filter across tokens, ordered by the lower tiers.
+///
+/// For a multi-token query like `customer orders`, the query string is rejoined with
+/// its space and fed to the exact/prefix name tiers — but no dbt identifier contains a
+/// space, so those two tiers are inert (every row collapses to `'1''1'`). Ranking
+/// therefore falls through to field-match priority → resource type → layer → name.
+///
+/// Fixtures (`type=model`):
+///   customer_orders — name matches both tokens          → field 1 (name)
+///   fct_sales       — columns `customer_id`,`orders_total` match both → field 2 (column)
+///   orders          — matches `orders` only             → AND-excluded
+///   customer_dim    — matches `customer` only           → AND-excluded
+///
+/// Expected: `customer_orders` (field 1) before `fct_sales` (field 2); the two
+/// single-token rows are absent. This pins both the `INTERSECT` AND-semantics and the
+/// fact that field priority — not exact/prefix — drives multi-token order.
+#[tokio::test]
+async fn search_multi_token_ranking_field_priority() {
+    let backend = Arc::new(InMemoryDuckDbBackend::new());
+    for (uid, name) in [
+        ("model.pkg.customer_orders", "customer_orders"),
+        ("model.pkg.fct_sales", "fct_sales"),
+        ("model.pkg.orders", "orders"),
+        ("model.pkg.customer_dim", "customer_dim"),
+    ] {
+        backend.insert_node(uid, name, "model", "pkg");
+    }
+    // `fct_sales` matches both tokens only via columns (field tier 2).
+    backend.insert_column("model.pkg.fct_sales", "customer_id");
+    backend.insert_column("model.pkg.fct_sales", "orders_total");
+
+    let providers = Providers {
+        backend: backend.clone() as Arc<dyn Backend>,
+        ..Providers::default()
+    };
+    let state = Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers));
+
+    let params = SearchQueryParams {
+        q: Some("customer orders".into()),
+        type_filter: Some("model".into()),
+        ..Default::default()
+    };
+    let response = search(State(state), Query(params)).await;
+    let status = response.status();
+    let body = response_body(response).await;
+    assert_eq!(status, 200, "non-200; body: {body}");
+    let names: Vec<&str> = body["data"]
+        .as_array()
+        .expect("data array")
+        .iter()
+        .map(|r| r["hit"]["name"].as_str().expect("name str"))
+        .collect();
+
+    assert_eq!(
+        names,
+        vec!["customer_orders", "fct_sales"],
+        "multi-token AND-match must rank name-tier (field 1) above column-tier (field 2), \
+         with single-token rows excluded; got: {names:?}"
+    );
+}
