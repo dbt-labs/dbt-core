@@ -367,6 +367,7 @@ pub async fn resolve(
         &dbt_state.root_package().package_root_path,
         &nodes,
         &disabled_nodes,
+        arg.skip_creating_generic_tests,
     )?;
 
     // Check access

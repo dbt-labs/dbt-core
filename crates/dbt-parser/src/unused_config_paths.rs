@@ -76,6 +76,7 @@ pub(crate) fn check_unused_resource_config_paths(
     root_project_path: &Path,
     nodes: &Nodes,
     disabled_nodes: &Nodes,
+    skip_data_tests: bool,
 ) -> FsResult<()> {
     let dbt_project_yml = value_from_file(
         io_args,
@@ -85,8 +86,12 @@ pub(crate) fn check_unused_resource_config_paths(
     )?;
     let used_fqns = collect_used_fqns(nodes);
     let disabled_fqns = collect_disabled_fqns(disabled_nodes);
-    let unused_config_paths =
-        collect_unused_config_paths(&dbt_project_yml, &used_fqns, &disabled_fqns);
+    let unused_config_paths = collect_unused_config_paths(
+        &dbt_project_yml,
+        &used_fqns,
+        &disabled_fqns,
+        skip_data_tests,
+    );
 
     if unused_config_paths.is_empty() {
         return Ok(());
@@ -117,6 +122,7 @@ fn collect_unused_config_paths(
     dbt_project_yml: &YmlValue,
     used_fqns: &ResourceFqns,
     disabled_fqns: &FqnSet,
+    skip_data_tests: bool,
 ) -> Vec<String> {
     let Some(project_map) = dbt_project_yml.as_mapping() else {
         return Vec::new();
@@ -124,6 +130,10 @@ fn collect_unused_config_paths(
 
     let mut unused_paths = BTreeSet::new();
     for section in RESOURCE_SECTIONS {
+        if skip_data_tests && section.yaml_key == "data_tests" {
+            continue;
+        }
+
         let Some(section_value) = project_map.get(section.yaml_key) else {
             continue;
         };
@@ -312,7 +322,7 @@ models:
             ResourceFqns::from([("models", fqn_set(vec![vec!["test", "used", "my_model"]]))]);
 
         assert_eq!(
-            collect_unused_config_paths(&project_yml, &used_fqns, &FqnSet::new()),
+            collect_unused_config_paths(&project_yml, &used_fqns, &FqnSet::new(), false),
             vec!["models.test.unused".to_string()]
         );
     }
@@ -331,7 +341,7 @@ models:
         let disabled_fqns = fqn_set(vec![vec!["test", "disabled", "my_model"]]);
 
         assert_eq!(
-            collect_unused_config_paths(&project_yml, &ResourceFqns::new(), &disabled_fqns),
+            collect_unused_config_paths(&project_yml, &ResourceFqns::new(), &disabled_fqns, false),
             Vec::<String>::new()
         );
     }
@@ -348,7 +358,7 @@ tests:
         .unwrap();
 
         assert_eq!(
-            collect_unused_config_paths(&project_yml, &ResourceFqns::new(), &FqnSet::new()),
+            collect_unused_config_paths(&project_yml, &ResourceFqns::new(), &FqnSet::new(), false),
             vec!["data_tests.test".to_string()]
         );
     }
