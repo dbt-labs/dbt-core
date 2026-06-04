@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 
 from metricflow.converters.osi_to_msi import OSIToMSIConverter
 
-from dbt.constants import OSI_DIRECTORY_NAME, SUPPORTED_OSI_VERSIONS
+from dbt.constants import SUPPORTED_OSI_VERSIONS
 from dbt.contracts.files import OsiSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import Metric, ModelNode, SemanticModel
@@ -28,11 +28,13 @@ class _OsiFileContext:
         return f"{self.package_name}://{self.rel_path}"
 
 
-def _scan_osi_directory(project_root: str) -> List[Path]:
-    osi_dir = Path(project_root) / OSI_DIRECTORY_NAME
-    if not osi_dir.is_dir():
-        return []
-    return sorted(osi_dir.rglob("*.json"))
+def _scan_osi_directories(project_root: str, osi_paths: List[str]) -> List[Path]:
+    files: List[Path] = []
+    for osi_path in osi_paths:
+        osi_dir = Path(project_root) / osi_path
+        if osi_dir.is_dir():
+            files.extend(osi_dir.rglob("*.json"))
+    return sorted(files)
 
 
 def _build_model_lookup(manifest: Manifest) -> Dict[Tuple[str, str, str], ModelNode]:
@@ -177,14 +179,16 @@ def _attribute_to_source_file(
         sf.metrics.extend(metric_ids)
 
 
-def _clear_osi_attributed_nodes(manifest: Manifest) -> None:
-    osi_pfx = OSI_DIRECTORY_NAME + os.sep
+def _clear_osi_attributed_nodes(manifest: Manifest, osi_paths: List[str]) -> None:
+    osi_prefixes = tuple(p + os.sep for p in osi_paths)
     for uid in [
-        u for u, n in manifest.semantic_models.items() if n.original_file_path.startswith(osi_pfx)
+        u
+        for u, n in manifest.semantic_models.items()
+        if n.original_file_path.startswith(osi_prefixes)
     ]:
         del manifest.semantic_models[uid]
     for uid in [
-        u for u, n in manifest.metrics.items() if n.original_file_path.startswith(osi_pfx)
+        u for u, n in manifest.metrics.items() if n.original_file_path.startswith(osi_prefixes)
     ]:
         del manifest.metrics[uid]
     for sf in manifest.files.values():
@@ -197,12 +201,13 @@ def load_osi_into_manifest(
     project_root: str,
     package_name: str,
     manifest: Manifest,
+    osi_paths: List[str],
 ) -> None:
     # Clear any OSI-attributed nodes from a prior load (e.g., partial parse replay).
     # Must run before the early-return so deleted OSI files don't leave stale nodes.
-    _clear_osi_attributed_nodes(manifest)
+    _clear_osi_attributed_nodes(manifest, osi_paths)
 
-    files = _scan_osi_directory(project_root)
+    files = _scan_osi_directories(project_root, osi_paths)
     if not files:
         return
 

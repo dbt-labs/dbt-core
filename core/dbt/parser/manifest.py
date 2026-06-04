@@ -489,6 +489,7 @@ class ManifestLoader:
                 self.root_project.project_root,
                 self.root_project.project_name,
                 self.manifest,
+                self.root_project.osi_paths,
             )
 
             # update the refs, sources, docs and metrics depends_on.nodes
