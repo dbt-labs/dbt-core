@@ -78,7 +78,8 @@ fn drop_unchanged_nodes_from_assets(
     assets.retain(|asset| !is_asset_unchanged(io, asset, unchanged_files));
 }
 
-/// Drops all seen assets from the dbt state.
+/// Drops all seen assets [DbtAsset] from the dbt state.
+/// [dbt_schemas::state::DbtPackage::all_paths] is not modified.
 ///
 /// For the root package (index 0) and local-path deps: filter all asset lists
 /// so only changed files remain for re-resolution.
@@ -123,20 +124,6 @@ pub fn drop_all_unchanged_nodes(
             drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.docs_files);
             drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.snapshot_files);
             drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.fixture_files);
-
-            let package_root_path = &package.package_root_path;
-            package.all_paths.retain(|_, assets| {
-                assets.retain(|(path, _mtime)| {
-                    let absolute_path = package_root_path.join(path.as_path());
-                    let rel_path = DbtPath::from_path(
-                        absolute_path
-                            .strip_prefix(&io.in_dir)
-                            .unwrap_or(path.as_path()),
-                    );
-                    !unchanged_files.contains(&rel_path)
-                });
-                !assets.is_empty()
-            });
         } else {
             // Pinned dep (hub/git/tarball/private): lock-file hash guarantees
             // content unchanged. Clear all asset lists so nothing is re-parsed.
