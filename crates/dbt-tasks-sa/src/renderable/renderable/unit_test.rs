@@ -91,13 +91,16 @@ impl Object for ObjectOverlay {
     }
 }
 
-/// Orchestrate the 3-step unit test render pipeline.
+/// Orchestrate the 3-phase unit test render pipeline.
 ///
 /// ```text
-/// Step 0 (blocking): discover_given_relations → (given_relations, to_fetch)
-/// Step 1 (async):    fetch_missing_schemas(to_fetch) → schemas in cache
-/// Step 2 (blocking): render_sql_instruction(given_relations) → SqlInstruction
+/// Phase 1 — Discover (blocking): discover_given_relations → (given_relations, to_fetch)
+/// Phase 2 — Fetch    (async):    fetch_missing_schemas(to_fetch) → schemas in cache
+/// Phase 3 — Render   (blocking): render_unit_test(given_relations) → SqlInstruction
 /// ```
+///
+/// Errors from any phase are funneled through `handle_render_result` so a
+/// `run_results.json` entry is recorded when the failure happens before render.
 pub(crate) async fn run_unit_test_render(
     node: Arc<dyn InternalDbtNodeAttributes>,
     mut ctx: TaskRunnerCtx,
@@ -106,30 +109,54 @@ pub(crate) async fn run_unit_test_render(
 ) -> FsResult<NodeStatus> {
     use dbt_tasks_core::task::TaskOp;
 
+    // Phase 1 — Discover
     let ut = node.clone();
-    let mut ctx_step0 = ctx.clone();
-    let given_relations = TaskOp::Blocking(Box::new(move || {
+    let mut discover_ctx = ctx.clone();
+    let discover_outcome = TaskOp::Blocking(Box::new(move || {
         // Downcast to DbtUnitTest for access to unit test fields
         let ut_ref = ut
             .as_any()
             .downcast_ref::<DbtUnitTest>()
             .expect("run_unit_test_render called on non-DbtUnitTest");
-        discover_given_relations(ut_ref, &mut ctx_step0)
+        discover_given_relations(ut_ref, &mut discover_ctx)
     }))
     .run()
-    .await??;
+    .await
+    .and_then(|inner| inner);
+    let given_relations = match discover_outcome {
+        Ok(r) => r,
+        Err(e) => {
+            return handle_render_result(
+                Err(e),
+                &node.unique_id(),
+                &node.materialized(),
+                &mut ctx,
+                &result_sender,
+            );
+        }
+    };
 
+    // Phase 2 — Fetch
     if !given_relations.relations_to_fetch.is_empty() {
-        TaskOp::r#async(fetch_missing_schemas(
+        let fetch_outcome = TaskOp::r#async(fetch_missing_schemas(
             &given_relations.relations_to_fetch,
             &node.common().unique_id,
             &mut ctx,
             task_hooks,
         ))
-        .await?;
+        .await;
+        if let Err(e) = fetch_outcome {
+            return handle_render_result(
+                Err(e),
+                &node.unique_id(),
+                &node.materialized(),
+                &mut ctx,
+                &result_sender,
+            );
+        }
     }
 
-    // Step 2: blocking render using cached schemas + discovered relations
+    // Phase 3 — Render (uses cached schemas + discovered relations)
     TaskOp::Blocking(Box::new(move || {
         let mut ctx = ctx;
         let ut_ref = node
@@ -150,7 +177,7 @@ pub(crate) async fn run_unit_test_render(
 }
 
 /// Get schema for upstream unit test inputs, using cache first and remote fallback.
-/// Used in Step 3 (after Step 2 has populated the cache via async fetch).
+/// Used during the Render phase (after the Fetch phase has populated the cache).
 fn get_schema_for_unit_test_relation(
     ctx: &TaskRunnerCtx,
     relation: Arc<dyn BaseRelation>,
@@ -1015,7 +1042,7 @@ fn render_unit_test(
     );
     let resolver_state = ctx.resolver_state();
 
-    // Build subqueries from pre-discovered relations (Step 0) + their schemas (now cached from Step 1).
+    // Build subqueries from pre-discovered relations (Discover phase) + their schemas (now cached from Fetch phase).
     let mut subqueries = Vec::new();
     for (given_idx, ((fqn_string, relation), given)) in given_relations
         .iter()
