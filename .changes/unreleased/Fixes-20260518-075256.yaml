@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Add a snapshot-specific hint when duplicate rows during DML suggest a non-unique `unique_key`"
+time: 2026-05-18T07:52:56.000000-07:00
+custom:
+    Author: saitejadesu
+    Issue: "10864"

@@ -56,6 +56,24 @@ pub struct CompareRecordBatchResult {
     pub has_differences: bool,
 }
 
+const DUPLICATE_ROW_DML_ERROR: &str = "duplicate row detected during dml action";
+const SNAPSHOT_UNIQUE_KEY_HINT: &str =
+    "Hint: This can happen when the snapshot's configured `unique_key` is not unique. \
+    Ensure the `unique_key` column(s) identify a single row in the snapshot query.";
+
+fn maybe_add_snapshot_unique_key_hint(resource_type: &str, message: String) -> String {
+    if resource_type != "snapshot"
+        || !message
+            .to_ascii_lowercase()
+            .contains(DUPLICATE_ROW_DML_ERROR)
+        || message.contains(SNAPSHOT_UNIQUE_KEY_HINT)
+    {
+        return message;
+    }
+
+    format!("{message}\n\n{SNAPSHOT_UNIQUE_KEY_HINT}")
+}
+
 #[allow(clippy::too_many_arguments)]
 fn execute_materialization_macro(
     jinja_env: Arc<JinjaEnv>,
@@ -82,6 +100,7 @@ fn execute_materialization_macro(
             let message = format!(
                 "Database Error in {resource_type} {node_alias} ({display_path})\n{indented_body}",
             );
+            let message = maybe_add_snapshot_unique_key_hint(resource_type, message);
             Box::new(dbt_common::FsError::new(e.code, message))
         } else {
             // For non-database errors (macro syntax errors, config errors, etc.)
@@ -90,6 +109,7 @@ fn execute_materialization_macro(
                 "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
                 e.context
             );
+            let message = maybe_add_snapshot_unique_key_hint(resource_type, message);
             Box::new(e.with_location(compiled_path).with_context(message))
         }
     })
@@ -1068,6 +1088,54 @@ fn value_as_string(array: &ArrayRef, index: usize, data_type: &DataType) -> Stri
             })
         }
         _ => "[unsupported]".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{maybe_add_snapshot_unique_key_hint, SNAPSHOT_UNIQUE_KEY_HINT};
+
+    #[test]
+    fn snapshot_duplicate_row_dml_error_gets_unique_key_hint() {
+        let message = "Database Error in snapshot my_snapshot (snapshots/my_snapshot.sql)\n  \
+            100090 (42P18): Duplicate row detected during DML action";
+
+        let updated_message = maybe_add_snapshot_unique_key_hint("snapshot", message.to_string());
+
+        assert!(updated_message.contains(message));
+        assert!(updated_message.contains(SNAPSHOT_UNIQUE_KEY_HINT));
+    }
+
+    #[test]
+    fn snapshot_unique_key_hint_is_only_added_once() {
+        let message = format!(
+            "Database Error in snapshot my_snapshot (snapshots/my_snapshot.sql)\n  \
+            duplicate row detected during dml action\n\n{SNAPSHOT_UNIQUE_KEY_HINT}"
+        );
+
+        let updated_message = maybe_add_snapshot_unique_key_hint("snapshot", message.clone());
+
+        assert_eq!(updated_message, message);
+    }
+
+    #[test]
+    fn snapshot_unique_key_hint_ignores_other_errors() {
+        let message = "Database Error in snapshot my_snapshot (snapshots/my_snapshot.sql)\n  \
+            relation does not exist";
+
+        let updated_message = maybe_add_snapshot_unique_key_hint("snapshot", message.to_string());
+
+        assert_eq!(updated_message, message);
+    }
+
+    #[test]
+    fn snapshot_unique_key_hint_ignores_non_snapshot_resources() {
+        let message = "Database Error in model my_model (models/my_model.sql)\n  \
+            duplicate row detected during dml action";
+
+        let updated_message = maybe_add_snapshot_unique_key_hint("model", message.to_string());
+
+        assert_eq!(updated_message, message);
     }
 }
 
