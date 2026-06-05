@@ -97,8 +97,25 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<DatabricksAuthIR<'a>, Aut
     // auth_type 'oauth'. Everything else means token
     match DatabricksAuthType::from_config(config) {
         Ok(DatabricksAuthType::OAuth) => {
-            // OAuth authentication: M2M if client_secret present, otherwise External Browser (U2M)
-            if config.contains_key("client_secret") {
+            // Token-first: if a preminted bearer token is in the payload, use it as
+            // PAT regardless of which OAuth-app fields accompany it. This matches
+            // dbt-databricks' `_ensure_config` (token short-circuits past M2M and
+            // external-browser)
+            // https://github.com/databricks/dbt-databricks/blob/c1c74df4bc01e155dabcc07f23a5a414e04aad62/dbt/adapters/databricks/credentials.py#L360-L361
+            //
+            // dbt Studio's U2M flow relies on
+            // completes the OAuth handshake on the cloud side and forwards
+            // `auth_type=oauth` together with the OAuth-app `client_id`/`client_secret`
+            // (which are *not* a Databricks service-principal credential) and the
+            // resulting access token. Without this short-circuit we would attempt an
+            // M2M client-credentials grant against Databricks with the cloud-app
+            // secret, which fails with `invalid_client`.
+            // https://github.com/dbt-labs/dbt-cloud/blob/228283facb9103a2053d83e5b085f6a7b771e686/sinter/services/profile/util/adapters/adapter_profile_helper.py#L189-L190
+            if config.contains_key("token") {
+                Ok(DatabricksAuthIR::Token {
+                    token: config.require_str("token")?,
+                })
+            } else if config.contains_key("client_secret") {
                 Ok(DatabricksAuthIR::OAuthM2M {
                     client_id: config.require_str("client_id")?,
                     client_secret: config.require_str("client_secret")?,
@@ -393,23 +410,27 @@ mod tests {
         run_config_test(config, &expected).unwrap();
     }
 
-    /// Test that M2M OAuth is used when auth_type is "oauth" even if a token field exists.
-    /// This handles the case where a user has a leftover token from a previous PAT configuration.
+    /// dbt Studio's U2M payload: `auth_type=oauth` plus the OAuth-app
+    /// `client_id`/`client_secret` (used by Studio to mint the token, *not* a
+    /// service-principal credential) plus the resulting preminted access token.
+    /// The preminted token must short-circuit to PAT — attempting M2M with the
+    /// cloud-app secret fails with `invalid_client`. Matches dbt-databricks'
+    /// token-first dispatch in `_ensure_config`. Regression test for
+    /// dbt-core#14588.
     #[test]
-    fn test_m2m_oauth_with_leftover_token() {
+    fn test_studio_u2m_preminted_token_routes_to_pat() {
         let mut config = base_config();
         config.insert(
             "http_path".into(),
             "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
         );
-        config.insert("client_id".into(), "CLIENT_ID".into());
-        config.insert("client_secret".into(), "CLIENT_SECRET".into());
+        config.insert("client_id".into(), "CLOUD_APP_CLIENT_ID".into());
+        config.insert("client_secret".into(), "CLOUD_APP_CLIENT_SECRET".into());
         config.insert("auth_type".into(), "oauth".into());
-        config.insert("token".into(), "LEFTOVER_TOKEN".into()); // Should be ignored
+        config.insert("token".into(), "PREMINTED_U2M_TOKEN".into());
 
         let expected = vec![
-            (databricks::CLIENT_ID, "CLIENT_ID"),
-            (databricks::CLIENT_SECRET, "CLIENT_SECRET"),
+            (databricks::TOKEN, "PREMINTED_U2M_TOKEN"),
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
             (
@@ -418,7 +439,7 @@ mod tests {
             ),
             (databricks::CATALOG, "C"),
             (databricks::USER_AGENT, USER_AGENT_NAME),
-            (databricks::AUTH_TYPE, databricks::auth_type::OAUTH_M2M),
+            (databricks::AUTH_TYPE, databricks::auth_type::PAT),
         ];
         run_config_test(config, &expected).unwrap();
     }
@@ -475,10 +496,11 @@ mod tests {
         run_config_test(config, &expected).unwrap();
     }
 
-    /// Test that External Browser OAuth is used when auth_type is "oauth" even if a token field exists.
-    /// This handles the case where a user has a leftover token from a previous PAT configuration.
+    /// U2M variant where only the OAuth-app `client_id` accompanies the
+    /// preminted token (no `client_secret`). Token-first dispatch still routes
+    /// to PAT, matching dbt-databricks' `_ensure_config`.
     #[test]
-    fn test_external_browser_oauth_with_leftover_token() {
+    fn test_oauth_with_preminted_token_and_only_client_id_routes_to_pat() {
         let mut config = base_config();
         config.insert(
             "http_path".into(),
@@ -486,8 +508,9 @@ mod tests {
         );
         config.insert("client_id".into(), "CLIENT_ID".into());
         config.insert("auth_type".into(), "oauth".into());
-        config.insert("token".into(), "LEFTOVER_TOKEN".into()); // Should be ignored
+        config.insert("token".into(), "PREMINTED_U2M_TOKEN".into());
         let expected = vec![
+            (databricks::TOKEN, "PREMINTED_U2M_TOKEN"),
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
             (
@@ -495,12 +518,8 @@ mod tests {
                 "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
             ),
             (databricks::CATALOG, "C"),
-            (databricks::CLIENT_ID, "CLIENT_ID"),
             (databricks::USER_AGENT, USER_AGENT_NAME),
-            (
-                databricks::AUTH_TYPE,
-                databricks::auth_type::EXTERNAL_BROWSER,
-            ),
+            (databricks::AUTH_TYPE, databricks::auth_type::PAT),
         ];
         run_config_test(config, &expected).unwrap();
     }
