@@ -783,7 +783,7 @@ jobs:
   # for pre-release versions (anything with a `-` in the SemVer) — brew
   # users only get stable releases.
   publish-homebrew:
-    needs: [prepare-release, github-release]
+    needs: [github-release]
     if: ${{ !inputs.dry_run && !contains(needs.prepare-release.outputs.version, '-') }}
     uses: ./.github/workflows/publish-homebrew.yml
     with:
