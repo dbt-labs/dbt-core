@@ -6,6 +6,7 @@ pub(crate) mod git_client;
 mod hub_client;
 mod network_client;
 mod notices;
+mod package_installer;
 pub mod package_listing;
 mod package_resolver;
 

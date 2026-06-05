@@ -51,7 +51,7 @@ impl<'a> DepsOperationContext<'a> {
             })
             .unwrap_or(DBT_HUB_URL);
         let http_client = retrying_http_client();
-        let tarball_client = TarballClient::from_client(http_client.clone());
+        let tarball_client = TarballClient::from_client(http_client.clone(), cancellation.clone());
 
         Self {
             io,

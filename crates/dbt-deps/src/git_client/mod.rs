@@ -17,6 +17,7 @@ mod traits;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
+use dbt_common::cancellation::never_cancels;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err, tokiofs};
 use reqwest_middleware::ClientWithMiddleware;
@@ -61,7 +62,7 @@ impl Default for GitClientContext {
 
 impl GitClientContext {
     pub fn from_http_client(http_client: ClientWithMiddleware) -> Self {
-        let tarball_client = TarballClient::from_client(http_client.clone());
+        let tarball_client = TarballClient::from_client(http_client.clone(), never_cancels());
         Self::from_clients(http_client, tarball_client)
     }
 
@@ -506,7 +507,7 @@ mod tests {
 
     fn test_github_client() -> github::GitHubClient {
         let http = retrying_http_client();
-        let tb = TarballClient::from_client(http.clone());
+        let tb = TarballClient::from_client(http.clone(), never_cancels());
         github::GitHubClient::new(http, tb)
     }
 

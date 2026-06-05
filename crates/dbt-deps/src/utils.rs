@@ -17,7 +17,7 @@ use dbt_common::{
 const DEFAULT_DEPS_MAX_CONCURRENCY: usize = 8;
 const MAX_DEPS_CONCURRENCY: usize = 16;
 
-/// Max concurrent package resolutions within one BFS level.
+/// Max concurrent package resolve/install operations.
 ///
 /// Override with `DBT_DEPS_MAX_CONCURRENCY` (clamped to 1..=16).
 pub fn max_resolve_concurrency() -> usize {

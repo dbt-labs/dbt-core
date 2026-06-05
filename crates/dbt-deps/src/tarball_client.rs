@@ -6,6 +6,7 @@
 //! Supports selective extraction with root directory stripping and subdirectory filtering.
 
 use async_compression::tokio::bufread::GzipDecoder;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use futures::StreamExt;
 use reqwest::StatusCode;
@@ -15,17 +16,19 @@ use std::path::{Path, PathBuf};
 use tokio_tar::Archive;
 use tokio_util::io::StreamReader;
 
-use crate::context::DepsOperationContext;
-
 /// Client for downloading and extracting tarball archives.
 #[derive(Clone)]
 pub struct TarballClient {
     pub client: ClientWithMiddleware,
+    cancellation: CancellationToken,
 }
 
 impl TarballClient {
-    pub fn from_client(client: ClientWithMiddleware) -> Self {
-        Self { client }
+    pub fn from_client(client: ClientWithMiddleware, cancellation: CancellationToken) -> Self {
+        Self {
+            client,
+            cancellation,
+        }
     }
 
     /// Download tarball from URL and extract to target directory with optional filtering.
@@ -50,6 +53,8 @@ impl TarballClient {
         subdirectory: Option<&str>,
         headers: &[(&str, &str)],
     ) -> FsResult<PathBuf> {
+        self.cancellation.check_cancellation()?;
+
         let mut req = self.client.get(download_url);
         for (name, value) in headers {
             req = req.header(*name, *value);
@@ -88,6 +93,8 @@ impl TarballClient {
         let mut extracted_any = false;
 
         while let Some(entry_result) = entries.next().await {
+            self.cancellation.check_cancellation()?;
+
             let mut entry = entry_result
                 .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to read tar entry: {}", e))?;
 
@@ -214,20 +221,4 @@ impl TarballClient {
 
         Ok(target_path.to_path_buf())
     }
-}
-
-/// Download and extract a tarball package to a directory.
-///
-/// `download_dir` must already exist and be writable; cleanup on error is the
-/// caller's responsibility.
-pub async fn download_tarball_package(
-    context: &DepsOperationContext<'_>,
-    tarball_url: &str,
-    download_dir: &Path,
-) -> FsResult<PathBuf> {
-    context.check_cancellation()?;
-    context
-        .tarball_client
-        .download_and_extract_tarball(tarball_url, download_dir, true, None, &[])
-        .await
 }

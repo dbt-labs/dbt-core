@@ -15,7 +15,6 @@ use crate::context::DepsOperationContext;
 use crate::git_client::download_git_like_package;
 use crate::package_listing::UnpinnedPackage;
 use crate::steps::load_dbt_packages;
-use crate::tarball_client::download_tarball_package;
 use crate::types::{
     GitPinnedPackage, GitUnpinnedPackage, HubUnpinnedPackage, LocalPinnedPackage,
     LocalUnpinnedPackage, PrivatePinnedPackage, PrivateUnpinnedPackage, TarballPinnedPackage,
@@ -191,7 +190,10 @@ impl PackageResolver for TarballUnpinnedPackage {
         let download_dir = tmp_dir.path().join("package");
         ensure_dir(&download_dir).await?;
 
-        let checkout_path = download_tarball_package(ctx, &self.tarball, &download_dir).await?;
+        let checkout_path = ctx
+            .tarball_client
+            .download_and_extract_tarball(&self.tarball, &download_dir, true, None, &[])
+            .await?;
         let dbt_project =
             read_and_validate_dbt_project(ctx.io, &checkout_path, true, ctx.jinja_env, ctx.vars)
                 .await?;
