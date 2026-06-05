@@ -66,11 +66,27 @@ jobs:
           echo "::error::$msg"
           exit 1
 
-  copybara:
+  dispatch:
     needs: check_run_approval
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
+      - name: Check for syncable changes
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          excluded=(".github/" ".changes/")
+          files=$(gh pr diff ${{ github.event.number }} --name-only --repo ${{ github.repository }})
+          for prefix in "${excluded[@]}"; do
+            files=$(echo "$files" | grep -v "^$prefix" || true)
+          done
+          echo "should_dispatch=$([ -n "$files" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
       - name: Trigger dbt-core PR Copybara sync in fs
+        if: steps.check.outputs.should_dispatch == 'true'
         run: |
           curl -L \
             -X POST \
