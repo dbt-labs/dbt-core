@@ -1,12 +1,25 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use super::{
-    TimingInfo,
+    InternalDbtNodeAttributes, TimingInfo,
     common::{FreshnessDefinition, FreshnessStatus},
 };
+
+fn serialize_internal_dbt_node<S>(
+    node: &Option<Arc<dyn InternalDbtNodeAttributes>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match node {
+        Some(node) => node.serialize_keep_none().serialize(serializer),
+        None => serializer.serialize_none(),
+    }
+}
 
 /// Metadata about the dbt run invocation.
 #[skip_serializing_none]
@@ -23,6 +36,10 @@ pub struct FreshnessResultsMetadata {
     pub env: BTreeMap<String, String>,
 }
 
+/// Result for a single source freshness check.
+///
+/// Used both for the sources.json artifact (where `node` is `None` and omitted) and
+/// for the Jinja `on_run_end` context (where `node` is populated, matching dbt-core behavior).
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -37,6 +54,15 @@ pub struct FreshnessResultsNode {
     pub timing: Vec<TimingInfo>,
     pub thread_id: String,
     pub execution_time: f64,
+    /// The source node that was checked for freshness.
+    /// Populated when passed to `on_run_end` hooks; `None` (and omitted) in the artifact.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        skip_deserializing,
+        serialize_with = "serialize_internal_dbt_node"
+    )]
+    pub node: Option<Arc<dyn InternalDbtNodeAttributes>>,
 }
 
 /// Represents the structure of the sources.json artifact.

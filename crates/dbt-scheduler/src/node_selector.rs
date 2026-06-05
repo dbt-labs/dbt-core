@@ -2364,6 +2364,7 @@ mod tests {
                 }],
                 thread_id: "thread1".to_string(),
                 execution_time: 1.0,
+                node: None,
             }],
             elapsed_time: 1.0,
         };
@@ -2402,6 +2403,7 @@ mod tests {
                 }],
                 thread_id: "thread1".to_string(),
                 execution_time: 1.0,
+                node: None,
             }],
             elapsed_time: 1.0,
         };
@@ -2452,6 +2454,7 @@ mod tests {
                 }],
                 thread_id: "thread1".to_string(),
                 execution_time: 1.0,
+                node: None,
             }],
             elapsed_time: 1.0,
         };
