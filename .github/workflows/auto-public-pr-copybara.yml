@@ -1,0 +1,78 @@
+name: Copybara - Auto Public PR Migration
+
+# **what?**
+# When a PR is opened against dbt-core, trigger the reverse Copybara sync that
+# mirrors the change into a PR on the private dbt-labs/fs repo (the dbt_core_pr
+# profile, which moves the root Rust tree into fs/sa/).
+#
+# **why?**
+# dbt-core is the public, copybara-synced mirror of fs/sa. Contributions that
+# land here need to flow back into fs so the two stay in sync.
+#
+# **when?**
+# On every PR open/reopen/synchronize. PRs from public forks must carry the
+# `ci:approve-public-fork-ci` label (a maintainer adds it) before the
+# secret-bearing dispatch runs — the label is stripped on each new push so
+# updates require re-approval.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+    paths-ignore:
+      # Mirror the dbt_core_pr copybara profile's excludes: .github and the
+      # private-anchored .rs files that cannot safely round-trip back to fs.
+      - '.github/**'
+      - 'crates/dbt-parser/src/resolver.rs'
+      - 'crates/dbt-deps/src/private_package.rs'
+      - 'crates/dbt-loader/src/load_packages.rs'
+      - 'crates/dbt-loader/src/loader.rs'
+      - 'crates/dbt-loader/src/mod.rs'
+
+# only run this once per PR at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+env:
+  CI_LABEL: "ci:approve-public-fork-ci"
+
+jobs:
+  check_run_approval:
+    permissions:
+      pull-requests: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: "If the event is to synchronize, remove the label from the PR"
+        if: ${{ github.event_name == 'pull_request_target' && (github.event.action == 'synchronize' || github.event.action == 'reopened') && github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, env.CI_LABEL) }}
+        run: |
+          echo "Synchronizing PR, removing '${{ env.CI_LABEL }}' label"
+          gh pr edit ${{ github.event.pull_request.number }} --remove-label ${{ env.CI_LABEL }} --repo ${{ github.repository }}
+          msg="All pull request updates require re-approval of CI. No CI will be run."
+          echo "::error::$msg"
+          exit 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Check that forks have the '${{ env.CI_LABEL }}' label"
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository && !contains(github.event.pull_request.labels.*.name, env.CI_LABEL) }}
+        run: |
+          msg="Pull request is from a public fork but does not have the '${{ env.CI_LABEL }}' label. No CI will be run."
+          echo "::error::$msg"
+          exit 1
+
+  copybara:
+    needs: check_run_approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger dbt-core PR Copybara sync in fs
+        run: |
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.FS_SERVICE_PAT }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/dbt-labs/fs/dispatches \
+            -d "{\"event_type\": \"dbt-core-pr-copybara-trigger\", \"client_payload\": {\"copybara_pr\": \"${{ github.event.number }}\"}}"

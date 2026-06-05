@@ -1,0 +1,140 @@
+//! SidecarClient trait for subprocess-based adapter execution.
+//!
+//! This module defines the interface for adapters that delegate execution
+//! to a subprocess (sidecar) or external service. The actual implementation
+//! is provided by closed-source crates (e.g., dbt-db-client wrapping dbt-db-runner).
+//!
+//! Design: SA crates expose only the trait interface. Implementation details
+//! (RunnerManager, subprocess spawning, message protocol) remain in proprietary code.
+
+use std::fmt::Debug;
+
+use arrow::record_batch::RecordBatch;
+use dbt_schemas::dbt_types::RelationType;
+use dbt_xdbc::{Connection, QueryCtx};
+use minijinja::State;
+
+use crate::errors::AdapterResult;
+
+/// Column information returned by sidecar introspection.
+#[derive(Debug, Clone)]
+pub struct ColumnInfo {
+    /// Column name
+    pub name: String,
+    /// Column data type (backend-specific, e.g., DuckDB types)
+    pub data_type: String,
+}
+
+/// Trait for adapters that execute via subprocess (sidecar) or HTTP service.
+///
+/// This trait defines the interface for delegation to a sidecar execution backend
+/// (e.g., dbt-db-runner). It allows Snowflake (and other) adapters to route
+/// execution to DuckDB or other engines without exposing implementation details
+/// in SA crates.
+///
+/// # Design Principles
+///
+/// - **Interface Only**: SA crates define the trait, closed-source implements it
+/// - **Stateless**: Each method is self-contained, no hidden state dependencies
+/// - **Session Management**: Clients handle session lifecycle (init/shutdown)
+/// - **Connection Pooling**: Clients may maintain connection pools internally
+///
+/// # Implementation Notes
+///
+/// Implementations typically:
+/// - Wrap a subprocess manager or HTTP client
+/// - Translate adapter calls into a task message protocol
+/// - Handle subprocess lifecycle and error recovery
+/// - Manage session isolation and state directories
+pub trait SidecarClient: Debug + Send + Sync {
+    /// Execute SQL and optionally fetch results.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Query context (warehouse config, logging, tracing)
+    /// * `sql` - Fully compiled SQL to execute
+    /// * `fetch` - Whether to fetch and return result rows
+    ///
+    /// # Returns
+    ///
+    /// * `Some(RecordBatch)` if `fetch = true` and query returns rows
+    /// * `None` if `fetch = false` or query returns no rows (DDL, DML)
+    ///
+    /// # Errors
+    ///
+    /// Returns adapter error if:
+    /// - SQL execution fails
+    /// - Subprocess communication fails
+    /// - Results cannot be parsed
+    fn execute(&self, ctx: &QueryCtx, sql: &str, fetch: bool)
+    -> AdapterResult<Option<RecordBatch>>;
+
+    /// Create a new connection within this session.
+    ///
+    /// Connections may share session state but have independent transaction scope.
+    /// Implementations may use connection pooling internally.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - Optional minijinja state for context
+    /// * `node_id` - Optional dbt node identifier for logging/tracing
+    ///
+    /// # Returns
+    ///
+    /// A new connection handle that can execute queries independently.
+    fn new_connection(
+        &self,
+        state: Option<&State>,
+        node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>>;
+
+    /// Gracefully shutdown the session.
+    ///
+    /// Closes connections, flushes state, and terminates subprocess if applicable.
+    /// Should be called when adapter is dropped or dbt run completes.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Subprocess fails to terminate cleanly
+    /// - State cannot be flushed
+    fn shutdown(&self) -> AdapterResult<()>;
+
+    /// Get the type of a relation (table, view, etc.) if it exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `schema` - Schema name (case-sensitive for DuckDB)
+    /// * `table` - Table/view name (case-sensitive for DuckDB)
+    ///
+    /// # Returns
+    ///
+    /// * `Some(RelationType)` if the relation exists
+    /// * `None` if the relation doesn't exist
+    fn get_relation_type(&self, schema: &str, table: &str) -> AdapterResult<Option<RelationType>>;
+
+    /// Get column information for a relation.
+    ///
+    /// # Arguments
+    ///
+    /// * `relation_name` - Fully qualified relation name (e.g., "schema.table")
+    ///
+    /// # Returns
+    ///
+    /// Vector of column info, empty if relation doesn't exist or has no columns.
+    fn get_columns(&self, relation_name: &str) -> AdapterResult<Vec<ColumnInfo>>;
+
+    /// List all relations in a schema.
+    ///
+    /// # Arguments
+    ///
+    /// * `schema` - Schema name to list relations from
+    ///
+    /// # Returns
+    ///
+    /// Vector of tuples: (database, schema, name, relation_type)
+    fn list_relations(
+        &self,
+        schema: &str,
+    ) -> AdapterResult<Vec<(String, String, String, RelationType)>>;
+}

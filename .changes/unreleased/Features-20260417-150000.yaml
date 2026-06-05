@@ -1,0 +1,7 @@
+kind: Features
+body: Add Exasol database connector via exarrow-rs ADBC driver
+time: 2026-04-17T15:00:00.000000+02:00
+custom:
+    author: marconae
+    issue: ""
+    project: dbt-fusion

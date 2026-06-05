@@ -1,0 +1,17 @@
+# Scenario: Two catalogs whose attach_as sanitizes to the same alias.
+# Exercises: Configuration error emitted with the colliding alias name.
+catalogs:
+  - name: first_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        attach_as: shared
+        endpoint_type: GLUE
+  - name: second_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        attach_as: shared
+        endpoint_type: GLUE

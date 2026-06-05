@@ -1,0 +1,7 @@
+kind: Features
+body: Add dbt-clickhouse macro package with full materialization support
+time: 2026-05-20T15:46:01.217971-04:00
+custom:
+    author: dataders
+    issue: "9960"
+    project: dbt-fusion

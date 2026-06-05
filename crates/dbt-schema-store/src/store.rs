@@ -1,0 +1,1338 @@
+//! Filesystem-backed implementation of the schema store.
+//!
+//! The `dbt-schema-store` persists canonical schemas and, optionally, materialized
+//! data for each dbt node.  This module contains the production implementation,
+//! which understands the different entry classes (analyzed, frontier, deferred,
+//! external) and maps them to their respective on-disk namespaces.
+
+use crate::{
+    CanonicalFqn, CanonicalIdentifier, DataStoreTrait, SchemaEntry, SchemaStoreResult,
+    SchemaStoreTrait, parquet_cache::ParquetSchemaCache,
+};
+use arrow::{
+    array::RecordBatch, ipc::reader::StreamReader as ArrowIpcStreamReader,
+    ipc::writer::StreamWriter as ArrowIpcStreamWriter,
+};
+use arrow_schema::{ArrowError, Schema, SchemaRef};
+use bimap::BiMap;
+use futures::StreamExt;
+use parquet::arrow::{
+    ArrowWriter as ParquetArrowWriter,
+    arrow_reader::{ArrowReaderOptions, ParquetRecordBatchReaderBuilder},
+};
+use scc::{HashMap as SccHashMap, HashSet as SccHashSet};
+use std::{
+    collections::{BTreeSet, HashMap},
+    panic::{AssertUnwindSafe, catch_unwind},
+    path::{Path, PathBuf},
+    sync::{Arc, OnceLock, RwLock},
+    time::{Duration, SystemTime},
+};
+
+type UniqueId = String;
+type Timestamp = u128;
+
+const ANALYZED_DIR_NAME: &str = "analyzed";
+const REMOTE_DIR_NAME: &str = "sourced_remote";
+const INTERNAL_DIR_NAME: &str = "internal";
+const DEFERRED_DIR_NAME: &str = "deferred";
+const EXTERNAL_DIR_NAME: &str = "external";
+const LOCAL_DIR_NAME: &str = "defined_local";
+const DATA_DIR_NAME: &str = "data";
+const SCHEMA_DIR_NAME: &str = "schemas";
+/// Epoch-append parquet dir for compile-time analyzed schemas (no TTL).
+const SCHEMAS_ANALYZED_DIR: &str = "metadata/compile/schemas";
+/// Epoch-append parquet dir for warehouse-fetched remote schemas (has TTL).
+const SCHEMAS_REMOTE_DIR: &str = "metadata/warehouse/schemas";
+const DBT_ORIGINAL_SCHEMA_KEY: &str = "DBT:original_schema";
+const DBT_SCHEMA_ORIGIN_KEY: &str = "DBT:schema_origin";
+// Keep in sync with `dbt_frontend_common::error::DBT_CACHED_PARQUET_PATH_KEY`.
+const DBT_CACHED_PARQUET_PATH_KEY: &str = "DBT:cached_parquet_path";
+
+/// Lookup key representing the origin of a schema entry.
+///
+/// The entry type encodes the guarantees required by the schema store:
+/// * [`LookupEntry::Selected`] – models analyzed during the current invocation.
+/// * [`LookupEntry::Frontier`] – sources, frontier nodes, and cross-project
+///   references whose schemas come from the remote warehouse.
+/// * [`LookupEntry::Deferred`] – nodes deferred to another manifest; they also
+///   hydrate from remote storage.
+/// * [`LookupEntry::External`] – tables outside of the project graph, discovered
+///   lazily as DataFusion resolves them.
+/// * [`LookupEntry::Local`] – sources with schema_origin=local, where schemas
+///   are derived from YAML column definitions rather than the remote warehouse.
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub enum LookupEntry {
+    Selected(UniqueId),
+    Frontier(CanonicalFqn),
+    Deferred(CanonicalFqn),
+    External(CanonicalFqn),
+    Local(CanonicalFqn),
+}
+
+impl std::fmt::Display for LookupEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LookupEntry::Selected(unique_id) => write!(f, "Selected({})", unique_id),
+            LookupEntry::Local(cfqn) => write!(f, "Local({})", cfqn),
+            LookupEntry::Frontier(cfqn) => write!(f, "Frontier({})", cfqn),
+            LookupEntry::Deferred(cfqn) => write!(f, "Deferred({})", cfqn),
+            LookupEntry::External(cfqn) => write!(f, "External({})", cfqn),
+        }
+    }
+}
+
+/// Lazily materialized schema cached in memory.
+///
+/// We retain the filesystem timestamp to enable future invalidation strategies.
+#[derive(Debug, Clone)]
+struct SchemaEntryWrapper {
+    schema_entry: OnceLock<SchemaEntry>,
+    #[allow(dead_code)]
+    timestamp: u128,
+}
+
+impl SchemaEntryWrapper {
+    pub fn empty(timestamp: u128) -> Self {
+        Self {
+            schema_entry: OnceLock::new(),
+            timestamp,
+        }
+    }
+
+    pub fn new(schema_entry: SchemaEntry, timestamp: u128) -> Self {
+        let once_lock = OnceLock::new();
+        once_lock
+            .set(schema_entry)
+            .expect("OnceLock should not be already set");
+        Self {
+            schema_entry: once_lock,
+            timestamp,
+        }
+    }
+
+    pub fn timestamp(&self) -> u128 {
+        self.timestamp
+    }
+}
+
+/// Interior mutable state shared by [`SchemaStore`].
+#[derive(Debug, Clone)]
+#[allow(clippy::type_complexity)]
+struct SchemaStoreState {
+    store_dir: PathBuf,
+    store_fmt: StoreFormat,
+    cached_entries: SccHashMap<LookupEntry, Arc<SchemaEntryWrapper>>,
+    /// Parquet-backed caches; `Some` only when `store_fmt == StoreFormat::ParquetCache`.
+    /// The first cache covers `compiled_state/schemas_analyzed/` (Selected entries, no TTL).
+    /// The second covers `warehouse_state/schemas_remote/` (all other entries, with TTL).
+    parquet_caches: Option<(
+        Arc<RwLock<ParquetSchemaCache>>,
+        Arc<RwLock<ParquetSchemaCache>>,
+    )>,
+}
+
+impl SchemaStoreState {
+    /// Pre-populates the state with any schemas already persisted on disk.
+    ///
+    /// Entries older than their configured interval are considered stale and
+    /// will not be registered, forcing a re-fetch.
+    ///
+    /// Each entry is paired with its optional refresh interval. `None` means
+    /// no expiration (cached indefinitely).
+    pub fn init(
+        target_dir: &Path,
+        cache_fmt: StoreFormat,
+        entries_with_intervals: &[(LookupEntry, Option<Duration>)],
+    ) -> Self {
+        let store_dir = target_dir.join(SCHEMA_DIR_NAME);
+        let cached_schemas = SccHashMap::new();
+
+        // For the parquet-cache variant, load epochs from both dirs and pre-populate
+        // `cached_entries` so the rest of the store machinery works transparently.
+        let parquet_caches = if matches!(cache_fmt, StoreFormat::ParquetCache) {
+            // Build interval maps for each dir (analyzed has no TTL; remote has TTL).
+            let analyzed_intervals: Vec<(String, Option<Duration>)> = entries_with_intervals
+                .iter()
+                .filter_map(|(entry, _)| {
+                    if let LookupEntry::Selected(uid) = entry {
+                        if !uid.starts_with("snapshot") {
+                            return None;
+                        }
+                        Some((entry.to_string(), None)) // no TTL for analyzed
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let remote_intervals: Vec<(String, Option<Duration>)> = entries_with_intervals
+                .iter()
+                .filter_map(|(entry, interval)| {
+                    if matches!(entry, LookupEntry::Selected(_)) {
+                        None // selected entries live in analyzed, not remote
+                    } else {
+                        Some((entry.to_string(), *interval))
+                    }
+                })
+                .collect();
+
+            let analyzed_dir = target_dir.join(SCHEMAS_ANALYZED_DIR);
+            let remote_dir = target_dir.join(SCHEMAS_REMOTE_DIR);
+
+            // analyzed: key filter ON — full set of Selected/snapshot uids is known at startup.
+            // remote: key filter OFF — External entries are not in entries_with_intervals.
+            let analyzed = ParquetSchemaCache::load(&analyzed_dir, &analyzed_intervals, false);
+            let remote = ParquetSchemaCache::load(&remote_dir, &remote_intervals, true);
+
+            // Pre-populate the SCC map so exists()/get_schema() work normally.
+            let now_ms = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_millis();
+            for (entry, _interval) in entries_with_intervals {
+                let key = entry.to_string();
+                let maybe = if let LookupEntry::Selected(uid) = entry {
+                    if uid.starts_with("snapshot") {
+                        analyzed.get(&key)
+                    } else {
+                        continue;
+                    }
+                } else {
+                    remote.get(&key)
+                };
+                if let Some(schema_entry) = maybe {
+                    let wrapper = Arc::new(SchemaEntryWrapper::new(schema_entry.clone(), now_ms));
+                    let _ = cached_schemas.upsert_sync(entry.clone(), wrapper);
+                }
+            }
+
+            Some((
+                Arc::new(RwLock::new(analyzed)),
+                Arc::new(RwLock::new(remote)),
+            ))
+        } else {
+            for (entry, interval) in entries_with_intervals {
+                if let LookupEntry::Selected(unique_id) = entry
+                    // HACK: snapshots can appear in both analyzed and remote simultaneously.
+                    && !unique_id.starts_with("snapshot")
+                {
+                    continue;
+                }
+
+                dbt_common::tracing::emit::emit_debug_log_message(format!(
+                    "Initializing schema store with entry: {:?} and interval: {:?}",
+                    entry, interval
+                ));
+
+                Self::try_register_entry_inner(&store_dir, &cached_schemas, entry, *interval);
+            }
+            None
+        };
+
+        Self {
+            store_dir,
+            store_fmt: cache_fmt,
+            cached_entries: cached_schemas,
+            parquet_caches,
+        }
+    }
+
+    /// Returns `true` if the requested lookup entry already exists on disk.
+    pub fn exists(&self, entry: &LookupEntry) -> bool {
+        self.cached_entries.contains_sync(entry)
+    }
+
+    /// Async equivalent of [`SchemaStoreState::exists`].
+    async fn exists_async(&self, entry: &LookupEntry) -> bool {
+        self.cached_entries.contains_async(entry).await
+    }
+
+    /// Ensures the given lookup entry is tracked by the cache without eagerly
+    /// hydrating the underlying schema.
+    ///
+    /// Note: This method does not apply TTL checking - it's for runtime registration
+    /// of entries that should be used regardless of age.
+    pub fn try_register_entry(&self, entry: &LookupEntry) -> Option<Arc<SchemaEntryWrapper>> {
+        // ParquetCache: check the in-memory parquet cache instead of the filesystem.
+        // The legacy path looks for a per-entry file on disk, which doesn't exist for
+        // ParquetCache (deferred entries land in the remote cache, not per-file).
+        if let Some((_analyzed, remote)) = &self.parquet_caches {
+            let key = entry.to_string();
+            let guard = remote.read().expect("parquet_cache lock poisoned");
+            if guard.contains(&key) {
+                let now_ms = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or(Duration::ZERO)
+                    .as_millis();
+                // Entry exists in the remote cache — register a placeholder wrapper
+                // so cached_entries reflects its presence; schema is loaded lazily.
+                let schema_entry = guard.get(&key)?.clone();
+                drop(guard);
+                let wrapper = Arc::new(SchemaEntryWrapper::new(schema_entry, now_ms));
+                let _ = self
+                    .cached_entries
+                    .upsert_sync(entry.clone(), wrapper.clone());
+                return Some(wrapper);
+            }
+            return None;
+        }
+        Self::try_register_entry_inner(&self.store_dir, &self.cached_entries, entry, None)
+    }
+
+    /// Retrieves the schema from the cache, hydrating it from disk on first use.
+    pub fn get_schema(&self, entry: &LookupEntry) -> Option<SchemaEntry> {
+        self.cached_entries
+            .read_sync(entry, |_, v| Arc::clone(v))
+            .and_then(|schema| self.try_get_or_init_schema(schema, entry))
+    }
+
+    /// Async variant of [`SchemaStoreState::get_schema`].
+    pub async fn get_schema_async(&self, entry: &LookupEntry) -> Option<SchemaEntry> {
+        self.cached_entries
+            .read_async(entry, |_, v| Arc::clone(v))
+            .await
+            .and_then(|schema| self.try_get_or_init_schema(schema, entry))
+    }
+
+    /// Writes the canonical schema to disk and updates the cache.
+    pub fn register_schema(
+        &self,
+        entry: &LookupEntry,
+        original_schema: Option<SchemaRef>,
+        schema: SchemaRef,
+        overwrite: bool,
+    ) -> SchemaStoreResult<SchemaEntry> {
+        if !overwrite && self.exists(entry) {
+            return Ok(self.get_schema(entry).expect("Entry should exist"));
+        }
+
+        // ParquetCache: store in the in-memory cache only (no per-file I/O).
+        if let Some((analyzed, remote)) = &self.parquet_caches {
+            // For External entries, `exists()` only checks `cached_entries`, which
+            // is empty for entries not in entries_with_intervals at startup (Externals).
+            // Check the parquet cache directly here so `overwrite=false` honours a
+            // schema loaded from a previous run's epoch file.
+            if !overwrite && !matches!(entry, LookupEntry::Local(_)) {
+                let cache = if matches!(entry, LookupEntry::Selected(_)) {
+                    analyzed
+                } else {
+                    remote
+                };
+                let guard = cache.read().expect("parquet_cache lock poisoned");
+                if let Some(existing) = guard.get(&entry.to_string()).cloned() {
+                    drop(guard);
+                    let now_ms = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap_or(Duration::ZERO)
+                        .as_millis();
+                    let wrapper = Arc::new(SchemaEntryWrapper::new(existing.clone(), now_ms));
+                    let _ = self.cached_entries.upsert_sync(entry.clone(), wrapper);
+                    return Ok(existing);
+                }
+            }
+
+            let schema_entry = SchemaEntry::from_sdf_arrow_schema(original_schema, schema);
+
+            // Local entries are always re-derived from YAML column definitions at
+            // startup — never persist them to the epoch files. We still insert into
+            // cached_entries so the rest of the store machinery works normally.
+            if !matches!(entry, LookupEntry::Local(_)) {
+                let cache = if matches!(entry, LookupEntry::Selected(_)) {
+                    analyzed
+                } else {
+                    remote
+                };
+                let mut guard = cache.write().expect("parquet_cache lock poisoned");
+                guard.upsert(entry.to_string(), schema_entry.clone())?;
+            }
+
+            let now_ms = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_millis();
+            let wrapper = Arc::new(SchemaEntryWrapper::new(schema_entry.clone(), now_ms));
+            let _ = self.cached_entries.upsert_sync(entry.clone(), wrapper);
+            return Ok(schema_entry);
+        }
+
+        let path = Self::resolve_entry_path(&self.store_dir, entry);
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
+            ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
+        })?;
+        let (schema_entry, timestamp) = self.write_cached_schema(&path, original_schema, schema)?;
+
+        let schema_entry_wrapper =
+            Arc::new(SchemaEntryWrapper::new(schema_entry.clone(), timestamp));
+        let _ = self
+            .cached_entries
+            .upsert_sync(entry.clone(), schema_entry_wrapper);
+        Ok(schema_entry)
+    }
+
+    /// Evicts stale entries from the cache based on their refresh intervals.
+    ///
+    /// Returns the number of entries evicted.
+    pub fn evict_stale_entries(
+        &self,
+        entries_with_intervals: &[(LookupEntry, Option<Duration>)],
+    ) -> usize {
+        let mut evicted_count = 0;
+
+        for (entry, interval) in entries_with_intervals {
+            // Skip entries without a refresh interval (cached indefinitely)
+            if interval.is_none() {
+                continue;
+            }
+
+            // Skip selected entries (they're compiled, not cached remotely)
+            if matches!(entry, LookupEntry::Selected(_)) {
+                continue;
+            }
+
+            // Check if entry exists in cache and if it's stale (logs if stale)
+            if let Some(wrapper) = self.cached_entries.read_sync(entry, |_, v| Arc::clone(v))
+                && Self::is_entry_stale(entry, wrapper.timestamp(), *interval)
+            {
+                self.cached_entries.remove_sync(entry);
+                // For ParquetCache, also remove from the in-memory parquet cache so
+                // the stale entry is not re-written to disk on save().
+                if let Some((_analyzed, remote)) = &self.parquet_caches {
+                    remote
+                        .write()
+                        .expect("parquet_cache lock poisoned")
+                        .remove(&entry.to_string());
+                }
+                evicted_count += 1;
+            }
+        }
+
+        evicted_count
+    }
+
+    /// Hydrates the schema on-demand and caches it in the underlying [`OnceLock`].
+    fn try_get_or_init_schema(
+        &self,
+        schema_entry_wrapper: Arc<SchemaEntryWrapper>,
+        entry: &LookupEntry,
+    ) -> Option<SchemaEntry> {
+        match catch_unwind(AssertUnwindSafe(|| {
+            if let Some(schema_entry) = schema_entry_wrapper.schema_entry.get() {
+                schema_entry.clone()
+            } else {
+                let path = Self::resolve_entry_path(&self.store_dir, entry);
+                let (schema_entry, _) = self
+                    .read_cached_schema(&path)
+                    .expect("Failed to read cached schema");
+                let _ = schema_entry_wrapper.schema_entry.set(schema_entry.clone());
+                schema_entry
+            }
+        })) {
+            Ok(schema_entry) => Some(schema_entry),
+            Err(_) => {
+                debug_assert!(false, "Failed to read cached schema");
+                None
+            }
+        }
+    }
+
+    /// Reads and deserializes the schema persisted for the lookup entry.
+    fn read_cached_schema(&self, table_path: &Path) -> SchemaStoreResult<(SchemaEntry, Timestamp)> {
+        match self.store_fmt {
+            StoreFormat::ArrowIpc => unimplemented!(),
+            StoreFormat::Parquet => read_cached_schema_from_parquet(table_path),
+            StoreFormat::Yaml => unimplemented!(),
+            // ParquetCache entries are pre-loaded into cached_entries at init() time;
+            // try_get_or_init_schema() will never reach this branch.
+            StoreFormat::ParquetCache => {
+                unreachable!("ParquetCache entries are pre-loaded; per-file reads never happen")
+            }
+        }
+    }
+
+    /// Persists the schema for the lookup entry using the configured store format.
+    fn write_cached_schema(
+        &self,
+        path: &Path,
+        original_schema: Option<SchemaRef>,
+        schema: SchemaRef,
+    ) -> SchemaStoreResult<(SchemaEntry, Timestamp)> {
+        match self.store_fmt {
+            StoreFormat::ArrowIpc => unimplemented!(),
+            StoreFormat::Parquet => {
+                persist_schema_as_parquet_file(original_schema, schema, true, path)
+            }
+            StoreFormat::Yaml => unimplemented!(),
+            // ParquetCache writes go through register_schema() directly, never here.
+            StoreFormat::ParquetCache => {
+                unreachable!("ParquetCache schemas are written via register_schema(); not here")
+            }
+        }
+    }
+
+    /// Builds the canonical filesystem path for the given lookup entry.
+    ///
+    /// Selected nodes live under `schemas/analyzed/<unique_id>`, while frontier,
+    /// deferred, and external nodes use the `schemas/sourced_remote/...`
+    /// hierarchy described in the crate-level documentation.  Data paths swap
+    /// `schemas/` for `data/`.
+    fn resolve_entry_path(cache_dir: &Path, entry: &LookupEntry) -> PathBuf {
+        match entry {
+            LookupEntry::Frontier(cfqn) => cache_dir
+                .join(REMOTE_DIR_NAME)
+                .join(INTERNAL_DIR_NAME)
+                .join(cfqn.catalog())
+                .join(cfqn.schema())
+                .join(cfqn.table())
+                .join("output.parquet"),
+            LookupEntry::Selected(unique_id) => cache_dir
+                .join(ANALYZED_DIR_NAME)
+                .join(unique_id)
+                .join("output.parquet"),
+            LookupEntry::Deferred(cfqn) => cache_dir
+                .join(REMOTE_DIR_NAME)
+                .join(DEFERRED_DIR_NAME)
+                .join(cfqn.catalog())
+                .join(cfqn.schema())
+                .join(cfqn.table())
+                .join("output.parquet"),
+            LookupEntry::External(cfqn) => cache_dir
+                .join(REMOTE_DIR_NAME)
+                .join(EXTERNAL_DIR_NAME)
+                .join(cfqn.catalog())
+                .join(cfqn.schema())
+                .join(cfqn.table())
+                .join("output.parquet"),
+            LookupEntry::Local(cfqn) => cache_dir
+                .join(LOCAL_DIR_NAME)
+                .join(cfqn.catalog())
+                .join(cfqn.schema())
+                .join(cfqn.table())
+                .join("output.parquet"),
+        }
+    }
+
+    /// Checks if a cached entry is stale based on its timestamp and refresh interval.
+    /// If stale, logs a debug message.
+    fn is_entry_stale(
+        entry: &LookupEntry,
+        timestamp: u128,
+        refresh_interval: Option<Duration>,
+    ) -> bool {
+        if let Some(interval) = refresh_interval {
+            let now_millis = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_millis();
+            let age = Duration::from_millis(now_millis.saturating_sub(timestamp) as u64);
+            if age > interval {
+                dbt_common::tracing::emit::emit_debug_log_message(format!(
+                    "Schema cache entry {:?} is stale (age: {:?}, refresh_interval: {:?})",
+                    entry, age, interval
+                ));
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Inserts the lookup entry into the cache if a persisted schema already exists
+    /// and is not stale according to the refresh interval.
+    fn try_register_entry_inner(
+        cache_dir: &Path,
+        cached_schemas: &SccHashMap<LookupEntry, Arc<SchemaEntryWrapper>>,
+        entry: &LookupEntry,
+        refresh_interval: Option<Duration>,
+    ) -> Option<Arc<SchemaEntryWrapper>> {
+        let path = Self::resolve_entry_path(cache_dir, entry);
+        let timestamp = get_timestamp(&path)?;
+
+        // Check if the entry is stale based on refresh interval
+        if Self::is_entry_stale(entry, timestamp, refresh_interval) {
+            return None;
+        }
+
+        let schema_entry_wrapper = Arc::new(SchemaEntryWrapper::empty(timestamp));
+        let _ = cached_schemas.upsert_sync(entry.clone(), schema_entry_wrapper.clone());
+        Some(schema_entry_wrapper)
+    }
+}
+
+/// Supported on-disk encodings for schemas and data.
+#[derive(Debug, Clone)]
+pub enum StoreFormat {
+    ArrowIpc,
+    Parquet,
+    Yaml,
+    /// Epoch-append parquet cache under `compiled_state/schemas_analyzed/` and
+    /// `warehouse_state/schemas_remote/`.  Schemas are loaded at startup and
+    /// flushed via [`SchemaStore::save`] at end of run; no per-entry I/O.
+    ParquetCache,
+}
+
+/// Primary filesystem-backed implementation of [`SchemaStoreTrait`].
+#[derive(Debug)]
+pub struct SchemaStore {
+    selected: BiMap<CanonicalFqn, UniqueId>,
+    frontier: BiMap<CanonicalFqn, UniqueId>,
+    deferred: RwLock<BiMap<CanonicalFqn, UniqueId>>,
+    external: SccHashSet<CanonicalFqn>,
+    local: BiMap<CanonicalFqn, UniqueId>,
+    state: SchemaStoreState,
+    /// Shadow state for verify mode: runs the parquet cache in parallel with the
+    /// primary (old) store to detect divergences without affecting correctness.
+    shadow_state: Option<SchemaStoreState>,
+}
+
+impl SchemaStore {
+    /// Creates a new filesystem-backed schema store rooted at `cache_dir`.
+    ///
+    /// `refresh_intervals` maps unique_id -> refresh interval for per-source TTL.
+    /// Sources not in the map or with `None` value use no expiration (cached indefinitely).
+    ///
+    /// `local` maps cfqn -> unique_id for sources with `schema_origin=local`.
+    /// `local_schemas` contains the Arrow schemas derived from YAML column definitions.
+    /// Schemas are registered during construction.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        cache_dir: PathBuf,
+        selected: HashMap<CanonicalFqn, UniqueId>,
+        frontier: HashMap<CanonicalFqn, UniqueId>,
+        local: HashMap<CanonicalFqn, UniqueId>,
+        local_schemas: Vec<crate::LocalSchemaEntry>,
+        cache_fmt: StoreFormat,
+        refresh_intervals: HashMap<String, Option<Duration>>,
+        verify_format: Option<StoreFormat>,
+    ) -> Self {
+        // Helper to get refresh interval for a unique_id
+        let get_interval = |uid: &String| refresh_intervals.get(uid).copied().flatten();
+
+        // Build entries with their refresh intervals
+        // Chain all entries first, then map to add intervals in a single pass
+        let entries_with_intervals: Vec<(LookupEntry, Option<Duration>)> = selected
+            .values()
+            .map(|uid| (LookupEntry::Selected(uid.clone()), uid))
+            .chain(
+                frontier
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Frontier(cfqn.clone()), uid)),
+            )
+            .chain(
+                local
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Local(cfqn.clone()), uid)),
+            )
+            .map(|(entry, uid)| (entry, get_interval(uid)))
+            .collect();
+
+        let state = SchemaStoreState::init(&cache_dir, cache_fmt, &entries_with_intervals);
+
+        let shadow_state = verify_format
+            .map(|fmt| SchemaStoreState::init(&cache_dir, fmt, &entries_with_intervals));
+
+        let store = Self {
+            selected: selected.into_iter().collect(),
+            frontier: frontier.into_iter().collect(),
+            deferred: RwLock::new(BiMap::new()),
+            external: SccHashSet::new(),
+            local: local.into_iter().collect(),
+            state,
+            shadow_state,
+        };
+
+        // Register local schemas during construction
+        for ls in local_schemas {
+            let entry = LookupEntry::Local(ls.cfqn.clone());
+            let schema_with_origin = add_schema_origin_metadata(ls.schema.clone(), "local");
+            // Always overwrite to pick up YAML changes; ignore errors during construction
+            let _ = store
+                .state
+                .register_schema(&entry, None, schema_with_origin.clone(), true);
+            if let Some(shadow) = &store.shadow_state {
+                let _ = shadow.register_schema(&entry, None, schema_with_origin, true);
+            }
+        }
+
+        store
+    }
+
+    /// Finds the [`LookupEntry`] corresponding to a canonical FQN.
+    pub fn resolve_lookup_entry_by_cfqn(&self, cfqn: &CanonicalFqn) -> Option<LookupEntry> {
+        if let Some(unique_id) = self.selected.get_by_left(cfqn) {
+            Some(LookupEntry::Selected(unique_id.clone()))
+        } else if self.local.contains_left(cfqn) {
+            Some(LookupEntry::Local(cfqn.clone()))
+        } else if self.frontier.contains_left(cfqn) {
+            Some(LookupEntry::Frontier(cfqn.clone()))
+        } else if self
+            .deferred
+            .read()
+            .expect("deferred lock poisoned")
+            .get_by_left(cfqn)
+            .is_some()
+        {
+            Some(LookupEntry::Deferred(cfqn.clone()))
+        } else if self.external.contains_sync(cfqn) {
+            Some(LookupEntry::External(cfqn.clone()))
+        } else {
+            None
+        }
+    }
+
+    /// Finds the [`LookupEntry`] corresponding to a dbt `unique_id`.
+    pub fn resolve_lookup_entry_by_unique_id(&self, unique_id: &str) -> Option<LookupEntry> {
+        if self.selected.contains_right(unique_id) {
+            Some(LookupEntry::Selected(unique_id.to_string()))
+        } else if let Some(cfqn) = self.local.get_by_right(unique_id) {
+            Some(LookupEntry::Local(cfqn.clone()))
+        } else if let Some(cfqn) = self.frontier.get_by_right(unique_id) {
+            Some(LookupEntry::Frontier(cfqn.clone()))
+        } else if self
+            .deferred
+            .read()
+            .expect("deferred lock poisoned")
+            .get_by_right(unique_id)
+            .is_some()
+        {
+            debug_assert!(
+                false,
+                "Deferred entry should be found in either selected or frontier"
+            );
+            None
+        } else {
+            None
+        }
+    }
+
+    /// Registers deferred nodes whose schemas must be sourced from remote storage.
+    ///
+    /// Merges `deferred` into the existing set so that successive defer phases
+    /// can expand the deferred entries instead of being limited to a single write.
+    pub fn set_deferred(&self, deferred: HashMap<CanonicalFqn, UniqueId>) -> bool {
+        let mut guard = self.deferred.write().expect("deferred lock poisoned");
+        let mut changed = false;
+        for (cfqn, uid) in deferred {
+            if !guard.contains_left(&cfqn) {
+                guard.insert(cfqn.clone(), uid);
+                let entry = LookupEntry::Deferred(cfqn);
+                self.state.try_register_entry(&entry);
+                if let Some(shadow) = &self.shadow_state {
+                    shadow.try_register_entry(&entry);
+                }
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Evicts stale entries from the schema store cache.
+    ///
+    /// This should be called when reusing a schema store from a previous cache state
+    /// to ensure TTL-based eviction happens even when the store isn't being recreated.
+    ///
+    /// Returns the number of entries evicted.
+    pub fn evict_stale_entries(
+        &self,
+        refresh_intervals: &HashMap<String, Option<Duration>>,
+    ) -> usize {
+        use std::time::Duration;
+
+        // Helper to get refresh interval for a unique_id
+        let get_interval = |uid: &String| refresh_intervals.get(uid).copied().flatten();
+
+        // Build the same entries_with_intervals structure as in ::new()
+        let entries_with_intervals: Vec<(LookupEntry, Option<Duration>)> = self
+            .selected
+            .iter()
+            .map(|(_, uid)| (LookupEntry::Selected(uid.clone()), uid))
+            .chain(
+                self.frontier
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Frontier(cfqn.clone()), uid)),
+            )
+            .chain(
+                self.local
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Local(cfqn.clone()), uid)),
+            )
+            .map(|(entry, uid)| (entry, get_interval(uid)))
+            .collect();
+
+        self.state.evict_stale_entries(&entries_with_intervals)
+    }
+
+    fn visit_cfqn<F>(&self, mut f: F)
+    where
+        F: FnMut(&CanonicalFqn),
+    {
+        for (cfqn, _) in self.selected.iter() {
+            f(cfqn);
+        }
+        for (cfqn, _) in self.frontier.iter() {
+            f(cfqn);
+        }
+        for (cfqn, _) in self.deferred.read().expect("deferred lock poisoned").iter() {
+            f(cfqn);
+        }
+        self.external.iter_sync(|cfqn| {
+            f(cfqn);
+            true
+        });
+        for (cfqn, _) in self.local.iter() {
+            f(cfqn);
+        }
+    }
+
+    /// Checks if a schema exists for a specific lookup entry type.
+    /// This is useful when you need to check existence for a specific entry type
+    /// (e.g., Frontier vs Selected) rather than just by FQN or unique_id.
+    pub fn exists_by_lookup(&self, entry: &LookupEntry) -> bool {
+        self.state.exists(entry)
+    }
+
+    /// Re-registers a `Selected` schema as a `Frontier` entry in the remote cache.
+    ///
+    /// Called after a local model executes so downstream models in the same run
+    /// can find the upstream schema as a Frontier cache hit (replacing the old
+    /// `mirror_schema_to_frontier_cache` file-copy approach).
+    ///
+    /// No-op when `store_fmt != ParquetCache` (legacy per-file stores do not need
+    /// this because `mirror_schema_to_frontier_cache` handles the file copy).
+    pub fn promote_to_frontier(&self, cfqn: &CanonicalFqn) -> SchemaStoreResult<()> {
+        let Some((_analyzed, remote)) = &self.state.parquet_caches else {
+            return Ok(());
+        };
+
+        let selected_entry = match self.selected.get_by_left(cfqn) {
+            Some(uid) => LookupEntry::Selected(uid.clone()),
+            None => return Ok(()), // not a selected node; nothing to promote
+        };
+
+        let schema_entry = match self.state.get_schema(&selected_entry) {
+            Some(s) => s,
+            None => return Ok(()), // schema not yet registered; nothing to promote
+        };
+
+        // SchemaEntry already carries both the SDF schema and the original warehouse
+        // schema. upsert() serializes both into the CacheRow correctly.
+        let frontier_entry = LookupEntry::Frontier(cfqn.clone());
+        let frontier_key = frontier_entry.to_string();
+        remote
+            .write()
+            .expect("remote cache lock poisoned")
+            .upsert(frontier_key, schema_entry.clone())?;
+
+        // Also insert into cached_entries so exists()/get_schema() see the entry
+        // immediately within the same run (without waiting for save/reload).
+        let now_ms = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .as_millis();
+        let wrapper = Arc::new(SchemaEntryWrapper::new(schema_entry, now_ms));
+        let _ = self
+            .state
+            .cached_entries
+            .upsert_sync(frontier_entry, wrapper);
+
+        Ok(())
+    }
+
+    /// Flushes all in-memory parquet-cache entries to disk as new epoch files.
+    ///
+    /// - `Selected` entries → `compiled_state/schemas_analyzed/{N}.parquet`
+    /// - all other entries  → `warehouse_state/schemas_remote/{N}.parquet`
+    ///
+    /// No-op when the store is not using [`StoreFormat::ParquetCache`].
+    pub fn save(&self, target_dir: &Path) -> SchemaStoreResult<()> {
+        self.save_state(&self.state, target_dir)?;
+        if let Some(shadow) = &self.shadow_state {
+            if let Err(e) = self.save_state(shadow, target_dir) {
+                tracing::warn!("verify-parquet-schema-store: shadow save failed: {e}");
+            }
+        }
+        Ok(())
+    }
+
+    fn save_state(&self, state: &SchemaStoreState, target_dir: &Path) -> SchemaStoreResult<()> {
+        let Some((analyzed, remote)) = &state.parquet_caches else {
+            return Ok(());
+        };
+
+        let analyzed_guard = analyzed.read().expect("analyzed cache lock poisoned");
+        if !analyzed_guard.is_empty() {
+            let analyzed_dir = target_dir.join(SCHEMAS_ANALYZED_DIR);
+            analyzed_guard.save_to(&analyzed_dir)?;
+        }
+        drop(analyzed_guard);
+
+        let remote_guard = remote.read().expect("remote cache lock poisoned");
+        if !remote_guard.is_empty() {
+            let remote_dir = target_dir.join(SCHEMAS_REMOTE_DIR);
+            remote_guard.save_to(&remote_dir)?;
+        }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl SchemaStoreTrait for SchemaStore {
+    fn exists(&self, cfqn: &CanonicalFqn) -> bool {
+        let entry = self.resolve_lookup_entry_by_cfqn(cfqn);
+        let primary = entry.as_ref().is_some_and(|entry| self.state.exists(entry));
+        if let (Some(shadow), Some(entry)) = (&self.shadow_state, &entry) {
+            let shadow_result = shadow.exists(entry);
+            if primary != shadow_result {
+                tracing::warn!(
+                    "verify-parquet-schema-store: exists() divergence for {cfqn}: \
+                     primary={primary}, shadow={shadow_result}"
+                );
+            }
+        }
+        primary
+    }
+
+    async fn exists_async(&self, cfqn: &CanonicalFqn) -> bool {
+        if let Some(entry) = self.resolve_lookup_entry_by_cfqn(cfqn) {
+            self.state.exists_async(&entry).await
+        } else {
+            false
+        }
+    }
+
+    fn exists_by_unique_id(&self, unique_id: &str) -> bool {
+        self.resolve_lookup_entry_by_unique_id(unique_id)
+            .is_some_and(|entry| self.state.exists(&entry))
+    }
+
+    fn get_schema(&self, cfqn: &CanonicalFqn) -> Option<SchemaEntry> {
+        let entry = self.resolve_lookup_entry_by_cfqn(cfqn)?;
+        let primary = self.state.get_schema(&entry);
+        if let Some(shadow) = &self.shadow_state {
+            let shadow_result = shadow.get_schema(&entry);
+            let primary_fields = primary.as_ref().map(|s| s.inner().fields().len());
+            let shadow_fields = shadow_result.as_ref().map(|s| s.inner().fields().len());
+            if primary_fields != shadow_fields {
+                tracing::warn!(
+                    "verify-parquet-schema-store: get_schema() divergence for {cfqn}: \
+                     primary_fields={primary_fields:?}, shadow_fields={shadow_fields:?}"
+                );
+            }
+        }
+        primary
+    }
+
+    async fn get_schema_async(&self, cfqn: &CanonicalFqn) -> Option<SchemaEntry> {
+        let entry = self.resolve_lookup_entry_by_cfqn(cfqn)?;
+        self.state.get_schema_async(&entry).await
+    }
+
+    fn get_schema_by_unique_id(&self, unique_id: &str) -> Option<SchemaEntry> {
+        let entry = self.resolve_lookup_entry_by_unique_id(unique_id)?;
+        self.state.get_schema(&entry)
+    }
+
+    async fn get_schema_by_unique_id_async(&self, unique_id: &str) -> Option<SchemaEntry> {
+        let entry = self.resolve_lookup_entry_by_unique_id(unique_id)?;
+        self.state.get_schema_async(&entry).await
+    }
+
+    fn register_schema(
+        &self,
+        cfqn: &CanonicalFqn,
+        original_schema: Option<SchemaRef>,
+        schema: SchemaRef,
+        overwrite: bool,
+    ) -> SchemaStoreResult<SchemaEntry> {
+        let entry = if let Some(entry) = self.resolve_lookup_entry_by_cfqn(cfqn) {
+            entry
+        } else {
+            LookupEntry::External(cfqn.clone())
+        };
+        let result = self.state.register_schema(
+            &entry,
+            original_schema.clone(),
+            schema.clone(),
+            overwrite,
+        )?;
+        if let Some(shadow) = &self.shadow_state {
+            if let Err(e) = shadow.register_schema(&entry, original_schema, schema, overwrite) {
+                tracing::warn!(
+                    "verify-parquet-schema-store: shadow register_schema failed for {cfqn}: {e}"
+                );
+            }
+        }
+        if let LookupEntry::External(cfqn) = entry {
+            let _ = self.external.insert_sync(cfqn);
+        }
+        Ok(result)
+    }
+
+    fn promote_to_frontier(&self, cfqn: &CanonicalFqn) -> SchemaStoreResult<()> {
+        self.promote_to_frontier(cfqn)
+    }
+
+    fn catalog_names(&self) -> Vec<CanonicalIdentifier> {
+        let mut catalogs = BTreeSet::new();
+        self.visit_cfqn(|cfqn| {
+            catalogs.insert(cfqn.catalog().clone());
+        });
+        catalogs.into_iter().collect()
+    }
+
+    fn schema_names(&self, catalog: &CanonicalIdentifier) -> Vec<CanonicalIdentifier> {
+        let mut schemas = BTreeSet::new();
+        self.visit_cfqn(|cfqn| {
+            if cfqn.catalog() == catalog {
+                schemas.insert(cfqn.schema().clone());
+            }
+        });
+        schemas.into_iter().collect()
+    }
+
+    fn table_names(
+        &self,
+        catalog: &CanonicalIdentifier,
+        schema: &CanonicalIdentifier,
+    ) -> Vec<CanonicalIdentifier> {
+        let mut tables = BTreeSet::new();
+        self.visit_cfqn(|cfqn| {
+            if cfqn.catalog() == catalog && cfqn.schema() == schema {
+                tables.insert(cfqn.table().clone());
+            }
+        });
+        tables.into_iter().collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DataStore {
+    store_dir: PathBuf,
+    store_fmt: StoreFormat,
+}
+
+impl DataStore {
+    pub fn new(target_dir: PathBuf, store_fmt: StoreFormat) -> Self {
+        let store_dir = target_dir.join(DATA_DIR_NAME);
+        Self {
+            store_dir,
+            store_fmt,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl DataStoreTrait for DataStore {
+    fn persist_data(
+        &self,
+        cfqn: &CanonicalFqn,
+        schema: SchemaRef,
+        batches: Vec<RecordBatch>,
+    ) -> SchemaStoreResult<usize> {
+        let path = self.get_path_to_data(cfqn);
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
+            ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
+        })?;
+        match self.store_fmt {
+            StoreFormat::ArrowIpc => unimplemented!(),
+            StoreFormat::Parquet | StoreFormat::ParquetCache => {
+                persist_data_as_parquet_file(schema, true, batches, &path)
+            }
+            StoreFormat::Yaml => unimplemented!(),
+        }
+    }
+
+    async fn persist_data_async(
+        &self,
+        cfqn: &CanonicalFqn,
+        schema: SchemaRef,
+        stream: std::pin::Pin<
+            Box<dyn futures::Stream<Item = SchemaStoreResult<RecordBatch>> + Send + 'static>,
+        >,
+    ) -> SchemaStoreResult<usize> {
+        let path = self.get_path_to_data(cfqn);
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
+            ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
+        })?;
+        match self.store_fmt {
+            StoreFormat::ArrowIpc => unimplemented!(),
+            StoreFormat::Parquet | StoreFormat::ParquetCache => {
+                persist_data_as_parquet_file_async(schema, true, stream, &path).await
+            }
+            StoreFormat::Yaml => unimplemented!(),
+        }
+    }
+
+    fn get_path_to_data(&self, cfqn: &CanonicalFqn) -> PathBuf {
+        // XXX: Normalize to lowercase to ensure case-insensitive lookups work on
+        // case-sensitive filesystems. Using file paths to encode case sensitivity is volatile
+        self.store_dir
+            .join(cfqn.catalog().to_ascii_lowercase())
+            .join(cfqn.schema().to_ascii_lowercase())
+            .join(cfqn.table().to_ascii_lowercase())
+            .join("output.parquet")
+    }
+}
+
+/// Deserialize an Arrow schema from Arrow IPC format.
+fn deserialize_arrow_schema(bytes: &[u8]) -> SchemaStoreResult<SchemaRef> {
+    let projection = None;
+    ArrowIpcStreamReader::try_new(bytes, projection).map(|r| r.schema())
+}
+
+/// Serialize an Arrow schema to Arrow IPC format.
+fn serialize_arrow_schema(schema: &SchemaRef) -> SchemaStoreResult<Vec<u8>> {
+    let mut buf = Vec::<u8>::new();
+    ArrowIpcStreamWriter::try_new(&mut buf, schema.as_ref()).and_then(|mut w| w.finish())?; // no data, just the schema
+    Ok(buf)
+}
+
+/// Read a cached schema from a Parquet file.
+///
+/// Returns the schema entry and the file's modification timestamp.
+/// The schema entry contains both the canonical schema and optionally
+/// the original warehouse schema if it was embedded in the parquet metadata.
+pub fn read_cached_schema_from_parquet(
+    table_path: &Path,
+) -> SchemaStoreResult<(SchemaEntry, Timestamp)> {
+    let file = std::fs::File::open(table_path).map_err(|e| {
+        ArrowError::IoError(format!("Failed to open file: {}", table_path.display()), e)
+    })?;
+    // Use options that preserve Arrow metadata
+    let options = ArrowReaderOptions::new().with_skip_arrow_metadata(false);
+    let reader_builder = ParquetRecordBatchReaderBuilder::try_new_with_options(file, options)?;
+    let arrow_schema = reader_builder.schema();
+    let original_schema = arrow_schema
+        .metadata()
+        .get(DBT_ORIGINAL_SCHEMA_KEY)
+        .and_then(|base64_encoded| {
+            use base64::Engine as _;
+            use base64::prelude::BASE64_STANDARD as BASE64_ENGINE;
+            let res = BASE64_ENGINE.decode(base64_encoded);
+            debug_assert!(res.is_ok());
+            let serialized = res.ok();
+
+            serialized.map(|bytes| deserialize_arrow_schema(&bytes))
+        })
+        .transpose()?;
+
+    let arrow_schema = {
+        let mut metadata = arrow_schema.metadata().clone();
+        // Remove the embedded original-schema blob to avoid confusion.
+        metadata.remove(DBT_ORIGINAL_SCHEMA_KEY);
+        // Record a stable logical identifier so the binder can surface an
+        // actionable error message when a column is not found in this cached
+        // schema. We extract catalog.schema.table from the path components
+        // rather than embedding the raw filesystem path.
+        metadata.insert(
+            DBT_CACHED_PARQUET_PATH_KEY.to_string(),
+            extract_source_identity_from_path(table_path),
+        );
+        Arc::new(Schema::new_with_metadata(
+            arrow_schema.fields().clone(),
+            metadata,
+        ))
+    };
+    Ok((
+        SchemaEntry::from_sdf_arrow_schema(original_schema, arrow_schema),
+        get_timestamp(table_path).expect("Failed to get timestamp for parquet file"),
+    ))
+}
+
+/// Extracts a stable logical identifier from a schema cache file path.
+///
+/// For `analyzed/{unique_id}/output.parquet` → `unique_id`
+/// For `sourced_remote/{sub}/{cat}/{schema}/{table}/output.parquet` → `cat.schema.table`
+/// For `defined_local/{cat}/{schema}/{table}/output.parquet` → `cat.schema.table`
+fn extract_source_identity_from_path(path: &Path) -> String {
+    let components: Vec<&str> = path
+        .components()
+        .filter_map(|c| c.as_os_str().to_str())
+        .collect();
+    // Find the "analyzed" or "sourced_remote" or "defined_local" marker
+    for (i, comp) in components.iter().enumerate() {
+        if *comp == ANALYZED_DIR_NAME {
+            // analyzed/{unique_id}/output.parquet
+            if i + 1 < components.len() {
+                return components[i + 1].to_string();
+            }
+        }
+        if *comp == REMOTE_DIR_NAME || *comp == LOCAL_DIR_NAME {
+            // sourced_remote/{internal|deferred|external}/{cat}/{schema}/{table}/output.parquet
+            // defined_local/{cat}/{schema}/{table}/output.parquet
+            let start = if *comp == REMOTE_DIR_NAME {
+                i + 2 // skip the sub-dir (internal/deferred/external)
+            } else {
+                i + 1
+            };
+            if start + 2 < components.len() {
+                return format!(
+                    "{}.{}.{}",
+                    components[start],
+                    components[start + 1],
+                    components[start + 2]
+                );
+            }
+        }
+    }
+    // Fallback: use the path as-is
+    path.display().to_string()
+}
+
+fn make_parquet_writer(
+    schema: SchemaRef,
+    delete_on_error: bool,
+    output_path: &Path,
+) -> SchemaStoreResult<parquet::arrow::ArrowWriter<std::fs::File>> {
+    let parquet_file = std::fs::File::create(output_path).map_err(|e| {
+        ArrowError::IoError(
+            format!("Failed to create file: {}", output_path.display()),
+            e,
+        )
+    })?;
+    match ParquetArrowWriter::try_new(parquet_file, schema, None) {
+        Ok(writer) => Ok(writer),
+        Err(e) => {
+            if delete_on_error {
+                // Delete the empty file - writer creation failed
+                std::fs::remove_file(output_path).map_err(|e| {
+                    ArrowError::IoError(
+                        format!("Failed to remove file: {}", output_path.display()),
+                        e,
+                    )
+                })?;
+            }
+            Err(ArrowError::ParquetError(format!(
+                "Failed to create ParquetArrowWriter: {}",
+                e
+            )))
+        }
+    }
+}
+
+/// Adds schema origin metadata to an Arrow schema.
+fn add_schema_origin_metadata(schema: SchemaRef, origin: &str) -> SchemaRef {
+    let mut metadata: HashMap<String, String> = schema.metadata().clone();
+    metadata.insert(DBT_SCHEMA_ORIGIN_KEY.to_string(), origin.to_string());
+    Arc::new(Schema::new_with_metadata(schema.fields().clone(), metadata))
+}
+
+/// Persists the given schema as a Parquet file at the specified path.
+///
+/// If `batches` is provided, they will be written to the Parquet file as well
+/// and the number of rows written will be returned.
+///
+/// PRE-CONDITION: The parent directory of `schema_path` must already exist.
+fn persist_schema_as_parquet_file(
+    original_schema: Option<SchemaRef>,
+    schema: SchemaRef,
+    delete_on_error: bool,
+    output_path: &Path,
+) -> SchemaStoreResult<(SchemaEntry, Timestamp)> {
+    // Include the original schema in the metadata if provided. It's serialized as Arrow IPC
+    // format and base64-encoded to ensure safe storage in the Parquet schema metadata.
+    let sdf_schema = original_schema
+        .as_ref()
+        .map(serialize_arrow_schema)
+        .transpose()?
+        .map_or_else(
+            || Arc::clone(&schema),
+            |serialized| {
+                use base64::Engine as _;
+                use base64::prelude::BASE64_STANDARD as BASE64_ENGINE;
+                let base64_encoded_schema = BASE64_ENGINE.encode(&serialized);
+
+                let mut metadata = schema.metadata().clone();
+                metadata.insert(DBT_ORIGINAL_SCHEMA_KEY.to_string(), base64_encoded_schema);
+                let sdf_schema = Schema::new_with_metadata(schema.fields().clone(), metadata);
+                Arc::new(sdf_schema)
+            },
+        );
+    let parquet_writer = make_parquet_writer(sdf_schema, delete_on_error, output_path)?;
+    parquet_writer.close().map_err(|e| {
+        ArrowError::ParquetError(format!(
+            "Failed to close ParquetArrowWriter at {}: {}",
+            output_path.display(),
+            e,
+        ))
+    })?;
+    Ok((
+        SchemaEntry::from_sdf_arrow_schema(original_schema, schema),
+        get_timestamp(output_path).expect("Failed to get timestamp for parquet file"),
+    ))
+}
+
+/// Writes the provided record batches to disk using the canonical schema.
+fn persist_data_as_parquet_file(
+    schema: SchemaRef,
+    delete_on_error: bool,
+    batches: Vec<RecordBatch>,
+    output_path: &Path,
+) -> SchemaStoreResult<usize> {
+    let mut parquet_writer = make_parquet_writer(schema, delete_on_error, output_path)?;
+    let mut num_rows = 0;
+    for batch in batches {
+        num_rows += batch.num_rows();
+        parquet_writer.write(&batch)?;
+    }
+    parquet_writer.close().map_err(|e| {
+        ArrowError::ParquetError(format!(
+            "Failed to close ParquetArrowWriter at {}: {}",
+            output_path.display(),
+            e,
+        ))
+    })?;
+    Ok(num_rows)
+}
+
+/// Async variant of [`persist_data_as_parquet_file`].
+async fn persist_data_as_parquet_file_async(
+    schema: SchemaRef,
+    delete_on_error: bool,
+    mut stream: std::pin::Pin<
+        Box<dyn futures::Stream<Item = SchemaStoreResult<RecordBatch>> + Send + 'static>,
+    >,
+    output_path: &Path,
+) -> SchemaStoreResult<usize> {
+    let mut parquet_writer = make_parquet_writer(schema, delete_on_error, output_path)?;
+    let mut num_rows = 0;
+    while let Some(res) = stream.next().await {
+        let batch = match res {
+            Ok(batch) => batch,
+            Err(e) => {
+                parquet_writer.close().map_err(|e| {
+                    ArrowError::ParquetError(format!(
+                        "Failed to close ParquetArrowWriter at {}: {}",
+                        output_path.display(),
+                        e,
+                    ))
+                })?;
+                return Err(ArrowError::ParquetError(format!(
+                    "Failed to read record batch: {}",
+                    e,
+                )));
+            }
+        };
+        num_rows += batch.num_rows();
+        parquet_writer.write(&batch)?;
+    }
+    parquet_writer.close().map_err(|e| {
+        ArrowError::ParquetError(format!(
+            "Failed to close ParquetArrowWriter at {}: {}",
+            output_path.display(),
+            e,
+        ))
+    })?;
+    Ok(num_rows)
+}
+
+fn get_timestamp(path: &Path) -> Option<u128> {
+    std::fs::metadata(path)
+        .map(|m| {
+            m.modified()
+                .unwrap_or_else(|_| SystemTime::now())
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or(Duration::from_secs(0))
+                .as_millis()
+        })
+        .ok()
+}

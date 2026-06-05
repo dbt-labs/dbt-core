@@ -1,0 +1,423 @@
+use crate::args::ResolveArgs;
+use crate::dbt_project_config::ProjectConfigResolver;
+use crate::dbt_project_config::RootProjectConfigs;
+use crate::dbt_project_config::init_project_config;
+use crate::resolve::resolve_properties::MinimalPropertiesEntry;
+use crate::resolve::resolve_utils::validate_compute;
+use crate::utils::get_node_fqn;
+use crate::utils::get_unique_id;
+use crate::validation::check_node_static_analysis;
+use dbt_adapter_core::AdapterType;
+use dbt_common::CodeLocationWithFile;
+use dbt_common::ErrorCode;
+use dbt_common::FsResult;
+use dbt_common::err;
+use dbt_common::error::AbstractLocation;
+use dbt_common::fs_err;
+use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::StaticAnalysisOffReason;
+
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::phases::parse::build_resolve_model_context;
+use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
+use dbt_jinja_utils::serde::into_typed_with_jinja;
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_jinja_utils::utils::render_extract_ref_or_source_expr;
+use dbt_schemas::schemas::DbtModel;
+use dbt_schemas::schemas::DbtUnitTestAttr;
+use dbt_schemas::schemas::common::DbtChecksum;
+use dbt_schemas::schemas::common::DbtMaterialization;
+use dbt_schemas::schemas::common::DbtQuoting;
+use dbt_schemas::schemas::common::Expect;
+use dbt_schemas::schemas::common::Formats;
+use dbt_schemas::schemas::common::Given;
+use dbt_schemas::schemas::common::NodeDependsOn;
+use dbt_schemas::schemas::packages::DeprecatedDbtPackageLock;
+use dbt_schemas::schemas::project::DbtProject;
+use dbt_schemas::schemas::project::ResolvableConfig;
+use dbt_schemas::schemas::project::ResolvedConfig;
+use dbt_schemas::schemas::project::UnitTestConfig;
+use dbt_schemas::schemas::properties::UnitTestProperties;
+use dbt_schemas::schemas::ref_and_source::DbtRef;
+use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
+use dbt_schemas::schemas::{CommonAttributes, DbtUnitTest, NodeBaseAttributes};
+use dbt_schemas::state::DbtPackage;
+use dbt_schemas::state::DbtRuntimeConfig;
+use dbt_schemas::state::ResourcePathKind;
+use dbt_yaml::Spanned;
+use serde_json::Value;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+pub fn resolve_unit_tests(
+    arg: &ResolveArgs,
+    unit_test_properties: BTreeMap<String, MinimalPropertiesEntry>,
+    package: &DbtPackage,
+    package_quoting: DbtQuoting,
+    root_project_configs: &RootProjectConfigs,
+    package_name: &str,
+    jinja_env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, minijinja::Value>,
+    model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
+    models: &BTreeMap<String, Arc<DbtModel>>,
+) -> FsResult<(
+    BTreeMap<String, Arc<DbtUnitTest>>,
+    BTreeMap<String, Arc<DbtUnitTest>>,
+)> {
+    let mut unit_tests: BTreeMap<String, Arc<DbtUnitTest>> = BTreeMap::new();
+    let mut disabled_unit_tests: BTreeMap<String, Arc<DbtUnitTest>> = BTreeMap::new();
+    let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.unit_tests.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.unit_tests,
+                (),
+                dependency_package_name,
+            )
+        },
+    )?
+    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
+
+    for (unit_test_name, mpe) in unit_test_properties.into_iter() {
+        // Capture YAML span of the unit-test `name:` declaration for error reporting.
+        // The analyzer uses this as `start_location` so messages anchor at the unit
+        // test's entry in the source YAML rather than at line 1 col 1.
+        let defined_at = mpe.name_span.is_valid().then(|| {
+            CodeLocationWithFile::new(
+                mpe.name_span.start.line as u32,
+                mpe.name_span.start.column as u32,
+                mpe.name_span.start.index as u32,
+                mpe.relative_path.clone(),
+            )
+        });
+
+        let unit_test = into_typed_with_jinja::<UnitTestProperties, _>(
+            &arg.io,
+            mpe.schema_value,
+            false,
+            jinja_env,
+            base_ctx,
+            &[],
+            dependency_package_name,
+            true,
+        )?;
+        // todo: Unit test should have a database and schema,
+        //    derived from the underlying model, correct?
+        // - if so, we should get it and still store it so that it is available,
+        // - but we should not serialize it
+        // - for now just use the global ones
+
+        let location = CodeLocationWithFile::default(); // TODO
+        let model_name = format!("model.{}.{}", package_name, unit_test.model);
+        // `tested_node_unique_id` is the unversioned model's unique id when resolvable.
+        // Versioned cases below override it with the version-specific id.
+        let (database, schema, _, tested_node_unique_id) = match models.get(&model_name) {
+            Some(model) => (
+                model.__base_attr__.database.clone(),
+                model.__base_attr__.schema.clone(),
+                model.__base_attr__.alias.clone(),
+                Some(model_name.clone()),
+            ),
+            None => (String::new(), String::new(), unit_test.model.clone(), None),
+        };
+
+        // Create base unit test node
+        let base_unique_id = format!(
+            "unit_test.{}.{}.{}",
+            package_name, unit_test.model, unit_test_name
+        );
+
+        let fqn = get_node_fqn(
+            package_name,
+            mpe.relative_path.to_owned(),
+            vec![unit_test.model.to_owned(), unit_test_name.to_owned()],
+            &package.dbt_project.all_source_paths(),
+        );
+
+        let properties_config =
+            config_resolver.resolve_with_properties(&fqn, unit_test.config.as_ref());
+        check_node_static_analysis(
+            &properties_config,
+            arg.static_analysis,
+            &base_unique_id,
+            dependency_package_name,
+            arg.io.status_reporter.as_ref(),
+        );
+        validate_compute(properties_config.compute, &mpe.relative_path)?;
+
+        let enabled = properties_config.enabled;
+
+        // todo: generalize given input format, according to https://docs.getdbt.com/docs/build/unit-tests
+
+        let dependent_refs = vec![DbtRef {
+            name: unit_test.model.to_owned(),
+            package: Some(package_name.to_owned()),
+            version: None,
+            location: Some(CodeLocationWithFile::default()),
+        }];
+
+        // Process unit test given inputs to extract ref nodes
+        for given_group in unit_test.given.iter() {
+            for g in given_group.iter() {
+                let input = &g.input;
+                if input.contains("ref") || input.contains("source") || input.as_str().eq("this") {
+                    continue;
+                } else {
+                    return err!(
+                        ErrorCode::Unexpected,
+                        "Invalid given input: {}",
+                        input.as_str()
+                    );
+                }
+            }
+        }
+
+        let mut file_map: BTreeMap<String, String> = BTreeMap::new();
+
+        for asset in package.fixture_files.iter() {
+            asset.path.file_name().map(|file_name| {
+                file_map.insert(
+                    file_name.to_string_lossy().to_string(),
+                    asset.path.to_string_lossy().to_string(),
+                )
+            });
+        }
+
+        let given = unit_test.given.as_ref().map_or(vec![], |vec| {
+            vec.iter()
+                .map(|given| {
+                    let full_path: Option<String> = match given.fixture {
+                        Some(ref fixture) if given.format == Formats::Csv => {
+                            file_map.get(&(fixture.clone() + ".csv")).cloned()
+                        }
+                        Some(ref fixture) if given.format == Formats::Sql => {
+                            file_map.get(&(fixture.clone() + ".sql")).cloned()
+                        }
+                        _ => given.fixture.clone(),
+                    };
+
+                    Given {
+                        fixture: full_path,
+                        input: given.input.clone(),
+                        rows: given.rows.clone(),
+                        format: given.format.clone(),
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+
+        let expect = {
+            let full_path: Option<String> = match unit_test.expect.fixture {
+                Some(ref fixture) if unit_test.expect.format == Formats::Csv => {
+                    file_map.get(&(fixture.clone() + ".csv")).cloned()
+                }
+                Some(ref fixture) if unit_test.expect.format == Formats::Sql => {
+                    file_map.get(&(fixture.clone() + ".sql")).cloned()
+                }
+                _ => unit_test.expect.fixture.clone(),
+            };
+
+            Expect {
+                fixture: full_path,
+                rows: unit_test.expect.rows.clone(),
+                format: unit_test.expect.format.clone(),
+            }
+        };
+
+        let static_analysis = properties_config.static_analysis.clone();
+
+        let base_unit_test = DbtUnitTest {
+            __common_attr__: CommonAttributes {
+                name: unit_test_name.to_owned(),
+                package_name: package_name.to_owned(),
+                original_file_path: mpe.relative_path.clone(),
+                path: mpe.relative_path.clone(),
+                name_span: dbt_common::Span::default(),
+                unique_id: base_unique_id.clone(),
+                fqn,
+                // dbt-core: description is always default ''
+                description: Some(unit_test.description.to_owned().unwrap_or_default()),
+                patch_path: None,
+                checksum: DbtChecksum::default(),
+                raw_code: None,
+                language: Some("sql".to_string()),
+                tags: properties_config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into())
+                    .unwrap_or_default(),
+                meta: properties_config.meta.clone().unwrap_or_default(),
+            },
+            __base_attr__: NodeBaseAttributes {
+                database: database.to_owned(),
+                schema: schema.to_owned(),
+                // match dbt-core semantics for unit test alias
+                alias: unit_test_name.to_owned(),
+                relation_name: None,
+                depends_on: NodeDependsOn::default(),
+                refs: dependent_refs,
+                sources: vec![],
+                functions: vec![],
+                enabled,
+                extended_model: false,
+                persist_docs: None,
+                quoting: package_quoting.try_into()?,
+                quoting_ignore_case: package_quoting.snowflake_ignore_case.unwrap_or(false),
+                materialized: DbtMaterialization::Unit,
+                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
+                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis,
+                compute: properties_config.compute,
+                columns: vec![],
+                metrics: vec![],
+                // TODO: populate unrendered_config for unit tests. dbt-core never does this
+                // (unit_tests.py has no reference to unrendered_config), so empty matches
+                // Core parity today, but it is an omission there too.
+                unrendered_config: Default::default(),
+            },
+            __unit_test_attr__: DbtUnitTestAttr {
+                model: unit_test.model.to_owned(),
+                given,
+                expect,
+                versions: None,
+                version: None,
+                overrides: unit_test.overrides.clone(),
+            },
+            tested_node_unique_id: tested_node_unique_id.clone(),
+            defined_at,
+            deprecated_config: properties_config.into(),
+            ..Default::default()
+        };
+        // Check if this model has versions
+        if let Some(version_info) = model_properties
+            .get(&unit_test.model)
+            .and_then(|mpe| mpe.version_info.as_ref())
+        {
+            // Parse version configuration to get the include and exclude lists
+            // this include and exclude accepted values are different than for generic tests
+            // no 'all' or '*' accepted
+            let version_config = unit_test.versions.as_ref().and_then(|v| match v {
+                dbt_yaml::Value::Mapping(map, _) => {
+                    let include_key = dbt_yaml::Value::string("include".to_string());
+                    let exclude_key = dbt_yaml::Value::string("exclude".to_string());
+                    Some((
+                        map.get(&include_key).and_then(parse_version_numbers_yml),
+                        map.get(&exclude_key).and_then(parse_version_numbers_yml),
+                    ))
+                }
+                _ => None,
+            });
+
+            // In the main code:
+            let versions = version_info
+                .all_versions
+                .keys()
+                .filter(|version| {
+                    version_config
+                        .as_ref()
+                        .map(|(include, exclude)| {
+                            should_include_version_for_unit_test(include, exclude, version)
+                        })
+                        .unwrap_or(true) // No version config means include all versions
+                })
+                .collect::<Vec<&String>>(); // Explicitly collect into Vec<&String>
+
+            if !enabled {
+                disabled_unit_tests.insert(base_unique_id, Arc::new(base_unit_test));
+                continue;
+            }
+
+            // Create a unit test node for each version
+            for version in versions {
+                let versioned_model_unique_id = get_unique_id(
+                    &unit_test.model,
+                    package_name,
+                    Some(version.clone()),
+                    "model",
+                );
+
+                // Look up database/schema from the versioned model
+                let (ver_database, ver_schema) = models
+                    .get(&versioned_model_unique_id)
+                    .map(|m| {
+                        (
+                            m.__base_attr__.database.clone(),
+                            m.__base_attr__.schema.clone(),
+                        )
+                    })
+                    .unwrap_or_default();
+
+                let mut versioned_test = base_unit_test.clone();
+                versioned_test.__common_attr__.unique_id = format!("{base_unique_id}.v{version}");
+                versioned_test.__unit_test_attr__.version = Some(version.clone().into());
+                versioned_test.__base_attr__.database = ver_database;
+                versioned_test.__base_attr__.schema = ver_schema;
+                versioned_test.__base_attr__.depends_on.nodes =
+                    vec![versioned_model_unique_id.clone()];
+                versioned_test
+                    .__base_attr__
+                    .depends_on
+                    .nodes_with_ref_location =
+                    vec![(versioned_model_unique_id.clone(), location.clone())];
+                versioned_test.tested_node_unique_id = Some(versioned_model_unique_id.clone());
+
+                unit_tests.insert(
+                    versioned_test.__common_attr__.unique_id.clone(),
+                    Arc::new(versioned_test),
+                );
+            }
+        } else {
+            // Non-versioned case
+            if tested_node_unique_id.is_none() || !enabled {
+                disabled_unit_tests.insert(base_unique_id, Arc::new(base_unit_test));
+            } else {
+                unit_tests.insert(base_unique_id, Arc::new(base_unit_test));
+            }
+        }
+    }
+    Ok((unit_tests, disabled_unit_tests))
+}
+
+fn parse_version_numbers_yml(value: &dbt_yaml::Value) -> Option<Vec<String>> {
+    match value {
+        dbt_yaml::Value::Sequence(arr, _) => Some(
+            arr.iter()
+                .filter_map(|v| match v {
+                    dbt_yaml::Value::Number(n, _) => Some(n.to_string()),
+                    dbt_yaml::Value::String(s, _) => s.parse::<i64>().ok().map(|n| n.to_string()),
+                    _ => None,
+                })
+                .collect(),
+        ),
+        dbt_yaml::Value::String(s, _) => s.parse::<i64>().ok().map(|n| vec![n.to_string()]),
+        _ => None,
+    }
+}
+
+fn should_include_version_for_unit_test(
+    include: &Option<Vec<String>>,
+    exclude: &Option<Vec<String>>,
+    version: &str,
+) -> bool {
+    // If there's an include list, version must be in it
+    let meets_include = include
+        .as_ref()
+        .map(|inc| inc.contains(&version.to_string()))
+        .unwrap_or(true); // No include list means include all
+
+    // If there's an exclude list, version must not be in it
+    let meets_exclude = !exclude
+        .as_ref()
+        .map(|exc| exc.contains(&version.to_string()))
+        .unwrap_or(false); // No exclude list means exclude none
+
+    meets_include && meets_exclude
+}

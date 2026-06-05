@@ -1,0 +1,148 @@
+use crate::{
+    args::LoadArgs,
+    dbt_project_yml_loader::{collect_protected_paths, load_project_yml},
+    load_for_clean,
+};
+use std::{collections::BTreeMap, path::Path, time::Duration};
+
+use dbt_common::{
+    ErrorCode, FsResult,
+    cancellation::CancellationToken,
+    constants::DBT_PROJECT_YML,
+    err, fs_err,
+    io_args::{EvalArgs, EvalArgsBuilder, IoArgs},
+    lease::{self, Lease},
+    stdfs,
+    tracing::{
+        dbt_metrics::error_count_checkpoint,
+        emit::{emit_error_log_from_fs_error, emit_info_progress_message, emit_trace_log_message},
+        event_info::store_event_attributes,
+    },
+};
+use dbt_jinja_utils::{
+    invocation_args::InvocationArgs, phases::load::init::initialize_load_jinja_environment,
+};
+use dbt_telemetry::{ExecutionPhase, PhaseExecuted, ProgressMessage};
+
+#[tracing::instrument(
+    skip_all,
+    fields(
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::Clean)),
+    )
+)]
+pub async fn execute_clean_command(
+    arg: &EvalArgs,
+    files: &[String],
+    _token: &CancellationToken,
+) -> FsResult<()> {
+    let load_args = LoadArgs::from_eval_args(arg);
+    let dbt_state = load_for_clean(&load_args).await?;
+    let invocation_args = InvocationArgs::from_eval_args(arg);
+    let flags: BTreeMap<String, minijinja::Value> = invocation_args.to_dict();
+
+    let arg = EvalArgsBuilder::from_eval_args(arg)
+        .with_threads(dbt_state.dbt_profile.threads)
+        .build();
+
+    let env = initialize_load_jinja_environment(
+        &dbt_state.dbt_profile.profile,
+        &dbt_state.dbt_profile.target,
+        dbt_state.dbt_profile.db_config.adapter_type(),
+        dbt_state.dbt_profile.db_config.clone(),
+        dbt_state.run_started_at,
+        &flags,
+        invocation_args.warn_error_options.clone(),
+        arg.io.clone(),
+        dbt_state.catalogs,
+    )?;
+
+    let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
+    let (dbt_project, _) =
+        load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())?;
+
+    let protected_paths = collect_protected_paths(&dbt_project)
+        .iter()
+        .map(|p| std::path::absolute(arg.io.in_dir.join(p)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut paths_to_delete = dbt_project
+        .clean_targets
+        .as_ref()
+        .unwrap()
+        .iter()
+        .chain(files.iter())
+        .map(|path| {
+            let path = Path::new(path);
+            if path.is_absolute() {
+                err!(
+                    ErrorCode::InvalidPath,
+                    "Absolute paths are not allowed: {}",
+                    path.display()
+                )
+            } else {
+                std::path::absolute(arg.io.in_dir.join(path)).map_err(Into::into)
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    paths_to_delete.push(arg.io.out_dir.clone());
+
+    let all_safe = paths_to_delete.iter().all(|path_to_delete| {
+        // The clean command does not delete anything outside of the project directory
+        unrelated_paths(&arg.io, &arg.io.in_dir, path_to_delete)
+            // The clean command does not delete protected directories ("models", "macros", etc.)
+            && protected_paths
+                .iter()
+                .all(|protected_path| unrelated_paths(&arg.io, protected_path, path_to_delete))
+    });
+
+    if all_safe {
+        for path in &paths_to_delete {
+            if path.exists() {
+                if let Some(lease_dir_name) = lease::dir_name_for_file_lease(&arg.io.in_dir, path) {
+                    let mut lease = {
+                        let target_lease_path =
+                            lease::lease_file_path(&arg.io.in_dir, &lease_dir_name);
+                        Lease::new(target_lease_path, lease_dir_name, Duration::ZERO)
+                    };
+                    lease.acquire(Duration::from_millis(1000)).await?;
+                }
+
+                emit_info_progress_message(
+                    ProgressMessage::new_from_action_and_target(
+                        "Removing".to_string(),
+                        arg.io.format_display_path(path),
+                    ),
+                    arg.io.status_reporter.as_ref(),
+                );
+                stdfs::remove_dir_all(path)?;
+            } else {
+                emit_trace_log_message(|| {
+                    format!("The target directory does not exist: {}", path.display())
+                });
+            }
+        }
+    }
+
+    error_count_checkpoint()
+}
+
+fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(io: &IoArgs, to: P, from: Q) -> bool {
+    stdfs::diff_paths(&to, &from)
+        .and_then(|diff| {
+            // It is safe to delete a directory if the only way to get to a protected directory is to navigate to the parent.
+            if diff.components().next() == Some(std::path::Component::ParentDir) {
+                Ok(true)
+            } else {
+                Err(fs_err!(
+                    ErrorCode::InvalidPath,
+                    "The target directory is protected: {}",
+                    from.as_ref().display()
+                ))
+            }
+        })
+        .inspect_err(|e| {
+            emit_error_log_from_fs_error(e, io.status_reporter.as_ref());
+        })
+        .is_ok()
+}

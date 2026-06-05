@@ -1,0 +1,41 @@
+use dbt_adapter_core::AdapterType;
+
+use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
+
+pub mod base;
+
+pub static DEFAULT_RESOLVED_QUOTING: ResolvedQuoting = ResolvedQuoting {
+    database: true,
+    schema: true,
+    identifier: true,
+};
+
+pub static SNOWFLAKE_RESOLVED_QUOTING: ResolvedQuoting = ResolvedQuoting {
+    database: false,
+    schema: false,
+    identifier: false,
+};
+
+pub static DEFAULT_DBT_QUOTING: DbtQuoting = DbtQuoting {
+    database: Some(true),
+    schema: Some(true),
+    identifier: Some(true),
+    snowflake_ignore_case: Some(false),
+};
+
+pub static SNOWFLAKE_DBT_QUOTING: DbtQuoting = DbtQuoting {
+    database: Some(false),
+    schema: Some(false),
+    identifier: Some(false),
+    snowflake_ignore_case: Some(false),
+};
+
+pub static DEFAULT_DATABRICKS_DATABASE: &str = "hive_metastore";
+
+#[inline]
+pub fn default_dbt_quoting_for(adapter_type: AdapterType) -> DbtQuoting {
+    match adapter_type {
+        AdapterType::Snowflake => SNOWFLAKE_DBT_QUOTING,
+        _ => DEFAULT_DBT_QUOTING,
+    }
+}

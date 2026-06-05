@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add SQL Server backend
+time: 2026-02-18T09:17:33.767988-07:00
+custom:
+    author: chasewalden
+    issue: ""
+    project: dbt-fusion

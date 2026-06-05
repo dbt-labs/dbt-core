@@ -1,0 +1,5 @@
+[bans]
+multiple-versions = "allow"
+deny = [
+  { crate = "dbt-common", reason = "dbt-xdbc should be treated as an 'external' crate that wraps ADBC and ODBC drivers with a more usable API" },
+]

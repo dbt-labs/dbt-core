@@ -1,0 +1,26 @@
+[package]
+name = "dbt-cli-lib"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+dbt-adapter = { workspace = true }
+dbt-common = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
+
+futures = { workspace = true }
+tokio = { workspace = true }
+
+[lib]
+name = "dbt_cli_lib"
+path = "src/lib.rs"
+doctest = false

@@ -1,0 +1,2629 @@
+extern crate num_cpus;
+
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashSet};
+use std::fmt::Debug;
+use std::io::Cursor;
+use std::path::Path;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use dbt_adapter::Column;
+use dbt_adapter::errors::into_fs_error;
+use dbt_adapter::formatter::SqlLiteralFormatter;
+use dbt_adapter::relation::{RelationObject, create_relation_from_node};
+use dbt_adapter::sql_types::DefaultTypeOps;
+use dbt_adapter::sql_types::{TypeOps, make_arrow_field};
+use dbt_adapter_core::{AdapterType, ExecutionPhase, quote_char};
+use dbt_common::cancellation::Cancellable;
+use dbt_common::collections::DashMap;
+use dbt_common::constants::DBT_CTE_PREFIX;
+use dbt_common::static_analysis::is_static_analysis_off_or_baseline;
+use dbt_common::stats::NodeStatus;
+use dbt_common::stdfs;
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
+use dbt_jinja_utils::phases::compile::DependencyValidationConfig;
+use dbt_jinja_utils::phases::run::build_run_node_context;
+use dbt_jinja_utils::utils::add_task_context;
+use dbt_jinja_utils::utils::macro_spans_to_macro_span_vec;
+use dbt_jinja_utils::utils::render_sql;
+use dbt_jinja_utils::{Var, env_var};
+use dbt_scheduler::instructions::SqlInstruction;
+use dbt_schemas::schemas;
+use dbt_schemas::schemas::InternalDbtNode;
+use dbt_schemas::schemas::common::{DbtMaterialization, Rows};
+use dbt_schemas::schemas::properties::UnitTestOverrides;
+use dbt_schemas::schemas::relations::base::BaseRelation;
+use dbt_schemas::schemas::{DbtUnitTest, InternalDbtNodeAttributes, NodePathKind};
+use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
+use dbt_telemetry::NodeType;
+
+use crate::renderable::unit_test_typing::{BigqueryTyping, SnowflakeTyping};
+use dbt_tasks_core::task::TaskResult;
+
+use arrow_schema::{DataType, Schema, SchemaRef};
+use csv::ReaderBuilder;
+use itertools::Itertools;
+use minijinja::listener::RenderingEventListener;
+use minijinja::value::Object;
+use minijinja::{CodeLocation, State, Value, Value as MinijinjaValue};
+use regex::Regex;
+use tracing::warn;
+
+use super::common::handle_render_result;
+
+type YmlValue = dbt_yaml::Value;
+
+/// Identifies which unit test relation schema is being resolved for error reporting.
+#[derive(Clone, Copy)]
+enum UnitTestSchemaTarget {
+    GivenUpstream,
+    ExpectedModel { incremental_expected_path: bool },
+}
+
+impl UnitTestSchemaTarget {
+    fn subject(self) -> &'static str {
+        match self {
+            Self::GivenUpstream => "unit test upstream relation from `given`",
+            Self::ExpectedModel {
+                incremental_expected_path: false,
+            } => "unit test model-under-test relation from `expect`",
+            Self::ExpectedModel {
+                incremental_expected_path: true,
+            } => "incremental unit test model-under-test relation from `expect`",
+        }
+    }
+}
+
+/// Small utility for merging objects
+#[derive(Debug, Clone)]
+struct ObjectOverlay(pub Vec<Value>);
+
+impl Object for ObjectOverlay {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        self.0
+            .iter()
+            // Err if undefined
+            .filter_map(|o| o.get_item(key).ok())
+            .next()
+    }
+}
+
+/// Orchestrate the 3-step unit test render pipeline.
+///
+/// ```text
+/// Step 0 (blocking): discover_given_relations → (given_relations, to_fetch)
+/// Step 1 (async):    fetch_missing_schemas(to_fetch) → schemas in cache
+/// Step 2 (blocking): render_sql_instruction(given_relations) → SqlInstruction
+/// ```
+pub(crate) async fn run_unit_test_render(
+    node: Arc<dyn InternalDbtNodeAttributes>,
+    mut ctx: TaskRunnerCtx,
+    result_sender: Option<std::sync::mpsc::SyncSender<TaskResult>>,
+    task_hooks: Arc<dyn RenderTaskHooks>,
+) -> FsResult<NodeStatus> {
+    use dbt_tasks_core::task::TaskOp;
+
+    let ut = node.clone();
+    let mut ctx_step0 = ctx.clone();
+    let given_relations = TaskOp::Blocking(Box::new(move || {
+        // Downcast to DbtUnitTest for access to unit test fields
+        let ut_ref = ut
+            .as_any()
+            .downcast_ref::<DbtUnitTest>()
+            .expect("run_unit_test_render called on non-DbtUnitTest");
+        discover_given_relations(ut_ref, &mut ctx_step0)
+    }))
+    .run()
+    .await??;
+
+    if !given_relations.relations_to_fetch.is_empty() {
+        TaskOp::r#async(fetch_missing_schemas(
+            &given_relations.relations_to_fetch,
+            &node.common().unique_id,
+            &mut ctx,
+            task_hooks,
+        ))
+        .await?;
+    }
+
+    // Step 2: blocking render using cached schemas + discovered relations
+    TaskOp::Blocking(Box::new(move || {
+        let mut ctx = ctx;
+        let ut_ref = node
+            .as_any()
+            .downcast_ref::<DbtUnitTest>()
+            .expect("run_unit_test_render called on non-DbtUnitTest");
+        let res = render_unit_test(ut_ref, &mut ctx, given_relations);
+        handle_render_result(
+            res,
+            &node.unique_id(),
+            &node.materialized(),
+            &mut ctx,
+            &result_sender,
+        )
+    }))
+    .run()
+    .await?
+}
+
+/// Get schema for upstream unit test inputs, using cache first and remote fallback.
+/// Used in Step 3 (after Step 2 has populated the cache via async fetch).
+fn get_schema_for_unit_test_relation(
+    ctx: &TaskRunnerCtx,
+    relation: Arc<dyn BaseRelation>,
+    schema_target: UnitTestSchemaTarget,
+) -> FsResult<SchemaRef> {
+    try_get_schema_from_cache(ctx, relation.as_ref(), schema_target)?.ok_or_else(|| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Schema for {} '{}' was not fetched during pre-render step",
+            schema_target.subject(),
+            relation.render_self_as_str()
+        )
+    })
+}
+
+/// Try to get schema from cache. Returns `Ok(Some(schema))` if found,
+/// `Ok(None)` if a warehouse fetch is allowed, or `Err` if fetch is not allowed.
+fn try_get_schema_from_cache(
+    ctx: &TaskRunnerCtx,
+    relation: &dyn BaseRelation,
+    schema_target: UnitTestSchemaTarget,
+) -> FsResult<Option<SchemaRef>> {
+    let canonical_fqn = relation.get_canonical_fqn()?;
+    if let Some(entry) = ctx.schema_cache.get_schema(&canonical_fqn) {
+        return Ok(Some(entry.inner().clone()));
+    }
+
+    // For upstreams (models, seeds, snapshots, sources), try to get schema from the schema cache by unique_id
+    let resolver_state = ctx.resolver_state();
+    let mut node_static_analysis_off = false;
+    // Iterate over all nodes
+    for (node_unique_id, node) in resolver_state.nodes.iter() {
+        // If a node is a model, seed, snapshot, or source (testable nodes)
+        if node_unique_id.starts_with("model.")
+            || node_unique_id.starts_with("seed.")
+            || node_unique_id.starts_with("snapshot.")
+            || node_unique_id.starts_with("source.")
+        {
+            let node_relation = create_relation_from_node(ctx.adapter_type(), node, None)?;
+            let node_canonical_fqn = node_relation.get_canonical_fqn().ok();
+
+            // If we have a hit
+            if node_canonical_fqn.as_ref() == Some(&canonical_fqn) {
+                node_static_analysis_off =
+                    is_static_analysis_off_or_baseline(node.static_analysis().into_inner());
+                break;
+            }
+        }
+    }
+
+    if ctx.inner.execute.is_default() && !node_static_analysis_off {
+        return Err(fs_err!(
+            ErrorCode::Generic,
+            "Failed to get cached schema for {} '{}'",
+            schema_target.subject(),
+            relation.render_self_as_str()
+        ));
+    }
+
+    // Schema not in cache, needs async fetch
+    Ok(None)
+}
+
+/// Fetch schema for a relation from the warehouse without consulting the schema cache.
+async fn fetch_schema_for_unit_test_relation(
+    ctx: &TaskRunnerCtx,
+    relation: Arc<dyn BaseRelation>,
+    unit_test_unique_id: &str,
+    fetched: &mut HashSet<String>,
+    schema_target: UnitTestSchemaTarget,
+    task_hooks: Arc<dyn RenderTaskHooks>,
+) -> FsResult<SchemaRef> {
+    let canonical_fqn = relation.get_canonical_fqn()?;
+    let semantic_fqn = relation.semantic_fqn();
+    let err_subject = || {
+        format!(
+            "{} '{}'",
+            schema_target.subject(),
+            relation.render_self_as_str()
+        )
+    };
+
+    let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to fetch schema for {}: adapter unavailable",
+            err_subject()
+        )
+    })?;
+
+    task_hooks
+        .will_fetch_schema_for_unit_test_relation(
+            ctx,
+            unit_test_unique_id,
+            fetched,
+            &relation,
+            adapter.engine().type_ops(),
+        )
+        .await
+        .map_err(|e| {
+            fs_err!(
+                ErrorCode::Generic,
+                "Failed to query schema for {}: {}",
+                err_subject(),
+                e.message()
+            )
+        })?;
+
+    // `fetched` tracks fqns whose schemas are already populated in `schema_cache`
+    // during this call. On repeat, short-circuit to the cache.
+    if fetched.contains(&semantic_fqn) {
+        return ctx
+            .schema_cache
+            .get_schema_async(&canonical_fqn)
+            .await
+            .map(|entry| entry.inner().clone())
+            .ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::Generic,
+                    "Failed to retrieve schema from cache for {}",
+                    err_subject()
+                )
+            });
+    }
+
+    // Metadata-adapter path: non-sidecar modes and the sidecar `Ok(None)`
+    // fall-through both land here and query the warehouse catalog directly.
+    let Some(metadata_adapter) = adapter.metadata_adapter() else {
+        return Err(fs_err!(
+            ErrorCode::UnsupportedFeature,
+            "Adapter '{}' does not support metadata operations required to resolve {}",
+            adapter.adapter_type(),
+            schema_target.subject()
+        ));
+    };
+
+    let relations = vec![relation.clone()];
+    let schemas = metadata_adapter
+        .list_relations_sdf_schemas(
+            adapter.engine().as_ref(),
+            Some(unit_test_unique_id.to_string()),
+            Some(ExecutionPhase::Analyze),
+            &relations,
+            adapter.cancellation_token(),
+        )
+        .await
+        .map_err(|e| {
+            into_fs_error(e).with_context(format!(
+                "Failed to execute metadata adapter call to fetch schema for {}",
+                err_subject()
+            ))
+        })?;
+
+    let schema_res = schemas.get(&semantic_fqn).ok_or_else(|| {
+        fs_err!(
+            ErrorCode::RemoteError,
+            "No schema found for {}",
+            err_subject()
+        )
+    })?;
+    match schema_res {
+        Ok(schema) => {
+            let entry = ctx.schema_cache.register_schema(
+                &canonical_fqn,
+                schema.original().map(Arc::clone),
+                Arc::clone(schema.inner()),
+                true,
+            )?;
+            fetched.insert(semantic_fqn);
+            Ok(entry.inner().clone())
+        }
+        Err(err) => Err(into_fs_error(Cancellable::Error(err.clone()))
+            .with_context(format!(
+                "Remote database error while fetching schema for {}",
+                err_subject()
+            ))
+            .into()),
+    }
+}
+
+fn columns_to_schema(
+    type_ops: &dyn TypeOps,
+    columns: Vec<Column>,
+    unique_id: &str,
+) -> FsResult<SchemaRef> {
+    let mut fields = Vec::with_capacity(columns.len());
+
+    for column in columns {
+        let sql_type_str: Cow<str> = column
+            .original_sql_str()
+            .map(Cow::from)
+            .unwrap_or_else(|| column.data_type().into());
+
+        let field = make_arrow_field(
+            type_ops,
+            column.name().to_string(),
+            sql_type_str.as_ref(),
+            None,
+            None,
+        )
+        .map_err(|e| {
+            fs_err!(
+                ErrorCode::Generic,
+                "Failed to parse column type '{}' for unit test {}: {}",
+                sql_type_str,
+                unique_id,
+                e
+            )
+        })?;
+        fields.push(field);
+    }
+
+    Ok(Arc::new(Schema::new(fields)))
+}
+
+/// Infer schema by creating an empty relation and reading its metadata schema.
+fn populate_schema_from_empty_relation(
+    ctx: &TaskRunnerCtx,
+    unit_test: &DbtUnitTest,
+    compiled_model_sql: &str,
+    subqueries: &[(String, String)],
+    infer_with_query_schema: bool,
+) -> FsResult<SchemaRef> {
+    let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to fetch unit test schema: adapter unavailable"
+        )
+    })?;
+
+    let mut run_context = build_run_node_context(
+        unit_test,
+        &unit_test.deprecated_config,
+        ctx.adapter_type(),
+        None,
+        &ctx.inner.base_context,
+        &ctx.inner.arg.io,
+        None,
+        ctx.runtime_config().dependencies.keys().cloned().collect(),
+    );
+
+    // Ensure schema inference macro evaluation is node-scoped for replay and any other
+    // context-dependent adapter behavior.
+    //
+    // Without TARGET_UNIQUE_ID, replay sees an empty node_id ("node ") and disables test-temp
+    // alpha conversion, causing mismatches like `__dbt_tmp` vs `__dbt_tmp<digits>`.
+    run_context.insert(
+        minijinja::constants::TARGET_UNIQUE_ID.to_string(),
+        MinijinjaValue::from(unit_test.__common_attr__.unique_id.clone()),
+    );
+    run_context.insert(
+        minijinja::constants::TARGET_PACKAGE_NAME.to_string(),
+        MinijinjaValue::from(unit_test.__common_attr__.package_name.clone()),
+    );
+
+    if let Some(overrides) = &unit_test.__unit_test_attr__.overrides {
+        apply_unit_test_overrides(&mut run_context, overrides, ctx);
+    }
+
+    // This is a small part of the dbt-core unit test materialization logic that infers
+    // expected schema from the compiled SQL of the model being tested by creating an
+    // empty temporary table and inspecting its schema metadata.
+
+    // DuckDB connections are dropped and not returned to the thread-local cache,
+    // where temp tables are session-scoped. Sidecar/service adapter calls route
+    // DDL through an Execute task, which cannot handle Snowflake-qualified temp
+    // tables, so sidecar inference uses the query-schema path as well.
+    let materialization = if ctx.adapter_type() == AdapterType::DuckDB || infer_with_query_schema {
+        r#"
+  {% macro get_expected_columns(sql, select_sql_header) -%}
+      {%- if select_sql_header is not none -%}
+          {%- set select_sql_header = render(select_sql_header) -%}
+      {%- endif -%}
+      {%- set columns_in_relation = get_column_schema_from_query(sql, select_sql_header) -%}
+      {{ return(columns_in_relation) }}
+  {%- endmacro %}"#
+    } else {
+        r#"
+{% macro get_expected_columns(sql, select_sql_header) -%}
+    {%- if select_sql_header is not none -%}
+        {%- set select_sql_header = render(select_sql_header) -%}
+    {%- endif -%}
+    {%- set target_relation = this.incorporate(type='table') -%}
+    {%- set temp_relation = make_temp_relation(target_relation) -%}
+    {% do run_query(get_create_table_as_sql(True, temp_relation, get_empty_subquery_sql(sql, select_sql_header))) %}
+    {%- set columns_in_relation = adapter.get_columns_in_relation(temp_relation) -%}
+    {% do adapter.drop_relation(temp_relation) %}
+    {{ return(columns_in_relation) }}
+{%- endmacro %}"#
+    };
+
+    // Compile and run a one-off macro without registering it in the shared environment.
+    let unique_id = &unit_test.__common_attr__.unique_id;
+
+    // Schema-probe SQL: when the probe runs outside of default mode,
+    // rewrite every mocked subquery into a CTE because we have no warehouse to
+    // query. When it runs against the real warehouse, only rewrite ephemerals —
+    // non-ephemeral upstreams must remain real relation refs so the warehouse
+    // provides their schemas (e.g. for type-checking expect-row literals).
+    let rewrite_targets: Vec<(String, String)> = if infer_with_query_schema {
+        subqueries.to_vec()
+    } else {
+        subqueries
+            .iter()
+            .filter(|(id, _)| id.starts_with(DBT_CTE_PREFIX))
+            .cloned()
+            .collect()
+    };
+
+    let type_ops = adapter.engine().type_ops();
+    let schema_sql = replace_subquery_refs_with_cte_names(
+        ctx.adapter_type(),
+        type_ops.as_ref(),
+        compiled_model_sql.to_string(),
+        &rewrite_targets,
+    );
+
+    let ctes = rewrite_targets
+        .iter()
+        .filter_map(|(id, q)| {
+            let cte_name = create_cte_name_from_fqn(ctx.adapter_type(), type_ops.as_ref(), id);
+            if schema_sql.contains(&cte_name) {
+                Some(format!("{cte_name} as ({q})"))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let template = ctx.env.template_from_str(materialization).map_err(|e| {
+        fs_err!(
+            ErrorCode::JinjaError,
+            "Internal error while compiling macro to infer schema for unit test {}: {}",
+            unique_id,
+            e
+        )
+    })?;
+    let state = template.eval_to_state(run_context, &[]).map_err(|e| {
+        fs_err!(
+            ErrorCode::JinjaError,
+            "Internal error while preparing macro context to infer schema for unit test {}: {}",
+            unique_id,
+            e
+        )
+    })?;
+    let func = state.lookup("get_expected_columns", &[]).ok_or_else(|| {
+        fs_err!(
+            ErrorCode::Unexpected,
+            "Internal error: macro lookup failed while inferring schema for unit test {}",
+            unique_id
+        )
+    })?;
+
+    let mut args = vec![Value::from(schema_sql)];
+    if ctes.is_empty() {
+        args.push(Value::from(()));
+    } else {
+        args.push(Value::from(format!("WITH {ctes} ")));
+    }
+
+    let columns_as_value = func.call(&state, &args, &[]).map_err(|e| {
+        fs_err!(
+            ErrorCode::JinjaError,
+            "Internal error while evaluating macro to infer schema for unit test {}: {}",
+            unique_id,
+            e
+        )
+    })?;
+
+    let columns =
+        Column::vec_from_jinja_value(ctx.adapter_type(), columns_as_value).map_err(|e| {
+            fs_err!(
+                ErrorCode::Generic,
+                "Internal error while extracting columns from inferred schema for unit test {}: {}",
+                unit_test.__common_attr__.unique_id,
+                e
+            )
+        })?;
+
+    // TODO: we may want to register this schema in the cache as well
+    columns_to_schema(
+        adapter.engine().type_ops().as_ref(),
+        columns,
+        &unit_test.__common_attr__.unique_id,
+    )
+}
+
+fn bind_override_macros(
+    macros: &BTreeMap<String, YmlValue>,
+    compile_context: &mut BTreeMap<String, Value>,
+) {
+    for (macro_name, macro_value) in macros.iter() {
+        let return_value = MinijinjaValue::from_serialize(macro_value.clone());
+        let fn_stub =
+            MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| Ok(return_value.clone()));
+
+        // If a package already exists, merge the override in
+        if let Some((pkg, attr)) = macro_name.split_once(".") {
+            let object_stub = Value::from(BTreeMap::from([(attr, fn_stub)]));
+            let new_pkg = if let Some(og) = compile_context.remove(pkg) {
+                // Check `object_stub` first
+                Value::from_object(ObjectOverlay(vec![object_stub, og]))
+            } else {
+                object_stub
+            };
+
+            compile_context.insert(pkg.to_string(), new_pkg);
+        } else {
+            compile_context.insert(macro_name.to_string(), fn_stub);
+        }
+    }
+}
+
+/// Apply overrides to the compile context for unit tests
+pub fn apply_unit_test_overrides(
+    compile_context: &mut BTreeMap<String, MinijinjaValue>,
+    overrides: &UnitTestOverrides,
+    ctx: &TaskRunnerCtx,
+) {
+    // Override for Macros
+    if let Some(macros) = &overrides.macros {
+        bind_override_macros(macros, compile_context);
+    }
+
+    // Override for Environment Variables
+    if let Some(env_vars) = &overrides.env_vars {
+        // The overrides are [serde_json::YmlValue]s, but the overrides_fn uses
+        // [MinijinjaValue::from_serialize] to convert them into [minijinja::YmlValue]s.
+        let env_var_func_func = {
+            let the_overrides = env_vars.clone();
+            let overrides_fn =
+                move |var: &str| the_overrides.get(var).map(MinijinjaValue::from_serialize);
+            move |state: &State, args: &[MinijinjaValue]| {
+                env_var(
+                    true, // placeholder_on_secret_access
+                    Some(&overrides_fn),
+                    state,
+                    args,
+                )
+            }
+        };
+        compile_context.insert(
+            "env_var".to_string(),
+            MinijinjaValue::from_func_func("env_var", env_var_func_func),
+        );
+    }
+
+    // Override for Variables
+    if let Some(vars) = &overrides.vars {
+        let base_vars = ctx.inner.arg.vars.clone();
+        let overrides_map = Some(vars.clone());
+        compile_context.insert(
+            "var".to_string(),
+            MinijinjaValue::from_object(Var::with_overrides(base_vars, overrides_map)),
+        );
+    }
+}
+
+fn create_cte_name_from_fqn(
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    fqn: &str,
+) -> String {
+    let cte_name = fqn.replace(quote_char(adapter_type), "").replace(".", "_");
+    type_ops.format_ident(&cte_name)
+}
+
+fn replace_subquery_refs_with_cte_names(
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    mut sql: String,
+    subqueries: &[(String, String)],
+) -> String {
+    for (fqn, _) in subqueries
+        .iter()
+        .sorted_by_key(|(fqn, _)| std::cmp::Reverse(fqn.len()))
+    {
+        let formatted_cte_name = create_cte_name_from_fqn(adapter_type, type_ops, fqn);
+
+        if fqn.starts_with(quote_char(adapter_type)) || fqn.contains(".") {
+            sql = sql.replace(fqn, &formatted_cte_name);
+            continue;
+        }
+
+        let escaped = regex::escape(fqn);
+        let re = Regex::new(&format!(r"({escaped})\b")).expect("Must compile regexp");
+        sql = re
+            .replace_all(&sql, formatted_cte_name.as_str())
+            .to_string();
+    }
+    sql
+}
+
+/// Per-given: (rendered FQN string, relation Arc).
+type GivenRelations = Vec<(String, Arc<dyn BaseRelation>)>;
+/// Relations needing async schema fetch (cache misses).
+type RelationsToFetch = Vec<(Arc<dyn BaseRelation>, UnitTestSchemaTarget)>;
+
+#[derive(Default)]
+struct DiscoveredGivenRelations {
+    given_relations: GivenRelations,
+    relations_to_fetch: RelationsToFetch,
+    given_relation_ids: Vec<String>,
+}
+
+/// A `RenderingEventListener` that collects unique IDs from resolved
+/// source and ref calls
+#[derive(Debug, Default)]
+struct UnitTestGivenCapture {
+    pub uids: RefCell<Vec<String>>,
+}
+
+impl UnitTestGivenCapture {
+    fn new() -> Rc<UnitTestGivenCapture> {
+        Rc::new(UnitTestGivenCapture::default())
+    }
+}
+
+impl RenderingEventListener for UnitTestGivenCapture {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn name(&self) -> &str {
+        "UnitTestGivenCapture"
+    }
+    fn on_macro_start(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+    fn on_macro_stop(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+    fn on_malicious_return(&self, _location: &CodeLocation) {}
+    fn on_function_start(&self) {}
+    fn on_function_end(&self) {}
+
+    /// Collect all unique IDs encountered for given source/ref eval
+    fn on_ref_or_source_resolved(&self, unique_id: &str) {
+        self.uids.borrow_mut().push(unique_id.to_string());
+    }
+}
+
+fn row_column_names_or_default<'a>(
+    rows: &[BTreeMap<String, YmlValue>],
+    column_names: Vec<&'a str>,
+    expect_schema: &'a SchemaRef,
+) -> Vec<&'a str> {
+    if rows.is_empty() {
+        column_names
+    } else {
+        let names = rows[0]
+            .keys()
+            .map(|k| k.to_ascii_lowercase())
+            .collect::<HashSet<_>>();
+        expect_schema
+            .fields
+            .iter()
+            .filter_map(|f| {
+                if names.contains(&f.name().to_ascii_lowercase()) {
+                    Some(f.name().as_str())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
+fn extract_expect_values<'a>(
+    ctx: &TaskRunnerCtx,
+    unit_test: &DbtUnitTest,
+    expect_schema: &'a SchemaRef,
+) -> FsResult<(String, Vec<&'a str>)> {
+    let type_ops_arc = ctx
+        .env
+        .get_base_adapter()
+        .map(|a| a.engine().type_ops().clone())
+        .unwrap_or_else(|| Arc::new(DefaultTypeOps::new(ctx.adapter_type())) as Arc<dyn TypeOps>);
+    let type_ops = type_ops_arc.as_ref();
+    let column_names = Vec::from_iter(
+        expect_schema
+            .fields()
+            .into_iter()
+            .map(|field| field.name().as_str()),
+    );
+
+    let expect_rows = &unit_test.__unit_test_attr__.expect.rows;
+    let expect_fixture = &unit_test.__unit_test_attr__.expect.fixture;
+    let expect_format = &unit_test.__unit_test_attr__.expect.format;
+
+    match (expect_format, expect_fixture, expect_rows) {
+        // dict
+        (schemas::common::Formats::Dict, _, Some(Rows::List(rows))) => Ok((
+            create_values(
+                expect_schema,
+                rows,
+                ctx.adapter_type(),
+                type_ops,
+                None,
+                &unit_test.__unit_test_attr__.model,
+            )?,
+            row_column_names_or_default(rows, column_names, expect_schema),
+        )),
+        (schemas::common::Formats::Dict, _, _) => Err(fs_err!(
+            ErrorCode::NotYetSupportedOption,
+            "Unit test {} is invalid. Format `dict` only supports inline YAML rows.",
+            unit_test.__common_attr__.name
+        )),
+        // csv (inline string)
+        (schemas::common::Formats::Csv, _, Some(Rows::String(csv_str))) => {
+            let rows = parse_csv_rows(csv_str.as_bytes()).map_err(|e| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Failed to parse expected value in unit test '{}' (model '{}'). {}",
+                    unit_test.__common_attr__.name,
+                    unit_test.__unit_test_attr__.model,
+                    e
+                )
+            })?;
+            Ok((
+                create_values(
+                    expect_schema,
+                    &rows,
+                    ctx.adapter_type(),
+                    type_ops,
+                    None,
+                    &unit_test.__unit_test_attr__.model,
+                )?,
+                row_column_names_or_default(&rows, column_names, expect_schema),
+            ))
+        }
+        (schemas::common::Formats::Csv, _, Some(Rows::List(_))) => Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "Unit test {} is invalid. Format `csv` only supports inline string rows or fixture files",
+            unit_test.__common_attr__.name
+        )),
+        (schemas::common::Formats::Sql, _, Some(Rows::List(_))) => Err(fs_err!(
+            ErrorCode::NotYetSupportedOption,
+            "Unit test {} is invalid. Format `sql` only supports inline string rows or fixture files",
+            unit_test.__common_attr__.name
+        )),
+        // sql (raw fixture, or inline string)
+        (schemas::common::Formats::Sql, _, Some(Rows::String(sql))) => {
+            Ok((sql.to_string(), column_names))
+        }
+        (schemas::common::Formats::Sql, Some(fixture), _) => {
+            let filename = ctx.inner.arg.io.in_dir.join(fixture.clone());
+            Ok((stdfs::read_to_string(filename)?, column_names))
+        }
+        // all other raw fixture values
+        (_, Some(fixture), _) => {
+            let rows = get_fixture_rows(fixture, &unit_test.__unit_test_attr__.expect.format, ctx)?;
+            Ok((
+                create_values(
+                    expect_schema,
+                    &rows,
+                    ctx.adapter_type(),
+                    type_ops,
+                    None,
+                    &unit_test.__unit_test_attr__.model,
+                )?,
+                row_column_names_or_default(&rows, column_names, expect_schema),
+            ))
+        }
+        (_, _, _) => Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "The unit test {} has no fixture",
+            unit_test.__common_attr__.name
+        )),
+    }
+}
+
+/// Step 0 (blocking): Eval Jinja for each `given` input to discover relations.
+/// Returns the resolved relations and any that need async schema fetching.
+fn discover_given_relations(
+    ut: &DbtUnitTest,
+    ctx: &mut TaskRunnerCtx,
+) -> FsResult<DiscoveredGivenRelations> {
+    let mut base_context = ctx.inner.base_context.clone();
+    add_task_context(&mut base_context, ut.common(), &ctx.thread_id);
+
+    let (compile_context, _config_map) = ctx.build_compile_node_context(
+        ut,
+        &base_context,
+        DependencyValidationConfig::new_unvalidated(),
+    );
+
+    let mut given_relations = Vec::new();
+    let mut relations_to_fetch = Vec::new();
+    let mut listeners = ctx.rendering_listener_factory.create_listeners(
+        &ut.__common_attr__.path,
+        &dbt_frontend_common::error::CodeLocation::start_of_file(),
+    );
+
+    let given_capture = UnitTestGivenCapture::new();
+    listeners.push(Rc::clone(&given_capture) as Rc<dyn RenderingEventListener>);
+
+    for given in &ut.__unit_test_attr__.given {
+        let given_relation = {
+            ctx.env
+                .compile_expression(&given.input)?
+                .eval(compile_context.clone(), &listeners)?
+        };
+        let given_relation = given_relation
+            .as_object()
+            .expect("Failed to convert relation to object")
+            .downcast_ref::<RelationObject>()
+            .expect("Failed to downcast relation to object");
+
+        let fqn_string = given_relation.render_self_as_str();
+        let relation = given_relation.inner();
+
+        // SQL-format givens use raw SQL directly — no schema needed.
+        // Only check/fetch schemas for Dict and Csv formats.
+        if given.format != schemas::common::Formats::Sql {
+            let canonical_fqn = relation.get_canonical_fqn()?;
+            if !ctx.schema_cache.exists(&canonical_fqn) {
+                relations_to_fetch
+                    .push((Arc::clone(&relation), UnitTestSchemaTarget::GivenUpstream));
+            }
+        }
+
+        given_relations.push((fqn_string, relation));
+    }
+
+    // Check expect relation for incremental + SA-off case
+    let model_unique_id = get_unique_id(
+        &ut.__unit_test_attr__.model,
+        &ut.__common_attr__.package_name,
+        ut.__unit_test_attr__
+            .version
+            .as_ref()
+            .map(|v| v.to_string()),
+        "model",
+    );
+    let resolver_state = ctx.resolver_state();
+    let model_static_analysis_off = resolver_state
+        .nodes
+        .get_node(&model_unique_id)
+        .map(|node| is_static_analysis_off_or_baseline(node.static_analysis().into_inner()))
+        .unwrap_or(false);
+    let is_incremental = resolver_state
+        .nodes
+        .get_node(&model_unique_id)
+        .map(|node| node.materialized() == DbtMaterialization::Incremental)
+        .unwrap_or(false);
+
+    if model_static_analysis_off && is_incremental {
+        if let Some(expect_relation) = ctx.try_get_relation_from_node(&model_unique_id) {
+            let schema_relation = check_defer_relation(&model_unique_id, ctx)
+                .unwrap_or_else(|| expect_relation.clone());
+            let canonical_fqn = schema_relation.get_canonical_fqn()?;
+            if !ctx.schema_cache.exists(&canonical_fqn) {
+                relations_to_fetch.push((
+                    schema_relation,
+                    UnitTestSchemaTarget::ExpectedModel {
+                        incremental_expected_path: true,
+                    },
+                ));
+            }
+        }
+    }
+
+    listeners.clear();
+
+    let given_relation_ids = Rc::try_unwrap(given_capture)
+        .map(|c| c.uids.into_inner())
+        .unwrap_or_else(|rc| rc.uids.borrow().clone());
+
+    Ok(DiscoveredGivenRelations {
+        given_relations,
+        relations_to_fetch,
+        given_relation_ids,
+    })
+}
+
+/// Step 1 (async): Fetch missing schemas into the cache.
+async fn fetch_missing_schemas(
+    to_fetch: &[(Arc<dyn BaseRelation>, UnitTestSchemaTarget)],
+    unit_test_unique_id: &str,
+    ctx: &mut TaskRunnerCtx,
+    task_hooks: Arc<dyn RenderTaskHooks>,
+) -> FsResult<()> {
+    let mut fetched = HashSet::new();
+    for (relation, schema_target) in to_fetch {
+        fetch_schema_for_unit_test_relation(
+            ctx,
+            Arc::clone(relation),
+            unit_test_unique_id,
+            &mut fetched,
+            *schema_target,
+            task_hooks.clone(),
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+fn check_defer_relation(
+    model_unique_id: &str,
+    ctx: &TaskRunnerCtx,
+) -> Option<Arc<dyn BaseRelation>> {
+    ctx.defer_nodes()
+        .and_then(|nodes| nodes.get_node(model_unique_id))
+        .and_then(|defer_node| create_relation_from_node(ctx.adapter_type(), defer_node, None).ok())
+        .map(|r| Arc::from(r) as Arc<dyn BaseRelation>)
+}
+
+fn render_unit_test(
+    node: &DbtUnitTest,
+    ctx: &mut TaskRunnerCtx,
+    given_relations: DiscoveredGivenRelations,
+) -> FsResult<(SqlInstruction, Arc<DashMap<String, MinijinjaValue>>)> {
+    let DiscoveredGivenRelations {
+        given_relations,
+        given_relation_ids,
+        ..
+    } = given_relations;
+    let mut base_context = ctx.inner.base_context.clone();
+
+    add_task_context(&mut base_context, node.common(), &ctx.thread_id);
+
+    // Compiled path lives at target/compiled/<package>/<dir-of-yaml>/<unit_test_name>.sql.
+    let absolute_path_unit_test = node.get_node_path_abs(
+        NodePathKind::Compiled,
+        ctx.inner.arg.io.in_dir.as_path(),
+        ctx.inner.arg.io.out_dir.as_path(),
+    );
+    let new_macro_span_name = format!("{}.macro_spans.json", node.__common_attr__.name);
+    let absolute_path_macro_span = absolute_path_unit_test.with_file_name(&new_macro_span_name);
+    let relative_path_unit_test = absolute_path_unit_test
+        .strip_prefix(&ctx.inner.arg.io.out_dir)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|_| absolute_path_unit_test.clone());
+
+    let adapter_type = ctx.adapter_type();
+    let type_ops_arc = ctx
+        .env
+        .get_base_adapter()
+        .map(|a| a.engine().type_ops().clone())
+        .unwrap_or_else(|| Arc::new(DefaultTypeOps::new(adapter_type)) as Arc<dyn TypeOps>);
+    let type_ops = type_ops_arc.as_ref();
+
+    // Build compile context first so we can use it for rendering given_fqn
+    let (mut compile_context, config_map) = ctx.build_compile_node_context(
+        node,
+        &base_context,
+        DependencyValidationConfig::new_for_node(node)
+            .validate()
+            .allow_dependencies(given_relation_ids.iter()),
+    );
+
+    // Apply overrides to the compile context
+    if let Some(overrides) = &node.__unit_test_attr__.overrides {
+        apply_unit_test_overrides(&mut compile_context, overrides, ctx);
+    }
+
+    let model_unique_id = get_unique_id(
+        &node.__unit_test_attr__.model,
+        &node.__common_attr__.package_name,
+        node.__unit_test_attr__
+            .version
+            .as_ref()
+            .map(|v| v.to_string()),
+        "model",
+    );
+    let resolver_state = ctx.resolver_state();
+
+    // Build subqueries from pre-discovered relations (Step 0) + their schemas (now cached from Step 1).
+    let mut subqueries = Vec::new();
+    for (given_idx, ((fqn_string, relation), given)) in given_relations
+        .iter()
+        .zip(&node.__unit_test_attr__.given)
+        .enumerate()
+    {
+        let given_values = match given.format {
+            // SQL uses the string value verbatim
+            schemas::common::Formats::Sql => {
+                if let Some(fixture) = &given.fixture {
+                    let filename = ctx.inner.arg.io.in_dir.join(fixture.clone());
+                    stdfs::read_to_string(filename)?
+                } else if let Some(Rows::String(sql)) = &given.rows {
+                    sql.clone()
+                } else {
+                    return Err(fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "The unit test {} with sql format has no fixture",
+                        node.__common_attr__.name
+                    ));
+                }
+            }
+            // dict: inline YAML rows only
+            schemas::common::Formats::Dict => {
+                let given_schema = get_schema_for_unit_test_relation(
+                    ctx,
+                    Arc::clone(relation),
+                    UnitTestSchemaTarget::GivenUpstream,
+                )?;
+                if let Some(Rows::List(rows)) = &given.rows {
+                    create_values(
+                        &given_schema,
+                        rows,
+                        ctx.adapter_type(),
+                        type_ops,
+                        None,
+                        given.input.as_str(),
+                    )?
+                } else {
+                    return Err(fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Unit test {} is invalid. Format `dict` only supports inline YAML rows.",
+                        node.__common_attr__.name
+                    ));
+                }
+            }
+            // csv: inline string or fixture file
+            schemas::common::Formats::Csv => {
+                let given_schema = get_schema_for_unit_test_relation(
+                    ctx,
+                    Arc::clone(relation),
+                    UnitTestSchemaTarget::GivenUpstream,
+                )?;
+
+                if let Some(Rows::String(csv_str)) = &given.rows {
+                    let rows = parse_csv_rows(csv_str.as_bytes()).map_err(|e| {
+                        fs_err!(
+                            ErrorCode::InvalidConfig,
+                            "Failed to parse given value in unit test '{}' (given[{}], {}). {}",
+                            node.__common_attr__.name,
+                            given_idx + 1,
+                            given.input.as_str(),
+                            e
+                        )
+                    })?;
+                    create_values(
+                        &given_schema,
+                        &rows,
+                        ctx.adapter_type(),
+                        type_ops,
+                        None,
+                        given.input.as_str(),
+                    )?
+                } else if let Some(fixture) = &given.fixture {
+                    let rows = get_fixture_rows(fixture, &given.format, ctx)?;
+                    create_values(
+                        &given_schema,
+                        &rows,
+                        ctx.adapter_type(),
+                        type_ops,
+                        None,
+                        given.input.as_str(),
+                    )?
+                } else {
+                    return Err(fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Unit test {} is invalid. Format `csv` requires inline string rows or a fixture file.",
+                        node.__common_attr__.name
+                    ));
+                }
+            }
+        };
+
+        subqueries.push((fqn_string.clone(), given_values));
+    }
+    // create a subquery for expect...
+    // todo: updating the model with a unique id should be done already in parse?
+    let expect_relation = ctx
+        .try_get_relation_from_node(&model_unique_id)
+        .ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Unit test '{}' references model '{}' which was not found",
+                node.__common_attr__.name,
+                model_unique_id
+            )
+        })?;
+    let original_file_path = ctx
+        .try_get_model_original_file_path(&model_unique_id)
+        .ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Unit test '{}' references model '{}' but its file path was not found",
+                node.__common_attr__.name,
+                model_unique_id
+            )
+        })?;
+    let absolute_path = ctx
+        .inner
+        .arg
+        .io
+        .map_to_workspace_path(original_file_path, NodeType::Model);
+
+    let raw_sql = stdfs::read_to_string(&absolute_path).map_err(|e| {
+        fs_err!(
+            ErrorCode::IoError,
+            "Failed to read file: {} for fqn: {}",
+            e,
+            expect_relation.render_self_as_str()
+        )
+    })?;
+
+    let model_static_analysis_off = resolver_state
+        .nodes
+        .get_node(&model_unique_id)
+        .map(|node| is_static_analysis_off_or_baseline(node.static_analysis().into_inner()))
+        .unwrap_or(false);
+
+    let is_incremental = resolver_state
+        .nodes
+        .get_node(&model_unique_id)
+        .map(|node| node.materialized() == DbtMaterialization::Incremental)
+        .unwrap_or(false);
+
+    // Ephemeral models have no registered dataset, so the temp-table probe in
+    // `populate_schema_from_empty_relation` fails with "Dataset not found".
+    // Force the self-contained query-schema path instead.
+    let is_tested_model_ephemeral = resolver_state
+        .nodes
+        .get_node(&model_unique_id)
+        .map(|node| node.materialized() == DbtMaterialization::Ephemeral)
+        .unwrap_or(false);
+
+    // If `static_analysis_off` false, it means the model being tested may have an analysis phase.
+    // It would not have it if any of upstreams have static analysis off. So we try the schema,
+    // but allow using the dbt-core approach - by creating temporary empty relation from code to
+    // infer schema.
+    // For incremental models, we either rely on analysis phase or fail, as dbt-core doesn't allow
+    // inferring incremental model schema if it doesn't alredy exist.
+    let expect_schema = match (model_static_analysis_off, is_incremental) {
+        // (static analysis is off) + (incremental model): use prod relation from defer
+        // state if available (dev table may not exist yet during build --defer)
+        (true, true) => {
+            let schema_relation = check_defer_relation(&model_unique_id, ctx)
+                .unwrap_or_else(|| expect_relation.clone());
+            get_schema_for_unit_test_relation(
+                ctx,
+                schema_relation.clone(),
+                UnitTestSchemaTarget::ExpectedModel {
+                    incremental_expected_path: true,
+                },
+            )?
+        }
+        // (static analysis is on) + (incremental model): require cached schema.
+        (false, true) => {
+            let expect_cfqn = expect_relation.get_canonical_fqn().map_err(|e| {
+                fs_err!(
+                    ErrorCode::Unexpected,
+                    "Failed to get canonical FQN for unit test '{}': {}",
+                    node.__common_attr__.unique_id,
+                    e
+                )
+            })?;
+            ctx.schema_cache
+                .get_schema(&expect_cfqn)
+                .map(|entry| entry.inner().clone())
+                .ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::Unexpected,
+                        "Missing cached schema for unit test '{}'",
+                        node.__common_attr__.unique_id
+                    )
+                })?
+        }
+        // (static analysis is off) + (not incremental): infer schema via empty relation.
+        // (static analysis is on) + (not incremental): try cache, then infer schema.
+        (_, false) => {
+            let cached_schema = if !model_static_analysis_off {
+                let expect_cfqn = expect_relation.get_canonical_fqn().ok();
+                if let Some(cfqn) = expect_cfqn {
+                    ctx.schema_cache
+                        .get_schema(&cfqn)
+                        .map(|entry| entry.inner().clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(schema) = cached_schema {
+                schema
+            } else {
+                let compiled_model_sql = render_sql(
+                    &raw_sql,
+                    &ctx.env,
+                    &compile_context,
+                    ctx.rendering_listener_factory.as_ref(),
+                    original_file_path,
+                )?;
+                // `--dbt-replay` recordings come from warehouse builds, which
+                // infer non-ephemeral unit-test schemas via the temp-table
+                // probe. The query-schema path's `get_column_schema_from_query`
+                // calls have no matching records under replay, so when the
+                // active adapter is a replayer, fall back to the probe path.
+                // Ephemeral models keep the query-schema path regardless (the
+                // probe has no dataset for them — see `is_tested_model_ephemeral`).
+                let is_replaying = ctx
+                    .env
+                    .get_base_adapter()
+                    .is_some_and(|adapter| adapter.as_replay().is_some());
+                let infer_with_query_schema =
+                    is_tested_model_ephemeral || (!ctx.inner.execute.is_default() && !is_replaying);
+                populate_schema_from_empty_relation(
+                    ctx,
+                    node,
+                    compiled_model_sql.as_str(),
+                    &subqueries,
+                    infer_with_query_schema,
+                )?
+            }
+        }
+    };
+
+    let mut column_names_to_field_names: BTreeMap<String, &String> = BTreeMap::new();
+    let mut column_names_to_data_types: BTreeMap<String, &DataType> = BTreeMap::new();
+
+    for field in expect_schema.fields() {
+        column_names_to_data_types.insert(field.name().to_ascii_lowercase(), field.data_type());
+        column_names_to_field_names.insert(field.name().to_ascii_lowercase(), field.name());
+    }
+
+    let (expect_values, expected_column_names_to_compare) =
+        extract_expect_values(ctx, node, &expect_schema)?;
+
+    let model_catalog = expect_relation.get_database()?;
+    let model_schema = expect_relation.get_schema()?;
+    let model_alias = expect_relation.get_identifier()?;
+
+    let expect_table = format!("{model_alias}_expect");
+    let fqn_expect = format_fqn(type_ops, &model_catalog, &model_schema, &expect_table);
+    subqueries.push((fqn_expect.clone(), expect_values));
+
+    // create a subquery for the model
+    let actual_table = format!("{model_alias}_actual");
+    let fqn_actual = format_fqn(type_ops, &model_catalog, &model_schema, &actual_table);
+
+    subqueries.push((fqn_actual.clone(), raw_sql));
+
+    // now build the final query
+    let mut query_str = String::new();
+    // ... iterate over all subqueries
+    let mut subqueries_vec = vec![];
+    for (fqn, values) in &subqueries {
+        let query = format!("\t{fqn} as ({values})");
+        subqueries_vec.push(query);
+    }
+
+    // Create ORDER BY clause for all columns except actual_or_expected
+    // Filter to only include orderable columns
+    let orderable_columns: Vec<String> = expected_column_names_to_compare
+        .iter()
+        .filter_map(|col| {
+            let col_lower = col.to_ascii_lowercase();
+            let data_type = column_names_to_data_types.get(&col_lower)?;
+            let col_name = column_names_to_field_names.get(&col_lower)?;
+            if is_orderable_type(ctx.adapter_type(), data_type) {
+                Some(type_ops.format_ident(col_name))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let order_by_columns = if orderable_columns.is_empty() {
+        // If no columns are orderable, don't use ORDER BY
+        String::new()
+    } else {
+        orderable_columns.join(", ")
+    };
+
+    let order_by_clause = if order_by_columns.is_empty() {
+        String::new()
+    } else {
+        format!("ORDER BY {}", order_by_columns)
+    };
+
+    let expected_column_names_formatted = expected_column_names_to_compare
+        .iter()
+        .map(
+            |col| match column_names_to_field_names.get(&col.to_ascii_lowercase()) {
+                Some(col_name) => Ok(type_ops.format_ident(col_name)),
+                None => Err(fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Column {} could not be found",
+                    col
+                )),
+            },
+        )
+        .collect::<FsResult<Vec<String>>>()?
+        .join(", ");
+
+    query_str.push_str(&format!(
+        r#"-- Build actual result given inputs
+WITH
+            {}
+        (SELECT {}, 'actual' AS actual_or_expected FROM {})
+        UNION ALL
+        (SELECT {}, 'expected' AS actual_or_expected FROM {})
+        {}"#,
+        subqueries_vec.join(",\n  "),
+        expected_column_names_formatted,
+        fqn_actual,
+        expected_column_names_formatted,
+        fqn_expect,
+        order_by_clause
+    ));
+
+    // create a subquery for the actual value ...
+
+    let rendered_sql = render_sql(
+        &query_str,
+        &ctx.env,
+        &compile_context,
+        ctx.rendering_listener_factory.as_ref(),
+        original_file_path,
+    )
+    .map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Error rendering unit test '{}': Please pay attention to fixture files: {}",
+            node.__common_attr__.name,
+            e
+        )
+    })
+    .map_err(|e| e.with_location(original_file_path.clone()))?;
+    let macro_spans = ctx
+        .rendering_listener_factory
+        .drain_macro_spans(original_file_path);
+
+    // todo: use Jinja to render all refs, here we just replace the fqns with the actual values
+    let rendered_sql =
+        replace_subquery_refs_with_cte_names(adapter_type, type_ops, rendered_sql, &subqueries);
+
+    stdfs::create_dir_all(absolute_path_unit_test.parent().unwrap())?;
+    stdfs::write(&absolute_path_unit_test, &rendered_sql)?;
+
+    // todo: the macro spans are off: render the whole query, not just the actual sql model
+    let macro_spans = macro_spans_to_macro_span_vec(&macro_spans);
+    stdfs::write(
+        absolute_path_macro_span,
+        serde_json::to_string_pretty(&macro_spans).unwrap(),
+    )?;
+
+    Ok((
+        SqlInstruction {
+            fqn: vec![
+                node.__base_attr__.database.clone(),
+                node.__base_attr__.schema.clone(),
+                node.__common_attr__.name.clone(),
+            ],
+            sql: rendered_sql,
+            macro_spans,
+            original_path: relative_path_unit_test,
+        },
+        config_map,
+    ))
+}
+
+fn format_fqn(type_ops: &dyn TypeOps, catalog: &str, schema: &str, table: &str) -> String {
+    format!(
+        "{}.{}.{}",
+        type_ops.format_ident(catalog),
+        type_ops.format_ident(schema),
+        type_ops.format_ident(table),
+    )
+}
+
+// types supported in ORDER BY clauses
+fn is_orderable_type(adapter_type: AdapterType, data_type: &DataType) -> bool {
+    match adapter_type {
+        AdapterType::Bigquery => {
+            !data_type.is_nested()
+                && !BigqueryTyping::is_json(data_type)
+                && !BigqueryTyping::is_geography(data_type)
+        }
+        // TODO(jason): Update this as more complex types are supported
+        _ => is_supported_type(adapter_type, data_type),
+    }
+}
+
+// Check if this is a data type we provide support for
+fn is_supported_type(adapter_type: AdapterType, ref_type: &DataType) -> bool {
+    ref_type.is_primitive()
+        || matches!(
+            ref_type,
+            DataType::Utf8
+                | DataType::Utf8View
+                | DataType::LargeUtf8
+                | DataType::Binary
+                | DataType::LargeBinary
+                | DataType::Boolean
+                | DataType::Null
+        )
+        || match adapter_type {
+            AdapterType::Snowflake => {
+                SnowflakeTyping::is_any_timestamp(ref_type).is_yes()
+                    || SnowflakeTyping::is_semi_structured_array(ref_type)
+                    || SnowflakeTyping::is_variant(ref_type)
+                    || SnowflakeTyping::is_object(ref_type)
+                    || SnowflakeTyping::is_geography(ref_type)
+                    || SnowflakeTyping::is_geometry(ref_type)
+            }
+            AdapterType::Bigquery => {
+                // Support Arrays and Structs for BigQuery
+                matches!(ref_type, DataType::List(_) | DataType::Struct(_))
+                    || BigqueryTyping::is_json(ref_type)
+                    || BigqueryTyping::is_geography(ref_type)
+            }
+            AdapterType::DuckDB => {
+                // DuckDB distinct types are wrapped as FixedSizeList(Field(name, ..), 1)
+                matches!(ref_type, DataType::FixedSizeList(_, 1))
+            }
+            _ => false,
+        }
+}
+
+/// Renders a `dbt_yaml::value::Sequence` to a SQL literal expression. All dialects
+/// other than Snowflake (which supports heterogeneous arrays) have explicit casts
+/// for each element.
+fn yml_sequence_to_sql_literal(
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    value: dbt_yaml::value::Sequence,
+    parent_data_type: &DataType,
+) -> FsResult<String> {
+    let (DataType::List(element_field)
+    | DataType::LargeList(element_field)
+    | DataType::FixedSizeList(element_field, _)) = parent_data_type
+    else {
+        return Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "Array value provided for non-array type: {:?}",
+            parent_data_type
+        ));
+    };
+    let mut element_type_literal = String::new();
+    type_ops
+        .format_arrow_type_as_sql(element_field.data_type(), &mut element_type_literal)
+        .map_err(|e| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Failed to format element type {:?}: {}",
+                element_field.data_type(),
+                e
+            )
+        })?;
+
+    // Snowflake's containers are 'untyped' and can be heterogeneous, e.g.
+    // SELECT ARRAY_CONSTRUCT(1, 'two')
+    let supports_hlist = adapter_type == AdapterType::Snowflake;
+
+    let child_literals = value
+        .into_iter()
+        .map(|v| {
+            let literal =
+                yml_value_to_sql_literal(adapter_type, type_ops, v, element_field.data_type())?;
+
+            if supports_hlist || element_field.data_type().is_nested() {
+                Ok(literal)
+            } else {
+                Ok(format!("CAST({} AS {})", literal, element_type_literal))
+            }
+        })
+        .collect::<FsResult<Vec<_>>>()?;
+
+    Ok(format!("[{}]", child_literals.join(", ")))
+}
+
+/// Renders a `dbt_yaml::value::Mapping` to a SQL literal expression. All dialects
+/// other than Snowflake use STRUCT() and each field's concrete type; Snowflake
+/// flattens the mapping back into JSON and uses JSON_PARSE
+fn yml_mapping_to_sql_literal(
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    sql_literal_formatter: &SqlLiteralFormatter,
+    mapping: dbt_yaml::mapping::Mapping,
+    parent_data_type: &DataType,
+) -> FsResult<String> {
+    match adapter_type {
+        // We represent structs as a list with an arrow bin type object
+        AdapterType::Snowflake => {
+            let json_str = serde_json::to_string(&mapping).map_err(|_| {
+                fs_err!(
+                    ErrorCode::InvalidArgument,
+                    "Unable to serialize struct field"
+                )
+            })?;
+
+            Ok(format!(
+                "PARSE_JSON({})",
+                sql_literal_formatter.format_str(&json_str)
+            ))
+        }
+        // We have type information for individual struct fields
+        _ => {
+            let DataType::Struct(fields) = parent_data_type else {
+                return Err(fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Object value provided for non-struct type: {:?}",
+                    parent_data_type
+                ));
+            };
+
+            let struct_fields: Vec<String> = fields
+                .iter()
+                .map(|field| {
+                    let field_name = field.name();
+                    let field_value = mapping
+                        .get(field_name)
+                        .cloned()
+                        .unwrap_or_else(YmlValue::null);
+                    let value_literal = yml_value_to_sql_literal(
+                        adapter_type,
+                        type_ops,
+                        field_value,
+                        field.data_type(),
+                    )?;
+                    let name_literal = type_ops.format_ident(field_name);
+                    Ok(format!("{value_literal} AS {name_literal}"))
+                })
+                .collect::<FsResult<Vec<_>>>()?;
+            Ok(format!("STRUCT({})", struct_fields.join(", ")))
+        }
+    }
+}
+
+/// Converts a yaml value to a String literal for the given adapter type
+fn yml_value_to_sql_literal(
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    value: YmlValue,
+    data_type: &DataType,
+) -> FsResult<String> {
+    let literal_formatter = SqlLiteralFormatter::new(adapter_type);
+
+    match value {
+        // Scalars are handled the same across dialects
+        YmlValue::Null(_) => Ok(literal_formatter.none_value()),
+        YmlValue::Bool(b, _) => Ok(literal_formatter.format_bool(b)),
+        YmlValue::Number(n, _) => Ok(n.to_string()),
+        YmlValue::String(s, _) => Ok(literal_formatter.format_str(&s)),
+        // Mappings/sequences have per-dialect customizations
+        YmlValue::Mapping(m, _) => {
+            yml_mapping_to_sql_literal(adapter_type, type_ops, &literal_formatter, m, data_type)
+        }
+        YmlValue::Sequence(s, _) => {
+            yml_sequence_to_sql_literal(adapter_type, type_ops, s, data_type)
+        }
+        _ => err!(
+            ErrorCode::InvalidConfig,
+            "Unsupported JSON value type: {value:?}"
+        ),
+    }
+}
+
+fn columns_to_formatted_types<'a>(
+    ref_schema: &'a SchemaRef,
+    type_ops: &dyn TypeOps,
+) -> FsResult<Vec<(&'a String, &'a DataType, String)>> {
+    ref_schema
+        .fields()
+        .iter()
+        .map(|f| {
+            let mut formatted = String::new();
+            type_ops
+                .format_arrow_type_as_sql(f.data_type(), &mut formatted)
+                .map_err(|e| {
+                    fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Failed to format type {:?}: {}",
+                        f.data_type(),
+                        e
+                    )
+                })?;
+            Ok((f.name(), f.data_type(), formatted))
+        })
+        .collect::<FsResult<Vec<_>>>()
+}
+
+/// Reference: https://github.com/dbt-labs/dbt-adapters/blob/60fc903f705f447a7b58d0df6b33d7be7cd00690/dbt-adapters/src/dbt/include/global_project/macros/unit_test_sql/get_fixture_sql.sql#L51
+fn create_values(
+    ref_schema: &SchemaRef,
+    rows: &[BTreeMap<String, YmlValue>],
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    named_column: Option<(String, YmlValue)>,
+    relation_name: &str,
+) -> FsResult<String> {
+    let columns = columns_to_formatted_types(ref_schema, type_ops)?;
+
+    let mut enriched_rows = vec![];
+    for (i, row) in rows.iter().enumerate() {
+        let mut input_row = row
+            .iter()
+            .map(|(k, v)| (k.to_ascii_lowercase(), v))
+            .collect::<BTreeMap<_, _>>();
+        let mut enriched_row = vec![];
+        for ref_field in ref_schema.fields() {
+            let ref_name = ref_field.name();
+            let ref_type = ref_field.data_type();
+
+            // Either a value exists, or we push NULL and move on
+
+            let Some(row_value) = input_row.remove(&ref_name.to_ascii_lowercase()) else {
+                enriched_row.push(YmlValue::null());
+                continue;
+            };
+
+            if !is_supported_type(adapter_type, ref_type) {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "The column '{}' has a non-primitive type '{}'. Only primitive types like numeric, temporal and varchar are supported for unit_testing{}",
+                    ref_name,
+                    ref_type.to_string(),
+                    match adapter_type {
+                        AdapterType::Bigquery => ", plus ARRAY and STRUCT types for BigQuery",
+                        _ => "",
+                    }
+                );
+            }
+            // todo: this is a hack to handle null values in a more robust way, but maybe we should only allows this if the column is nullable?
+            // if the value is null or a string "null", we push a null value
+            if row_value.is_null()
+                || row_value.is_string() && (row_value.as_str().unwrap()).to_lowercase() == "null"
+            {
+                enriched_row.push(YmlValue::null());
+            } else {
+                enriched_row.push(row_value.clone());
+            }
+        }
+
+        if !input_row.is_empty() {
+            let invalid_columns: Vec<_> = input_row.keys().collect();
+            let accepted_columns: Vec<_> = ref_schema
+                .fields()
+                .iter()
+                .map(|f| f.name().as_str())
+                .collect();
+            warn!(
+                "Invalid column name(s): {} in row {} of unit test fixture for '{relation_name}'. Accepted columns are: {:?}",
+                invalid_columns.iter().map(|c| format!("'{c}'")).join(", "),
+                i + 1,
+                accepted_columns
+            );
+        }
+
+        enriched_rows.push(enriched_row);
+    }
+
+    let constant_column = if let Some((column_name, column_value)) = named_column {
+        format!(", {column_value:?} AS {column_name}")
+    } else {
+        "".to_string()
+    };
+
+    match adapter_type {
+        AdapterType::Bigquery => {
+            // For BigQuery, just use the UNNEST clause directly
+            // https://github.com/dbt-labs/fs/issues/3964
+            let values_clause = create_bigquery_relation_to_select_from(
+                type_ops,
+                enriched_rows,
+                ref_schema,
+                &columns,
+            )?;
+            Ok(format!(
+                "SELECT * {constant_column} FROM {{% raw %}}{values_clause}{{% endraw %}}"
+            ))
+        }
+        _ => {
+            // Use UNION ALL approach - much cleaner and more efficient!
+            let query = create_select_with_union_all(
+                adapter_type,
+                type_ops,
+                enriched_rows,
+                ref_schema,
+                &columns,
+                &constant_column,
+            )?;
+            Ok(format!("{{% raw %}}{query}{{% endraw %}}"))
+        }
+    }
+}
+
+fn create_select_with_union_all(
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    enriched_rows: Vec<Vec<YmlValue>>,
+    ref_schema: &SchemaRef,
+    columns: &Vec<(&String, &DataType, String)>,
+    constant_column: &str,
+) -> FsResult<String> {
+    if enriched_rows.is_empty() {
+        // Handle empty case with NULL values
+        let null_casts: Vec<String> = columns
+            .iter()
+            .map(|(name, df_type, formatted_type)| {
+                let formatted_name = type_ops.format_ident(name);
+                let ty = match formatted_type.as_str() {
+                    "null" => "varchar",
+                    _ => formatted_type,
+                };
+
+                match adapter_type {
+                    AdapterType::Snowflake if SnowflakeTyping::is_geography(df_type) => {
+                        Ok(format!("TO_GEOGRAPHY(NULL) AS {formatted_name}"))
+                    }
+                    AdapterType::Snowflake if SnowflakeTyping::is_geometry(df_type) => {
+                        Ok(format!("TO_GEOMETRY(NULL) AS {formatted_name}"))
+                    }
+                    _ => Ok(format!("CAST(NULL AS {ty}) AS {formatted_name}")),
+                }
+            })
+            .collect::<FsResult<Vec<_>>>()?;
+        // Use WHERE FALSE to ensure 0 rows are returned while preserving the schema
+        return Ok(format!(
+            "SELECT {}{} WHERE FALSE",
+            null_casts.join(", "),
+            constant_column
+        ));
+    }
+
+    let select_statements: Vec<String> = enriched_rows
+        .into_iter()
+        .map(|row| {
+            let cast_expressions: Vec<String> = row
+                .iter()
+                .zip(ref_schema.fields())
+                .enumerate()
+                .map(|(i, (value, field))| {
+                    let sql_literal = yml_value_to_sql_literal(adapter_type, type_ops, value.clone(), field.data_type())?;
+                    let can_cast = type_ops
+                        .can_cast_literal_to_type(&sql_literal, field.data_type())
+                        .map_err(|e| fs_err!(
+                            ErrorCode::InvalidConfig,
+                            "The column '{}' has a literal '{}' that is not compatible with the type '{}' of the reference table: {}",
+                            field.name(),
+                            sql_literal,
+                            field.data_type(),
+                            e,
+                        ))?;
+                    if !can_cast {
+                        return err!(
+                            ErrorCode::InvalidConfig,
+                            "The column '{}' has a literal '{}' that is not compatible with the type '{}' of the reference table",
+                            field.name(),
+                            sql_literal,
+                            field.data_type().to_string()
+                        );
+                    }
+                    let (name, df_type, ty) = &columns[i];
+                    let formatted_name = type_ops.format_ident(name);
+                    let ty = match ty.as_str() {
+                        "null" => "varchar",
+                        _ => ty,
+                    };
+                    // if a cast is to a type of the form NUMBER(x,0), change it to just NUMBER
+                    let ty = if ty.starts_with("NUMBER(") && ty.ends_with(",0)") {
+                        "NUMBER"
+                    } else {
+                        ty
+                    };
+
+                    match adapter_type {
+                        AdapterType::Snowflake if SnowflakeTyping::is_geography(df_type) =>
+                            Ok(format!("TO_GEOGRAPHY({sql_literal}) AS {formatted_name}")),
+                        AdapterType::Snowflake if SnowflakeTyping::is_geometry(df_type) =>
+                            Ok(format!("TO_GEOMETRY({sql_literal}) AS {formatted_name}")),
+                        _ => Ok(format!("CAST({sql_literal} AS {ty}) AS {formatted_name}"))
+                    }
+                })
+                .collect::<FsResult<Vec<_>>>()?;
+            Ok(format!(
+                "SELECT {}{}",
+                cast_expressions.join(", "),
+                constant_column
+            ))
+        })
+        .collect::<FsResult<Vec<_>>>()?;
+
+    Ok(select_statements.join("\nUNION ALL\n"))
+}
+
+fn create_bigquery_relation_to_select_from(
+    type_ops: &dyn TypeOps,
+    enriched_rows: Vec<Vec<YmlValue>>,
+    schema: &SchemaRef,
+    columns: &Vec<(&String, &DataType, String)>,
+) -> FsResult<String> {
+    let columns_mapped: BTreeMap<String, String> = columns
+        .iter()
+        .map(|(col, _, ty)| (col.to_lowercase(), ty.clone()))
+        .collect();
+    let struct_values: Vec<String> = enriched_rows
+        .into_iter()
+        .map(|row| {
+            let struct_fields: Vec<String> = row
+                .into_iter()
+                .enumerate()
+                .map(|(i, value)| {
+                    let field_name = schema.field(i).name().to_lowercase();
+                    let formatted_name = &type_ops.format_ident(&field_name);
+                    let formatted_value = yml_value_to_sql_literal(
+                        AdapterType::Bigquery,
+                        type_ops,
+                        value,
+                        schema.field(i).data_type(),
+                    )?;
+
+                    // format cast target
+                    let bigquery_type = columns_mapped.get(&field_name).ok_or_else(|| {
+                        fs_err!(
+                            ErrorCode::InvalidConfig,
+                            "Column type not found for field: {}",
+                            field_name
+                        )
+                    })?;
+
+                    Ok(format!(
+                        "CAST({formatted_value} AS {bigquery_type}) AS {formatted_name}"
+                    ))
+                })
+                .collect::<FsResult<Vec<_>>>()?;
+            Ok(format!("STRUCT({})", struct_fields.join(", ")))
+        })
+        .collect::<FsResult<Vec<_>>>()?;
+
+    if struct_values.is_empty() {
+        // Generate a typed empty array that returns 0 rows with correct schema
+        // e.g., UNNEST(ARRAY<STRUCT<id INT64, name STRING>>[])
+        let struct_fields: Vec<String> = columns
+            .iter()
+            .map(|(name, _, ty)| {
+                let formatted_name = type_ops.format_ident(name);
+                format!("{formatted_name} {ty}")
+            })
+            .collect();
+        Ok(format!(
+            "UNNEST(ARRAY<STRUCT<{}>>[])",
+            struct_fields.join(", ")
+        ))
+    } else {
+        Ok(format!("UNNEST([{}])", struct_values.join(", ")))
+    }
+}
+
+/// generate the unique id for a model (can be made more extensible for each type of node)
+/// Copied from parse.rs
+fn get_unique_id(
+    model_name: &str,
+    package_name: &str,
+    version: Option<String>,
+    node_type: &str,
+) -> String {
+    if let Some(version) = version {
+        format!("{node_type}.{package_name}.{model_name}.v{version}")
+    } else {
+        format!("{node_type}.{package_name}.{model_name}")
+    }
+}
+
+fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .from_reader(Cursor::new(data));
+
+    let headers = reader
+        .headers()
+        .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "Failed to read headers: {}", e))?
+        .clone();
+    let mut rows = Vec::new();
+
+    for result in reader.records() {
+        let record = result
+            .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "Failed to read record: {}", e))?;
+        let mut row = BTreeMap::new();
+        for (i, field) in record.iter().enumerate() {
+            let value = if field.is_empty() {
+                YmlValue::null()
+            } else if let Ok(v) = field.parse::<i64>() {
+                YmlValue::number(v.into())
+            } else if let Ok(v) = field.parse::<f64>() {
+                YmlValue::number(v.into())
+            } else if field.eq_ignore_ascii_case("true") {
+                YmlValue::bool(true)
+            } else if field.eq_ignore_ascii_case("false") {
+                YmlValue::bool(false)
+            } else {
+                YmlValue::string(field.to_string())
+            };
+            row.insert(headers[i].to_string(), value);
+        }
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
+fn get_fixture_rows(
+    fixture: &str,
+    format: &schemas::common::Formats,
+    ctx: &TaskRunnerCtx,
+) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
+    match format {
+        schemas::common::Formats::Dict => Err(fs_err!(
+            ErrorCode::NotYetSupportedOption,
+            "The unit test {} has a dict format, which is not supported yet",
+            fixture
+        )),
+        schemas::common::Formats::Csv => {
+            let fixture_path = ctx.inner.arg.io.in_dir.join(fixture);
+            let file = stdfs::read(&fixture_path)?;
+            parse_csv_rows(&file).map_err(|e| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Failed to parse fixture '{}'. {}",
+                    fixture_path.display(),
+                    e
+                )
+            })
+        }
+        schemas::common::Formats::Sql => Err(fs_err!(
+            ErrorCode::NotYetSupportedOption,
+            "The unit test {} has a sql format, which is not supported yet",
+            fixture
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+    use dbt_test_primitives::assert_contains;
+
+    type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn test_create_cte_name_from_fqn_with_bigquery_backticks() {
+        let adapter_type = AdapterType::Bigquery;
+        let fqn = "`project.dataset.table`";
+        let result =
+            create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
+        assert_eq!(result, "project_dataset_table");
+    }
+
+    #[test]
+    fn test_create_cte_name_from_fqn_with_snowflake_quotes() {
+        let adapter_type = AdapterType::Snowflake;
+        let fqn = "database.schema.table";
+        let result =
+            create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
+        assert_eq!(result, "\"database_schema_table\"");
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_with_simple_data() {
+        let fields = vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, true),
+            Field::new("active", DataType::Boolean, false),
+        ];
+        let schema = Arc::new(Schema::new(fields));
+        let id = "id".to_string();
+        let name = "name".to_string();
+        let active = "active".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "INT64".to_string()),
+            (&name, &DataType::Utf8, "STRING".to_string()),
+            (&active, &DataType::Boolean, "BOOL".to_string()),
+        ];
+        let enriched_rows = vec![
+            vec![
+                YmlValue::number(1.into()),
+                YmlValue::string("Alice".to_string()),
+                YmlValue::bool(true),
+            ],
+            vec![
+                YmlValue::number(2.into()),
+                YmlValue::string("Bob".to_string()),
+                YmlValue::bool(false),
+            ],
+        ];
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            enriched_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+        // Should generate UNNEST with STRUCT values
+        assert_contains!(result, "UNNEST");
+        assert_contains!(result, "STRUCT");
+        assert_contains!(result, "CAST(1 AS INT64) AS id");
+        assert_contains!(result, "CAST('Alice' AS STRING) AS name");
+        assert_contains!(result, "CAST(true AS BOOL) AS active");
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_with_nulls() {
+        let fields = vec![
+            Field::new("id", DataType::Int64, true),
+            Field::new("description", DataType::Utf8, true),
+        ];
+        let schema = Arc::new(Schema::new(fields));
+        let id = "id".to_string();
+        let description = "description".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "INT64".to_string()),
+            (&description, &DataType::Utf8, "STRING".to_string()),
+        ];
+        let enriched_rows = vec![
+            vec![YmlValue::number(1.into()), YmlValue::null()],
+            vec![YmlValue::null(), YmlValue::string("Test".to_string())],
+        ];
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            enriched_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+        assert_contains!(result, "UNNEST");
+        assert_contains!(result, "CAST(NULL AS INT64) AS id");
+        assert_contains!(result, "CAST('Test' AS STRING) AS description");
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_empty_rows() {
+        let fields = vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+        ];
+        let schema = Arc::new(Schema::new(fields));
+        let id = "id".to_string();
+        let name = "name".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "INT64".to_string()),
+            (&name, &DataType::Utf8, "STRING".to_string()),
+        ];
+        let enriched_rows = vec![];
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            enriched_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+        // Should generate typed empty array: UNNEST(ARRAY<STRUCT<id INT64, name STRING>>[])
+        assert_contains!(result, "UNNEST(ARRAY<STRUCT<");
+        assert_contains!(result, "id INT64");
+        assert_contains!(result, "name STRING");
+        assert_contains!(result, ">>[]");
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_with_string_escaping() {
+        let fields = vec![Field::new("message", DataType::Utf8, false)];
+        let schema = Arc::new(Schema::new(fields));
+        let message = "message".to_string();
+        let columns = vec![(&message, &DataType::Utf8, "STRING".to_string())];
+        let enriched_rows = vec![vec![YmlValue::string("Hello 'World'".to_string())]];
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            enriched_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+        // Should properly escape single quotes for BigQuery
+        assert!(result.contains(r"'Hello \'World\''"));
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_with_different_types() {
+        let fields = vec![
+            Field::new("date_col", DataType::Date32, false),
+            Field::new(
+                "timestamp_col",
+                DataType::Timestamp(TimeUnit::Nanosecond, None),
+                false,
+            ),
+            Field::new("float_col", DataType::Float64, false),
+        ];
+        let schema = Arc::new(Schema::new(fields));
+        let date_col = "date_col".to_string();
+        let timestamp_col = "timestamp_col".to_string();
+        let float_col = "float_col".to_string();
+        let columns = vec![
+            (&date_col, &DataType::Date32, "DATE".to_string()),
+            (
+                &timestamp_col,
+                &DataType::Timestamp(TimeUnit::Nanosecond, None),
+                "DATETIME".to_string(),
+            ),
+            (&float_col, &DataType::Float64, "FLOAT64".to_string()),
+        ];
+        let enriched_rows = vec![vec![
+            YmlValue::string("2023-01-01".to_string()),
+            YmlValue::string("2023-01-01 12:00:00".to_string()),
+            YmlValue::number(3.15.into()),
+        ]];
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            enriched_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+        // Should use appropriate BigQuery types
+        assert_contains!(result, "CAST('2023-01-01' AS DATE) AS date_col");
+        assert_contains!(
+            result,
+            "CAST('2023-01-01 12:00:00' AS DATETIME) AS timestamp_col"
+        );
+        assert_contains!(result, "CAST(3.15 AS FLOAT64) AS float_col");
+    }
+
+    #[test]
+    fn test_create_select_with_union_all() {
+        // Test single row case
+        let id = "id".to_string();
+        let name = "name".to_string();
+        let active = "active".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "BIGINT".to_string()),
+            (&name, &DataType::Utf8, "VARCHAR".to_string()),
+            (&active, &DataType::Boolean, "BOOLEAN".to_string()),
+        ];
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+            Field::new("active", DataType::Boolean, false),
+        ]));
+
+        let single_row = vec![vec![
+            YmlValue::number(1.into()),
+            YmlValue::string("Alice".to_string()),
+            YmlValue::bool(true),
+        ]];
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            single_row,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        // Should generate: SELECT CAST(1 AS BIGINT) AS id, CAST('Alice' AS VARCHAR) AS name, CAST(true AS BOOLEAN) AS active
+        assert!(result.starts_with("SELECT"));
+        assert_contains!(result, "CAST(1 AS BIGINT) AS id");
+        assert_contains!(result, "CAST('Alice' AS VARCHAR) AS name");
+        assert_contains!(result, "CAST(true AS BOOLEAN) AS active");
+        assert!(!result.contains("UNION ALL")); // Single row shouldn't have UNION ALL
+        assert!(!result.contains("VALUES")); // No VALUES clause
+
+        // Test multiple rows case
+        let multiple_rows = vec![
+            vec![
+                YmlValue::number(1.into()),
+                YmlValue::string("Alice".to_string()),
+                YmlValue::bool(true),
+            ],
+            vec![
+                YmlValue::number(2.into()),
+                YmlValue::string("Bob".to_string()),
+                YmlValue::bool(false),
+            ],
+            vec![
+                YmlValue::number(3.into()),
+                YmlValue::string("Charlie".to_string()),
+                YmlValue::bool(true),
+            ],
+        ];
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            multiple_rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        // Should generate UNION ALL structure
+        assert_contains!(result, "UNION ALL");
+        assert!(!result.contains("VALUES")); // No VALUES clause
+
+        // Should have three SELECT statements
+        let select_count = result.matches("SELECT").count();
+        assert_eq!(select_count, 3);
+
+        // Should have two UNION ALL clauses (between 3 SELECT statements)
+        let union_count = result.matches("UNION ALL").count();
+        assert_eq!(union_count, 2);
+
+        // Verify each row's data is present
+        assert_contains!(result, "CAST(1 AS BIGINT) AS id");
+        assert_contains!(result, "CAST('Alice' AS VARCHAR) AS name");
+        assert_contains!(result, "CAST(2 AS BIGINT) AS id");
+        assert_contains!(result, "CAST('Bob' AS VARCHAR) AS name");
+        assert_contains!(result, "CAST(3 AS BIGINT) AS id");
+        assert_contains!(result, "CAST('Charlie' AS VARCHAR) AS name");
+
+        // Verify structure: each SELECT should be on its own line with UNION ALL between
+        let lines: Vec<&str> = result.split('\n').collect();
+        assert!(lines[0].starts_with("SELECT"));
+        assert_eq!(lines[1], "UNION ALL");
+        assert!(lines[2].starts_with("SELECT"));
+        assert_eq!(lines[3], "UNION ALL");
+        assert!(lines[4].starts_with("SELECT"));
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_empty_rows() {
+        // Test empty rows case
+        let id = "id".to_string();
+        let name = "name".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "BIGINT".to_string()),
+            (&name, &DataType::Utf8, "VARCHAR".to_string()),
+        ];
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+        ]));
+
+        let empty_rows = vec![];
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            empty_rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        // Should generate: SELECT CAST(NULL AS BIGINT) AS id, CAST(NULL AS VARCHAR) AS name WHERE FALSE
+        assert!(result.starts_with("SELECT"));
+        assert_contains!(result, "CAST(NULL AS BIGINT) AS id");
+        assert_contains!(result, "CAST(NULL AS VARCHAR) AS name");
+        assert_contains!(result, "WHERE FALSE"); // Empty case returns 0 rows
+        assert!(!result.contains("UNION ALL")); // Empty case shouldn't have UNION ALL
+        assert!(!result.contains("VALUES")); // No VALUES clause
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_with_constant_column() {
+        // Test with constant column (used for additional metadata)
+        let id = "id".to_string();
+        let columns = vec![(&id, &DataType::Int64, "BIGINT".to_string())];
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
+
+        let rows = vec![
+            vec![YmlValue::number(1.into())],
+            vec![YmlValue::number(2.into())],
+        ];
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            rows,
+            &schema,
+            &columns,
+            ", 'test' AS source",
+        )
+        .unwrap();
+
+        // Should include the constant column in each SELECT
+        assert_contains!(result, "CAST(1 AS BIGINT) AS id, 'test' AS source");
+        assert_contains!(result, "CAST(2 AS BIGINT) AS id, 'test' AS source");
+        assert_contains!(result, "UNION ALL");
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_null_handling() {
+        // Test proper null handling in the data
+        let id = "id".to_string();
+        let name = "name".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "BIGINT".to_string()),
+            (&name, &DataType::Utf8, "VARCHAR".to_string()),
+        ];
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+        ]));
+        let rows = vec![
+            vec![YmlValue::number(1.into()), YmlValue::null()],
+            vec![YmlValue::null(), YmlValue::string("Bob".to_string())],
+        ];
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        // Should properly handle NULL values in the data
+        assert_contains!(
+            result,
+            "CAST(1 AS BIGINT) AS id, CAST(NULL AS VARCHAR) AS name"
+        );
+        assert_contains!(
+            result,
+            "CAST(NULL AS BIGINT) AS id, CAST('Bob' AS VARCHAR) AS name"
+        );
+        assert_contains!(result, "UNION ALL");
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_null_type_handling() {
+        // Test handling of "null" type (should be converted to varchar)
+        let id = "id".to_string();
+        let nullable_col = "nullable_col".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "BIGINT".to_string()),
+            (&nullable_col, &DataType::Utf8, "null".to_string()), // This should be converted to varchar
+        ];
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("nullable_col", DataType::Utf8, true),
+        ]));
+        let rows = vec![vec![
+            YmlValue::number(1.into()),
+            YmlValue::string("test".to_string()),
+        ]];
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        // "null" type should be converted to "varchar"
+        assert_contains!(result, "CAST('test' AS varchar) AS nullable_col");
+        assert!(!result.contains("CAST('test' AS null)"));
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_number_type_normalization() {
+        // Test NUMBER(x,0) type normalization (should be converted to just NUMBER)
+        let id = "id".to_string();
+        let amount = "amount".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "BIGINT".to_string()),
+            (&amount, &DataType::Int64, "NUMBER(10,0)".to_string()), // This should be normalized to NUMBER
+        ];
+
+        let rows = vec![vec![
+            YmlValue::number(1.into()),
+            YmlValue::number(100.into()),
+        ]];
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("amount", DataType::Int64, false),
+        ]));
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        // NUMBER(10,0) should be normalized to NUMBER
+        assert_contains!(result, "CAST(100 AS NUMBER) AS amount");
+        assert!(!result.contains("CAST(100 AS NUMBER(10,0)) AS amount"));
+
+        // Other types should remain unchanged
+        assert_contains!(result, "CAST(1 AS BIGINT) AS id");
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_number_type_variants() {
+        // Test various NUMBER type variants to ensure only NUMBER(x,0) is normalized
+        let id = "id".to_string();
+        let amount1 = "amount1".to_string();
+        let amount2 = "amount2".to_string();
+        let amount3 = "amount3".to_string();
+        let columns = vec![
+            (&id, &DataType::Int64, "BIGINT".to_string()),
+            (&amount1, &DataType::Int64, "NUMBER(10,0)".to_string()), // Should normalize to NUMBER
+            (&amount2, &DataType::Int64, "NUMBER(10,2)".to_string()), // Should remain NUMBER(10,2)
+            (&amount3, &DataType::Int64, "NUMBER".to_string()),       // Should remain NUMBER
+        ];
+
+        let rows = vec![vec![
+            YmlValue::number(1.into()),
+            YmlValue::number(100.into()),
+            YmlValue::number(99.99.into()),
+            YmlValue::number(50.into()),
+        ]];
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("amount1", DataType::Int64, false),
+            Field::new("amount2", DataType::Int64, false),
+            Field::new("amount3", DataType::Int64, false),
+        ]));
+
+        let result = create_select_with_union_all(
+            AdapterType::Bigquery,
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        // Verify normalization behavior
+        assert_contains!(result, "CAST(100 AS NUMBER) AS amount1"); // Normalized
+        assert_contains!(result, "CAST(99.99 AS NUMBER(10,2)) AS amount2"); // Not normalized
+        assert_contains!(result, "CAST(50 AS NUMBER) AS amount3"); // Already NUMBER
+        assert!(!result.contains("CAST(100 AS NUMBER(10,0)) AS amount1")); // Original form should not appear
+    }
+
+    #[test]
+    fn test_get_unique_id_without_version() {
+        let result = get_unique_id("my_model", "my_pkg", None, "model");
+        assert_eq!(result, "model.my_pkg.my_model");
+    }
+
+    #[test]
+    fn test_get_unique_id_with_version() {
+        let result = get_unique_id("my_model", "my_pkg", Some("2".to_string()), "model");
+        assert_eq!(result, "model.my_pkg.my_model.v2");
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_semistructured() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("variant_col", SnowflakeTyping::variant(), true),
+            Field::new("object_col", SnowflakeTyping::object(), true),
+            Field::new(
+                "array_col",
+                DataType::List(Arc::new(Field::new(
+                    "item",
+                    SnowflakeTyping::variant(),
+                    true,
+                ))),
+                true,
+            ),
+        ]));
+
+        let columns =
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Snowflake))
+                .expect("Must format column types");
+
+        let mut object_map = dbt_yaml::mapping::Mapping::new();
+        object_map.insert(
+            YmlValue::string("foo".to_string()),
+            YmlValue::string("bar".to_string()),
+        );
+
+        let yml_rows = vec![vec![
+            YmlValue::null(),
+            YmlValue::Mapping(object_map.clone(), Default::default()),
+            // Snowflake supports hlists, so try serializing number, string, mapping
+            YmlValue::Sequence(
+                vec![
+                    YmlValue::number(4.into()),
+                    YmlValue::string("abcdef".to_string()),
+                    YmlValue::Mapping(object_map, Default::default()),
+                ],
+                Default::default(),
+            ),
+        ]];
+
+        let result = create_select_with_union_all(
+            AdapterType::Snowflake,
+            &DefaultTypeOps::new(AdapterType::Snowflake),
+            yml_rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        assert_contains!(
+            result,
+            "CAST(NULL AS VARIANT) AS \"variant_col\"",
+            "variant_col should be NULL"
+        );
+        assert_contains!(
+            result,
+            "CAST(PARSE_JSON('{\"foo\":\"bar\"}') AS OBJECT) AS \"object_col\"",
+            "object_col should use PARSE_JSON"
+        );
+        assert_contains!(
+            result,
+            "CAST([4, 'abcdef', PARSE_JSON('{\"foo\":\"bar\"}')] AS ARRAY) AS \"array_col\"",
+            "array_col should be a heterogeneous array literal"
+        );
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_semistructured() {
+        // BigQuery has 'full' type information for the object and array columns
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("numeric_col", BigqueryTyping::numeric(), true),
+            Field::new(
+                "object_col",
+                DataType::Struct(vec![Arc::new(Field::new("foo", DataType::Utf8, true))].into()),
+                true,
+            ),
+            Field::new(
+                "array_col",
+                DataType::List(Arc::new(Field::new(
+                    "item",
+                    BigqueryTyping::numeric(),
+                    true,
+                ))),
+                true,
+            ),
+        ]));
+
+        let columns =
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Bigquery))
+                .expect("Must format column types");
+
+        let mut object_map = dbt_yaml::mapping::Mapping::new();
+        object_map.insert(
+            YmlValue::string("foo".to_string()),
+            YmlValue::string("bar".to_string()),
+        );
+
+        let yml_rows = vec![vec![
+            YmlValue::null(),
+            YmlValue::Mapping(object_map, Default::default()),
+            YmlValue::Sequence(
+                vec![YmlValue::number(4.into()), YmlValue::number(2.into())],
+                Default::default(),
+            ),
+        ]];
+
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            yml_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+
+        // DefaultTypeOpsImpl maps Decimal128(38,9) to float64 and Utf8 to string (lowercase);
+        // the proprietary TypeOpsImpl would produce NUMERIC and STRING for BigQuery.
+        assert_contains!(
+            result,
+            "STRUCT(CAST(NULL AS float64) AS numeric_col",
+            "numeric_col should be NULL cast"
+        );
+        assert_contains!(
+            result,
+            "CAST(STRUCT('bar' AS foo) AS STRUCT<foo string>) AS object_col",
+            "object_col should use typed STRUCT with AS aliases"
+        );
+        assert_contains!(
+            result,
+            "CAST([CAST(4 AS float64), CAST(2 AS float64)] AS ARRAY<float64>) AS array_col",
+            "array_col should have typed elements and ARRAY<T> type parameter"
+        );
+    }
+}
