@@ -4685,6 +4685,20 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "+transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": {
