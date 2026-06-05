@@ -35,7 +35,7 @@ impl AppState {
     }
 
     pub fn server_version(&self) -> &'static str {
-        env!("CARGO_PKG_VERSION")
+        self.providers.dist_info.server_version()
     }
 
     pub fn has_column_lineage(&self) -> bool {

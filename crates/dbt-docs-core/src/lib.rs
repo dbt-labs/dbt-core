@@ -16,6 +16,10 @@ pub struct DistInfo {
 
 pub trait DistInfoProvider: Send + Sync {
     fn dist_info(&self) -> DistInfo;
+
+    fn server_version(&self) -> &'static str {
+        env!("CARGO_PKG_VERSION")
+    }
 }
 
 pub struct DefaultDistInfoProvider;
@@ -24,7 +28,7 @@ impl DistInfoProvider for DefaultDistInfoProvider {
     fn dist_info(&self) -> DistInfo {
         DistInfo {
             name: "oss".to_string(),
-            version: env!("CARGO_PKG_VERSION"),
+            version: self.server_version(),
             is_logged_in: false,
         }
     }
