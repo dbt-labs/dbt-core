@@ -85,6 +85,8 @@ pub struct ProjectSeedConfig {
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+transient")]
+    pub transient: Option<bool>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+delimiter")]
@@ -352,7 +354,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 copy_grants: None,
                 copy_tags: config.copy_tags,
                 secure: None,
-                transient: None,
+                transient: config.transient,
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
@@ -448,6 +450,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             quoting: config.quoting,
             // Snowflake fields
             refresh_warehouse: config.__warehouse_specific_config__.refresh_warehouse,
+            transient: config.__warehouse_specific_config__.transient,
             copy_tags: config.__warehouse_specific_config__.copy_tags,
             query_tag: config.__warehouse_specific_config__.query_tag,
             // BigQuery fields
