@@ -126,7 +126,7 @@ fn format_node_description(node: &NodeProcessed) -> Option<String> {
                 "No new changes on any upstreams".to_string()
             }
             dbt_telemetry::NodeCacheReason::StillFresh => format!(
-                "New changes detected. Did not meet build_after of {}. Last updated {} ago",
+                "New changes detected. Did not meet lag_tolerance of {}. Last updated {} ago",
                 humantime::format_duration(std::time::Duration::from_secs(
                     cache_detail.build_after_seconds()
                 )),
