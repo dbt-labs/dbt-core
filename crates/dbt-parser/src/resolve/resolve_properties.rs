@@ -301,13 +301,34 @@ impl MinimalProperties {
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
                     true,
                 )?;
-                if let Some(existing_function) = self.functions.get_mut(&function.name) {
+                // Function node names are always derived as lowercase from the SQL
+                // filename. Normalize the YAML `name:` to lowercase so the lookup
+                // succeeds even when the author used a different case (e.g.
+                // `RENAME_DATA_CLOUD_COLUMN` vs `rename_data_cloud_column.sql`).
+                let normalized_name = function.name.to_ascii_lowercase();
+                if normalized_name != function.name {
+                    emit_warn_log_message(
+                        ErrorCode::FunctionNameCaseMismatch,
+                        format!(
+                            "Function name '{}' in '{}' does not match the expected lowercase \
+                             form '{}'. dbt derives the function node name from the SQL filename \
+                             (always lowercase), so the YAML entry will be matched \
+                             case-insensitively. Consider renaming it to '{}' to avoid ambiguity.",
+                            function.name,
+                            properties_path.display(),
+                            normalized_name,
+                            normalized_name,
+                        ),
+                        io_args.status_reporter.as_ref(),
+                    );
+                }
+                if let Some(existing_function) = self.functions.get_mut(&normalized_name) {
                     existing_function
                         .duplicate_paths
                         .push(properties_path.to_path_buf());
                 } else {
                     self.functions.insert(
-                        function.name.clone(),
+                        normalized_name,
                         MinimalPropertiesEntry {
                             name: validate_resource_name(&function.name)?,
                             name_span: Span::default(),
