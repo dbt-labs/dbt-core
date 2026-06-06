@@ -875,3 +875,72 @@ fn pre_render_tables_field(
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_function_yaml_value(name: &str) -> dbt_yaml::Value {
+        let yaml = format!("name: {name}\n");
+        dbt_yaml::from_str(&yaml).expect("valid yaml")
+    }
+
+    /// Inserting a function whose YAML `name:` is uppercase must store the
+    /// entry under the lowercase key so the renderer (which derives the node
+    /// name from the lowercase SQL filename) can find it.
+    #[test]
+    fn test_function_name_normalized_to_lowercase_on_insert() {
+        let mut props = MinimalProperties::default();
+
+        let uppercase_name = "RENAME_DATA_CLOUD_COLUMN";
+        let lowercase_name = "rename_data_cloud_column";
+
+        let normalized = uppercase_name.to_ascii_lowercase();
+        props.functions.insert(
+            normalized.clone(),
+            MinimalPropertiesEntry {
+                name: uppercase_name.to_string(),
+                name_span: Default::default(),
+                relative_path: std::path::PathBuf::from("schema.yml"),
+                schema_value: make_function_yaml_value(uppercase_name),
+                table_value: None,
+                version_info: None,
+                duplicate_paths: vec![],
+            },
+        );
+
+        // Must be reachable via lowercase key (how renderer looks it up)
+        assert!(
+            props.functions.contains_key(lowercase_name),
+            "expected key '{lowercase_name}' after inserting uppercase '{uppercase_name}'"
+        );
+
+        // Original casing preserved in the entry itself
+        let entry = props.functions.get(lowercase_name).unwrap();
+        assert_eq!(entry.name, uppercase_name);
+
+        // Uppercase key must NOT exist (that was the silent no-op bug)
+        assert!(!props.functions.contains_key(uppercase_name));
+    }
+
+    /// A function whose YAML `name:` is already lowercase is stored as-is.
+    #[test]
+    fn test_function_name_already_lowercase_unchanged() {
+        let mut props = MinimalProperties::default();
+        let name = "my_udf";
+
+        props.functions.insert(
+            name.to_string(),
+            MinimalPropertiesEntry {
+                name: name.to_string(),
+                name_span: Default::default(),
+                relative_path: std::path::PathBuf::from("schema.yml"),
+                schema_value: make_function_yaml_value(name),
+                table_value: None,
+                version_info: None,
+                duplicate_paths: vec![],
+            },
+        );
+
+        assert!(props.functions.contains_key(name));
+    }
+}
