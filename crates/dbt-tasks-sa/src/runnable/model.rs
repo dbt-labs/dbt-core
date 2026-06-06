@@ -90,7 +90,13 @@ pub fn prepare_microbatch_batches(
         model.deprecated_config.lookback,
     )?;
 
-    let full_refresh = ctx.inner.arg.full_refresh;
+    // Model-level `full_refresh` config overrides the CLI `--full-refresh` flag.
+    // Matches dbt-core's `_is_incremental` function
+    // https://github.com/dbt-labs/dbt-core/blob/ecefc59e660eae4b34194ee4150fd4302836f4ea/core/dbt/task/run.py#L745-L746
+    let full_refresh = model
+        .deprecated_config
+        .full_refresh
+        .unwrap_or(ctx.inner.arg.full_refresh);
     let is_incremental = is_incremental(model, full_refresh, ctx.adapter_type(), ctx.env.clone());
 
     let end_time = batch_builder.build_end_time(ctx.inner.arg.event_time_end.clone())?;
