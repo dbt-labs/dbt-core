@@ -196,6 +196,116 @@ fn test_external_read_location_multi_partition() {
     assert_eq!(result.as_str().unwrap(), "b/*/*/*.parquet");
 }
 
+fn make_adapter_with_truthy_nulls(adapter_type: AdapterType) -> Arc<Adapter> {
+    let concrete = AdapterImpl::new_mock(
+        adapter_type,
+        BTreeMap::from([(
+            "enable_truthy_nulls_equals_macro".to_string(),
+            Value::from(true),
+        )]),
+        DEFAULT_RESOLVED_QUOTING,
+        Arc::new(DefaultTypeOps::new(adapter_type)),
+        Arc::new(DefaultStmtSplitter),
+    );
+    Arc::new(Adapter::new(Arc::new(concrete), None, never_cancels()))
+}
+
+#[test]
+fn test_render_equals_flag_off_returns_simple_eq() {
+    let adapter = make_duckdb_adapter();
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a = b)");
+}
+
+#[test]
+fn test_render_equals_parse_mode_returns_simple_eq() {
+    let adapter = make_duckdb_parse_adapter();
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a = b)");
+}
+
+#[test]
+fn test_render_equals_flag_on_snowflake_is_not_distinct_from() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::Snowflake);
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
+}
+
+#[test]
+fn test_render_equals_flag_on_bigquery_is_not_distinct_from() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::Bigquery);
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
+}
+
+#[test]
+fn test_render_equals_flag_on_postgres_is_not_distinct_from() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::Postgres);
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
+}
+
+#[test]
+fn test_render_equals_flag_on_redshift_is_not_distinct_from() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::Redshift);
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
+}
+
+#[test]
+fn test_render_equals_flag_on_duckdb_is_not_distinct_from() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::DuckDB);
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
+}
+
+#[test]
+fn test_render_equals_flag_on_databricks_is_not_distinct_from() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::Databricks);
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
+}
+
 // -- location_exists tests ------------------------------------------------
 
 #[test]

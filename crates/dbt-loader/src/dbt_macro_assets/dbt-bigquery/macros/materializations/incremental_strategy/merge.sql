@@ -1,3 +1,24 @@
+{#
+    Override only the unique-key match used inside the MERGE ON predicate.
+
+    When the `enable_truthy_nulls_equals_macro` flag is enabled, `bigquery__equals`
+    emits `IS NOT DISTINCT FROM`. Inside a MERGE on a partitioned table that has
+    `require_partition_filter=True`, BigQuery's partition-pruning analyzer no longer
+    recognizes the `(<partition_field> is null or <partition_field> is not null)`
+    auxiliary predicate (added by `predicate_for_avoid_require_partition_filter`)
+    as a valid partition filter, and the MERGE fails at runtime. Use the
+    equivalent `(a is null and b is null) or (a = b)` form instead so partition
+    pruning still works.
+#}
+{% macro bigquery__get_merge_unique_key_match(source_unique_key, target_unique_key) -%}
+    {%- if adapter.behavior.enable_truthy_nulls_equals_macro.no_warn -%}
+        (({{ source_unique_key }} is null and {{ target_unique_key }} is null) or ({{ source_unique_key }} = {{ target_unique_key }}))
+    {%- else -%}
+        ({{ source_unique_key }} = {{ target_unique_key }})
+    {%- endif %}
+{%- endmacro %}
+
+
 {% macro bq_generate_incremental_merge_build_sql(
     tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns, tmp_relation_exists, incremental_predicates
 ) %}
