@@ -28,7 +28,7 @@ from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
-from tests.unit.fixtures import model_node
+from tests.unit.fixtures import generic_test_node, model_node
 
 
 class TestPartialParse:
@@ -497,6 +497,62 @@ class TestCheckFunctionLanguageSupport:
         }
         config = self._make_config("snowflake")
         _check_function_language_support(manifest, config)
+
+
+class TestBackfillDirectParents:
+    @pytest.fixture
+    @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
+    @patch("dbt.parser.manifest.os.path.exists")
+    @patch("dbt.parser.manifest.open")
+    def loader(self, patched_open, patched_os_exist, patched_state_check) -> ManifestLoader:
+        mock_project = MagicMock(RuntimeConfig)
+        mock_project.project_target_path = "mock_target_path"
+        mock_project.project_name = "mock_project_name"
+        return ManifestLoader(mock_project, {})
+
+    def test_in_project_model_gets_direct_parents_from_depends_on(
+        self, loader: ManifestLoader
+    ) -> None:
+        model = model_node()
+        model.depends_on.nodes = ["model.test.upstream", "seed.test.seed"]
+        model.direct_parents = []
+        loader.manifest.add_node_nofile(model)
+
+        loader._backfill_direct_parents()
+
+        assert model.direct_parents == ["model.test.upstream", "seed.test.seed"]
+
+    def test_external_model_direct_parents_not_overwritten(self, loader: ManifestLoader) -> None:
+        # External nodes (from publications) carry the full transitive closure in
+        # depends_on.nodes but already have the narrower nearest-public-ancestor
+        # set in direct_parents. The backfill must not widen it back.
+        model = model_node()
+        model.depends_on.nodes = ["model.upstream.nearest", "model.upstream.further"]
+        model.direct_parents = ["model.upstream.nearest"]
+        loader.manifest.add_node_nofile(model)
+
+        loader._backfill_direct_parents()
+
+        assert model.direct_parents == ["model.upstream.nearest"]
+
+    def test_non_model_nodes_skipped(self, loader: ManifestLoader) -> None:
+        test = generic_test_node()
+        test.depends_on.nodes = ["model.test.upstream"]
+        loader.manifest.add_node_nofile(test)
+
+        loader._backfill_direct_parents()
+
+        assert not hasattr(test, "direct_parents")
+
+    def test_backfill_copies_list(self, loader: ManifestLoader) -> None:
+        model = model_node()
+        model.depends_on.nodes = ["model.test.upstream"]
+        loader.manifest.add_node_nofile(model)
+        loader._backfill_direct_parents()
+
+        model.direct_parents.append("model.test.injected")
+
+        assert model.depends_on.nodes == ["model.test.upstream"]
 
 
 class TestVersionToStr:
