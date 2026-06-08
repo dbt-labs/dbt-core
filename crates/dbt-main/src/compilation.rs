@@ -1638,7 +1638,6 @@ impl DbtProjectCompilation {
         // Initialize adapter
         let adapter = self.loaded_project().init_adapter(
             &self.resolved_state,
-            &arg.io,
             arg.replay.clone(),
             &jinja_env,
             Some(schema_store.clone()),
@@ -1760,13 +1759,11 @@ impl DbtProjectCompilation {
         }
 
         let base_context = build_base_context(&resolved_state, &jinja_env);
-        if let Some(qc) = adapter.engine().query_cache() {
+        if adapter.engine().has_query_cache() {
             let reverse_deps = reverse(&schedule.deps);
-            let converted: HashMap<String, HashSet<String>> = reverse_deps
-                .into_iter()
-                .map(|(k, vs)| (k, vs.into_iter().collect()))
-                .collect();
-            qc.set_reverse_deps(converted);
+            adapter
+                .engine()
+                .set_query_cache_reverse_deps(reverse_deps)?;
         }
         token.check_cancellation()?;
 
@@ -2221,7 +2218,6 @@ async fn write_catalog(
     let execute = Execute::from_compute_flag(arg.local_execution_backend);
     let adapter = loaded_project.init_adapter(
         resolved_state,
-        &arg.io,
         arg.replay.clone(),
         jinja_env,
         None,

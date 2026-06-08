@@ -25,7 +25,6 @@ use serde::Deserialize;
 use crate::cache::RelationCache;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
-use crate::query_cache::QueryCache;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
 
@@ -75,8 +74,6 @@ pub struct XdbcEngine {
     pub type_ops: Arc<dyn TypeOps>,
     /// Statement splitter
     splitter: Arc<dyn StmtSplitter>,
-    /// Query cache
-    query_cache: Option<Arc<dyn QueryCache>>,
     /// Relation cache - caches warehouse relation metadata to avoid repeated queries
     relation_cache: Arc<RelationCache>,
     /// User overrides for behavior flags from dbt_project.yml
@@ -99,7 +96,6 @@ impl XdbcEngine {
         query_comment: QueryCommentConfig,
         type_ops: Arc<dyn TypeOps>,
         splitter: Arc<dyn StmtSplitter>,
-        query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
         mode: EngineMode,
@@ -121,7 +117,6 @@ impl XdbcEngine {
             type_ops,
             splitter,
             query_comment,
-            query_cache,
             relation_cache,
             behavior_flag_overrides,
             behavior,
@@ -139,7 +134,6 @@ impl XdbcEngine {
         query_comment: QueryCommentConfig,
         type_ops: Arc<dyn TypeOps>,
         splitter: Arc<dyn StmtSplitter>,
-        query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
         threads: Option<usize>,
@@ -152,7 +146,6 @@ impl XdbcEngine {
             query_comment,
             type_ops,
             splitter,
-            query_cache,
             relation_cache,
             behavior_flag_overrides,
             EngineMode::Live,
@@ -183,7 +176,6 @@ impl XdbcEngine {
             QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
             type_ops,
             splitter,
-            None,
             relation_cache,
             behavior_flag_overrides,
             EngineMode::Mock,
@@ -599,10 +591,6 @@ impl AdapterEngine for XdbcEngine {
 
     fn get_config(&self) -> &AdapterConfig {
         &self.config
-    }
-
-    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
-        self.query_cache.as_ref()
     }
 
     fn relation_cache(&self) -> &Arc<RelationCache> {

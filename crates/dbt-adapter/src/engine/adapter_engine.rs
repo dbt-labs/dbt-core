@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use adbc_core::options::{OptionStatement, OptionValue};
@@ -18,7 +18,7 @@ use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, Cancellable, cre
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_telemetry::{QueryExecuted, QueryOutcome};
 use dbt_xdbc::bigquery::QUERY_LABELS;
-use dbt_xdbc::{Backend, Connection, QueryCtx};
+use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
 use indexmap::IndexMap;
 use minijinja::State;
 use tracy_client::span;
@@ -28,7 +28,6 @@ use crate::cache::RelationCache;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::engine::sidecar_client::SidecarClient;
 use crate::errors::{adbc_error_to_adapter_error, arrow_error_to_adapter_error};
-use crate::query_cache::QueryCache;
 use crate::record_batch::{RecordBatchExt, SchemaExt};
 use crate::sql_types::TypeOps;
 use crate::statement::*;
@@ -67,9 +66,6 @@ pub trait AdapterEngine: Send + Sync {
     /// Get the full config object
     fn get_config(&self) -> &AdapterConfig;
 
-    /// Get the query cache
-    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>>;
-
     /// Get a reference to the relation cache
     fn relation_cache(&self) -> &Arc<RelationCache>;
 
@@ -91,6 +87,30 @@ pub trait AdapterEngine: Send + Sync {
         &self,
         config: &AdapterConfig,
     ) -> AdapterResult<Box<dyn Connection>>;
+
+    fn has_query_cache(&self) -> bool {
+        false
+    }
+
+    fn new_query_cache_statement(
+        &self,
+        _stmt: Box<dyn Statement>,
+    ) -> AdapterResult<Box<dyn Statement>> {
+        Err(AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            "Query cache not supported",
+        ))
+    }
+
+    fn set_query_cache_reverse_deps(
+        &self,
+        _deps: BTreeMap<String, BTreeSet<String>>,
+    ) -> AdapterResult<()> {
+        Err(AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            "Query cache not supported",
+        ))
+    }
 
     /// Execute the given SQL query or statement with options.
     ///
@@ -247,12 +267,16 @@ pub(crate) fn adbc_execute_with_options(
     > {
         use dbt_xdbc::statement::Statement as _;
 
-        let mut stmt = match engine.query_cache() {
-            Some(query_cache) => {
-                let inner_stmt = conn.new_statement()?;
-                query_cache.new_statement(inner_stmt)
-            }
-            None => conn.new_statement()?,
+        let mut stmt = if engine.has_query_cache() {
+            let stmt = conn.new_statement()?;
+            engine.new_query_cache_statement(stmt).map_err(|e| {
+                Cancellable::Error(adbc_core::error::Error::with_message_and_status(
+                    e.message(),
+                    adbc_core::error::Status::Internal,
+                ))
+            })?
+        } else {
+            conn.new_statement()?
         };
         if let Some(node_id) = ctx.node_id() {
             stmt.set_option(

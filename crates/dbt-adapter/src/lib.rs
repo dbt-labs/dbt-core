@@ -19,7 +19,6 @@ pub mod load_catalogs;
 pub mod metadata;
 pub mod need_quotes;
 pub(crate) mod python;
-pub mod query_cache;
 pub mod query_ctx;
 pub mod relation;
 pub mod render_constraint;

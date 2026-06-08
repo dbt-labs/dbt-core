@@ -203,7 +203,6 @@ impl Adapter {
             query_comment,
             type_ops,
             stmt_splitter,
-            None,
             relation_cache,
             BTreeMap::new(),
             None,

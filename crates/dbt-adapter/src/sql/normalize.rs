@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 /// `adapter.generate_unique_temporary_table_suffix`.
 ///
 /// Example: `"dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb"` -> `"dbt_tmp_"`
-pub(crate) fn normalize_dbt_tmp_name(sql: &str) -> String {
+pub fn normalize_dbt_tmp_name(sql: &str) -> String {
     static DBT_TMP_UUID_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
     });
@@ -15,7 +15,7 @@ pub(crate) fn normalize_dbt_tmp_name(sql: &str) -> String {
         .to_string()
 }
 
-pub(crate) fn strip_sql_comments(sql: &str) -> String {
+pub fn strip_sql_comments(sql: &str) -> String {
     let mut result = String::with_capacity(sql.len());
     let mut chars = sql.chars().peekable();
     let mut in_single = false;

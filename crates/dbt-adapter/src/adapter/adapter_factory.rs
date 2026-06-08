@@ -23,7 +23,6 @@ use crate::AdapterEngine;
 use crate::cache::RelationCache;
 use crate::engine::XdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
-use crate::query_cache::QueryCache;
 use crate::relation::do_create_relation;
 use crate::sql_types::TypeOpsFactory;
 use crate::stmt_splitter::StmtSplitter;
@@ -67,7 +66,6 @@ pub trait AdapterFactory: Send + Sync {
         replay_mode: Option<ReplayMode>,
         flags: BTreeMap<String, Value>,
         schema_cache: Option<Arc<dyn SchemaStoreTrait>>,
-        query_cache: Option<Arc<dyn QueryCache>>,
         quoting: ResolvedQuoting,
         query_comment: Option<QueryComment>,
         token: CancellationToken,
@@ -117,7 +115,6 @@ impl DefaultAdapterFactory {
             query_comment,
             type_ops,
             stmt_splitter,
-            None,
             relation_cache,
             behavior_flag_overrides,
             threads,
@@ -135,7 +132,6 @@ impl AdapterFactory for DefaultAdapterFactory {
         _replay_mode: Option<ReplayMode>,
         flags: BTreeMap<String, Value>,
         schema_cache: Option<Arc<dyn SchemaStoreTrait>>,
-        _query_cache: Option<Arc<dyn QueryCache>>,
         quoting: ResolvedQuoting,
         query_comment: Option<QueryComment>,
         token: CancellationToken,

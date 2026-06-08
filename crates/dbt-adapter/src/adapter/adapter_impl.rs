@@ -4889,7 +4889,6 @@ mod tests {
             QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
             Arc::new(DefaultTypeOps::new(adapter_type)), // XXX: NaiveTypeOpsImpl
             Arc::new(DefaultStmtSplitter), // XXX: may cause bugs if these tests run SQL
-            None,
             Arc::new(RelationCache::default()),
             BTreeMap::new(),
             None,
