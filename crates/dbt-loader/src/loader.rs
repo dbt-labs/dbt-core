@@ -758,6 +758,12 @@ pub async fn load_simplified_project_and_profiles(
             minijinja::Value::from_object(Var::new(merged_vars)),
         ),
         (
+            // Add empty target object. When we call `load_project_yml` later,
+            // target will actually be populated.
+            "target".to_owned(),
+            minijinja::Value::from_serialize(BTreeMap::<String, minijinja::Value>::new()),
+        ),
+        (
             // Add empty context object (mimics dbt-core's BaseContext.to_dict() pattern)
             // This allows profiles.yml to use: context.project_name or ''
             "context".to_owned(),
