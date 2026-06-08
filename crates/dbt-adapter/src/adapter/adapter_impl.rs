@@ -4542,21 +4542,11 @@ impl AdapterImpl {
         let is_true = flags.get("is_true").is_none_or(|v| v.is_true());
         let is_false = flags.get("is_false").is_some_and(|v| v.is_true());
         let is_unknown = flags.get("is_unknown").is_none_or(|v| v.is_true());
-        let enable_truthy_nulls_equals_macro = flags
-            .get("enable_truthy_nulls_equals_macro")
-            .is_some_and(|v| v.is_true());
         let behavior = Arc::new(Behavior::new(
             vec![
                 BehaviorFlag::new("is_true", is_true, None, None, None),
                 BehaviorFlag::new("is_false", is_false, None, None, None),
                 BehaviorFlag::new("is_unknown", is_unknown, None, None, None),
-                BehaviorFlag::new(
-                    "enable_truthy_nulls_equals_macro",
-                    enable_truthy_nulls_equals_macro,
-                    None,
-                    None,
-                    None,
-                ),
             ],
             &BTreeMap::new(),
         ));

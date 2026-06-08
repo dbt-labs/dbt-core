@@ -581,46 +581,6 @@ impl Adapter {
         }
     }
 
-    /// Render the equality comparison SQL for two expressions.
-    ///
-    /// When `enable_truthy_nulls_equals_macro` is enabled the output uses
-    /// the most idiomatic null-safe form for each adapter family
-    /// When the flag is off (or in parse mode) a plain `(a = b)` is returned.
-    pub fn render_equals(
-        &self,
-        _state: &State,
-        expr1: &str,
-        expr2: &str,
-    ) -> Result<Value, minijinja::Error> {
-        let flag_enabled = match &self.inner {
-            Typed { adapter, .. } => adapter
-                .behavior_object()
-                .get_value(&Value::from("enable_truthy_nulls_equals_macro"))
-                .is_some_and(|flag| flag.is_true()),
-            Parse(_) => false,
-        };
-        let sql = if !flag_enabled {
-            format!("({expr1} = {expr2})")
-        } else {
-            match self.adapter_type() {
-                AdapterType::Snowflake
-                | AdapterType::Bigquery
-                | AdapterType::Postgres
-                | AdapterType::Redshift
-                | AdapterType::Spark
-                | AdapterType::Databricks
-                | AdapterType::DuckDB => {
-                    format!("({expr1} IS NOT DISTINCT FROM {expr2})")
-                }
-                _ => format!(
-                    "case when (({expr1} = {expr2}) or ({expr1} is null and {expr2} is null)) \
-                     then 0 else 1 end = 0"
-                ),
-            }
-        };
-        Ok(Value::from(sql))
-    }
-
     /// Convert type.
     ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1221
@@ -3870,13 +3830,6 @@ impl Adapter {
                         )
                     })?;
                 self.get_csv_data(table)
-            }
-            "render_equals" => {
-                let iter = ArgsIter::new(name, &["expr1", "expr2"], args);
-                let expr1 = iter.next_arg::<&str>()?;
-                let expr2 = iter.next_arg::<&str>()?;
-                iter.finish()?;
-                self.render_equals(state, expr1, expr2)
             }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::UnknownMethod,

@@ -10,7 +10,6 @@ drivers = [
   "databricks-0.21.0+dbt0.21.5",
   "databricks-0.21.0+dbt0.21.6",
   "databricks-0.21.0+dbt0.21.7",
-  "databricks-0.21.0.dev+dbt0.21.10",
   "clickhouse-0.1.0-alpha.1",
   "clickhouse-0.1.0-alpha.2",
   "duckdb-0.21.0.dev+dbt0.0.20",

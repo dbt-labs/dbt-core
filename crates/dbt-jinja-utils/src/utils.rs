@@ -511,7 +511,7 @@ pub fn generate_component_name(
         .map(|name| vec![Value::from(name)])
         .unwrap_or_else(|| vec![Value::from(())]); // If no custom name, pass in none so the macro reads from the target context
     if let Some(node) = node {
-        let mut serialized = node.serialize_keep_none();
+        let mut serialized = node.serialize();
         // Strip resource-type prefix from path so node.path inside macros like
         // generate_schema_name matches dbt-core convention ("staging/model.sql"
         // not "models/staging/model.sql"). build_flat_graph does the same for
