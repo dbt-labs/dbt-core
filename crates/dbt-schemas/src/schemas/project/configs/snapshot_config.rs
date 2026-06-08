@@ -968,4 +968,23 @@ __additional_properties__: {}
             .expect("resource_tags should propagate from ProjectSnapshotConfig to SnapshotConfig");
         assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
     }
+
+    #[test]
+    fn test_snapshot_config_resource_tags_propagates_to_project_snapshot_config() {
+        let project_config: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let snapshot_config: SnapshotConfig = project_config.into();
+        let round_tripped: ProjectSnapshotConfig = snapshot_config.into();
+        let resource_tags = round_tripped
+            .resource_tags
+            .expect("resource_tags should propagate from SnapshotConfig back to ProjectSnapshotConfig");
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
 }

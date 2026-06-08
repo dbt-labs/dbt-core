@@ -671,4 +671,23 @@ __additional_properties__: {}
             .expect("resource_tags should propagate from ProjectSeedConfig to SeedConfig");
         assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
     }
+
+    #[test]
+    fn test_seed_config_resource_tags_propagates_to_project_seed_config() {
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let seed_config: SeedConfig = project_config.into();
+        let round_tripped: ProjectSeedConfig = seed_config.into();
+        let resource_tags = round_tripped
+            .resource_tags
+            .expect("resource_tags should propagate from SeedConfig back to ProjectSeedConfig");
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
 }
