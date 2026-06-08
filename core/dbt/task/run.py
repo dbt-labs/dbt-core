@@ -254,7 +254,9 @@ class ModelRunner(CompileRunner[ModelNode]):
         identifier_quoted = bool(getattr(quote_policy, "identifier", True))
         if identifier_quoted:
             return source_identifier == pointer_identifier
-        return source_identifier.casefold() == pointer_identifier.casefold()
+        # Match dbt's identifier folding convention (`.lower()`, as in
+        # BaseRelation.get_lowered_part / _is_exactish_match).
+        return source_identifier.lower() == pointer_identifier.lower()
 
     def _latest_version_pointer_identifier(
         self,
