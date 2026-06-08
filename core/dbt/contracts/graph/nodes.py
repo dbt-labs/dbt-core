@@ -505,6 +505,7 @@ class BatchContext(dbtClassMixin):
 class ModelNode(ModelResource, CompiledNode):
     previous_batch_results: Optional[BatchResults] = None
     batch: Optional[BatchContext] = None
+    direct_parents: List[str] = field(default_factory=list)
     _has_this: Optional[bool] = None
 
     def __post_serialize__(
@@ -515,6 +516,11 @@ class ModelNode(ModelResource, CompiledNode):
             del dct["_has_this"]
         if "previous_batch_results" in dct:
             del dct["previous_batch_results"]
+        # direct_parents is a runtime-only lineage attribute. Emit it via
+        # `dbt ls --output=json` only (see ListTask.generate_json); do not
+        # write it into manifest.json so the manifest contract is unchanged.
+        if "direct_parents" in dct:
+            del dct["direct_parents"]
         return dct
 
     @classmethod
@@ -551,6 +557,7 @@ class ModelNode(ModelResource, CompiledNode):
             path="",
             unrendered_config=unrendered_config,
             depends_on=DependsOn(nodes=args.depends_on_nodes),
+            direct_parents=args.direct_parents,
             config=ModelConfig(enabled=args.enabled),
         )
 

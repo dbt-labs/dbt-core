@@ -1,0 +1,13 @@
+kind: Fixes
+body: >-
+    Add a `direct_parents` attribute to model nodes carrying the nearest public
+    ancestors only, and emit it in `dbt ls --output=json` for models. Lineage
+    consumers can now render DAG edges from `direct_parents` instead of
+    `depends_on.nodes`, which carries the full transitive closure across plugin
+    boundaries (still required for node selection and cycle detection). The new
+    attribute is runtime-only and is stripped during manifest serialization, so
+    the manifest.json contract is unchanged.
+time: 2026-06-04T12:00:00.000000000Z
+custom:
+    Author: sriramr98
+    Issue: ""
