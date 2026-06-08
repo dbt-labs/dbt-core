@@ -80,6 +80,7 @@ body:
         - postgres
         - redshift
         - duckdb
+        - clickhouse
         - other (describe in Additional Context)
     validations:
       required: false

@@ -31,7 +31,7 @@ jobs:
 
             // "other (describe in additional context)" is intentionally excluded from
             // validAdapters — it will be silently dropped, which is the desired behavior.
-            const validAdapters = ['snowflake', 'databricks', 'bigquery', 'postgres', 'redshift', 'duckdb'];
+            const validAdapters = ['snowflake', 'databricks', 'bigquery', 'postgres', 'redshift', 'duckdb', 'clickhouse'];
             const labels = selected.filter(s => validAdapters.includes(s));
 
             if (labels.length > 0) {
