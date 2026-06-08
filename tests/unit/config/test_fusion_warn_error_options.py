@@ -1,0 +1,161 @@
+"""Tests for tolerating dbt Fusion-specific ``warn_error_options`` names in dbt-core.
+
+When a project shares ``warn_error_options`` between the dbt Fusion engine and
+dbt-core, Core should ignore Fusion-only names (emitting a note) rather than
+raising, while still rejecting genuine typos.
+"""
+
+import importlib.util
+from pathlib import Path
+
+import pytest
+from click import Option
+
+from dbt.cli.flags import convert_config
+from dbt.cli.option_types import WarnErrorOptionsType
+from dbt.config.utils import (
+    build_warn_error_options_v2,
+    extract_fusion_only_warn_error_options,
+)
+from dbt.events import ALL_EVENT_NAMES
+from dbt.events.fusion_warn_error_options import FUSION_WARN_ERROR_OPTION_NAMES
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.event_manager_client import add_callback_to_manager
+from dbt_common.events.types import Note
+
+# A Fusion-only grouping keyword and a Fusion-native error code, neither of which
+# is a valid dbt-core event name.
+FUSION_GROUP = "StaticAnalysis"
+FUSION_CODE = "SelectorError"
+# A name shared by Fusion (an ErrorCode) and dbt-core (an event) -- not Fusion-only.
+SHARED_NAME = "DeprecatedModel"
+
+
+def _fusion_note_catcher() -> EventCatcher:
+    catcher = EventCatcher(event_to_catch=Note)
+    add_callback_to_manager(catcher.catch)
+    return catcher
+
+
+def _fusion_messages(catcher: EventCatcher) -> set:
+    suffix = "specific to the dbt Fusion engine."
+    return {e.data.msg for e in catcher.caught_events if e.data.msg.endswith(suffix)}
+
+
+class TestExtractFusionOnlyWarnErrorOptions:
+    def test_strips_fusion_only_keeps_core_and_typos(self) -> None:
+        weo = {
+            "error": [SHARED_NAME, FUSION_CODE, FUSION_GROUP, "TotallyBogus"],
+            "warn": [],
+            "silence": ["DbtYamlValidationError"],
+        }
+        removed = extract_fusion_only_warn_error_options(weo, ALL_EVENT_NAMES)
+
+        assert removed == {FUSION_CODE, FUSION_GROUP, "DbtYamlValidationError"}
+        # Shared dbt-core name and unknown typo are left for WarnErrorOptionsV2 to handle.
+        assert weo["error"] == [SHARED_NAME, "TotallyBogus"]
+        assert weo["silence"] == []
+
+    def test_noop_when_no_fusion_names(self) -> None:
+        weo = {"error": [SHARED_NAME], "warn": [], "silence": []}
+        assert extract_fusion_only_warn_error_options(weo, ALL_EVENT_NAMES) == set()
+        assert weo["error"] == [SHARED_NAME]
+
+    def test_handles_missing_and_non_list_keys(self) -> None:
+        weo = {"error": "all"}  # "all" is a str, not a list
+        assert extract_fusion_only_warn_error_options(weo, ALL_EVENT_NAMES) == set()
+        assert weo["error"] == "all"
+
+
+class TestBuildWarnErrorOptionsV2:
+    def test_fusion_only_names_stripped_and_noted(self) -> None:
+        catcher = _fusion_note_catcher()
+        weo = {"error": [SHARED_NAME, FUSION_CODE, FUSION_GROUP], "warn": [], "silence": []}
+
+        result = build_warn_error_options_v2(weo, ALL_EVENT_NAMES)
+
+        assert result.error == [SHARED_NAME]
+        assert _fusion_messages(catcher) == {
+            f"{FUSION_CODE} is not being used because it's specific to the dbt Fusion engine.",
+            f"{FUSION_GROUP} is not being used because it's specific to the dbt Fusion engine.",
+        }
+
+    def test_unknown_name_still_raises(self) -> None:
+        with pytest.raises(ValidationError, match="not a valid dbt error name"):
+            build_warn_error_options_v2(
+                {"error": ["TotallyBogus"], "warn": [], "silence": []}, ALL_EVENT_NAMES
+            )
+
+    def test_valid_only_config_unchanged(self) -> None:
+        result = build_warn_error_options_v2(
+            {"error": [SHARED_NAME], "warn": [], "silence": []}, ALL_EVENT_NAMES
+        )
+        assert result.error == [SHARED_NAME]
+
+
+class TestWarnErrorOptionsTypeTolerance:
+    """The CLI / env-var path: ``--warn-error-options`` and ``DBT_WARN_ERROR_OPTIONS``."""
+
+    def _convert(self, raw: str):
+        return WarnErrorOptionsType().convert(raw, Option(["--warn-error-options"]), None)
+
+    def test_fusion_only_name_does_not_raise(self) -> None:
+        catcher = _fusion_note_catcher()
+        result = self._convert(f"{{'error': ['{FUSION_CODE}', '{SHARED_NAME}']}}")
+        assert result.error == [SHARED_NAME]
+        assert (
+            f"{FUSION_CODE} is not being used because it's specific to the dbt Fusion engine."
+            in _fusion_messages(catcher)
+        )
+
+    def test_typo_still_raises(self) -> None:
+        with pytest.raises(ValidationError, match="not a valid dbt error name"):
+            self._convert("{'error': ['TotallyBogus']}")
+
+
+class TestConvertConfigTolerance:
+    """The ``dbt_project.yml`` / ``profiles.yml`` path via ``flags.convert_config``."""
+
+    def test_fusion_only_name_does_not_raise(self) -> None:
+        catcher = _fusion_note_catcher()
+        result = convert_config("warn_error_options", {"error": [FUSION_GROUP, SHARED_NAME]})
+        assert result.error == [SHARED_NAME]
+        assert (
+            f"{FUSION_GROUP} is not being used because it's specific to the dbt Fusion engine."
+            in _fusion_messages(catcher)
+        )
+
+    def test_typo_still_raises(self) -> None:
+        with pytest.raises(ValidationError, match="not a valid dbt error name"):
+            convert_config("warn_error_options", {"error": ["TotallyBogus"]})
+
+
+class TestGeneratedFileInSync:
+    """The vendored Fusion name set must match what the generator produces from the fs repo."""
+
+    def test_generated_file_is_up_to_date(self) -> None:
+        repo_root = Path(__file__).resolve().parents[3]
+        gen_path = repo_root / "scripts" / "generate_fusion_warn_error_options.py"
+        spec = importlib.util.spec_from_file_location("gen_fweo", gen_path)
+        gen = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gen)  # type: ignore[union-attr]
+
+        fs_root = gen._resolve_fs_root(None)
+        if not fs_root.exists():
+            pytest.skip(
+                f"dbt Fusion (fs) repo not found at {fs_root}; "
+                "set DBT_FS_REPO_PATH to run the sync check."
+            )
+
+        expected = gen.render(gen.collect_fusion_names(fs_root))
+        actual = gen.OUTPUT_PATH.read_text()
+        assert actual == expected, (
+            "core/dbt/events/fusion_warn_error_options.py is out of date. "
+            "Re-run: python scripts/generate_fusion_warn_error_options.py"
+        )
+
+    def test_sanity_contents(self) -> None:
+        # Fusion-only groups present; shared name present (handled as core event at runtime).
+        assert {"StaticAnalysis", "PackageParsingCompatibility"} <= FUSION_WARN_ERROR_OPTION_NAMES
+        assert SHARED_NAME in FUSION_WARN_ERROR_OPTION_NAMES
