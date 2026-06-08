@@ -946,14 +946,8 @@ __additional_properties__: {}
             .resource_tags
             .expect("+resource_tags should parse on ProjectSnapshotConfig");
         assert_eq!(resource_tags.len(), 2);
-        assert_eq!(
-            resource_tags.get("123456789012/dbt-access"),
-            Some(&"managed".to_string())
-        );
-        assert_eq!(
-            resource_tags.get("123456789012/cost-center"),
-            Some(&"analytics".to_string())
-        );
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+        assert_eq!(resource_tags["123456789012/cost-center"], "analytics");
     }
 
     #[test]
@@ -972,9 +966,6 @@ __additional_properties__: {}
             .__warehouse_specific_config__
             .resource_tags
             .expect("resource_tags should propagate from ProjectSnapshotConfig to SnapshotConfig");
-        assert_eq!(
-            resource_tags.get("123456789012/dbt-access"),
-            Some(&"managed".to_string())
-        );
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
     }
 }
