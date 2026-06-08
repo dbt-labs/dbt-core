@@ -96,6 +96,46 @@ class TestScanOsiDirectories:
         result = _scan_osi_directories(str(tmp_path), ["osi_a", "nonexistent"])
         assert [p.name for p in result] == ["a.json"]
 
+    def test_lowercase_osi_directory_is_recognized(self, tmp_path):
+        osi_dir = tmp_path / "osi"
+        osi_dir.mkdir()
+        (osi_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi"])
+        assert [p.name for p in result] == ["orders.json"]
+
+    def test_uppercase_osi_directory_still_recognized(self, tmp_path):
+        osi_dir = tmp_path / "OSI"
+        osi_dir.mkdir()
+        (osi_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["OSI"])
+        assert [p.name for p in result] == ["orders.json"]
+
+    # This test requires a case-sensitive filesystem: it creates osi/ and OSI/
+    # as two distinct directories, which is impossible on macOS where they map
+    # to the same physical directory and the second mkdir() raises FileExistsError.
+    # The case where one physical directory is reachable via both names is covered
+    # by test_duplicate_resolved_path_is_scanned_once.
+    @pytest.mark.skipif(
+        __import__("sys").platform == "darwin",
+        reason="macOS uses a case-insensitive filesystem by default",
+    )
+    def test_both_osi_directories_scanned_when_present(self, tmp_path):
+        (tmp_path / "osi").mkdir()
+        (tmp_path / "OSI").mkdir()
+        (tmp_path / "osi" / "lower.json").write_text("{}")
+        (tmp_path / "OSI" / "upper.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi", "OSI"])
+        assert {p.name for p in result} == {"lower.json", "upper.json"}
+
+    def test_duplicate_resolved_path_is_scanned_once(self, tmp_path):
+        # On case-insensitive filesystems "osi" and "OSI" resolve to the same
+        # directory; deduplication must prevent files from appearing twice.
+        osi_dir = tmp_path / "osi"
+        osi_dir.mkdir(exist_ok=True)
+        (osi_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi", "OSI"])
+        assert [p.name for p in result] == ["orders.json"]
+
 
 class TestBuildModelLookup:
     def test_indexes_model_by_alias_schema_database(self):

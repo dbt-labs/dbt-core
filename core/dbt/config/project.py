@@ -466,7 +466,9 @@ class PartialProject(RenderComponents):
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ["analyses"])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
         function_paths: List[str] = value_or(cfg.function_paths, ["functions"])
-        osi_paths: List[str] = value_or(cfg.osi_paths, [OSI_DIRECTORY_NAME])
+        osi_paths: List[str] = value_or(
+            cfg.osi_paths, [OSI_DIRECTORY_NAME, OSI_DIRECTORY_NAME.upper()]
+        )
 
         all_source_paths: List[str] = _all_source_paths(
             model_paths,
