@@ -55,7 +55,7 @@ pub(crate) trait PackageInstaller {
         out: &mut InstallOutcome,
     ) -> FsResult<()>;
 
-    /// Owns span, telemetry, status recording, and `M015` finalization.
+    /// Owns span, telemetry, status recording, and `M016` finalization.
     async fn install(&self, ctx: &DepsOperationContext<'_>, dest: &Path) -> FsResult<()> {
         ctx.check_cancellation()?;
         let attrs = self.span_attrs();
@@ -73,20 +73,18 @@ pub(crate) trait PackageInstaller {
 
         let result = inner.record_status(&span);
 
-        if result.is_ok() {
-            if ctx.io.send_anonymous_usage_stats {
-                package_install_event(
-                    ctx.io.invocation_id.to_string(),
-                    outcome.name.unwrap_or_default(),
-                    outcome.version.unwrap_or_default(),
-                    self.telemetry_kind().to_string(),
-                );
-            }
-
-            update_span_attrs(&span, |ev: &mut DepsPackageInstalled| {
-                ev.dbt_core_event_code = "M015".to_string();
-            });
+        if result.is_ok() && ctx.io.send_anonymous_usage_stats {
+            package_install_event(
+                ctx.io.invocation_id.to_string(),
+                outcome.name.unwrap_or_default(),
+                outcome.version.unwrap_or_default(),
+                self.telemetry_kind().to_string(),
+            );
         }
+
+        update_span_attrs(&span, |ev: &mut DepsPackageInstalled| {
+            ev.dbt_core_event_code = "M016".to_string();
+        });
 
         result
     }

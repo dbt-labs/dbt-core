@@ -93,6 +93,7 @@ impl SemanticCategory {
             "quote"
             | "quote_as_configured"
             | "quote_seed_column"
+            | "render_equals"
             | "convert_type"
             | "dispatch"
             | "commit"

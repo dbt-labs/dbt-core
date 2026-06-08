@@ -789,7 +789,9 @@ pub struct ManifestModel {
     pub group: Option<String>,
     #[serde(default)]
     pub config: ManifestModelConfig,
+    #[serialize_always]
     pub version: Option<StringOrInteger>,
+    #[serialize_always]
     pub latest_version: Option<StringOrInteger>,
     pub constraints: Option<Vec<ModelConstraint>>,
     pub deprecation_date: Option<String>,
