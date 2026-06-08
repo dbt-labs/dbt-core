@@ -1,0 +1,7 @@
+kind: Features
+body: Tolerate dbt Fusion-specific warn_error_options names instead of erroring, emitting
+  a note that they are ignored because they are specific to the dbt Fusion engine
+time: 2026-06-08T22:03:46.605308+05:30
+custom:
+  Author: ajnovice
+  Issue: "12885"
