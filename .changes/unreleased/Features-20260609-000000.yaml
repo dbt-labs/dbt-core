@@ -1,0 +1,8 @@
+kind: Features
+body: Emit anonymous usage telemetry when state management is enabled via the --manage-state
+  flag, DBT_ENGINE_MANAGE_STATE env var, or manage_state project config, including
+  which surface supplied the opt-in
+time: 2026-06-09T00:00:00.000000-07:00
+custom:
+  Author: colinrogers
+  Issue: "0000"

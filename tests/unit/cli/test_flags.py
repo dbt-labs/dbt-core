@@ -180,6 +180,61 @@ class TestFlags:
         flags = Flags(context)
         assert flags.USE_COLORS is True
 
+    def test_manage_state_source_unset(self, monkeypatch):
+        # PluginManager may leak DBT_ENGINE_MANAGE_STATE=true into os.environ in a
+        # shared test process; clear it so this case exercises the true default.
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: {})
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context)
+        assert flags.MANAGE_STATE is False
+        assert flags.MANAGE_STATE_SOURCE is None
+
+    def test_manage_state_source_cli_flag(self, monkeypatch):
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: {})
+        context = self.make_dbt_context("run", ["--manage-state", "run"])
+        flags = Flags(context)
+        assert flags.MANAGE_STATE is True
+        assert flags.MANAGE_STATE_SOURCE == "cli_flag"
+
+    def test_manage_state_source_env_var(self, monkeypatch):
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: {})
+        monkeypatch.setenv("DBT_ENGINE_MANAGE_STATE", "True")
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context)
+        assert flags.MANAGE_STATE is True
+        assert flags.MANAGE_STATE_SOURCE == "env_var"
+
+    def test_manage_state_source_project_config(self, monkeypatch):
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: {})
+        project_flags = ProjectFlags(manage_state=True)
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context, project_flags)
+        assert flags.MANAGE_STATE is True
+        assert flags.MANAGE_STATE_SOURCE == "project_config"
+
+    def test_manage_state_source_user_settings(self, monkeypatch):
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setattr(
+            "dbt.cli.flags.get_user_setting_flags",
+            lambda: {"manage_state": True},
+        )
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context)
+        assert flags.MANAGE_STATE is True
+        assert flags.MANAGE_STATE_SOURCE == "user_settings"
+
+    def test_manage_state_source_cli_overrides_project(self, monkeypatch):
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: {})
+        project_flags = ProjectFlags(manage_state=False)
+        context = self.make_dbt_context("run", ["--manage-state", "run"])
+        flags = Flags(context, project_flags)
+        assert flags.MANAGE_STATE is True
+        assert flags.MANAGE_STATE_SOURCE == "cli_flag"
+
     def test_mutually_exclusive_options_passed_separately(self):
         """Assert options that are mutually exclusive can be passed separately without error"""
         warn_error_context = self.make_dbt_context("run", ["--warn-error", "run"])

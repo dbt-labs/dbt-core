@@ -53,6 +53,7 @@ RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-1-1"
 PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
 ARTIFACT_UPLOAD = "iglu:com.dbt/artifact_upload/jsonschema/1-0-0"
+MANAGE_STATE_SPEC = "iglu:com.dbt/manage_state/jsonschema/1-0-0"
 
 SNOWPLOW_TRACKER_VERSION = Version(snowplow_version)
 
@@ -446,6 +447,19 @@ def track_plugin_get_nodes(options):
         active_user,
         category="dbt",
         action="plugin_get_nodes",
+        label=get_invocation_id(),
+        context=context,
+    )
+
+
+def track_manage_state(options):
+    context = [SelfDescribingJson(MANAGE_STATE_SPEC, options)]
+    assert active_user is not None, "Cannot track manage_state when active user is None"
+
+    track(
+        active_user,
+        category="dbt",
+        action="manage_state",
         label=get_invocation_id(),
         context=context,
     )

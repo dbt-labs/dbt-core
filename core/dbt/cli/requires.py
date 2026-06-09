@@ -40,7 +40,12 @@ from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
 from dbt.profiler import profiler
-from dbt.tracking import active_user, initialize_from_flags, track_run
+from dbt.tracking import (
+    active_user,
+    initialize_from_flags,
+    track_manage_state,
+    track_run,
+)
 from dbt.utils import try_get_max_rss_kb
 from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
@@ -111,6 +116,16 @@ def preflight(func):
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         ctx.with_resource(track_run(run_command=flags.WHICH))
+
+        # Telemetry for opt-in state management (--manage-state /
+        # DBT_ENGINE_MANAGE_STATE / manage_state: true).
+        if getattr(flags, "MANAGE_STATE", False) and dbt.tracking.active_user is not None:
+            track_manage_state(
+                {
+                    "manage_state": True,
+                    "source": getattr(flags, "MANAGE_STATE_SOURCE", None),
+                }
+            )
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
