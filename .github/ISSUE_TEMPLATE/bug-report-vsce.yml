@@ -1,7 +1,7 @@
 name: 🐞📟 VS Code Extension Bug
 description: Report a bug with the dbt VS Code extension
 title: "[VSCE] [Bug] <title>"
-labels: ["bug", "triage", "vsce"]
+labels: ["bug", "triage", "vsce", "v2"]
 body:
   - type: markdown
     attributes:
