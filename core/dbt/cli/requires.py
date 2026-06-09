@@ -40,12 +40,7 @@ from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
 from dbt.profiler import profiler
-from dbt.tracking import (
-    active_user,
-    initialize_from_flags,
-    track_manage_state,
-    track_run,
-)
+from dbt.tracking import initialize_from_flags, track_manage_state, track_run
 from dbt.utils import try_get_max_rss_kb
 from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
@@ -135,8 +130,8 @@ def preflight(func):
         # Deprecation warnings
         flags.fire_deprecations(ctx)
 
-        if active_user is not None:  # mypy appeasement, always true
-            fire_event(MainTrackingUserState(user_state=active_user.state()))
+        if dbt.tracking.active_user is not None:  # mypy appeasement, always true
+            fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
 
         # Profiling
         if flags.RECORD_TIMING_INFO:
