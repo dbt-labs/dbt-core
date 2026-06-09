@@ -6252,16 +6252,6 @@
             }
           ]
         },
-        "+quoting": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DbtQuoting"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "+refresh_interval_minutes": {
           "anyOf": [
             {
