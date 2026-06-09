@@ -8,6 +8,7 @@ use dbt_lib::print_trimmed_error;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+// test: copybara reverse-sync end-to-end probe — remove before merge
 fn main() -> ExitCode {
     let cli_parser = DefaultCliParserFactory.create("dbt-core");
     let cli = dbt_lib::prepare_cli_or_exit(&cli_parser);
