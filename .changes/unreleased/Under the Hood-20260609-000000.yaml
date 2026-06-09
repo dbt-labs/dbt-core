@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add v1/v2 version labels and version dropdowns to issue templates
+time: 2026-06-09T00:00:00.000000+00:00
+custom:
+    author: tauhid621
+    issue: ""
+    project: dbt-fusion
