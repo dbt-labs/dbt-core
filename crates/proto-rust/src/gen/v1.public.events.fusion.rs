@@ -306,6 +306,9 @@ pub struct ResourceCounts {
     /// total count of saved queries in the project.
     #[prost(int32, tag = "17")]
     pub saved_queries: i32,
+    /// total count of catalogs in the project.
+    #[prost(int32, tag = "18")]
+    pub catalogs: i32,
 }
 impl ::prost::Name for ResourceCounts {
     const NAME: &'static str = "ResourceCounts";

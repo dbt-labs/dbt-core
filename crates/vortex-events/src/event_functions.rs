@@ -400,7 +400,11 @@ pub fn package_install_event(invocation_id: String, name: String, version: Strin
 }
 
 /// dbt-core core/dbt/compilation.py::print_compile_stats, track_resource_counts
-pub fn resource_counts_event(args: InvocationArgs, resolved_state: &ResolverState) {
+pub fn resource_counts_event(
+    args: InvocationArgs,
+    resolved_state: &ResolverState,
+    catalog_count: i32,
+) {
     let model_count = resolved_state.nodes.models.len() as i32;
     let seed_count = resolved_state.nodes.seeds.len() as i32;
     let data_test_count = resolved_state.nodes.tests.len() as i32;
@@ -455,6 +459,8 @@ pub fn resource_counts_event(args: InvocationArgs, resolved_state: &ResolverStat
         semantic_models: semantic_model_count,
         // total count of saved queries in the project.
         saved_queries: saved_query_count,
+        // total count of catalogs in the project.
+        catalogs: catalog_count,
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
     };

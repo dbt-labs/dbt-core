@@ -265,6 +265,9 @@ message ResourceCounts {
 
   // total count of saved queries in the project.
   int32 saved_queries = 17;
+
+  // total count of catalogs in the project.
+  int32 catalogs = 18;
 }
 
 // Run Model Event will be emitted when Fusion runs a model or skips a model because

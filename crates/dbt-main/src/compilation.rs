@@ -305,10 +305,10 @@ impl<'a> CompilationPhasesExecutor<'a> {
     }
 
     /// Emit Vortex resource_counts if instrumentation is enabled
-    fn resource_counts_event(&self, resolved_state: &ResolverState) {
+    fn resource_counts_event(&self, resolved_state: &ResolverState, catalog_count: i32) {
         if self.arg.send_anonymous_usage_stats {
             let invocation_args = InvocationArgs::from_eval_args(self.arg.as_ref());
-            resource_counts_event(invocation_args, resolved_state);
+            resource_counts_event(invocation_args, resolved_state, catalog_count);
         }
     }
 
@@ -1198,7 +1198,20 @@ impl DbtProjectCompilation {
         let semantic_manifest = SemanticManifest::from(&resolved_state.nodes);
         token.check_cancellation()?;
 
-        executor.resource_counts_event(&resolved_state);
+        // Catalogs are parsed into DbtState (catalogs.yml), not ResolverState, so
+        // count them here from the loaded project where DbtState is in scope, and
+        // pass the count through to the telemetry event. Both v1 and v2
+        // catalogs.yml store their entries under the top-level `catalogs` key.
+        let catalog_count = {
+            let dbt_state = loaded_project.dbt_state();
+            dbt_state
+                .catalogs
+                .as_ref()
+                .and_then(|catalogs| catalogs.catalogs_seq().ok())
+                .map(|seq| seq.len() as i32)
+                .unwrap_or(0)
+        };
+        executor.resource_counts_event(&resolved_state, catalog_count);
         token.check_cancellation()?;
 
         let metricflow_server_client =
