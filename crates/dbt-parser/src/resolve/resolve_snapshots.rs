@@ -325,9 +325,10 @@ pub async fn resolve_snapshots(
     } in snapshot_sql_resources_map.into_iter()
     {
         {
+            let error_path = &dbt_asset.original_path;
             let snapshot_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
             if snapshot_name.contains(' ') {
-                return Err(err_resource_name_has_spaces(snapshot_name, &dbt_asset.path));
+                return Err(err_resource_name_has_spaces(snapshot_name, error_path));
             }
 
             // Recalculate checksum from original snapshot file.
@@ -347,6 +348,17 @@ pub async fn resolve_snapshots(
             } else {
                 SnapshotProperties::empty(snapshot_name.to_owned())
             };
+            let snapshot_name_span = snapshot_properties
+                .get(snapshot_name)
+                .and_then(|mpe| {
+                    mpe.name_span.is_valid().then(|| {
+                        dbt_common::Span::from_serde_span(
+                            mpe.name_span.clone(),
+                            mpe.relative_path.clone(),
+                        )
+                    })
+                })
+                .unwrap_or_default();
 
             let unique_id = format!("snapshot.{package_name}.{snapshot_name}");
 
@@ -375,7 +387,7 @@ pub async fn resolve_snapshots(
                 dependency_package_name,
                 arg.io.status_reporter.as_ref(),
             );
-            validate_compute(snapshot_config.compute, &dbt_asset.path)?;
+            validate_compute(snapshot_config.compute, error_path)?;
 
             let macro_depends_on = all_depends_on
                 .get(&format!("{package_name}.{snapshot_name}"))
@@ -419,7 +431,7 @@ pub async fn resolve_snapshots(
                     name: snapshot_name.to_string(),
                     package_name: package_name.clone(),
                     path: dbt_asset.path.clone(),
-                    name_span: dbt_common::Span::default(),
+                    name_span: snapshot_name_span,
                     raw_code: Some(snapshot_block_body.unwrap_or(raw_code)),
                     // The original file path where the snapshot was defined
                     // For package snapshots, this includes the package path (e.g., dbt_packages/my_pkg/snapshots/foo.sql)
@@ -547,7 +559,7 @@ pub async fn resolve_snapshots(
             match node_resolver.insert_ref(&dbt_snapshot, adapter_type, status, false) {
                 Ok(_) => (),
                 Err(e) => {
-                    let err_with_loc = e.with_location(dbt_asset.path.clone());
+                    let err_with_loc = e.with_location(error_path.clone());
                     emit_error_log_from_fs_error(&err_with_loc, arg.io.status_reporter.as_ref());
                 }
             }
@@ -557,7 +569,7 @@ pub async fn resolve_snapshots(
                     if snapshot_config.unique_key.is_none() || snapshot_config.strategy.is_none() {
                         let e = fs_err!(
                             code => ErrorCode::InvalidConfig,
-                            loc => dbt_asset.path.clone(),
+                            loc => error_path.clone(),
                             "Snapshot '{}' must be configured with a 'strategy' and 'unique_key'",
                             snapshot_name
                         );

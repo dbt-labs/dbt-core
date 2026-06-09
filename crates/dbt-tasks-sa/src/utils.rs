@@ -12,7 +12,7 @@ use dbt_common::artifact_io::write_artifact_to_file;
 use dbt_common::constants::DBT_MANIFEST_JSON;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::DbtPath;
-use dbt_common::path::{get_snapshot_compiled_path, get_target_write_path};
+use dbt_common::path::get_target_write_path;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::unexpected_err;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, stdfs};
@@ -23,7 +23,7 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::relations::base::ComponentName;
 use dbt_schemas::schemas::{
-    CommonAttributes, InternalDbtNode, InternalDbtNodeAttributes,
+    CommonAttributes, InternalDbtNode, InternalDbtNodeAttributes, NodePathKind,
     macros::DbtMacro,
     manifest::{DbtManifest, DbtNode},
     nodes::Nodes,
@@ -152,15 +152,8 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
         // parquet. raw_code is already populated at resolve time — see resolve_snapshots.rs.
         if arg.write_json || arg.write_metadata {
             if let Some(base_mut) = base_mut {
-                // Always use nested path for snapshots — mirrors task_runner and materialize_snapshot.
-                // Must stay in sync with DefaultCompiledSqlCache::get_compiled_sql_path.
-                // See dbt-core#12693.
-                let absolute_path = get_snapshot_compiled_path(
-                    &io.out_dir.join(DBT_COMPILED_DIR_NAME),
-                    &snapshot.__common_attr__.package_name,
-                    &snapshot.__common_attr__.original_file_path,
-                    &snapshot.__common_attr__.name,
-                );
+                let absolute_path =
+                    snapshot.get_node_path_abs(NodePathKind::Compiled, &io.in_dir, &io.out_dir);
                 if let Ok(compiled_sql) = stdfs::read_to_string(&absolute_path) {
                     let relative_path = stdfs::diff_paths(&absolute_path, &io.in_dir)?;
                     base_mut.compiled_path = Some(relative_path.to_string_lossy().to_string());

@@ -38,7 +38,7 @@ use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{DbtUnitTest, InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
-use dbt_telemetry::NodeType;
+use dbt_telemetry::{ExecutionPhase as TelemetryExecutionPhase, NodeType};
 
 use crate::renderable::unit_test_typing::{BigqueryTyping, SnowflakeTyping};
 use dbt_tasks_core::task::TaskResult;
@@ -415,6 +415,7 @@ fn populate_schema_from_empty_relation(
         None,
         &ctx.inner.base_context,
         &ctx.inner.arg.io,
+        TelemetryExecutionPhase::Render,
         None,
         ctx.runtime_config().dependencies.keys().cloned().collect(),
     );

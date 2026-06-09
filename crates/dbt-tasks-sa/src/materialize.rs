@@ -35,6 +35,7 @@ use dbt_schemas::{
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
 use dbt_tasks_core::test_aggregation::GenericTestRelationships;
+use dbt_telemetry::ExecutionPhase;
 use minijinja::Value;
 
 /// Macro to handle NULL values in Arrow arrays
@@ -90,7 +91,13 @@ fn execute_materialization_macro(
                 "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
                 e.context
             );
-            Box::new(e.with_location(compiled_path).with_context(message))
+            let error_path = if resource_type == "snapshot" {
+                PathBuf::from(display_path)
+            } else {
+                compiled_path.clone()
+            };
+            let err = e.with_location(error_path);
+            Box::new(err.with_context(message))
         }
     })
 }
@@ -170,6 +177,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
     io_args: &IoArgs,
     sql: Option<&str>,
     style: NodeHookStyle,
+    error_path_kind: NodePathKind,
     phase: NodeHookPhase,
 ) -> FsResult<()> {
     let mut context = build_run_node_context(
@@ -179,6 +187,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -205,7 +214,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
         );
         Box::new(
             e.with_location(node.get_node_path_abs(
-                NodePathKind::Compiled,
+                error_path_kind,
                 &io_args.in_dir,
                 &io_args.out_dir,
             ))
@@ -339,6 +348,7 @@ pub fn materialize_clone<S: serde::Serialize>(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -440,6 +450,7 @@ pub fn materialize_seed(
         Some(agate_table),
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -476,6 +487,7 @@ pub fn materialize_model(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         sql_header,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -486,13 +498,8 @@ pub fn materialize_model(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &model.__common_attr__.package_name,
-        &model.__common_attr__.path,
-        &model.__common_attr__.original_file_path,
-    );
+    let compiled_path =
+        model.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
 
     let unique_id = model.__common_attr__.unique_id.clone();
     let node_alias = model.__base_attr__.alias.clone();
@@ -580,13 +587,8 @@ pub fn materialize_microbatch_model(
     let macro_name = materialization_resolver
         .find_materialization_macro_by_name(&DbtMaterialization::Incremental.to_string())?;
 
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &model.__common_attr__.package_name,
-        &model.__common_attr__.path,
-        &model.__common_attr__.original_file_path,
-    );
+    let compiled_path =
+        model.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -657,6 +659,7 @@ pub fn materialize_snapshot(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -672,10 +675,9 @@ pub fn materialize_snapshot(
 
     let unique_id = snapshot.__common_attr__.unique_id.clone();
     let node_alias = snapshot.__base_attr__.alias.clone();
-    let original_file_path = snapshot
-        .__common_attr__
-        .original_file_path
-        .to_string_lossy()
+    let run_display_path = snapshot
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .display()
         .to_string();
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
@@ -705,7 +707,7 @@ pub fn materialize_snapshot(
         "snapshot",
         &unique_id,
         &node_alias,
-        &original_file_path,
+        &run_display_path,
         compiled_path,
     );
 
@@ -732,6 +734,7 @@ pub fn materialize_unit_test(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         resolver_state
             .runtime_config
@@ -806,6 +809,7 @@ pub fn materialize_unit_test_fast_pass(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -1005,6 +1009,7 @@ pub fn materialize_test(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         packages,
     );
@@ -1313,6 +1318,7 @@ pub fn materialize_function(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );

@@ -7,7 +7,7 @@ use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_errors};
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::constants::{DBT_TARGET_DIR_NAME, PARSING};
+use dbt_common::constants::{DBT_SNAPSHOTS_DIR_NAME, DBT_TARGET_DIR_NAME, PARSING};
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
@@ -145,12 +145,30 @@ where
 
     let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
 
-    let display_path = if dbt_asset.base_path == args.io.out_dir {
+    let display_path = if dbt_asset.base_path == args.io.out_dir
+        && dbt_asset.path.starts_with(DBT_SNAPSHOTS_DIR_NAME)
+    {
+        dbt_asset.original_path.clone()
+    } else if dbt_asset.base_path == args.io.out_dir {
         PathBuf::from(DBT_TARGET_DIR_NAME).join(dbt_asset.to_display_path(&args.io.out_dir))
     } else {
         dbt_asset.to_display_path(&args.io.in_dir)
     };
-    let display_path_str = display_path.display().to_string();
+    let display_path_str = if dbt_asset.base_path == args.io.out_dir
+        && dbt_asset.path.starts_with(DBT_SNAPSHOTS_DIR_NAME)
+        && let Some(mpe) = node_properties.get(ref_name)
+        && mpe.name_span.is_valid()
+    {
+        format!(
+            "{}:{}:{} ({})",
+            display_path.display(),
+            mpe.name_span.start.line,
+            mpe.name_span.start.column,
+            ref_name
+        )
+    } else {
+        display_path.display().to_string()
+    };
 
     let span = create_debug_span(AssetParsed::new_with_phase_from_context(
         package_name.clone(),
@@ -493,7 +511,7 @@ where
                 let status = match err.code {
                     ErrorCode::DisabledModel => ModelStatus::Disabled,
                     ErrorCode::MacroSyntaxInvalid => {
-                        let err_with_loc = err.with_location(dbt_asset.path.clone());
+                        let err_with_loc = err.with_location(display_path.clone());
                         emit_error_log_from_fs_error(
                             &err_with_loc,
                             args.io.status_reporter.as_ref(),
@@ -502,7 +520,7 @@ where
                     }
                     _ => {
                         if was_enabled {
-                            let err_with_loc = err.with_location(dbt_asset.path.clone());
+                            let err_with_loc = err.with_location(display_path.clone());
                             emit_error_log_from_fs_error(
                                 &err_with_loc,
                                 args.io.status_reporter.as_ref(),

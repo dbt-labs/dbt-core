@@ -22,8 +22,8 @@ use dbt_jinja_utils::{
     utils::{inject_and_persist_ephemeral_models, render_sql},
 };
 use dbt_schemas::schemas::{
-    ContextRunResult, InternalDbtNode, InternalDbtNodeAttributes, common::DbtMaterialization,
-    manifest::DbtOperation,
+    ContextRunResult, InternalDbtNode, InternalDbtNodeAttributes, NodePathKind,
+    common::DbtMaterialization, manifest::DbtOperation,
 };
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::context::TaskRunnerCtx;
@@ -266,14 +266,12 @@ pub async fn run_operation_on_run(
     operation_ctx.insert(
         "write".to_owned(),
         MinijinjaValue::from_object(WriteConfig {
-            // as assigned by `dbt_parser::new_operation`
-            node_name: operation.__common_attr__.name.clone(),
             resource_type: NodeType::Operation.as_str_name().to_string(),
-            project_root: io_args.in_dir.clone(),
-            target_path: io_args.out_dir.clone(),
-            package_name: operation.__common_attr__.package_name.clone(),
-            path: operation.__common_attr__.path.clone(),
-            original_file_path: operation.__common_attr__.original_file_path.clone(),
+            run_file_path: operation.get_node_path_abs(
+                NodePathKind::Executable,
+                &io_args.in_dir,
+                &io_args.out_dir,
+            ),
         }),
     );
 

@@ -14,7 +14,7 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtMaterialization};
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes};
 use dbt_tasks_core::context::TaskRunnerCtx;
-use dbt_telemetry::{NodeEvaluated, NodeEvent, has_node_warning};
+use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeEvent, has_node_warning};
 
 use minijinja::Value;
 use tracing::debug;
@@ -132,6 +132,7 @@ pub fn prepare_microbatch_batches(
         None,
         &base_context,
         &ctx.inner.arg.io,
+        ExecutionPhase::Run,
         sql_header,
         ctx.runtime_config().dependencies.keys().cloned().collect(),
     ));

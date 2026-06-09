@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -11,10 +10,9 @@ use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
 };
-use dbt_loader::args::IoArgs;
 use dbt_schema_store::store::{DataStore, SchemaStore};
 use dbt_schemas::{
-    schemas::{CommonAttributes, Nodes, project::DbtProject},
+    schemas::{Nodes, project::DbtProject},
     state::{Macros, ModelStatus, ResolverState},
 };
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooksFactory;
@@ -27,7 +25,6 @@ use crate::schedule::{DbtProjectCompilationCacheChanges, DbtScheduleDescription}
 pub trait CompilationCache: Send + Sync {
     fn schema_exists_by_unique_id(&self, unique_id: &str) -> bool;
     fn get_schema_by_unique_id(&self, unique_id: &str) -> Option<arrow_schema::SchemaRef>;
-    fn get_compiled_sql_path(&self, io: &IoArgs, common: &CommonAttributes) -> PathBuf;
     fn schema_store(&self) -> Arc<SchemaStore>;
     fn data_store(&self) -> Arc<DataStore>;
     fn into_any_arc(self: Arc<Self>) -> Arc<dyn std::any::Any + Send + Sync>;

@@ -94,8 +94,8 @@ fn render_default(
 
     add_task_context(&mut base_context, node.common(), &ctx.thread_id);
 
-    // For snapshots, use `path` (generated file) instead of `original_file_path` (source file)
-    // because the generated file may have a different name than the source file
+    // For snapshots, `path` is the generated SQL artifact used as render input.
+    // Display/error locations still use the definition path via `get_node_path`.
     let file_path = if node.resource_type() == NodeType::Snapshot {
         &node.common().path
     } else {
@@ -123,27 +123,26 @@ fn render_default(
         unit_test::apply_unit_test_overrides(&mut compile_context, overrides, ctx);
     }
 
+    let render_file_path = node
+        .get_node_path(
+            NodePathKind::Definition,
+            ctx.inner.arg.io.in_dir.as_path(),
+            ctx.inner.arg.io.out_dir.as_path(),
+        )
+        .into_owned();
+
     let rendered_sql = render_sql(
         &raw_sql,
         &ctx.env,
         &compile_context,
         ctx.rendering_listener_factory.as_ref(),
-        &node.path(),
+        &render_file_path,
     )
-    .map_err(|e| {
-        let loc = node
-            .get_node_path(
-                NodePathKind::Definition,
-                ctx.inner.arg.io.in_dir.as_path(),
-                ctx.inner.arg.io.out_dir.as_path(),
-            )
-            .into_owned();
-        e.with_location(loc)
-    })?;
+    .map_err(|e| e.with_location(render_file_path.clone()))?;
 
     let mut macro_spans = ctx
         .rendering_listener_factory
-        .drain_macro_spans(&node.common().path);
+        .drain_macro_spans(&render_file_path);
     let rendered_sql_maybe_with_cte = inject_and_persist_ephemeral_models(
         rendered_sql,
         &mut macro_spans,
@@ -151,16 +150,7 @@ fn render_default(
         node.materialized() == DbtMaterialization::Ephemeral,
         &ctx.inner.arg.io.out_dir.join(DBT_EPHEMERAL_DIR_NAME),
     )
-    .map_err(|e| {
-        let loc = node
-            .get_node_path(
-                NodePathKind::Definition,
-                ctx.inner.arg.io.in_dir.as_path(),
-                ctx.inner.arg.io.out_dir.as_path(),
-            )
-            .into_owned();
-        e.with_location(loc)
-    })?;
+    .map_err(|e| e.with_location(render_file_path.clone()))?;
 
     let macro_spans = macro_spans_to_macro_span_vec(&macro_spans);
 

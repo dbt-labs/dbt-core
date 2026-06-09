@@ -187,7 +187,7 @@ impl InternalDbtNodeWrapper {
 /// - [`Executable`](Self::Executable) — the run-ready SQL under `target/run/`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodePathKind {
-    /// The original source file (sql for most nodes, yml for tests & yml-defined snapshots).
+    /// The original source file where the node is defined.
     Definition,
     /// The compiled SQL path (`target/compiled/…`).
     Compiled,
@@ -195,9 +195,9 @@ pub enum NodePathKind {
     Executable,
 }
 
-/// Most call-sites that surface a node path already know their [`ExecutionPhase`].
-/// This conversion lets them pass the phase directly and get the right path kind
-/// without hard-coding the mapping at every call-site.
+/// Maps an [`ExecutionPhase`] to the corresponding node path kind for phase-aware
+/// reporting. The node path API still decides what each kind means for the
+/// specific node type.
 impl From<ExecutionPhase> for NodePathKind {
     fn from(phase: ExecutionPhase) -> Self {
         match phase {
@@ -301,15 +301,16 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     ///
     /// Callers that have an [`ExecutionPhase`] can convert it via `.into()`.
     ///
-    /// For models, generic tests, and unit tests the path varies by kind:
+    /// For models, generic tests, unit tests, and snapshots the path varies by kind:
     ///
-    ///   - `Compiled`   - `target/compiled/{package}/{path_segment}` (via `get_target_write_path`)
+    ///   - `Compiled`   - `target/compiled/{package}/{path_segment}` (snapshots use
+    ///     their nested compiled artifact path)
     ///   - `Executable` - `target/run/{package}/{path_segment}/{alias}.sql`
     ///     (mirrors `write_file()` in `run_node_context.rs`; uses `alias` to
     ///     avoid ENAMETOOLONG on Linux for long generic test names)
     ///   - `Definition` - see `get_node_definition_path`
     ///
-    /// For all other node types the definition path is always returned.
+    /// For all other node types the definition path is returned.
     fn get_node_path(
         &self,
         path_kind: NodePathKind,
@@ -321,7 +322,10 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
                 NodePathKind::Compiled,
                 NodeType::Model | NodeType::Test | NodeType::UnitTest | NodeType::Snapshot,
             )
-            | (NodePathKind::Executable, NodeType::Model | NodeType::Test | NodeType::UnitTest) => {
+            | (
+                NodePathKind::Executable,
+                NodeType::Model | NodeType::Test | NodeType::UnitTest | NodeType::Snapshot,
+            ) => {
                 let abs = self.get_node_path_abs(path_kind, in_dir, out_dir);
                 pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
             }
@@ -329,8 +333,10 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         }
     }
 
-    /// Absolute counterpart to `get_node_path` for the `Compiled` and `Executable` kinds.
-    /// Useful when the caller needs to pass the path to filesystem APIs directly.
+    /// Constructs the absolute path for the requested kind.
+    ///
+    /// `get_node_path` applies node-kind fallback for display/reporting paths. This lower-level
+    /// helper is for callers that need a concrete artifact or definition path for filesystem use.
     fn get_node_path_abs(&self, path_kind: NodePathKind, in_dir: &Path, out_dir: &Path) -> PathBuf {
         let common = self.common();
         let executable_filename = || {
@@ -383,7 +389,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     ///
     /// This is where the node is defined in the project — independent of execution phase.
     ///
-    /// - Snapshots: relative path to the generated snapshot file in the target directory.
+    /// - Snapshots: the raw YAML/SQL file where the snapshot is defined.
     /// - Generic tests: the YAML file where the test is declared (via `defined_at.file`).
     ///   `original_file_path` is a misnomer for tests — it points at the generated SQL —
     ///   so we prefer `defined_at` when available and fall back to it only if missing.
@@ -391,13 +397,8 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn get_node_definition_path(
         &self,
         in_dir: &Path,
-        out_dir: &Path,
+        _out_dir: &Path,
     ) -> std::borrow::Cow<'_, Path> {
-        if self.resource_type() == NodeType::Snapshot {
-            let out_dir_relative =
-                pathdiff::diff_paths(out_dir, in_dir).unwrap_or_else(|| out_dir.to_owned());
-            return out_dir_relative.join(&self.common().path).into();
-        }
         if self.resource_type() == NodeType::Test
             && let Some(defined_at) = self.defined_at()
         {
@@ -435,33 +436,23 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             None
         };
 
-        // This is a quirk of historical reporting. For generic tests we report the yml source with line:col location,
-        // but for all other node types we follow the logic described in `get_node_definition_path`.
-        // TODO: streamline and ensure the path's reported via events align with what LSP is being sent
-        let (relative_path, defined_at_line, defined_at_column) = self.defined_at().map_or_else(
-            || {
-                (
-                    self.get_node_path(NodePathKind::Definition, in_dir, out_dir)
-                        .display()
-                        .to_string(),
-                    None,
-                    None,
-                )
-            },
-            |defined_at| {
-                let relative_path = if defined_at.file.is_absolute() {
-                    defined_at
-                        .file
-                        .strip_prefix(in_dir)
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|_| defined_at.file.display().to_string())
-                } else {
-                    defined_at.file.display().to_string()
-                };
-
-                (relative_path, Some(defined_at.line), Some(defined_at.col))
-            },
-        );
+        // Keep model status/log display on the source definition path for readability.
+        let path_kind = if node_type == NodeType::Model {
+            NodePathKind::Definition
+        } else {
+            phase.into()
+        };
+        let relative_path = self
+            .get_node_path(path_kind, in_dir, out_dir)
+            .display()
+            .to_string();
+        let (defined_at_line, defined_at_column) = if path_kind == NodePathKind::Definition {
+            self.defined_at()
+                .map(|defined_at| (Some(defined_at.line), Some(defined_at.col)))
+                .unwrap_or((None, None))
+        } else {
+            (None, None)
+        };
 
         let node_checksum = common.checksum.as_checksum_string().to_string();
 
@@ -2342,6 +2333,14 @@ impl InternalDbtNode for DbtSnapshot {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn defined_at(&self) -> Option<&dbt_common::CodeLocationWithFile> {
+        if self.__common_attr__.name_span.start.line > 0 {
+            Some(&self.__common_attr__.name_span.start)
+        } else {
+            None
+        }
     }
 
     fn serialize_inner(
@@ -5672,18 +5671,187 @@ fn default_introspection() -> IntrospectionKind {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
     use serde::Deserialize;
 
     use super::{
-        DbtSnapshot, InternalDbtNodeAttributes, ModelConfig, hooks_equal, normalize_description,
-        persist_docs_configs_equal, quoting_equal,
+        DbtSnapshot, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind,
+        hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
     };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
     use crate::schemas::project::SnapshotMetaColumnNames;
     use dbt_adapter_core::AdapterType;
+    use dbt_common::path::path_separator_eq;
+    use dbt_telemetry::ExecutionPhase;
     use dbt_yaml::Verbatim;
 
     type YmlValue = dbt_yaml::Value;
+
+    fn snapshot_with_paths(name: &str, path: &str, original_file_path: &str) -> DbtSnapshot {
+        let mut snapshot = DbtSnapshot::default();
+        snapshot.__common_attr__.name = name.to_string();
+        snapshot.__common_attr__.package_name = "pkg".to_string();
+        snapshot.__common_attr__.path = PathBuf::from(path);
+        snapshot.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        snapshot.__base_attr__.alias = name.to_string();
+        snapshot
+    }
+
+    #[test]
+    fn yaml_snapshot_node_paths_are_phase_accurate() {
+        let snapshot = snapshot_with_paths(
+            "daily_orders",
+            "snapshots/daily_orders.sql",
+            "snapshots/snapshots.yml",
+        );
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        assert_eq!(
+            snapshot
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            Path::new("snapshots/snapshots.yml")
+        );
+        assert_eq!(
+            snapshot.get_node_path_abs(NodePathKind::Compiled, in_dir, out_dir),
+            PathBuf::from(
+                "/workspace/target/compiled/pkg/snapshots/snapshots.yml/daily_orders.sql"
+            )
+        );
+        assert_eq!(
+            snapshot
+                .get_node_path(NodePathKind::Executable, in_dir, out_dir)
+                .as_ref(),
+            Path::new("target/run/pkg/snapshots/snapshots.yml/snapshots/daily_orders.sql")
+        );
+    }
+
+    #[test]
+    fn legacy_sql_snapshot_node_paths_preserve_nested_compiled_layout() {
+        let snapshot = snapshot_with_paths(
+            "snap_non_matching",
+            "snapshots/snap_non_matching.sql",
+            "snapshots/snap_collide.sql",
+        );
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        assert_eq!(
+            snapshot
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            Path::new("snapshots/snap_collide.sql")
+        );
+        assert_eq!(
+            snapshot.get_node_path_abs(NodePathKind::Compiled, in_dir, out_dir),
+            PathBuf::from(
+                "/workspace/target/compiled/pkg/snapshots/snap_collide.sql/snap_non_matching.sql"
+            )
+        );
+        assert_eq!(
+            snapshot
+                .get_node_path(NodePathKind::Executable, in_dir, out_dir)
+                .as_ref(),
+            Path::new("target/run/pkg/snapshots/snap_collide.sql/snapshots/snap_non_matching.sql")
+        );
+    }
+
+    #[test]
+    fn snapshot_node_evaluated_paths_are_phase_accurate() {
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        let yaml_snapshot = snapshot_with_paths(
+            "daily_orders",
+            "snapshots/daily_orders.sql",
+            "snapshots/snapshots.yml",
+        );
+        assert_snapshot_evaluated_paths(
+            &yaml_snapshot,
+            in_dir,
+            out_dir,
+            "snapshots/snapshots.yml",
+            "target/compiled/pkg/snapshots/snapshots.yml/daily_orders.sql",
+            "target/run/pkg/snapshots/snapshots.yml/snapshots/daily_orders.sql",
+        );
+
+        let legacy_sql_snapshot = snapshot_with_paths(
+            "snap_non_matching",
+            "snapshots/snap_non_matching.sql",
+            "snapshots/snap_collide.sql",
+        );
+        assert_snapshot_evaluated_paths(
+            &legacy_sql_snapshot,
+            in_dir,
+            out_dir,
+            "snapshots/snap_collide.sql",
+            "target/compiled/pkg/snapshots/snap_collide.sql/snap_non_matching.sql",
+            "target/run/pkg/snapshots/snap_collide.sql/snapshots/snap_non_matching.sql",
+        );
+    }
+
+    #[test]
+    fn snapshot_node_evaluated_definition_paths_include_yaml_location() {
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+        let mut snapshot = snapshot_with_paths(
+            "daily_orders",
+            "snapshots/daily_orders.sql",
+            "snapshots/snapshots.yml",
+        );
+        snapshot.__common_attr__.name_span = dbt_common::Span {
+            start: dbt_common::CodeLocationWithFile::new(2, 5, 18, "snapshots/snapshots.yml"),
+            stop: Default::default(),
+        };
+
+        for phase in [ExecutionPhase::Parse, ExecutionPhase::Render] {
+            let event = snapshot.get_node_evaluated_event(phase, in_dir, out_dir);
+            assert_eq!(event.relative_path, "snapshots/snapshots.yml");
+            assert_eq!(event.defined_at_line, Some(2));
+            assert_eq!(event.defined_at_col, Some(5));
+        }
+
+        for phase in [ExecutionPhase::Analyze, ExecutionPhase::Run] {
+            let event = snapshot.get_node_evaluated_event(phase, in_dir, out_dir);
+            assert_eq!(event.defined_at_line, None);
+            assert_eq!(event.defined_at_col, None);
+        }
+    }
+
+    fn assert_snapshot_evaluated_paths(
+        snapshot: &DbtSnapshot,
+        in_dir: &Path,
+        out_dir: &Path,
+        definition_path: &str,
+        compiled_path: &str,
+        run_path: &str,
+    ) {
+        for phase in [ExecutionPhase::Parse, ExecutionPhase::Render] {
+            assert_eq!(
+                snapshot
+                    .get_node_evaluated_event(phase, in_dir, out_dir)
+                    .relative_path,
+                definition_path
+            );
+        }
+        let actual_compiled_path = snapshot
+            .get_node_evaluated_event(ExecutionPhase::Analyze, in_dir, out_dir)
+            .relative_path;
+        assert!(
+            path_separator_eq(&actual_compiled_path, compiled_path),
+            "left: {actual_compiled_path:?}\nright: {compiled_path:?}"
+        );
+
+        let actual_run_path = snapshot
+            .get_node_evaluated_event(ExecutionPhase::Run, in_dir, out_dir)
+            .relative_path;
+        assert!(
+            path_separator_eq(&actual_run_path, run_path),
+            "left: {actual_run_path:?}\nright: {run_path:?}"
+        );
+    }
 
     #[test]
     fn snapshot_serialized_config_defaults_partial_meta_column_names() {

@@ -61,8 +61,8 @@ use dbt_metadata::file_registry::CompleteStateWithKind;
 use dbt_schemas::{
     filter::RunFilter,
     schemas::{
-        CommonAttributes, Nodes, ResolvedCloudConfig, common::ResolvedQuoting,
-        manifest::DbtManifestV12, profiles::Execute, project::DbtProject,
+        Nodes, ResolvedCloudConfig, common::ResolvedQuoting, manifest::DbtManifestV12,
+        profiles::Execute, project::DbtProject,
         semantic_layer::semantic_manifest::SemanticManifest,
     },
     state::{CacheState, DbtPackage, DbtState, Macros, ModelStatus, ResolverState},
@@ -658,10 +658,6 @@ impl DbtProjectCompilationCacheState {
             .map(|x| x.into_inner())
     }
 
-    pub fn get_compiled_sql_path(&self, io: &IoArgs, common: &CommonAttributes) -> PathBuf {
-        self.compiled_sql_cache.get_compiled_sql_path(io, common)
-    }
-
     pub fn data_store(&self) -> Arc<DataStore> {
         self.data_store.clone()
     }
@@ -676,10 +672,6 @@ impl CompilationCache for DbtProjectCompilationCacheState {
         self.schema_store
             .get_schema_by_unique_id(unique_id)
             .map(|x| x.into_inner())
-    }
-
-    fn get_compiled_sql_path(&self, io: &IoArgs, common: &CommonAttributes) -> PathBuf {
-        self.compiled_sql_cache.get_compiled_sql_path(io, common)
     }
 
     fn schema_store(&self) -> Arc<SchemaStore> {

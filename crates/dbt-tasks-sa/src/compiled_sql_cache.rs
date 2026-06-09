@@ -8,7 +8,6 @@ use dbt_common::{
     stdfs,
 };
 use dbt_schemas::schemas::CommonAttributes;
-
 use dbt_tasks_core::CompiledSqlCache;
 
 #[derive(Default)]

@@ -442,13 +442,15 @@ pub fn format_node_evaluated_start_legacy(node: &NodeEvaluated, command: FsComma
         phase_action
     };
 
-    // Generic tests are YAML-defined and should keep the test name for clarity.
-    // Singular SQL tests should keep the old plain path output.
-    let is_yaml_defined_test =
+    // YAML-defined nodes should keep the entry name for clarity.
+    // Singular SQL tests and legacy SQL snapshots should keep the old plain path output.
+    let is_yaml_defined_node =
         node.relative_path.ends_with(".yml") || node.relative_path.ends_with(".yaml");
 
-    if (node.node_type() == NodeType::Test || node.node_type() == NodeType::UnitTest)
-        && is_yaml_defined_test
+    if matches!(
+        node.node_type(),
+        NodeType::Test | NodeType::UnitTest | NodeType::Snapshot
+    ) && is_yaml_defined_node
     {
         let display_path: std::borrow::Cow<str> = if let Some(line) = node.defined_at_line {
             if let Some(col) = node.defined_at_col {

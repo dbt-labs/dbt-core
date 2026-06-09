@@ -97,14 +97,16 @@ impl Task for RunTask {
             let mut result_receiver = { self.result_receiver.lock().take() };
             let task_result = receive_task_result(&unique_id, &mut result_receiver)?;
             let start_time = chrono::Utc::now();
-            // Status lines (RUNNING + report_completed) cite the definition path so the
-            // user sees where they wrote the code, not the run-phase artifact under target/.
-            // Error messages, which are emitted with their own phase-accurate locations
-            // attached during inner execution, are unaffected by this choice.
+            // Status lines keep source path for Models for readability
+            let display_path_kind = if self.node.resource_type() == NodeType::Model {
+                NodePathKind::Definition
+            } else {
+                NodePathKind::Executable
+            };
             let display_path = self
                 .node
                 .get_node_path(
-                    NodePathKind::Definition,
+                    display_path_kind,
                     ctx.inner.arg.io.in_dir.as_path(),
                     ctx.inner.arg.io.out_dir.as_path(),
                 )
@@ -699,6 +701,7 @@ fn execute_hook_node_blocking(
             &ctx.inner.arg.io,
             sql,
             model_hook_style(ctx.adapter_type(), &model.__base_attr__.materialized),
+            NodePathKind::Compiled,
             phase,
         ),
         RunCacheReuseHookNode::Snapshot(snapshot) => execute_node_hooks(
@@ -711,6 +714,7 @@ fn execute_hook_node_blocking(
             &ctx.inner.arg.io,
             sql,
             NodeHookStyle::SplitTransaction,
+            NodePathKind::Executable,
             phase,
         ),
         RunCacheReuseHookNode::Seed(seed) => execute_node_hooks(
@@ -723,6 +727,7 @@ fn execute_hook_node_blocking(
             &ctx.inner.arg.io,
             None,
             NodeHookStyle::SplitTransaction,
+            NodePathKind::Compiled,
             phase,
         ),
     }

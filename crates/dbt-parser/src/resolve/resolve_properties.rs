@@ -16,7 +16,7 @@ use dbt_schemas::schemas::properties::{
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
 use dbt_telemetry::AssetParsed;
-use dbt_yaml::{Span, Verbatim};
+use dbt_yaml::{Span, Spanned, Verbatim};
 use itertools::Itertools;
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
@@ -31,6 +31,12 @@ pub struct MinimalPropertiesEntry {
     pub table_value: Option<dbt_yaml::Value>,
     pub version_info: Option<VersionInfo>,
     pub duplicate_paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MinimalSnapshotValue {
+    name: Spanned<String>,
+    __additional_properties__: Verbatim<BTreeMap<String, dbt_yaml::Value>>,
 }
 
 #[derive(Default, Debug)]
@@ -259,7 +265,7 @@ impl MinimalProperties {
         }
         if let Some(snapshots) = other.snapshots {
             for snapshot_value in snapshots {
-                let snapshot = into_typed_with_jinja::<MinimalSchemaValue, _>(
+                let snapshot = into_typed_with_jinja::<MinimalSnapshotValue, _>(
                     io_args,
                     snapshot_value.clone(),
                     false,
@@ -269,16 +275,16 @@ impl MinimalProperties {
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
                     true,
                 )?;
-                if let Some(existing_snapshot) = self.snapshots.get_mut(&snapshot.name) {
+                if let Some(existing_snapshot) = self.snapshots.get_mut(snapshot.name.as_ref()) {
                     existing_snapshot
                         .duplicate_paths
                         .push(properties_path.to_path_buf());
                 } else {
                     self.snapshots.insert(
-                        snapshot.name.clone(),
+                        snapshot.name.clone().into_inner(),
                         MinimalPropertiesEntry {
-                            name: validate_resource_name(&snapshot.name)?,
-                            name_span: Span::default(),
+                            name: validate_resource_name(snapshot.name.as_ref())?,
+                            name_span: snapshot.name.span().clone(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: snapshot_value,
                             table_value: None,

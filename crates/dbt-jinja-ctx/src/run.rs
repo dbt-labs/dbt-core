@@ -131,8 +131,9 @@ pub struct RunNodeCtx {
     #[serde(rename = "TARGET_PACKAGE_NAME")]
     pub target_package_name: String,
 
-    /// `{{ __minijinja_current_path }}` — compiled-SQL path relative to the
-    /// out_dir. Key string matches `minijinja::constants::CURRENT_PATH`.
+    /// `{{ __minijinja_current_path }}` — node path selected from the
+    /// execution phase and expressed relative to the out_dir when applicable.
+    /// Key string matches `minijinja::constants::CURRENT_PATH`.
     #[serde(rename = "__minijinja_current_path")]
     pub current_path: String,
 
