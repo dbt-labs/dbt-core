@@ -5,4 +5,4 @@ body: Emit anonymous usage telemetry when state management is enabled via the --
 time: 2026-06-09T00:00:00.000000-07:00
 custom:
   Author: colinrogers
-  Issue: "0000"
+  Issue: "15222"
