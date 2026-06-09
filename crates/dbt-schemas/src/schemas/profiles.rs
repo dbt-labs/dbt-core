@@ -806,6 +806,12 @@ pub struct BigqueryDbConfig {
     pub job_retry_deadline_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workload_pool_provider_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_account_impersonation_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_endpoint: Option<YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]

@@ -175,6 +175,9 @@ fn create_merged_db_config(
                 job_retries: None,
                 job_retry_deadline_seconds: None,
                 target_name: None,
+                workload_pool_provider_path: None,
+                service_account_impersonation_url: None,
+                token_endpoint: None,
             }))
         }
         models::UserCredentialsResponseCredentials::RedshiftCredentials(redshift) => {
@@ -293,6 +296,9 @@ fn create_merged_db_config(
                     job_retries: None,
                     job_retry_deadline_seconds: None,
                     target_name: None,
+                    workload_pool_provider_path: None,
+                    service_account_impersonation_url: None,
+                    token_endpoint: None,
                 };
                 bigquery_config.merge(connection_details);
             }
@@ -349,6 +355,9 @@ fn create_merged_db_config(
                     timeout_seconds: None,
                     job_retries: None,
                     target_name: None,
+                    workload_pool_provider_path: None,
+                    service_account_impersonation_url: None,
+                    token_endpoint: None,
                 };
                 bigquery_config.merge(connection_details);
             }

@@ -14,6 +14,7 @@ pub mod auth_type {
     pub const TEMPORARY_ACCESS_TOKEN: &str = "adbc.bigquery.sql.auth_type.temporary_access_token";
     pub const JSON_CREDENTIAL_FILE: &str = "adbc.bigquery.sql.auth_type.json_credential_file";
     pub const JSON_CREDENTIAL_STRING: &str = "adbc.bigquery.sql.auth_type.json_credential_string";
+    pub const EXTERNAL_ACCOUNT: &str = "adbc.bigquery.sql.auth_type.external_account";
 }
 
 pub const AUTH_CREDENTIALS: &str = "adbc.bigquery.sql.auth_credentials";
@@ -25,6 +26,14 @@ pub const AUTH_REFRESH_TOKEN: &str = "adbc.bigquery.sql.auth.refresh_token";
 pub const AUTH_ACCESS_TOKEN_ENDPOINT: &str = "adbc.bigquery.sql.auth.access_token_endpoint";
 pub const AUTH_ACCESS_TOKEN_SERVER_NAME: &str = "adbc.bigquery.sql.auth.access_token_server_name";
 pub const AUTH_QUOTA_PROJECT: &str = "adbc.bigquery.sql.auth.quota_project";
+
+pub const AUTH_EXTERNAL_ACCOUNT_AUDIENCE: &str = "adbc.bigquery.sql.auth.external_account.audience";
+pub const AUTH_EXTERNAL_ACCOUNT_IMPERSONATION_URL: &str =
+    "adbc.bigquery.sql.auth.external_account.impersonation_url";
+pub const AUTH_EXTERNAL_ACCOUNT_REQUEST_URL: &str =
+    "adbc.bigquery.sql.auth.external_account.request_url";
+pub const AUTH_EXTERNAL_ACCOUNT_REQUEST_DATA: &str =
+    "adbc.bigquery.sql.auth.external_account.request_data";
 
 pub const IMPERSONATE_TARGET_PRINCIPAL: &str = "adbc.bigquery.sql.impersonate.target_principal";
 pub const IMPERSONATE_SCOPES: &str = "adbc.bigquery.sql.impersonate.scopes";
