@@ -238,6 +238,24 @@ class ModelRunner(CompileRunner[ModelNode]):
             return identifier
         return relation.name or ""
 
+    def _pointer_collides_with_source(
+        self, source_relation: BaseRelation, pointer_identifier: str
+    ) -> bool:
+        """Whether the pointer identifier resolves to the same relation as the latest
+        version's identifier.
+
+        When the identifier component is unquoted, the warehouse resolves identifiers
+        case-insensitively (e.g. Snowflake folds ``DIM_CUSTOMERS`` and ``dim_customers``
+        to the same object), so compare case-insensitively. When quoted, identifiers are
+        case-sensitive, so compare exactly.
+        """
+        source_identifier = self._relation_identifier(source_relation)
+        quote_policy = getattr(source_relation, "quote_policy", None)
+        identifier_quoted = bool(getattr(quote_policy, "identifier", True))
+        if identifier_quoted:
+            return source_identifier == pointer_identifier
+        return source_identifier.lower() == pointer_identifier.lower()
+
     def _latest_version_pointer_identifier(
         self,
         model: ModelNode,
@@ -285,7 +303,7 @@ class ModelRunner(CompileRunner[ModelNode]):
         source_relation = relations[0]
         pointer_identifier = self._latest_version_pointer_identifier(model, manifest, context)
 
-        if self._relation_identifier(source_relation) == pointer_identifier:
+        if self._pointer_collides_with_source(source_relation, pointer_identifier):
             raise DbtRuntimeError(
                 f"Cannot create latest version pointer: the latest version of '{model.name}' "
                 f"is already aliased to '{pointer_identifier}'. "
