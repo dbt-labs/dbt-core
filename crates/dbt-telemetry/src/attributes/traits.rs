@@ -5,8 +5,10 @@ use serde_json::Value as JsonValue;
 use std::{any::Any, fmt::Debug};
 
 use crate::{
-    SpanStatus, TelemetryOutputFlags, attributes::TelemetryContext, schemas::RecordCodeLocation,
-    serialize::arrow::ArrowAttributes,
+    SpanStatus, TelemetryOutputFlags,
+    attributes::TelemetryContext,
+    schemas::RecordCodeLocation,
+    serialize::{arrow::ArrowAttributes, traits::ArrowAttributesSerialize},
 };
 
 /// Category of record (envelope) this event should be recorded in.
@@ -139,7 +141,7 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
     /// - If `EXPORT_PARQUET` flag is NOT set in `output_flags()`, returns `None` (not exported to Arrow/Parquet).
     /// - If `EXPORT_PARQUET` flag IS set but the event does not override this method, this panics.
     ///   Types that are exported to Parquet MUST override and provide a concrete implementation.
-    fn to_arrow(&self) -> Option<ArrowAttributes<'_>> {
+    fn to_arrow(&self) -> Option<Box<dyn ArrowAttributesSerialize + '_>> {
         #[cfg(debug_assertions)]
         if self
             .output_flags()
@@ -339,7 +341,7 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
         serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
     }
 
-    fn to_arrow(&self) -> Option<ArrowAttributes<'_>> {
-        Some(self.to_arrow_record())
+    fn to_arrow(&self) -> Option<Box<dyn ArrowAttributesSerialize + '_>> {
+        Some(Box::new(self.to_arrow_record()))
     }
 }

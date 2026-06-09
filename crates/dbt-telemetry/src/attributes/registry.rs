@@ -1,6 +1,8 @@
 //! Registry for telemetry attribute types.
 
 use crate::StaticName;
+use arrow::datatypes::{DataType, Field, Fields};
+use arrow_schema::extension::Json as JsonExtensionType;
 use std::{collections::HashMap, sync::LazyLock};
 
 use super::traits::AnyTelemetryEvent;
@@ -14,12 +16,13 @@ use crate::{
         OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process, ProgressMessage,
         QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, Unknown, UserLogMessage,
     },
-    serialize::arrow::ArrowAttributes,
+    serialize::arrow::ArrowAttributes as DbtTelemetryArrowAttributes,
+    serialize::traits::ArrowRegistryLookup,
 };
 
 /// Helper function that converts trait deserializer method to one compatible with the registry.
 fn arrow_deserialize_for_type<T>(
-    attrs: &ArrowAttributes,
+    attrs: &DbtTelemetryArrowAttributes,
 ) -> Result<Box<dyn AnyTelemetryEvent>, String>
 where
     T: AnyTelemetryEvent + ArrowSerializableTelemetryEvent,
@@ -127,7 +130,8 @@ macro_rules! faker_for_type_with_oneofs {
     };
 }
 
-pub type ArrowDeserializerFn = fn(&ArrowAttributes) -> Result<Box<dyn AnyTelemetryEvent>, String>;
+pub type ArrowDeserializerFn =
+    for<'a> fn(&DbtTelemetryArrowAttributes<'a>) -> Result<Box<dyn AnyTelemetryEvent>, String>;
 #[cfg(any(test, feature = "test-utils"))]
 pub type FakerFn = fn(&str) -> Vec<Box<dyn AnyTelemetryEvent>>;
 
@@ -360,7 +364,7 @@ impl TelemetryEventTypeRegistry {
     pub fn register(
         &mut self,
         event_type: &'static str,
-        arrow_deserializer: fn(&ArrowAttributes) -> Result<Box<dyn AnyTelemetryEvent>, String>,
+        arrow_deserializer: ArrowDeserializerFn,
         #[cfg(any(test, feature = "test-utils"))] faker: FakerFn,
     ) {
         self.arrow_deserializers
@@ -397,6 +401,99 @@ impl TelemetryEventTypeRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &'static str> {
         self.arrow_deserializers.keys().copied()
+    }
+}
+
+fn dict_utf8_field(name: &str, nullable: bool) -> Field {
+    Field::new(
+        name,
+        DataType::Dictionary(Box::new(DataType::Int32), Box::new(DataType::Utf8)),
+        nullable,
+    )
+}
+
+fn large_utf8_field(name: &str, nullable: bool) -> Field {
+    Field::new(name, DataType::LargeUtf8, nullable)
+}
+
+fn json_large_utf8_field(name: &str, nullable: bool) -> Field {
+    Field::new(name, DataType::LargeUtf8, nullable)
+        .with_extension_type(JsonExtensionType::default())
+}
+
+fn create_arrow_attributes_fields() -> Fields {
+    Fields::from(vec![
+        // JSON blob for non well-known attributes
+        json_large_utf8_field("json_payload", true),
+        // Well-known common fields
+        dict_utf8_field("name", true),
+        dict_utf8_field("database", true),
+        dict_utf8_field("schema", true),
+        dict_utf8_field("identifier", true),
+        dict_utf8_field("dbt_core_event_code", true),
+        // Phase
+        dict_utf8_field("phase", true),
+        // Node fields
+        dict_utf8_field("unique_id", true),
+        dict_utf8_field("materialization", true),
+        dict_utf8_field("custom_materialization", true),
+        dict_utf8_field("node_type", true),
+        dict_utf8_field("node_outcome", true),
+        dict_utf8_field("node_error_type", true),
+        dict_utf8_field("node_cancel_reason", true),
+        dict_utf8_field("node_skip_reason", true),
+        Field::new("sao_enabled", DataType::Boolean, true),
+        // CallTrace/Unknown fields
+        dict_utf8_field("dev_name", true),
+        // Fusion origin code location fields (debug only)
+        dict_utf8_field("file", true),
+        Field::new("line", DataType::UInt32, true),
+        // Log fields
+        Field::new("code", DataType::UInt32, true),
+        dict_utf8_field("code_name", true),
+        Field::new("original_severity_number", DataType::Int32, true),
+        dict_utf8_field("original_severity_text", true),
+        dict_utf8_field("package_name", true),
+        // Artifact or node paths & location
+        large_utf8_field("relative_path", true),
+        Field::new("code_line", DataType::UInt32, true),
+        Field::new("code_column", DataType::UInt32, true),
+        dict_utf8_field("artifact_type", true),
+        // Query fields
+        large_utf8_field("query_id", true),
+        dict_utf8_field("query_outcome", true),
+        dict_utf8_field("adapter_type", true),
+        Field::new("query_error_vendor_code", DataType::Int32, true),
+        // Content hash (e.g. CAS hash for artifacts stored in CAS)
+        large_utf8_field("content_hash", true),
+        // List command output fields
+        dict_utf8_field("output_format", true),
+        large_utf8_field("content", true),
+        // Node processing duration
+        Field::new("duration_ms", DataType::UInt64, true),
+        // Number of rows affected by this event
+        Field::new("rows_affected", DataType::UInt64, true),
+        // Group identifier for model notifications
+        large_utf8_field("group", true),
+    ])
+}
+
+impl ArrowRegistryLookup for TelemetryEventTypeRegistry {
+    type ArrowAttributes<'a> = DbtTelemetryArrowAttributes<'a>;
+
+    fn arrow_attributes_fields() -> Fields {
+        create_arrow_attributes_fields()
+    }
+
+    fn deserialize_arrow_attributes(
+        &self,
+        event_type: &str,
+        attributes: &Self::ArrowAttributes<'_>,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+        let deserializer = self
+            .get_arrow_deserializer(event_type)
+            .ok_or_else(|| format!("Unknown event type\"{event_type}\""))?;
+        deserializer(attributes)
     }
 }
 

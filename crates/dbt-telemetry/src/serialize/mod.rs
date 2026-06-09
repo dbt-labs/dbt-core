@@ -2,6 +2,7 @@
 
 pub mod arrow;
 pub mod otlp;
+pub mod traits;
 
 use serde::de::{self, Visitor};
 use serde::{Deserializer, Serializer};

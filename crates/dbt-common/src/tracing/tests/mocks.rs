@@ -7,12 +7,14 @@ use super::super::{
     },
     shared_writer::SharedWriter,
 };
+use arrow::datatypes::{DataType, Field, Fields};
 use dbt_telemetry::{
     AnyTelemetryEvent, RecordCodeLocation, TelemetryAttributes, TelemetryContext,
-    TelemetryEventRecType, TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+    TelemetryEventRecType, TelemetryOutputFlags,
+    serialize::traits::{ArrowAttributesSerialize, ArrowRegistryLookup},
 };
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
 use tracing::Subscriber;
@@ -105,6 +107,41 @@ pub struct MockDynSpanEvent {
     pub context: Option<TestTelemetryContext>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MockArrowAttributes<'a> {
+    pub name: Option<Cow<'a, str>>,
+    pub code: Option<i32>,
+    pub file: Option<Cow<'a, str>>,
+    pub line: Option<u32>,
+}
+
+pub struct MockTelemetryEventRegistry;
+
+impl ArrowRegistryLookup for MockTelemetryEventRegistry {
+    type ArrowAttributes<'a> = MockArrowAttributes<'a>;
+
+    fn arrow_attributes_fields() -> Fields {
+        Fields::from(vec![
+            Field::new("name", DataType::LargeUtf8, true),
+            Field::new("code", DataType::Int32, true),
+            Field::new("file", DataType::LargeUtf8, true),
+            Field::new("line", DataType::UInt32, true),
+        ])
+    }
+
+    fn deserialize_arrow_attributes(
+        &self,
+        event_type: &str,
+        attributes: &Self::ArrowAttributes<'_>,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+        match event_type {
+            MockUnknown::EVENT_TYPE => MockUnknown::from_arrow_record(attributes),
+            MockDynLogEvent::EVENT_TYPE => MockDynLogEvent::from_arrow_record(attributes),
+            _ => Err(format!("Unknown mock event type \"{event_type}\"")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct MockUnknown {
     pub name: String,
@@ -118,29 +155,22 @@ impl MockUnknown {
     pub const EVENT_TYPE: &'static str = "v1.public.events.fusion.dev.MockUnknown";
 
     pub fn from_arrow_record(
-        attrs: &ArrowAttributes,
+        attrs: &MockArrowAttributes<'_>,
     ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
         Ok(Box::new(Self {
             name: attrs
-                .dev_name
+                .name
                 .as_deref()
                 .map(str::to_string)
-                .ok_or_else(|| {
-                    format!("Missing `dev_name` for event type \"{}\"", Self::EVENT_TYPE)
-                })?,
+                .ok_or_else(|| format!("Missing `name` for event type \"{}\"", Self::EVENT_TYPE))?,
             file: attrs
                 .file
                 .as_deref()
                 .map(str::to_string)
                 .unwrap_or_default(),
             line: attrs.line.unwrap_or_default(),
-            flags: TelemetryOutputFlags::ALL,
+            flags: TelemetryOutputFlags::EXPORT_PARQUET,
         }))
-    }
-
-    #[cfg(test)]
-    pub fn faker(_seed: &str) -> Vec<Box<dyn AnyTelemetryEvent>> {
-        vec![Box::new(Self::default())]
     }
 }
 
@@ -213,14 +243,16 @@ impl AnyTelemetryEvent for MockUnknown {
         serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
     }
 
-    fn to_arrow(&self) -> Option<ArrowAttributes<'_>> {
+    fn to_arrow(&self) -> Option<Box<dyn ArrowAttributesSerialize + '_>> {
         self.flags
             .contains(TelemetryOutputFlags::EXPORT_PARQUET)
-            .then(|| ArrowAttributes {
-                dev_name: Some(Cow::Borrowed(self.name.as_str())),
-                file: Some(Cow::Borrowed(self.file.as_str())),
-                line: Some(self.line),
-                ..Default::default()
+            .then(|| {
+                Box::new(MockArrowAttributes {
+                    name: Some(Cow::Borrowed(self.name.as_str())),
+                    file: Some(Cow::Borrowed(self.file.as_str())),
+                    line: Some(self.line),
+                    ..Default::default()
+                }) as Box<dyn ArrowAttributesSerialize + '_>
             })
     }
 }
@@ -358,9 +390,27 @@ pub struct MockDynLogEvent {
     pub attempt: Option<u32>,
 }
 
+impl MockDynLogEvent {
+    pub const EVENT_TYPE: &'static str = "v1.public.events.fusion.dev.MockDynLogEvent";
+
+    pub fn from_arrow_record(
+        attrs: &MockArrowAttributes<'_>,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+        Ok(Box::new(Self {
+            code: attrs
+                .code
+                .ok_or_else(|| format!("Missing `code` for event type \"{}\"", Self::EVENT_TYPE))?,
+            flags: TelemetryOutputFlags::EXPORT_PARQUET,
+            file: attrs.file.as_deref().map(str::to_string),
+            line: attrs.line,
+            ..Default::default()
+        }))
+    }
+}
+
 impl AnyTelemetryEvent for MockDynLogEvent {
     fn event_type(&self) -> &'static str {
-        "v1.public.events.fusion.dev.MockDynLogEvent"
+        Self::EVENT_TYPE
     }
 
     fn event_display_name(&self) -> String {
@@ -445,6 +495,19 @@ impl AnyTelemetryEvent for MockDynLogEvent {
 
     fn to_json(&self) -> Result<serde_json::Value, String> {
         serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+    }
+
+    fn to_arrow(&self) -> Option<Box<dyn ArrowAttributesSerialize + '_>> {
+        self.flags
+            .contains(TelemetryOutputFlags::EXPORT_PARQUET)
+            .then(|| {
+                Box::new(MockArrowAttributes {
+                    code: Some(self.code),
+                    file: self.file.as_deref().map(Cow::Borrowed),
+                    line: self.line,
+                    ..Default::default()
+                }) as Box<dyn ArrowAttributesSerialize + '_>
+            })
     }
 }
 

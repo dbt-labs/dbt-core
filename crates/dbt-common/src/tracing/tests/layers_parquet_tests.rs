@@ -6,14 +6,15 @@ use crate::tracing::{
         data_layer::get_span_start_info_from_span, parquet_writer::build_parquet_writer_layer,
     },
     span_info,
-    tests::mocks::{MockDynLogEvent, MockDynSpanEvent, test_data_layer},
+    tests::mocks::{
+        MockDynLogEvent, MockDynSpanEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
+    },
 };
 use dbt_telemetry::{
-    CallTrace, LogMessage, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo,
-    TelemetryAttributes, TelemetryEventTypeRegistry, TelemetryOutputFlags, TelemetryRecord,
-    serialize::arrow::deserialize_from_arrow,
+    LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, TelemetryAttributes,
+    TelemetryOutputFlags, TelemetryRecord, serialize::arrow::deserialize_from_arrow,
 };
-use std::{collections::BTreeMap, fs, panic::Location, time::SystemTime};
+use std::{fs, panic::Location, time::SystemTime};
 
 #[test]
 #[allow(clippy::cognitive_complexity)]
@@ -24,10 +25,11 @@ fn test_tracing_parquet_filtering() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temporary test directory");
     let temp_file_path = temp_dir.path().join("test_telemetry_filtering.parquet");
 
-    let (parquet_layer, mut shutdown_handle) = build_parquet_writer_layer(
-        fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
-    )
-    .expect("Failed to create parquet layer");
+    let (parquet_layer, mut shutdown_handle) =
+        build_parquet_writer_layer::<_, MockTelemetryEventRegistry>(
+            fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
+        )
+        .expect("Failed to create parquet layer");
 
     // Init telemetry using internal API allowing to set thread local subscriber.
     // This avoids collisions with other unit tests
@@ -43,35 +45,20 @@ fn test_tracing_parquet_filtering() {
     );
 
     // Pre-create attrs to compare them later
-    let mut test_log_attrs: TelemetryAttributes = LogMessage {
-        code: Some(42),
-        code_name: None,
-        dbt_core_event_code: Some("test_code".to_string()),
-        original_severity_number: SeverityNumber::Warn as i32,
-        original_severity_text: "WARN".to_string(),
-        package_name: None,
-        unique_id: None,
-        phase: None,
+    let mut test_log_attrs: TelemetryAttributes = MockDynLogEvent {
+        code: 42,
+        flags: TelemetryOutputFlags::EXPORT_PARQUET,
         file: None,
         line: None,
-        relative_path: None,
-        code_line: None,
-        code_column: None,
-        expanded_relative_path: None,
-        expanded_line: None,
-        expanded_column: None,
+        ..Default::default()
     }
     .into();
 
-    let mut extra_map = BTreeMap::new();
-    extra_map.insert("key".to_string(), true.into());
-
-    let mut dev_span_attrs: TelemetryAttributes = CallTrace {
+    let mut dev_span_attrs: TelemetryAttributes = MockUnknown {
         name: "dev_test".to_string(),
-        file: None,
-        line: None,
-        // Add extra attributes to ensure they are filtered out
-        extra: extra_map,
+        file: String::new(),
+        line: 0,
+        flags: TelemetryOutputFlags::EXPORT_PARQUET,
     }
     .into();
 
@@ -135,10 +122,10 @@ fn test_tracing_parquet_filtering() {
         .unwrap();
 
     let mut all_records = Vec::new();
-    let registry = TelemetryEventTypeRegistry::public();
+    let registry = MockTelemetryEventRegistry;
     for batch_result in reader {
         let batch = batch_result.unwrap();
-        let records = deserialize_from_arrow(&batch, registry).unwrap();
+        let records = deserialize_from_arrow(&batch, &registry).unwrap();
         all_records.extend(records);
     }
 
@@ -166,7 +153,7 @@ fn test_tracing_parquet_filtering() {
         assert!(
             span_start_info
                 .span_name
-                .starts_with("Dev trace: dev_test (")
+                .starts_with("Mock Unknown Span: dev_test")
         );
         assert!(span_start_info.parent_span_id.is_none());
         assert!(span_start_info.links.is_none());
@@ -194,7 +181,7 @@ fn test_tracing_parquet_filtering() {
     {
         assert_eq!(*recorded_trace_id, trace_id);
         assert_eq!(*span_id, expected_span_id);
-        assert!(span_name.starts_with("Dev trace: dev_test ("));
+        assert!(span_name.starts_with("Mock Unknown Span: dev_test"));
         assert!(parent_span_id.is_none());
         assert!(links.is_none());
         assert_eq!(*severity_number, SeverityNumber::Trace);
@@ -239,7 +226,7 @@ fn test_tracing_parquet_filtering() {
             span_name
                 .clone()
                 .expect("Span must be set")
-                .starts_with("Dev trace: dev_test (")
+                .starts_with("Mock Unknown Span: dev_test")
         );
         assert!(*time_unix_nano > before_start);
         assert_eq!(body, "Valid log message");

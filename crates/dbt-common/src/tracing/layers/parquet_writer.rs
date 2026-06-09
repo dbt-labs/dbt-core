@@ -5,7 +5,10 @@ use std::thread::{self, JoinHandle};
 
 use dbt_telemetry::{
     LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecord,
-    serialize::arrow::{get_telemetry_arrow_schema, serialize_to_arrow},
+    serialize::{
+        arrow::{TelemetryArrowSchemas, serialize_to_arrow},
+        traits::ArrowRegistryLookup,
+    },
 };
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 
@@ -19,10 +22,14 @@ use super::super::{
 /// Build a parquet writer layer with a background writer. Do not wrap
 /// or buffer the writer, as the layer already does its own buffering
 /// and operates on a non-blocking worker thread.
-pub fn build_parquet_writer_layer<W: Write + Send + 'static>(
+pub fn build_parquet_writer_layer<W, R>(
     writer: W,
-) -> TracingResult<(ConsumerLayer, TelemetryShutdownItem)> {
-    let (parquet_layer, handle) = TelemetryParquetWriterLayer::new(writer)?;
+) -> TracingResult<(ConsumerLayer, TelemetryShutdownItem)>
+where
+    W: Write + Send + 'static,
+    R: ArrowRegistryLookup,
+{
+    let (parquet_layer, handle) = TelemetryParquetWriterLayer::new::<W, R>(writer)?;
 
     Ok((Box::new(parquet_layer), Box::new(handle)))
 }
@@ -39,14 +46,18 @@ impl<W> ParquetWriter<W>
 where
     W: Write + Send + 'static,
 {
-    fn new(writer: W) -> TracingResult<Self> {
+    fn new<R>(writer: W) -> TracingResult<Self>
+    where
+        R: ArrowRegistryLookup,
+    {
         let writer_properties = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
+        let arrow_schemas = TelemetryArrowSchemas::new::<R>();
 
         let parquet_writer = ArrowWriter::try_new(
             writer,
-            arrow::datatypes::Schema::new(get_telemetry_arrow_schema()).into(),
+            arrow::datatypes::Schema::new(arrow_schemas.schema_with_timestamps().to_vec()).into(),
             Some(writer_properties),
         )
         .map_err(|e| TracingError::io(format!("Failed to create Parquet writer: {}", e)))?;
@@ -54,6 +65,7 @@ where
         Ok(Self {
             buffer: Vec::with_capacity(PARQUET_WRITER_BUF_SIZE),
             parquet_writer: Some(parquet_writer),
+            arrow_schemas,
         })
     }
 
@@ -75,7 +87,7 @@ where
         }
 
         // Serialize records to Arrow RecordBatch
-        let record_batch = serialize_to_arrow(&self.buffer)
+        let record_batch = serialize_to_arrow(&self.buffer, &self.arrow_schemas)
             .map_err(|e| TracingError::io(format!("Failed to serialize to Arrow: {}", e)))?;
 
         // Write the batch
@@ -120,8 +132,8 @@ where
 /// A tracing layer that batches telemetry data and writes it as Parquet files.
 ///
 /// This layer collects telemetry records in batches and writes them to Parquet
-/// format using Arrow serialization in a separate worker thread. It filters records to only include SpanEnd
-/// records and valid log records, skipping SpanStart, CallTrace, Unknown, and LegacyLog records.
+/// format using Arrow serialization in a separate worker thread. It writes records whose
+/// attributes are enabled for Parquet export.
 pub struct TelemetryParquetWriterLayer {
     sender: mpsc::Sender<ParquetMessage>,
     /// Flag used to avoid repeated error messages in case of early shutdown
@@ -142,12 +154,14 @@ where
 {
     buffer: Vec<TelemetryRecord>,
     parquet_writer: Option<ArrowWriter<W>>,
+    arrow_schemas: TelemetryArrowSchemas,
 }
 
 impl TelemetryParquetWriterLayer {
-    pub fn new<W>(writer: W) -> TracingResult<(Self, TelemetryParquetWriterHandle)>
+    pub fn new<W, R>(writer: W) -> TracingResult<(Self, TelemetryParquetWriterHandle)>
     where
         W: Write + Send + 'static,
+        R: ArrowRegistryLookup,
     {
         let (sender, receiver) = mpsc::channel::<ParquetMessage>();
         let shutdown_flag = Arc::new(AtomicBool::new(false));
@@ -155,7 +169,7 @@ impl TelemetryParquetWriterLayer {
         let shutdown_err = Arc::new(Mutex::new(None));
         let shutdown_err_clone = shutdown_err.clone();
 
-        let mut parquet_writer = ParquetWriter::new(writer)?;
+        let mut parquet_writer = ParquetWriter::new::<R>(writer)?;
 
         let writer_thread = thread::spawn(move || {
             while let Ok(message) = receiver.recv() {
@@ -328,11 +342,13 @@ impl Drop for TelemetryParquetWriterHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tracing::tests::mocks::{MockUnknown, test_data_layer};
+    use crate::tracing::tests::mocks::{
+        MockDynLogEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
+    };
     use arrow_schema::Schema;
     use dbt_telemetry::{
-        LogMessage, LogRecordInfo, SeverityNumber, TelemetryEventTypeRegistry, TelemetryRecord,
-        serialize::arrow::{deserialize_from_arrow, get_telemetry_arrow_schema},
+        LogRecordInfo, SeverityNumber, TelemetryOutputFlags, TelemetryRecord,
+        serialize::arrow::{TelemetryArrowSchemas, deserialize_from_arrow},
     };
     use std::io::{self, Cursor, Write};
     use std::sync::{Arc, Mutex};
@@ -410,23 +426,12 @@ mod tests {
             body: format!("Test message {i}"),
             severity_number: SeverityNumber::Info,
             severity_text: "INFO".to_string(),
-            attributes: LogMessage {
-                code: Some(i as u32),
-                code_name: None,
-                dbt_core_event_code: Some(format!("test_code_{i}")),
-                original_severity_number: SeverityNumber::Info as i32,
-                original_severity_text: "INFO".to_string(),
-                package_name: None,
-                unique_id: Some(format!("unique_{i}")),
-                phase: None,
+            attributes: MockDynLogEvent {
+                code: i as i32,
+                flags: TelemetryOutputFlags::EXPORT_PARQUET,
                 file: None,
                 line: None,
-                relative_path: None,
-                code_line: None,
-                code_column: None,
-                expanded_relative_path: None,
-                expanded_line: None,
-                expanded_column: None,
+                ..Default::default()
             }
             .into(),
         })
@@ -437,7 +442,8 @@ mod tests {
         use parquet::arrow::arrow_reader::{ArrowReaderOptions, ParquetRecordBatchReaderBuilder};
 
         let bytes = Bytes::from_owner(buffer.to_vec());
-        let schema_ref = Arc::new(Schema::new(get_telemetry_arrow_schema()));
+        let schemas = TelemetryArrowSchemas::new::<MockTelemetryEventRegistry>();
+        let schema_ref = Arc::new(Schema::new(schemas.schema_with_timestamps().to_vec()));
 
         let arrow_reader = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
@@ -447,13 +453,7 @@ mod tests {
         .build()
         .unwrap();
 
-        let mut registry = TelemetryEventTypeRegistry::public().clone();
-        registry.register(
-            MockUnknown::EVENT_TYPE,
-            MockUnknown::from_arrow_record,
-            #[cfg(test)]
-            MockUnknown::faker,
-        );
+        let registry = MockTelemetryEventRegistry;
 
         let mut records = Vec::new();
         for batch in arrow_reader {
@@ -466,7 +466,8 @@ mod tests {
     #[test]
     fn test_normal_write_and_shutdown_idempotency() {
         let (mock, buffer) = MockWriter::new();
-        let (layer, mut handle) = TelemetryParquetWriterLayer::new(mock).unwrap();
+        let (layer, mut handle) =
+            TelemetryParquetWriterLayer::new::<_, MockTelemetryEventRegistry>(mock).unwrap();
 
         // Create some test records
         let record1 = get_test_log_record(1);
@@ -493,7 +494,8 @@ mod tests {
         // Create a writer that fails after 1 byte
         let (mock, buffer) = MockWriter::new();
         let mock = mock.with_fail_after_bytes(1);
-        let (layer, mut handle) = TelemetryParquetWriterLayer::new(mock).unwrap();
+        let (layer, mut handle) =
+            TelemetryParquetWriterLayer::new::<_, MockTelemetryEventRegistry>(mock).unwrap();
 
         // Write itself should succeed (the error will occur in the writer thread)
         assert!(layer.write_record(get_test_log_record(1)).is_ok());
@@ -530,7 +532,8 @@ mod tests {
     #[test]
     fn test_write_after_shutdown() {
         let (mock, buffer) = MockWriter::new();
-        let (layer, mut handle) = TelemetryParquetWriterLayer::new(mock).unwrap();
+        let (layer, mut handle) =
+            TelemetryParquetWriterLayer::new::<_, MockTelemetryEventRegistry>(mock).unwrap();
 
         let record1 = get_test_log_record(1);
         let record2 = get_test_log_record(2);
@@ -553,7 +556,8 @@ mod tests {
     #[test]
     fn test_layer_with_tracing_registry() {
         let (mock, buffer) = MockWriter::new();
-        let (parquet_layer, mut handle) = TelemetryParquetWriterLayer::new(mock).unwrap();
+        let (parquet_layer, mut handle) =
+            TelemetryParquetWriterLayer::new::<_, MockTelemetryEventRegistry>(mock).unwrap();
 
         let trace_id = uuid::Uuid::new_v4().as_u128();
         let subscriber = crate::tracing::init::create_tracing_subcriber_with_layer(

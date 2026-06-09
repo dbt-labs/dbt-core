@@ -1,11 +1,12 @@
 //! Arrow serialization support for telemetry records using serde_arrow.
 
 use super::to_nanos;
+use crate::serialize::traits::{ArrowAttributesSerialize, ArrowRegistryLookup};
 use crate::{
     ArtifactType, ExecutionPhase, LogRecordInfo, NodeCancelReason, NodeErrorType,
     NodeMaterialization, NodeOutcome, NodeSkipReason, NodeType, QueryOutcome, SeverityNumber,
     SpanEndInfo, SpanLinkInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
-    TelemetryEventTypeRegistry, TelemetryOutputFlags, TelemetryRecord, TelemetryRecordType,
+    TelemetryOutputFlags, TelemetryRecord, TelemetryRecordType,
 };
 use arrow::{
     array::{Array, ArrayRef, ListArray, StructArray, new_null_array},
@@ -17,10 +18,7 @@ use arrow::{
 use arrow_schema::extension::Json as JsonExtensionType;
 use serde::{Deserialize, Serialize};
 // no serde_arrow schema tracing; we build schema manually
-use std::{
-    borrow::Cow,
-    sync::{Arc, LazyLock},
-};
+use std::{borrow::Cow, sync::Arc};
 use std::{str::FromStr, time::SystemTime};
 
 // Create sudo impls for defaults on these two enums. This is only necessary
@@ -60,7 +58,7 @@ impl<'a> TryFrom<&'a SpanLinkInfo> for ArrowSpanLink {
 /// A special type used to derive the schema for telemetry records (envelope) in arrow
 /// serialization, as well as a intermediate representation for serialization and deserialization.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ArrowTelemetryRecord<'a> {
+pub struct ArrowTelemetryRecord<'a, A> {
     pub record_type: TelemetryRecordType,
     /// Arrow doesn't support u128 natively, so this is stored as a hex string.
     pub trace_id: String,
@@ -78,7 +76,7 @@ pub struct ArrowTelemetryRecord<'a> {
     pub status_code: Option<u32>,
     pub status_message: Option<Cow<'a, str>>,
     pub event_type: Cow<'a, str>,
-    pub attributes: ArrowAttributes<'a>,
+    pub attributes: A,
 }
 
 /// A special type used to derive the schema for telemetry event attributes in arrow
@@ -147,7 +145,9 @@ fn nanos_to_system_time(nanos: u64) -> SystemTime {
     SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(nanos)
 }
 
-impl<'a> TryFrom<&'a TelemetryRecord> for ArrowTelemetryRecord<'a> {
+impl<'a> TryFrom<&'a TelemetryRecord>
+    for ArrowTelemetryRecord<'a, Box<dyn ArrowAttributesSerialize + 'a>>
+{
     type Error = String;
 
     fn try_from(value: &'a TelemetryRecord) -> Result<Self, Self::Error> {
@@ -243,18 +243,19 @@ impl<'a> TryFrom<&'a TelemetryRecord> for ArrowTelemetryRecord<'a> {
     }
 }
 
-fn deserialize_record_from_arrow(
-    arrow: ArrowTelemetryRecord,
-    registry: &TelemetryEventTypeRegistry,
-) -> Result<TelemetryRecord, String> {
+fn deserialize_record_from_arrow<R>(
+    arrow: ArrowTelemetryRecord<'_, R::ArrowAttributes<'_>>,
+    registry: &R,
+) -> Result<TelemetryRecord, String>
+where
+    R: ArrowRegistryLookup,
+{
     let trace_id =
         u128::from_str_radix(&arrow.trace_id, 16).map_err(|e| format!("Invalid trace_id: {e}"))?;
 
-    let attributes_deserializer = registry
-        .get_arrow_deserializer(arrow.event_type.as_ref())
-        .ok_or_else(|| format!("Unknown event type\"{}\"", arrow.event_type))?;
-
-    let attributes = TelemetryAttributes::new(attributes_deserializer(&arrow.attributes)?);
+    let attributes = TelemetryAttributes::new(
+        registry.deserialize_arrow_attributes(arrow.event_type.as_ref(), &arrow.attributes)?,
+    );
 
     let links = if let Some(arrow_links) = arrow.links {
         let mut span_links = Vec::with_capacity(arrow_links.len());
@@ -393,13 +394,16 @@ fn json_large_utf8_field(name: &str, nullable: bool) -> Field {
 ///    they are only an intermediate step in the serialization process.
 /// 2. `schema_with_timestamps`: The final schema with timestamp fields converted to `Timestamp(NANOSECOND)`.
 ///
-/// This function is used to generate lazy static schemas, that are then used  by `serialize_to_arrow` and `deserialize_from_arrow`.
+/// Callers that need to reuse schemas should cache the returned fields.
 ///
 /// # Returns
 ///
 /// Returns two vectors of Arrow field references that define the schema structure,
 /// or an error if schema generation fails.
-fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
+fn create_arrow_schema<R>() -> (Vec<FieldRef>, Vec<FieldRef>)
+where
+    R: ArrowRegistryLookup,
+{
     // ArrowSpanLink struct fields
     let span_link_fields = Fields::from(vec![
         dict_utf8_field("trace_id", false),
@@ -407,61 +411,7 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
         json_large_utf8_field("json_payload", true),
     ]);
 
-    // ArrowAttributes struct fields
-    let attributes_fields = Fields::from(vec![
-        // JSON blob for non well-known attributes
-        json_large_utf8_field("json_payload", true),
-        // Well-known common fields
-        dict_utf8_field("name", true),
-        dict_utf8_field("database", true),
-        dict_utf8_field("schema", true),
-        dict_utf8_field("identifier", true),
-        dict_utf8_field("dbt_core_event_code", true),
-        // Phase
-        dict_utf8_field("phase", true),
-        // Node fields
-        dict_utf8_field("unique_id", true),
-        dict_utf8_field("materialization", true),
-        dict_utf8_field("custom_materialization", true),
-        dict_utf8_field("node_type", true),
-        dict_utf8_field("node_outcome", true),
-        dict_utf8_field("node_error_type", true),
-        dict_utf8_field("node_cancel_reason", true),
-        dict_utf8_field("node_skip_reason", true),
-        Field::new("sao_enabled", DataType::Boolean, true),
-        // CallTrace/Unknown fields
-        dict_utf8_field("dev_name", true),
-        // Fusion origin code location fields (debug only)
-        dict_utf8_field("file", true),
-        Field::new("line", DataType::UInt32, true),
-        // Log fields
-        Field::new("code", DataType::UInt32, true),
-        dict_utf8_field("code_name", true),
-        Field::new("original_severity_number", DataType::Int32, true),
-        dict_utf8_field("original_severity_text", true),
-        dict_utf8_field("package_name", true),
-        // Artifact or node paths & location
-        large_utf8_field("relative_path", true),
-        Field::new("code_line", DataType::UInt32, true),
-        Field::new("code_column", DataType::UInt32, true),
-        dict_utf8_field("artifact_type", true),
-        // Query fields
-        large_utf8_field("query_id", true),
-        dict_utf8_field("query_outcome", true),
-        dict_utf8_field("adapter_type", true),
-        Field::new("query_error_vendor_code", DataType::Int32, true),
-        // Content hash (e.g. CAS hash for artifacts stored in CAS)
-        large_utf8_field("content_hash", true),
-        // List command output fields
-        dict_utf8_field("output_format", true),
-        large_utf8_field("content", true),
-        // Node processing duration
-        Field::new("duration_ms", DataType::UInt64, true),
-        // Number of rows affected by this event
-        Field::new("rows_affected", DataType::UInt64, true),
-        // Group identifier for model notifications
-        large_utf8_field("group", true),
-    ]);
+    let attributes_fields = R::arrow_attributes_fields();
 
     // Top-level fields for ArrowTelemetryRecord
     let serialisable_schema: Vec<FieldRef> = vec![
@@ -518,14 +468,32 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
     (serialisable_schema, schema_with_timestamps)
 }
 
-static ARROW_SCHEMAS: LazyLock<(Vec<FieldRef>, Vec<FieldRef>)> = LazyLock::new(create_arrow_schema);
-
-fn get_serialisable_schema() -> &'static [FieldRef] {
-    &ARROW_SCHEMAS.0
+#[derive(Clone, Debug)]
+pub struct TelemetryArrowSchemas {
+    serialisable_schema: Vec<FieldRef>,
+    schema_with_timestamps: Vec<FieldRef>,
 }
 
-pub fn get_telemetry_arrow_schema() -> &'static [FieldRef] {
-    &ARROW_SCHEMAS.1
+impl TelemetryArrowSchemas {
+    pub fn new<R>() -> Self
+    where
+        R: ArrowRegistryLookup,
+    {
+        let (serialisable_schema, schema_with_timestamps) = create_arrow_schema::<R>();
+
+        Self {
+            serialisable_schema,
+            schema_with_timestamps,
+        }
+    }
+
+    pub fn serialisable_schema(&self) -> &[FieldRef] {
+        &self.serialisable_schema
+    }
+
+    pub fn schema_with_timestamps(&self) -> &[FieldRef] {
+        &self.schema_with_timestamps
+    }
 }
 
 /// Serializes telemetry records to an Arrow RecordBatch.
@@ -538,6 +506,7 @@ pub fn get_telemetry_arrow_schema() -> &'static [FieldRef] {
 /// # Arguments
 ///
 /// * `records` - Slice of telemetry records to serialize
+/// * `schemas` - Cached Arrow schemas for the registry used by the caller
 ///
 /// # Returns
 ///
@@ -547,31 +516,34 @@ pub fn get_telemetry_arrow_schema() -> &'static [FieldRef] {
 /// # Examples
 ///
 /// ```rust
-/// use dbt_telemetry::serialize::arrow::serialize_to_arrow;
-/// use dbt_telemetry::TelemetryRecord;
+/// use dbt_telemetry::serialize::arrow::{serialize_to_arrow, TelemetryArrowSchemas};
+/// use dbt_telemetry::{TelemetryEventTypeRegistry, TelemetryRecord};
 ///
 /// let records: Vec<TelemetryRecord> = vec![/* ... */];
-/// let batch = serialize_to_arrow(&records).expect("Failed to serialize");
+/// let schemas = TelemetryArrowSchemas::new::<TelemetryEventTypeRegistry>();
+/// let batch = serialize_to_arrow(&records, &schemas).expect("Failed to serialize");
 /// ```
 pub fn serialize_to_arrow(
     records: &[TelemetryRecord],
+    schemas: &TelemetryArrowSchemas,
 ) -> Result<RecordBatch, Box<dyn std::error::Error>> {
     let mut errors: Vec<String> = Vec::new();
 
-    let arrow_records: Vec<ArrowTelemetryRecord> = records
-        .iter()
-        .filter(|r| {
-            // Only include records with serializable attributes
-            r.attributes()
-                .output_flags()
-                .contains(TelemetryOutputFlags::EXPORT_PARQUET)
-        })
-        .filter_map(|r| {
-            ArrowTelemetryRecord::try_from(r)
-                .map_err(|e| errors.push(e))
-                .ok()
-        })
-        .collect();
+    let arrow_records: Vec<ArrowTelemetryRecord<'_, Box<dyn ArrowAttributesSerialize + '_>>> =
+        records
+            .iter()
+            .filter(|r| {
+                // Only include records with serializable attributes
+                r.attributes()
+                    .output_flags()
+                    .contains(TelemetryOutputFlags::EXPORT_PARQUET)
+            })
+            .filter_map(|r| {
+                ArrowTelemetryRecord::try_from(r)
+                    .map_err(|e| errors.push(e))
+                    .ok()
+            })
+            .collect();
 
     if !errors.is_empty() {
         // As of today, this should never happen because we filter out records with non-serializable attributes
@@ -584,13 +556,13 @@ pub fn serialize_to_arrow(
 
     // Serialize with the temporary schema (timestamp fields as u64),
     // see `create_arrow_schema` for details.
-    let batch = serde_arrow::to_record_batch(get_serialisable_schema(), &arrow_records)?;
+    let batch = serde_arrow::to_record_batch(schemas.serialisable_schema(), &arrow_records)?;
 
     let mut columns = batch.columns().to_vec();
 
     // Convert timestamp columns from u64 to Timestamp(NANOSECOND),
     // this is zero-copy, just metadata change.
-    let schema_with_timestamps = get_telemetry_arrow_schema();
+    let schema_with_timestamps = schemas.schema_with_timestamps();
     for (i, field) in schema_with_timestamps.iter().enumerate() {
         if let DataType::Timestamp(TimeUnit::Nanosecond, None) = field.data_type()
             && let Some(column) = columns.get(i)
@@ -607,7 +579,7 @@ pub fn serialize_to_arrow(
     }
 
     Ok(RecordBatch::try_new(
-        Schema::new(schema_with_timestamps).into(),
+        Schema::new(schema_with_timestamps.to_vec()).into(),
         columns,
     )?)
 }
@@ -640,21 +612,26 @@ pub fn serialize_to_arrow(
 /// # Examples
 ///
 /// ```rust
-/// use dbt_telemetry::serialize::arrow::deserialize_from_arrow;
+/// use dbt_telemetry::serialize::arrow::{deserialize_from_arrow, TelemetryArrowSchemas};
 /// use dbt_telemetry::TelemetryEventTypeRegistry;
 /// use arrow::record_batch::RecordBatch;
 ///
 /// let batch: RecordBatch = /* read from file */;
-/// let records = deserialize_from_arrow(&batch, &TelemetryEventTypeRegistry::public()).expect("Failed to deserialize");
+/// let records = deserialize_from_arrow(&batch, TelemetryEventTypeRegistry::public()).expect("Failed to deserialize");
 /// ```
-pub fn deserialize_from_arrow(
+pub fn deserialize_from_arrow<R>(
     batch: &RecordBatch,
-    registry: &TelemetryEventTypeRegistry,
-) -> Result<Vec<TelemetryRecord>, Box<dyn std::error::Error>> {
-    let temp_batch = normalize_batch(batch)?;
+    registry: &R,
+) -> Result<Vec<TelemetryRecord>, Box<dyn std::error::Error>>
+where
+    R: ArrowRegistryLookup,
+{
+    let schemas = TelemetryArrowSchemas::new::<R>();
+    let temp_batch = normalize_batch(batch, schemas.serialisable_schema())?;
 
-    let arrow_records: Vec<ArrowTelemetryRecord> = serde_arrow::from_record_batch(&temp_batch)
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    let arrow_records: Vec<ArrowTelemetryRecord<'_, R::ArrowAttributes<'_>>> =
+        serde_arrow::from_record_batch(&temp_batch)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     arrow_records
         .into_iter()
@@ -678,8 +655,10 @@ pub fn deserialize_from_arrow(
 /// * String-like columns (plain or dictionary) are accepted without casting
 ///   so long as both sides are string compatible.
 /// * other mismatches are cast to the expected type when possible.
-fn normalize_batch(batch: &RecordBatch) -> Result<RecordBatch, Box<dyn std::error::Error>> {
-    let serialisable_schema = get_serialisable_schema();
+fn normalize_batch(
+    batch: &RecordBatch,
+    serialisable_schema: &[FieldRef],
+) -> Result<RecordBatch, Box<dyn std::error::Error>> {
     let batch_schema = batch.schema();
 
     let mut missing_columns = Vec::new();
@@ -1016,6 +995,7 @@ fn cast_array(
 
 #[cfg(test)]
 mod tests {
+    use crate::TelemetryEventTypeRegistry;
     use arrow::{
         array::{Array, DictionaryArray, Int32Builder, LargeStringArray, StructArray, UInt64Array},
         datatypes::{DataType, Fields, Int32Type, Schema},
@@ -1384,7 +1364,9 @@ mod tests {
 
         let log_record = create_test_log_record("schema_norm_seed", attributes);
         let records = vec![log_record];
-        let base_batch = serialize_to_arrow(&records).expect("failed to serialize base batch");
+        let schemas = TelemetryArrowSchemas::new::<TelemetryEventTypeRegistry>();
+        let base_batch =
+            serialize_to_arrow(&records, &schemas).expect("failed to serialize base batch");
         let registry = TelemetryEventTypeRegistry::public();
 
         let variations = vec![
@@ -1452,7 +1434,8 @@ mod tests {
                 }
             });
 
-        let batch = serialize_to_arrow(&original_records).unwrap();
+        let schemas = TelemetryArrowSchemas::new::<TelemetryEventTypeRegistry>();
+        let batch = serialize_to_arrow(&original_records, &schemas).unwrap();
         let mut deserialized =
             deserialize_from_arrow(&batch, TelemetryEventTypeRegistry::public()).unwrap();
 
@@ -1471,7 +1454,7 @@ mod tests {
 
             let mut parquet_writer = ArrowWriter::try_new(
                 cursor,
-                arrow::datatypes::Schema::new(get_telemetry_arrow_schema()).into(),
+                arrow::datatypes::Schema::new(schemas.schema_with_timestamps().to_vec()).into(),
                 Some(
                     WriterProperties::builder()
                         .set_compression(Compression::SNAPPY)
@@ -1511,8 +1494,9 @@ mod tests {
 
     #[test]
     fn test_schema_creation() {
-        let serialisable_schema = get_serialisable_schema();
-        let schema_with_timestamps = get_telemetry_arrow_schema();
+        let schemas = TelemetryArrowSchemas::new::<TelemetryEventTypeRegistry>();
+        let serialisable_schema = schemas.serialisable_schema();
+        let schema_with_timestamps = schemas.schema_with_timestamps();
         assert!(!serialisable_schema.is_empty());
         assert!(!schema_with_timestamps.is_empty());
 
