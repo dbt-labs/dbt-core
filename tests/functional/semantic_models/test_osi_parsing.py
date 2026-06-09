@@ -27,13 +27,13 @@ def _osi_doc_json(sm_name: str, source: str) -> str:
 
 def _write_osi_file(project, sm_name: str, filename: str) -> None:
     source = f"{project.database}.{project.test_schema}.fct_revenue"
-    osi_dir = os.path.join(project.project_root, "OSI")
+    osi_dir = os.path.join(project.project_root, "osi")
     os.makedirs(osi_dir, exist_ok=True)
     write_file(_osi_doc_json(sm_name, source), osi_dir, filename)
 
 
 class TestOsiDocumentParsedIntoManifest:
-    """OSI documents in OSI/ are parsed into the manifest and semantic_manifest."""
+    """OSI documents in osi/ are parsed into the manifest and semantic_manifest."""
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -58,7 +58,7 @@ class TestOsiDocumentParsedIntoManifest:
         sm = manifest.semantic_models[uid]
         assert sm.name == "osi_orders"
         assert sm.package_name == "test"
-        assert sm.path == os.path.join("OSI", "orders.json")
+        assert sm.path == os.path.join("osi", "orders.json")
         from dbt.artifacts.resources import RefArgs
 
         assert sm.refs == [RefArgs(name="fct_revenue", package=None, version=None)]

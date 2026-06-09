@@ -30,10 +30,17 @@ class _OsiFileContext:
 
 def _scan_osi_directories(project_root: str, osi_paths: List[str]) -> List[Path]:
     files: List[Path] = []
+    seen: set = set()
     for osi_path in osi_paths:
         osi_dir = Path(project_root) / osi_path
-        if osi_dir.is_dir():
-            files.extend(osi_dir.rglob("*.json"))
+        if not osi_dir.is_dir():
+            continue
+        stat = osi_dir.stat()
+        dir_id = (stat.st_dev, stat.st_ino)
+        if dir_id in seen:
+            continue
+        seen.add(dir_id)
+        files.extend(osi_dir.rglob("*.json"))
     return sorted(files)
 
 
