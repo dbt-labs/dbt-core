@@ -2120,8 +2120,11 @@ impl InternalDbtNode for DbtSource {
                 }
             };
 
-            let quoting_eq =
-                quoting_equal(&self_config.quoting, &other_config.quoting, adapter_type);
+            let quoting_eq = quoting_equal(
+                &self.__source_attr__.user_quoting,
+                &other_source.__source_attr__.user_quoting,
+                adapter_type,
+            );
 
             let loaded_at_field_eq = loaded_at_eq(
                 &self.__source_attr__.loaded_at_field,
@@ -2191,8 +2194,8 @@ impl InternalDbtNode for DbtSource {
                             "quoting",
                             quoting_eq,
                             Some((
-                                format!("{:?}", &self_config.quoting),
-                                format!("{:?}", &other_config.quoting),
+                                format!("{:?}", &self.__source_attr__.user_quoting),
+                                format!("{:?}", &other_source.__source_attr__.user_quoting),
                             )),
                         ),
                         (

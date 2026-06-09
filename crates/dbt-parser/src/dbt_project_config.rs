@@ -4,14 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
-use dbt_adapter_core::AdapterType;
 use indexmap::IndexMap;
 
 use crate::args::ResolveArgs;
 use dbt_common::{FsResult, io_args::IoArgs, tracing::dbt_emit::emit_strict_parse_error};
-use dbt_schemas::schemas::{
-    common::DbtQuoting, project::DbtProject, relations::default_dbt_quoting_for,
-};
+use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
 use dbt_schemas::schemas::{
     project::{
         AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
@@ -375,7 +372,6 @@ pub fn build_root_project_configs(
     arg: &ResolveArgs,
     root_project: &DbtProject,
     root_project_quoting: DbtQuoting,
-    adapter_type: AdapterType,
 ) -> FsResult<RootProjectConfigs> {
     let maybe_root_project_config =
         match (root_project.tests.clone(), root_project.data_tests.clone()) {
@@ -387,11 +383,9 @@ pub fn build_root_project_configs(
             (None, None) => None,
         };
 
-    let source_default_quoting = default_dbt_quoting_for(adapter_type);
-
     Ok(RootProjectConfigs {
         models: init_project_config(&arg.io, &root_project.models, root_project_quoting, None)?,
-        sources: init_project_config(&arg.io, &root_project.sources, source_default_quoting, None)?,
+        sources: init_project_config(&arg.io, &root_project.sources, (), None)?,
         snapshots: init_project_config(
             &arg.io,
             &root_project.snapshots,

@@ -225,7 +225,9 @@ pub async fn resolve_sources(
 
     let special_chars = Regex::new(r"[^a-zA-Z0-9_]").unwrap();
 
-    // Sources use adapter-specific quoting defaults, NOT project-level quoting
+    // Sources use adapter-specific quoting defaults, NOT project-level quoting.
+    // The defaults are only folded in below to drive SQL generation; the manifest
+    // serializes the raw user-supplied merge via `user_quoting`.
     // https://docs.getdbt.com/reference/resource-properties/quoting
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
@@ -234,7 +236,7 @@ pub async fn resolve_sources(
             init_project_config(
                 io_args,
                 &package.dbt_project.sources,
-                source_default_quoting,
+                (),
                 dependency_package_name,
             )
         })?
@@ -384,7 +386,7 @@ pub async fn resolve_sources(
         let user_quoting = DbtQuoting::merge_user(source.quoting.as_ref(), table.quoting.as_ref());
 
         let mut table_quoting = user_quoting.unwrap_or_default();
-        table_quoting.default_to(&source_config.quoting);
+        table_quoting.default_to(&source_default_quoting);
         let quoting_ignore_case = table_quoting.snowflake_ignore_case.unwrap_or(false);
 
         // Preserve the raw user-provided identifier (including any embedded quote
