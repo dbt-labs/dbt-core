@@ -81,6 +81,11 @@ members = [
   "crates/dbt-login",
   "crates/dbt-platform-auth",
 ]
+exclude = [
+  "wizard/wizard-app/src-tauri",
+  "wizard/dbt-codex",
+  "wizard/wizard-ui",
+]
 
 resolver = "2"
 
