@@ -452,16 +452,23 @@ def track_plugin_get_nodes(options):
     )
 
 
-def track_manage_state(options):
-    context = [SelfDescribingJson(MANAGE_STATE_SPEC, options)]
-    assert active_user is not None, "Cannot track manage_state when active user is None"
-
+def _track_context_event(spec: str, action: str, options, error_msg: str) -> None:
+    assert active_user is not None, error_msg
     track(
         active_user,
         category="dbt",
-        action="manage_state",
+        action=action,
         label=get_invocation_id(),
-        context=context,
+        context=[SelfDescribingJson(spec, options)],
+    )
+
+
+def track_manage_state(options):
+    _track_context_event(
+        MANAGE_STATE_SPEC,
+        "manage_state",
+        options,
+        "Cannot track manage_state when active user is None",
     )
 
 
