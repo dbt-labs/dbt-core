@@ -2220,6 +2220,14 @@ fn record_service_decision(
             } else {
                 None
             };
+            if unique_id.starts_with("test.") && cached_test_failures.is_none() {
+                emit_trace_log_message(|| {
+                    format!(
+                        "dbt State service data test skip ignored because no cached test result was returned for node {unique_id}; executing normally"
+                    )
+                });
+                return RunCacheServiceDecision::execute_without_confirmation();
+            }
             RunCacheServiceDecision::Skip {
                 status: skip_node_status_from_response(response, freshness_tolerance_seconds),
                 sao_stored_hash: None,
@@ -2420,6 +2428,39 @@ mod tests {
                 status: NodeStatus::ReusedNoChanges(_),
                 sao_stored_hash: None,
                 cached_test_failures: None,
+            }
+        ));
+    }
+
+    #[test]
+    fn data_test_skip_without_cached_failures_executes() {
+        assert_eq!(
+            record_service_decision(
+                "test.test.not_null_orders_order_date.abc123",
+                &skip_execution_response(),
+                0,
+                true,
+            ),
+            RunCacheServiceDecision::Execute {
+                after_success: RunCacheAfterSuccess::None,
+                sao_guard: None,
+            }
+        );
+    }
+
+    #[test]
+    fn data_test_skip_with_cached_failures_is_honored() {
+        assert!(matches!(
+            record_service_decision(
+                "test.test.not_null_orders_order_date.abc123",
+                &skip_execution_response_with_test_failures(0),
+                0,
+                true,
+            ),
+            RunCacheServiceDecision::Skip {
+                status: NodeStatus::ReusedNoChanges(_),
+                sao_stored_hash: None,
+                cached_test_failures: Some(0),
             }
         ));
     }
@@ -2874,6 +2915,17 @@ mod tests {
         SubmitSqlResponse {
             response: Some(submit_sql_response::Response::SkipExecution(
                 SkipExecutionResponse::default(),
+            )),
+        }
+    }
+
+    fn skip_execution_response_with_test_failures(failures: i64) -> SubmitSqlResponse {
+        SubmitSqlResponse {
+            response: Some(submit_sql_response::Response::SkipExecution(
+                SkipExecutionResponse {
+                    execution_results: Some(build_test_execution_results_struct(failures)),
+                    ..Default::default()
+                },
             )),
         }
     }
