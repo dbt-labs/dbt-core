@@ -1,25 +1,32 @@
 # **what?**
 # Cut a `dbt-sa-cli` release: bump version on a release branch, build the
 # binary matrix via `cargo build`, pack each binary into a wheel via
-# `cargo ci pypi pack`, tag the build commit, publish to PyPI.
+# `cargo ci pypi pack`, tag the build commit, publish to PyPI, create a
+# GitHub Release with the platform tarballs, and push a Homebrew formula
+# to the dbt-labs/homebrew-dbt tap.
 #
 # **why?**
 # OSS release path for the standalone analyzer CLI. The build (`cargo build`)
 # is decoupled from the wheel writer (`cargo ci pypi pack`) — same pattern
 # the internal fs side will use to consume its CDN-built signed binaries.
 # `dbt-ci` writes wheels in pure Rust (zip + metadata) and uploads via the
-# PyPI HTTP API; no maturin, no twine.
+# PyPI HTTP API; no maturin, no twine. Homebrew distribution reuses the
+# same `dbt-ci` tooling (`homebrew render`/`publish`) and serves tarballs
+# straight from the GitHub Release.
 #
 # **when?**
 # Manual `workflow_dispatch` only — every release goes through
 # `cargo ci bump-cargo-version` for the workspace version bump.
 #
 # Flow: prepare-release → { build (matrix), test } → pack → tag →
-# { publish-pypi, github-release }. build and test fan out from
-# prepare-release in parallel and both gate pack — a failing test
-# aborts the release before any wheels are written. tag is a small
+# { publish-pypi, github-release → publish-homebrew }. build and test
+# fan out from prepare-release in parallel and both gate pack — a failing
+# test aborts the release before any wheels are written. tag is a small
 # gate that everything downstream depends on; publish-pypi and
 # github-release run in parallel and are each independently retriable.
+# publish-homebrew runs after github-release (it needs the uploaded
+# SHA256SUMS) and is gated to non-pre-release versions that GitHub
+# marked as "Latest".
 #
 # Repo setup (required `vars.*` runner labels, branch protection, secret
 # provisioning) is documented in `crates/dbt-ci/README.md`.
@@ -30,16 +37,26 @@
 # `PYPI_API_TOKEN` secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`).
 # Two distributions are published — `dbt-core` and
 # `dbt-core-experimental-parser` — selected by the `release_target` input.
-# Dry-run (`inputs.dry_run = true`) skips tag push, publish, and the
-# GitHub Release — build + pack still run so artifacts are inspectable.
-# The release branch is still pushed under `release/dry-run/v…-<run_id>`
-# so the matrix has something to check out; clean these up periodically.
+#
+# **Homebrew publishing**
+# `publish-homebrew` renders `Formula/dbt-core.rb` from the SHA256SUMS the
+# `github-release` job just uploaded and pushes it to the shared
+# dbt-labs/homebrew-dbt tap. Tap commits are GPG-signed by the build bot
+# (via FISHTOWN_BOT_GPG_*). Skipped for SemVer pre-releases and any tag
+# that isn't GitHub's current "Latest" release — protects against
+# downgrades from re-runs or hotfixes on older minors.
+#
+# Dry-run (`inputs.dry_run = true`) skips tag push, PyPI publish, the
+# GitHub Release, and the Homebrew publish — build + pack still run so
+# artifacts are inspectable. The release branch is still pushed under
+# `release/dry-run/v…-<run_id>` so the matrix has something to check
+# out; clean these up periodically.
 
 name: Release dbt Core V2
 run-name: >-
   ${{
-    inputs.dry_run && format('Publish PyPI v{0} (dry run — build only)', inputs.version)
-    || format('Publish PyPI v{0}', inputs.version)
+    inputs.dry_run && format('Release v{0} (dry run — build only)', inputs.version)
+    || format('Release v{0}', inputs.version)
   }}
 
 on:
@@ -50,7 +67,7 @@ on:
         required: true
         type: string
       dry_run:
-        description: "Build and pack only — skip tag push, PyPI publish, and GitHub Release."
+        description: "Build and pack only — skip tag push, PyPI publish, GitHub Release, and Homebrew publish."
         required: false
         type: boolean
         default: false
@@ -60,7 +77,7 @@ on:
         type: string
         default: "main"
       release_target:
-        description: "Which package(s) to publish to PyPI. Pack always builds both; no effect on dry runs."
+        description: "Which package(s) to publish to PyPI. Pack always builds both; no effect on dry runs or Homebrew publish."
         required: false
         type: choice
         options:
@@ -70,7 +87,7 @@ on:
         default: both
 
 concurrency:
-  group: ${{ inputs.dry_run && format('publish-pypi-dry-{0}', github.run_id) || 'publish-pypi-prod' }}
+  group: ${{ inputs.dry_run && format('publish-release-dry-{0}', github.run_id) || 'publish-release-prod' }}
   cancel-in-progress: false
 
 permissions:
@@ -760,3 +777,25 @@ jobs:
           fi
 
           gh release upload "$TAG" --clobber "${ASSETS[@]}"
+
+  # Renders Formula/dbt-core.rb from the SHA256SUMS just uploaded by the
+  # `github-release` job and pushes it to dbt-labs/homebrew-dbt. Skipped
+  # for pre-release versions (anything with a `-` in the SemVer) — brew
+  # users only get stable releases.
+  publish-homebrew:
+    needs: [github-release]
+    if: ${{ !inputs.dry_run && !contains(needs.prepare-release.outputs.version, '-') }}
+    uses: ./.github/workflows/publish-homebrew.yml
+    with:
+      version: ${{ needs.prepare-release.outputs.version }}
+      tag: ${{ needs.prepare-release.outputs.tag }}
+      dry_run: false
+      # Must match the `build` job's `BINARY_NAME` env and the
+      # `ARCHIVE_BASE` template's `${PACKAGE_NAME}-` prefix. Hardcoded
+      # because reusable-workflow `with:` blocks don't accept the `env`
+      # context — keep these in lockstep with the build job manually.
+      binary_name: dbt-sa-cli
+      tarball_prefix: dbt-core-
+    permissions:
+      contents: read
+    secrets: inherit
