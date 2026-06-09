@@ -395,8 +395,22 @@ class Flags:
         if not getattr(self, "MANAGE_STATE", False):
             return None
 
-        # `manage_state` is a global option, so it may be parsed in the top-level
-        # context, any parent context, or the invoked subcommand's context.
+        click_source = self._manage_state_click_source(ctx, invoked_subcommand_ctx)
+        if click_source is not None:
+            return click_source
+        if project_flags is not None and getattr(project_flags, "manage_state", None) is not None:
+            return "project_config"
+        if user_flags.get("manage_state") is not None:
+            return "user_settings"
+        return None
+
+    def _manage_state_click_source(
+        self, ctx: Context, invoked_subcommand_ctx: Optional[Context]
+    ) -> Optional[str]:
+        """Return "cli_flag"/"env_var" if Click parsed manage_state from the command
+        line or an env var, else None. `manage_state` is a global option, so it may
+        be parsed in the top-level context, any parent context, or the invoked
+        subcommand's context."""
         contexts: List[Context] = []
         cur: Optional[Context] = ctx
         while cur is not None:
@@ -416,10 +430,6 @@ class Flags:
             return "cli_flag"
         if ParameterSource.ENVIRONMENT in click_sources:
             return "env_var"
-        if project_flags is not None and getattr(project_flags, "manage_state", None) is not None:
-            return "project_config"
-        if user_flags.get("manage_state") is not None:
-            return "user_settings"
         return None
 
     def _override_if_set(self, lead: str, follow: str, defaulted: Set[str]) -> None:
