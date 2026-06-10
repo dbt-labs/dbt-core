@@ -7,7 +7,7 @@ runs:
       run: |
         Write-Host -Object "Installing PostgreSQL 16 as windows service..."
         $installerArgs = @("--install_runtimes 0", "--superpassword root", "--enable_acledit 1", "--unattendedmodeui none", "--mode unattended")
-        $filePath = Invoke-DownloadWithRetry -Url "https://get.enterprisedb.com/postgresql/postgresql-16.1-1-windows-x64.exe" -Path "$env:PGROOT/postgresql-16.1-1-windows-x64.exe"
+        $filePath = Invoke-DownloadWithRetry -Url "https://get.enterprisedb.com/postgresql/postgresql-16.11-1-windows-x64.exe" -Path "$env:PGROOT/postgresql-16.11-1-windows-x64.exe"
         Start-Process -FilePath $filePath -ArgumentList $installerArgs -Wait -PassThru
 
         Write-Host -Object "Validating PostgreSQL 16 Install..."
