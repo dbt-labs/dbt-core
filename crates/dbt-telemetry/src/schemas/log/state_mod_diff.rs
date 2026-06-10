@@ -1,13 +1,13 @@
 pub use crate::proto::v1::public::events::fusion::log::StateModifiedDiff;
 use crate::{
-    ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent, TelemetryContext,
+    ArrowSerializableTelemetryEvent, DbtTelemetryContext, StaticTelemetryEvent, TelemetryContext,
     TelemetryEventRecType, TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
-impl ProtoTelemetryEvent for StateModifiedDiff {
+impl StaticTelemetryEvent for StateModifiedDiff {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -43,6 +43,7 @@ struct StateModifiedDiffJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for StateModifiedDiff {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             unique_id: self.unique_id.as_deref().map(Cow::Borrowed),

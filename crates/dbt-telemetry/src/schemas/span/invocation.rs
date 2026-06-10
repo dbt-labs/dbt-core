@@ -1,6 +1,6 @@
 use crate::{
     TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
 
@@ -10,7 +10,7 @@ pub use crate::proto::v1::public::events::fusion::invocation::{
 pub use crate::proto::v1::public::events::fusion::process::Process;
 use prost::Name;
 
-impl ProtoTelemetryEvent for Invocation {
+impl StaticTelemetryEvent for Invocation {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -43,6 +43,7 @@ impl ProtoTelemetryEvent for Invocation {
 }
 
 impl ArrowSerializableTelemetryEvent for Invocation {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

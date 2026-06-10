@@ -2,16 +2,12 @@
 
 use std::time::SystemTime;
 
-use super::{
-    super::{
-        attributes::TelemetryAttributes,
-        serialize::{
-            serialize_optional_span_id, serialize_span_id, serialize_timestamp, serialize_trace_id,
-        },
+use crate::{
+    SeverityNumber, SpanStatus, TelemetryAttributes,
+    serialize::envelope::{
+        serialize_optional_span_id, serialize_span_id, serialize_timestamp, serialize_trace_id,
     },
-    otlp::SpanStatus,
 };
-use crate::proto::v1::public::events::fusion::compat::SeverityNumber;
 use dbt_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -213,6 +209,16 @@ impl TelemetryRecord {
             TelemetryRecord::SpanEnd(info) => &info.attributes,
             TelemetryRecord::LogRecord(info) => &info.attributes,
         }
+    }
+}
+
+// Provides a default discriminant so downstream record types that embed
+// `TelemetryRecordType` can derive `Default`. The value is not used in practice,
+// as `record_type` is always set explicitly during conversion.
+#[allow(clippy::derivable_impls)]
+impl Default for TelemetryRecordType {
+    fn default() -> Self {
+        TelemetryRecordType::LogRecord
     }
 }
 

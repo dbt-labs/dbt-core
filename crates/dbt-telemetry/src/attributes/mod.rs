@@ -5,15 +5,11 @@
 //! users to extend the telemetry system with their own attribute types.
 
 mod context;
-mod export;
 mod registry;
-mod traits;
-mod wrapper;
 
 pub use context::{DbtTelemetryContext, TelemetryContext};
-pub use export::TelemetryOutputFlags;
-pub use registry::TelemetryEventTypeRegistry;
-pub use traits::{
-    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
+pub use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryAttributes,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
-pub use wrapper::TelemetryAttributes;
+pub use registry::TelemetryEventTypeRegistry;

@@ -5,9 +5,9 @@ use arrow::datatypes::{DataType, Field, Fields};
 use arrow_schema::extension::Json as JsonExtensionType;
 use std::{collections::HashMap, sync::LazyLock};
 
-use super::traits::AnyTelemetryEvent;
+use super::AnyTelemetryEvent;
 use crate::{
-    attributes::traits::ArrowSerializableTelemetryEvent,
+    attributes::ArrowSerializableTelemetryEvent,
     schemas::{
         AdapterConnectionClose, AdapterConnectionOpen, ArtifactWritten, AssetParsed, CallTrace,
         CompiledCode, CompiledCodeInline, ConnectionLimitWait, DepsAddPackage,
@@ -22,7 +22,7 @@ use crate::{
 
 /// Helper function that converts trait deserializer method to one compatible with the registry.
 fn arrow_deserialize_for_type<T>(
-    attrs: &DbtTelemetryArrowAttributes,
+    attrs: &T::ArrowRecord<'_>,
 ) -> Result<Box<dyn AnyTelemetryEvent>, String>
 where
     T: AnyTelemetryEvent + ArrowSerializableTelemetryEvent,

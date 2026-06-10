@@ -1,12 +1,12 @@
 pub use crate::proto::v1::public::events::fusion::log::{ShowDataOutput, ShowDataOutputFormat};
 use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
+    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
     TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 use std::borrow::Cow;
 
-impl ProtoTelemetryEvent for ShowDataOutput {
+impl StaticTelemetryEvent for ShowDataOutput {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -50,6 +50,7 @@ struct ShowDataOutputJsonPayload<'a> {
 }
 
 impl ArrowSerializableTelemetryEvent for ShowDataOutput {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dbt_core_event_code: Some(Cow::Borrowed(self.dbt_core_event_code.as_str())),

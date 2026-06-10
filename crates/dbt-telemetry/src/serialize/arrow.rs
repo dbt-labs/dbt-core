@@ -21,18 +21,6 @@ use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, sync::Arc};
 use std::{str::FromStr, time::SystemTime};
 
-// Create sudo impls for defaults on these two enums. This is only necessary
-// to make `ArrowTelemetryRecord` derive `Default` automatically, which in turn
-// simplifies the conversion from `TelemetryRecord` to `ArrowTelemetryRecord`.
-// During conversion we always set the `record_type` & `event_type` fields,
-// so default implementations are not used in practice.
-#[allow(clippy::derivable_impls)]
-impl Default for TelemetryRecordType {
-    fn default() -> Self {
-        TelemetryRecordType::LogRecord
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ArrowSpanLink {
     /// Arrow doesn't support u128 natively, so this is stored as a hex string.

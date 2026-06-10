@@ -8,8 +8,7 @@ use schemars::{
 use serde::Serialize;
 use std::{borrow::Cow, fmt::Debug};
 
-use super::traits::{AnyTelemetryEvent, TelemetryEventRecType};
-use crate::{SpanStatus, TelemetryOutputFlags};
+use crate::{AnyTelemetryEvent, SpanStatus, TelemetryEventRecType, TelemetryOutputFlags};
 
 /// Wrapper type that holds a boxed trait object for telemetry event data.
 ///

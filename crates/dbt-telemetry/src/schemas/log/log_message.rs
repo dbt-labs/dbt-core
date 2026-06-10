@@ -1,17 +1,17 @@
-pub use crate::proto::v1::public::events::fusion::compat::SeverityNumber;
 pub use crate::proto::v1::public::events::fusion::log::{
     LogMessage, ProgressMessage, UserLogMessage,
 };
 use crate::{
-    ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent, TelemetryContext,
+    ArrowSerializableTelemetryEvent, DbtTelemetryContext, StaticTelemetryEvent, TelemetryContext,
     TelemetryEventRecType, TelemetryOutputFlags, schemas::RecordCodeLocation,
     serialize::arrow::ArrowAttributes,
 };
+pub use dbt_tracing::SeverityNumber;
 use prost::Name;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
-impl ProtoTelemetryEvent for LogMessage {
+impl StaticTelemetryEvent for LogMessage {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -72,6 +72,7 @@ struct LogMessageJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for LogMessage {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         let json_payload = LogMessageJsonPayload {
             expanded_relative_path: self.expanded_relative_path.clone(),
@@ -165,7 +166,7 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
     }
 }
 
-impl ProtoTelemetryEvent for UserLogMessage {
+impl StaticTelemetryEvent for UserLogMessage {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -214,6 +215,7 @@ struct UserLogMessageJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for UserLogMessage {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dbt_core_event_code: Some(Cow::Borrowed(self.dbt_core_event_code.as_str())),
@@ -284,7 +286,7 @@ impl ArrowSerializableTelemetryEvent for UserLogMessage {
     }
 }
 
-impl ProtoTelemetryEvent for ProgressMessage {
+impl StaticTelemetryEvent for ProgressMessage {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -337,6 +339,7 @@ struct ProgressMessageJsonPayload<'a> {
 }
 
 impl ArrowSerializableTelemetryEvent for ProgressMessage {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),

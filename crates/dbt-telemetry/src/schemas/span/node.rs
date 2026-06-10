@@ -1,7 +1,7 @@
 use crate::{
     SpanStatus, TelemetryOutputFlags,
     attributes::{
-        ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent,
+        ArrowSerializableTelemetryEvent, DbtTelemetryContext, StaticTelemetryEvent,
         TelemetryContext, TelemetryEventRecType,
     },
     serialize::arrow::ArrowAttributes,
@@ -25,7 +25,7 @@ pub use crate::proto::v1::public::events::fusion::node::{
     node_processed,
 };
 
-impl ProtoTelemetryEvent for NodeEvaluated {
+impl StaticTelemetryEvent for NodeEvaluated {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -150,6 +150,7 @@ fn deserialize_node_evaluated_json_payload(
 }
 
 impl ArrowSerializableTelemetryEvent for NodeEvaluated {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Well-known fields for easier querying
@@ -256,7 +257,7 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
     }
 }
 
-impl ProtoTelemetryEvent for NodeProcessed {
+impl StaticTelemetryEvent for NodeProcessed {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -311,6 +312,7 @@ impl ProtoTelemetryEvent for NodeProcessed {
 }
 
 impl ArrowSerializableTelemetryEvent for NodeProcessed {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Well-known fields for easier querying

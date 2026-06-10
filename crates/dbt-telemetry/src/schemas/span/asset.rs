@@ -1,7 +1,7 @@
 use crate::proto::v1::public::events::fusion::phase::ExecutionPhase;
 use crate::{
     DbtTelemetryContext, TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
@@ -9,7 +9,7 @@ use serde_with::skip_serializing_none;
 
 pub use crate::proto::v1::public::events::fusion::asset::AssetParsed;
 
-impl ProtoTelemetryEvent for AssetParsed {
+impl StaticTelemetryEvent for AssetParsed {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -49,6 +49,7 @@ struct AssetParsedJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for AssetParsed {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             phase: Some(self.phase()),

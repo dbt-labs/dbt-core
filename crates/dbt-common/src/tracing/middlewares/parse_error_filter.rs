@@ -175,8 +175,9 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
                 SeverityNumber::Error,
                 "Do not emit deprecation messages as non-errors"
             );
+            let original_severity: SeverityNumber = log_message.original_severity_number().into();
             debug_assert_eq!(
-                log_message.original_severity_number(),
+                original_severity,
                 SeverityNumber::Error,
                 "Do not emit deprecation messages as non-errors"
             );

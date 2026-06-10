@@ -4,7 +4,7 @@ pub use crate::proto::v1::public::events::fusion::deps::{
     DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, PackageType,
 };
 use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
+    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
     TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
@@ -19,7 +19,7 @@ struct DepsAddPackageJsonPayload<'a> {
     pub package_version: Option<Cow<'a, str>>,
 }
 
-impl ProtoTelemetryEvent for DepsAddPackage {
+impl StaticTelemetryEvent for DepsAddPackage {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -33,6 +33,7 @@ impl ProtoTelemetryEvent for DepsAddPackage {
 }
 
 impl ArrowSerializableTelemetryEvent for DepsAddPackage {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dbt_core_event_code: Some(Cow::Borrowed(self.dbt_core_event_code.as_str())),
@@ -95,7 +96,7 @@ impl ArrowSerializableTelemetryEvent for DepsAddPackage {
     }
 }
 
-impl ProtoTelemetryEvent for DepsPackageInstalled {
+impl StaticTelemetryEvent for DepsPackageInstalled {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -126,6 +127,7 @@ struct DepsPackageInstalledJsonPayload<'a> {
 }
 
 impl ArrowSerializableTelemetryEvent for DepsPackageInstalled {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dbt_core_event_code: Some(Cow::Borrowed(self.dbt_core_event_code.as_str())),
@@ -184,7 +186,7 @@ impl ArrowSerializableTelemetryEvent for DepsPackageInstalled {
     }
 }
 
-impl ProtoTelemetryEvent for DepsAllPackagesInstalled {
+impl StaticTelemetryEvent for DepsAllPackagesInstalled {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -198,6 +200,7 @@ impl ProtoTelemetryEvent for DepsAllPackagesInstalled {
 }
 
 impl ArrowSerializableTelemetryEvent for DepsAllPackagesInstalled {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Data is serialized as JSON payload

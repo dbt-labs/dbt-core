@@ -1,6 +1,6 @@
 use crate::{
     TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
@@ -17,7 +17,7 @@ pub fn create_process_event_data(package: &str) -> Process {
     }
 }
 
-impl ProtoTelemetryEvent for Process {
+impl StaticTelemetryEvent for Process {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -34,6 +34,7 @@ impl ProtoTelemetryEvent for Process {
 }
 
 impl ArrowSerializableTelemetryEvent for Process {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

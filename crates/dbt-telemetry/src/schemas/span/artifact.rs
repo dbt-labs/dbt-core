@@ -1,6 +1,6 @@
 use crate::{
     TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
@@ -8,7 +8,7 @@ use std::borrow::Cow;
 
 pub use crate::proto::v1::public::events::fusion::artifact::{ArtifactType, ArtifactWritten};
 
-impl ProtoTelemetryEvent for ArtifactWritten {
+impl StaticTelemetryEvent for ArtifactWritten {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -24,6 +24,7 @@ impl ProtoTelemetryEvent for ArtifactWritten {
 }
 
 impl ArrowSerializableTelemetryEvent for ArtifactWritten {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             relative_path: Some(Cow::from(self.relative_path.as_str())),

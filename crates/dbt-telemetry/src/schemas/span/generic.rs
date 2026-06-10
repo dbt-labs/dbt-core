@@ -1,6 +1,6 @@
 use crate::{
     TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
@@ -9,7 +9,7 @@ pub use crate::proto::v1::public::events::fusion::generic::{
     GenericOpExecuted, GenericOpItemProcessed,
 };
 
-impl ProtoTelemetryEvent for GenericOpExecuted {
+impl StaticTelemetryEvent for GenericOpExecuted {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -26,6 +26,7 @@ impl ProtoTelemetryEvent for GenericOpExecuted {
 }
 
 impl ArrowSerializableTelemetryEvent for GenericOpExecuted {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)
@@ -57,7 +58,7 @@ impl ArrowSerializableTelemetryEvent for GenericOpExecuted {
     }
 }
 
-impl ProtoTelemetryEvent for GenericOpItemProcessed {
+impl StaticTelemetryEvent for GenericOpItemProcessed {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -74,6 +75,7 @@ impl ProtoTelemetryEvent for GenericOpItemProcessed {
 }
 
 impl ArrowSerializableTelemetryEvent for GenericOpItemProcessed {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

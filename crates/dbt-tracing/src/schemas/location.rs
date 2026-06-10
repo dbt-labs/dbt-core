@@ -2,7 +2,7 @@ use tracing::Metadata;
 
 /// Helper struct that provides universal code location information
 /// for telemetry traits and tracing layers.
-#[cfg_attr(test, derive(fake::Dummy))]
+#[cfg_attr(any(test, feature = "test-utils"), derive(fake::Dummy))]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RecordCodeLocation {
     /// The file path

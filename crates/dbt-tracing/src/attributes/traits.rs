@@ -5,10 +5,8 @@ use serde_json::Value as JsonValue;
 use std::{any::Any, fmt::Debug};
 
 use crate::{
-    SpanStatus, TelemetryOutputFlags,
-    attributes::TelemetryContext,
-    schemas::RecordCodeLocation,
-    serialize::{arrow::ArrowAttributes, traits::ArrowAttributesSerialize},
+    SpanStatus, TelemetryOutputFlags, attributes::TelemetryContext, schemas::RecordCodeLocation,
+    serialize::traits::ArrowAttributesSerialize,
 };
 
 /// Category of record (envelope) this event should be recorded in.
@@ -162,21 +160,28 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
 /// and then used for blanket implementations as `to_arrow` in `AnyTelemetryEvent`
 /// and the source of deserialization in the registry.
 pub trait ArrowSerializableTelemetryEvent {
+    /// The concrete Arrow-serializable record type produced/consumed by this event.
+    type ArrowRecord<'a>: ArrowAttributesSerialize
+    where
+        Self: 'a;
+
     /// Serialize the event data to Arrow compatible record (used in arrow serialization)
-    fn to_arrow_record(&self) -> ArrowAttributes<'_>;
+    fn to_arrow_record(&self) -> Self::ArrowRecord<'_>;
 
     /// Deserialize from Arrow compatible record into a boxed trait object.
     /// This is a non-dispatchable method called on concrete types.
-    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String>
+    fn from_arrow_record(record: &Self::ArrowRecord<'_>) -> Result<Self, String>
     where
         Self: Sized;
 }
 
-/// A convenience trait for proto-defined telemetry events. Reduces boilerplate.
-/// Implement this trait for all proto defined events, which should be all non-internal events.
+/// A convenience trait bundling the bounds for statically-typed telemetry events;
+/// the statically-typed counterpart to `AnyTelemetryEvent`. Reduces boilerplate.
+/// Implement this trait for all schema-defined (e.g. proto-generated) events,
+/// which should be all non-internal events.
 ///
 /// Any type that implements this trait automatically implements AnyTelemetryEvent.
-pub trait ProtoTelemetryEvent:
+pub trait StaticTelemetryEvent:
     Debug
     + Clone
     + Send
@@ -261,8 +266,8 @@ pub trait ProtoTelemetryEvent:
     }
 }
 
-// Blanket implementation of AnyTelemetryEvent for types that implement ProtoTelemetryEvent
-impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
+// Blanket implementation of AnyTelemetryEvent for types that implement StaticTelemetryEvent
+impl<T: StaticTelemetryEvent> AnyTelemetryEvent for T {
     #[inline]
     fn event_type(&self) -> &'static str {
         T::FULL_NAME
@@ -277,11 +282,11 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
     }
 
     fn event_display_name(&self) -> String {
-        ProtoTelemetryEvent::event_display_name(self)
+        StaticTelemetryEvent::event_display_name(self)
     }
 
     fn get_span_status(&self) -> Option<SpanStatus> {
-        ProtoTelemetryEvent::get_span_status(self)
+        StaticTelemetryEvent::get_span_status(self)
     }
 
     #[inline]
@@ -295,29 +300,29 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
     }
 
     fn code_location(&self) -> Option<RecordCodeLocation> {
-        ProtoTelemetryEvent::code_location(self)
+        StaticTelemetryEvent::code_location(self)
     }
 
     fn with_code_location(&mut self, location: RecordCodeLocation) {
-        ProtoTelemetryEvent::with_code_location(self, location)
+        StaticTelemetryEvent::with_code_location(self, location)
     }
 
     #[inline]
     fn context(&self) -> Option<TelemetryContext> {
-        ProtoTelemetryEvent::context(self)
+        StaticTelemetryEvent::context(self)
     }
 
     #[inline]
     fn with_context(&mut self, context: &TelemetryContext) {
-        ProtoTelemetryEvent::with_context(self, context)
+        StaticTelemetryEvent::with_context(self, context)
     }
 
     fn has_sensitive_data(&self) -> bool {
-        ProtoTelemetryEvent::has_sensitive_data(self)
+        StaticTelemetryEvent::has_sensitive_data(self)
     }
 
     fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
-        ProtoTelemetryEvent::clone_without_sensitive_data(self)
+        StaticTelemetryEvent::clone_without_sensitive_data(self)
     }
 
     /// Helper for downcasting to concrete types.

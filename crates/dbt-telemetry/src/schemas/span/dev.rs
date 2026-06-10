@@ -1,14 +1,14 @@
 pub use crate::proto::v1::public::events::fusion::dev::{CallTrace, DebugValue, Unknown};
 use crate::{
     AnyTelemetryEvent, TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
     schemas::RecordCodeLocation,
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 use std::borrow::Cow;
 
-impl ProtoTelemetryEvent for CallTrace {
+impl StaticTelemetryEvent for CallTrace {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -61,6 +61,7 @@ impl ProtoTelemetryEvent for CallTrace {
 }
 
 impl ArrowSerializableTelemetryEvent for CallTrace {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dev_name: Some(Cow::Borrowed(self.name.as_str())),
@@ -109,7 +110,7 @@ impl ArrowSerializableTelemetryEvent for CallTrace {
     }
 }
 
-impl ProtoTelemetryEvent for Unknown {
+impl StaticTelemetryEvent for Unknown {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -141,6 +142,7 @@ impl ProtoTelemetryEvent for Unknown {
 }
 
 impl ArrowSerializableTelemetryEvent for Unknown {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dev_name: Some(Cow::Borrowed(self.name.as_str())),
