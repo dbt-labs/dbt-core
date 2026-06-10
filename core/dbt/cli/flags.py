@@ -390,8 +390,8 @@ class Flags:
         """Attribute the resolved MANAGE_STATE value to the surface that supplied it.
 
         Returns None when state management is not enabled. Otherwise returns one of
-        "cli_flag", "env_var", "project_config", or "user_settings", following the
-        same precedence dbt uses when resolving the flag."""
+        "cli_flag", "env_var", "programmatic", "project_config", or "user_settings",
+        following the same precedence dbt uses when resolving the flag."""
         if not getattr(self, "MANAGE_STATE", False):
             return None
 
@@ -407,10 +407,12 @@ class Flags:
     def _manage_state_click_source(
         self, ctx: Context, invoked_subcommand_ctx: Optional[Context]
     ) -> Optional[str]:
-        """Return "cli_flag"/"env_var" if Click parsed manage_state from the command
-        line or an env var, else None. `manage_state` is a global option, so it may
-        be parsed in the top-level context, any parent context, or the invoked
-        subcommand's context."""
+        """Return "cli_flag"/"env_var"/"programmatic" if Click parsed manage_state
+        from the command line, an env var, or a dbtRunner.invoke() kwarg, else None.
+        `manage_state` is a global option, so it may be parsed in the top-level
+        context, any parent context, or the invoked subcommand's context.
+        dbtRunner.invoke() tags kwarg-supplied params with the string source
+        "kwargs" (see dbt.cli.main), which we surface as "programmatic"."""
         contexts: List[Context] = []
         cur: Optional[Context] = ctx
         while cur is not None:
@@ -430,6 +432,8 @@ class Flags:
             return "cli_flag"
         if ParameterSource.ENVIRONMENT in click_sources:
             return "env_var"
+        if "kwargs" in click_sources:
+            return "programmatic"
         return None
 
     def _override_if_set(self, lead: str, follow: str, defaulted: Set[str]) -> None:

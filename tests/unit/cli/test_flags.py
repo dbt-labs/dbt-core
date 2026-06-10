@@ -224,6 +224,18 @@ class TestFlags:
         assert flags.MANAGE_STATE is expected_state
         assert flags.MANAGE_STATE_SOURCE == expected_source
 
+    def test_manage_state_source_programmatic(self, monkeypatch):
+        # dbtRunner.invoke(manage_state=True) tags the param source with the string
+        # "kwargs"; this should be attributed to the "programmatic" surface.
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: {})
+        context = self.make_dbt_context("run", ["run"])
+        context.params["manage_state"] = True
+        context.set_parameter_source("manage_state", "kwargs")
+        flags = Flags(context)
+        assert flags.MANAGE_STATE is True
+        assert flags.MANAGE_STATE_SOURCE == "programmatic"
+
     def test_mutually_exclusive_options_passed_separately(self):
         """Assert options that are mutually exclusive can be passed separately without error"""
         warn_error_context = self.make_dbt_context("run", ["--warn-error", "run"])

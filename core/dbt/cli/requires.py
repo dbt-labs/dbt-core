@@ -112,8 +112,11 @@ def preflight(func):
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         ctx.with_resource(track_run(run_command=flags.WHICH))
 
-        # Telemetry for opt-in state management (--manage-state /
-        # DBT_ENGINE_MANAGE_STATE / manage_state: true).
+        # Telemetry for opt-in state management. Source is attributed to whichever
+        # surface enabled it: --manage-state (cli_flag), DBT_ENGINE_MANAGE_STATE
+        # (env_var), dbtRunner.invoke(manage_state=...) (programmatic),
+        # manage_state: true in dbt_project.yml (project_config), or
+        # user_settings.yml (user_settings).
         if getattr(flags, "MANAGE_STATE", False) and dbt.tracking.active_user is not None:
             track_manage_state(
                 {
