@@ -431,10 +431,15 @@ impl RedshiftMaterializedViewConfig {
         false
     }
 
-    /// Get the full path (database.schema.mv_name)
+    /// Get the full path: `"database"."schema"."mv_name"`.
+    ///
+    /// Mirrors upstream Python `RedshiftMaterializedViewConfig.path`, which builds the
+    /// path from components always quoted rendered by `_render_part` under `RedshiftQuotePolicy`
+    /// (database/schema/identifier all default to True).
+    /// https://github.com/dbt-labs/dbt-adapters/blob/fc39590f62cfe2c8b78ec96594a5b91ed334aebd/dbt-redshift/src/dbt/adapters/redshift/relation_configs/materialized_view.py#L100-L101
     pub fn path(&self) -> String {
         format!(
-            "{}.{}.{}",
+            "\"{}\".\"{}\".\"{}\"",
             self.database_name, self.schema_name, self.mv_name
         )
     }
