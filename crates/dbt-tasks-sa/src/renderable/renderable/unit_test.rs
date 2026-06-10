@@ -1695,9 +1695,23 @@ fn create_values(
                 );
             }
             // todo: this is a hack to handle null values in a more robust way, but maybe we should only allows this if the column is nullable?
-            // if the value is null or a string "null", we push a null value
+            // Emit a null if the value is:
+            // - `NULL` (actually null)
+            // - "null" (string)
+            // - ""     (empty string, but only if *not* string typed)
+            let is_string_typed = matches!(
+                ref_type,
+                DataType::Utf8
+                    | DataType::Utf8View
+                    | DataType::LargeUtf8
+                    | DataType::Binary
+                    | DataType::LargeBinary
+            );
             if row_value.is_null()
                 || row_value.is_string() && (row_value.as_str().unwrap()).to_lowercase() == "null"
+                || row_value.is_string()
+                    && row_value.as_str().unwrap().is_empty()
+                    && !is_string_typed
             {
                 enriched_row.push(YmlValue::null());
             } else {
