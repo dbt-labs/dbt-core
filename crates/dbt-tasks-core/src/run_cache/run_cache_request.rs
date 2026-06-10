@@ -2,7 +2,7 @@
 //!
 //! This module owns extraction from dbt schema/task types, adapter-specific
 //! relation rendering, seed file hashing, and task-layer context assembly before
-//! lowering into the stable request-builder inputs in `dbt-run-cache`.
+//! lowering into the stable request-builder inputs in `dbt-state`.
 
 #![allow(dead_code)]
 
@@ -13,19 +13,19 @@ use std::path::Path;
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_run_cache::proto::query_cache::{
-    QueryDependency, StaleUpstreamPolicy, SubmitEnrichedSqlRequest, SubmitValuesRequest,
-    TableModifiedInfo, TableProperties,
-};
-use dbt_run_cache::request_builder::{
-    ExecutionTypeInput, NodeIdentity, RequestBuildError, SemanticExtraConfig, SemanticExtras,
-    SubmitEnrichedSqlRequestInput, SubmitValuesRequestInput, execution_type_from_input,
-    seed_semantic_extras, seed_values_hash_reader, sql_semantic_extras,
-};
 use dbt_schemas::schemas::common::{DbtMaterialization, OnSchemaChange};
 use dbt_schemas::schemas::project::{ModelConfig, SeedConfig, SnapshotConfig};
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
+};
+use dbt_state::proto::query_cache::{
+    QueryDependency, StaleUpstreamPolicy, SubmitEnrichedSqlRequest, SubmitValuesRequest,
+    TableModifiedInfo, TableProperties,
+};
+use dbt_state::request_builder::{
+    ExecutionTypeInput, NodeIdentity, RequestBuildError, SemanticExtraConfig, SemanticExtras,
+    SubmitEnrichedSqlRequestInput, SubmitValuesRequestInput, execution_type_from_input,
+    seed_semantic_extras, seed_values_hash_reader, sql_semantic_extras,
 };
 use dbt_telemetry::NodeType;
 use serde::Serialize;
@@ -34,8 +34,8 @@ use serde_json::Value;
 #[derive(Clone, Debug)]
 /// Execution-time SQL request inputs assembled by `dbt-tasks`.
 ///
-/// This stays separate from the `dbt-run-cache` request-builder input so the
-/// `dbt-run-cache` crate only sees normalized values and does not depend on task/schema
+/// This stays separate from the `dbt-state` request-builder input so the
+/// `dbt-state` crate only sees normalized values and does not depend on task/schema
 /// runtime types.
 pub struct SqlRunCacheRequestContext {
     pub adapter_type: AdapterType,
@@ -59,7 +59,7 @@ pub struct SqlRunCacheRequestContext {
 /// Execution-time seed request inputs assembled by `dbt-tasks`.
 ///
 /// This context may include task-layer details, such as the project root, before
-/// being lowered into the stable `dbt-run-cache` request-builder input.
+/// being lowered into the stable `dbt-state` request-builder input.
 pub struct SeedRunCacheRequestContext<'a> {
     pub adapter_type: AdapterType,
     pub dialect: String, // TODO: remove because redundant when adapter_type is present in context
@@ -259,7 +259,7 @@ pub fn seed_clone_table_properties(seed: &DbtSeed) -> Option<TableProperties> {
 fn build_sql_request_input(
     node: &dyn InternalDbtNodeAttributes,
     context: SqlRunCacheRequestContext,
-    execution_type: dbt_run_cache::proto::query_cache::ModelExecutionType,
+    execution_type: dbt_state::proto::query_cache::ModelExecutionType,
     semantic_extras: SemanticExtras,
 ) -> FsResult<SubmitEnrichedSqlRequestInput> {
     Ok(SubmitEnrichedSqlRequestInput {
@@ -418,8 +418,6 @@ fn request_build_error(error: RequestBuildError) -> Box<dbt_common::FsError> {
 mod tests {
     use super::*;
     use dbt_common::io_args::StaticAnalysisKind;
-    use dbt_run_cache::proto::query_cache::ModelExecutionType;
-    use dbt_run_cache::request_builder::{execution_type_from_input, seed_values_hash};
     use dbt_schemas::schemas::common::{
         Access, DbtIncrementalStrategy, DbtMaterialization, DbtUniqueKey, OnSchemaChange,
         ResolvedQuoting,
@@ -430,6 +428,8 @@ mod tests {
         CommonAttributes, DbtModelAttr, DbtSeedAttr, DbtSnapshotAttr, IntrospectionKind,
         NodeBaseAttributes,
     };
+    use dbt_state::proto::query_cache::ModelExecutionType;
+    use dbt_state::request_builder::{execution_type_from_input, seed_values_hash};
     use dbt_yaml::Spanned;
     use indexmap::IndexMap;
     use std::collections::BTreeMap;

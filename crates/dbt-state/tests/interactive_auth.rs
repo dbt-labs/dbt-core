@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dbt_platform_auth::AuthChainBuilder;
-use dbt_run_cache::auth::{BrowserFlow, OAuthTokenSource, TokenStore};
-use dbt_run_cache::service_config::{DEFAULT_OAUTH_AUTH_URL, RunCacheServiceConfig};
+use dbt_state::auth::{BrowserFlow, OAuthTokenSource, TokenStore};
+use dbt_state::service_config::{DEFAULT_OAUTH_AUTH_URL, RunCacheServiceConfig};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Serialize;
 use tempfile::TempDir;

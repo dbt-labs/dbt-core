@@ -1,5 +1,5 @@
 [package]
-name = "dbt-run-cache"
+name = "dbt-state"
 version.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -13,7 +13,7 @@ edition.workspace = true
 workspace = true
 
 [lib]
-name = "dbt_run_cache"
+name = "dbt_state"
 path = "src/mod.rs"
 
 

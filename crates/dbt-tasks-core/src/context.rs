@@ -16,16 +16,16 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::compile::{
     DependencyValidationConfig, build_compile_node_context_inner,
 };
-use dbt_run_cache::metadata_cache::RunCacheMetadataCache;
-use dbt_run_cache::service_client::SharedRunCacheServiceClient;
-use dbt_run_cache::service_config::RunCacheServiceConfig;
-use dbt_run_cache::view_traversal::ViewDefinitionTraverser;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::UpdatesOn;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes, Nodes};
 use dbt_schemas::state::{DbtProfile, DbtRuntimeConfig, NodeResolverTracker, ResolverState};
+use dbt_state::metadata_cache::RunCacheMetadataCache;
+use dbt_state::service_client::SharedRunCacheServiceClient;
+use dbt_state::service_config::RunCacheServiceConfig;
+use dbt_state::view_traversal::ViewDefinitionTraverser;
 use minijinja::Value;
 
 use crate::RunTasksArgs;

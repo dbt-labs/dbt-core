@@ -6,13 +6,13 @@ use dbt_common::tracing::dbt_emit::{
 };
 use dbt_common::tracing::dbt_metrics::{FusionMetricKey, RunCacheServiceMetricKey};
 use dbt_common::tracing::metrics::increment_metric;
-use dbt_run_cache::metadata_cache::RunCacheMetadataCache;
-use dbt_run_cache::service_client::{
+use dbt_schemas::schemas::profiles::Execute;
+use dbt_state::metadata_cache::RunCacheMetadataCache;
+use dbt_state::service_client::{
     ClientVersionStatus, GrpcRunCacheServiceClient, SharedRunCacheServiceClient,
     format_error_chain, shared_run_cache_service_client, validate_client_version_fail_open,
 };
-use dbt_run_cache::service_config::RunCacheServiceConfig;
-use dbt_schemas::schemas::profiles::Execute;
+use dbt_state::service_config::RunCacheServiceConfig;
 use std::sync::Arc;
 
 use crate::RunTasksArgs;

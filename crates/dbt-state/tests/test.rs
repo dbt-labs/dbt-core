@@ -8,13 +8,13 @@ mod tests {
 
     use crossbeam_queue::SegQueue;
     use dashmap::DashMap;
-    use dbt_run_cache::node_session::{Acquired, Contention, NodeCacheSession};
-    use dbt_run_cache::task_cache::{TaskCache, TaskState, TaskValue};
-    use dbt_run_cache::task_cache_noop::TaskCacheNoop;
-    use dbt_run_cache::task_cache_redis::TaskCacheRedis;
     use dbt_schemas::schemas::{CloudCredentials, ResolvedCloudConfig};
+    use dbt_state::node_session::{Acquired, Contention, NodeCacheSession};
+    use dbt_state::task_cache::{TaskCache, TaskState, TaskValue};
+    use dbt_state::task_cache_noop::TaskCacheNoop;
+    use dbt_state::task_cache_redis::TaskCacheRedis;
     use redis::aio::MultiplexedConnection;
-    // use dbt_run_cache::task_cache::SLEEP_PERIOD;
+    // use dbt_state::task_cache::SLEEP_PERIOD;
 
     fn redis_uri() -> &'static str {
         "redis://127.0.0.1:6379"
@@ -195,7 +195,7 @@ mod tests {
         let start = TaskValue::new_now("seed".into(), Some("h1".into()));
         cache.try_start_task(key, &start, &None).await.unwrap();
         let stop = TaskValue::new_now("seed".into(), Some("h1".into()));
-        let info = dbt_run_cache::task_cache::TaskInfo {
+        let info = dbt_state::task_cache::TaskInfo {
             upstreams: HashMap::new(),
         };
         cache.stop_task(key, &stop, &info).await.unwrap();
@@ -391,7 +391,7 @@ mod tests {
         let key = "initial_expiration_test_node";
 
         let start_value = TaskValue::new_now("worker1".into(), Some("test_data".into()));
-        let info = dbt_run_cache::task_cache::TaskInfo {
+        let info = dbt_state::task_cache::TaskInfo {
             upstreams: HashMap::from([
                 ("upstream1".to_string(), "hash1".to_string()),
                 ("upstream2".to_string(), "hash2".to_string()),
@@ -436,7 +436,7 @@ mod tests {
         let key = "get_info_test_node";
 
         let start_value = TaskValue::new_now("worker1".into(), Some("test_data".into()));
-        let info = dbt_run_cache::task_cache::TaskInfo {
+        let info = dbt_state::task_cache::TaskInfo {
             upstreams: HashMap::from([
                 ("upstream1".to_string(), "hash1".to_string()),
                 ("upstream2".to_string(), "hash2".to_string()),

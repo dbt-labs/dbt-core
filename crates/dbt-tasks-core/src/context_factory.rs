@@ -10,10 +10,10 @@ use dbt_common::collections::DashMap;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::RenderingEventListenerFactory;
-use dbt_run_cache::view_traversal::ViewDefinitionTraverser;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
+use dbt_state::view_traversal::ViewDefinitionTraverser;
 use petgraph::graph::DiGraph;
 
 use crate::CompiledSqlCache;

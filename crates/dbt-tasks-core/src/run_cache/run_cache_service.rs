@@ -9,7 +9,7 @@
 //!
 //! The module owns task-specific concerns such as rendered SQL extraction,
 //! adapter relation rendering, warehouse metadata lookups, and skip policy.
-//! Stable service DTO construction lives in `dbt-run-cache::request_builder`.
+//! Stable service DTO construction lives in `dbt-state::request_builder`.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -30,22 +30,22 @@ use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_messag
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_frontend_common::Dialect;
 use dbt_frontend_common::ident::FullyQualifiedName;
-use dbt_run_cache::node_session::ExecutionGuard;
-use dbt_run_cache::proto::query_cache::{
-    ConfirmExecutionRequest, ExplainedDecision, NodeFuncMapping, QueryDependency,
-    RecordExecutionsRequest, SkipExecutionResponse, Struct, SubmitEnrichedSqlRequest,
-    SubmitSqlResponse, SubmitValuesRequest, TableModifiedInfo, submit_sql_response,
-};
-use dbt_run_cache::request_builder::{
-    ExecutionOutcomeInput, sql_execution_record_from_submit_request,
-    values_execution_record_from_submit_request,
-};
 use dbt_schemas::schemas::common::{DbtMaterialization, ModelFreshnessRules, ResolvedQuoting};
 use dbt_schemas::schemas::profiles::DbConfig;
 use dbt_schemas::schemas::properties::ModelState;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
+};
+use dbt_state::node_session::ExecutionGuard;
+use dbt_state::proto::query_cache::{
+    ConfirmExecutionRequest, ExplainedDecision, NodeFuncMapping, QueryDependency,
+    RecordExecutionsRequest, SkipExecutionResponse, Struct, SubmitEnrichedSqlRequest,
+    SubmitSqlResponse, SubmitValuesRequest, TableModifiedInfo, submit_sql_response,
+};
+use dbt_state::request_builder::{
+    ExecutionOutcomeInput, sql_execution_record_from_submit_request,
+    values_execution_record_from_submit_request,
 };
 use dbt_xdbc::QueryCtx;
 
@@ -282,7 +282,7 @@ impl RunCacheExecutionConfirmation {
 /// `count(*) != 0` in the templated test SQL, so they are simply
 /// `failures > 0`.
 pub fn build_test_execution_results_struct(failures: i64) -> Struct {
-    use dbt_run_cache::proto::query_cache::{Value, value::Kind};
+    use dbt_state::proto::query_cache::{Value, value::Kind};
     let fail_value = Value {
         kind: Some(Kind::IntValue(failures)),
     };
@@ -300,7 +300,7 @@ pub fn build_test_execution_results_struct(failures: i64) -> Struct {
 /// `SkipExecutionResponse`. Returns the failures count if the field is
 /// present and decodable.
 pub fn parse_cached_test_failures(response: &SkipExecutionResponse) -> Option<i64> {
-    use dbt_run_cache::proto::query_cache::value::Kind;
+    use dbt_state::proto::query_cache::value::Kind;
     let results = response.execution_results.as_ref()?;
     let value = results.fields.get("failures")?;
     match value.kind.as_ref()? {
@@ -327,7 +327,7 @@ pub struct RunCacheCloneDecision {
 
 impl RunCacheCloneDecision {
     pub fn from_response(
-        response: &dbt_run_cache::proto::query_cache::ReadyToCloneResponse,
+        response: &dbt_state::proto::query_cache::ReadyToCloneResponse,
         freshness_tolerance_seconds: i64,
     ) -> Self {
         Self {
@@ -1082,7 +1082,7 @@ async fn submit_model(
     ctx: &TaskRunnerCtx,
     model: &DbtModel,
     task_result: &TaskResult,
-    client: &dbt_run_cache::service_client::SharedRunCacheServiceClient,
+    client: &dbt_state::service_client::SharedRunCacheServiceClient,
 ) -> FsResult<Option<RunCacheSubmitOutcome>> {
     let full_refresh = effective_full_refresh(
         ctx.inner.arg.full_refresh,
@@ -1206,7 +1206,7 @@ async fn submit_snapshot(
     ctx: &TaskRunnerCtx,
     snapshot: &DbtSnapshot,
     task_result: &TaskResult,
-    client: &dbt_run_cache::service_client::SharedRunCacheServiceClient,
+    client: &dbt_state::service_client::SharedRunCacheServiceClient,
 ) -> FsResult<Option<RunCacheSubmitOutcome>> {
     let context = build_sql_context(
         ctx,
@@ -1242,7 +1242,7 @@ async fn submit_snapshot(
 async fn submit_seed(
     ctx: &TaskRunnerCtx,
     seed: &DbtSeed,
-    client: &dbt_run_cache::service_client::SharedRunCacheServiceClient,
+    client: &dbt_state::service_client::SharedRunCacheServiceClient,
 ) -> FsResult<Option<RunCacheSubmitOutcome>> {
     if effective_full_refresh(
         ctx.inner.arg.full_refresh,
@@ -1300,7 +1300,7 @@ async fn submit_test(
     ctx: &TaskRunnerCtx,
     test: &DbtTest,
     task_result: &TaskResult,
-    client: &dbt_run_cache::service_client::SharedRunCacheServiceClient,
+    client: &dbt_state::service_client::SharedRunCacheServiceClient,
 ) -> FsResult<Option<RunCacheSubmitOutcome>> {
     let context = build_sql_context(
         ctx,
@@ -1482,9 +1482,9 @@ fn resolve_tolerate_nondeterminism(
 /// least one upstream must be within tolerance.
 fn stale_upstream_policy_for_node(
     node: &dyn InternalDbtNodeAttributes,
-) -> dbt_run_cache::proto::query_cache::StaleUpstreamPolicy {
-    use dbt_run_cache::proto::query_cache::StaleUpstreamPolicy;
+) -> dbt_state::proto::query_cache::StaleUpstreamPolicy {
     use dbt_schemas::schemas::common::UpdatesOn;
+    use dbt_state::proto::query_cache::StaleUpstreamPolicy;
 
     let updates_on = model_state_for_node(node)
         .and_then(|state| state.require_fresh_data_from.as_ref())
@@ -2393,9 +2393,9 @@ fn collect_view_traversal_roots(ctx: &TaskRunnerCtx) -> Vec<Arc<dyn BaseRelation
 mod tests {
     use super::*;
     use dbt_common::io_args::RunCacheMode;
-    use dbt_run_cache::proto::query_cache::{ReadyToCloneResponse, ReadyToExecuteResponse};
     use dbt_schemas::schemas::common::{FreshnessPeriod, UpdatesOn};
     use dbt_schemas::schemas::properties::{ModelFreshness, ModelState};
+    use dbt_state::proto::query_cache::{ReadyToCloneResponse, ReadyToExecuteResponse};
 
     fn model_with_state(state: ModelState) -> DbtModel {
         let mut model = DbtModel::default();
@@ -2728,7 +2728,7 @@ mod tests {
 
         assert_eq!(
             stale_upstream_policy_for_node(&model),
-            dbt_run_cache::proto::query_cache::StaleUpstreamPolicy::Any
+            dbt_state::proto::query_cache::StaleUpstreamPolicy::Any
         );
     }
 

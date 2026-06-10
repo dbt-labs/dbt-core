@@ -6,12 +6,12 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_platform_auth::resolver::{INTERACTIVE_TIMEOUT, OAUTH_SCOPES, OAuthInteractiveResolver};
 use dbt_platform_auth::{AuthError, OAUTH_CLIENT_ID};
-use dbt_run_cache::auth::scope::{Scope, determine_org_id};
-use dbt_run_cache::auth::{
+use dbt_state::auth::scope::{Scope, determine_org_id};
+use dbt_state::auth::{
     BrowserFlow, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, StoredToken, TokenStore,
 };
-use dbt_run_cache::service_client::RunCacheServiceError;
-use dbt_run_cache::service_config::{
+use dbt_state::service_client::RunCacheServiceError;
+use dbt_state::service_config::{
     DEFAULT_OAUTH_AUTH_URL, DEFAULT_OAUTH_CLIENT_ID, DEFAULT_OAUTH_TOKEN_URL,
 };
 
@@ -43,7 +43,7 @@ pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken
     let state_url_tx = Arc::new(Mutex::new(Some(state_url_tx)));
     let platform_url_tx = Arc::new(Mutex::new(Some(platform_url_tx)));
 
-    let state_opener: dbt_run_cache::auth::Opener = {
+    let state_opener: dbt_state::auth::Opener = {
         let tx = state_url_tx.clone();
         Box::new(move |url: &str| {
             if let Some(sender) = tx.lock().unwrap().take() {
