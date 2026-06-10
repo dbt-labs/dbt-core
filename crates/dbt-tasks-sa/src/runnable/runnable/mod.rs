@@ -892,6 +892,12 @@ fn emit_run_usage_stats(
             RunExecutionPath::Local => (None, false, false, None, None),
         };
 
+    // `catalog_type` is not stored on the model — only `catalog_name` is. The type
+    // lives on the catalog's active write integration in catalogs.yml, so resolve
+    // it the same way the adapter does (catalog_name -> active_write_integration ->
+    // write_integration.catalog_type). See dbt-adapter's CatalogRelation builders.
+    let catalog_type = resolve_catalog_type(catalog_name.as_deref());
+
     run_model_event(
         ctx.inner.arg.io.invocation_id.to_string(),
         &ctx.inner.run_stats,
@@ -901,7 +907,51 @@ fn emit_run_usage_stats(
         has_group,
         table_format,
         catalog_name,
+        catalog_type,
     );
+}
+
+/// Resolve a model's `catalog_name` to the `catalog_type` declared in catalogs.yml.
+///
+/// Mirrors how the adapter resolves catalog metadata at materialization time
+/// (`CatalogRelation::build_with_catalogs` and friends). The returned string is the
+/// catalog-type enum's stable form (`*::as_str`), which is the aggregatable value we
+/// want in telemetry.
+///
+/// Two schemas are supported:
+/// - **v1**: `catalog_type` lives on the catalog's active write integration —
+///   find the catalog by name, follow its `active_write_integration`, and read that
+///   integration's `catalog_type`.
+/// - **v2**: each catalog declares its `type` directly (no write integrations) —
+///   find the catalog by name and read its `catalog_type`.
+///
+/// Returns `None` when the model has no `catalog_name`, catalogs.yml is absent, or the
+/// catalog/integration cannot be found.
+fn resolve_catalog_type(catalog_name: Option<&str>) -> Option<String> {
+    let catalog_name = catalog_name?;
+    let catalogs = dbt_adapter::load_catalogs::fetch_catalogs()?;
+    // v2 catalogs.yml declares `type` directly on each catalog (no write
+    // integrations); v1 nests `catalog_type` under the active write integration.
+    if dbt_adapter::load_catalogs::fetch_use_catalogs_v2() {
+        let view = catalogs.view_v2().ok()?;
+        let catalog = view
+            .catalogs
+            .iter()
+            .find(|catalog| catalog.name == catalog_name)?;
+        return Some(catalog.catalog_type.as_str().to_string());
+    }
+    let view = catalogs.view().ok()?;
+    let catalog = view
+        .catalogs
+        .iter()
+        .find(|catalog| catalog.catalog_name.0 == catalog_name)?;
+    let active_integration = catalog.active_write_integration.0;
+    let write_integration = catalog
+        .write_integrations
+        .0
+        .iter()
+        .find(|write_integration| write_integration.integration_name == active_integration)?;
+    Some(write_integration.catalog_type.as_str().to_string())
 }
 
 fn node_runs_with_cache(node: &dyn InternalDbtNodeAttributes) -> bool {

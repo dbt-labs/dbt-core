@@ -407,6 +407,12 @@ pub struct RunModel {
     /// empty string when the model does not use catalogs.yml.
     #[prost(string, tag = "22")]
     pub catalog_name: ::prost::alloc::string::String,
+    /// the catalog type of the model's active write integration in catalogs.yml
+    /// (ex. "iceberg_rest", "unity", "glue", "built_in", "biglake_metastore").
+    /// this is the catalog backend kind, distinct from catalog_name (the user-chosen
+    /// catalog label). empty string when the model does not use catalogs.yml.
+    #[prost(string, tag = "23")]
+    pub catalog_type: ::prost::alloc::string::String,
 }
 impl ::prost::Name for RunModel {
     const NAME: &'static str = "RunModel";

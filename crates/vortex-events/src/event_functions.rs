@@ -209,6 +209,7 @@ pub fn run_model_event(
     has_group: bool,
     table_format: Option<String>,
     catalog_name: Option<String>,
+    catalog_type: Option<String>,
 ) {
     let unique_id = node.unique_id();
     if !run_stats.contains_key(&unique_id) {
@@ -319,6 +320,7 @@ pub fn run_model_event(
         resource_type,
         table_format: table_format.unwrap_or_default(),
         catalog_name: catalog_name.unwrap_or_default(),
+        catalog_type: catalog_type.unwrap_or_default(),
     };
 
     let _ = log_proto(message);

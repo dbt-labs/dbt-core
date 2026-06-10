@@ -354,6 +354,12 @@ message RunModel {
   // the catalog name from catalogs.yml, if the model opted into a write integration.
   // empty string when the model does not use catalogs.yml.
   string catalog_name = 22;
+
+  // the catalog type of the model's active write integration in catalogs.yml
+  // (ex. "iceberg_rest", "unity", "glue", "built_in", "biglake_metastore").
+  // this is the catalog backend kind, distinct from catalog_name (the user-chosen
+  // catalog label). empty string when the model does not use catalogs.yml.
+  string catalog_type = 23;
 }
 
 message Onboarding {
