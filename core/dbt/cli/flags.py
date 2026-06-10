@@ -421,12 +421,9 @@ class Flags:
         if invoked_subcommand_ctx is not None:
             contexts.append(invoked_subcommand_ctx)
 
-        click_sources = set()
-        for context in contexts:
-            try:
-                click_sources.add(context.get_parameter_source("manage_state"))
-            except Exception:
-                continue
+        # Context.get_parameter_source returns None (it does not raise) when the
+        # parameter was not supplied in that context; None entries are ignored below.
+        click_sources = {context.get_parameter_source("manage_state") for context in contexts}
 
         if ParameterSource.COMMANDLINE in click_sources:
             return "cli_flag"

@@ -453,6 +453,12 @@ def track_plugin_get_nodes(options):
 
 
 def _track_context_event(spec: str, action: str, options, error_msg: str) -> None:
+    """Emit a single-context structured tracking event.
+
+    Most track_* helpers in this module inline this same assert-then-track
+    pattern; this is the canonical form that the rest are intended to adopt.
+    For now only track_manage_state uses it (a full migration is deferred to a
+    follow-up to keep this change scoped)."""
     assert active_user is not None, error_msg
     track(
         active_user,
