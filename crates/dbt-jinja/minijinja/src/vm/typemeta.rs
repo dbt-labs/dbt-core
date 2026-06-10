@@ -1952,6 +1952,18 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }
+                Instruction::JinjaLayoutEvent(_kind, span) => {
+                    // TYPECHECK: NO
+                    listener.set_span(span);
+                }
+                Instruction::JinjaLayoutEventIfLoopDidNotIterate(_kind, span) => {
+                    // TYPECHECK: NO
+                    listener.set_span(span);
+                }
+                Instruction::JinjaLayoutLoopIterationStart(span) => {
+                    // TYPECHECK: NO
+                    listener.set_span(span);
+                }
                 Instruction::MacroName(_name, span) => {
                     // TYPECHECK: NO
                     listener.set_span(span);

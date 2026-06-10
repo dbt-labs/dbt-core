@@ -7,7 +7,8 @@ use std::{
 };
 
 use minijinja::{
-    CodeLocation, MacroSpans, OutputTracker, OutputTrackerLocation, TypecheckingEventListener,
+    CodeLocation, JinjaLayoutEventKind, MacroSpans, OutputTracker, OutputTrackerLocation,
+    TypecheckingEventListener,
     listener::{MacroStart, RenderingEventListener},
     machinery::Span,
 };
@@ -619,6 +620,8 @@ impl RenderingEventListener for DefaultRenderingEventListener {
             macro_start_stack_last.pop();
         }
     }
+
+    fn on_jinja_layout_event(&self, _kind: JinjaLayoutEventKind, _source_span: &Span) {}
 
     fn on_raw_emit(&self, raw: &str, source_span: &Span) {
         push_raw_source_spans(

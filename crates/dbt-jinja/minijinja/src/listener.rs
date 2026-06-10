@@ -5,6 +5,7 @@ use std::fmt::Write;
 use std::path::Path;
 
 use crate::compiler::tokens::Token;
+use crate::layout::JinjaLayoutEventKind;
 use crate::output_tracker::OutputTracker;
 use crate::{machinery::Span, CodeLocation};
 
@@ -30,6 +31,15 @@ pub trait RenderingEventListener: std::fmt::Debug {
     /// Called when a macro stop is encountered.
     /// The expanded location can be obtained from the output_tracker_location if needed.
     fn on_macro_stop(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32);
+
+    /// Called when a Jinja layout boundary is encountered during rendering.
+    fn on_jinja_layout_event(&self, _kind: JinjaLayoutEventKind, _source_span: &Span) {}
+
+    /// Called when a Jinja loop enters a repeated iteration.
+    fn on_jinja_loop_iteration_start(&self, _source_span: &Span) {}
+
+    /// Called when a Jinja loop ended without iterating.
+    fn on_jinja_loop_skipped_end(&self, _source_span: &Span) {}
 
     /// Called when raw template text is emitted into rendered output.
     fn on_raw_emit(&self, _raw: &str, _source_span: &Span) {}

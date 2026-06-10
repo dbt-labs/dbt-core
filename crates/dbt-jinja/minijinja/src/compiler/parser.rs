@@ -9,6 +9,7 @@ use crate::compiler::ast::{self, Comment, MacroKind, Spanned};
 use crate::compiler::lexer::{Tokenizer, WhitespaceConfig};
 use crate::compiler::tokens::{Span, Token};
 use crate::error::{Error, ErrorKind};
+use crate::layout::JinjaLayoutEventKind;
 use crate::listener::TokenizerEventListener;
 use crate::syntax::SyntaxConfig;
 use crate::value::Value;
@@ -944,11 +945,11 @@ impl<'a> Parser<'a> {
                 ast::Stmt::ForLoop(Spanned::new(node, self.stream.expand_span(span)))
             }
             "if" => {
-                let node = ok!(self.parse_if_cond(span));
+                let node = ok!(self.parse_if_cond(span, JinjaLayoutEventKind::BlockStart));
                 ast::Stmt::IfCond(Spanned::new(node, self.stream.expand_span(span)))
             }
             "with" => ast::Stmt::WithBlock(respan!(ok!(self.parse_with_block()))),
-            "set" => match ok!(self.parse_set()) {
+            "set" => match ok!(self.parse_set(span)) {
                 SetParseResult::Set(rv) => ast::Stmt::Set(respan!(rv)),
                 SetParseResult::SetBlock(rv) => ast::Stmt::SetBlock(respan!(rv)),
             },
@@ -1141,24 +1142,25 @@ impl<'a> Parser<'a> {
         skip_token!(self, Token::Colon);
 
         expect_token!(self, Token::BlockEnd, "end of block");
-        let _ = start_open_span;
+        let start_tag_span = self.stream.expand_span(start_open_span);
         let body = ok!(self.subparse(
             &|tok| matches!(tok, Token::Ident("endfor" | "else")),
             Some(("for", &["endfor", "else"])),
         ));
         let next_open_span = self.stream.last_span();
-        let (else_body, end_open_span) = match ok!(self.stream.next()) {
+        let (else_body, else_tag_span, end_open_span) = match ok!(self.stream.next()) {
             Some((Token::Ident("else"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
+                let else_tag_span = self.stream.expand_span(next_open_span);
                 let else_body = ok!(self.subparse(
                     &|tok| matches!(tok, Token::Ident("endfor")),
                     Some(("for", &["endfor"])),
                 ));
                 let end_open_span = self.stream.last_span();
                 expect_token!(self, Token::Ident("endfor"), "endfor");
-                (else_body, end_open_span)
+                (else_body, Some(else_tag_span), end_open_span)
             }
-            Some((Token::Ident("endfor"), _)) => (Vec::new(), next_open_span),
+            Some((Token::Ident("endfor"), _)) => (Vec::new(), None, next_open_span),
             Some((token, span)) => {
                 syntax_error!(
                     "unexpected end of for-loop: expected endfor or else, got {}",
@@ -1172,7 +1174,7 @@ impl<'a> Parser<'a> {
             }
         };
         expect_token!(self, Token::BlockEnd, "end of block");
-        let _ = end_open_span;
+        let end_tag_span = self.stream.expand_span(end_open_span);
         self.in_loop = old_in_loop;
         Ok(ast::ForLoop {
             target,
@@ -1181,21 +1183,30 @@ impl<'a> Parser<'a> {
             recursive,
             body,
             else_body,
+            start_tag_span,
+            else_tag_span,
+            end_tag_span,
         })
     }
 
-    fn parse_if_cond(&mut self, _start_open_span: Span) -> Result<ast::IfCond<'a>, Error> {
+    fn parse_if_cond(
+        &mut self,
+        start_open_span: Span,
+        start_tag_kind: JinjaLayoutEventKind,
+    ) -> Result<ast::IfCond<'a>, Error> {
         let expr = ok!(self.parse_expr_noif());
         skip_token!(self, Token::Colon);
         expect_token!(self, Token::BlockEnd, "end of block");
+        let start_tag_span = self.stream.expand_span(start_open_span);
         let true_body = ok!(self.subparse(
             &|tok| matches!(tok, Token::Ident("endif" | "else" | "elif")),
             Some(("if", &["elif", "else", "endif"])),
         ));
         let next_open_span = self.stream.last_span();
-        let false_body = match ok!(self.stream.next()) {
+        let (false_body, else_tag_span, end_tag_span) = match ok!(self.stream.next()) {
             Some((Token::Ident("else"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
+                let else_tag_span = self.stream.expand_span(next_open_span);
                 let rv = ok!(self.subparse(
                     &|tok| matches!(tok, Token::Ident("endif")),
                     Some(("if", &["endif"])),
@@ -1203,19 +1214,26 @@ impl<'a> Parser<'a> {
                 let end_open_span = self.stream.last_span();
                 expect_token!(self, Token::Ident("endif"), "endif");
                 expect_token!(self, Token::BlockEnd, "end of block");
-                let _ = end_open_span;
-                rv
+                let end_tag_span = self.stream.expand_span(end_open_span);
+                (rv, Some(else_tag_span), end_tag_span)
             }
             Some((Token::Ident("elif"), span)) => {
-                let nested = ok!(self.parse_if_cond(next_open_span));
-                vec![ast::Stmt::IfCond(Spanned::new(
-                    nested,
-                    self.stream.expand_span(span),
-                ))]
+                let nested =
+                    ok!(self.parse_if_cond(next_open_span, JinjaLayoutEventKind::BlockMid));
+                let end_tag_span = nested.end_tag_span;
+                (
+                    vec![ast::Stmt::IfCond(Spanned::new(
+                        nested,
+                        self.stream.expand_span(span),
+                    ))],
+                    None,
+                    end_tag_span,
+                )
             }
             Some((Token::Ident("endif"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
-                Vec::new()
+                let end_tag_span = self.stream.expand_span(next_open_span);
+                (Vec::new(), None, end_tag_span)
             }
             Some((token, span)) => {
                 syntax_error!(
@@ -1234,6 +1252,10 @@ impl<'a> Parser<'a> {
             expr,
             true_body,
             false_body,
+            start_tag_kind,
+            start_tag_span,
+            else_tag_span,
+            end_tag_span,
         })
     }
 
@@ -1266,7 +1288,7 @@ impl<'a> Parser<'a> {
     }
 
     // both the left hand side and right hand side can be a list
-    fn parse_set(&mut self) -> Result<SetParseResult<'a>, Error> {
+    fn parse_set(&mut self, start_tag_span: Span) -> Result<SetParseResult<'a>, Error> {
         let in_paren = skip_token!(self, Token::ParenOpen);
         let mut targets = Vec::new();
 
@@ -1296,11 +1318,14 @@ impl<'a> Parser<'a> {
                 &|tok| matches!(tok, Token::Ident("endset")),
                 Some(("set", &["endset"])),
             ));
+            let end_tag_span = self.stream.last_span();
             ok!(self.stream.next());
             Ok(SetParseResult::SetBlock(ast::SetBlock {
                 target: targets.into_iter().next().unwrap(),
                 filter,
                 body,
+                start_tag_span,
+                end_tag_span,
             }))
         } else {
             expect_token!(self, Token::Assign, "assignment operator");

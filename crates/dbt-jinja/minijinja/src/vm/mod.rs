@@ -1281,6 +1281,41 @@ impl<'env> Vm<'env> {
                         });
                     }
                 }
+                Instruction::JinjaLayoutEvent(kind, source_span) => {
+                    if current_macro_name.is_none() {
+                        let source_span =
+                            span_with_current_offset(source_span, &state.ctx.current_span);
+                        listeners.iter().for_each(|listener| {
+                            listener.on_jinja_layout_event(*kind, &source_span)
+                        });
+                    }
+                }
+                Instruction::JinjaLayoutEventIfLoopDidNotIterate(_kind, source_span) => {
+                    let did_not_iterate = state
+                        .ctx
+                        .current_loop()
+                        .is_some_and(|loop_ctx| loop_ctx.object.idx.load(Ordering::Relaxed) == 0);
+                    if did_not_iterate && current_macro_name.is_none() {
+                        let source_span =
+                            span_with_current_offset(source_span, &state.ctx.current_span);
+                        listeners
+                            .iter()
+                            .for_each(|listener| listener.on_jinja_loop_skipped_end(&source_span));
+                    }
+                }
+                Instruction::JinjaLayoutLoopIterationStart(source_span) => {
+                    let is_repeated_iteration = state
+                        .ctx
+                        .current_loop()
+                        .is_some_and(|loop_ctx| loop_ctx.object.idx.load(Ordering::Relaxed) > 0);
+                    if is_repeated_iteration && current_macro_name.is_none() {
+                        let source_span =
+                            span_with_current_offset(source_span, &state.ctx.current_span);
+                        listeners.iter().for_each(|listener| {
+                            listener.on_jinja_loop_iteration_start(&source_span)
+                        });
+                    }
+                }
                 Instruction::MacroName(name, _) => {
                     current_macro_name = Some((*name).to_string());
                 }

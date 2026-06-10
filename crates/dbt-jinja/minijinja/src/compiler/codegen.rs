@@ -8,6 +8,7 @@ use crate::compiler::instructions::{
 };
 use crate::compiler::tokens::Span;
 use crate::compiler::typecheck::FunctionRegistry;
+use crate::layout::JinjaLayoutEventKind;
 use crate::output::CaptureMode;
 use crate::types::function::UserDefinedFunctionType;
 use crate::types::Type;
@@ -195,6 +196,16 @@ impl<'source> CodeGenerator<'source> {
 
     /// Starts a for loop
     pub fn start_for_loop(&mut self, with_loop_var: bool, recursive: bool, span: Span) {
+        self.start_for_loop_with_layout(with_loop_var, recursive, span, None);
+    }
+
+    fn start_for_loop_with_layout(
+        &mut self,
+        with_loop_var: bool,
+        recursive: bool,
+        span: Span,
+        repeat_start_tag_span: Option<Span>,
+    ) {
         let mut flags = 0;
         if with_loop_var {
             flags |= LOOP_FLAG_WITH_LOOP_VAR;
@@ -204,6 +215,9 @@ impl<'source> CodeGenerator<'source> {
         }
         self.add(Instruction::PushLoop(flags, span));
         let instr = self.add(Instruction::Iterate(!0, span));
+        if let Some(start_tag_span) = repeat_start_tag_span {
+            self.add(Instruction::JinjaLayoutLoopIterationStart(start_tag_span));
+        }
         self.pending_block.push(PendingBlock::Loop {
             iter_instr: instr,
             jump_instrs: Vec::new(),
@@ -212,6 +226,15 @@ impl<'source> CodeGenerator<'source> {
 
     /// Ends the open for loop
     pub fn end_for_loop(&mut self, push_did_not_iterate: bool, span: Span) {
+        self.end_for_loop_with_layout(push_did_not_iterate, span, None);
+    }
+
+    fn end_for_loop_with_layout(
+        &mut self,
+        push_did_not_iterate: bool,
+        span: Span,
+        skipped_end_tag_span: Option<Span>,
+    ) {
         if let Some(PendingBlock::Loop {
             iter_instr,
             jump_instrs,
@@ -219,6 +242,12 @@ impl<'source> CodeGenerator<'source> {
         {
             self.add(Instruction::Jump(iter_instr, span));
             let loop_end = self.next_instruction();
+            if let Some(end_tag_span) = skipped_end_tag_span {
+                self.add(Instruction::JinjaLayoutEventIfLoopDidNotIterate(
+                    JinjaLayoutEventKind::BlockEnd,
+                    end_tag_span,
+                ));
+            }
             if push_did_not_iterate {
                 self.add(Instruction::PushDidNotIterate);
             };
@@ -453,6 +482,10 @@ impl<'source> CodeGenerator<'source> {
             ast::Stmt::Set(set) => {
                 self.set_line_from_span(set.span());
                 let span = set.span();
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::BlockStandalone,
+                    span,
+                ));
                 self.add(Instruction::MacroStart(
                     span.start_line,
                     span.start_col,
@@ -470,11 +503,19 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::Stmt::SetBlock(set_block) => {
                 self.set_line_from_span(set_block.span());
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::BlockStart,
+                    set_block.start_tag_span,
+                ));
                 self.add(Instruction::BeginCapture(CaptureMode::Capture));
                 for node in &set_block.body {
                     self.compile_stmt(node)?;
                 }
                 self.add(Instruction::EndCapture);
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::BlockEnd,
+                    set_block.end_tag_span,
+                ));
                 if let Some(ref filter) = set_block.filter {
                     self.compile_expr(filter)?;
                 }
@@ -589,6 +630,10 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::Stmt::Do(do_tag) => {
                 let span = do_tag.span();
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::BlockStandalone,
+                    span,
+                ));
                 self.add(Instruction::MacroStart(
                     span.start_line,
                     span.start_col,
@@ -603,6 +648,10 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::Stmt::Comment(comment) => {
                 let span = comment.span();
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::Comment,
+                    span,
+                ));
                 self.add(Instruction::MacroStart(
                     span.start_line,
                     span.start_col,
@@ -828,6 +877,10 @@ impl<'source> CodeGenerator<'source> {
     ) -> Result<(), crate::Error> {
         self.set_line_from_span(if_cond.span());
         let span = if_cond.span();
+        self.add(Instruction::JinjaLayoutEvent(
+            if_cond.start_tag_kind,
+            if_cond.start_tag_span,
+        ));
         self.add(Instruction::MacroStart(
             span.start_line,
             span.start_col,
@@ -850,7 +903,26 @@ impl<'source> CodeGenerator<'source> {
         if !if_cond.false_body.is_empty()
             || matches!(self.profile, CodeGenerationProfile::TypeCheck(_, _))
         {
+            if let Some(else_tag_span) = if_cond.else_tag_span {
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::BlockMid,
+                    else_tag_span,
+                ));
+            } else if let Some(ast::Stmt::IfCond(nested_if_cond)) = if_cond.false_body.first() {
+                if nested_if_cond.start_tag_kind == JinjaLayoutEventKind::BlockMid {
+                    self.add(Instruction::JinjaLayoutEvent(
+                        JinjaLayoutEventKind::BlockMid,
+                        nested_if_cond.start_tag_span,
+                    ));
+                }
+            }
             self.start_else(span);
+            if let Some(else_tag_span) = if_cond.else_tag_span {
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::BlockMid,
+                    else_tag_span,
+                ));
+            }
             if type_constraints.len() == 1 {
                 // if there is only one type constraint, we can just add it to the else block
                 // if there is more than one, we don't have constraints
@@ -865,6 +937,10 @@ impl<'source> CodeGenerator<'source> {
             }
         }
         self.end_if();
+        self.add(Instruction::JinjaLayoutEvent(
+            JinjaLayoutEventKind::BlockEnd,
+            if_cond.end_tag_span,
+        ));
         self.add(Instruction::MacroStop(
             span.end_line,
             span.end_col,
@@ -879,6 +955,10 @@ impl<'source> CodeGenerator<'source> {
     ) -> Result<(), crate::Error> {
         self.set_line_from_span(expr.span());
         let span = expr.span();
+        self.add(Instruction::JinjaLayoutEvent(
+            JinjaLayoutEventKind::Variable,
+            span,
+        ));
         self.add(Instruction::MacroStart(
             span.start_line,
             span.start_col,
@@ -943,6 +1023,10 @@ impl<'source> CodeGenerator<'source> {
     ) -> Result<(), crate::Error> {
         self.set_line_from_span(for_loop.span());
         let span = for_loop.span();
+        self.add(Instruction::JinjaLayoutEvent(
+            JinjaLayoutEventKind::BlockStart,
+            for_loop.start_tag_span,
+        ));
         self.add(Instruction::MacroStart(
             span.start_line,
             span.start_col,
@@ -956,7 +1040,7 @@ impl<'source> CodeGenerator<'source> {
         if let Some(ref filter_expr) = for_loop.filter_expr {
             self.add(Instruction::LoadConst(Value::from(0usize)));
             self.compile_expr(&for_loop.iter)?;
-            self.start_for_loop(false, false, span);
+            self.start_for_loop_with_layout(false, false, span, Some(for_loop.start_tag_span));
             self.add(Instruction::DupTop);
             self.compile_assignment(&for_loop.target)?;
             self.compile_expr(filter_expr)?;
@@ -967,24 +1051,50 @@ impl<'source> CodeGenerator<'source> {
             self.start_else(span);
             self.add(Instruction::DiscardTop);
             self.end_if();
-            self.end_for_loop(false, span);
+            self.end_for_loop_with_layout(false, span, None);
             self.add(Instruction::BuildList(None, span));
         } else {
             self.compile_expr(&for_loop.iter)?;
         }
 
-        self.start_for_loop(true, for_loop.recursive, span);
+        self.start_for_loop_with_layout(
+            true,
+            for_loop.recursive,
+            span,
+            Some(for_loop.start_tag_span),
+        );
         self.compile_assignment(&for_loop.target)?;
         for node in &for_loop.body {
             self.compile_stmt(node)?;
         }
-        self.end_for_loop(!for_loop.else_body.is_empty(), span);
+        self.add(Instruction::JinjaLayoutEvent(
+            JinjaLayoutEventKind::BlockEnd,
+            for_loop.end_tag_span,
+        ));
+        self.end_for_loop_with_layout(
+            !for_loop.else_body.is_empty(),
+            span,
+            for_loop
+                .else_body
+                .is_empty()
+                .then_some(for_loop.end_tag_span),
+        );
         if !for_loop.else_body.is_empty() {
             self.start_if(span);
+            if let Some(else_tag_span) = for_loop.else_tag_span {
+                self.add(Instruction::JinjaLayoutEvent(
+                    JinjaLayoutEventKind::BlockMid,
+                    else_tag_span,
+                ));
+            }
             for node in &for_loop.else_body {
                 self.compile_stmt(node)?;
             }
             self.end_if();
+            self.add(Instruction::JinjaLayoutEvent(
+                JinjaLayoutEventKind::BlockEnd,
+                for_loop.end_tag_span,
+            ));
         };
         self.add(Instruction::MacroStop(
             span.end_line,

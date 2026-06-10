@@ -3,6 +3,7 @@ use std::fmt;
 
 use crate::compiler::codegen::TypeConstraint;
 use crate::compiler::tokens::Span;
+use crate::layout::JinjaLayoutEventKind;
 use crate::output::CaptureMode;
 use crate::value::Value;
 
@@ -260,6 +261,9 @@ pub enum Instruction<'source> {
 
     MacroStart(u32, u32, u32),
     MacroStop(u32, u32, u32),
+    JinjaLayoutEvent(JinjaLayoutEventKind, Span),
+    JinjaLayoutEventIfLoopDidNotIterate(JinjaLayoutEventKind, Span),
+    JinjaLayoutLoopIterationStart(Span),
 
     // A label instruction to indicate the start of a macro
     // After MacroName, there will be a series of StoreLocal instructions for parameters
