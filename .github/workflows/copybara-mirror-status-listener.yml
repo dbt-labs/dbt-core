@@ -1,0 +1,207 @@
+name: Copybara - Sync Mirror Status to PR
+
+# **what?**
+# Listen for `mirror-status-update` dispatches and surface the current mirror
+# lifecycle state on the dbt-core PR via:
+#   - a sticky comment (single comment edited in place, identified by marker)
+#   - a `mirror-*` label (mutually exclusive within the set)
+# On terminal states (merged/closed), also close the dbt-core PR.
+#
+# **why?**
+# Contributors opening PRs against dbt-core don't see the upstream review
+# process. The sticky comment gives them a warm, current explanation; the
+# label gives maintainers at-a-glance filtering in the PR list.
+#
+# **when?**
+# On `repository_dispatch: mirror-status-update`. Payload:
+#   - dbt_core_pr: dbt-core PR number
+#   - state: pending | active | failed | merged | closed
+#
+# Concurrency is keyed on the dbt-core PR number so writes for the same PR
+# are serialized — no races between, e.g., `pending` from the dispatcher
+# workflow and `active` from the fs success path.
+
+on:
+  repository_dispatch:
+    types: [mirror-status-update]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.client_payload.dbt_core_pr }}
+  cancel-in-progress: false
+
+jobs:
+  update_status:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.FS_SERVICE_PAT }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.client_payload.dbt_core_pr }}
+      STATE: ${{ github.event.client_payload.state }}
+      MARKER: "<!-- mirror-status -->"
+    steps:
+      - name: Validate payload
+        run: |
+          case "$STATE" in
+            pending|active|failed|merged|closed) ;;
+            *) echo "::error::Unknown mirror state: $STATE"; exit 1 ;;
+          esac
+          if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid PR number: '$PR'"; exit 1
+          fi
+
+      - name: Read PR labels and state
+        id: pr
+        run: |
+          json=$(gh pr view "$PR" --repo "$REPO" --json state,labels)
+          labels=$(echo "$json" | jq -r '.labels[].name')
+          echo "state=$(echo "$json" | jq -r .state)" >> "$GITHUB_OUTPUT"
+          {
+            echo "labels<<MIRROR_LABELS_EOF"
+            echo "$labels"
+            echo "MIRROR_LABELS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Guard against terminal-state downgrade
+        id: guard
+        # If the PR is already in a terminal mirror state (merged/closed) and a
+        # delayed non-terminal update (pending/active/failed) arrives — possible
+        # when a contributor closes their OSS PR while fs work is in flight —
+        # ignore it. The listener's per-PR concurrency group serializes runs but
+        # cannot reorder GitHub's queue arrival.
+        env:
+          LABELS: ${{ steps.pr.outputs.labels }}
+        run: |
+          case "$STATE" in
+            pending|active|failed)
+              if echo "$LABELS" | grep -qx -e "mirror-merged" -e "mirror-closed"; then
+                echo "::warning::PR #$PR is already in a terminal mirror state; ignoring '$STATE'"
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "skip=false" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            *)
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Resolve bot login
+        id: bot
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          login=$(gh api user --jq .login)
+          echo "login=$login" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure mirror-* labels exist
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          ensure_label() {
+            gh label create "$1" --color "$2" --description "$3" --repo "$REPO" 2>/dev/null || true
+          }
+          ensure_label "mirror-pending" "FBCA04" "Mirror to upstream review repository is in progress"
+          ensure_label "mirror-active"  "1D76DB" "Mirrored to upstream review repository; under review"
+          ensure_label "mirror-failed"  "D73A4A" "Automatic mirror failed; maintainer attention needed"
+          ensure_label "mirror-merged"  "0E8A16" "Upstream change merged; arriving via forward sync"
+          ensure_label "mirror-closed"  "BFBFBF" "Upstream change closed without merging"
+
+      - name: Swap mirror-* labels
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          LABELS: ${{ steps.pr.outputs.labels }}
+        run: |
+          for label in mirror-pending mirror-active mirror-failed mirror-merged mirror-closed; do
+            if [ "$label" != "mirror-$STATE" ] && echo "$LABELS" | grep -qx "$label"; then
+              gh pr edit "$PR" --remove-label "$label" --repo "$REPO" || true
+            fi
+          done
+          gh pr edit "$PR" --add-label "mirror-$STATE" --repo "$REPO"
+
+      - name: Render sticky comment body
+        id: body
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          case "$STATE" in
+            pending)
+              body=$(cat <<'EOF'
+          Hi! 👋 Thanks so much for opening this PR.
+
+          We're copying your changes over to our upstream review repository now — this usually only takes a minute. We'll update this comment as soon as it's ready.
+
+          <!-- mirror-status -->
+          EOF
+              )
+              ;;
+            active)
+              body=$(cat <<'EOF'
+          Thanks again for your contribution! 🎉
+
+          Your changes have been mirrored to our upstream review repository, and a maintainer will take a look there. There's nothing more for you to do right now — please feel free to keep the discussion going in this thread and we'll respond.
+
+          When the upstream change is merged, it'll land here through our regular sync from `main`, and we'll close this PR for you automatically.
+
+          <!-- mirror-status -->
+          EOF
+              )
+              ;;
+            failed)
+              body=$(cat <<'EOF'
+          Thanks for opening this PR!
+
+          We hit a snag automatically mirroring your changes — usually this means a merge conflict with `main`. A maintainer will take a look and follow up here. No action needed from you for now. 🙏
+
+          <!-- mirror-status -->
+          EOF
+              )
+              ;;
+            merged)
+              body=$(cat <<'EOF'
+          🎉 Your change has been merged upstream! It'll land in this repository through our regular sync from `main` shortly. Thank you so much for contributing!
+
+          Closing this PR — the sync will bring your change over.
+
+          <!-- mirror-status -->
+          EOF
+              )
+              ;;
+            closed)
+              body=$(cat <<'EOF'
+          The upstream change was closed without merging, so we're closing this PR as well.
+
+          Thank you for taking the time to contribute! Please don't hesitate to open another PR or reach out if you have any questions. 🙏
+
+          <!-- mirror-status -->
+          EOF
+              )
+              ;;
+          esac
+          {
+            echo "body<<MIRROR_BODY_EOF"
+            echo "$body"
+            echo "MIRROR_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upsert sticky comment
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          BODY: ${{ steps.body.outputs.body }}
+          BOT_LOGIN: ${{ steps.bot.outputs.login }}
+        run: |
+          # Author filter prevents hijack: if a contributor's comment happens to
+          # contain the marker (e.g. quoted from an earlier PR), we'd otherwise
+          # silently edit their comment instead of posting our own.
+          existing_id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.user.login == \"$BOT_LOGIN\") | select(.body | contains(\"$MARKER\"))][0].id // empty")
+          if [ -n "$existing_id" ]; then
+            echo "Editing existing sticky comment #$existing_id"
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing_id" \
+              -f body="$BODY" >/dev/null
+          else
+            echo "Posting new sticky comment"
+            gh pr comment "$PR" --repo "$REPO" --body "$BODY"
+          fi
+
+      - name: Close PR on terminal state
+        if: steps.guard.outputs.skip == 'false' && (env.STATE == 'merged' || env.STATE == 'closed') && steps.pr.outputs.state == 'OPEN'
+        run: gh pr close "$PR" --repo "$REPO"
