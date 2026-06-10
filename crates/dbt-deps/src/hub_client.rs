@@ -84,9 +84,15 @@ impl std::fmt::Display for PackageVersionCompatibilityStatus {
 fn get_fusion_compatibility_status(
     package_compatibility: &HubPackageFusionCompatibility,
 ) -> PackageVersionCompatibilityStatus {
+    // Version has been manually verified as compatible, overrides all others
+    if let Some(true) = package_compatibility.manually_verified_compatible {
+        PackageVersionCompatibilityStatus::Compatible
+    // Version has been manually verified as incompatible, overrides all others
+    } else if let Some(true) = package_compatibility.manually_verified_incompatible {
+        PackageVersionCompatibilityStatus::ManuallyVerifiedIncompatible
     // Legacy logic: if the version defines a required dbt version,
     // use that to determine compatibility
-    if let Some(true) = package_compatibility.require_dbt_version_defined {
+    } else if let Some(true) = package_compatibility.require_dbt_version_defined {
         // If the required dbt version excludes 2.0, consider it incompatible
         if let Some(false) = package_compatibility.require_dbt_version_compatible {
             PackageVersionCompatibilityStatus::RequiredDbtVersionIncompatible
@@ -94,9 +100,6 @@ fn get_fusion_compatibility_status(
             // If required dbt version includes 2.0, consider it compatible
             PackageVersionCompatibilityStatus::Compatible
         }
-    // Version has been manually verified as incompatible
-    } else if let Some(true) = package_compatibility.manually_verified_incompatible {
-        PackageVersionCompatibilityStatus::ManuallyVerifiedIncompatible
     // Insufficient information to determine compatibility
     } else {
         PackageVersionCompatibilityStatus::Unknown
@@ -282,6 +285,9 @@ impl HubPackageVersion {
             if matches!(
                 compatibility_status,
                 PackageVersionCompatibilityStatus::RequiredDbtVersionIncompatible
+            ) || matches!(
+                compatibility_status,
+                PackageVersionCompatibilityStatus::ManuallyVerifiedIncompatible
             ) {
                 return Some(PackageNotice {
                     key: package_name.to_string(),
@@ -851,6 +857,36 @@ mod tests {
     }
 
     #[test]
+    fn test_version_compat_notice_verified_incompatible_with_fusion_compatibility() {
+        let version = HubPackageVersion {
+            name: "test_package".to_string(),
+            packages: vec![],
+            downloads: HubPackageDownloads {
+                tarball: "https://example.com/tarball.tar.gz".to_string(),
+            },
+            require_dbt_version: Some(StringOrArrayOfStrings::String(">=100.0.0".to_string())),
+            fusion_compatibility: Some(HubPackageFusionCompatibility {
+                require_dbt_version_defined: Some(true),
+                require_dbt_version_compatible: Some(true),
+                parse_compatible: None,
+                manually_verified_compatible: None,
+                manually_verified_incompatible: Some(true),
+                fusion_compatible_download: None,
+            }),
+        };
+        let notice = version
+            .version_compat_notice("test-org/test_package")
+            .expect("expected fusion-compat notice");
+        assert!(matches!(
+            notice,
+            PackageNotice {
+                key,
+                kind: PackageNoticeKind::HubVersionCompat(VersionCompatKind::Fusion(_)),
+            } if key == "test-org/test_package"
+        ));
+    }
+
+    #[test]
     fn test_version_compat_notice_no_requirement_with_fusion_compatibility() {
         let version = HubPackageVersion {
             name: "test_package".to_string(),
@@ -1119,9 +1155,8 @@ mod tests {
 
         let compatibility_status = get_fusion_compatibility_status(&fusion_compatibility);
 
-        // TODO: should return ManuallyVerifiedIncompatible once additional logic implemented
         assert_eq!(
-            PackageVersionCompatibilityStatus::Compatible,
+            PackageVersionCompatibilityStatus::ManuallyVerifiedIncompatible,
             compatibility_status
         );
     }
@@ -1140,9 +1175,8 @@ mod tests {
 
         let compatibility_status = get_fusion_compatibility_status(&fusion_compatibility);
 
-        // TODO: should return ManuallyVerifiedIncompatible once additional logic implemented
         assert_eq!(
-            PackageVersionCompatibilityStatus::RequiredDbtVersionIncompatible,
+            PackageVersionCompatibilityStatus::ManuallyVerifiedIncompatible,
             compatibility_status
         );
     }
@@ -1161,9 +1195,8 @@ mod tests {
 
         let compatibility_status = get_fusion_compatibility_status(&fusion_compatibility);
 
-        // TODO: should return compatible once additional logic implemented
         assert_eq!(
-            PackageVersionCompatibilityStatus::RequiredDbtVersionIncompatible,
+            PackageVersionCompatibilityStatus::Compatible,
             compatibility_status
         );
     }
