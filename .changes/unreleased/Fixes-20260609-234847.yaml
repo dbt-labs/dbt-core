@@ -1,0 +1,15 @@
+kind: Fixes
+body: 'Redshift: honor the `is_serverless` and `serverless_work_group` profile fields
+  for IAM auth so Serverless connections work when the host does not reveal a Serverless
+  endpoint (e.g. through a tunnel). Serverless detection now matches dbt-redshift:
+  any host containing `serverless`, or `is_serverless: true`. For Serverless IAM,
+  `user` is no longer required and an empty username is sent to the driver (the database
+  user is derived from the IAM identity). `serverless_acct_id` is accepted but not
+  supported by the driver yet; a warning is emitted when it is set. The error for
+  a missing `cluster_id` now points at `is_serverless` instead of a confusing serde
+  message'
+time: 2026-06-09T23:48:47.000000+09:00
+custom:
+    author: hytfjwr
+    issue: "14621"
+    project: dbt-fusion
