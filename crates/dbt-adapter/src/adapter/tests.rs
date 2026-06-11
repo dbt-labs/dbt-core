@@ -23,15 +23,7 @@ fn dispatch_test(
 
 /// Create a Typed-phase DuckDB adapter backed by MockEngine.
 fn make_duckdb_adapter() -> Arc<Adapter> {
-    let concrete = AdapterImpl::new_mock(
-        AdapterType::DuckDB,
-        BTreeMap::new(),
-        DEFAULT_RESOLVED_QUOTING,
-        Arc::new(DefaultTypeOps::new(AdapterType::DuckDB)),
-        Arc::new(DefaultStmtSplitter),
-    );
-    let adapter = Adapter::new(Arc::new(concrete), None, never_cancels());
-    Arc::new(adapter)
+    make_mock_adapter(AdapterType::DuckDB)
 }
 
 /// Create a parse-phase DuckDB adapter (returns defaults, no real execution).
@@ -210,6 +202,18 @@ fn make_adapter_with_truthy_nulls(adapter_type: AdapterType) -> Arc<Adapter> {
     Arc::new(Adapter::new(Arc::new(concrete), None, never_cancels()))
 }
 
+/// Create a Typed-phase mock adapter for the given adapter type (no behavior flags).
+fn make_mock_adapter(adapter_type: AdapterType) -> Arc<Adapter> {
+    let concrete = AdapterImpl::new_mock(
+        adapter_type,
+        BTreeMap::new(),
+        DEFAULT_RESOLVED_QUOTING,
+        Arc::new(DefaultTypeOps::new(adapter_type)),
+        Arc::new(DefaultStmtSplitter),
+    );
+    Arc::new(Adapter::new(Arc::new(concrete), None, never_cancels()))
+}
+
 #[test]
 fn test_render_equals_flag_off_returns_simple_eq() {
     let adapter = make_duckdb_adapter();
@@ -363,4 +367,48 @@ fn test_parse_mode_accepts_mistyped_args_list_relations_without_caching() {
     .unwrap();
     // Parse-mode returns an empty list
     assert!(result.try_iter().unwrap().next().is_none());
+}
+
+#[test]
+fn test_get_relation_dispatch_spark_absent_database() {
+    // Exercises the full `"get_relation"` arm of `call_method_impl` (arg parsing + per-adapter
+    // database resolution + handoff to `get_relation`) for the absent-database (`none`) case,
+    // covering every branch of the inline resolution. Spark relations carry no catalog, so the
+    // database argument is `none`.
+    let args = [
+        Value::from(()), // database: none
+        Value::from("my_schema"),
+        Value::from("my_table"),
+    ];
+
+    // Spark: no catalog -> resolves to the empty default and a relation is still returned.
+    let result = dispatch_test(
+        &make_mock_adapter(AdapterType::Spark),
+        "get_relation",
+        &args,
+    )
+    .unwrap();
+    assert!(!result.is_none() && !result.is_undefined());
+
+    // Databricks: substitutes its default catalog -> a relation is returned.
+    let result = dispatch_test(
+        &make_mock_adapter(AdapterType::Databricks),
+        "get_relation",
+        &args,
+    )
+    .unwrap();
+    assert!(!result.is_none() && !result.is_undefined());
+
+    // Every other adapter requires a database -> an absent value is an explicit error.
+    let err = dispatch_test(
+        &make_mock_adapter(AdapterType::DuckDB),
+        "get_relation",
+        &args,
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("argument 'database' to get_relation() is required"),
+        "unexpected error: {err}"
+    );
 }

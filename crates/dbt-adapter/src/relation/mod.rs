@@ -8,6 +8,7 @@ pub mod bigquery;
 pub mod databricks;
 pub mod redshift;
 pub mod snowflake;
+pub mod spark;
 
 pub mod factory;
 

@@ -9,6 +9,7 @@ use crate::parse::adapter::ParseAdapterState;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::relation::factory::create_static_relation;
+use crate::relation::spark::DEFAULT_SPARK_DATABASE;
 use crate::relation::{Relation, RelationObject};
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
@@ -3451,13 +3452,19 @@ impl Adapter {
                 // needs_information: bool = False
                 let iter = ArgsIter::new(name, &["database", "schema", "identifier"], args);
 
-                let database = iter.next_arg::<&str>().or_else(|e| {
-                    if self.adapter_type() == AdapterType::Databricks {
-                        Ok(DEFAULT_DATABRICKS_DATABASE)
-                    } else {
-                        Err(e)
-                    }
-                })?;
+                let database = match iter.next_arg::<Option<&str>>()? {
+                    Some(database) => database,
+                    None => match self.adapter_type() {
+                        AdapterType::Databricks => DEFAULT_DATABRICKS_DATABASE,
+                        AdapterType::Spark => DEFAULT_SPARK_DATABASE,
+                        _ => {
+                            return Err(minijinja::Error::new(
+                                minijinja::ErrorKind::InvalidArgument,
+                                "argument 'database' to get_relation() is required",
+                            ));
+                        }
+                    },
+                };
                 let schema = iter.next_arg::<&str>()?;
                 let identifier = iter.next_arg::<&str>()?;
                 let needs_information = iter

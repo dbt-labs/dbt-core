@@ -1745,6 +1745,20 @@ impl AdapterImpl {
                             .collect::<Vec<_>>();
                         Ok(columns)
                     }
+                    Spark => {
+                        let columns =
+                            Column::vec_from_jinja_value(Spark, macro_columns).map_err(|e| {
+                                AdapterError::new(
+                                    AdapterErrorKind::UnexpectedResult,
+                                    e.detail().map(|d| d.to_string()).unwrap_or_else(|| {
+                                        "Could not convert columns from jinja value".to_string()
+                                    }),
+                                )
+                            })?;
+                        Ok(metadata::spark::truncate_at_describe_extended_separator(
+                            columns,
+                        ))
+                    }
                     _ => Column::vec_from_jinja_value(ClickHouse, macro_columns).map_err(|e| {
                         AdapterError::new(
                             AdapterErrorKind::UnexpectedResult,
