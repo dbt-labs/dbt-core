@@ -37,15 +37,14 @@ fn downgraded_node_dependency_warning(
     error: &FsError,
     location: CodeLocationWithFile,
 ) -> Option<(FsError, bool)> {
-    let has_disabled_dependency = match error.code {
-        ErrorCode::DisabledDependency => true,
-        ErrorCode::DependencyNotFound => false,
+    let has_disabled_or_missing_dependency = match error.code {
+        ErrorCode::DisabledDependency | ErrorCode::DependencyNotFound => true,
         _ => return None,
     };
 
     Some((
         FsError::new(ErrorCode::NodeNotFoundOrDisabled, error.to_string()).with_location(location),
-        has_disabled_dependency,
+        has_disabled_or_missing_dependency,
     ))
 }
 
@@ -851,7 +850,7 @@ pub fn resolve_dependencies(
 
         let node_base = node.base_mut();
 
-        let mut has_disabled_dependency = false;
+        let mut has_disabled_or_missing_dependency = false;
 
         // Check refs
         let node_package_name_value = &Some(node_package_name.clone());
@@ -896,10 +895,13 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // For tests and exposures, warn on missing or disabled dependencies instead of erroring
                     if (is_test || is_exposure)
-                        && let Some((warning, disabled_dependency)) =
+                        && let Some((warning, disable)) =
                             downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        has_disabled_dependency |= disabled_dependency;
+                        // Whether the dep is disabled or simply missing, the test must be
+                        // excluded — dbt-core issues NodeNotFoundOrDisabled in both cases and
+                        // never executes the test.
+                        has_disabled_or_missing_dependency = disable;
                         emit_warn_log_from_fs_error(&warning, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
@@ -936,10 +938,13 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // For tests and exposures, warn on missing or disabled dependencies instead of erroring
                     if (is_test || is_exposure)
-                        && let Some((warning, disabled_dependency)) =
+                        && let Some((warning, disable)) =
                             downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        has_disabled_dependency |= disabled_dependency;
+                        // Whether the dep is disabled or simply missing, the test must be
+                        // excluded — dbt-core issues NodeNotFoundOrDisabled in both cases and
+                        // never executes the test.
+                        has_disabled_or_missing_dependency = disable;
                         emit_warn_log_from_fs_error(&warning, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
@@ -978,7 +983,7 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // Check if this is a disabled dependency error for tests or exposures
                     if (is_test || is_exposure) && e.code == ErrorCode::DisabledDependency {
-                        has_disabled_dependency = true;
+                        has_disabled_or_missing_dependency = true;
                         let err_with_loc = e.with_location(location);
                         emit_warn_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
                     } else {
@@ -991,11 +996,11 @@ pub fn resolve_dependencies(
             };
         }
 
-        if is_test && has_disabled_dependency {
+        if is_test && has_disabled_or_missing_dependency {
             tests_to_disable.push(node_unique_id.clone());
         }
 
-        if is_exposure && has_disabled_dependency {
+        if is_exposure && has_disabled_or_missing_dependency {
             exposures_to_disable.push(node_unique_id);
         }
     }
@@ -1344,7 +1349,7 @@ mod tests {
         .expect("missing ref should be downgraded");
 
         assert_eq!(warning.0.code, ErrorCode::NodeNotFoundOrDisabled);
-        assert!(!warning.1);
+        assert!(warning.1);
     }
 
     #[test]
