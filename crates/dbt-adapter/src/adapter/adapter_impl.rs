@@ -2489,6 +2489,15 @@ impl AdapterImpl {
     ) -> AdapterResult<IndexMap<String, Vec<String>>> {
         let record_batch = grants_table.original_record_batch();
 
+        // When show_grants returns 0 rows, agate records column_types as
+        // ["Integer",...] rather than the actual string types (no values to
+        // infer from). Fusion replays that result verbatim, so column_values
+        // would fail the StringArray downcast. An empty table means no grants
+        // to process, so return early — matching Python's loop-over-rows behaviour.
+        if record_batch.num_rows() == 0 {
+            return Ok(IndexMap::new());
+        }
+
         match self.adapter_type() {
             Postgres | Bigquery | Redshift | DuckDB => {
                 let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
@@ -5380,6 +5389,76 @@ mod tests {
         let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
         let batch = record_batch_with_string_column("nspname", vec!["public"]);
         assert!(adapter.list_schemas_inner(batch).is_err());
+    }
+
+    // -- standardize_grants_dict tests ----------------------------------------
+
+    #[test]
+    fn test_standardize_grants_dict_redshift_empty_integer_typed_columns() {
+        // Regression: when show_grants returns 0 rows on Redshift, agate records
+        // column_types as ["Integer","Integer"] rather than ["Text","Text"] because
+        // it has no values to infer types from. Fusion replays that execute result
+        // and passes the resulting Int64-typed RecordBatch to standardize_grants_dict,
+        // which must return an empty map rather than erroring on the type mismatch.
+        use arrow_array::Int64Array;
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("grantee", DataType::Int64, true),
+            Field::new("privilege_type", DataType::Int64, true),
+        ]));
+        let grantee = Arc::new(Int64Array::from(vec![] as Vec<i64>)) as ArrayRef;
+        let privilege = Arc::new(Int64Array::from(vec![] as Vec<i64>)) as ArrayRef;
+        let batch = RecordBatch::try_new(schema, vec![grantee, privilege]).unwrap();
+        let table = Arc::new(AgateTable::from_record_batch(Arc::new(batch)));
+
+        let adapter = AdapterImpl::new(engine(Redshift), None);
+        let result = adapter.standardize_grants_dict(table);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_standardize_grants_dict_snowflake_empty_integer_typed_columns() {
+        // Same root cause as the Redshift case: agate records column_types as
+        // ["Integer",...] for 0-row results, so Fusion replays a RecordBatch
+        // with Int64-typed columns instead of the expected StringArrays.
+        use arrow_array::Int64Array;
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("grantee_name", DataType::Int64, true),
+            Field::new("granted_to", DataType::Int64, true),
+            Field::new("privilege", DataType::Int64, true),
+        ]));
+        let col = || Arc::new(Int64Array::from(vec![] as Vec<i64>)) as ArrayRef;
+        let batch = RecordBatch::try_new(schema, vec![col(), col(), col()]).unwrap();
+        let table = Arc::new(AgateTable::from_record_batch(Arc::new(batch)));
+
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
+        let result = adapter.standardize_grants_dict(table);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_standardize_grants_dict_databricks_empty_integer_typed_columns() {
+        // Same root cause as the Redshift case: agate records column_types as
+        // ["Integer",...] for 0-row results, so Fusion replays a RecordBatch
+        // with Int64-typed columns instead of the expected StringArrays.
+        use arrow_array::Int64Array;
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("Principal", DataType::Int64, true),
+            Field::new("ActionType", DataType::Int64, true),
+            Field::new("ObjectType", DataType::Int64, true),
+        ]));
+        let col = || Arc::new(Int64Array::from(vec![] as Vec<i64>)) as ArrayRef;
+        let batch = RecordBatch::try_new(schema, vec![col(), col(), col()]).unwrap();
+        let table = Arc::new(AgateTable::from_record_batch(Arc::new(batch)));
+
+        let adapter = AdapterImpl::new(build_engine(Databricks, Mapping::new()), None);
+        let result = adapter.standardize_grants_dict(table);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 
     // -- BigQuery job_execution_timeout_seconds tests -------------------------
