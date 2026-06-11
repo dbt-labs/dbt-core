@@ -374,7 +374,14 @@ pub trait TasksForNodeFactory: Send + Sync {
             let is_unit_test = unique_id.starts_with("unit_test.");
 
             if is_unit_test {
-                match (the_runnable_task, execute) {
+                // Per-node `+compute` overrides the global execute for unit_tests.
+                let unit_test_execute = nodes
+                    .unit_tests
+                    .get(unique_id)
+                    .and_then(|ut| ut.deprecated_config.compute)
+                    .map(|c| Execute::from_compute_flag(c.into()))
+                    .unwrap_or(execute);
+                match (the_runnable_task, unit_test_execute) {
                     (Some(t), Execute::Remote) => {
                         runnable = Some(Arc::new(RunTask::new(
                             t,

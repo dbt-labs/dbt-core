@@ -92,10 +92,11 @@ pub(crate) fn err_resource_name_has_spaces(name: &str, path: &Path) -> Box<FsErr
     )
 }
 
-/// Validates the merged `compute` config on a node. Currently only `Remote` is supported;
-/// other variants are rejected with a clear error so users see the constraint at parse time
+/// Validates the merged `compute` config on a model / data_test / snapshot node. Currently
+/// only `Remote` is supported for those node types; other variants are rejected at parse time
 /// rather than mid-build. The set of accepted values will widen as local-compute support
-/// for additional node types stabilizes.
+/// for additional node types stabilizes. Unit test nodes use [`validate_unit_test_compute`]
+/// instead.
 pub(crate) fn validate_compute(compute: Option<ComputeArg>, path: &Path) -> FsResult<()> {
     match compute {
         None | Some(ComputeArg::Remote) => Ok(()),
@@ -103,6 +104,18 @@ pub(crate) fn validate_compute(compute: Option<ComputeArg>, path: &Path) -> FsRe
             code => ErrorCode::InvalidConfig,
             loc => path.to_path_buf(),
             "compute config currently only accepts 'remote'; got '{other}'",
+        )),
+    }
+}
+
+/// Unit tests can run on either on the `remote` warehouse or `sidecar`
+pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Path) -> FsResult<()> {
+    match compute {
+        None | Some(ComputeArg::Remote) | Some(ComputeArg::Sidecar) => Ok(()),
+        Some(other) => Err(fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => path.to_path_buf(),
+            "unit_test compute config accepts 'remote' or 'sidecar'; got '{other}'",
         )),
     }
 }
