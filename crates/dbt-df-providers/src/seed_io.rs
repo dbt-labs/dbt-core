@@ -376,4 +376,34 @@ mod tests {
             assert_eq!(b.schema(), schema);
         }
     }
+
+    #[test]
+    fn read_jsonl_seed_full_read() {
+        let mut file = NamedTempFile::with_suffix(".jsonl").unwrap();
+        writeln!(file, r#"{{"id": 1, "name": "alpha"}}"#).unwrap();
+        writeln!(file, r#"{{"id": 2, "name": "beta"}}"#).unwrap();
+        file.flush().unwrap();
+
+        let (schema, batches) = read_json_seed(file.path(), true).expect("read jsonl");
+        let batches = batches.expect("batches");
+        let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 2);
+        assert_eq!(schema.fields().len(), 2);
+    }
+
+    #[test]
+    fn read_ndjson_seed_full_read() {
+        let mut file = NamedTempFile::with_suffix(".ndjson").unwrap();
+        writeln!(file, r#"{{"x": 10, "y": "hello"}}"#).unwrap();
+        writeln!(file, r#"{{"x": 20, "y": "world"}}"#).unwrap();
+        writeln!(file).unwrap(); // blank line — Arrow JSON reader skips empty lines
+        writeln!(file, r#"{{"x": 30, "y": "!"}}"#).unwrap();
+        file.flush().unwrap();
+
+        let (schema, batches) = read_json_seed(file.path(), true).expect("read ndjson");
+        let batches = batches.expect("batches");
+        let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 3);
+        assert_eq!(schema.fields().len(), 2);
+    }
 }
