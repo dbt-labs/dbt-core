@@ -1,5 +1,6 @@
 //! Library-shaped serialization for telemetry records.
 
+pub mod arrow;
 pub mod envelope;
 pub mod otlp;
 pub mod traits;

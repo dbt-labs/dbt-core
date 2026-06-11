@@ -13,7 +13,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-arrow = { workspace = true, features = ["canonical_extension_types"] }
 arrow-schema = { workspace = true, features = ["canonical_extension_types"] }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-tracing = { workspace = true }
@@ -24,7 +23,6 @@ prost-types = { workspace = true }
 proto-rust-macros = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
-serde_arrow = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = { workspace = true }
 serde_with = { workspace = true }
@@ -38,6 +36,7 @@ uuid = { workspace = true }
 fake = { workspace = true, optional = true }
 
 [dev-dependencies]
+arrow = { workspace = true, features = ["canonical_extension_types"] }
 fake = { workspace = true }
 # Enables `fake::Dummy` derives on telemetry value types moved to dbt-tracing
 # (e.g. SeverityNumber) so this crate's own tests can fake them.

@@ -1,8 +1,7 @@
 //! Registry for telemetry attribute types.
 
 use crate::StaticName;
-use arrow::datatypes::{DataType, Field, Fields};
-use arrow_schema::extension::Json as JsonExtensionType;
+use arrow_schema::{DataType, Field, Fields, extension::Json as JsonExtensionType};
 use std::{collections::HashMap, sync::LazyLock};
 
 use super::AnyTelemetryEvent;
