@@ -268,10 +268,10 @@ class Flags:
             invoked_subcommand = getattr(import_module("dbt.cli.main"), invoked_subcommand_name)
             invoked_subcommand.allow_extra_args = True
             invoked_subcommand.ignore_unknown_options = True
-            subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
-            invoked_subcommand_ctx = subcommand_ctx
+            invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
+            assert invoked_subcommand_ctx is not None  # make_context never returns None
             _assign_params(
-                subcommand_ctx,
+                invoked_subcommand_ctx,
                 params_assigned_from_default,
                 params_assigned_from_user,
                 deprecated_env_vars,
