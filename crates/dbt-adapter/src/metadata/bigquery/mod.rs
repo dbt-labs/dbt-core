@@ -503,20 +503,13 @@ pub fn build_relation_clauses_bigquery(
     let mut rels_by_db = BTreeMap::<String, Vec<Arc<dyn BaseRelation>>>::new();
 
     for rel in relations {
-        // Semantic FQN: <project>.<dataset>.<table>
-        let fqn = rel.semantic_fqn();
-        let parts: Vec<&str> = fqn.split('.').collect();
-        if parts.len() != 3 {
-            return Err(AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                format!("Invalid BigQuery FQN: {}", rel.semantic_fqn()),
-            ));
-        }
-        let (project, dataset_raw, table_raw) = (parts[0], parts[1], parts[2]);
+        let project = rel.database_as_resolved_str()?;
+        let dataset = rel.schema_as_resolved_str()?;
+        let table = rel.identifier_as_resolved_str()?;
 
-        let dataset = dataset_raw.trim_matches('`');
-        let table = table_raw.trim_matches('`');
-        let db_key = format!("{project}.{dataset}");
+        // Backtick-quote the project so dotted/dashed project IDs parse as
+        // a single identifier in `<db>.__TABLES__`.
+        let db_key = format!("`{project}`.{dataset}");
 
         where_by_db
             .entry(db_key.clone())
@@ -529,56 +522,120 @@ pub fn build_relation_clauses_bigquery(
     Ok((where_by_db, rels_by_db))
 }
 
-fn make_map_f(
-    relations: Vec<Arc<dyn BaseRelation>>,
-    adapter: AdapterImpl,
-    token: CancellationToken,
-) -> impl Fn(&mut dyn Connection, &(String, Vec<String>)) -> AdapterResult<Arc<RecordBatch>>
-+ Send
-+ Sync
-+ 'static {
-    move |conn: &mut dyn Connection, database_and_where_clauses: &(String, Vec<String>)| {
-        let (database, where_clauses) = &database_and_where_clauses;
-        // Query to get last modified times from BigQuery's __TABLES__ metadata table
-        let table_list = relations
-            .iter()
-            .map(|relation| format!("'{}'", relation.identifier().unwrap_or_default()))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let or_block = where_clauses.join(" OR ");
-
-        let table_filter = format!("table_id IN ({})", table_list);
-
-        let joined_where_clauses = if or_block.is_empty() {
-            table_filter
-        } else {
-            format!("({}) AND {}", or_block, table_filter)
-        };
-
-        // __TABLES__ is officially deprecated in favor of TABLES and
-        // PARTITIONS, but neither has last_modified_time. Bigquery's API
-        // has get_table. But for customers with larger source freshness
-        // workloads fanning out over all individual relations can trigger
-        // API limiting errors or run up larger bills.
-        //
-        // reference: https://discuss.google.dev/t/information-schema-tables-monitoring-last-modified-time/125698
-        let sql = format!(
-            "SELECT
+/// Build SQL to fetch last-modified timestamps from `{project}.{dataset}.__TABLES__`.
+///
+/// `where_clauses` is already scoped to this (project, dataset) group.
+///
+/// __TABLES__ is officially deprecated in favor of TABLES and PARTITIONS, but neither has
+/// last_modified_time. Bigquery's API has get_table. But for customers with larger source
+/// freshness workloads fanning out over all individual relations can trigger API limiting
+/// errors or run up larger bills.
+///
+/// reference: https://discuss.google.dev/t/information-schema-tables-monitoring-last-modified-time/125698
+fn build_tables_freshness_query(database: &str, where_clauses: &[String]) -> String {
+    let joined_where_clauses = where_clauses.join(" OR ");
+    format!(
+        "SELECT
                  dataset_id AS table_schema,
                  table_id AS table_name,
                  TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
                  (type = 2) AS is_view
              FROM {db}.__TABLES__
              WHERE {joined_where_clauses}",
-            db = database,
-            joined_where_clauses = joined_where_clauses,
-        );
+        db = database,
+        joined_where_clauses = joined_where_clauses,
+    )
+}
 
-        let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-        let (_, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None, token.clone())?;
-        let batch = agate_table.original_record_batch();
-        Ok(batch)
+fn query_tables_freshness(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    database: &str,
+    where_clauses: &[String],
+    token: CancellationToken,
+) -> AdapterResult<Arc<RecordBatch>> {
+    let sql = build_tables_freshness_query(database, where_clauses);
+    let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+    let (_, agate_table) = adapter.query(&ctx, conn, &sql, None, token)?;
+    Ok(agate_table.original_record_batch())
+}
+
+fn accumulate_tables_freshness_from_batch(
+    acc: &mut BTreeMap<String, MetadataFreshness>,
+    batch: &RecordBatch,
+    database: &str,
+    relations_by_database: &RelationsByDb,
+) -> AdapterResult<()> {
+    let schemas = batch.column_values::<StringArray>("table_schema")?;
+    let tables = batch.column_values::<StringArray>("table_name")?;
+    let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
+    let is_views = batch.column_values::<BooleanArray>("is_view")?;
+    let relations = &relations_by_database[database];
+    for i in 0..batch.num_rows() {
+        let schema = schemas.value(i);
+        let table = tables.value(i);
+        let timestamp = timestamps.value(i);
+        let is_view = is_views.value(i);
+        for table_name in find_matching_relation(schema, table, relations)? {
+            acc.insert(
+                table_name,
+                MetadataFreshness::from_micros(timestamp, is_view)?,
+            );
+        }
+    }
+    Ok(())
+}
+
+fn run_bulk_tables_freshness(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    relations: &[Arc<dyn BaseRelation>],
+    token: CancellationToken,
+) -> AdapterResult<BTreeMap<String, MetadataFreshness>> {
+    let (where_clauses_by_database, relations_by_database) =
+        build_relation_clauses_bigquery(relations)?;
+    let mut acc = BTreeMap::new();
+    for (database, where_clauses) in where_clauses_by_database {
+        let batch =
+            match query_tables_freshness(adapter, conn, &database, &where_clauses, token.clone()) {
+                Ok(batch) => batch,
+                Err(e) if is_bigquery_not_found_error(&e) => continue,
+                Err(e) => return Err(e),
+            };
+        accumulate_tables_freshness_from_batch(
+            &mut acc,
+            &batch,
+            &database,
+            &relations_by_database,
+        )?;
+    }
+    Ok(acc)
+}
+
+fn bulk_freshness_tasks_from_relations(
+    relations: &[Arc<dyn BaseRelation>],
+) -> AdapterResult<Vec<FreshnessTask>> {
+    let (_, relations_by_database) = build_relation_clauses_bigquery(relations)?;
+    Ok(relations_by_database
+        .into_values()
+        .map(FreshnessTask::Bulk)
+        .collect())
+}
+
+fn run_freshness_task(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    task: &FreshnessTask,
+    token: CancellationToken,
+) -> AdapterResult<FreshnessTaskResult> {
+    match task {
+        FreshnessTask::Bulk(bulk) => {
+            let acc = run_bulk_tables_freshness(adapter, conn, bulk, token)?;
+            Ok(FreshnessTaskResult::Bulk(acc))
+        }
+        FreshnessTask::Override(relation, ovr) => {
+            run_override_query(adapter, conn, relation, ovr, token)
+        }
     }
 }
 
@@ -617,6 +674,34 @@ impl BigqueryMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
         let adapter = AdapterImpl::new(engine, None);
         Self { adapter }
+    }
+
+    fn freshness_mapreduce(
+        &self,
+        tasks: Vec<FreshnessTask>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+        let adapter_for_map = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &mut dyn Connection, task: &FreshnessTask| {
+            run_freshness_task(&adapter_for_map, conn, task, token_clone.clone())
+        };
+        let reduce_f = move |acc: &mut Acc,
+                             _task: FreshnessTask,
+                             res: AdapterResult<FreshnessTaskResult>|
+              -> Result<(), Cancellable<AdapterError>> {
+            apply_freshness_task_result(acc, res?)?;
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(tasks), token)
     }
 }
 
@@ -1031,65 +1116,14 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        // Build the where clause for all relations grouped by databases
-        let (where_clauses_by_database, relations_by_database) =
-            match build_relation_clauses_bigquery(relations) {
-                Ok(result) => result,
-                Err(e) => {
-                    let future = async move { Err(Cancellable::Error(e)) };
-                    return Box::pin(future);
-                }
-            };
-
-        type Acc = BTreeMap<String, MetadataFreshness>;
-
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
-
-        let adapter = self.adapter.clone();
-        let map_f = make_map_f(relations.to_vec(), adapter, token.clone());
-
-        let reduce_f = move |acc: &mut Acc,
-                             database_and_where_clauses: (String, Vec<String>),
-                             batch_res: AdapterResult<Arc<RecordBatch>>|
-              -> Result<(), Cancellable<AdapterError>> {
-            let batch = match batch_res {
-                Ok(b) => b,
-                // Missing dataset surfaces as a BigQuery 404. Treat it like an
-                // empty result so downstream callers (e.g. run cache) see the
-                // relations as having unknown freshness instead of bypassing
-                // entirely. Mirrors the handling in
-                // `list_relations_in_parallel_inner`.
-                Err(e) if e.message().contains("Error 404: Not found:") => return Ok(()),
-                Err(e) => return Err(Cancellable::Error(e)),
-            };
-            let schemas = batch.column_values::<StringArray>("table_schema")?;
-            let tables = batch.column_values::<StringArray>("table_name")?;
-            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
-            let is_views = batch.column_values::<BooleanArray>("is_view")?;
-            let (database, _where_clauses) = &database_and_where_clauses;
-            for i in 0..batch.num_rows() {
-                let schema = schemas.value(i);
-                let table = tables.value(i);
-                let timestamp = timestamps.value(i);
-                let is_view = is_views.value(i);
-                let relations = &relations_by_database[database];
-
-                for table_name in find_matching_relation(schema, table, relations)? {
-                    acc.insert(
-                        table_name,
-                        MetadataFreshness::from_micros(timestamp, is_view)?,
-                    );
-                }
+        let tasks = match bulk_freshness_tasks_from_relations(relations) {
+            Ok(tasks) => tasks,
+            Err(e) => {
+                let future = async move { Err(Cancellable::Error(e)) };
+                return Box::pin(future);
             }
-            Ok(())
         };
-
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        map_reduce.run(Arc::new(keys), token)
+        self.freshness_mapreduce(tasks, token)
     }
 
     /// Honors per-source `loaded_at_field` / `loaded_at_query` config. Mirrors the
@@ -1119,128 +1153,21 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             }
         }
 
-        let engine = self.adapter.engine().clone();
-        let threads = engine.threads();
-
-        // Run the bulk and per-override queries through one MapReduce pass so
-        // they share the same connection-factory threadpool — same parallelism
-        // model as the plugin.
-        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
-        type Acc = BTreeMap<String, MetadataFreshness>;
-
         let mut tasks: Vec<FreshnessTask> = Vec::new();
         if !bulk_relations.is_empty() {
-            // Pre-partition by (project, dataset) so each bulk query runs as
-            // its own MapReduce task — preserves the per-dataset parallelism
-            // that `freshness_inner` gets from MapReducing over the db keys.
-            let (_, relations_by_database) = match build_relation_clauses_bigquery(&bulk_relations)
-            {
-                Ok(result) => result,
+            match bulk_freshness_tasks_from_relations(&bulk_relations) {
+                Ok(bulk_tasks) => tasks.extend(bulk_tasks),
                 Err(e) => {
                     let future = async move { Err(Cancellable::Error(e)) };
                     return Box::pin(future);
                 }
-            };
-            for (_db, rels) in relations_by_database {
-                tasks.push(FreshnessTask::Bulk(rels));
             }
         }
         for (relation, ovr) in override_targets {
             tasks.push(FreshnessTask::Override(relation, ovr));
         }
 
-        let token_clone = token.clone();
-        let adapter_for_map = self.adapter.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          task: &FreshnessTask|
-              -> AdapterResult<FreshnessTaskResult> {
-            match task {
-                FreshnessTask::Bulk(bulk) => {
-                    let (where_clauses_by_database, relations_by_database) =
-                        build_relation_clauses_bigquery(bulk)?;
-                    let mut acc: Acc = BTreeMap::new();
-                    for (database, where_clauses) in where_clauses_by_database {
-                        let table_list = bulk
-                            .iter()
-                            .map(|relation| {
-                                format!("'{}'", relation.identifier().unwrap_or_default())
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-
-                        let or_block = where_clauses.join(" OR ");
-                        let table_filter = format!("table_id IN ({})", table_list);
-                        let joined_where_clauses = if or_block.is_empty() {
-                            table_filter
-                        } else {
-                            format!("({}) AND {}", or_block, table_filter)
-                        };
-
-                        let sql = format!(
-                            "SELECT
-                                 dataset_id AS table_schema,
-                                 table_id AS table_name,
-                                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
-                                 (type = 2) AS is_view
-                             FROM {db}.__TABLES__
-                             WHERE {joined_where_clauses}",
-                            db = database,
-                            joined_where_clauses = joined_where_clauses,
-                        );
-
-                        let ctx = QueryCtx::default()
-                            .with_desc("Extracting freshness from information schema");
-                        let result = adapter_for_map.query(
-                            &ctx,
-                            &mut *conn,
-                            &sql,
-                            None,
-                            token_clone.clone(),
-                        );
-                        let batch = match result {
-                            Ok((_, agate_table)) => agate_table.original_record_batch(),
-                            // Missing dataset surfaces as a BigQuery 404. Treat
-                            // it like an empty result, matching `freshness_inner`.
-                            Err(e) if e.message().contains("Error 404: Not found:") => continue,
-                            Err(e) => return Err(e),
-                        };
-                        let schemas = batch.column_values::<StringArray>("table_schema")?;
-                        let tables = batch.column_values::<StringArray>("table_name")?;
-                        let timestamps =
-                            batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
-                        let is_views = batch.column_values::<BooleanArray>("is_view")?;
-                        let relations = &relations_by_database[&database];
-                        for i in 0..batch.num_rows() {
-                            let schema = schemas.value(i);
-                            let table = tables.value(i);
-                            let timestamp = timestamps.value(i);
-                            let is_view = is_views.value(i);
-                            for table_name in find_matching_relation(schema, table, relations)? {
-                                acc.insert(
-                                    table_name,
-                                    MetadataFreshness::from_micros(timestamp, is_view)?,
-                                );
-                            }
-                        }
-                    }
-                    Ok(FreshnessTaskResult::Bulk(acc))
-                }
-                FreshnessTask::Override(relation, ovr) => {
-                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
-                }
-            }
-        };
-
-        let reduce_f = move |acc: &mut Acc,
-                             _task: FreshnessTask,
-                             res: AdapterResult<FreshnessTaskResult>|
-              -> Result<(), Cancellable<AdapterError>> {
-            apply_freshness_task_result(acc, res?)?;
-            Ok(())
-        };
-
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        map_reduce.run(Arc::new(tasks), token)
+        self.freshness_mapreduce(tasks, token)
     }
 
     fn create_schemas_if_not_exists(
@@ -1284,9 +1211,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                     Ok(())
                 }
                 Err(e) => {
-                    // Empty schema error code
-                    // XXX: The AdapterError struct is not properly being built at the moment, rely on string search for now
-                    if e.message().contains("Error 404: Not found:") {
+                    if is_bigquery_not_found_error(&e) {
                         acc.insert(db_schema, Ok(Vec::new()));
                         Ok(())
                     } else {
@@ -1421,6 +1346,9 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     }
 }
 
+fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
+    e.message().contains("Error 404: Not found:")
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1590,5 +1518,37 @@ mod tests {
     fn build_views_query_escapes_single_quotes_in_identifiers() {
         let sql = build_views_query("p", "d", &["weird'name".to_string()]);
         assert!(sql.contains("'weird''name'"), "got: {sql}");
+    }
+
+    /// https://github.com/dbt-labs/dbt-fusion/issues/1450:
+    /// project IDs containing a `.` (domain-style IDs) used to abort source
+    /// freshness with `Invalid BigQuery FQN` because the prior implementation
+    /// split `semantic_fqn()` on `.`.
+    #[test]
+    fn build_relation_clauses_bigquery_handles_dotted_project_id() {
+        use crate::relation::Relation;
+        use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+        let rel = Arc::new(
+            Relation::new(
+                AdapterType::Bigquery,
+                "mycompany.io".to_string(),
+                "analytics".to_string(),
+                "orders".to_string(),
+            )
+            .with_quoting(DEFAULT_RESOLVED_QUOTING),
+        ) as Arc<dyn BaseRelation>;
+
+        let (where_by_db, rels_by_db) =
+            build_relation_clauses_bigquery(std::slice::from_ref(&rel)).unwrap();
+
+        let db_key = "`mycompany.io`.analytics";
+        assert!(
+            where_by_db.contains_key(db_key),
+            "got keys: {:?}",
+            where_by_db.keys().collect::<Vec<_>>()
+        );
+        assert_eq!(where_by_db[db_key], vec!["table_id = 'orders'"]);
+        assert_eq!(rels_by_db[db_key].len(), 1);
     }
 }

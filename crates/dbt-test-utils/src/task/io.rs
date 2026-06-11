@@ -364,8 +364,13 @@ fn update_sqlite_recordings(db_path: &Path, replace_fn: &dyn Fn(&str) -> String)
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Update SQL, error, and data fields
+    // Update unique_id, SQL, error, and data fields
     for (unique_id, record_type, sql, data_base64, error) in recordings {
+        let mut new_unique_id = replace_fn(&unique_id);
+        // `random_schema` is `prefix___<micros>___`; sources named `{schema}_sources`
+        // leave `____` between the stable prefix and `_sources` once the micros
+        // segment is replaced. Collapse so replay keys match stable-schema runs.
+        new_unique_id = new_unique_id.replace("____sources", "_sources");
         let new_sql = sql.as_ref().map(|s| replace_fn(s));
         let new_error = error.as_ref().map(|e| replace_fn(e));
 
@@ -416,7 +421,33 @@ fn update_sqlite_recordings(db_path: &Path, replace_fn: &dyn Fn(&str) -> String)
             None
         };
 
-        if new_sql != sql || new_error != error || new_data_base64 != data_base64 {
+        let changed = new_unique_id != unique_id
+            || new_sql != sql
+            || new_error != error
+            || new_data_base64 != data_base64;
+
+        if !changed {
+            continue;
+        }
+
+        // Primary key includes unique_id; rewrite via delete+insert when it changes.
+        if new_unique_id != unique_id {
+            conn.execute(
+                "DELETE FROM recordings WHERE unique_id = ?1 AND record_type = ?2",
+                params![unique_id, record_type],
+            )?;
+            conn.execute(
+                "INSERT INTO recordings (unique_id, record_type, sql, data_base64, error)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    new_unique_id,
+                    record_type,
+                    new_sql,
+                    new_data_base64,
+                    new_error
+                ],
+            )?;
+        } else {
             conn.execute(
                 "UPDATE recordings SET sql = ?1, data_base64 = ?2, error = ?3 WHERE unique_id = ?4 AND record_type = ?5",
                 params![new_sql, new_data_base64, new_error, unique_id, record_type],
