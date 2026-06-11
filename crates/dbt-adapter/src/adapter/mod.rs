@@ -1115,9 +1115,21 @@ impl Adapter {
                 let iter = ArgsIter::new("valid_snapshot_target", &["relation"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let column_names_val = iter.next_kwarg::<Option<Value>>("column_names")?;
+                let column_names = column_names_val
+                    .map(minijinja_value_to_typed_struct::<BTreeMap<String, String>>)
+                    .transpose()
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
                 iter.finish()?;
 
-                adapter.valid_snapshot_target(state, &relation)
+                adapter.valid_snapshot_target(state, &relation, column_names)?;
+
+                Ok(none_value())
             }
             Parse(_) => Ok(none_value()),
         }

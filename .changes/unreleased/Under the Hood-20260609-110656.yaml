@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Fix implementation of legacy `valid_snapshot_target`
+time: 2026-06-09T11:06:56.685235-06:00
+custom:
+    author: chasewalden
+    issue: ""
+    project: dbt-fusion

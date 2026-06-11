@@ -1038,10 +1038,29 @@ impl AdapterImpl {
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L894
     pub fn valid_snapshot_target(
         &self,
-        _state: &State,
-        _relation: &Arc<dyn BaseRelation>,
-    ) -> Result<Value, minijinja::Error> {
-        unimplemented!("valid_snapshot_target")
+        state: &State,
+        relation: &Arc<dyn BaseRelation>,
+        column_names: Option<BTreeMap<String, String>>,
+    ) -> AdapterResult<()> {
+        match self.inner_adapter() {
+            Replay(_, replay) => replay.replay_valid_snapshot_target(state, relation, column_names),
+            Impl(_, _engine) => {
+                let no_strategy = SnapshotStrategy {
+                    unique_key: None,
+                    updated_at: None,
+                    row_changed: None,
+                    scd_id: None,
+                    hard_deletes: None,
+                };
+
+                self.assert_valid_snapshot_target_given_strategy(
+                    state,
+                    relation,
+                    column_names,
+                    Arc::new(no_strategy),
+                )
+            }
+        }
     }
 
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1769
@@ -4815,6 +4834,13 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         state: &State,
         _relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value>;
+
+    fn replay_valid_snapshot_target(
+        &self,
+        state: &State,
+        _relation: &Arc<dyn BaseRelation>,
+        _column_names: Option<BTreeMap<String, String>>,
+    ) -> AdapterResult<()>;
 
     fn replay_assert_valid_snapshot_target_given_strategy(
         &self,
