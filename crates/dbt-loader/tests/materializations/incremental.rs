@@ -208,3 +208,159 @@ mod databricks {
         );
     }
 }
+
+mod spark {
+    use super::*;
+    const ADAPTER: AdapterType = AdapterType::Spark;
+
+    fn build_harness() -> MacroTestHarness {
+        let harness = MacroTestHarness::for_adapter(ADAPTER)
+            .load_all_macros()
+            .with_stub_functions()
+            .build()
+            .expect("harness should build");
+
+        // `spark__get_merge_sql` reads the destination columns, but they are only
+        // used when `merge_update_columns`/`merge_exclude_columns` are set.
+        harness.mock().on("get_columns_in_relation", |_| {
+            Ok(Value::from(Vec::<Value>::new()))
+        });
+
+        harness
+    }
+
+    fn merge_ctx(harness: &MacroTestHarness, unique_key: Value) -> BTreeMap<String, Value> {
+        let target = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "orders_incremental",
+            Some(RelationType::Table),
+        );
+        let source = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "orders_incremental__dbt_tmp",
+            Some(RelationType::Table),
+        );
+
+        BTreeMap::from([
+            (
+                "config".to_string(),
+                Value::from_dyn_object(default_mock_config()),
+            ),
+            ("sql_header".to_string(), Value::from(())),
+            (
+                "source".to_string(),
+                RelationObject::new(source).into_value(),
+            ),
+            (
+                "target".to_string(),
+                RelationObject::new(target).into_value(),
+            ),
+            ("unique_key".to_string(), unique_key),
+        ])
+    }
+
+    #[test]
+    fn get_incremental_sql_merge_with_unique_key() {
+        let harness = build_harness();
+        let ctx = merge_ctx(&harness, Value::from("order_id"));
+
+        let sql = harness
+            .render(
+                "{{ dbt_spark_get_incremental_sql('merge', source, target, none, unique_key, none) }}",
+                ctx,
+            )
+            .unwrap_or_else(|e| panic!("rendering spark merge sql failed: {e:?}"));
+
+        let lower = sql.to_lowercase();
+        assert!(lower.contains("merge into"), "got: {sql}");
+        assert!(
+            sql.contains("DBT_INTERNAL_SOURCE.order_id = DBT_INTERNAL_DEST.order_id"),
+            "got: {sql}",
+        );
+        assert!(lower.contains("when matched then update set"), "got: {sql}");
+        assert!(
+            lower.contains("when not matched then insert *"),
+            "got: {sql}"
+        );
+    }
+
+    #[test]
+    fn get_incremental_sql_merge_without_unique_key_matches_on_false() {
+        let harness = build_harness();
+        let ctx = merge_ctx(&harness, Value::from(()));
+
+        let sql = harness
+            .render(
+                "{{ dbt_spark_get_incremental_sql('merge', source, target, none, unique_key, none) }}",
+                ctx,
+            )
+            .unwrap_or_else(|e| panic!("rendering spark merge sql failed: {e:?}"));
+
+        let lower = sql.to_lowercase();
+        assert!(lower.contains("merge into"), "got: {sql}");
+        assert!(lower.contains("on false"), "got: {sql}");
+    }
+
+    #[test]
+    fn get_incremental_sql_insert_overwrite() {
+        let harness = build_harness();
+        harness.mock().on("get_columns_in_relation", |_| {
+            Ok(Value::from_serialize(vec![
+                BTreeMap::from([("quoted", "`order_id`")]),
+                BTreeMap::from([("quoted", "`order_date`")]),
+            ]))
+        });
+
+        let target = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "orders_incremental",
+            Some(RelationType::Table),
+        );
+        let source = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "orders_incremental__dbt_tmp",
+            Some(RelationType::Table),
+        );
+        let existing = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "orders_incremental",
+            Some(RelationType::Table),
+        );
+
+        let ctx = BTreeMap::from([
+            (
+                "config".to_string(),
+                Value::from_dyn_object(default_mock_config()),
+            ),
+            (
+                "source".to_string(),
+                RelationObject::new(source).into_value(),
+            ),
+            (
+                "target".to_string(),
+                RelationObject::new(target).into_value(),
+            ),
+            (
+                "existing".to_string(),
+                RelationObject::new(existing).into_value(),
+            ),
+        ]);
+
+        let sql = harness
+            .render(
+                "{{ dbt_spark_get_incremental_sql('insert_overwrite', source, target, existing, none, none) }}",
+                ctx,
+            )
+            .unwrap_or_else(|e| panic!("rendering spark insert_overwrite sql failed: {e:?}"));
+
+        let lower = sql.to_lowercase();
+        assert!(lower.contains("insert overwrite table"), "got: {sql}");
+        assert!(sql.contains("`order_id`, `order_date`"), "got: {sql}");
+        assert!(lower.contains("select"), "got: {sql}");
+    }
+}
