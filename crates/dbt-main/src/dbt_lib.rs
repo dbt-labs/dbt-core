@@ -1055,47 +1055,6 @@ impl<'a> AllPhasesExecutor<'a> {
             write_runtime_results_parquet(&run_task_results.stats.run, self.arg.as_ref());
         }
 
-        // When writing metadata epochs (--write-index), fetch catalog stats from the
-        // warehouse for executed TABLE nodes and write to run/catalog_stats parquet.
-        // This is intentionally separate from the write_json / write_catalog path:
-        // --write-index sets write_json=false so write_catalog_json is never called.
-        if self.arg.write_metadata && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
-        {
-            let metadata_adapter = adapter.metadata_adapter();
-            if let Some(metadata_adapter) = metadata_adapter {
-                let relations = metadata_adapter.create_relations_from_executed_nodes(
-                    &resolved_state,
-                    &run_task_results.stats.run,
-                );
-                if !relations.is_empty() {
-                    let base_context = build_base_context(&resolved_state, &jinja_env);
-                    match fetch_catalog_data(
-                        &adapter,
-                        &resolved_state,
-                        relations,
-                        &jinja_env,
-                        compilation.root_project_name(),
-                        &base_context,
-                        self.arg.as_ref(),
-                        20,
-                    )
-                    .await
-                    {
-                        Ok(catalog) => {
-                            write_catalog_stats_parquet(&catalog, self.arg.as_ref()).await;
-                        }
-                        Err(e) => {
-                            emit_warn_log_message(
-                                ErrorCode::Generic,
-                                format!("Failed to fetch catalog data for metadata epoch: {e}"),
-                                self.arg.io.status_reporter.as_ref(),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
         for s in &run_task_results.storeables {
             let path = self.arg.io.out_dir.join(s.out_dir_relpath());
             let mut output = stdfs::File::create(&path)?;
@@ -1140,9 +1099,46 @@ impl<'a> AllPhasesExecutor<'a> {
             resolved_state
         };
 
+        // Single warehouse INFORMATION_SCHEMA fetch shared by all catalog consumers.
+        // Gated on write_metadata && (write_catalog || write_index): --write-metadata alone
+        // must not hit the warehouse. For --write-catalog without --write-metadata, Block 0
+        // (write_json path) fetches independently via write_catalog_json — adding write_catalog
+        // here would introduce a second DWH round-trip for that path.
+        //
+        // NOTE on resolved_state: for --write-index, write_json=true (clap-core forces
+        // write_json=false only when self.write_metadata=true AND self.write_index=false;
+        // --write-index has self.write_metadata=false raw, so write_json stays true and
+        // update_manifest IS called above). This is safe: catalog queries use resolved_state
+        // only for relation identity (database/schema/table), not for compiled SQL or inferred
+        // schemas added by update_manifest.
+        let catalog_data: Option<DbtCatalog> = if self.arg.write_metadata
+            && (self.arg.write_catalog || self.arg.write_index)
+            && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
+        {
+            try_fetch_catalog(
+                &adapter,
+                &resolved_state,
+                &run_task_results,
+                &compilation,
+                &jinja_env,
+                self.arg.as_ref(),
+            )
+            .await
+        } else {
+            None
+        };
+
         // Produce parquet metadata epoch files (compile/nodes, compile/columns, cll, etc.).
         // Must happen before into_map_compiled_sql() consumes the manifest.
         if self.arg.write_metadata && self.arg.command != FsCommand::Show {
+            // Catalog epochs fire whenever catalog_data is Some — catalog_data is non-None
+            // only when write_metadata && (write_catalog || write_index) && Run|Build,
+            // so the if-let is sufficient; catalog.json is separately gated below.
+            if let Some(ref catalog) = catalog_data {
+                write_catalog_stats_parquet(catalog, self.arg.as_ref()).await;
+                write_catalog_columns_epoch(catalog, self.arg.as_ref());
+            }
+
             let schema_store =
                 Arc::clone(&compilation_cache_state.schema_store) as Arc<dyn SchemaStoreTrait>;
 
@@ -1248,40 +1244,30 @@ impl<'a> AllPhasesExecutor<'a> {
                 }
             }
 
-            // Fetch catalog and write catalog/columns epoch BEFORE write_index so the
-            // index ingestion can consume it. Only for Run/Build (need executed nodes).
+            // Write catalog.json from pre-fetched catalog — no second warehouse query.
+            // Epochs already written unconditionally above; this block is catalog.json only.
+            // Only for Run/Build: need executed nodes to populate relations.
             if self.arg.write_catalog
                 && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
             {
-                let base_context = build_base_context(&resolved_state, &jinja_env);
-                let metadata_adapter = adapter
-                    .metadata_adapter()
-                    .expect("Expected implements MetadataAdapter");
-                let relations = metadata_adapter.create_relations_from_executed_nodes(
-                    &resolved_state,
-                    &run_task_results.stats.run,
-                );
-                match write_catalog_json(
-                    &adapter,
-                    &resolved_state,
-                    relations,
-                    &jinja_env,
-                    compilation.root_project_name(),
-                    &base_context,
-                    self.arg.as_ref(),
-                    20,
-                )
-                .await
-                {
-                    Ok(catalog) => {
-                        write_catalog_columns_epoch(&catalog, self.arg.as_ref());
-                    }
-                    Err(e) => {
-                        emit_warn_log_message(
-                            ErrorCode::Generic,
-                            format!("catalog: {e}"),
-                            self.arg.io.status_reporter.as_ref(),
-                        );
+                if let Some(ref catalog) = catalog_data {
+                    match write_artifact_to_file(
+                        catalog,
+                        ArtifactType::Catalog,
+                        &self.arg.io.out_dir,
+                        DBT_CATALOG_JSON,
+                        &self.arg.io.in_dir,
+                    ) {
+                        Ok(()) => {
+                            emit_info_log_message("Successfully wrote catalog.json");
+                        }
+                        Err(e) => {
+                            emit_warn_log_message(
+                                ErrorCode::Generic,
+                                format!("catalog: {e}"),
+                                self.arg.io.status_reporter.as_ref(),
+                            );
+                        }
                     }
                 }
             }
@@ -1599,6 +1585,48 @@ pub fn check_options(io_args: &IoArgs, cli: &Cli) {
     }
 }
 
+/// Fetches catalog data at most once, returning None if the adapter has no
+/// metadata support, no executed relations, or the fetch fails (warn-logged).
+/// Callers should treat None as "skip all catalog writes".
+async fn try_fetch_catalog(
+    adapter: &Arc<Adapter>,
+    resolved_state: &Arc<ResolverState>,
+    run_task_results: &RunTaskResults,
+    compilation: &DbtProjectCompilation,
+    jinja_env: &Arc<JinjaEnv>,
+    arg: &EvalArgs,
+) -> Option<DbtCatalog> {
+    let metadata_adapter = adapter.metadata_adapter()?;
+    let relations = metadata_adapter
+        .create_relations_from_executed_nodes(resolved_state, &run_task_results.stats.run);
+    if relations.is_empty() {
+        return None;
+    }
+    let base_context = build_base_context(resolved_state, jinja_env);
+    match fetch_catalog_data(
+        adapter,
+        resolved_state,
+        relations,
+        jinja_env,
+        compilation.root_project_name(),
+        &base_context,
+        arg,
+        20,
+    )
+    .await
+    {
+        Ok(catalog) => Some(catalog),
+        Err(e) => {
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("Failed to fetch catalog data: {e}"),
+                arg.io.status_reporter.as_ref(),
+            );
+            None
+        }
+    }
+}
+
 /// Fetches catalog data from the warehouse without writing any artifact.
 /// Returns the populated `DbtCatalog` (nodes keyed by unique_id with stats).
 ///
@@ -1615,7 +1643,7 @@ async fn fetch_catalog_data(
     arg: &EvalArgs,
     batches: usize,
 ) -> FsResult<DbtCatalog> {
-    emit_info_log_message("Preparing to write catalog.json");
+    emit_info_log_message("Fetching catalog from warehouse");
     let metadata_adapter = adapter
         .metadata_adapter()
         .expect("Expected implements MetadataAdapter");

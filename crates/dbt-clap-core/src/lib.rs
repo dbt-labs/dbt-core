@@ -2215,7 +2215,7 @@ impl CommonArgs {
             } else {
                 self.write_json
             },
-            write_catalog: self.write_catalog || self.write_index,
+            write_catalog: self.write_catalog,
             write_metadata: self.write_metadata || self.write_index,
             write_index: self.write_index,
             index_dir: self.index_dir.clone(),
