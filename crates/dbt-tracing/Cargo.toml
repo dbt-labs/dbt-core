@@ -18,6 +18,9 @@ bitflags = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-yaml = { workspace = true }
 erased-serde = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
+opentelemetry_sdk = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
