@@ -301,7 +301,10 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     ///
     /// Callers that have an [`ExecutionPhase`] can convert it via `.into()`.
     ///
-    /// For models, generic tests, unit tests, and snapshots the path varies by kind:
+    /// For models, generic tests, unit tests, snapshots, analyses, functions, and seeds the path
+    /// varies by kind (analyses only have a `Compiled` path — they are never materialized/run;
+    /// functions have both `Compiled` and `Executable` paths; seeds only have an `Executable` run
+    /// path beyond the definition path — they are never compiled):
     ///
     ///   - `Compiled`   - `target/compiled/{package}/{path_segment}` (snapshots use
     ///     their nested compiled artifact path)
@@ -320,11 +323,21 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         match (path_kind, self.resource_type()) {
             (
                 NodePathKind::Compiled,
-                NodeType::Model | NodeType::Test | NodeType::UnitTest | NodeType::Snapshot,
+                NodeType::Model
+                | NodeType::Test
+                | NodeType::UnitTest
+                | NodeType::Snapshot
+                | NodeType::Analysis
+                | NodeType::Function,
             )
             | (
                 NodePathKind::Executable,
-                NodeType::Model | NodeType::Test | NodeType::UnitTest | NodeType::Snapshot,
+                NodeType::Model
+                | NodeType::Test
+                | NodeType::UnitTest
+                | NodeType::Snapshot
+                | NodeType::Function
+                | NodeType::Seed,
             ) => {
                 let abs = self.get_node_path_abs(path_kind, in_dir, out_dir);
                 pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
@@ -5676,8 +5689,9 @@ mod tests {
     use serde::Deserialize;
 
     use super::{
-        DbtSnapshot, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind,
-        hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
+        DbtAnalysis, DbtFunction, DbtSeed, DbtSnapshot, DbtSource, InternalDbtNode,
+        InternalDbtNodeAttributes, ModelConfig, NodePathKind, hooks_equal, normalize_description,
+        persist_docs_configs_equal, quoting_equal,
     };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
     use crate::schemas::project::SnapshotMetaColumnNames;
@@ -5725,6 +5739,170 @@ mod tests {
                 .get_node_path(NodePathKind::Executable, in_dir, out_dir)
                 .as_ref(),
             Path::new("target/run/pkg/snapshots/snapshots.yml/snapshots/daily_orders.sql")
+        );
+    }
+
+    fn analysis_with_paths(name: &str, original_file_path: &str) -> DbtAnalysis {
+        let mut analysis = DbtAnalysis::default();
+        analysis.__common_attr__.name = name.to_string();
+        analysis.__common_attr__.package_name = "pkg".to_string();
+        analysis.__common_attr__.path = PathBuf::from(original_file_path);
+        analysis.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        analysis.__base_attr__.alias = name.to_string();
+        analysis
+    }
+
+    #[test]
+    fn analysis_node_paths_are_phase_accurate() {
+        let analysis = analysis_with_paths("my_analysis", "analyses/my_analysis.sql");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        // Parse / Render: raw SQL file (original_file_path).
+        assert_eq!(
+            analysis
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            Path::new("analyses/my_analysis.sql")
+        );
+
+        // Analysis: compiled SQL file.
+        let actual_compiled_path = analysis.get_node_path(NodePathKind::Compiled, in_dir, out_dir);
+        let actual_compiled_path = actual_compiled_path.to_string_lossy();
+        let expected_compiled_path = "target/compiled/pkg/analyses/my_analysis.sql";
+        assert!(
+            path_separator_eq(&actual_compiled_path, expected_compiled_path),
+            "left: {actual_compiled_path:?}\nright: {expected_compiled_path:?}"
+        );
+
+        // Analyses are never materialized/run: Executable falls back to the definition path.
+        assert_eq!(
+            analysis
+                .get_node_path(NodePathKind::Executable, in_dir, out_dir)
+                .as_ref(),
+            Path::new("analyses/my_analysis.sql")
+        );
+    }
+
+    fn function_with_paths(name: &str, original_file_path: &str) -> DbtFunction {
+        let mut function = DbtFunction::default();
+        function.__common_attr__.name = name.to_string();
+        function.__common_attr__.package_name = "pkg".to_string();
+        function.__common_attr__.path = PathBuf::from(original_file_path);
+        function.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        function.__base_attr__.alias = name.to_string();
+        function
+    }
+
+    #[test]
+    fn function_node_paths_are_phase_accurate() {
+        let function = function_with_paths("my_function", "functions/my_function.sql");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        // Parse / Render: raw SQL file (original_file_path).
+        assert_eq!(
+            function
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            Path::new("functions/my_function.sql")
+        );
+
+        // Analysis: compiled SQL file.
+        let actual_compiled_path = function.get_node_path(NodePathKind::Compiled, in_dir, out_dir);
+        let actual_compiled_path = actual_compiled_path.to_string_lossy();
+        let expected_compiled_path = "target/compiled/pkg/functions/my_function.sql";
+        assert!(
+            path_separator_eq(&actual_compiled_path, expected_compiled_path),
+            "left: {actual_compiled_path:?}\nright: {expected_compiled_path:?}"
+        );
+
+        // Materialization: run path (functions are materialized, unlike analyses).
+        let actual_run_path = function.get_node_path(NodePathKind::Executable, in_dir, out_dir);
+        let actual_run_path = actual_run_path.to_string_lossy();
+        let expected_run_path = "target/run/pkg/functions/my_function.sql";
+        assert!(
+            path_separator_eq(&actual_run_path, expected_run_path),
+            "left: {actual_run_path:?}\nright: {expected_run_path:?}"
+        );
+    }
+
+    fn seed_with_paths(name: &str, original_file_path: &str) -> DbtSeed {
+        let mut seed = DbtSeed::default();
+        seed.__common_attr__.name = name.to_string();
+        seed.__common_attr__.package_name = "pkg".to_string();
+        seed.__common_attr__.path = PathBuf::from(original_file_path);
+        seed.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        seed.__base_attr__.alias = name.to_string();
+        seed
+    }
+
+    #[test]
+    fn seed_node_paths_are_phase_accurate() {
+        let seed = seed_with_paths("my_seed", "seeds/my_seed.csv");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        // Parse / Render: raw CSV file (original_file_path).
+        assert_eq!(
+            seed.get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            Path::new("seeds/my_seed.csv")
+        );
+
+        // Analysis: falls back to the raw CSV file — seeds are NOT in the Compiled arm.
+        assert_eq!(
+            seed.get_node_path(NodePathKind::Compiled, in_dir, out_dir)
+                .as_ref(),
+            Path::new("seeds/my_seed.csv")
+        );
+
+        // Materialization: run path (the `.csv` is replaced by `{alias}.sql`, not nested).
+        let actual_run_path = seed.get_node_path(NodePathKind::Executable, in_dir, out_dir);
+        let actual_run_path = actual_run_path.to_string_lossy();
+        let expected_run_path = "target/run/pkg/seeds/my_seed.sql";
+        assert!(
+            path_separator_eq(&actual_run_path, expected_run_path),
+            "left: {actual_run_path:?}\nright: {expected_run_path:?}"
+        );
+    }
+
+    fn source_with_paths(name: &str, original_file_path: &str) -> DbtSource {
+        let mut source = DbtSource::default();
+        source.__common_attr__.name = name.to_string();
+        source.__common_attr__.package_name = "pkg".to_string();
+        source.__common_attr__.path = PathBuf::from(original_file_path);
+        source.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        source.__base_attr__.alias = name.to_string();
+        source
+    }
+
+    #[test]
+    fn source_node_paths_are_phase_accurate() {
+        let source = source_with_paths("raw_customers", "models/__sources.yml");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        for kind in [
+            NodePathKind::Definition,
+            NodePathKind::Compiled,
+            NodePathKind::Executable,
+        ] {
+            assert_eq!(
+                source.get_node_path(kind, in_dir, out_dir).as_ref(),
+                Path::new("models/__sources.yml"),
+                "kind {kind:?} should fall back to the raw YAML definition path",
+            );
+        }
+
+        // The source freshness path unification relies on get_node_path(Definition)
+        // returning the same value the freshness call sites previously read from
+        // __common_attr__.path (parser sets path == original_file_path for sources).
+        assert_eq!(
+            source
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            source.__common_attr__.path.as_path(),
         );
     }
 
@@ -6423,7 +6601,7 @@ mod tests {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtAnalysis {
     pub __common_attr__: CommonAttributes,

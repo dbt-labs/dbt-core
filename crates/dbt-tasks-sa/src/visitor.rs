@@ -18,7 +18,7 @@ use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_trace_log_message};
 use dbt_common::{ErrorCode, FsError, fs_err, status_reporter::report_completed};
 use dbt_common::{FsResult, io_args::IoArgs, unexpected_err};
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::{InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::task::TP;
 use dbt_tasks_core::task::Task;
@@ -322,15 +322,21 @@ fn show_skip_summary(io: &IoArgs, skipped_nodes: &[Arc<dyn InternalDbtNodeAttrib
     }
 
     for node in skipped_nodes {
-        let node_common = node.common();
-        let unique_id = &node_common.unique_id;
+        let unique_id = &node.common().unique_id;
 
         // Show completed message for non-test nodes
         if !unique_id.starts_with("test.") && !unique_id.starts_with("unit_test.") {
             report_completed(
                 &NodeStatus::SkippedUpstreamFailed,
                 None,
-                &node_common.original_file_path.display().to_string(),
+                &node
+                    .get_node_path(
+                        NodePathKind::Definition,
+                        io.in_dir.as_path(),
+                        io.out_dir.as_path(),
+                    )
+                    .display()
+                    .to_string(),
                 false,
                 io.status_reporter.as_ref(),
             );

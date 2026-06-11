@@ -435,9 +435,6 @@ pub fn materialize_seed(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
-    // TODO(path-unification): the matrix says seeds report the run path, but get_node_path
-    // currently falls back to the definition path for seeds (no run artifact). Extend the
-    // Executable arm in get_node_path to synthesize a run path for seeds in the follow-up PR.
     let run_path = seed
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
         .into_owned();
@@ -1547,19 +1544,11 @@ pub fn materialize_function(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &function.__common_attr__.package_name,
-        &function.__common_attr__.path,
-        &function.__common_attr__.original_file_path,
-    );
+    let compiled_path =
+        function.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
 
     let unique_id = function.__common_attr__.unique_id.clone();
     let node_alias = function.__base_attr__.alias.clone();
-    // TODO(path-unification): the matrix says functions report the run path, but get_node_path
-    // currently falls back to the definition path for functions (no run artifact). Extend the
-    // Executable arm in get_node_path to synthesize a run path for functions in the follow-up PR.
     let run_path = function
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
         .into_owned();
