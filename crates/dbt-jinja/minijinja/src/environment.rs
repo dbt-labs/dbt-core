@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::compiler::codegen::{CodeGenerationProfile, CodeGenerator};
 use crate::compiler::instructions::Instructions;
-use crate::compiler::parser::parse_expr;
+use crate::compiler::parser::{parse, parse_expr};
 use crate::constants::{
     DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
     NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
@@ -499,6 +499,32 @@ impl<'source> Environment<'source> {
     /// with name set to `<string>`.
     pub fn template_from_str(&self, source: &'source str) -> Result<Template<'_, 'source>, Error> {
         self.template_from_named_str("<string>", source)
+    }
+
+    /// Statically discovers calls to any function in `function_names` whose
+    /// positional arguments are all string literals.
+    ///
+    /// Unlike rendering, both arms of every `{% if %}` and all loop
+    /// bodies are visited, so the result is independent of runtime eval.
+    /// This lets callers discover `source()` dependencies that
+    /// sit inside a conditional branch which is false during an
+    /// `execute=false` discovery render (see dbt-fusion #1660).
+    pub fn find_static_string_arg_calls(
+        &self,
+        name: &str,
+        source: &str,
+        function_names: &[&str],
+    ) -> Result<Vec<crate::compiler::meta::StaticFunctionCall>, Error> {
+        let ast = ok!(parse(
+            source,
+            name,
+            self.templates.template_config.syntax_config.clone(),
+            self.templates.template_config.ws_config,
+        ));
+        Ok(crate::compiler::meta::find_string_arg_calls(
+            &ast,
+            function_names,
+        ))
     }
 
     /// Parses and renders a template from a string in one go with name.
