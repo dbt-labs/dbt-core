@@ -507,7 +507,8 @@ impl AdapterImpl {
             Fabric => &[Append, DeleteInsert, Merge, Microbatch],
             Salesforce => &[Append, Merge],
             ClickHouse => &[Append, DeleteInsert, InsertOverwrite, Microbatch, Legacy],
-            Spark | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => {
+            Spark => &[Append, Merge, InsertOverwrite, Microbatch],
+            Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("valid_incremental_strategies not implemented")
             }
         }
@@ -1696,6 +1697,14 @@ impl AdapterImpl {
             })
             // Post-process macro results
             .and_then(|macro_columns| {
+                let to_adapter_err = |e: minijinja::Error| {
+                    AdapterError::new(
+                        AdapterErrorKind::UnexpectedResult,
+                        e.detail().map(|d| d.to_string()).unwrap_or_else(|| {
+                            "Could not convert columns from jinja value".to_string()
+                        }),
+                    )
+                };
                 match self.adapter_type() {
                     Databricks => {
                         // Databricks inherits the implementation from the Spark adapter.
@@ -1745,28 +1754,12 @@ impl AdapterImpl {
                             .collect::<Vec<_>>();
                         Ok(columns)
                     }
-                    Spark => {
-                        let columns =
-                            Column::vec_from_jinja_value(Spark, macro_columns).map_err(|e| {
-                                AdapterError::new(
-                                    AdapterErrorKind::UnexpectedResult,
-                                    e.detail().map(|d| d.to_string()).unwrap_or_else(|| {
-                                        "Could not convert columns from jinja value".to_string()
-                                    }),
-                                )
-                            })?;
-                        Ok(metadata::spark::truncate_at_describe_extended_separator(
-                            columns,
-                        ))
-                    }
-                    _ => Column::vec_from_jinja_value(ClickHouse, macro_columns).map_err(|e| {
-                        AdapterError::new(
-                            AdapterErrorKind::UnexpectedResult,
-                            e.detail().map(|d| d.to_string()).unwrap_or_else(|| {
-                                "Could not convert columns from jinja value".to_string()
-                            }),
-                        )
-                    }),
+                    Spark => Ok(metadata::spark::truncate_at_describe_extended_separator(
+                        Column::vec_from_jinja_value(Spark, macro_columns)
+                            .map_err(to_adapter_err)?,
+                    )),
+                    adapter_type => Column::vec_from_jinja_value(adapter_type, macro_columns)
+                        .map_err(to_adapter_err),
                 }
             })
     }
