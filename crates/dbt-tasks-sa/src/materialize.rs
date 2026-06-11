@@ -65,8 +65,7 @@ fn execute_materialization_macro(
     resource_type: &str,
     unique_id: &str,
     node_alias: &str,
-    display_path: &str,
-    compiled_path: PathBuf,
+    run_path: PathBuf,
 ) -> FsResult<Value> {
     let macro_string = format!("{macro_name}()");
     let expr = jinja_env.compile_expression(&macro_string)?;
@@ -81,7 +80,8 @@ fn execute_materialization_macro(
                 .collect::<Vec<_>>()
                 .join("\n");
             let message = format!(
-                "Database Error in {resource_type} {node_alias} ({display_path})\n{indented_body}",
+                "Database Error in {resource_type} {node_alias} ({})\n{indented_body}",
+                run_path.display(),
             );
             Box::new(dbt_common::FsError::new(e.code, message))
         } else {
@@ -91,12 +91,7 @@ fn execute_materialization_macro(
                 "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
                 e.context
             );
-            let error_path = if resource_type == "snapshot" {
-                PathBuf::from(display_path)
-            } else {
-                compiled_path.clone()
-            };
-            let err = e.with_location(error_path);
+            let err = e.with_location(run_path);
             Box::new(err.with_context(message))
         }
     })
@@ -387,19 +382,11 @@ pub fn materialize_clone<S: serde::Serialize>(
     let adapter = jinja_env
         .get_base_adapter()
         .ok_or_else(|| unexpected_fs_err!("No adapter found for model {}", &unique_id))?;
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &node.common().package_name,
-        &node.common().path,
-        &node.common().original_file_path,
-    );
     let node_alias = node.base().alias.clone();
-    let original_file_path = node
-        .common()
-        .original_file_path
-        .to_string_lossy()
-        .to_string();
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = node
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
 
     // Only call use_warehouse when there's a custom warehouse to set
     let override_warehouse = if let Some(warehouse) = custom_warehouse {
@@ -414,8 +401,7 @@ pub fn materialize_clone<S: serde::Serialize>(
         "clone",
         &unique_id,
         &node_alias,
-        &original_file_path,
-        compiled_path,
+        run_path,
     );
     if override_warehouse {
         let _ = adapter.restore_warehouse(&unique_id);
@@ -433,14 +419,6 @@ pub fn materialize_seed(
     agate_table: AgateTable,
     io_args: &IoArgs,
 ) -> FsResult<Value> {
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &seed.__common_attr__.package_name,
-        &seed.__common_attr__.path,
-        &seed.__common_attr__.original_file_path,
-    );
-
     let macro_name = materialization_resolver.find_materialization_macro_by_name("seed")?;
 
     let mut context = build_run_node_context(
@@ -455,6 +433,13 @@ pub fn materialize_seed(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
+    // TODO(path-unification): the matrix says seeds report the run path, but get_node_path
+    // currently falls back to the definition path for seeds (no run artifact). Extend the
+    // Executable arm in get_node_path to synthesize a run path for seeds in the follow-up PR.
+    let run_path = seed
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
+
     execute_materialization_macro(
         jinja_env,
         &macro_name,
@@ -462,8 +447,7 @@ pub fn materialize_seed(
         "seed",
         &seed.__common_attr__.unique_id,
         &seed.__base_attr__.alias,
-        &seed.__common_attr__.original_file_path.to_string_lossy(),
-        compiled_path,
+        run_path,
     )
 }
 
@@ -498,16 +482,12 @@ pub fn materialize_model(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let compiled_path =
-        model.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
-
     let unique_id = model.__common_attr__.unique_id.clone();
     let node_alias = model.__base_attr__.alias.clone();
-    // For runtime errors, surface the run path so users can inspect the SQL that was executed.
-    let run_display_path = model
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = model
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
-        .display()
-        .to_string();
+        .into_owned();
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -536,8 +516,7 @@ pub fn materialize_model(
         "model",
         &unique_id,
         &node_alias,
-        &run_display_path,
-        compiled_path,
+        run_path,
     );
 
     if override_warehouse {
@@ -587,9 +566,6 @@ pub fn materialize_microbatch_model(
     let macro_name = materialization_resolver
         .find_materialization_macro_by_name(&DbtMaterialization::Incremental.to_string())?;
 
-    let compiled_path =
-        model.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
-
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         fs_err!(
             ErrorCode::Generic,
@@ -605,11 +581,10 @@ pub fn materialize_microbatch_model(
     };
 
     let node_alias = model.__base_attr__.alias.clone();
-    // For runtime errors, surface the run path so users can inspect the SQL that was executed.
-    let run_display_path = model
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = model
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
-        .display()
-        .to_string();
+        .into_owned();
     let unique_id = model.__common_attr__.unique_id.clone();
 
     // Execute the materialization macro
@@ -626,8 +601,7 @@ pub fn materialize_microbatch_model(
         "model",
         &unique_id,
         &node_alias,
-        &run_display_path,
-        compiled_path,
+        run_path,
     );
 
     if override_warehouse {
@@ -669,16 +643,12 @@ pub fn materialize_snapshot(
 
     let macro_name = materialization_resolver.find_materialization_macro_by_name("snapshot")?;
 
-    // Always nested to avoid EISDIR when multiple snapshots share a file (dbt-core#12693).
-    let compiled_path =
-        snapshot.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
-
     let unique_id = snapshot.__common_attr__.unique_id.clone();
     let node_alias = snapshot.__base_attr__.alias.clone();
-    let run_display_path = snapshot
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = snapshot
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
-        .display()
-        .to_string();
+        .into_owned();
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -707,8 +677,7 @@ pub fn materialize_snapshot(
         "snapshot",
         &unique_id,
         &node_alias,
-        &run_display_path,
-        compiled_path,
+        run_path,
     );
 
     if override_warehouse {
@@ -1339,11 +1308,12 @@ pub fn materialize_function(
 
     let unique_id = function.__common_attr__.unique_id.clone();
     let node_alias = function.__base_attr__.alias.clone();
-    let original_file_path = function
-        .__common_attr__
-        .original_file_path
-        .to_string_lossy()
-        .to_string();
+    // TODO(path-unification): the matrix says functions report the run path, but get_node_path
+    // currently falls back to the definition path for functions (no run artifact). Extend the
+    // Executable arm in get_node_path to synthesize a run path for functions in the follow-up PR.
+    let run_path = function
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
 
     let _adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -1359,8 +1329,7 @@ pub fn materialize_function(
         "function",
         &unique_id,
         &node_alias,
-        &original_file_path,
-        compiled_path.clone(),
+        run_path,
     );
 
     // Write compiled SQL to file
