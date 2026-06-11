@@ -1,4 +1,6 @@
 mod data_provider_tests;
+mod dbt_emit_tests;
+mod dbt_middleware_tests;
 mod emit_tests;
 mod filter_tests;
 mod infra_tests;
