@@ -36,7 +36,9 @@ use dbt_schemas::{
 };
 use dbt_tasks_core::test_aggregation::GenericTestRelationships;
 use dbt_telemetry::ExecutionPhase;
+use dbt_yaml::Verbatim;
 use minijinja::Value;
+use tracing::debug;
 
 /// Macro to handle NULL values in Arrow arrays
 macro_rules! null_or {
@@ -523,6 +525,253 @@ pub fn materialize_model(
         let _ = adapter.restore_warehouse(&unique_id);
     }
     result
+}
+
+/// Checks whether the latest version pointer should be created for this model.
+///
+/// Returns `true` when:
+/// - The model is versioned (`version` is set)
+/// - It is the latest version (`version == latest_version`)
+/// - `latest_version_pointer.enabled` is explicitly `true`, OR `enabled` is `None` and
+///   the project flag `latest_version_pointer_enabled_by_default` is `true`
+pub fn should_create_latest_version_pointer(
+    model: &DbtModel,
+    runtime_config: &DbtRuntimeConfig,
+) -> bool {
+    let version = match &model.__model_attr__.version {
+        Some(v) => v,
+        None => return false,
+    };
+    let latest_version = match &model.__model_attr__.latest_version {
+        Some(v) => v,
+        None => return false,
+    };
+    if version.to_string() != latest_version.to_string() {
+        return false;
+    }
+    model
+        .deprecated_config
+        .latest_version_pointer
+        .as_ref()
+        .and_then(|p| p.enabled)
+        .unwrap_or(
+            runtime_config
+                .inner
+                .latest_version_pointer_enabled_by_default,
+        )
+}
+
+/// Determines the pointer view identifier by calling
+/// `generate_latest_version_pointer_alias(custom_alias_name, model)`.
+///
+/// The default macro (shipped in dbt-adapters) returns `custom_alias_name`
+/// if set, otherwise the unsuffixed model name. Users can override this macro
+/// in their project to customize pointer naming globally.
+fn latest_version_pointer_identifier(
+    model: &DbtModel,
+    jinja_env: &JinjaEnv,
+    context: &mut BTreeMap<String, Value>,
+) -> FsResult<String> {
+    let custom_alias = model
+        .deprecated_config
+        .latest_version_pointer
+        .as_ref()
+        .and_then(|p| p.alias.as_ref())
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty());
+
+    let alias_arg = custom_alias
+        .as_deref()
+        .map(Value::from)
+        .unwrap_or_else(|| Value::from(()));
+    context.insert("__lvp_custom_alias__".to_string(), alias_arg);
+
+    let macro_template = "{{ generate_latest_version_pointer_alias(__lvp_custom_alias__, model) }}";
+    let render_result = jinja_env.render_str(macro_template, &mut *context, &[]);
+    context.remove("__lvp_custom_alias__");
+
+    let rendered = render_result.map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to render `generate_latest_version_pointer_alias` macro for model '{}': {}. \
+             Check your project's macro override for syntax errors.",
+            model.__common_attr__.unique_id,
+            e
+        )
+    })?;
+
+    let trimmed = rendered.trim();
+    if trimmed.is_empty() {
+        return Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "`generate_latest_version_pointer_alias` returned an empty string for model '{}'. \
+             The macro must return a non-empty identifier.",
+            model.__common_attr__.unique_id,
+        ));
+    }
+    Ok(trimmed.to_string())
+}
+
+/// After the latest version of a versioned model materializes, create a view
+/// at the unsuffixed name (or custom alias) pointing to the latest version.
+///
+/// This mirrors dbt-core's `_materialize_latest_version_view` behavior: it
+/// creates a synthetic context for the view materialization macro, pointing
+/// the `this` relation at the pointer identifier with SQL = `SELECT * FROM <latest>`.
+///
+/// The pointer identifier is resolved via `generate_latest_version_pointer_alias`
+/// macro if defined, otherwise falls back to `config.alias` or the unsuffixed name.
+#[allow(clippy::too_many_arguments)]
+pub fn materialize_latest_version_pointer(
+    model: &DbtModel,
+    adapter_type: AdapterType,
+    runtime_config: &DbtRuntimeConfig,
+    materialization_resolver: &Arc<MaterializationResolver>,
+    jinja_env: Arc<JinjaEnv>,
+    base_context: &BTreeMap<String, Value>,
+    io_args: &IoArgs,
+) -> FsResult<Value> {
+    // Build a context from the original model first so macros can access `model`
+    let mut resolve_context = build_run_node_context(
+        model,
+        &model.deprecated_config,
+        adapter_type,
+        None,
+        base_context,
+        io_args,
+        ExecutionPhase::Run,
+        None,
+        runtime_config.dependencies.keys().cloned().collect(),
+    );
+
+    let pointer_identifier =
+        latest_version_pointer_identifier(model, &jinja_env, &mut resolve_context)?;
+    let model_alias = &model.__base_attr__.alias;
+
+    // Build the source relation (the versioned model's actual relation in the warehouse).
+    // This is pure in-memory construction (no warehouse round-trip).
+    let source_relation = do_create_relation(
+        adapter_type,
+        model.__base_attr__.database.clone(),
+        model.__base_attr__.schema.clone(),
+        Some(model_alias.clone()),
+        None,
+        model.__base_attr__.quoting,
+    )
+    .map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to create source relation for latest version pointer: {}",
+            e
+        )
+    })?;
+
+    // Collision check: compare source (latest version) and pointer as the warehouse
+    // would resolve them, not as raw strings. `identifier_as_resolved_str` applies the
+    // adapter's quoting/casing policy, so an unquoted alias like `DIM_CUSTOMERS` and a
+    // pointer name `dim_customers` are correctly detected as the same relation on
+    // case-insensitive adapters (e.g. Snowflake).
+    let pointer_relation = do_create_relation(
+        adapter_type,
+        model.__base_attr__.database.clone(),
+        model.__base_attr__.schema.clone(),
+        Some(pointer_identifier.clone()),
+        None,
+        model.__base_attr__.quoting,
+    )
+    .map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to create pointer relation for latest version pointer: {}",
+            e
+        )
+    })?;
+    let source_identifier = source_relation.identifier_as_resolved_str().map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to resolve source identifier: {}",
+            e
+        )
+    })?;
+    let pointer_resolved_identifier =
+        pointer_relation.identifier_as_resolved_str().map_err(|e| {
+            fs_err!(
+                ErrorCode::Generic,
+                "Failed to resolve pointer identifier: {}",
+                e
+            )
+        })?;
+    if source_identifier == pointer_resolved_identifier {
+        return Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "Cannot create latest version pointer: the latest version of '{}' \
+             is already aliased to '{}'. Set `latest_version_pointer: {{enabled: false}}` \
+             or remove the conflicting alias.",
+            model.__common_attr__.name,
+            pointer_identifier,
+        ));
+    }
+
+    let source_relation_str = source_relation.render_self_as_str();
+
+    let pointer_sql = format!("SELECT * FROM {source_relation_str}");
+
+    // Build a synthetic model with the pointer's alias and view materialization.
+    // Clone the model and override:
+    //   - alias → pointer identifier
+    //   - materialization → "view"
+    //   - hooks cleared (pre/post hooks should not run for the pointer)
+    //   - persist_docs cleared (avoid duplicating doc persistence)
+    let mut pointer_model = model.clone();
+    pointer_model.__base_attr__.alias = pointer_identifier.clone();
+    pointer_model.__base_attr__.materialized = DbtMaterialization::View;
+    pointer_model.deprecated_config.materialized = Some(DbtMaterialization::View);
+    pointer_model.deprecated_config.pre_hook = Verbatim::from(None);
+    pointer_model.deprecated_config.post_hook = Verbatim::from(None);
+    pointer_model.deprecated_config.persist_docs = None;
+
+    debug!(
+        "Creating latest version pointer view '{}' -> '{}' for model '{}'",
+        pointer_identifier, model_alias, model.__common_attr__.unique_id
+    );
+
+    let mut context = build_run_node_context(
+        &pointer_model,
+        &pointer_model.deprecated_config,
+        adapter_type,
+        None,
+        base_context,
+        io_args,
+        ExecutionPhase::Run,
+        None,
+        runtime_config.dependencies.keys().cloned().collect(),
+    );
+
+    let macro_name = materialization_resolver.find_materialization_macro_by_name("view")?;
+    context.insert("sql".to_string(), Value::from(pointer_sql.as_str()));
+    context.insert(
+        "compiled_code".to_string(),
+        Value::from(pointer_sql.as_str()),
+    );
+
+    let unique_id = format!(
+        "{}__latest_version_pointer",
+        model.__common_attr__.unique_id
+    );
+
+    let run_path = model
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
+
+    execute_materialization_macro(
+        jinja_env,
+        &macro_name,
+        &mut context,
+        "model",
+        &unique_id,
+        &pointer_identifier,
+        run_path,
+    )
 }
 
 /// Executes a single batch of a microbatch model.

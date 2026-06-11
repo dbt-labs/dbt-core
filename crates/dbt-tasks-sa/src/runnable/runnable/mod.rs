@@ -19,7 +19,7 @@ use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::utils::add_task_context;
 use dbt_schemas::schemas::manifest::saved_query::DbtSavedQuery;
 use dbt_schemas::schemas::{
-    DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
+    DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, InternalDbtNode,
     InternalDbtNodeAttributes, NodePathKind, Nodes,
 };
 use dbt_tasks_core::context::TaskRunnerCtx;
@@ -32,6 +32,10 @@ use tokio::task::JoinSet;
 use tracing::Instrument;
 use vortex_events::run_model_event;
 
+use crate::materialize::{
+    materialize_latest_version_pointer, should_create_latest_version_pointer,
+};
+use crate::runnable::cache::cache_materialization_return_value;
 use crate::runnable::model::{
     execute_microbatch_batch, execute_model_remote, prepare_microbatch_batches,
     try_get_microbatch_model,
@@ -310,6 +314,11 @@ impl Task for RunTask {
                                     ctx,
                                     &task_result,
                                 )?;
+                                // An empty event window yields no batches, so the target
+                                // relation is never materialized on a first run. Mirror
+                                // dbt-core's `if not relations` guard: only create the
+                                // pointer view when at least one batch executed.
+                                let had_batches = !batch_groups.is_empty();
                                 for group in batch_groups {
                                     let batch_span = tracing::Span::current();
                                     let mut batch_tasks = group
@@ -332,6 +341,51 @@ impl Task for RunTask {
                                         res.map_err(Into::into).flatten()??;
                                     }
                                 }
+
+                                // After all microbatch batches succeed, create the latest
+                                // version pointer view if applicable. Skip when no batches
+                                // executed (empty event window) — the source relation may
+                                // not exist yet, so pointing at it would fail.
+                                if had_batches
+                                    && let Some(model) =
+                                        self.node.as_any().downcast_ref::<DbtModel>()
+                                    && should_create_latest_version_pointer(
+                                        model,
+                                        ctx.runtime_config(),
+                                    )
+                                {
+                                    let mut base_context = ctx.inner.base_context.clone();
+                                    add_task_context(
+                                        &mut base_context,
+                                        model.common(),
+                                        &ctx.thread_id,
+                                    );
+                                    let model_clone = model.clone();
+                                    let ctx_clone = ctx.clone();
+                                    TaskOp::BlockingWithConnection {
+                                        f: Box::new(move || {
+                                            let relations_map = materialize_latest_version_pointer(
+                                                &model_clone,
+                                                ctx_clone.adapter_type(),
+                                                ctx_clone.runtime_config(),
+                                                &ctx_clone.inner.materialization_resolver,
+                                                ctx_clone.env.clone(),
+                                                &base_context,
+                                                &ctx_clone.inner.arg.io,
+                                            )?;
+                                            let _ = cache_materialization_return_value(
+                                                ctx_clone.env,
+                                                &relations_map,
+                                            );
+                                            Ok::<(), Box<dbt_common::FsError>>(())
+                                        }),
+                                        adapter_type,
+                                        max_threads,
+                                    }
+                                    .run()
+                                    .await??;
+                                }
+
                                 Ok(NodeStatus::Succeeded)
                             // Node is Saved Query
                             } else if let Some(saved_query) =

@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::materialize::{materialize_microbatch_model, materialize_model};
+use crate::materialize::{
+    materialize_latest_version_pointer, materialize_microbatch_model, materialize_model,
+    should_create_latest_version_pointer,
+};
 use crate::microbatch::{BatchContext, MicrobatchBuilder};
 use crate::runnable::cache::cache_materialization_return_value;
 use crate::runnable::microbatch::{build_event_time_mapping, is_incremental};
@@ -239,6 +242,20 @@ pub fn execute_model_remote(
         Err(e) => {
             return Err(e);
         }
+    }
+
+    // After successful materialization, create the latest version pointer view if applicable
+    if should_create_latest_version_pointer(model, ctx.runtime_config()) {
+        let relations_map = materialize_latest_version_pointer(
+            model,
+            ctx.adapter_type(),
+            ctx.runtime_config(),
+            &ctx.inner.materialization_resolver,
+            ctx.env.clone(),
+            &base_context,
+            &ctx.inner.arg.io,
+        )?;
+        let _ = cache_materialization_return_value(ctx.env.clone(), &relations_map);
     }
 
     let mut had_warning = false;
