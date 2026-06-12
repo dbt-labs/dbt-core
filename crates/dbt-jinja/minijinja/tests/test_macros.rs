@@ -441,6 +441,19 @@ fn test_unary_operator_with_function() {
 }
 
 #[test]
+fn test_macro_inline_type_alias() {
+    let env = Environment::new();
+    let rv = env
+        .render_str(
+            r#"{% macro greet(name: str) %}Hello {{ name }}{% endmacro %}{{ greet("world") }}"#,
+            context! {},
+            &[],
+        )
+        .unwrap();
+    assert_eq!(rv.trim(), "Hello world");
+}
+
+#[test]
 fn test_macro_default_arg_referencing_other_arg() {
     let env = Environment::new();
 

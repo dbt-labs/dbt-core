@@ -1533,6 +1533,10 @@ impl<'a> Parser<'a> {
                 }
             }
             args.push(ok!(self.parse_assign_name(false)));
+            if skip_token!(self, Token::Colon) {
+                // consume and discard dbt-style type annotation (e.g. `arg: str`)
+                expect_token!(self, Token::Ident(name) => name, "identifier");
+            }
             if skip_token!(self, Token::Assign) {
                 defaults.push(ok!(self.parse_expr()));
             } else if !defaults.is_empty() {
