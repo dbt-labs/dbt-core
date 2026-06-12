@@ -1787,8 +1787,22 @@ impl<'a> Parser<'a> {
     #[cfg(feature = "macros")]
     fn parse_snapshot(&mut self) -> Result<ast::Macro<'a>, Error> {
         let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
-        // Assuming self has access to an arena or string interner
         let macro_name = self.intern_string(&format!("snapshot_{name}"));
+        // dbt-core's regex extractor stops at the first non-identifier character and
+        // silently ignores everything else in the block tag, so `{% snapshot snp.sql %}`
+        // and `{% snapshot snp() %}` both become name "snp". Drain all trailing tokens
+        // using the same aggressive approach as `parse_doc` — see that function for the
+        // full rationale. We stop *before* BlockEnd here (rather than consuming it like
+        // `parse_doc` does) because `parse_snapshot_or_call_block_body` expects to
+        // consume BlockEnd itself.
+        loop {
+            match ok!(self.stream.current()) {
+                Some((&Token::BlockEnd, _)) | None => break,
+                Some(_) => {
+                    ok!(self.stream.next());
+                }
+            }
+        }
         self.parse_snapshot_or_call_block_body(Some(macro_name), span)
     }
 
@@ -1818,12 +1832,13 @@ impl<'a> Parser<'a> {
             None => return Err(unexpected_eof("identifier")),
         };
 
-        // Skip everything until BlockEnd, advancing on Token Errors
-        // This is specifically because doc macros can have random
-        // tokens, characters, spaces, etc. in the names
-        // (i.e. {% doc package.doc_name %%% $$$$ hehehe %} is valid)
-        // TODO(alex): One day deprecate this nonsense as it really a parsing bug in dbt
-        // that is unreported (but let's bug for bug repro fs for now)
+        // Skip everything until BlockEnd, advancing on Token Errors.
+        // This is specifically because doc macros can have random tokens, characters,
+        // spaces, etc. in the names (e.g. `{% doc package.doc_name %%% $$$$ hehehe %}`
+        // is valid in dbt-core). TODO(alex): One day deprecate this — it is really a
+        // parsing bug in dbt that is unreported (but let's bug-for-bug repro for now).
+        // See also: `parse_snapshot`, which uses the same aggressive drain pattern.
+        // Unlike here, that drain stops *before* consuming BlockEnd.
         loop {
             match self.stream.next() {
                 Ok(Some((Token::BlockEnd, _))) => break,
