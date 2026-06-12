@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Publish to PyPI when the stable track is promoted to production instead of at release-build time
-time: 2026-06-03T21:42:33.042399+05:30
-custom:
-    author: tauhid621
-    issue: ""
-    project: internal

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Add a dedicated dbt Core changelog (CHANGELOG-dbtcore.md) and sync it through copybara so dbt-core publishes its own changelog, starting at 2.0.0-alpha.1, separate from the dbt-fusion changelog
-time: 2026-06-01T20:35:50.121485+05:30
-custom:
-    author: "tauhid621"
-    issue: ""
-    project: internal

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: 'Centralize server version lookup: `DistInfoProvider` gains a default `server_version()` method so `env!("CARGO_PKG_VERSION")` is defined in one place.'
-time: 2026-06-04T17:20:33.396396-07:00
-custom:
-    author: eddowh
-    issue: "10794"
-    project: internal

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Clarify that users can enable strict static analysis by creating a free account using dbt login
-time: 2026-06-07T10:43:42.223391-04:00
-custom:
-    author: connie-carey
-    issue: ""
-    project: dbt-fusion

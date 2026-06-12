@@ -1,7 +1,0 @@
-kind: Fixes
-body: Add Snowflake typechecking support for BITMAP_TO_ARRAY, BITMAP_ABSOLUTE_POSITION, BITMAP_OR, SNOWFLAKE.CORTEX.FINETUNE ('SHOW'), and SYSTEM$EVALUATE_DATA_QUALITY_EXPECTATIONS_PERSIST_RESULT
-time: 2026-06-04T11:02:59.639837747-07:00
-custom:
-    author: ""
-    issue: "15113"
-    project: dbt-fusion
