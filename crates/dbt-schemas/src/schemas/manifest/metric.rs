@@ -20,7 +20,7 @@ use crate::schemas::{
     },
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtMetric {
     pub __common_attr__: CommonAttributes,
