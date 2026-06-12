@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: 'ci: publish dbt-core winget manifests to microsoft/winget-pkgs via wingetcreate update on stable releases'
+time: 2026-06-12T17:59:18.518479+05:30
+custom:
+    author: itsnamangoyal
+    issue: ""
+    project: dbt-fusion

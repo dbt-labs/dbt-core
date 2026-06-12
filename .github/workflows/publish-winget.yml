@@ -1,0 +1,119 @@
+# **what?**
+# Bump the published `dbtLabs.dbt-core` winget manifest to a new version
+# and submit a PR to `microsoft/winget-pkgs`.
+#
+# **why?**
+# Distribute dbt-core via winget so users can `winget install dbt-core`.
+#
+# **when?**
+# - workflow_call: invoked by release-v2.yml after `github-release` for
+#   non-prerelease versions. The GitHub Release must already host the
+#   Windows `.zip`.
+# - workflow_dispatch: ad-hoc manual run against an existing release.
+#
+# **how?**
+# `wingetcreate update <id> --version V --urls URL` updates the latest
+# published manifest from `microsoft/winget-pkgs`, rewriting the version +
+# installer URL and re-hashing the zip. With `--submit`, wingetcreate
+# pushes a branch to the **PAT user's personal fork** of
+# `microsoft/winget-pkgs` (auto-created if absent) and opens a PR upstream.
+#
+# Description / publisher / license / tags / moniker / binary_name all
+# carry over from the seed manifest already on upstream — they're
+# inherited, not threaded through CLI flags.
+#
+# Dry-run path uses `--out` instead of `--submit`, so manifests land in a
+# local dir and are uploaded as a workflow artifact.
+#
+# wingetcreate is Windows-only (ships as `WingetCreateCLI.exe` from
+# `microsoft/winget-create` releases), so this workflow runs on
+# `windows-latest` even though every other release publisher runs on
+# Ubuntu.
+#
+# Submit requires `secrets.FISHTOWN_BOT_PAT` — the same PAT the homebrew
+# tap flow uses; needs `public_repo` scope. wingetcreate submits from
+# `<pat-owner>/winget-pkgs`.
+
+name: Publish winget manifests
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version string (e.g. 2.0.0)"
+        type: string
+        required: true
+      dry_run:
+        description: "If true, render manifests locally without submitting upstream."
+        type: boolean
+        required: false
+        default: false
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer to publish (e.g. 2.0.0). Do NOT include the leading `v`."
+        required: true
+        type: string
+      dry_run:
+        description: "If true, render manifests locally but do NOT submit upstream."
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish-winget:
+    name: wingetcreate update + submit
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PACKAGE_IDENTIFIER: dbtLabs.dbt-core
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Compute installer URL
+        shell: bash
+        run: echo "INSTALLER_URL=https://github.com/dbt-labs/dbt-core/releases/download/v${VERSION}/dbt-core-${VERSION}-x86_64-pc-windows-msvc.zip" >> "$GITHUB_ENV"
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      - name: Render manifests (dry-run)
+        if: ${{ inputs.dry_run }}
+        shell: pwsh
+        run: |
+          Write-Host "→ $env:INSTALLER_URL"
+          .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER `
+            --version $env:VERSION `
+            --urls $env:INSTALLER_URL `
+            --out manifests-out
+          Write-Host "---rendered manifests---"
+          Get-ChildItem -Recurse manifests-out
+
+      - name: Upload rendered manifests
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests-${{ inputs.version }}
+          path: manifests-out/
+
+      - name: Submit to microsoft/winget-pkgs
+        if: ${{ !inputs.dry_run }}
+        shell: pwsh
+        env:
+          FISHTOWN_BOT_PAT: ${{ secrets.FISHTOWN_BOT_PAT }}
+        run: |
+          if (-not $env:FISHTOWN_BOT_PAT) {
+            Write-Error "FISHTOWN_BOT_PAT secret not set — cannot submit. Either dry-run or add the secret."
+            exit 1
+          }
+          Write-Host "→ $env:INSTALLER_URL"
+          .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER `
+            --version $env:VERSION `
+            --urls $env:INSTALLER_URL `
+            --submit `
+            --token $env:FISHTOWN_BOT_PAT
