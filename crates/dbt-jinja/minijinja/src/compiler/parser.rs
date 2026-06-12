@@ -633,6 +633,9 @@ impl<'a> Parser<'a> {
                         },
                         self.stream.expand_span(span),
                     ));
+                    // Allow postfix attribute/item access on the filter result,
+                    // e.g. `rows|first.col` is valid Jinja2 and means `(rows|first).col`.
+                    expr = ok!(self.parse_postfix(expr, span));
                 }
                 Some((Token::Ident("is"), _)) => {
                     ok!(self.stream.next());
