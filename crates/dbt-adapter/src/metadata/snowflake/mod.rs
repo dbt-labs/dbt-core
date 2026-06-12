@@ -19,6 +19,7 @@ use dbt_adapter_core::ExecutionPhase;
 use dbt_common::AsyncAdapterResult;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
+use dbt_frontend_common::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
@@ -1356,7 +1357,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                     continue;
                 }
 
-                let parsed = match dbt_frontend_common::Dialect::Snowflake.parse_fqn(&fqn) {
+                let parsed = match Dialect::Snowflake.parse_fqn(&fqn) {
                     Ok(p) => p,
                     Err(_) => continue, // unparseable — skip
                 };
@@ -1364,7 +1365,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                 acc.push(ViewDefinition {
                     fqn,
                     definition: definition.to_string(),
-                    dialect: dbt_frontend_common::Dialect::Snowflake,
+                    dialect: AdapterType::Snowflake,
                     default_catalog: parsed.catalog().name().to_string(),
                     default_schema: parsed.schema().name().to_string(),
                 });

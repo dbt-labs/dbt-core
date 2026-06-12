@@ -13,6 +13,7 @@ use dbt_common::FsResult;
 use dbt_common::collections::{DashMap, SccHashMap};
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_dag::schedule::Schedule;
+use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::compile::{
     DependencyValidationConfig, build_compile_node_context_inner,
@@ -81,6 +82,7 @@ pub struct TaskRunnerCtxInner {
     pub materialization_resolver: Arc<MaterializationResolver>,
     pub root_project_name: String,
     pub adapter_type: AdapterType,
+    pub sources_extractor: Arc<dyn SourcesExtractor>,
     pub dbt_profile: Arc<DbtProfile>,
     pub runtime_config: Arc<DbtRuntimeConfig>,
     pub generic_test_relationships: GenericTestRelationships,
@@ -109,6 +111,7 @@ impl TaskRunnerCtxInner {
         generic_test_relationships: GenericTestRelationships,
         span_manager: Arc<SpanManager<FsResult<NodeStatus>, SkipReason>>,
         execute: dbt_schemas::schemas::profiles::Execute,
+        sources_extractor: Arc<dyn SourcesExtractor>,
         run_cache_ctx: RunCacheCtx,
     ) -> Self {
         let runnable_set = schedule
@@ -149,6 +152,7 @@ impl TaskRunnerCtxInner {
             materialization_resolver: Arc::new(materialization_resolver),
             root_project_name: resolver_state.root_project_name.clone(),
             adapter_type: resolver_state.adapter_type,
+            sources_extractor,
             dbt_profile: Arc::new(resolver_state.dbt_profile.clone()),
             runtime_config: resolver_state.runtime_config.clone(),
             generic_test_relationships,

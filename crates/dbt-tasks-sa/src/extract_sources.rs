@@ -6,11 +6,12 @@
 use std::collections::{BTreeSet, HashSet};
 
 use core::ops::ControlFlow;
-use dbt_frontend_common::{Dialect, FullyQualifiedName, ident::Identifier};
+use dbt_adapter::AdapterType;
+use dbt_frontend_common::{FullyQualifiedName, ident::Identifier};
 use sqlparser::ast::{ObjectName, Query, TableFactor, Visit, Visitor};
 use sqlparser::parser::Parser;
 
-use crate::sql::dialect::sqlparser_dialect_for_frontend;
+use crate::sql::dialect::sqlparser_dialect_for;
 
 /// Errors returned by [`extract_sources_from_str`].
 #[derive(Debug)]
@@ -35,16 +36,15 @@ impl std::error::Error for ExtractSourcesError {}
 /// References to in-scope CTE aliases are excluded from the result.
 pub(crate) fn extract_sources_from_str(
     sql: &str,
-    dialect: Dialect,
+    adapter_type: AdapterType,
     default_catalog: &str,
     default_schema: &str,
 ) -> Result<BTreeSet<FullyQualifiedName>, ExtractSourcesError> {
-    let sp_dialect = sqlparser_dialect_for_frontend(dialect);
-    let statements = Parser::parse_sql(sp_dialect, sql)
+    let statements = Parser::parse_sql(sqlparser_dialect_for(adapter_type), sql)
         .map_err(|e| ExtractSourcesError::Parse(e.to_string()))?;
 
     let mut visitor = SourceExtractor {
-        dialect,
+        adapter_type,
         default_catalog,
         default_schema,
         cte_scopes: Vec::new(),
@@ -55,7 +55,7 @@ pub(crate) fn extract_sources_from_str(
 }
 
 struct SourceExtractor<'a> {
-    dialect: Dialect,
+    adapter_type: AdapterType,
     default_catalog: &'a str,
     default_schema: &'a str,
     /// Stack of CTE name sets, one per enclosing query scope. A name appears
@@ -103,7 +103,7 @@ impl Visitor for SourceExtractor<'_> {
 
 impl SourceExtractor<'_> {
     fn record_source(&mut self, name: &ObjectName) {
-        let parts = object_name_parts(name, self.dialect);
+        let parts = object_name_parts(name, self.adapter_type);
         if parts.is_empty() {
             return;
         }
@@ -125,8 +125,8 @@ impl SourceExtractor<'_> {
 /// dialect-specific case folding to each part (see [`fold_identifier_case`]).
 /// Falls back to splitting on `.` when the parser produced a single quoted
 /// identifier containing dots (BigQuery's `` `proj.ds.tbl` `` is one such form).
-fn object_name_parts(name: &ObjectName, dialect: Dialect) -> Vec<String> {
-    if should_split_dotted_quoted_ident(name, dialect) {
+fn object_name_parts(name: &ObjectName, adapter_type: AdapterType) -> Vec<String> {
+    if should_split_dotted_quoted_ident(name, adapter_type) {
         // Treat the inner dotted parts as quoted (they were inside backticks),
         // matching BigQuery's behavior where backtick-quoted segments preserve
         // case verbatim.
@@ -134,7 +134,7 @@ fn object_name_parts(name: &ObjectName, dialect: Dialect) -> Vec<String> {
             return only
                 .value
                 .split('.')
-                .map(|s| fold_identifier_case(s, Some('`'), dialect))
+                .map(|s| fold_identifier_case(s, Some('`'), adapter_type))
                 .collect();
         }
     }
@@ -142,7 +142,7 @@ fn object_name_parts(name: &ObjectName, dialect: Dialect) -> Vec<String> {
     name.0
         .iter()
         .filter_map(|p| p.as_ident())
-        .map(|i| fold_identifier_case(&i.value, i.quote_style, dialect))
+        .map(|i| fold_identifier_case(&i.value, i.quote_style, adapter_type))
         .collect()
 }
 
@@ -152,12 +152,18 @@ fn object_name_parts(name: &ObjectName, dialect: Dialect) -> Vec<String> {
 ///
 /// Kept narrow on purpose: extends only what's needed to match the existing
 /// extractor's output, without touching the shared identifier-parsing path.
-fn fold_identifier_case(value: &str, quote_style: Option<char>, dialect: Dialect) -> String {
+///
+/// TODO: rely on functions from the adapter crates that perform this operation
+fn fold_identifier_case(
+    value: &str,
+    quote_style: Option<char>,
+    adapter_type: AdapterType,
+) -> String {
     if quote_style.is_some() {
         return value.to_owned();
     }
-    match dialect {
-        Dialect::Snowflake => value.to_ascii_uppercase(),
+    match adapter_type {
+        AdapterType::Snowflake => value.to_ascii_uppercase(),
         _ => value.to_owned(),
     }
 }
@@ -166,14 +172,17 @@ fn fold_identifier_case(value: &str, quote_style: Option<char>, dialect: Dialect
 /// value contains dots; we split it for multi-part FQN construction. Limited
 /// to that dialect/shape so we don't accidentally split legitimate
 /// dot-containing identifiers in other dialects.
-fn should_split_dotted_quoted_ident(name: &ObjectName, dialect: Dialect) -> bool {
-    if !matches!(dialect, Dialect::Bigquery | Dialect::BigqueryUntyped) {
-        return false;
+fn should_split_dotted_quoted_ident(name: &ObjectName, adapter_type: AdapterType) -> bool {
+    use AdapterType::*;
+    match adapter_type {
+        Bigquery => {
+            let Some(only) = name.0.first().and_then(|p| p.as_ident()) else {
+                return false;
+            };
+            name.0.len() == 1 && only.quote_style.is_some() && only.value.contains('.')
+        }
+        _ => false,
     }
-    let Some(only) = name.0.first().and_then(|p| p.as_ident()) else {
-        return false;
-    };
-    name.0.len() == 1 && only.quote_style.is_some() && only.value.contains('.')
 }
 
 fn resolve_fqn(
@@ -204,18 +213,18 @@ mod tests {
 
     fn extract(
         sql: &str,
-        dialect: Dialect,
+        adapter_type: AdapterType,
         default_catalog: &str,
         default_schema: &str,
     ) -> BTreeSet<FullyQualifiedName> {
-        extract_sources_from_str(sql, dialect, default_catalog, default_schema).unwrap()
+        extract_sources_from_str(sql, adapter_type, default_catalog, default_schema).unwrap()
     }
 
     #[test]
     fn simple_bare_reference_gets_qualified() {
         let sources = extract(
             "CREATE TABLE x AS SELECT a FROM b",
-            Dialect::Trino,
+            AdapterType::Trino,
             "datafusion",
             "public",
         );
@@ -224,7 +233,12 @@ mod tests {
 
     #[test]
     fn partial_qualification_uses_default_catalog() {
-        let sources = extract("SELECT a FROM b.c", Dialect::Trino, "datafusion", "public");
+        let sources = extract(
+            "SELECT a FROM b.c",
+            AdapterType::Trino,
+            "datafusion",
+            "public",
+        );
         assert!(sources.contains(&fqn("datafusion", "b", "c")));
     }
 
@@ -232,7 +246,7 @@ mod tests {
     fn fully_qualified_kept_as_is() {
         let sources = extract(
             "CREATE TABLE x AS SELECT a FROM b.c.d",
-            Dialect::Trino,
+            AdapterType::Trino,
             "datafusion",
             "public",
         );
@@ -243,7 +257,7 @@ mod tests {
     fn bigquery_backtick_multipart_splits() {
         let sources = extract(
             "CREATE TABLE x AS SELECT a FROM `b.c.d`",
-            Dialect::Bigquery,
+            AdapterType::Bigquery,
             "datafusion",
             "public",
         );
@@ -254,7 +268,7 @@ mod tests {
     fn cte_alias_not_upstream() {
         let sources = extract(
             "with a as (select * from b) select * from a",
-            Dialect::Trino,
+            AdapterType::Trino,
             "datafusion",
             "public",
         );
@@ -266,7 +280,7 @@ mod tests {
     fn cte_alias_match_is_case_insensitive() {
         let sources = extract(
             "with A as (select * from b), C as (select * from a) select * from A,c",
-            Dialect::Trino,
+            AdapterType::Trino,
             "datafusion",
             "public",
         );
@@ -278,7 +292,7 @@ mod tests {
     fn ctas_with_nested_ctes() {
         let sources = extract(
             "CREATE TABLE x AS with a as (select * from b), c as (select * from a, b) select * from c",
-            Dialect::Trino,
+            AdapterType::Trino,
             "datafusion",
             "public",
         );
@@ -291,7 +305,7 @@ mod tests {
         let sources = extract(
             "CREATE TABLE x AS SELECT j1_string, j2_string, \
              (SELECT count(*) FROM J1, J3) as c FROM j1, j2",
-            Dialect::Trino,
+            AdapterType::Trino,
             "dataFusion",
             "PUBLIC",
         );
@@ -310,7 +324,7 @@ mod tests {
                 SELECT r.x + 1 FROM r WHERE r.x < 10
              )
              SELECT * FROM r",
-            Dialect::Snowflake,
+            AdapterType::Snowflake,
             "mydb",
             "myschema",
         );
@@ -322,7 +336,7 @@ mod tests {
     fn duplicate_references_deduplicated() {
         let sources = extract(
             "select * from c union all select * from a.b.c",
-            Dialect::Snowflake,
+            AdapterType::Snowflake,
             "a",
             "b",
         );
@@ -337,7 +351,7 @@ mod tests {
         // cache key matches.
         let sources = extract(
             "CREATE VIEW v AS SELECT * FROM upstream_t",
-            Dialect::Snowflake,
+            AdapterType::Snowflake,
             "DB",
             "S",
         );
@@ -352,7 +366,7 @@ mod tests {
     fn snowflake_quoted_identifiers_preserve_case() {
         let sources = extract(
             r#"SELECT * FROM "mydb"."myschema"."mytbl""#,
-            Dialect::Snowflake,
+            AdapterType::Snowflake,
             "DB",
             "S",
         );
@@ -366,7 +380,7 @@ mod tests {
     fn bigquery_unquoted_identifiers_preserve_case() {
         let sources = extract(
             "SELECT * FROM proj.ds.MyTbl",
-            Dialect::Bigquery,
+            AdapterType::Bigquery,
             "datafusion",
             "public",
         );
@@ -380,7 +394,7 @@ mod tests {
     fn create_view_yields_inner_query_sources() {
         let sources = extract(
             "CREATE OR REPLACE VIEW mydb.myschema.v AS SELECT * FROM mydb.myschema.t",
-            Dialect::Snowflake,
+            AdapterType::Snowflake,
             "mydb",
             "myschema",
         );

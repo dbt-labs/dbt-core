@@ -1215,7 +1215,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
                 acc.push(ViewDefinition {
                     fqn: rel.semantic_fqn(),
                     definition,
-                    dialect: dbt_frontend_common::Dialect::Redshift,
+                    dialect: AdapterType::Redshift,
                     default_catalog: rel.database_as_str().unwrap_or_default().to_string(),
                     default_schema: rel.schema_as_str().unwrap_or_default().to_string(),
                 });

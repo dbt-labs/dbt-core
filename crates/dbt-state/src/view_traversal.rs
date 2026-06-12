@@ -2,7 +2,7 @@
 //!
 //! `ViewDefinitionTraverser` wraps a `MetadataAdapter` and drives a BFS over
 //! the dependency graph implied by view DDL. Each fetched view's SQL is
-//! parsed via `TypeOps::extract_sources_from_str` to extract upstream
+//! parsed via `SourcesExtractor::extract_upstreams` to extract upstream
 //! references; new references become the next BFS frontier.
 //!
 //! Concurrency: in-flight fetches run as `tokio::task::JoinSet` tasks; the
@@ -19,9 +19,9 @@ use dashmap::DashMap;
 use dbt_adapter::AdapterType;
 use dbt_adapter::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_adapter::metadata::{MetadataAdapter, ViewDefinition};
-use dbt_adapter::sql_types::TypeOps;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_frontend_common::FullyQualifiedName;
+use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use tokio::task::JoinSet;
 use tracing::Instrument as _;
@@ -63,9 +63,7 @@ pub struct ViewDefinitionTraverser {
     /// The metadata adapter used to fetch view definitions.
     adapter: Arc<dyn MetadataAdapter>,
 
-    /// Dialect-aware operations.
-    /// Currently only used to extract reference to upstream from view SQL.
-    type_ops: Arc<dyn TypeOps>,
+    sources_extractor: Arc<dyn SourcesExtractor>,
 
     /// Long-lived deduplication cache. Lives for the lifetime of the
     /// traverser; reused across every `traverse()` call. The value is
@@ -77,10 +75,13 @@ pub struct ViewDefinitionTraverser {
 
 impl ViewDefinitionTraverser {
     /// Create a traverser bound to the given adapter, with an empty cache.
-    pub fn new(adapter: Arc<dyn MetadataAdapter>, type_ops: Arc<dyn TypeOps>) -> Self {
+    pub fn new(
+        adapter: Arc<dyn MetadataAdapter>,
+        sources_extractor: Arc<dyn SourcesExtractor>,
+    ) -> Self {
         Self {
             adapter,
-            type_ops,
+            sources_extractor,
             cache: Arc::new(DashMap::new()),
         }
     }
@@ -98,9 +99,9 @@ impl ViewDefinitionTraverser {
 
     /// Recursively traverse view definitions starting from the given relations.
     ///
-    /// For each fetched view definition, parses its SQL via `sqlparser`
-    /// (`dbt_adapter::sql::extract_sources`) to extract upstream references and
-    /// continues the traversal with those as the next BFS frontier.
+    /// For each fetched view definition, parses its SQL via the
+    /// `SourcesExtractor` to extract upstream references and continues the
+    /// traversal with those as the next BFS frontier.
     ///
     /// Sequential `traverse()` calls reuse the cache, so a view fetched on one
     /// call is not re-fetched on a later one. Two concurrent calls that race
@@ -131,12 +132,12 @@ impl ViewDefinitionTraverser {
                 let cached = self.cache.get(&fqn).map(|e| e.value().clone());
                 match cached {
                     Some(Some(view_def)) => record_and_enqueue(
+                        adapter_type,
                         &mut view_definitions,
                         &mut queue,
                         &seen_fqns,
                         &view_def,
-                        adapter_type,
-                        &*self.type_ops,
+                        self.sources_extractor.as_ref(),
                     )?,
                     Some(None) => { /* leaf: not a view, skip. */ }
                     None => to_fetch.push(rel),
@@ -198,12 +199,12 @@ impl ViewDefinitionTraverser {
 
             for v in views {
                 record_and_enqueue(
+                    adapter_type,
                     &mut view_definitions,
                     &mut queue,
                     &seen_fqns,
                     &v,
-                    adapter_type,
-                    &*self.type_ops,
+                    self.sources_extractor.as_ref(),
                 )?;
             }
         }
@@ -233,8 +234,8 @@ impl ViewDefinitionTraverser {
 
 /// Parse `view_def.definition` and return the qualified upstream references.
 ///
-/// Routes through `TypeOps::extract_sources_from_str`, using `type_ops`'s
-/// adapter (which carries the dialect) and `view_def.default_catalog` /
+/// Routes through `SourcesExtractor::extract_upstreams`, using `adapter_type`
+/// (which carries the dialect) and `view_def.default_catalog` /
 /// `view_def.default_schema`. Returns each upstream reference as a
 /// `FullyQualifiedName` (parsed catalog/schema/table parts), not a stringified
 /// form.
@@ -247,11 +248,13 @@ impl ViewDefinitionTraverser {
 /// these parts and uses `semantic_fqn()` as the cache key, ensuring
 /// byte-identical keys with seed relations.
 fn extract_referenced_tables(
+    adapter_type: AdapterType,
     view_def: &ViewDefinition,
-    type_ops: &dyn TypeOps,
+    sources_extractor: &dyn SourcesExtractor,
 ) -> AdapterResult<BTreeSet<FullyQualifiedName>> {
-    type_ops
+    sources_extractor
         .extract_upstreams(
+            adapter_type,
             &view_def.definition,
             &view_def.default_catalog,
             &view_def.default_schema,
@@ -272,15 +275,15 @@ fn extract_referenced_tables(
 /// `seen_tables` is consulted (read-only) to avoid pushing duplicates; the
 /// queue-drain step is responsible for actually inserting into `seen_tables`.
 fn record_and_enqueue(
+    adapter_type: AdapterType,
     view_definitions: &mut BTreeMap<String, Arc<ViewDefinition>>,
     queue: &mut VecDeque<Arc<dyn BaseRelation>>,
     seen_tables: &BTreeSet<String>,
     view_def: &Arc<ViewDefinition>,
-    adapter_type: AdapterType,
-    type_ops: &dyn TypeOps,
+    sources_extractor: &dyn SourcesExtractor,
 ) -> AdapterResult<()> {
     view_definitions.insert(view_def.fqn.clone(), Arc::clone(view_def));
-    let refs = extract_referenced_tables(view_def, type_ops)?;
+    let refs = extract_referenced_tables(adapter_type, view_def, sources_extractor)?;
     for ref_fqn in refs {
         // `ref_fqn` is a `FullyQualifiedName` with separate catalog/schema/table
         // identifiers. Build a synthetic `BaseRelation` from those parts so
@@ -331,14 +334,13 @@ mod tests {
     use dbt_adapter::metadata::{
         CatalogAndSchema, MetadataAdapter, MetadataFreshness, RelationSchemaPair, RelationVec,
     };
-    use dbt_adapter::sql_types::DefaultTypeOps;
     use dbt_adapter_core::ExecutionPhase;
     use dbt_common::AsyncAdapterResult;
     use dbt_common::cancellation::CancellationToken;
-    use dbt_frontend_common::Dialect;
     use dbt_schemas::schemas::common::ResolvedQuoting;
     use dbt_schemas::schemas::legacy_catalog::{CatalogTable, ColumnMetadata};
     use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
+    use dbt_tasks_sa::sources_extractor::DefaultSourcesExtractor;
     use parking_lot::Mutex as PlMutex;
     use std::collections::{BTreeMap, HashMap};
 
@@ -469,7 +471,7 @@ mod tests {
                         out.push(ViewDefinition {
                             fqn: fqn.clone(),
                             definition: sql.clone(),
-                            dialect: Dialect::Snowflake,
+                            dialect: AdapterType::Snowflake,
                             default_catalog: "DB".to_string(),
                             default_schema: "S".to_string(),
                         });
@@ -503,11 +505,11 @@ mod tests {
         let v = ViewDefinition {
             fqn: r#""DB"."S"."V""#.to_string(),
             definition: "CREATE VIEW v AS SELECT 1 AS x".to_string(),
-            dialect: Dialect::Snowflake,
+            dialect: AdapterType::Snowflake,
             default_catalog: "DB".to_string(),
             default_schema: "S".to_string(),
         };
-        let refs = extract_referenced_tables(&v, &DefaultTypeOps::new(AdapterType::Snowflake))
+        let refs = extract_referenced_tables(AdapterType::Snowflake, &v, &DefaultSourcesExtractor)
             .expect("parse ok");
         assert!(refs.is_empty(), "expected no upstream refs, got {refs:?}");
     }
@@ -517,11 +519,11 @@ mod tests {
         let v = ViewDefinition {
             fqn: r#""DB"."S"."V""#.to_string(),
             definition: "CREATE VIEW v AS SELECT * FROM upstream_t".to_string(),
-            dialect: Dialect::Snowflake,
+            dialect: AdapterType::Snowflake,
             default_catalog: "DB".to_string(),
             default_schema: "S".to_string(),
         };
-        let refs = extract_referenced_tables(&v, &DefaultTypeOps::new(AdapterType::Snowflake))
+        let refs = extract_referenced_tables(AdapterType::Snowflake, &v, &DefaultSourcesExtractor)
             .expect("parse ok");
         // The unqualified `upstream_t` must come back qualified against the
         // view's default catalog/schema. Snowflake normalizes unquoted
@@ -540,10 +542,8 @@ mod tests {
         graph.insert(v_fqn.clone(), Some("SELECT 1 AS x".to_string()));
 
         let adapter = Arc::new(MockAdapter::new(graph)) as Arc<dyn MetadataAdapter>;
-        let traverser = ViewDefinitionTraverser::new(
-            Arc::clone(&adapter),
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser =
+            ViewDefinitionTraverser::new(Arc::clone(&adapter), Arc::new(DefaultSourcesExtractor));
 
         let result = traverser
             .traverse(&[rel("V")], CancellationToken::never_cancels())
@@ -571,10 +571,8 @@ mod tests {
         graph.insert(t1.clone(), None); // table, not a view
 
         let adapter = Arc::new(MockAdapter::new(graph)) as Arc<dyn MetadataAdapter>;
-        let traverser = ViewDefinitionTraverser::new(
-            Arc::clone(&adapter),
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser =
+            ViewDefinitionTraverser::new(Arc::clone(&adapter), Arc::new(DefaultSourcesExtractor));
 
         let result = traverser
             .traverse(&[rel("V1")], CancellationToken::never_cancels())
@@ -598,11 +596,11 @@ mod tests {
         let v = ViewDefinition {
             fqn: r#""DB"."S"."V""#.to_string(),
             definition: format!("SELECT * FROM {}", original_fqn),
-            dialect: Dialect::Snowflake,
+            dialect: AdapterType::Snowflake,
             default_catalog: "DB".to_string(),
             default_schema: "S".to_string(),
         };
-        let refs = extract_referenced_tables(&v, &DefaultTypeOps::new(AdapterType::Snowflake))
+        let refs = extract_referenced_tables(AdapterType::Snowflake, &v, &DefaultSourcesExtractor)
             .expect("parse ok");
         assert_eq!(refs.len(), 1);
         let parsed = refs.into_iter().next().unwrap();
@@ -629,10 +627,7 @@ mod tests {
 
         let mock = Arc::new(MockAdapter::new(graph));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         let result = traverser
             .traverse(&[rel("V1")], CancellationToken::never_cancels())
@@ -657,10 +652,7 @@ mod tests {
 
         let mock = Arc::new(MockAdapter::new(graph));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         // If the cycle isn't terminated, this test hangs forever.
         // Wrap in a timeout to fail fast.
@@ -686,10 +678,7 @@ mod tests {
 
         let mock = Arc::new(MockAdapter::new(graph));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         traverser
             .traverse(&[rel("V1")], CancellationToken::never_cancels())
@@ -712,10 +701,7 @@ mod tests {
 
         let mock = Arc::new(MockAdapter::new(graph).with_error(v1.clone(), "boom"));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         let err = traverser
             .traverse(&[rel("V1")], CancellationToken::never_cancels())
@@ -731,15 +717,12 @@ mod tests {
         let mock =
             Arc::new(MockAdapter::new(HashMap::new()).with_error(v1.clone(), "must not fetch"));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         traverser.insert_view_definition(ViewDefinition {
             fqn: v1.clone(),
             definition: "SELECT 1".to_string(),
-            dialect: Dialect::Snowflake,
+            dialect: AdapterType::Snowflake,
             default_catalog: "DB".to_string(),
             default_schema: "S".to_string(),
         });
@@ -762,10 +745,7 @@ mod tests {
 
         let mock = Arc::new(MockAdapter::new(graph));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         traverser
             .traverse(&[rel("V1")], CancellationToken::never_cancels())
@@ -776,7 +756,7 @@ mod tests {
         traverser.insert_view_definition(ViewDefinition {
             fqn: v1.clone(),
             definition: "SELECT 'compiled'".to_string(),
-            dialect: Dialect::Snowflake,
+            dialect: AdapterType::Snowflake,
             default_catalog: "DB".to_string(),
             default_schema: "S".to_string(),
         });
@@ -801,15 +781,12 @@ mod tests {
 
         let mock = Arc::new(MockAdapter::new(graph));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         traverser.insert_view_definition(ViewDefinition {
             fqn: v.clone(),
             definition: format!("SELECT * FROM {}", t),
-            dialect: Dialect::Snowflake,
+            dialect: AdapterType::Snowflake,
             default_catalog: "DB".to_string(),
             default_schema: "S".to_string(),
         });
@@ -836,10 +813,7 @@ mod tests {
         // Big latency so we have time to cancel.
         let mock = Arc::new(MockAdapter::new(graph).with_latency(2000));
         let adapter: Arc<dyn MetadataAdapter> = mock.clone();
-        let traverser = ViewDefinitionTraverser::new(
-            adapter,
-            Arc::new(DefaultTypeOps::new(AdapterType::Snowflake)),
-        );
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
 
         // CancellationTokenSource lets us actually cancel.
         let source = dbt_common::cancellation::CancellationTokenSource::new();

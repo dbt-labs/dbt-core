@@ -1218,7 +1218,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             acc.push(ViewDefinition {
                 fqn,
                 definition: view_text,
-                dialect: Dialect::Databricks,
+                dialect: AdapterType::Databricks,
                 default_catalog,
                 default_schema,
             });

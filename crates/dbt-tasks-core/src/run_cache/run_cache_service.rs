@@ -29,8 +29,8 @@ use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
-use dbt_frontend_common::Dialect;
 use dbt_frontend_common::ident::FullyQualifiedName;
+use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_schemas::schemas::common::{DbtMaterialization, ModelFreshnessRules, ResolvedQuoting};
 use dbt_schemas::schemas::profiles::DbConfig;
 use dbt_schemas::schemas::properties::ModelState;
@@ -452,7 +452,7 @@ pub fn insert_compiled_view_definition(
     traverser.insert_view_definition(dbt_adapter::metadata::ViewDefinition {
         fqn,
         definition: compiled_sql.to_string(),
-        dialect,
+        dialect: adapter_type,
         default_catalog,
         default_schema,
     });
@@ -2402,14 +2402,16 @@ fn parse_sql_relations_for_run_cache(
     let Some(adapter) = ctx.env.get_adapter_ref() else {
         return Ok(BTreeMap::new());
     };
-    let type_ops = adapter.engine().type_ops();
+    let type_ops = adapter.engine().type_ops().as_ref();
+    let sources_extractor = ctx.inner.sources_extractor.as_ref();
     parse_sql_relations_for_adapter(
         ctx.adapter_type(),
         sql,
         default_catalog,
         default_schema,
         quoted_name_ignore_case,
-        type_ops.as_ref(),
+        sources_extractor,
+        type_ops,
     )
 }
 
@@ -2419,18 +2421,23 @@ fn parse_sql_relations_for_adapter(
     default_catalog: &str,
     default_schema: &str,
     quoted_name_ignore_case: bool,
+    sources_extractor: &dyn SourcesExtractor,
     type_ops: &dyn TypeOps,
 ) -> FsResult<BTreeMap<String, Arc<dyn BaseRelation>>> {
-    let Some(dialect) = dialect_of(adapter_type) else {
-        return Ok(BTreeMap::new());
-    };
-
-    let upstreams = type_ops.extract_upstreams(
-        sql,
-        default_catalog,
-        default_schema,
-        quoted_name_ignore_case,
-    )?;
+    let upstreams = sources_extractor
+        .extract_upstreams(
+            adapter_type,
+            sql,
+            default_catalog,
+            default_schema,
+            quoted_name_ignore_case,
+        )
+        .map_err(|e| {
+            fs_err!(
+                ErrorCode::Generic,
+                "failed to extract upstreams from SQL: {e}"
+            )
+        })?;
 
     let mut relations = BTreeMap::new();
     for upstream in upstreams.into_iter() {
@@ -2443,7 +2450,7 @@ fn parse_sql_relations_for_adapter(
             upstream.schema().to_string(),
             Some(upstream.table().to_string()),
             None,
-            quoting_for_upstream(dialect, &upstream, type_ops),
+            quoting_for_upstream(&upstream, type_ops),
         )?;
         // Canonical key so a parser-seen relation collapses against the same
         // upstream surfaced via DAG dependencies (`relation_for_node`) and the
@@ -2456,7 +2463,6 @@ fn parse_sql_relations_for_adapter(
 }
 
 fn quoting_for_upstream(
-    _dialect: Dialect,
     upstream: &dbt_frontend_common::named_reference::NamedReference<FullyQualifiedName>,
     type_ops: &dyn TypeOps,
 ) -> ResolvedQuoting {

@@ -16,7 +16,6 @@ use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
-use dbt_frontend_common::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::legacy_catalog::*;
@@ -1332,7 +1331,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                 acc.push(ViewDefinition {
                     fqn: input_rel.semantic_fqn(),
                     definition: definition.to_string(),
-                    dialect: Dialect::Bigquery,
+                    dialect: AdapterType::Bigquery,
                     default_catalog: catalog.to_string(),
                     default_schema: schema.to_string(),
                 });
