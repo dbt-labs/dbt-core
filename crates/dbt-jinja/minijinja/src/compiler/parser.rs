@@ -1870,7 +1870,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_do(&mut self) -> Result<ast::Do<'a>, Error> {
-        let expr = ok!(self.parse_expr());
+        let expr = ok!(self.parse_expr_or_implied_tuple());
         Ok(ast::Do { expr })
     }
 
