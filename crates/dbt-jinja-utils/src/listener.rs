@@ -359,8 +359,8 @@ impl TypecheckingEventListener for WarningPrinter {
         let mut warnings: Vec<_> = self
             .pending_warnings
             .borrow()
-            .iter()
-            .flat_map(|(_, warnings)| warnings.iter().cloned())
+            .values()
+            .flat_map(|warnings| warnings.iter().cloned())
             .collect();
         warnings.sort_by(|(loc1, msg1), (loc2, msg2)| {
             (loc1.line, loc1.col, msg1).cmp(&(loc2.line, loc2.col, msg2))

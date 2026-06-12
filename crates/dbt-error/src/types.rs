@@ -300,8 +300,10 @@ impl FsError {
         if let Some(location) = &self.location {
             s.push_str(&format!("\n  --> {location}"));
         }
-        if is_sdf_debug() && self.cause.is_some() {
-            s.push_str(&format!("\n{:#?}", self.cause.as_ref().unwrap()));
+        if is_sdf_debug()
+            && let Some(cause) = &self.cause
+        {
+            s.push_str(&format!("\n{:#?}", cause));
         }
         if let Some(backtrace) = self.get_backtrace() {
             s.push_str(&format!("\n{backtrace}"));
@@ -317,8 +319,10 @@ impl FsError {
         if let Some(location) = &self.location {
             s.push_str(&format!("\n  --> {location}"));
         }
-        if is_sdf_debug() && self.cause.is_some() {
-            s.push_str(&format!("\n{:#?}", self.cause.as_ref().unwrap()));
+        if is_sdf_debug()
+            && let Some(cause) = &self.cause
+        {
+            s.push_str(&format!("\n{:#?}", cause));
         }
         if let Some(backtrace) = self.get_backtrace() {
             s.push_str(&format!("\n{backtrace}"));

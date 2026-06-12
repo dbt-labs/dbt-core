@@ -80,8 +80,8 @@ impl Task for DbtRecordTask {
                 ("DBT_RECORDER_TYPES".to_string(), "Available".to_string()),
                 ("DBT_RECORDER_MODE".to_string(), "RECORD".to_string()),
             ];
-            let mut goldie_index = task_index;
-            for record_cmd in self.record_cmds.iter() {
+
+            for (goldie_index, record_cmd) in (task_index..).zip(self.record_cmds.iter()) {
                 let mut config = base_record_config.clone();
                 let record_cmd_args = record_cmd
                     .split_whitespace()
@@ -110,7 +110,6 @@ impl Task for DbtRecordTask {
                     .join(format!("manifest_{goldie_index}.json"));
                 stdfs::write(recordings_path, recordings)?;
                 stdfs::write(manifest_path, manifest)?;
-                goldie_index += 1;
             }
         }
         Ok(())

@@ -443,17 +443,12 @@ pub fn resolve_top_level_metrics(
             MetricType::Ratio => {
                 let maybe_numerator = type_params.numerator.clone();
                 let maybe_denominator = type_params.denominator.clone();
-                if maybe_numerator.is_none() || maybe_denominator.is_none() {
-                    vec![]
+                if let Some(numerator) = maybe_numerator
+                    && let Some(denominator) = maybe_denominator
+                {
+                    vec![numerator.name, denominator.name]
                 } else {
-                    vec![
-                        maybe_numerator
-                            .expect("Numerator must be specified for ratio metric")
-                            .name,
-                        maybe_denominator
-                            .expect("Denominator must be specified for ratio metric")
-                            .name,
-                    ]
+                    vec![]
                 }
             }
             MetricType::Derived => {
@@ -474,16 +469,10 @@ pub fn resolve_top_level_metrics(
                     .unwrap_or_default()
                     .metric;
 
-                if maybe_cumulative_metric.is_none() {
-                    vec![]
+                if let Some(metric) = maybe_cumulative_metric {
+                    vec![metric.name]
                 } else {
-                    vec![
-                        maybe_cumulative_metric
-                            .expect(
-                                "cumulative_type_params.metric must exist for cumulative metric",
-                            )
-                            .name,
-                    ]
+                    vec![]
                 }
             }
             MetricType::Conversion => {

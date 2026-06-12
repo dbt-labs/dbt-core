@@ -149,15 +149,8 @@ impl DeferState {
             nodes = run_cache_defer_nodes.or(nodes);
         }
 
-        let deferred: HashMap<CanonicalFqn, String> = if nodes.is_some() {
-            let deferred = defer_common(
-                arg,
-                resolved_state,
-                nodes.as_mut().unwrap(),
-                schedule,
-                &adapter,
-            )
-            .await?;
+        let deferred: HashMap<CanonicalFqn, String> = if let Some(ref mut nodes) = nodes {
+            let deferred = defer_common(arg, resolved_state, nodes, schedule, &adapter).await?;
             rewrite_recorded_relation_calls_with_deferral(resolved_state, &deferred.relation_remap);
             deferred.deferred_unique_ids
         } else {

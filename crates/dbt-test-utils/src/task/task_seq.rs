@@ -248,7 +248,7 @@ async fn run_test_tasks(
         match task.run(project_env, test_env, index).await {
             Ok(()) => {}
             Err(TestError::GoldieMismatch(p)) => {
-                patches.extend(p.into_iter());
+                patches.extend(p);
             }
             Err(e) => return Err(e),
         }
