@@ -1,7 +1,0 @@
-kind: Fixes
-body: Implement uniform translation in DuckDB
-time: 2026-06-03T10:13:22.393423-04:00
-custom:
-    author: mach-kernel
-    issue: "10809"
-    project: dbt-fusion

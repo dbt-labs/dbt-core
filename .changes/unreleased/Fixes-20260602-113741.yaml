@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix manifest deserialization failing on no configs
-time: 2026-06-02T11:37:41.096857973-07:00
-custom:
-    author: ajhlee-dbt
-    issue: ""
-    project: dbt-fusion

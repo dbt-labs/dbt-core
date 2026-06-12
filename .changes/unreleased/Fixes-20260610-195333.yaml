@@ -1,7 +1,0 @@
-kind: Fixes
-body: Singular tests whose ref() or source() calls target a node that doesn't exist in the project are now excluded from the schedule (NodeNotFoundOrDisabled warning at parse time, no execution), matching dbt-core behavior. Previously Fusion scheduled and executed those tests, hitting a dbt1501 render error.
-time: 2026-06-10T19:53:33.929278-07:00
-custom:
-    author: akbog
-    issue: ""
-    project: dbt-fusion

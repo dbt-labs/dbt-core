@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Only send Slack success notification for schema sync when a PR is actually created
-time: 2026-06-05T10:56:48.782772+05:30
-custom:
-    author: "tauhid621"
-    issue: ""
-    project: internal

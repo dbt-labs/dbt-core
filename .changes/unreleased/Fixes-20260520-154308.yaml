@@ -1,7 +1,0 @@
-kind: Fixes
-body: BigQuery source freshness now correctly handles dotted project IDs (e.g. mycompany.io) by using relation component accessors instead of splitting the FQN on '.'. Also fixes a secondary bug where each per-dataset query included a redundant table_id IN (...) filter built from relations in unrelated datasets.
-time: 2026-05-20T15:43:08.509272592-07:00
-custom:
-    author: xuliangs
-    issue: "1450"
-    project: dbt-fusion

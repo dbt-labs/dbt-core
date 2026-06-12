@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Strip private fs PR references from commit messages synced to dbt-core
-time: 2026-06-04T14:30:49.063676+05:30
-custom:
-    author: tauhid621
-    issue: ""
-    project: internal

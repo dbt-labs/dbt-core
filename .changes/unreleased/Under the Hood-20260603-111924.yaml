@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Speed up Copybara test workflows with sccache distributed compiler caching
-time: 2026-06-03T11:19:24.053866+05:30
-custom:
-    author: tauhid621
-    issue: ""
-    project: internal

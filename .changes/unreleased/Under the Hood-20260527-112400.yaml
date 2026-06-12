@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Add reusable `publish-homebrew.yml` workflow that renders the formula and pushes it to a Homebrew tap. Used by the release pipeline and invokable ad-hoc via `workflow_dispatch`.
-time: 2026-05-27T11:24:00.173141+05:30
-custom:
-    author: itsnamangoyal
-    issue: ""
-    project: internal
