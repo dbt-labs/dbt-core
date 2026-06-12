@@ -1,0 +1,7 @@
+kind: Fixes
+body: Surface cached data test failures in dbt State builds
+time: 2026-06-09T14:44:37.87798-05:00
+custom:
+    author: kczimm
+    issue: "10911"
+    project: dbt-fusion

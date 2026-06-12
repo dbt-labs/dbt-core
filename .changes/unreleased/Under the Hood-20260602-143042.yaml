@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: (fabric) adds local dev creds setup, plus an end to end test
+time: 2026-06-02T14:30:42.828475071-07:00
+custom:
+    author: xuliangs
+    issue: ""
+    project: dbt-fusion

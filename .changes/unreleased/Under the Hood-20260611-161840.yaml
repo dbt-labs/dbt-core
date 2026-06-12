@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Errors and logs now show phase accurate paths for analyses, funcs, seeds and sources
+time: 2026-06-11T16:18:40.022633-05:00
+custom:
+    author: HannanNaeem
+    issue: ""
+    project: dbt-fusion

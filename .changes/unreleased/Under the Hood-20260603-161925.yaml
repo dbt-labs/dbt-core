@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Use lag_tolerance in freshness reuse messages
+time: 2026-06-03T16:19:25.612108-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: dbt-fusion

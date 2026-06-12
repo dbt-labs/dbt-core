@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: LP decompiler hoists structurally equivalent subqueries with more than one usage into WITH
+time: 2026-06-02T10:59:40.053221-04:00
+custom:
+    author: mach-kernel
+    issue: ""
+    project: dbt-fusion

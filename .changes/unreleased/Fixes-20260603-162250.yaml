@@ -1,0 +1,7 @@
+kind: Fixes
+body: Implement array_construct_compact translation in DuckDB
+time: 2026-06-03T16:22:50.000000-04:00
+custom:
+    author: mach-kernel
+    issue: "10813"
+    project: dbt-fusion

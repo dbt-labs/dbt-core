@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix re.findall Capture objects to be sliceable sequences when pattern has 3+ capture groups
+time: 2026-06-02T10:18:05.094177995-07:00
+custom:
+    author: b-per
+    issue: ""
+    project: dbt-fusion

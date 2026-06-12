@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Honor model-level `full_refresh: false` config on microbatch models under `dbt build --full-refresh`'
+time: 2026-06-05T16:17:14.935792965-07:00
+custom:
+    author: xuliangs
+    issue: "15170"
+    project: dbt-fusion

@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Bump dbt-docs-v2 UI bundle to add dbt State banner (a0c6c196807e9e6f2b9ea4fa953e99c2d1031657)
+time: 2026-06-01T12:20:06.664723-04:00
+custom:
+    author: jcserv
+    issue: ""
+    project: dbt-fusion

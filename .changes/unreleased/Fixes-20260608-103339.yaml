@@ -1,0 +1,7 @@
+kind: Fixes
+body: fix seed configs rejecting valid fields
+time: 2026-06-08T10:33:39.312703347-07:00
+custom:
+    author: ""
+    issue: ""
+    project: dbt-fusion

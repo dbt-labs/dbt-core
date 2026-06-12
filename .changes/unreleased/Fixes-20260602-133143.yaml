@@ -1,0 +1,7 @@
+kind: Fixes
+body: The dbt extension now recognizes when your email is not yet verified after you sign in, prompts you to verify it, and continues automatically once verification is complete.
+time: 2026-06-02T13:31:43.852075+01:00
+custom:
+    author: walther-lalk
+    issue: ""
+    project: dbt-extension

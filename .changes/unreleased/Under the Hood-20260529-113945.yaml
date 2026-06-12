@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Execute hooks on dbt State reuse
+time: 2026-05-29T11:39:45.714702-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: dbt-fusion

@@ -1,0 +1,7 @@
+kind: Features
+body: Add Workload Identity Federation auth for BigQuery via Microsoft Entra
+time: 2026-06-03T21:19:12.701354+05:30
+custom:
+    author: ragesh-g
+    issue: ""
+    project: dbt-fusion

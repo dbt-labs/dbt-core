@@ -1,0 +1,7 @@
+kind: Fixes
+body: source freshness on_run_end hooks can now access result.node (unique_id, relation_name, etc.) — fixes compatibility with elementary and other packages that read result.node in on_run_end macros
+time: 2026-06-01T07:16:11.868990111-07:00
+custom:
+    author: b-per
+    issue: "2245"
+    project: dbt-fusion

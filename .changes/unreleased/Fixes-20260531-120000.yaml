@@ -1,0 +1,7 @@
+kind: Fixes
+body: Guard Fusion-only macro divergences in dbt_macro_assets on `dbt_version.startswith('2.')` so dbt-core's v2-parser handoff produces macros compatible with both runtimes. Covers Snowflake (`use_catalogs_v2`, table drop), BigQuery (`load_csv_rows` arg count, schema management macros, `alter_relation_comment`), Databricks (`render_type`, `has_feature` -> `has_dbr_capability`, column masks, SHALLOW CLONE PK handling), Redshift (`has_feature("datasharing")`), and Spark (`sql_convert_columns_in_relation`). Consolidates and supersedes #10712 and #10718.
+time: 2026-05-31T12:00:00.000000-07:00
+custom:
+    author: aiguofer
+    issue: "10659"
+    project: dbt-fusion

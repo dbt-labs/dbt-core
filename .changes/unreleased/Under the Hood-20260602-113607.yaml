@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Switch license loaded messages from info to debug
+time: 2026-06-02T11:36:07.261593-05:00
+custom:
+    author: ""
+    issue: ""
+    project: dbt-fusion

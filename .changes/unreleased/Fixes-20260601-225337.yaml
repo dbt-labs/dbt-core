@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix schema routing for test failures when +schema: null is set in dbt_project.yml with store_failures: true'
+time: 2026-06-01T22:53:37.58667-06:00
+custom:
+    author: aiguofer
+    issue: ""
+    project: dbt-fusion

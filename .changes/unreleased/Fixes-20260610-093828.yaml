@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'sidecar: empty-string CAST to NULL, *_from_parts zero-tuple to NULL, unknown format string to NULL, timestamp_ltz_from_parts bridges'
+time: 2026-06-10T09:38:28.836844-04:00
+custom:
+    author: mach-kernel
+    issue: "10961"
+    project: dbt-fusion

@@ -1,0 +1,7 @@
+kind: Features
+body: "GET /api/v1/models: add catalog field (row_count_stat, bytes_stat, last_modified_stat from warehouse INFORMATION_SCHEMA) and materialized field; dbt build --write-index now queries warehouse catalog stats and writes them to the parquet index"
+time: 2026-05-28T18:50:26.885357-07:00
+custom:
+    author: eddowh
+    issue: ''
+    project: dbt-fusion

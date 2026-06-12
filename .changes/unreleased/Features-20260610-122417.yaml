@@ -1,0 +1,7 @@
+kind: Features
+body: Support the insert_overwrite incremental strategy for the Spark adapter
+time: 2026-06-10T12:24:17.490074+02:00
+custom:
+    author: serramatutu
+    issue: ""
+    project: dbt-fusion

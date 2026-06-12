@@ -1,0 +1,7 @@
+kind: Fixes
+body: Capture and surface failures for unit test schema fetch phase
+time: 2026-06-04T10:29:48.338563-04:00
+custom:
+    author: mach-kernel
+    issue: ""
+    project: dbt-fusion

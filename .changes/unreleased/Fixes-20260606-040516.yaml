@@ -1,0 +1,7 @@
+kind: Fixes
+body: Emit M015 (DepsInstallInfo) only on successful package install, not M016
+time: 2026-06-06T04:05:16.580356+03:00
+custom:
+    author: dbtagarovat
+    issue: ""
+    project: dbt-fusion
