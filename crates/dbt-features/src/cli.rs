@@ -1,17 +1,25 @@
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use clap::{Parser, Subcommand};
+use minijinja::Value as MinijinjaValue;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
 use dbt_adapter::Adapter;
-use dbt_clap_core::commands::ExtensionCommandParser;
-use dbt_clap_core::{Cli, CliParser, CliParserFactory, InitArgs};
+use dbt_clap_core::commands::{AbstractExtensionCommand, ExtensionCommandParser};
+use dbt_clap_core::{Cli, CliParser, CliParserFactory, CommonArgs, InitArgs, in_out_dir};
 use dbt_cloud_config::ResolvedCloudConfig;
-use dbt_common::FsResult;
 use dbt_common::cancellation::{CancellationToken, CancellationTokenSource};
 use dbt_common::fail_fast::FailFast;
-use dbt_common::io_args::{EvalArgs, IoArgs};
+use dbt_common::io_args::{EvalArgs, FsCommand, IoArgs, Phases, SystemArgs};
+use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_error_log_message};
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_compilation::config::CompilationConfig;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -20,8 +28,6 @@ use dbt_schemas::schemas::StateArtifacts;
 use dbt_schemas::state::{DbtState, ResolverState};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::{PreTaskRunData, RunTaskResults};
-use minijinja::Value as MinijinjaValue;
-use uuid::Uuid;
 
 use crate::feature_stack::FeatureStack;
 use crate::metricflow::MetricflowClient;
@@ -84,19 +90,147 @@ impl CliFeatureBuilder {
     }
 }
 
-pub struct DefaultCliParserFactory;
+#[derive(clap::Parser, Debug, Clone, Serialize, Deserialize)]
+#[command()]
+pub enum SystemCommand {
+    /// Informative-only update command for dbt Core 2.x.
+    #[clap(hide = true)]
+    Update,
+    /// Informative-only uninstall command for dbt Core 2.x.
+    #[clap(hide = true)]
+    Uninstall,
+    /// Preinstall all supported database drivers into the local cache
+    InstallDrivers,
+}
 
-impl CliParserFactory for DefaultCliParserFactory {
-    fn create(&self, command_name: &'static str) -> CliParser {
-        CliParser::new(command_name, Box::new(NoopExtensionCommandParser))
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct SystemMgmtArgs {
+    #[command(subcommand)]
+    pub command: SystemCommand,
+    // Flattened Common args
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+}
+
+impl SystemMgmtArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
+        eval_args.phase = Phases::Deps;
+        eval_args
     }
 }
 
-struct NoopExtensionCommandParser;
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum OSSExtensionCommand {
+    /// dbt Core 2.x system subcommand
+    System(SystemMgmtArgs),
+}
 
-impl ExtensionCommandParser for NoopExtensionCommandParser {
-    fn has_subcommand(&self, _name: &str) -> bool {
-        false
+impl AbstractExtensionCommand for OSSExtensionCommand {
+    fn name(&self) -> &'static str {
+        match self {
+            OSSExtensionCommand::System(_) => "system",
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn AbstractExtensionCommand> {
+        Box::new(self.clone())
+    }
+
+    fn display_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self as &mut dyn Any
+    }
+    fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        self
+    }
+
+    fn is_project_command(&self) -> bool {
+        use OSSExtensionCommand::*;
+        !matches!(self, System(_))
+    }
+
+    fn to_eval_args(&self, common_args: &CommonArgs, system_arg: SystemArgs) -> FsResult<EvalArgs> {
+        use OSSExtensionCommand::*;
+        // Determine the input and output directories based on the command.
+        // Some commands operate without project context, while others must be run in a project directory.
+        let (in_dir, out_dir) = if self.is_project_command() {
+            in_out_dir(common_args)?
+        } else {
+            (PathBuf::from("."), PathBuf::from("."))
+        };
+
+        let from_main = system_arg.from_main;
+        let mut arg = match self {
+            System(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+        };
+        arg.from_main = from_main;
+
+        Ok(arg)
+    }
+
+    fn common_args(&self) -> CommonArgs {
+        use OSSExtensionCommand::*;
+        match self {
+            System(args) => args.common_args.clone(),
+        }
+    }
+
+    fn stage(&self) -> Phases {
+        use OSSExtensionCommand::*;
+        match self {
+            System(_) => unreachable!("System command does not need a phase"),
+        }
+    }
+
+    fn as_command(&self) -> FsCommand {
+        FsCommand::System
+    }
+
+    fn extend_cli_options(&self, _options: &mut Vec<String>) {
+        // no-op
+    }
+
+    fn sample_select(&self) -> Option<Vec<String>> {
+        None
+    }
+
+    fn sample_exclude(&self) -> Option<Vec<String>> {
+        None
+    }
+}
+
+pub struct DefaultCliParserFactory;
+
+impl CliParserFactory for DefaultCliParserFactory {
+    fn create(&self, command_name: &'static str, version: &'static str) -> CliParser {
+        CliParser::new(command_name, version, Box::new(OSSExtensionCommandParser))
+    }
+}
+
+struct OSSExtensionCommandParser;
+
+impl ExtensionCommandParser for OSSExtensionCommandParser {
+    fn from_arg_matches_mut(
+        &self,
+        arg_matches: &mut clap::ArgMatches,
+    ) -> Result<Box<dyn AbstractExtensionCommand>, clap::Error> {
+        let cmd = <OSSExtensionCommand as clap::FromArgMatches>::from_arg_matches_mut(arg_matches)?;
+        Ok(Box::new(cmd) as Box<dyn AbstractExtensionCommand>)
+    }
+
+    fn augment_subcommands(&self, app: clap::Command) -> clap::Command {
+        OSSExtensionCommand::augment_subcommands(app)
+    }
+
+    fn has_subcommand(&self, name: &str) -> bool {
+        OSSExtensionCommand::has_subcommand(name)
     }
 }
 
@@ -267,11 +401,60 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
 
     async fn will_execute(
         &self,
-        _cli: &Cli,
-        _eval_arg: &EvalArgs,
+        cli: &Cli,
+        eval_arg: &EvalArgs,
         _feature_stack: &Arc<FeatureStack>,
     ) -> FsResult<()> {
-        Ok(())
+        use OSSExtensionCommand::*;
+        match cli.extension_command::<OSSExtensionCommand>() {
+            Some(System(args)) => {
+                match &args.command {
+                    SystemCommand::Update => {
+                        let e = fs_err!(
+                            ErrorCode::NotSupported,
+                            "`dbt system update` is not supported for this distribution. Upgrade \
+             dbt-core with the package manager you installed it with:\
+             \n\n    pip install --pre --upgrade dbt-core\
+             \n    brew upgrade dbt-core\
+             \n    winget upgrade --id dbtLabs.dbt-core --exact"
+                        );
+                        emit_error_log_from_fs_error(
+                            e.as_ref(),
+                            eval_arg.io.status_reporter.as_ref(),
+                        );
+                        Err(FsError::exit_with_status(1))
+                    }
+                    SystemCommand::Uninstall => {
+                        let e = fs_err!(
+                            ErrorCode::NotSupported,
+                            "`dbt system uninstall` is not supported for this distribution. Remove \
+             dbt-core with the package manager you installed it with:\
+             \n\n    pip uninstall dbt-core\
+             \n    brew uninstall dbt-core\
+             \n    winget uninstall --id dbtLabs.dbt-core"
+                        );
+                        emit_error_log_from_fs_error(
+                            e.as_ref(),
+                            eval_arg.io.status_reporter.as_ref(),
+                        );
+                        Err(FsError::exit_with_status(1))
+                    }
+                    SystemCommand::InstallDrivers => {
+                        dbt_xdbc::pre_install_all_drivers().map_err(|install_err| {
+                            emit_error_log_message(
+                                ErrorCode::Generic,
+                                format!("Failed to install drivers: {}", install_err).as_str(),
+                                eval_arg.io.status_reporter.as_ref(),
+                            );
+                            FsError::exit_with_status(1)
+                        })
+                    }
+                }?;
+                // handled the System command, signal to exit with success
+                Err(FsError::exit_with_status(0))
+            }
+            _ => Ok(()), // nothing handled, continue normal execution
+        }
     }
 
     async fn did_resolve_project(
@@ -366,5 +549,52 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
         _manifest_path: &mut Option<PathBuf>,
     ) -> FsResult<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn system_help(parser: &CliParser) -> String {
+        parser
+            .try_parse_from(["dbt", "system", "--help"])
+            .unwrap_err()
+            .to_string()
+    }
+
+    #[test]
+    fn hidden_self_management_commands_are_absent_from_help_but_parseable() {
+        let version = "2.x";
+        let parser = CliParser::new("dbt-core", version, Box::new(OSSExtensionCommandParser));
+
+        // Hidden from help, but unaffected commands remain.
+        let help = system_help(&parser);
+        assert!(!help.contains("Update dbt in place"), "got:\n{help}");
+        assert!(!help.contains("Uninstall dbt"), "got:\n{help}");
+        assert!(help.contains("install-drivers"), "got:\n{help}");
+
+        // Still parseable, so the runtime message fires instead of a parse error.
+        let cli = parser.try_parse_from(["dbt", "system", "update"]).unwrap();
+        let oss_ext_cmd = cli.extension_command::<OSSExtensionCommand>().unwrap();
+        assert!(matches!(
+            oss_ext_cmd,
+            OSSExtensionCommand::System(SystemMgmtArgs {
+                command: SystemCommand::Update,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn system_is_not_a_project_command() {
+        let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
+        let cli = parser.try_parse_from(["dbt", "system", "update"]).unwrap();
+
+        let oss_ext_cmd = cli.extension_command::<OSSExtensionCommand>().unwrap();
+        assert!(!oss_ext_cmd.is_project_command());
+
+        // `Cli::is_project_command` should delegate to the extension command.
+        assert!(!cli.is_project_command());
     }
 }

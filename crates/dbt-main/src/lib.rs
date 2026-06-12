@@ -15,7 +15,7 @@ pub mod version_check;
 pub use dbt_clap_core::from_lib;
 
 pub mod partial_parse;
-mod uninstall;
+pub mod uninstall;
 pub mod update;
 mod utils;
 

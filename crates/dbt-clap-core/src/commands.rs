@@ -9,7 +9,7 @@ use strum_macros::Display;
 use crate::{
     BuildArgs, CleanArgs, CloneArgs, CommonArgs, CompileArgs, CompletionsArgs, DebugArgs, DepsArgs,
     DocsArgs, InitArgs, ListArgs, LoginArgs, ManArgs, ParseArgs, RetryArgs, RunArgs,
-    RunOperationArgs, SeedArgs, ShowArgs, SnapshotArgs, SourceArgs, SystemMgmtArgs, TestArgs,
+    RunOperationArgs, SeedArgs, ShowArgs, SnapshotArgs, SourceArgs, TestArgs,
 };
 
 #[derive(clap::Subcommand, Debug, Clone, Display)]
@@ -46,8 +46,6 @@ pub enum CoreCommand {
     Source(SourceArgs),
     /// Create clones of selected nodes
     Clone(CloneArgs),
-    /// dbt installation configuration
-    System(SystemMgmtArgs),
     /// Create reference documentation
     Man(ManArgs),
     /// Profile connection debugging
@@ -81,7 +79,6 @@ impl CoreCommand {
             Clone(..) => FsCommand::Clone,
             Clean(..) => FsCommand::Clean,
             Source(..) => FsCommand::Source,
-            System(..) => FsCommand::System,
             Show(..) => FsCommand::Show,
             Man(..) => FsCommand::Man,
             Debug(..) => FsCommand::Debug,
@@ -114,7 +111,6 @@ impl CoreCommand {
             Clone(args) => &args.common_args,
             Clean(args) => &args.common_args,
             Source(args) => args.common_args(),
-            System(args) => &args.common_args,
             Show(args) => &args.common_args,
             Man(args) => &args.common_args,
             Debug(args) => &args.common_args,
@@ -144,7 +140,6 @@ impl CoreCommand {
             Clean(_) => None,
             Source(_) => None,
             Clone(_) => None,
-            System(_) => None,
             Man(_) => None,
             Debug(_) => None,
             Retry(retry_args) => retry_args.static_analysis,
@@ -168,14 +163,18 @@ pub trait AbstractExtensionCommand: Send + Sync + fmt::Debug + Any {
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
 
+    /// Command must be executed within the context of a dbt project.
+    ///
+    /// Some commands operate without project context, while others must be run in a project
+    /// directory.
+    fn is_project_command(&self) -> bool;
+
     // TODO: this list of required methods should eventually shrink as we improve the design
     fn to_eval_args(&self, common_args: &CommonArgs, system_arg: SystemArgs) -> FsResult<EvalArgs>;
     fn common_args(&self) -> CommonArgs;
     fn stage(&self) -> Phases;
     fn as_command(&self) -> FsCommand;
     fn extend_cli_options(&self, options: &mut Vec<String>);
-    fn with_sample(&self) -> Option<String>;
-    fn sampled(&self) -> Vec<String>;
     fn sample_select(&self) -> Option<Vec<String>>;
     fn sample_exclude(&self) -> Option<Vec<String>>;
 }
@@ -295,9 +294,8 @@ impl CommandParser {
     }
 
     /// Test whether we can parse a specific subcommand
-    #[allow(dead_code)]
     pub fn has_subcommand(&self, name: &str) -> bool {
         <CoreCommand as clap::Subcommand>::has_subcommand(name)
-        // TODO: check extension commands
+            || self.extension_command_parser.has_subcommand(name)
     }
 }

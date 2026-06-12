@@ -84,7 +84,7 @@ const CLI_HELP_TEMPLATE: &str = "\
 {subcommands}{after-help}";
 
 pub trait CliParserFactory: Send + Sync {
-    fn create(&self, command_name: &'static str) -> CliParser;
+    fn create(&self, command_name: &'static str, version: &'static str) -> CliParser;
 }
 
 /// An equivalent of [clap::Parser] that produces a [Cli] instead of parsing into itself.
@@ -94,17 +94,20 @@ pub trait CliParserFactory: Send + Sync {
 /// that can carry dependencies instead of a static method.
 pub struct CliParser {
     command_name: &'static str,
+    version: &'static str,
     command_parser: CommandParser,
 }
 
 impl CliParser {
     pub fn new(
         command_name: &'static str,
+        version: &'static str,
         extension_command_parser: Box<dyn ExtensionCommandParser>,
     ) -> Self {
         let command_parser = CommandParser::new(extension_command_parser);
         Self {
             command_name,
+            version,
             command_parser,
         }
     }
@@ -147,7 +150,7 @@ impl CliParser {
 
         // -- Augment metadata
         app.author("dbt Labs <info@getdbt.com>")
-            .version(env!("CARGO_PKG_VERSION"))
+            .version(self.version)
             .long_about(None)
             .about(ABOUT)
             .after_help(&**AFTER_HELP)
@@ -276,29 +279,30 @@ got {:?}, expected an instance of {}",
         }
     }
 
+    pub fn is_project_command(&self) -> bool {
+        use CoreCommand::*;
+        match &self.command {
+            Command::Core(Man(_) | Init(_) | Docs(_) | Login(_) | Completions(_)) => {
+                // These commands do not require a project directory
+                false
+            }
+            Command::Core(_) => {
+                // Assume all the other core commands require a project directory.
+                true
+            }
+            Command::Extension(ext_cmd) => ext_cmd.is_project_command(),
+        }
+    }
+
     pub fn to_eval_args(&self, system_arg: SystemArgs) -> FsResult<EvalArgs> {
         use CoreCommand::*;
         let common_args = self.common_args();
         // Determine the input and output directories based on the command.
-        // Some commands operate without project context, while others must be run in a project directory.
         let (in_dir, out_dir) = {
-            match &self.command {
-                Command::Core(System(_))
-                | Command::Core(Man(_))
-                | Command::Core(Init(_))
-                | Command::Core(Docs(_))
-                | Command::Core(Login(_))
-                | Command::Core(Completions(_)) => {
-                    // These commands do not require a project directory
-                    (PathBuf::from("."), PathBuf::from("."))
-                }
-                Command::Extension(_) => {
-                    // Extension commands determine their own project requirements.
-                    // Avoid resolving project dir here, which can fail for commands
-                    // that intentionally run outside project context.
-                    (PathBuf::from("."), PathBuf::from("."))
-                }
-                _ => in_out_dir(&common_args)?,
+            if self.is_project_command() {
+                in_out_dir(&common_args)?
+            } else {
+                (PathBuf::from("."), PathBuf::from("."))
             }
         };
 
@@ -321,7 +325,6 @@ got {:?}, expected an instance of {}",
                 Clone(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Clean(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Source(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
-                System(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Show(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Man(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Debug(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
@@ -382,7 +385,6 @@ got {:?}, expected an instance of {}",
                     .phase
                     .clone()
                     .unwrap_or(Phases::Freshness),
-                System(_args) => unreachable!("System command does not need a phase"),
                 Show(args) => args.common_args.phase.clone().unwrap_or(Phases::Show),
                 Man(_args) => unreachable!("Man command does not need a phase"),
                 Debug(args) => args.common_args.phase.clone().unwrap_or(Phases::Debug),
@@ -420,36 +422,6 @@ got {:?}, expected an instance of {}",
             Command::Extension(ext_cmd) => ext_cmd.extend_cli_options(&mut options),
         }
         options
-    }
-
-    pub fn with_sample(&self) -> Option<String> {
-        use CoreCommand::*;
-        match &self.command {
-            Command::Core(core_cmd) => match core_cmd {
-                Run(RunArgs { with_sample, .. }) => with_sample.clone(),
-                Test(TestArgs { with_sample, .. }) => with_sample.clone(),
-                Build(BuildArgs { with_sample, .. }) => with_sample.clone(),
-                Compile(CompileArgs { with_sample, .. }) => with_sample.clone(),
-                Show(ShowArgs { with_sample, .. }) => with_sample.clone(),
-                _ => None,
-            },
-            Command::Extension(ext_cmd) => ext_cmd.with_sample(),
-        }
-    }
-
-    pub fn sampled(&self) -> Vec<String> {
-        use CoreCommand::*;
-        match &self.command {
-            Command::Core(core_cmd) => match core_cmd {
-                Run(RunArgs { sampled, .. }) => sampled.clone(),
-                Test(TestArgs { sampled, .. }) => sampled.clone(),
-                Build(BuildArgs { sampled, .. }) => sampled.clone(),
-                Compile(CompileArgs { sampled, .. }) => sampled.clone(),
-                Show(ShowArgs { sampled, .. }) => sampled.clone(),
-                _ => vec![],
-            },
-            Command::Extension(ext_cmd) => ext_cmd.sampled(),
-        }
     }
 
     pub fn sample_select(&self) -> Option<Vec<String>> {
@@ -2276,55 +2248,6 @@ impl CommonArgs {
     }
 }
 
-/// Maintain the system: update and uninstall
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-pub struct SystemMgmtArgs {
-    #[command(subcommand)]
-    pub command: SystemCommand,
-    // Flattened Common args
-    #[clap(flatten)]
-    pub common_args: CommonArgs,
-}
-
-impl SystemMgmtArgs {
-    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
-        let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.phase = Phases::Deps;
-        eval_args
-    }
-}
-
-/// Manage system status
-#[derive(clap::Parser, Debug, Clone, Serialize, Deserialize)]
-#[command()]
-pub enum SystemCommand {
-    /// Update dbt in place to the latest version
-    Update(SystemUpdateArgs),
-    /// Uninstall dbt from the system
-    Uninstall(SystemUninstallArgs),
-    /// Preinstall all supported database drivers into the local cache
-    InstallDrivers,
-}
-
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-pub struct SystemUpdateArgs {
-    /// Update dbt to this version (e.g. 1.2.3) [default: latest version]
-    #[arg(global = true, long)]
-    pub version: Option<String>,
-
-    /// Package to update (e.g. dbt) [default: dbt]
-    #[arg(long)]
-    pub package: Option<String>,
-
-    /// Self-update in place even when dbt was installed by a package manager.
-    /// This overwrites the package-manager-owned binary.
-    #[arg(long)]
-    pub force: bool,
-}
-
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-pub struct SystemUninstallArgs {}
-
 /// Generate shell completion scripts
 #[derive(Parser, Debug, Clone)]
 pub struct CompletionsArgs {
@@ -2640,5 +2563,66 @@ mod tests {
             Some("false"),
             None
         ));
+    }
+
+    fn core_cli(command: CoreCommand) -> Cli {
+        Cli {
+            command: Command::Core(command),
+            common_args: CommonArgs::default(),
+        }
+    }
+
+    #[test]
+    fn non_project_core_commands_do_not_require_a_project() {
+        use CoreCommand::*;
+        let non_project = [
+            Init(InitArgs::default()),
+            Man(ManArgs::default()),
+            Docs(DocsArgs::default()),
+            Login(LoginArgs::default()),
+            Completions(CompletionsArgs {
+                shell: Shell::Bash,
+                common_args: CommonArgs::default(),
+            }),
+        ];
+        for command in non_project {
+            let name = command.name();
+            assert!(
+                !core_cli(command).is_project_command(),
+                "expected `{name}` to not be a project command"
+            );
+        }
+    }
+
+    #[test]
+    fn project_core_commands_require_a_project() {
+        use CoreCommand::*;
+        // A representative sample of the core commands that fall under the
+        // `Command::Core(_)` catch-all and therefore require a project.
+        let project = [
+            Deps(DepsArgs::default()),
+            Parse(ParseArgs::default()),
+            List(ListArgs::default()),
+            Ls(ListArgs::default()),
+            Compile(CompileArgs::default()),
+            Run(RunArgs::default()),
+            RunOperation(RunOperationArgs::default()),
+            Test(TestArgs::default()),
+            Seed(SeedArgs::default()),
+            Snapshot(SnapshotArgs::default()),
+            Show(ShowArgs::default()),
+            Build(BuildArgs::default()),
+            Clean(CleanArgs::default()),
+            Clone(CloneArgs::default()),
+            Debug(DebugArgs::default()),
+            Retry(RetryArgs::default()),
+        ];
+        for command in project {
+            let name = command.name();
+            assert!(
+                core_cli(command).is_project_command(),
+                "expected `{name}` to be a project command"
+            );
+        }
     }
 }

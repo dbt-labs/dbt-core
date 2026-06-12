@@ -38,10 +38,13 @@ dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }
 dbt-tasks-sa = { workspace = true }
+dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
 
+clap = { workspace = true, features = ["derive"] }
 minijinja = { workspace = true }
 petgraph = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 vortex-events = { workspace = true }

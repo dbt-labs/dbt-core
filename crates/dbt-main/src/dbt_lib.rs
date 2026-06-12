@@ -10,7 +10,7 @@ use dbt_adapter::{
 };
 use dbt_clap_core::{
     Cli, Command, CompileArgs, CoreCommand, DocsServeArgs as ClapDocsServeArgs, DocsSubcommand,
-    LoginSubcommand, ProjectTemplate, ShowArgs, SystemCommand,
+    LoginSubcommand, ProjectTemplate, ShowArgs,
 };
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_utils::StatusReporter;
@@ -100,8 +100,6 @@ use crate::{
         DbtRunTasksResult, DbtScheduleDescription, update_manifest,
     },
     retry::{RETRIABLE_COMMANDS, RetryState},
-    uninstall::exec_uninstall,
-    update::exec_update,
     utils::{InvocationContext, write_catalog_stats_parquet, write_runtime_results_parquet},
     vars::validate_engine_env_vars,
 };
@@ -257,34 +255,7 @@ async fn do_execute_fs(
         .will_execute(&cli, eval_arg, &feature_stack)
         .await?;
 
-    if let Command::Core(System(cmd)) = cli.command {
-        return match &cmd.command {
-            SystemCommand::Update(system_update_args) => {
-                exec_update(system_update_args).await.inspect_err(|e| {
-                    // Without this, the FsError returned by exec_update is silently
-                    // swallowed: the invocation summary reports "Finished 'system'
-                    // successfully" (errors==0) while the process exits non-zero,
-                    // leaving wrappers like orc/dispatch with no diagnostic. Logging
-                    // here writes the message to stderr and bumps the error counter
-                    // so the summary reflects reality.
-                    emit_error_log_from_fs_error(e.as_ref(), eval_arg.io.status_reporter.as_ref());
-                })
-            }
-            SystemCommand::Uninstall(_) => exec_uninstall().await.inspect_err(|e| {
-                emit_error_log_from_fs_error(e.as_ref(), eval_arg.io.status_reporter.as_ref());
-            }),
-            SystemCommand::InstallDrivers => {
-                dbt_xdbc::pre_install_all_drivers().map_err(|install_err| {
-                    emit_error_log_message(
-                        ErrorCode::Generic,
-                        format!("Failed to install drivers: {}", install_err).as_str(),
-                        eval_arg.io.status_reporter.as_ref(),
-                    );
-                    FsError::exit_with_status(1)
-                })
-            }
-        };
-    } else if let Command::Core(Man(_)) = &cli.command {
+    if let Command::Core(Man(_)) = &cli.command {
         return execute_man_command(eval_arg).await;
     } else if let Command::Core(Login(login_args)) = &cli.command {
         return match login_args.subcommand {
