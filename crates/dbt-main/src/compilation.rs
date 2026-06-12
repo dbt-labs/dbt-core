@@ -1967,6 +1967,18 @@ impl DbtProjectCompilation {
             }
         };
 
+        // Shut down the adapter-level sidecar client so its dbt-db-runner
+        // subprocess releases the DuckDB advisory lock before the next
+        // invocation starts. In the in-process test model the tokio runtime is
+        // shared across sequential TaskSeq steps, so without an explicit
+        // shutdown the background reader tasks keep Arc<RunnerManager> alive
+        // (preventing Drop from firing) and the runner holds the DB lock
+        // indefinitely. The task-runner sidecar is shut down separately in
+        // did_collect_all_run_task_results via ext.local_engine.shutdown().
+        if let Some(client) = &sidecar_client {
+            let _ = client.shutdown();
+        }
+
         token.check_cancellation()?;
 
         // Flush the parquet schema cache to disk (no-op for non-ParquetCache stores).

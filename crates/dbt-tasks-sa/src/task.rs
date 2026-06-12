@@ -110,14 +110,13 @@ impl TasksForNodeFactory for DefaultTasksForNodeFactory {
     ) -> Option<Arc<dyn InternalDbtNodeAttributes>> {
         let needs_run = phases.contains(&TP::Run);
         // Dispatch based on Execute mode:
-        // - Local: Use RunnableLocal (existing inline backend path)
         // - Remote: Warehouse execution via Jinja materialization macros
         // - Sidecar/Service: Direct execution via sidecar adapter (bypasses Jinja)
         match execute {
             Execute::Remote => needs_run
                 .then(|| runnable_remote_task(nodes, unique_id))
                 .flatten(),
-            Execute::Local | Execute::Sidecar | Execute::Service => {
+            Execute::Sidecar | Execute::Service => {
                 debug_assert!(false, "unexpected execution mode {execute}");
                 None
             }
@@ -199,16 +198,6 @@ impl RunTaskHooks for DefaultRunTaskHooks {
         _task_result: Option<TaskResult>,
     ) -> FsResult<NodeStatus> {
         debug_assert!(false, "run_alt_compute_sidecar called");
-        Ok(NodeStatus::Errored)
-    }
-
-    async fn run_alt_compute_local(
-        &self,
-        _ctx: &mut TaskRunnerCtx,
-        _node: Arc<dyn InternalDbtNodeAttributes>,
-        _task_result: Option<TaskResult>,
-    ) -> FsResult<NodeStatus> {
-        debug_assert!(false, "run_alt_compute_local called");
         Ok(NodeStatus::Errored)
     }
 
@@ -399,18 +388,10 @@ pub trait TasksForNodeFactory: Send + Sync {
                         )) as Arc<dyn Task>);
                     }
                     (None, _) => (),
-                    (_, Execute::Local | Execute::Service) => (),
+                    (_, Execute::Service) => (),
                 }
             } else {
                 match (the_runnable_task, execute) {
-                    (Some(t), Execute::Local) => {
-                        runnable = Some(Arc::new(RunTask::new(
-                            t,
-                            next_receiver.take(),
-                            RunExecutionPath::Local,
-                            run_task_hooks,
-                        )) as Arc<dyn Task>);
-                    }
                     (Some(t), Execute::Remote) => {
                         runnable = Some(Arc::new(RunTask::new(
                             t,

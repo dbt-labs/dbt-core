@@ -139,6 +139,18 @@ impl Task for CpFromTargetTask {
             stdfs::create_dir_all(parent)?;
         }
 
+        // The source may be written asynchronously by the dbt-db-runner sidecar
+        // (e.g. `target/decompiled/.../*.sql`). The preceding `dbt` command can
+        // return before the runner has flushed it, so poll briefly for the file
+        // to appear instead of racing it (avoids a "No such file" copy error).
+        let mut waited = std::time::Duration::ZERO;
+        let poll = std::time::Duration::from_millis(100);
+        let max_wait = std::time::Duration::from_secs(10);
+        while !src_path.exists() && waited < max_wait {
+            tokio::time::sleep(poll).await;
+            waited += poll;
+        }
+
         stdfs::copy(&src_path, &dest_path)?;
         Ok(())
     }

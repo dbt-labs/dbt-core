@@ -481,7 +481,6 @@ impl DbConfig {
 pub enum Execute {
     #[default]
     Remote,
-    Local,
     Sidecar,
     Service,
 }
@@ -490,7 +489,6 @@ impl Display for Execute {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Execute::Remote => write!(f, "remote"),
-            Execute::Local => write!(f, "local"),
             Execute::Sidecar => write!(f, "sidecar"),
             Execute::Service => write!(f, "service"),
         }
@@ -503,7 +501,9 @@ impl std::str::FromStr for Execute {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "remote" => Ok(Execute::Remote),
-            "local" => Ok(Execute::Local),
+            // "local" and "sidecar" both resolve to Sidecar; "local" is the
+            // legacy string that predates the rename and must keep parsing.
+            "local" | "sidecar" => Ok(Execute::Sidecar),
             _ => Err(format!("Invalid execute mode: {s}")),
         }
     }
@@ -523,8 +523,9 @@ impl Execute {
         use dbt_common::io_args::LocalExecutionBackendKind;
         match compute_flag {
             LocalExecutionBackendKind::Remote => Execute::Remote,
-            LocalExecutionBackendKind::Inline => Execute::Local,
-            LocalExecutionBackendKind::Worker => Execute::Sidecar,
+            LocalExecutionBackendKind::Inline | LocalExecutionBackendKind::Worker => {
+                Execute::Sidecar
+            }
             LocalExecutionBackendKind::Service => Execute::Service,
         }
     }

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Add Release Tracker workflow that labels closed v2 issues as awaiting release
-time: 2026-06-09T12:00:00.000000+00:00
-custom:
-    author: tauhid621
-    issue: ""

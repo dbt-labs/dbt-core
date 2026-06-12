@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dbt_adapter::Adapter;
-use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -12,7 +11,6 @@ use dbt_schema_store::DataStoreTrait;
 use dbt_schema_store::store::SchemaStore;
 use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::StateArtifacts;
-use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
 use petgraph::Graph;
 
@@ -28,17 +26,6 @@ use crate::task::Task;
 #[async_trait]
 pub trait TaskRunnerHooks: Send + Sync {
     fn resolved_state(&self) -> &ResolverState;
-
-    fn should_persist_seed_data(&self, run_task_args: &RunTasksArgs) -> bool {
-        // Preserve the historical gate: persist parquet/JSON seed data iff the backend carries a
-        // DataFusion SessionContext. After the migration off DataFusion-driven seed ingestion the
-        // choice is no longer mechanically coupled to the backend.
-        let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
-        let adapter_type = self.resolved_state().dbt_profile.db_config.adapter_type();
-        execute != Execute::Local
-            || !run_task_args.static_analysis_off_or_baseline().into_inner()
-            || adapter_type == AdapterType::DuckDB
-    }
 
     async fn create_extended_ctx_factory(
         &self,

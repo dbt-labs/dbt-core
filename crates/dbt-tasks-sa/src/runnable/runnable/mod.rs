@@ -52,7 +52,6 @@ use dbt_tasks_core::run_cache::run_cache_service::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunExecutionPath {
-    Local,
     Remote,
     SideCar,
 }
@@ -466,12 +465,6 @@ impl Task for RunTask {
                 RunExecutionPath::SideCar => {
                     self.task_hooks
                         .run_alt_compute_sidecar(ctx, Arc::clone(&self.node), task_result.clone())
-                        .await
-                }
-                // Out of Scope for Connection Backpressure (or splitting)
-                RunExecutionPath::Local => {
-                    self.task_hooks
-                        .run_alt_compute_local(ctx, Arc::clone(&self.node), task_result.clone())
                         .await
                 }
             };
@@ -943,7 +936,6 @@ fn emit_run_usage_stats(
                     (None, false, false, None, None)
                 }
             }
-            RunExecutionPath::Local => (None, false, false, None, None),
         };
 
     // `catalog_type` is not stored on the model — only `catalog_name` is. The type
