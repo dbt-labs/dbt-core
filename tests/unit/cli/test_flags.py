@@ -180,6 +180,62 @@ class TestFlags:
         flags = Flags(context)
         assert flags.USE_COLORS is True
 
+    @pytest.mark.parametrize(
+        "argv,manage_state_project,user_flags,env_value,expected_state,expected_source",
+        [
+            (["run"], None, {}, None, False, None),
+            (["--manage-state", "run"], None, {}, None, True, "cli_flag"),
+            (["run"], None, {}, "True", True, "env_var"),
+            (["run"], True, {}, None, True, "project_config"),
+            (["run"], None, {"manage_state": True}, None, True, "user_settings"),
+            (["--manage-state", "run"], False, {}, None, True, "cli_flag"),
+        ],
+        ids=[
+            "unset",
+            "cli_flag",
+            "env_var",
+            "project_config",
+            "user_settings",
+            "cli_overrides_project",
+        ],
+    )
+    def test_manage_state_source(
+        self,
+        monkeypatch,
+        argv,
+        manage_state_project,
+        user_flags,
+        env_value,
+        expected_state,
+        expected_source,
+    ):
+        # PluginManager may leak DBT_ENGINE_MANAGE_STATE=true into os.environ in a
+        # shared test process; control it explicitly per case.
+        if env_value is None:
+            monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        else:
+            monkeypatch.setenv("DBT_ENGINE_MANAGE_STATE", env_value)
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: user_flags)
+        context = self.make_dbt_context("run", argv)
+        if manage_state_project is None:
+            flags = Flags(context)
+        else:
+            flags = Flags(context, ProjectFlags(manage_state=manage_state_project))
+        assert flags.MANAGE_STATE is expected_state
+        assert flags.MANAGE_STATE_SOURCE == expected_source
+
+    def test_manage_state_source_programmatic(self, monkeypatch):
+        # dbtRunner.invoke(manage_state=True) tags the param source with the string
+        # "kwargs"; this should be attributed to the "programmatic" surface.
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setattr("dbt.cli.flags.get_user_setting_flags", lambda: {})
+        context = self.make_dbt_context("run", ["run"])
+        context.params["manage_state"] = True
+        context.set_parameter_source("manage_state", "kwargs")
+        flags = Flags(context)
+        assert flags.MANAGE_STATE is True
+        assert flags.MANAGE_STATE_SOURCE == "programmatic"
+
     def test_mutually_exclusive_options_passed_separately(self):
         """Assert options that are mutually exclusive can be passed separately without error"""
         warn_error_context = self.make_dbt_context("run", ["--warn-error", "run"])

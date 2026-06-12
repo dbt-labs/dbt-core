@@ -260,6 +260,7 @@ class Flags:
         )
 
         # Get the invoked command flags.
+        invoked_subcommand_ctx: Optional[Context] = None
         invoked_subcommand_name = (
             ctx.invoked_subcommand if hasattr(ctx, "invoked_subcommand") else None
         )
@@ -268,6 +269,7 @@ class Flags:
             invoked_subcommand.allow_extra_args = True
             invoked_subcommand.ignore_unknown_options = True
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
+            assert invoked_subcommand_ctx is not None  # make_context never returns None
             _assign_params(
                 invoked_subcommand_ctx,
                 params_assigned_from_default,
@@ -321,6 +323,17 @@ class Flags:
                 )
                 params_assigned_from_default.remove(param_name)
 
+        # Record which surface supplied MANAGE_STATE so telemetry can attribute
+        # opt-ins to a CLI flag, env var, project config, or user settings. The
+        # ordering mirrors the resolution precedence applied above.
+        object.__setattr__(
+            self,
+            "MANAGE_STATE_SOURCE",
+            self._resolve_manage_state_source(
+                ctx, invoked_subcommand_ctx, project_flags, user_flags
+            ),
+        )
+
         # Set hard coded flags.
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
 
@@ -366,6 +379,59 @@ class Flags:
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))
+
+    def _resolve_manage_state_source(
+        self,
+        ctx: Context,
+        invoked_subcommand_ctx: Optional[Context],
+        project_flags: Optional[ProjectFlags],
+        user_flags: Dict[str, Any],
+    ) -> Optional[str]:
+        """Attribute the resolved MANAGE_STATE value to the surface that supplied it.
+
+        Returns None when state management is not enabled. Otherwise returns one of
+        "cli_flag", "env_var", "programmatic", "project_config", or "user_settings",
+        following the same precedence dbt uses when resolving the flag."""
+        if not getattr(self, "MANAGE_STATE", False):
+            return None
+
+        click_source = self._manage_state_click_source(ctx, invoked_subcommand_ctx)
+        if click_source is not None:
+            return click_source
+        if project_flags is not None and getattr(project_flags, "manage_state", None) is not None:
+            return "project_config"
+        if user_flags.get("manage_state") is not None:
+            return "user_settings"
+        return None
+
+    def _manage_state_click_source(
+        self, ctx: Context, invoked_subcommand_ctx: Optional[Context]
+    ) -> Optional[str]:
+        """Return "cli_flag"/"env_var"/"programmatic" if Click parsed manage_state
+        from the command line, an env var, or a dbtRunner.invoke() kwarg, else None.
+        `manage_state` is a global option, so it may be parsed in the top-level
+        context, any parent context, or the invoked subcommand's context.
+        dbtRunner.invoke() tags kwarg-supplied params with the string source
+        "kwargs" (see dbt.cli.main), which we surface as "programmatic"."""
+        contexts: List[Context] = []
+        cur: Optional[Context] = ctx
+        while cur is not None:
+            contexts.append(cur)
+            cur = cur.parent
+        if invoked_subcommand_ctx is not None:
+            contexts.append(invoked_subcommand_ctx)
+
+        # Context.get_parameter_source returns None (it does not raise) when the
+        # parameter was not supplied in that context; None entries are ignored below.
+        click_sources = {context.get_parameter_source("manage_state") for context in contexts}
+
+        if ParameterSource.COMMANDLINE in click_sources:
+            return "cli_flag"
+        if ParameterSource.ENVIRONMENT in click_sources:
+            return "env_var"
+        if "kwargs" in click_sources:
+            return "programmatic"
+        return None
 
     def _override_if_set(self, lead: str, follow: str, defaulted: Set[str]) -> None:
         """If the value of the lead parameter was set explicitly, apply the value to follow, unless follow was also set explicitly."""

@@ -111,6 +111,36 @@ class TestCompileStatsTracking:
         assert resource_counts["models"] == 1
 
 
+class TestTrackManageState:
+    def test_emits_manage_state_event(self) -> None:
+        mock_user = mock.Mock(do_not_track=False)
+        with mock.patch("dbt.tracking.active_user", mock_user):
+            with mock.patch("dbt.tracking.tracker") as mock_tracker:
+                with mock.patch("dbt.tracking.fire_event"):
+                    dbt.tracking.track_manage_state({"manage_state": True, "source": "cli_flag"})
+
+        mock_tracker.track.assert_called_once()
+        event = mock_tracker.track.call_args[0][0]
+        assert event.action == "manage_state"
+        context = event.context
+        assert len(context) == 1
+        payload = context[0].to_json()["data"]
+        assert payload == {"manage_state": True, "source": "cli_flag"}
+        assert context[0].to_json()["schema"] == dbt.tracking.MANAGE_STATE_SPEC
+
+    def test_does_not_track_when_user_opted_out(self) -> None:
+        mock_user = mock.Mock(do_not_track=True)
+        with mock.patch("dbt.tracking.active_user", mock_user):
+            with mock.patch("dbt.tracking.tracker") as mock_tracker:
+                with mock.patch("dbt.tracking.fire_event"):
+                    dbt.tracking.track_manage_state({"manage_state": True, "source": "env_var"})
+        mock_tracker.track.assert_not_called()
+
+    def test_raises_without_active_user(self, active_user_none) -> None:
+        with pytest.raises(AssertionError, match="active user is None"):
+            dbt.tracking.track_manage_state({"manage_state": True, "source": "cli_flag"})
+
+
 class TestTrackModelRun:
     def test_raises_without_active_user(self, active_user_none) -> None:
         node = mock.MagicMock(resource_type=NodeType.Model)

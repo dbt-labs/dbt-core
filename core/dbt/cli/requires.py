@@ -40,7 +40,7 @@ from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
 from dbt.profiler import profiler
-from dbt.tracking import active_user, initialize_from_flags, track_run
+from dbt.tracking import initialize_from_flags, track_manage_state, track_run
 from dbt.utils import try_get_max_rss_kb
 from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
@@ -112,6 +112,19 @@ def preflight(func):
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         ctx.with_resource(track_run(run_command=flags.WHICH))
 
+        # Telemetry for opt-in state management. Source is attributed to whichever
+        # surface enabled it: --manage-state (cli_flag), DBT_ENGINE_MANAGE_STATE
+        # (env_var), dbtRunner.invoke(manage_state=...) (programmatic),
+        # manage_state: true in dbt_project.yml (project_config), or
+        # user_settings.yml (user_settings).
+        if getattr(flags, "MANAGE_STATE", False) and dbt.tracking.active_user is not None:
+            track_manage_state(
+                {
+                    "manage_state": True,
+                    "source": getattr(flags, "MANAGE_STATE_SOURCE", None),
+                }
+            )
+
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
         flags_dict_str = cast_dict_to_dict_of_strings(get_flag_dict())
@@ -120,8 +133,8 @@ def preflight(func):
         # Deprecation warnings
         flags.fire_deprecations(ctx)
 
-        if active_user is not None:  # mypy appeasement, always true
-            fire_event(MainTrackingUserState(user_state=active_user.state()))
+        if dbt.tracking.active_user is not None:  # mypy appeasement, always true
+            fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
 
         # Profiling
         if flags.RECORD_TIMING_INFO:
