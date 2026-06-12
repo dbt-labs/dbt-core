@@ -9,8 +9,10 @@ use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, ResolvedCloudConfig},
     state::ResolverState,
 };
+pub use proto_rust::v1::public::events::fusion::LoginType;
 use proto_rust::v1::public::events::fusion::{
-    AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, PackageInstall, ResourceCounts, RunModel,
+    AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, Login, PackageInstall, ResourceCounts,
+    RunModel,
 };
 use proto_rust::v1::public::fields::core_types::ObservabilityMetric;
 use serde::{Deserialize, Serialize};
@@ -554,4 +556,88 @@ fn set_user_cookie(profiles_dir: &Path, cookie_path: &Path) -> String {
     }
     // even if we weren't able to store the user_id in the .user.yml file, return it anyway
     user_id
+}
+
+struct LoginJwtClaims {
+    platform_user_id: Option<u64>,
+    platform_account_id: Option<u64>,
+    platform_account_identifier: Option<String>,
+}
+
+fn extract_login_jwt_claims(access_token: &str) -> Option<LoginJwtClaims> {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let parts: Vec<&str> = access_token.split('.').collect();
+    let payload_bytes = URL_SAFE_NO_PAD.decode(parts.get(1)?).ok()?;
+    let payload: serde_json::Value = serde_json::from_slice(&payload_bytes).ok()?;
+    let parse_u64 =
+        |v: &serde_json::Value| -> Option<u64> { v.as_u64().or_else(|| v.as_str()?.parse().ok()) };
+    Some(LoginJwtClaims {
+        platform_user_id: parse_u64(&payload["sub"]),
+        platform_account_id: parse_u64(&payload["https://dbt.com/account_id"]),
+        platform_account_identifier: payload["https://dbt.com/account_identifier"]
+            .as_str()
+            .map(str::to_owned),
+    })
+}
+
+/// Walk from the current directory toward the filesystem root looking for a
+/// `dbt_project.yml`. Returns the MD5 hex of the project `name` field, or
+/// `None` if no project file is found or the name cannot be parsed.
+fn discover_project_id() -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct ProjectName {
+        name: String,
+    }
+    let mut dir = std::env::current_dir().ok()?;
+    loop {
+        let candidate = dir.join("dbt_project.yml");
+        if candidate.exists() {
+            let contents = fs::read_to_string(candidate).ok()?;
+            let p: ProjectName = dbt_yaml::from_str(&contents).ok()?;
+            return Some(format!("{:x}", md5::compute(&p.name)));
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
+/// Emit a `Login` Vortex event. Call once per `dbt login` invocation,
+/// after the login attempt completes (success or failure).
+///
+/// `access_token` should be the platform OAuth access token when available —
+/// on success it comes directly from the new session; on failure it can be
+/// read from the cached session on disk so that expired-JWT identity fields
+/// are still populated.
+pub fn login_event(
+    invocation_id: &Uuid,
+    success: bool,
+    login_type: LoginType,
+    access_token: Option<&str>,
+) {
+    let claims = access_token.and_then(extract_login_jwt_claims);
+    let c = claims.as_ref();
+
+    let default_profiles_path = dirs::home_dir().map(|h| h.join(".dbt").join("profiles.yml"));
+    let user_cookie = default_profiles_path
+        .as_deref()
+        .map(get_user_id)
+        .unwrap_or_default();
+
+    let message = Login {
+        enrichment: None,
+        event_id: Uuid::new_v4().to_string(),
+        invocation_id: invocation_id.to_string(),
+        success,
+        login_type: login_type as i32,
+        user_cookie,
+        project_id: discover_project_id(),
+        platform_user_id: c.and_then(|x| x.platform_user_id),
+        platform_account_id: c.and_then(|x| x.platform_account_id),
+        platform_account_identifier: c.and_then(|x| x.platform_account_identifier.clone()),
+    };
+
+    let _ = log_proto(message);
 }

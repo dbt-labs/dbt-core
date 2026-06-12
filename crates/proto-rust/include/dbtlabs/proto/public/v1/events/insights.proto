@@ -142,7 +142,7 @@ message RunQuery {
   option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
-  v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext context = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
   string sql = 3;
   string error = 4;
 }
