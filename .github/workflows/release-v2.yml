@@ -82,88 +82,20 @@ defaults:
 
 jobs:
   # ------------------------------------------------------------------
-  # Cut release/vX.Y.Z, bump workspace version, push the branch.
+  # Cut release/vX.Y.Z, bump workspace version, generate the changelog,
+  # push the branch. Delegated to the reusable release-prep workflow so the
+  # same prep can be reused by other workflows (e.g. nightly releases).
+  # Exposes branch/tag/version outputs that the rest of the pipeline hangs off.
   # ------------------------------------------------------------------
   prepare-release:
     name: Prepare release branch
-    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
     permissions:
       contents: write
-    outputs:
-      branch: ${{ steps.bump.outputs.branch }}
-      tag: ${{ steps.bump.outputs.tag }}
+    uses: ./.github/workflows/release-prep-v2.yml
+    with:
       version: ${{ inputs.version }}
-    env:
-      CARGO_INCREMENTAL: 0
-      RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ inputs.source_ref }}
-          fetch-tags: true
-
-      - name: Reject pre-existing tag
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
-            echo "::error::Tag v$VERSION already exists. Pick a new version."
-            exit 1
-          fi
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry and dbt-ci build
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
-        with:
-          shared-key: cargo-ci-tool
-          cache-targets: "true"
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
-        with:
-          version: "v0.12.0"
-
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Cut release branch and bump version
-        id: bump
-        env:
-          VERSION: ${{ inputs.version }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          if [ "$DRY_RUN" = "true" ]; then
-            BRANCH="release/dry-run/v${VERSION}-${GITHUB_RUN_ID}"
-          else
-            BRANCH="release/v${VERSION}"
-          fi
-
-          if [ "$DRY_RUN" != "true" ] && git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            echo "::error::Branch $BRANCH already exists. Delete it or pick a new version."
-            exit 1
-          fi
-
-          git switch -c "$BRANCH"
-
-          # Validates SemVer shape, writes [workspace.package].version, refreshes Cargo.lock.
-          cargo ci bump-cargo-version "$VERSION"
-
-          git add Cargo.toml Cargo.lock
-          git commit \
-            -m "chore: release v${VERSION}" \
-            -m "Release workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          git push origin "$BRANCH"
-
-          {
-            echo "branch=$BRANCH"
-            echo "tag=v${VERSION}"
-          } >> "$GITHUB_OUTPUT"
+      dry_run: ${{ inputs.dry_run }}
+      source_ref: ${{ inputs.source_ref }}
 
   # ------------------------------------------------------------------
   # Build the binary per target via `cargo build`. This is the
