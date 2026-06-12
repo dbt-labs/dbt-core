@@ -64,6 +64,12 @@ pub struct State<'template, 'env> {
     // current program counter, updated by the vm eval loop, is only used for
     // error reporting in filters/functions:
     pub(crate) pc: usize,
+
+    // Location of the call expression that is about to invoke a macro, captured
+    // by the vm just before the call (see `record_pending_call_site`) and read
+    // when the macro starts executing. Only populated when a listener opts into
+    // call-site tracking.
+    pub(crate) pending_call_site: Option<(PathBuf, Span)>,
 }
 
 impl fmt::Debug for State<'_, '_> {
@@ -105,6 +111,27 @@ impl<'template, 'env> State<'template, 'env> {
             fuel_tracker: env.fuel().map(FuelTracker::new),
 
             pc: 0,
+            pending_call_site: None,
+        }
+    }
+
+    /// Records the location of the call expression that is about to invoke a
+    /// macro, so the macro can be reported with its call site. `span` is the
+    /// raw span of the call instruction; it is offset into the current template
+    /// context to match the locations used in error stack traces.
+    ///
+    /// This is a no-op unless a listener opts into call-site tracking, to avoid
+    /// the path clone on the hot call path during normal rendering.
+    pub(crate) fn record_pending_call_site(
+        &mut self,
+        listeners: &[Rc<dyn RenderingEventListener>],
+        span: &Span,
+    ) {
+        if listeners.iter().any(|l| l.tracks_macro_call_sites()) {
+            self.pending_call_site = Some((
+                self.ctx.current_path.clone(),
+                span.with_offset(&self.ctx.current_span),
+            ));
         }
     }
 

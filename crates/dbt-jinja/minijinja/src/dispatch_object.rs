@@ -303,6 +303,7 @@ impl DispatchObject {
                     Value::from("caller"),
                     Value::from_object(Macro {
                         name: Value::from("caller"),
+                        package_name: caller_macro.package_name.clone(),
                         arg_spec: caller_macro.arg_spec.clone(),
                         macro_ref_id: template_state.macros.len(),
                         state_id: template_state.id,
@@ -328,6 +329,11 @@ impl DispatchObject {
                 listeners,
             )
             .expect("function should exist in template");
+
+        // Forward the caller's pending call site (recorded by the vm before the
+        // dispatch) onto the macro's template state, since `func.call` runs with
+        // `template_state` rather than the original caller state.
+        template_state.pending_call_site = state.pending_call_site.clone();
 
         func.call(&template_state, &args, listeners)
     }

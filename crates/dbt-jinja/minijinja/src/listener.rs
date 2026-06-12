@@ -65,6 +65,35 @@ pub trait RenderingEventListener: std::fmt::Debug {
     /// The `template_name` has the form `{package_name}.{macro_name}`.
     fn on_macro_dependency(&self, _template_name: &str) {}
 
+    /// Whether this listener wants macro call-site locations to be tracked.
+    /// Capturing the call site clones a path on every call, so the vm only does
+    /// so when at least one listener opts in. Defaults to `false`.
+    fn tracks_macro_call_sites(&self) -> bool {
+        false
+    }
+
+    /// Called just before a macro body begins executing.
+    ///
+    /// - `name` is the qualified `{package}.{macro_name}`.
+    /// - `call_site` is where the macro was invoked from (the calling
+    ///   template's path and span), when available.
+    /// - `def_path`/`def_span` is where the macro is defined.
+    ///
+    /// Paired with [`on_macro_execute_end`](Self::on_macro_execute_end) around the
+    /// body, including when the body returns an error, so callers can maintain a
+    /// balanced call stack.
+    fn on_macro_execute_start(
+        &self,
+        _name: &str,
+        _call_site: Option<(&Path, &Span)>,
+        _def_path: &Path,
+        _def_span: &Span,
+    ) {
+    }
+
+    /// Called after a macro body finishes executing (on both success and error).
+    fn on_macro_execute_end(&self, _name: &str) {}
+
     /// Called when a ref() or source() call is rendered.
     /// This is used to detect mangled refs by checking if there are
     /// non-whitespace characters adjacent to the ref/source span.
