@@ -129,6 +129,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                         Arc::clone(adapter.engine().type_ops()),
                     ))
                 }),
+                heuristic_clock: std::sync::OnceLock::new(),
             };
 
             Ok(TaskRunnerCtx {

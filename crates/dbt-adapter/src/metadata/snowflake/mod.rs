@@ -1160,6 +1160,72 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         self.freshness_with_overrides_inner_with_options(relations, overrides, options, token)
     }
 
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        database: &'a str,
+        schema: &'a str,
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        // Schema-only WHERE clause — no per-table filtering.
+        let where_clause = format!("table_schema = '{schema}'");
+        let sql = snowflake_freshness_sql(database, &[where_clause]);
+        let relations = relations.to_vec();
+        let adapter = self.adapter.clone();
+        let metadata_warehouse = options.warehouse.clone();
+        let token_clone = token.clone();
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            adapter.engine().clone(),
+            adapter.engine().threads(),
+        ));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          _: &()|
+              -> AdapterResult<Arc<RecordBatch>> {
+            with_metadata_warehouse(
+                &adapter,
+                conn,
+                metadata_warehouse.as_deref(),
+                &token_clone,
+                |conn| {
+                    let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
+                    let metadata_sql = plan
+                        .statements
+                        .last()
+                        .expect("metadata query plan always includes metadata SQL");
+                    let ctx = QueryCtx::default()
+                        .with_desc("Extracting freshness from information schema");
+                    let (_resp, agate_table) =
+                        adapter.query(&ctx, conn, metadata_sql, None, token_clone.clone())?;
+                    Ok(agate_table.original_record_batch())
+                },
+            )
+        };
+
+        let reduce_f = move |acc: &mut Acc, _: (), batch_res: AdapterResult<Arc<RecordBatch>>| {
+            let batch = batch_res?;
+            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+            let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+            for i in 0..batch.num_rows() {
+                for fqn in find_matching_relation(schemas.value(i), tables.value(i), &relations)? {
+                    acc.insert(
+                        fqn,
+                        MetadataFreshness::from_millis(timestamps.value(i), is_views.value(i))?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(vec![()]), token)
+    }
+
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-snowflake/src/dbt/include/snowflake/macros/metadata/list_relations_without_caching.sql
     fn list_relations_in_parallel_inner(
         &self,

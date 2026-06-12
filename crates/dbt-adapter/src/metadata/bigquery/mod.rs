@@ -1344,6 +1344,63 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let keys = by_dataset.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
     }
+
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        database: &'a str,
+        schema: &'a str,
+        relations: &'a [Arc<dyn BaseRelation>],
+        _options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        let sql = format!(
+            "SELECT
+                 dataset_id AS table_schema,
+                 table_id AS table_name,
+                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
+                 (type = 2) AS is_view
+             FROM {database}.__TABLES__
+             WHERE dataset_id = '{schema}'"
+        );
+        let relations = relations.to_vec();
+        let adapter = self.adapter.clone();
+        let factory = Box::new(AdapterConnectionFactory::new(
+            adapter.engine().clone(),
+            adapter.engine().threads(),
+        ));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let token_clone = token.clone();
+        let map_f = move |conn: &mut dyn Connection, _: &()| -> AdapterResult<Arc<RecordBatch>> {
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+            let (_, agate) = adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
+            Ok(agate.original_record_batch())
+        };
+
+        let reduce_f = move |acc: &mut Acc, _: (), batch_res: AdapterResult<Arc<RecordBatch>>| {
+            let batch = match batch_res {
+                Ok(b) => b,
+                Err(e) if e.message().contains("Error 404: Not found:") => return Ok(()),
+                Err(e) => return Err(Cancellable::Error(e)),
+            };
+            let schemas = batch.column_values::<StringArray>("table_schema")?;
+            let tables = batch.column_values::<StringArray>("table_name")?;
+            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
+            let is_views = batch.column_values::<BooleanArray>("is_view")?;
+            for i in 0..batch.num_rows() {
+                for fqn in find_matching_relation(schemas.value(i), tables.value(i), &relations)? {
+                    acc.insert(
+                        fqn,
+                        MetadataFreshness::from_micros(timestamps.value(i), is_views.value(i))?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(vec![()]), token)
+    }
 }
 
 fn is_bigquery_not_found_error(e: &AdapterError) -> bool {

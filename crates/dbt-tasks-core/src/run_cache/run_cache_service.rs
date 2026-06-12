@@ -19,6 +19,7 @@ use crate::task::{TaskOp, TaskResult};
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{Cancellable, into_fs_error};
 use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
+use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
 use dbt_adapter_core::AdapterType;
@@ -457,31 +458,341 @@ pub fn insert_compiled_view_definition(
     });
 }
 
-/// Start-of-run traversal hook. Fires once before any model executes.
+/// A clock bootstrapped once per run from a single warehouse SYSDATE() sample.
 ///
-/// Collects all relations referenced by selected nodes (excluding the
-/// selected nodes themselves) and drives one `ViewDefinitionTraverser`
-/// traversal, warming the shared cache for the rest of the run.
+/// `now_ms` returns that sample plus local monotonic elapsed time, so every
+/// call after the first is pure arithmetic — no additional warehouse queries.
+/// Used in `confirm_run_cache_service_execution` to stamp freshly-executed
+/// tables without re-querying `information_schema`.
 ///
-/// No-op when no `view_traverser` is available (e.g. parse-only mode
-/// with no metadata adapter).
+/// The "heuristic" is the assumption that a table's `last_modified` after
+/// Fusion writes it equals approximately "now." The error is bounded by
+/// local-vs-warehouse clock drift, negligible relative to `lag_tolerance`
+/// windows (minutes to hours).
+#[derive(Debug)]
+pub struct HeuristicClock {
+    start_instant: std::time::Instant,
+    start_ts_ms: i64,
+}
+
+impl HeuristicClock {
+    /// Sample the warehouse clock and return a bootstrapped clock, or `None`
+    /// if the adapter is not opted in or the query fails.
+    ///
+    /// `Instant::now()` is recorded *before* the warehouse query fires so that
+    /// the round-trip time (~50-100 ms) is baked into every subsequent
+    /// `elapsed` calculation, making `now_ms()` reliably land above
+    /// `LAST_ALTERED` despite small Snowflake-vs-local clock skew.
+    pub async fn bootstrap(ctx: &TaskRunnerCtx) -> Option<Self> {
+        if !heuristic_clock_enabled_for_adapter(ctx.adapter_type()) {
+            return None;
+        }
+        let start_instant = std::time::Instant::now();
+        let start_ts_ms = warehouse_now_ms(ctx).await?;
+        Some(Self {
+            start_instant,
+            start_ts_ms,
+        })
+    }
+
+    pub fn now_ms(&self) -> i64 {
+        self.start_ts_ms + self.start_instant.elapsed().as_millis() as i64
+    }
+}
+
+/// Query the warehouse for its current epoch-millisecond timestamp.
+/// Returns `None` when the adapter is unsupported or the query fails.
+async fn warehouse_now_ms(ctx: &TaskRunnerCtx) -> Option<i64> {
+    let sql: &'static str = match ctx.adapter_type() {
+        AdapterType::Snowflake => "SELECT DATE_PART('epoch_millisecond', SYSDATE())",
+        AdapterType::Redshift => "SELECT (EXTRACT(EPOCH FROM GETDATE()) * 1000)::BIGINT",
+        AdapterType::Databricks => "SELECT unix_millis(current_timestamp())",
+        AdapterType::Bigquery => "SELECT UNIX_MILLIS(CURRENT_TIMESTAMP())",
+        _ => return None,
+    };
+    let ctx_inner = ctx.clone();
+    TaskOp::Blocking(Box::new(move || -> Option<i64> {
+        let adapter = ctx_inner.env.get_adapter_ref()?;
+        let query_ctx = QueryCtx::default().with_desc("dbt State run clock");
+        let (_, table) = adapter
+            .execute_without_state(Some(&query_ctx), sql, true)
+            .ok()?;
+        table.original_record_batch().first_value_as_i64()
+    }))
+    .run()
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Return `true` for adapters that opt into the heuristic clock.
+fn heuristic_clock_enabled_for_adapter(adapter_type: AdapterType) -> bool {
+    matches!(
+        adapter_type,
+        AdapterType::Snowflake
+            | AdapterType::Redshift
+            | AdapterType::Databricks
+            | AdapterType::Bigquery
+    )
+}
+
+/// Collect every relation and source freshness override needed for the run's
+/// metadata prefetch.
 ///
-/// Returns the originating `AdapterError` on traversal failure; the
-/// caller is responsible for surfacing it as a run-level failure.
-pub async fn run_cache_service_before_run(ctx: &TaskRunnerCtx) -> AdapterResult<()> {
-    let Some(traverser) = ctx.inner.run_cache_ctx.view_traverser.as_ref() else {
+/// Returns a map of `semantic_fqn → relation` covering every selected node's
+/// own target relation plus the relations of all their runtime dependencies
+/// (models, snapshots, seeds, sources). Ephemeral and inline models are skipped
+/// because they never submit to the service. A second map carries
+/// `FreshnessOverride` entries for sources that declare `loaded_at_query` or
+/// `loaded_at_field`; these are passed through to `freshness_with_overrides`
+/// so the prefetch uses the same freshness strategy as per-node submits.
+///
+/// Taking the individual components rather than a `&TaskRunnerCtx` keeps this
+/// function unit-testable without a live adapter.
+fn collect_global_prefetch_relations(
+    adapter_type: AdapterType,
+    runnable_set: &BTreeSet<String>,
+    runtime_deps: &BTreeMap<String, BTreeSet<String>>,
+    nodes: &dbt_schemas::schemas::Nodes,
+) -> (
+    BTreeMap<String, Arc<dyn BaseRelation>>,
+    BTreeMap<String, FreshnessOverride>,
+) {
+    let mut relations: BTreeMap<String, Arc<dyn BaseRelation>> = BTreeMap::new();
+    let mut overrides: BTreeMap<String, FreshnessOverride> = BTreeMap::new();
+
+    let trimmed_nonempty = |s: &str| {
+        let t = s.trim();
+        (!t.is_empty()).then(|| t.to_string())
+    };
+
+    for node_id in runnable_set {
+        let Some(node) = nodes.get_node(node_id) else {
+            continue;
+        };
+        if let Some(model) = node.as_any().downcast_ref::<DbtModel>() {
+            if is_no_op_model_materialization(model.materialized()) {
+                continue;
+            }
+        }
+
+        if let Ok(relation) = create_relation_from_node(adapter_type, node, None) {
+            let fqn = relation.semantic_fqn();
+            relations.entry(fqn).or_insert_with(|| relation.into());
+        }
+
+        let Some(dep_ids) = runtime_deps.get(node_id) else {
+            continue;
+        };
+        for dep_id in dep_ids {
+            let Some(dep_node) = nodes.get_node(dep_id) else {
+                continue;
+            };
+            if !dep_node.as_any().is::<DbtModel>()
+                && !dep_node.as_any().is::<DbtSnapshot>()
+                && !dep_node.as_any().is::<DbtSeed>()
+                && !dep_id.starts_with("source.")
+            {
+                continue;
+            }
+            let Ok(relation) = create_relation_from_node(adapter_type, dep_node, None) else {
+                continue;
+            };
+            let fqn = relation.semantic_fqn();
+            if let Some(source) = dep_node.as_any().downcast_ref::<DbtSource>() {
+                let override_kind = source
+                    .__source_attr__
+                    .loaded_at_query
+                    .as_deref()
+                    .and_then(trimmed_nonempty)
+                    .map(FreshnessOverride::Query)
+                    .or_else(|| {
+                        source
+                            .__source_attr__
+                            .loaded_at_field
+                            .as_deref()
+                            .and_then(trimmed_nonempty)
+                            .map(FreshnessOverride::Field)
+                    });
+                if let Some(kind) = override_kind {
+                    overrides.insert(fqn.clone(), kind);
+                }
+            }
+            relations.entry(fqn).or_insert_with(|| relation.into());
+        }
+    }
+
+    (relations, overrides)
+}
+
+/// Batch-prefetch `last_modified_epoch` for all selected nodes and their
+/// runtime dependencies, warming `run_cache_metadata` before any per-node
+/// submit fires.
+///
+/// After this call, `last_modified_epoch_for_relation` returns a cache hit
+/// for every relation in the prefetch set, eliminating the per-node warehouse
+/// round-trips that `collect_table_modified_infos` would otherwise incur.
+/// Errors are fail-open: a failed prefetch is logged at trace level and the
+/// run continues; per-node fallback fetches will still succeed.
+async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) {
+    let (relations, overrides) = collect_global_prefetch_relations(
+        ctx.adapter_type(),
+        &ctx.inner.runnable_set,
+        &ctx.inner.runtime_deps,
+        ctx.nodes(),
+    );
+    if relations.is_empty() {
+        return;
+    }
+    if let Err(err) = bulk_prefetch_last_modified_by_schema(ctx, &relations, &overrides).await {
+        emit_trace_log_message(|| format!("dbt State global metadata prefetch failed: {err}"));
+    }
+}
+
+/// Prefetch last-modified epochs using per-schema dump queries rather than
+/// per-table predicates.
+///
+/// For each (database, schema) group, calls `freshness_all_in_schema` which
+/// returns ALL rows for the schema with a single `WHERE table_schema = '...'`
+/// filter — matching the plugin's approach. Relations with source overrides
+/// (`loaded_at_query` / `loaded_at_field`) are handled separately via the
+/// existing per-table path so their custom freshness logic is preserved.
+///
+/// Falls back to the per-table path for adapters where `freshness_all_in_schema`
+/// returns an empty result (the default implementation).
+async fn bulk_prefetch_last_modified_by_schema(
+    ctx: &TaskRunnerCtx,
+    relations: &BTreeMap<String, Arc<dyn BaseRelation>>,
+    overrides: &BTreeMap<String, FreshnessOverride>,
+) -> FsResult<()> {
+    let Some(adapter) = ctx.env.get_adapter_ref() else {
+        for name in relations.keys() {
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .insert_last_modified_epoch(name, None);
+        }
         return Ok(());
     };
-    let roots = collect_view_traversal_roots(ctx);
-    if roots.is_empty() {
+    let Some(metadata_adapter) = adapter.metadata_adapter() else {
+        for name in relations.keys() {
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .insert_last_modified_epoch(name, None);
+        }
+        return Ok(());
+    };
+
+    let metadata_options = run_cache_metadata_query_options(ctx);
+
+    // Separate relations with overrides — they need the per-table path so
+    // their custom freshness queries (loaded_at_query / loaded_at_field) fire.
+    let (override_relations, bulk_relations): (
+        BTreeMap<String, Arc<dyn BaseRelation>>,
+        BTreeMap<String, Arc<dyn BaseRelation>>,
+    ) = relations
+        .iter()
+        .map(|(k, v)| (k.clone(), Arc::clone(v)))
+        .partition(|(name, _)| overrides.contains_key(name.as_str()));
+
+    // Handle overrides via the existing per-table path.
+    if !override_relations.is_empty() {
+        refresh_last_modified_epochs(ctx, &override_relations, overrides).await?;
+    }
+
+    if bulk_relations.is_empty() {
         return Ok(());
     }
-    let token = ctx
-        .env
-        .get_adapter_ref()
-        .map(|a| a.cancellation_token())
-        .unwrap_or_else(never_cancels);
-    let _ = traverser.traverse(&roots, token).await?;
+
+    // For each (database, schema) group, attempt a schema dump. If the adapter
+    // returns an empty map (unsupported), fall back to per-table for that group.
+    for ((database, schema), grouped) in group_relations_by_database_and_schema(&bulk_relations) {
+        let semantic_to_name: BTreeMap<String, String> = grouped
+            .iter()
+            .map(|(name, rel)| (rel.semantic_fqn(), name.clone()))
+            .collect();
+        let relation_values: Vec<Arc<dyn BaseRelation>> = grouped.values().cloned().collect();
+
+        let db = database.as_deref().unwrap_or("");
+        let sch = schema.as_deref().unwrap_or("");
+
+        let dump = metadata_adapter
+            .freshness_all_in_schema(
+                db,
+                sch,
+                &relation_values,
+                &metadata_options,
+                adapter.cancellation_token(),
+            )
+            .await
+            .map_err(into_fs_error)?;
+
+        if dump.is_empty() {
+            // Adapter doesn't support schema dump — fall back to per-table.
+            let empty_overrides = BTreeMap::new();
+            let freshness = metadata_adapter
+                .freshness_with_overrides_and_options(
+                    &relation_values,
+                    &empty_overrides,
+                    &metadata_options,
+                    adapter.cancellation_token(),
+                )
+                .await
+                .map_err(into_fs_error)?;
+            for (sem_fqn, name) in semantic_to_name {
+                let epoch = freshness
+                    .get(&sem_fqn)
+                    .map(|m| m.last_altered.timestamp_millis());
+                ctx.inner
+                    .run_cache_ctx
+                    .run_cache_metadata
+                    .insert_last_modified_epoch(&name, epoch);
+            }
+        } else {
+            // Schema dump succeeded — store everything returned and mark
+            // requested relations missing from the dump as non-existent.
+            for (sem_fqn, name) in &semantic_to_name {
+                let epoch = dump.get(sem_fqn).map(|m| m.last_altered.timestamp_millis());
+                ctx.inner
+                    .run_cache_ctx
+                    .run_cache_metadata
+                    .insert_last_modified_epoch(name, epoch);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Start-of-run hook. Fires once before any model executes.
+///
+/// 1. Drives a `ViewDefinitionTraverser` traversal over all unselected upstream
+///    relations, warming the view-definition cache for the rest of the run.
+/// 2. Batch-prefetches `last_modified_epoch` for all selected nodes and their
+///    runtime dependencies into `run_cache_metadata`, so per-node submits
+///    resolve freshness from the in-process cache instead of issuing individual
+///    warehouse queries.
+///
+/// Both steps are fail-open. The view traversal error is surfaced to the
+/// caller; the metadata prefetch is traced and swallowed.
+pub async fn run_cache_service_before_run(ctx: &TaskRunnerCtx) -> AdapterResult<()> {
+    if let Some(traverser) = ctx.inner.run_cache_ctx.view_traverser.as_ref() {
+        let roots = collect_view_traversal_roots(ctx);
+        if !roots.is_empty() {
+            let token = ctx
+                .env
+                .get_adapter_ref()
+                .map(|a| a.cancellation_token())
+                .unwrap_or_else(never_cancels);
+            let _ = traverser.traverse(&roots, token).await?;
+        }
+    }
+    prefetch_global_last_modified_epochs(ctx).await;
+
+    if let Some(clock) = HeuristicClock::bootstrap(ctx).await {
+        let _ = ctx.inner.run_cache_ctx.heuristic_clock.set(clock);
+    }
     Ok(())
 }
 
@@ -635,6 +946,22 @@ pub async fn confirm_run_cache_service_execution(
     // where there is no audit relation to query.
     let final_last_modified_epoch = if is_test {
         None
+    } else if let Some(clock) = ctx.inner.run_cache_ctx.heuristic_clock.get() {
+        let h = clock.now_ms();
+        // Mirror the plugin's `clear_cache` + `cache_last_modified_epoch(table, H)`:
+        // replace the stale prefetch value (often None for newly-created tables) with H
+        // so downstream submissions in the same run have metadata_complete=true.
+        if let Ok((name, _)) = relation_for_node(ctx, node) {
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .remove_last_modified_epoch(&name);
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .insert_last_modified_epoch(&name, Some(h));
+        }
+        Some(h)
     } else {
         match refresh_final_last_modified_epoch_for_node(ctx, node).await {
             Ok(epoch) => epoch,
@@ -979,6 +1306,15 @@ impl RunCachePendingExecutionRecord {
     }
 }
 
+/// Guard against cloning from a source that was modified out-of-band since the
+/// service issued its Clone decision.
+///
+/// Mirrors the plugin's check (run_cache.py lines 776-792): abort if the
+/// source's current epoch is **greater than** the required epoch, meaning an
+/// external write happened after the service recorded the state. Equality and
+/// less-than are both fine — equal means nothing changed; less-than covers the
+/// case where the confirmed epoch was a heuristic that landed slightly above the
+/// true `LAST_ALTERED` value.
 async fn verify_clone_source_freshness(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
@@ -998,10 +1334,11 @@ async fn verify_clone_source_freshness(
     let actual_epoch =
         refresh_last_modified_epoch_for_relation(ctx, &clone.clone_source, source_relation).await?;
     match actual_epoch {
-        Some(actual_epoch) if actual_epoch == required_epoch => Ok(()),
+        Some(actual_epoch) if actual_epoch <= required_epoch => Ok(()),
         Some(actual_epoch) => Err(fs_err!(
             ErrorCode::Generic,
-            "dbt State service clone source freshness mismatch for {}: required {}, found {}",
+            "dbt State service clone source was modified since the cache decision for {}: \
+             required epoch <= {}, found {}; falling back to execution",
             clone.clone_source,
             required_epoch,
             actual_epoch
@@ -2949,5 +3286,284 @@ mod tests {
 
     fn empty_response() -> SubmitSqlResponse {
         SubmitSqlResponse { response: None }
+    }
+
+    // ── collect_global_prefetch_relations tests ──────────────────────────────
+
+    fn make_model(
+        unique_id: &str,
+        db: &str,
+        schema: &str,
+        alias: &str,
+        mat: DbtMaterialization,
+    ) -> Arc<DbtModel> {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = unique_id.to_string();
+        model.__base_attr__.database = db.to_string();
+        model.__base_attr__.schema = schema.to_string();
+        model.__base_attr__.alias = alias.to_string();
+        model.__base_attr__.materialized = mat;
+        Arc::new(model)
+    }
+
+    fn make_source(unique_id: &str, db: &str, schema: &str, alias: &str) -> Arc<DbtSource> {
+        let mut source = DbtSource::default();
+        source.__common_attr__.unique_id = unique_id.to_string();
+        source.__base_attr__.database = db.to_string();
+        source.__base_attr__.schema = schema.to_string();
+        source.__base_attr__.alias = alias.to_string();
+        source.__base_attr__.materialized = DbtMaterialization::View;
+        Arc::new(source)
+    }
+
+    fn nodes_from(
+        models: Vec<Arc<DbtModel>>,
+        sources: Vec<Arc<DbtSource>>,
+    ) -> dbt_schemas::schemas::Nodes {
+        let mut nodes = dbt_schemas::schemas::Nodes::default();
+        for m in models {
+            nodes.models.insert(m.__common_attr__.unique_id.clone(), m);
+        }
+        for s in sources {
+            nodes.sources.insert(s.__common_attr__.unique_id.clone(), s);
+        }
+        nodes
+    }
+
+    fn fqn_of(db: &str, schema: &str, alias: &str) -> String {
+        create_relation(
+            AdapterType::Snowflake,
+            db.to_string(),
+            schema.to_string(),
+            Some(alias.to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap()
+        .semantic_fqn()
+    }
+
+    #[test]
+    fn prefetch_includes_selected_node_and_source_dep() {
+        let model = make_model(
+            "model.pkg.orders",
+            "db",
+            "analytics",
+            "orders",
+            DbtMaterialization::Table,
+        );
+        let source = make_source("source.pkg.raw.events", "db", "raw", "events");
+
+        let runnable_set: BTreeSet<String> = ["model.pkg.orders".to_string()].into_iter().collect();
+        let runtime_deps: BTreeMap<String, BTreeSet<String>> = [(
+            "model.pkg.orders".to_string(),
+            ["source.pkg.raw.events".to_string()].into_iter().collect(),
+        )]
+        .into_iter()
+        .collect();
+        let nodes = nodes_from(vec![model], vec![source]);
+
+        let (relations, overrides) = collect_global_prefetch_relations(
+            AdapterType::Snowflake,
+            &runnable_set,
+            &runtime_deps,
+            &nodes,
+        );
+
+        assert!(
+            relations.contains_key(&fqn_of("db", "analytics", "orders")),
+            "selected model target should be included"
+        );
+        assert!(
+            relations.contains_key(&fqn_of("db", "raw", "events")),
+            "source dep should be included"
+        );
+        assert!(overrides.is_empty());
+    }
+
+    #[test]
+    fn prefetch_skips_ephemeral_nodes() {
+        let ephemeral = make_model(
+            "model.pkg.eph",
+            "db",
+            "analytics",
+            "eph",
+            DbtMaterialization::Ephemeral,
+        );
+        let runnable_set: BTreeSet<String> = ["model.pkg.eph".to_string()].into_iter().collect();
+        let runtime_deps: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let nodes = nodes_from(vec![ephemeral], vec![]);
+
+        let (relations, _) = collect_global_prefetch_relations(
+            AdapterType::Snowflake,
+            &runnable_set,
+            &runtime_deps,
+            &nodes,
+        );
+
+        assert!(relations.is_empty(), "ephemeral nodes should be excluded");
+    }
+
+    #[test]
+    fn prefetch_includes_source_freshness_overrides() {
+        let model = make_model(
+            "model.pkg.fact",
+            "db",
+            "analytics",
+            "fact",
+            DbtMaterialization::Incremental,
+        );
+        let mut source = DbtSource::default();
+        source.__common_attr__.unique_id = "source.pkg.raw.users".to_string();
+        source.__base_attr__.database = "db".to_string();
+        source.__base_attr__.schema = "raw".to_string();
+        source.__base_attr__.alias = "users".to_string();
+        source.__base_attr__.materialized = DbtMaterialization::View;
+        source.__source_attr__.loaded_at_field = Some("updated_at".to_string());
+        let source = Arc::new(source);
+
+        let runnable_set: BTreeSet<String> = ["model.pkg.fact".to_string()].into_iter().collect();
+        let runtime_deps: BTreeMap<String, BTreeSet<String>> = [(
+            "model.pkg.fact".to_string(),
+            ["source.pkg.raw.users".to_string()].into_iter().collect(),
+        )]
+        .into_iter()
+        .collect();
+        let nodes = nodes_from(vec![model], vec![source]);
+
+        let (_, overrides) = collect_global_prefetch_relations(
+            AdapterType::Snowflake,
+            &runnable_set,
+            &runtime_deps,
+            &nodes,
+        );
+
+        let source_fqn = fqn_of("db", "raw", "users");
+        assert!(
+            overrides.contains_key(&source_fqn),
+            "source with loaded_at_field should produce an override"
+        );
+        assert!(
+            matches!(overrides[&source_fqn], FreshnessOverride::Field(_)),
+            "override kind should be Field"
+        );
+    }
+
+    #[test]
+    fn prefetch_deduplicates_shared_deps() {
+        let model_a = make_model(
+            "model.pkg.a",
+            "db",
+            "analytics",
+            "a",
+            DbtMaterialization::Table,
+        );
+        let model_b = make_model(
+            "model.pkg.b",
+            "db",
+            "analytics",
+            "b",
+            DbtMaterialization::Table,
+        );
+        let shared_source = make_source("source.pkg.raw.shared", "db", "raw", "shared");
+
+        let runnable_set: BTreeSet<String> = ["model.pkg.a".to_string(), "model.pkg.b".to_string()]
+            .into_iter()
+            .collect();
+        let runtime_deps: BTreeMap<String, BTreeSet<String>> = [
+            (
+                "model.pkg.a".to_string(),
+                ["source.pkg.raw.shared".to_string()].into_iter().collect(),
+            ),
+            (
+                "model.pkg.b".to_string(),
+                ["source.pkg.raw.shared".to_string()].into_iter().collect(),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        let nodes = nodes_from(vec![model_a, model_b], vec![shared_source]);
+
+        let (relations, _) = collect_global_prefetch_relations(
+            AdapterType::Snowflake,
+            &runnable_set,
+            &runtime_deps,
+            &nodes,
+        );
+
+        // 2 selected models + 1 shared source = 3 unique entries
+        assert_eq!(relations.len(), 3);
+        assert!(relations.contains_key(&fqn_of("db", "raw", "shared")));
+    }
+
+    // ── HeuristicClock tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn heuristic_clock_now_ms_equals_start_when_no_time_elapsed() {
+        // Freeze the clock by giving it a start_instant that was created just
+        // before we check; elapsed will be sub-millisecond so now_ms should
+        // equal start_ts_ms (integer truncation keeps the delta at zero).
+        let start_ts_ms: i64 = 1_700_000_000_000;
+        let clock = HeuristicClock {
+            start_ts_ms,
+            start_instant: std::time::Instant::now(),
+        };
+        // Elapsed is essentially zero immediately after construction.
+        assert_eq!(clock.now_ms(), start_ts_ms);
+    }
+
+    #[test]
+    fn heuristic_clock_now_ms_advances_monotonically() {
+        let start_ts_ms: i64 = 1_700_000_000_000;
+        let clock = HeuristicClock {
+            start_ts_ms,
+            start_instant: std::time::Instant::now(),
+        };
+        let first = clock.now_ms();
+        // Spin briefly so at least one millisecond passes.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(5);
+        while std::time::Instant::now() < deadline {}
+        let second = clock.now_ms();
+        assert!(
+            second >= first,
+            "now_ms should be non-decreasing: first={first}, second={second}"
+        );
+    }
+
+    #[test]
+    fn heuristic_clock_now_ms_reflects_start_offset() {
+        // Build a clock with a known start, then manually verify the arithmetic
+        // by constructing a second clock with a start 1000 ms later and
+        // checking that the difference between their now_ms values is ~1000.
+        let base: i64 = 1_700_000_000_000;
+        let clock_a = HeuristicClock {
+            start_ts_ms: base,
+            start_instant: std::time::Instant::now(),
+        };
+        let clock_b = HeuristicClock {
+            start_ts_ms: base + 1_000,
+            start_instant: std::time::Instant::now(),
+        };
+        // Both clocks were created at approximately the same real time, so
+        // their elapsed values are nearly equal. The difference in now_ms
+        // should therefore be close to 1000 ms.
+        let diff = clock_b.now_ms() - clock_a.now_ms();
+        assert!(
+            (990..=1010).contains(&diff),
+            "expected diff ~1000ms, got {diff}"
+        );
+    }
+
+    #[test]
+    fn heuristic_clock_once_lock_set_and_get() {
+        let lock: std::sync::OnceLock<HeuristicClock> = std::sync::OnceLock::new();
+        assert!(lock.get().is_none(), "lock should be empty before set");
+        lock.set(HeuristicClock {
+            start_ts_ms: 42_000,
+            start_instant: std::time::Instant::now(),
+        })
+        .unwrap();
+        let clock = lock.get().expect("clock should be set");
+        assert_eq!(clock.now_ms(), 42_000);
     }
 }

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::run_cache::run_cache_service::HeuristicClock;
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
 use dbt_adapter::relation::create_relation_from_node;
@@ -46,6 +47,10 @@ pub struct RunCacheCtx {
     pub run_cache_service_config: Option<RunCacheServiceConfig>,
     pub run_cache_service_client: Option<SharedRunCacheServiceClient>,
     pub view_traverser: Option<Arc<ViewDefinitionTraverser>>,
+    /// Run-start warehouse clock, set once in `run_cache_service_before_run`.
+    /// When present, `confirm_run_cache_service_execution` uses it to stamp
+    /// freshly-executed tables without an additional warehouse round-trip.
+    pub heuristic_clock: std::sync::OnceLock<HeuristicClock>,
 }
 
 /// Information about a rendered node, used for unit test hash computation.
