@@ -1,6 +1,5 @@
 use std::sync::OnceLock;
 
-use dbt_telemetry::TelemetryAttributes;
 use tracing::{Subscriber, level_filters::LevelFilter, span};
 
 use tracing_subscriber::{
@@ -9,7 +8,8 @@ use tracing_subscriber::{
     registry::{LookupSpan, SpanRef},
 };
 
-use super::{
+use crate::{
+    TelemetryAttributes,
     constants::PROCESS_SPAN_NAME,
     error::{TracingError, TracingResult},
     event_info::store_event_attributes,
@@ -58,7 +58,7 @@ pub struct TelemetryHandle {
 
 // This impl block is intended to stay with the future generic tracing library.
 impl TelemetryHandle {
-    pub(crate) fn new(items: Vec<TelemetryShutdownItem>, process_span_handle: span::Span) -> Self {
+    pub fn new(items: Vec<TelemetryShutdownItem>, process_span_handle: span::Span) -> Self {
         TelemetryHandle {
             items,
             process_span_handle: Some(process_span_handle),
@@ -140,9 +140,7 @@ pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync +
 /// Creates a tracing subscriber implementing our telemetry data pipeline.
 ///
 /// See module README for details on the pipeline.
-pub(super) fn create_tracing_subcriber_with_layer<
-    D: Layer<BaseSubscriber> + Send + Sync + 'static,
->(
+pub fn create_tracing_subcriber_with_layer<D: Layer<BaseSubscriber> + Send + Sync + 'static>(
     max_log_verbosity: LevelFilter,
     data_layer: D,
 ) -> impl Subscriber + Send + Sync + 'static {

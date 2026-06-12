@@ -9,8 +9,8 @@ use crate::tracing::{
         metric_aggregator::TelemetryMetricAggregator,
         warn_error_options::TelemetryWarnErrorOptionsMiddleware,
     },
-    tests::mocks::{MockDynSpanEvent, TestLayer, test_data_layer},
 };
+use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 use crate::ErrorCode;
 use crate::warn_error_options::{SupportedLegacyWarnError, WarnErrorOptionValue, WarnErrorOptions};

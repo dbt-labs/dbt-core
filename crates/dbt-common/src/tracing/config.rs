@@ -2,7 +2,6 @@ use std::{borrow::Cow, path::PathBuf};
 
 use super::{
     dbt_convert::log_level_filter_to_tracing,
-    layer::{ConsumerLayer, MiddlewareLayer},
     layers::{
         file_log_layer::build_file_log_layer_with_background_writer,
         json_compat_layer::{
@@ -18,8 +17,6 @@ use super::{
     middlewares::metric_aggregator::TelemetryMetricAggregator,
     middlewares::node_warn_outcome::TelemetryNodeWarnOutcome,
     middlewares::warn_error_options::TelemetryWarnErrorOptionsMiddleware,
-    rotating_file_writer::RotatingFileWriter,
-    shutdown::TelemetryShutdownItem,
     tracing_feature_handles::TracingConfigProvider,
 };
 use crate::{
@@ -38,6 +35,11 @@ use crate::{
 };
 use dbt_error::{ErrorCode, FsError, FsResult};
 use dbt_telemetry::{LogMessage, LogRecordInfo, TelemetryEventTypeRegistry};
+use dbt_tracing::{
+    layer::{ConsumerLayer, MiddlewareLayer},
+    rotating_file_writer::RotatingFileWriter,
+    shutdown::TelemetryShutdownItem,
+};
 use tracing::level_filters::LevelFilter;
 
 /// Configuration for tracing.

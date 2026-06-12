@@ -1,12 +1,8 @@
-use dbt_error::{ErrorCode, FsError};
+use dbt_tracing::error::TracingError;
 
-use super::error::TracingError;
+use crate::{ErrorCode, FsError};
 
 /// Fusion error bridge for tracing-owned errors.
-///
-/// This module's placement under tracing is temporary. It should move out of
-/// tracing once the generic tracing code is extracted into its own crate and
-/// `dbt-error` can depend on that crate directly.
 impl From<TracingError> for FsError {
     fn from(error: TracingError) -> Self {
         let code = match error {

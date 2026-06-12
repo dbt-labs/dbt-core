@@ -1,4 +1,5 @@
-use crate::tracing::{
+use crate::{
+    LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags,
     data_provider::DataProvider,
     emit::{
         create_debug_span, create_info_span, create_root_info_span, emit_debug_event,
@@ -10,13 +11,9 @@ use crate::tracing::{
 };
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent, TestLayer, test_data_layer};
-use dbt_telemetry::TelemetryOutputFlags;
 use tracing::level_filters::LevelFilter;
 
-fn find_span_by_event_name<'a>(
-    records: &'a [dbt_telemetry::SpanStartInfo],
-    name: &str,
-) -> &'a dbt_telemetry::SpanStartInfo {
+fn find_span_by_event_name<'a>(records: &'a [SpanStartInfo], name: &str) -> &'a SpanStartInfo {
     records
         .iter()
         .find(|record| {
@@ -46,34 +43,26 @@ impl TokenFilteringConsumer {
 }
 
 impl TelemetryConsumer for TokenFilteringConsumer {
-    fn is_span_enabled(&self, span: &dbt_telemetry::SpanStartInfo) -> bool {
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
         span.attributes
             .downcast_ref::<MockDynSpanEvent>()
             .map(|event| event.name.contains(&self.span_token))
             .unwrap_or(false)
     }
 
-    fn is_log_enabled(&self, log: &dbt_telemetry::LogRecordInfo) -> bool {
+    fn is_log_enabled(&self, log: &LogRecordInfo) -> bool {
         log.body.contains(&self.log_token)
     }
 
-    fn on_span_start(
-        &self,
-        span: &dbt_telemetry::SpanStartInfo,
-        data_provider: &mut DataProvider<'_>,
-    ) {
+    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &mut DataProvider<'_>) {
         self.inner.on_span_start(span, data_provider);
     }
 
-    fn on_span_end(&self, span: &dbt_telemetry::SpanEndInfo, data_provider: &mut DataProvider<'_>) {
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {
         self.inner.on_span_end(span, data_provider);
     }
 
-    fn on_log_record(
-        &self,
-        record: &dbt_telemetry::LogRecordInfo,
-        data_provider: &mut DataProvider<'_>,
-    ) {
+    fn on_log_record(&self, record: &LogRecordInfo, data_provider: &mut DataProvider<'_>) {
         self.inner.on_log_record(record, data_provider);
     }
 }

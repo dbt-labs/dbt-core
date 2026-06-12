@@ -1,4 +1,4 @@
-use dbt_telemetry::TelemetryAttributes;
+use crate::TelemetryAttributes;
 use std::cell::RefCell;
 use tracing::Event;
 
@@ -27,12 +27,12 @@ thread_local! {
 
 /// Pre-saves structured event attributes to be immediately consumed by tracing span/log call.
 ///
-/// If you want to emit a log or create a new span, prefer - `dbt_common::tracing::emit::...` macros to avoid mistakes.
+/// If you want to emit a log or create a new span, prefer - `dbt_tracing::emit::...` macros to avoid mistakes.
 ///
 /// The only use case where this API should be used outside of `dbt_common::tracing` is
 /// in conjunction with `#[tracing::instrument]`:
 /// ```no_run
-/// use dbt_common::tracing::event_info::store_event_attributes;
+/// use dbt_tracing::event_info::store_event_attributes;
 ///
 /// #[tracing::instrument(
 ///    skip_all,

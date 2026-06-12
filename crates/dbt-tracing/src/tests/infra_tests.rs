@@ -1,21 +1,18 @@
-use dbt_telemetry::{
-    LogMessage, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, TelemetryAttributes,
-    TelemetryOutputFlags,
-};
 use std::{panic::Location, sync::Arc};
 
-use crate::tracing::{
+use crate::{
+    LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, TelemetryAttributes,
+    TelemetryOutputFlags,
     data_provider::DataProvider,
     emit::{create_info_span, create_root_info_span, emit_info_event},
+    init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
+    layer::TelemetryConsumer,
 };
 
-use super::{
-    super::{init::create_tracing_subcriber_with_layer, layer::TelemetryConsumer},
-    mocks::{
-        MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, MockUnknown, TestLayer,
-        TestTelemetryContext, test_data_layer,
-    },
+use super::mocks::{
+    MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, MockUnknown, TestLayer,
+    TestTelemetryContext, test_data_layer,
 };
 
 #[test]
@@ -347,7 +344,13 @@ fn test_tracing_log_record_poisoning() {
             tracing::subscriber::with_default(subscriber1, || {
                 let _g = shared_span.entered();
                 let msg = format!("event from thread {:?}", thread::current().id());
-                emit_info_event(LogMessage::default(), Some(&msg));
+                emit_info_event(
+                    MockDynLogEvent {
+                        flags: TelemetryOutputFlags::ALL,
+                        ..Default::default()
+                    },
+                    Some(&msg),
+                );
             })
         });
 
@@ -357,7 +360,13 @@ fn test_tracing_log_record_poisoning() {
             tracing::subscriber::with_default(subscriber2, || {
                 let _g = shared_span_clone.entered();
                 let msg = format!("event from thread {:?}", thread::current().id());
-                emit_info_event(LogMessage::default(), Some(&msg));
+                emit_info_event(
+                    MockDynLogEvent {
+                        flags: TelemetryOutputFlags::ALL,
+                        ..Default::default()
+                    },
+                    Some(&msg),
+                );
             })
         });
 

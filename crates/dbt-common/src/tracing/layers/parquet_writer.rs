@@ -12,7 +12,7 @@ use dbt_telemetry::{
 };
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 
-use super::super::{
+use dbt_tracing::{
     data_provider::DataProvider,
     error::{TracingError, TracingResult},
     layer::{ConsumerLayer, TelemetryConsumer},
@@ -342,13 +342,13 @@ impl Drop for TelemetryParquetWriterHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tracing::tests::mocks::{
-        MockDynLogEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
-    };
     use arrow_schema::Schema;
     use dbt_telemetry::{
         LogRecordInfo, SeverityNumber, TelemetryOutputFlags, TelemetryRecord,
         serialize::arrow::{TelemetryArrowSchemas, deserialize_from_arrow},
+    };
+    use dbt_tracing::test_support::mocks::{
+        MockDynLogEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
     };
     use std::io::{self, Cursor, Write};
     use std::sync::{Arc, Mutex};

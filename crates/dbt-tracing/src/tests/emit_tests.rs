@@ -1,9 +1,7 @@
-use dbt_telemetry::{
-    RecordCodeLocation, SeverityNumber, TelemetryAttributes, TelemetryOutputFlags,
-};
 use std::panic::Location;
 
-use crate::tracing::{
+use crate::{
+    RecordCodeLocation, SeverityNumber, TelemetryAttributes, TelemetryOutputFlags,
     emit::{
         create_info_span, create_root_info_span, emit_debug_event, emit_error_event,
         emit_info_event, emit_trace_event, emit_warn_event,

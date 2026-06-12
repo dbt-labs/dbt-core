@@ -1,4 +1,4 @@
-use dbt_telemetry::SeverityNumber;
+use crate::SeverityNumber;
 use tracing::Level;
 
 pub fn log_level_to_severity(level: &Level) -> (SeverityNumber, &'static str) {

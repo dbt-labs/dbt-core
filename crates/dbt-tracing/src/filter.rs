@@ -1,5 +1,7 @@
-use super::{data_provider::DataProvider, layer::TelemetryConsumer};
-use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
+use crate::{
+    LogRecordInfo, SpanEndInfo, SpanStartInfo, data_provider::DataProvider,
+    layer::TelemetryConsumer,
+};
 
 pub trait TelemetryFilter {
     fn is_span_enabled(&self, span: &SpanStartInfo) -> bool;

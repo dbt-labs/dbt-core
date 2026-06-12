@@ -1,11 +1,11 @@
-use crate::tracing::{
+use crate::{
+    TelemetryOutputFlags,
     data_provider::DataProvider,
     emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
     metrics::{MetricKey, get_metric, increment_metric},
 };
-use dbt_telemetry::TelemetryOutputFlags;
 use tracing_subscriber::{Registry, registry::LookupSpan};
 
 use super::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};

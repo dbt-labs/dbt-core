@@ -1,11 +1,11 @@
-use super::super::{
+use crate::{
+    TelemetryOutputFlags,
     emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
     metrics::{MetricKey, get_metric},
     tests::mocks::{MockDynSpanEvent, MockMiddleware, TestLayer, test_data_layer},
 };
-use dbt_telemetry::TelemetryOutputFlags;
 
 const TEST_WARNING_METRIC: MetricKey = MetricKey::from_raw(1);
 

@@ -5,7 +5,7 @@ use dbt_telemetry::{
 };
 use tracing::level_filters::LevelFilter;
 
-use super::super::{
+use dbt_tracing::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     layer::{ConsumerLayer, LogPreprocessorHook, TelemetryConsumer},

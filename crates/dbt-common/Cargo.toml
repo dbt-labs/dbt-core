@@ -17,6 +17,7 @@ dbt-adapter-core = { workspace = true }
 dbt-error = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-telemetry = { workspace = true }
+dbt-tracing = { workspace = true }
 # leaf dependencies (depend on little more than std lib)
 blake3 = { workspace = true }
 dbt-base = { workspace = true }
@@ -77,6 +78,7 @@ powershell_script = "1.1.0"
 bytes = { workspace = true }
 dbt-telemetry = { workspace = true, features = ["test-utils"] }
 dbt-test-primitives = { workspace = true }
+dbt-tracing = { workspace = true, features = ["test-utils"] }
 indoc = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

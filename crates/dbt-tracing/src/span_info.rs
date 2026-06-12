@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
-use super::layers::data_layer::DLSpanStartInfo;
-use super::shared::Recordable;
-use dbt_telemetry::{
+use crate::{
     AnyTelemetryEvent, DebugValue, SpanStartInfo, SpanStatus, TelemetryAttributes,
+    layers::data_layer::DLSpanStartInfo, shared::Recordable,
 };
 
 use tracing::Span;
@@ -118,7 +117,7 @@ where
 ///
 /// Should always return `Some(R)`. None means thread local subscriber missing,
 /// which should not happen in our case.
-pub(super) fn with_span<F, R>(span: &Span, f: F) -> Option<R>
+pub fn with_span<F, R>(span: &Span, f: F) -> Option<R>
 where
     F: FnOnce(SpanRef<Registry>) -> R,
 {
@@ -141,7 +140,7 @@ pub fn get_root_span_ref(cur_span: SpanRef<Registry>) -> SpanRef<Registry> {
     cur_span.scope().from_root().next().unwrap_or(cur_span)
 }
 
-pub(super) fn with_root_span<F, R>(mut f: F) -> Option<R>
+pub fn with_root_span<F, R>(mut f: F) -> Option<R>
 where
     F: FnMut(SpanRef<Registry>) -> R,
 {

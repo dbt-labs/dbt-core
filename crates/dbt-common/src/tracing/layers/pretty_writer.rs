@@ -2,7 +2,7 @@ use dbt_telemetry::{
     LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
 };
 
-use super::super::{
+use dbt_tracing::{
     data_provider::DataProvider, layer::TelemetryConsumer, shared_writer::SharedWriter,
 };
 

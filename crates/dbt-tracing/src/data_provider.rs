@@ -1,11 +1,11 @@
-use super::{
+use crate::{
+    AnyTelemetryEvent, TelemetryAttributes,
     metrics::{
         MetricKey, get_all_metrics_from_span_extension, get_metric_from_span_extension,
         increment_metric_on_span,
     },
     span_info::SpanAccess,
 };
-use dbt_telemetry::{AnyTelemetryEvent, TelemetryAttributes};
 use std::any::TypeId;
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 

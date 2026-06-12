@@ -6,16 +6,30 @@
 //! between parallel logically independent program threads, e.g. a service.
 //!
 //! Module provides process-wide public getters & writers, while tracing layers &middleware
-//! may safely access metrics through [`crate::tracing::data_provider::DataProvider`].
+//! may safely access metrics through [`crate::data_provider::DataProvider`].
 
 use tracing_subscriber::registry::Extensions;
 
-use crate::sccmap;
-
-use super::{
+use crate::{
     constants::ROOT_SPAN_NAME,
     span_info::{SpanAccess, with_root_span},
 };
+
+mod sccmap {
+    /// A scc::HashMap variant that uses a stable hasher in debug builds and a
+    /// DoS-resistant hasher in release builds.
+    #[allow(clippy::disallowed_types)]
+    pub type HashMap<K, V> = scc::HashMap<K, V, dbt_base::MaybeStableHasherBuilder>;
+
+    /// Creates a new scc::HashMap with the stable/DoS-resistant hasher.
+    #[inline]
+    pub fn new<K, V>() -> HashMap<K, V>
+    where
+        K: std::hash::Hash + Eq,
+    {
+        HashMap::with_hasher(dbt_base::MaybeStableHasherBuilder::default())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MetricKey(u64);

@@ -1,4 +1,5 @@
-use crate::tracing::{
+use crate::{
+    LogRecordInfo, TelemetryOutputFlags,
     data_provider::DataProvider,
     emit::{create_info_span, create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
@@ -7,7 +8,6 @@ use crate::tracing::{
     tests::mocks::{MockDynLogEvent, MockDynSpanEvent, MockMiddleware, TestLayer, test_data_layer},
 };
 
-use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
 use std::thread;
 use std::{
     sync::{Arc, Barrier, Condvar, Mutex},

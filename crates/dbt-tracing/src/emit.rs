@@ -8,9 +8,10 @@
 
 use std::panic::Location;
 
-use dbt_telemetry::{TelemetryAttributes, TelemetryEventRecType};
-
-use super::{constants::ROOT_SPAN_NAME, event_info::store_event_attributes, shared::Recordable};
+use crate::{
+    TelemetryAttributes, TelemetryEventRecType, constants::ROOT_SPAN_NAME,
+    event_info::store_event_attributes, shared::Recordable,
+};
 
 use tracing;
 

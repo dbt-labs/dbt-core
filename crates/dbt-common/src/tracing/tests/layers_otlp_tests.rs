@@ -10,8 +10,10 @@ use crate::tracing::{
     layers::otlp::{OTLPExporterLayer, OtlpResourceConfig},
 };
 
-use super::mocks::{MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, test_data_layer};
 use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
+use dbt_tracing::test_support::mocks::{
+    MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, test_data_layer,
+};
 use opentelemetry::{Key, KeyValue, Value as OtelValue, logs::AnyValue};
 use opentelemetry_sdk as sdk;
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};

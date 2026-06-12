@@ -16,20 +16,25 @@ workspace = true
 arrow = { workspace = true, features = ["canonical_extension_types"] }
 arrow-schema = { workspace = true, features = ["canonical_extension_types"] }
 bitflags = { workspace = true }
+dbt-base = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-yaml = { workspace = true }
 erased-serde = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
+rand = { workspace = true }
+scc = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_arrow = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
+tokio = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true, features = ["v7"] }
 
 # This is used for test API's that fake telemetry value types. It needs to be
 # defined as optional here so we can expose it in the `test-utils` feature, so
@@ -39,6 +44,7 @@ fake = { workspace = true, optional = true }
 
 [dev-dependencies]
 fake = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
 # Test-only helpers - exposes `fake::Dummy` derives on telemetry value types so

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use super::super::{
+use dbt_tracing::{
     data_provider::DataProvider,
     error::{TracingError, TracingResult},
     layer::{ConsumerLayer, LogPreprocessorHook, TelemetryConsumer},
@@ -62,8 +62,8 @@ pub fn build_otlp_layer(
     let layer = OTLPExporterLayer::new_with_http_export(resource_config, log_preprocessor_hook)?;
 
     let shutdown_items: Vec<TelemetryShutdownItem> = vec![
-        Box::new(layer.tracer_provider()),
-        Box::new(layer.logger_provider()),
+        Box::new(OtlpTracerProviderShutdown(layer.tracer_provider())),
+        Box::new(OtlpLoggerProviderShutdown(layer.logger_provider())),
     ];
 
     Some((Box::new(layer), shutdown_items))
@@ -224,9 +224,11 @@ impl OTLPExporterLayer {
     }
 }
 
-impl TelemetryShutdown for SdkTracerProvider {
+struct OtlpTracerProviderShutdown(SdkTracerProvider);
+
+impl TelemetryShutdown for OtlpTracerProviderShutdown {
     fn shutdown(&mut self) -> TracingResult<()> {
-        SdkTracerProvider::shutdown(self).map_err(|otel_error| {
+        SdkTracerProvider::shutdown(&self.0).map_err(|otel_error| {
             TracingError::shutdown(format!(
                 "Failed to gracefully shutdown OTLP trace exporter: {otel_error}"
             ))
@@ -234,9 +236,11 @@ impl TelemetryShutdown for SdkTracerProvider {
     }
 }
 
-impl TelemetryShutdown for SdkLoggerProvider {
+struct OtlpLoggerProviderShutdown(SdkLoggerProvider);
+
+impl TelemetryShutdown for OtlpLoggerProviderShutdown {
     fn shutdown(&mut self) -> TracingResult<()> {
-        SdkLoggerProvider::shutdown(self).map_err(|otel_error| {
+        SdkLoggerProvider::shutdown(&self.0).map_err(|otel_error| {
             TracingError::shutdown(format!(
                 "Failed to gracefully shutdown OTLP log exporter: {otel_error}"
             ))

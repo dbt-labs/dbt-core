@@ -1,4 +1,6 @@
-use crate::tracing::{
+use crate::{
+    AnyTelemetryEvent, SpanStatus, TelemetryAttributes, TelemetryEventRecType,
+    TelemetryOutputFlags,
     emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
@@ -8,7 +10,6 @@ use crate::tracing::{
     },
 };
 use dbt_base::{HashMap, hashmap};
-use dbt_telemetry::{AnyTelemetryEvent, SpanStatus, TelemetryAttributes, TelemetryEventRecType};
 use serde::Serialize;
 use tracing_subscriber::{Registry, registry::LookupSpan as _};
 
@@ -48,8 +49,8 @@ impl AnyTelemetryEvent for TestStatusEvent {
         TelemetryEventRecType::Span
     }
 
-    fn output_flags(&self) -> dbt_telemetry::TelemetryOutputFlags {
-        dbt_telemetry::TelemetryOutputFlags::empty()
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        TelemetryOutputFlags::empty()
     }
 
     fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool {

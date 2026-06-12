@@ -18,14 +18,14 @@
 
 use std::borrow::Cow;
 
-use super::{
+use crate::{
+    LogRecordInfo, SpanEndInfo, SpanStartInfo,
     data_provider::DataProvider,
     filter::{
         FilteredTelemetryConsumer, TelemetryFilter, TelemetryFilterFn, enable_all_logs,
         enable_all_spans,
     },
 };
-use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
 
 /// A consumer of telemetry data.
 ///

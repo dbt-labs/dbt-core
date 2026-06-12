@@ -18,11 +18,32 @@
 //!
 //! [`tracing`]: https://docs.rs/tracing
 
+pub mod async_tracing;
 pub mod attributes;
+pub mod background_writer;
+pub mod constants;
+pub mod convert;
+pub mod data_provider;
+mod debug_value;
+pub mod emit;
+pub mod error;
+pub mod event_info;
+pub mod filter;
+pub mod init;
+pub mod layer;
+pub mod layers;
+pub mod metrics;
+pub mod reload;
+pub mod rotating_file_writer;
 pub mod schemas;
 pub mod serialize;
+mod shared;
+pub mod shared_writer;
+pub mod shutdown;
+pub mod span_info;
 mod static_name;
 
+pub use debug_value::DebugValue;
 pub use static_name::StaticName;
 
 pub use attributes::{
@@ -33,3 +54,9 @@ pub use schemas::{
     LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanLinkInfo, SpanStartInfo,
     SpanStatus, StatusCode, TelemetryRecord, TelemetryRecordRef, TelemetryRecordType,
 };
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_support;

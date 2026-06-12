@@ -1,26 +1,23 @@
-use super::super::{
+use crate::{
+    AnyTelemetryEvent, LogRecordInfo, RecordCodeLocation, SpanEndInfo, SpanStartInfo,
+    TelemetryAttributes, TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
     data_provider::DataProvider,
     layer::{ConsumerLayer, MiddlewareLayer, TelemetryConsumer, TelemetryMiddleware},
     layers::data_layer::{
         RootSpanTraceContext, TelemetryDataLayer, TelemetryDataLayerConfig,
         UnstructuredLogAttributesInput, UnstructuredSpanAttributesInput,
     },
+    serialize::traits::{ArrowAttributesSerialize, ArrowRegistryLookup},
     shared_writer::SharedWriter,
 };
 use arrow::datatypes::{DataType, Field, Fields};
-use dbt_telemetry::{
-    AnyTelemetryEvent, RecordCodeLocation, TelemetryAttributes, TelemetryContext,
-    TelemetryEventRecType, TelemetryOutputFlags,
-    serialize::traits::{ArrowAttributesSerialize, ArrowRegistryLookup},
-};
-use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
 use tracing::Subscriber;
 use tracing_subscriber::registry::LookupSpan;
 
-pub(in crate::tracing) fn test_data_layer<S>(
+pub fn test_data_layer<S>(
     trace_id: u128,
     parent_span_id: Option<u64>,
     strip_code_location: bool,

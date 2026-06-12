@@ -1,4 +1,6 @@
-use super::super::{
+use crate::{
+    DebugValue, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanLinkInfo,
+    SpanStartInfo, SpanStatus, TelemetryAttributes, TelemetryContext, TelemetryEventRecType,
     constants::{PROCESS_SPAN_NAME, ROOT_SPAN_NAME},
     data_provider::DataProvider,
     emit::get_file_and_line,
@@ -20,28 +22,22 @@ use tracing_subscriber::{
     registry::{LookupSpan, SpanRef},
 };
 
-use dbt_telemetry::{
-    DebugValue, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanLinkInfo,
-    SpanStartInfo, SpanStatus, TelemetryAttributes, TelemetryContext, TelemetryEventRecType,
-};
-
 /// Builds span attributes for spans that were not created through the structured emit/span helpers.
 ///
 /// The data layer passes the tracing metadata it has available here, and the application
 /// provides the fallback attributes to use for unstructured spans.
-pub(in crate::tracing) type UnstructuredSpanAttributesCallback =
+pub type UnstructuredSpanAttributesCallback =
     for<'a> fn(UnstructuredSpanAttributesInput<'a>) -> TelemetryAttributes;
 
 /// Builds log attributes for events that were not created through the structured emit helpers.
-pub(in crate::tracing) type UnstructuredLogAttributesCallback =
+pub type UnstructuredLogAttributesCallback =
     fn(UnstructuredLogAttributesInput) -> TelemetryAttributes;
 
 /// Extracts trace correlation data from attributes when a root span defines its own trace context.
-pub(in crate::tracing) type RootSpanTraceContextCallback =
-    fn(&TelemetryAttributes) -> Option<RootSpanTraceContext>;
+pub type RootSpanTraceContextCallback = fn(&TelemetryAttributes) -> Option<RootSpanTraceContext>;
 
 /// Metadata available when constructing fallback span attributes.
-pub(in crate::tracing) struct UnstructuredSpanAttributesInput<'a> {
+pub struct UnstructuredSpanAttributesInput<'a> {
     /// The tracing metadata name for the unstructured span.
     pub name: &'a str,
     /// The tracing severity level for the unstructured span.
@@ -53,7 +49,7 @@ pub(in crate::tracing) struct UnstructuredSpanAttributesInput<'a> {
 }
 
 /// Metadata available when constructing fallback log attributes.
-pub(in crate::tracing) struct UnstructuredLogAttributesInput {
+pub struct UnstructuredLogAttributesInput {
     /// The normalized telemetry severity for the log event.
     pub severity_number: SeverityNumber,
     /// Code location calculated from tracing metadata or explicit event fields.
@@ -61,7 +57,7 @@ pub(in crate::tracing) struct UnstructuredLogAttributesInput {
 }
 
 /// Trace correlation data supplied by structured root span attributes.
-pub(in crate::tracing) struct RootSpanTraceContext {
+pub struct RootSpanTraceContext {
     /// The trace ID that should be used for this root span and its children.
     pub trace_id: u128,
     /// Optional parent span ID for trace correlation.
@@ -88,7 +84,7 @@ pub struct TelemetryDataLayerConfig {
 
 impl TelemetryDataLayerConfig {
     /// Creates a new data layer configuration for fallback telemetry behavior.
-    pub(in crate::tracing) fn new(
+    pub fn new(
         fallback_trace_id: u128,
         fallback_parent_span_id: Option<u64>,
         unstructured_span_attributes: UnstructuredSpanAttributesCallback,
@@ -166,7 +162,7 @@ impl FilterMask {
 /// - Deref provides only immutable references to SpanStartInfo
 /// - Cannot be mutated via span extensions (extensions_mut requires
 ///   constructing a new value to replace, and our Deref prevents mutable access)
-pub(in crate::tracing) struct DLSpanStartInfo(SpanStartInfo);
+pub(crate) struct DLSpanStartInfo(SpanStartInfo);
 
 impl DLSpanStartInfo {
     /// Creates a new wrapper for SpanStartInfo.
@@ -215,7 +211,7 @@ impl<S> TelemetryDataLayer<S>
 where
     S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
-    pub(in crate::tracing) fn new(
+    pub fn new(
         config: TelemetryDataLayerConfig,
         strip_code_location: bool,
         middlewares: impl Iterator<Item = MiddlewareLayer>,
@@ -232,12 +228,12 @@ where
     }
 
     /// Returns a copy of the data layer fallback configuration.
-    pub(in crate::tracing) fn config(&self) -> TelemetryDataLayerConfig {
+    pub fn config(&self) -> TelemetryDataLayerConfig {
         self.config
     }
 
     /// For testing and debugging purposes, enables sequential span IDs
-    pub(in crate::tracing) fn with_sequential_ids(&mut self) {
+    pub fn with_sequential_ids(&mut self) {
         self.next_id = Some(AtomicU64::new(1));
     }
 
@@ -416,7 +412,9 @@ where
         // If tracing is set up correctly, the only time when root span doesn't have our special root
         // span name marker is when it is the process span created during tracing initialization.
         debug_assert!(
-            root_span.name() == ROOT_SPAN_NAME || span.name() == PROCESS_SPAN_NAME || cfg!(test),
+            root_span.name() == ROOT_SPAN_NAME
+                || span.name() == PROCESS_SPAN_NAME
+                || cfg!(any(test, feature = "test-utils")),
             "Expected root span created via `create_root_info_span`. Got: {}.
             Are you running code not instrumented under a root operation span tree?",
             root_span.name()
@@ -708,7 +706,9 @@ where
         // If tracing is set up correctly, the only time when root span doesn't have our special root
         // span name marker is when it is the process span created during tracing initialization.
         debug_assert!(
-            root_span.name() == ROOT_SPAN_NAME || span.name() == PROCESS_SPAN_NAME || cfg!(test),
+            root_span.name() == ROOT_SPAN_NAME
+                || span.name() == PROCESS_SPAN_NAME
+                || cfg!(any(test, feature = "test-utils")),
             "Expected root span created via `create_root_info_span`. Got: {}.
             Are you running code not instrumented under a root operation span tree?",
             root_span.name()
@@ -882,7 +882,7 @@ where
         // lead to incorrect behavior. E.g. error metric counts and related exit code calculation will
         // ignore such events. These scenarios should be covered by tests to avoid regressions.
         debug_assert!(
-            root_span.is_some() || cfg!(test),
+            root_span.is_some() || cfg!(any(test, feature = "test-utils")),
             "Event logged outside of span context. Expected root span created via `create_root_info_span`
             or a process span. Are you logging events after tracing has been shutdown?",
         );
@@ -989,8 +989,8 @@ where
     }
 }
 
-#[cfg(test)]
-pub(in crate::tracing) fn get_span_start_info_from_span(
+#[cfg(any(test, feature = "test-utils"))]
+pub fn get_span_start_info_from_span(
     span: &SpanRef<'_, impl Subscriber + for<'lookup> LookupSpan<'lookup>>,
 ) -> Option<SpanStartInfo> {
     let span_ext = span.extensions();

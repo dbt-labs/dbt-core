@@ -1,4 +1,3 @@
-use super::mocks::{TestLayer, TestWriter, test_data_layer};
 use crate::tracing::{
     emit::{create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
@@ -6,8 +5,10 @@ use crate::tracing::{
     layers::pretty_writer::TelemetryPrettyWriterLayer,
 };
 
-use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
 use dbt_telemetry::{TelemetryOutputFlags, TelemetryRecordRef};
+use dbt_tracing::test_support::mocks::{
+    MockDynLogEvent, MockDynSpanEvent, TestLayer, TestWriter, test_data_layer,
+};
 
 fn mock_format_telemetry_record(record: TelemetryRecordRef, _is_tty: bool) -> Option<String> {
     match record {
