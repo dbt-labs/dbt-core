@@ -448,6 +448,92 @@ class TestModelRunner:
                 relations=[source_relation],
             )
 
+    def test_materialize_latest_version_pointer_collision_is_case_insensitive_when_unquoted(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        # When the identifier is unquoted, the warehouse resolves it case-insensitively
+        # (e.g. Snowflake folds DIM_CUSTOMERS and dim_customers to the same object), so a
+        # latest-version alias differing from the pointer name only by case must still be
+        # detected as a collision.
+        @dataclass
+        class FakePolicy:
+            identifier: bool
+
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+            quote_policy: FakePolicy
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(
+            materialized="table",
+            # pointer resolves to "versioned_model_v2"; alias differs only by case
+            latest_version_pointer=LatestVersionPointer(enabled=True, alias="versioned_model_v2"),
+        )
+
+        source_relation = FakeRelation(
+            database="dbt",
+            schema="dbt_schema",
+            identifier="VERSIONED_MODEL_V2",
+            type="table",
+            quote_policy=FakePolicy(identifier=False),
+        )
+
+        model_runner.adapter = mocker.Mock()
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = None
+
+        with pytest.raises(DbtRuntimeError, match="already aliased"):
+            model_runner._materialize_latest_version_pointer(
+                manifest=manifest,
+                model=model,
+                context={"context_macro_stack": []},
+                relations=[source_relation],
+            )
+
+    def test_materialize_latest_version_pointer_no_collision_when_quoted_case_differs(
+        self, model_runner: ModelRunner
+    ) -> None:
+        # When the identifier is quoted it is case-sensitive, so names differing only by
+        # case are distinct relations and must NOT be treated as a collision.
+        @dataclass
+        class FakePolicy:
+            identifier: bool
+
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+            quote_policy: FakePolicy
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+        runner = model_runner
+        assert not runner._pointer_collides_with_source(
+            FakeRelation(
+                database="dbt",
+                schema="dbt_schema",
+                identifier="VERSIONED_MODEL_V2",
+                type="table",
+                quote_policy=FakePolicy(identifier=True),
+            ),
+            "versioned_model_v2",
+        )
+
 
 class TestMicrobatchModelRunner:
     @pytest.fixture
