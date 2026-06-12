@@ -377,33 +377,56 @@ mod tests {
         }
     }
 
-    #[test]
-    fn read_jsonl_seed_full_read() {
-        let mut file = NamedTempFile::with_suffix(".jsonl").unwrap();
-        writeln!(file, r#"{{"id": 1, "name": "alpha"}}"#).unwrap();
-        writeln!(file, r#"{{"id": 2, "name": "beta"}}"#).unwrap();
+    /// Helper: write newline-delimited JSON lines to a temp file and verify `read_json_seed`.
+    fn check_jsonl_variant(
+        suffix: &str,
+        lines: &[&str],
+        expect_rows: usize,
+        expect_fields: usize,
+    ) {
+        let mut file = NamedTempFile::with_suffix(suffix).unwrap();
+        for line in lines {
+            writeln!(file, "{line}").unwrap();
+        }
         file.flush().unwrap();
 
-        let (schema, batches) = read_json_seed(file.path(), true).expect("read jsonl");
+        let (schema, batches) = read_json_seed(file.path(), true)
+            .unwrap_or_else(|e| panic!("read {suffix}: {e}"));
         let batches = batches.expect("batches");
         let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
-        assert_eq!(total_rows, 2);
-        assert_eq!(schema.fields().len(), 2);
+        assert_eq!(total_rows, expect_rows, "row count for {suffix}");
+        assert_eq!(
+            schema.fields().len(),
+            expect_fields,
+            "field count for {suffix}"
+        );
+    }
+
+    #[test]
+    fn read_jsonl_seed_full_read() {
+        check_jsonl_variant(
+            ".jsonl",
+            &[
+                r#"{"id": 1, "name": "alpha"}"#,
+                r#"{"id": 2, "name": "beta"}"#,
+            ],
+            2,
+            2,
+        );
     }
 
     #[test]
     fn read_ndjson_seed_full_read() {
-        let mut file = NamedTempFile::with_suffix(".ndjson").unwrap();
-        writeln!(file, r#"{{"x": 10, "y": "hello"}}"#).unwrap();
-        writeln!(file, r#"{{"x": 20, "y": "world"}}"#).unwrap();
-        writeln!(file).unwrap(); // blank line — Arrow JSON reader skips empty lines
-        writeln!(file, r#"{{"x": 30, "y": "!"}}"#).unwrap();
-        file.flush().unwrap();
-
-        let (schema, batches) = read_json_seed(file.path(), true).expect("read ndjson");
-        let batches = batches.expect("batches");
-        let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
-        assert_eq!(total_rows, 3);
-        assert_eq!(schema.fields().len(), 2);
+        check_jsonl_variant(
+            ".ndjson",
+            &[
+                r#"{"x": 10, "y": "hello"}"#,
+                r#"{"x": 20, "y": "world"}"#,
+                "", // blank line — Arrow JSON reader skips empty lines
+                r#"{"x": 30, "y": "!"}"#,
+            ],
+            3,
+            2,
+        );
     }
 }
