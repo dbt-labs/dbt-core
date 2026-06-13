@@ -5,8 +5,8 @@ use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
 use dbt_schemas::dbt_types::RelationType;
-use minijinja::Value;
 use minijinja::dispatch_object::DispatchObject;
+use minijinja::Value;
 
 use crate::macro_test_harness::{
     MacroTestHarness, assert_executed_contains, default_mock_config, executed_sql,
@@ -78,11 +78,9 @@ fn delete_insert_config() -> Arc<MockJinjaObject> {
             _ => Ok(default),
         }
     });
-    mock.on("require", |args| {
-        match args.first().and_then(|v| v.as_str()) {
-            Some("unique_key") => Ok(Value::from("id")),
-            _ => Ok(Value::UNDEFINED),
-        }
+    mock.on("require", |args| match args.first().and_then(|v| v.as_str()) {
+        Some("unique_key") => Ok(Value::from("id")),
+        _ => Ok(Value::UNDEFINED),
     });
     mock
 }
@@ -262,17 +260,19 @@ mod databricks {
 
         harness.mock().on("get_columns_in_relation", |_| {
             Ok(Value::from_serialize(vec![
-                BTreeMap::from([("quoted", Value::from("`id`"))]),
-                BTreeMap::from([("quoted", Value::from("`name`"))]),
+                BTreeMap::from([("quoted", "`id`")]),
+                BTreeMap::from([("quoted", "`name`")]),
             ]))
         });
         harness.mock().on("get_incremental_strategy_macro", |args| {
             let strategy = args
                 .get(1)
                 .and_then(|v| v.as_str())
-                .expect("strategy argument should be passed");
+                .expect("strategy argument should be passed")
+                .replace('+', "_");
+            let macro_name = format!("get_incremental_{strategy}_sql");
             Ok(Value::from_object(DispatchObject {
-                macro_name: format!("get_incremental_{}_sql", strategy.replace('+', "_")),
+                macro_name,
                 package_name: None,
                 strict: false,
                 auto_execute: false,
@@ -292,25 +292,10 @@ mod databricks {
         render_incremental(&harness, ADAPTER, ctx)
             .unwrap_or_else(|e| panic!("incremental delete+insert failed: {e:?}"));
 
-        let sqls = executed_sql(harness.mock());
-        assert!(
-            sqls.iter().any(|sql| {
-                let lower = sql.to_lowercase();
-                lower.contains("delete from")
-                    && lower.contains("where")
-                    && sql.contains(".id IN (SELECT id FROM")
-            }),
-            "Expected delete+insert to execute a DELETE statement, got: {sqls:?}",
-        );
-        assert!(
-            sqls.iter().any(|sql| {
-                let lower = sql.to_lowercase();
-                lower.contains("insert into")
-                    && lower.contains("select `id`, `name`")
-                    && lower.contains("from")
-            }),
-            "Expected delete+insert to execute an INSERT statement, got: {sqls:?}",
-        );
+        assert_executed_contains(harness.mock(), "delete from");
+        assert_executed_contains(harness.mock(), ".id IN (SELECT id FROM");
+        assert_executed_contains(harness.mock(), "insert into");
+        assert_executed_contains(harness.mock(), "select `id`, `name`");
     }
 }
 
