@@ -412,3 +412,20 @@ fn test_get_relation_dispatch_spark_absent_database() {
         "unexpected error: {err}"
     );
 }
+
+#[test]
+fn test_databricks_get_incremental_strategy_macro_accepts_delete_insert() {
+    let result = dispatch_test(
+        &make_mock_adapter(AdapterType::Databricks),
+        "get_incremental_strategy_macro",
+        &[
+            Value::from(BTreeMap::<String, Value>::new()),
+            Value::from("delete+insert"),
+        ],
+    );
+
+    assert!(
+        result.is_ok(),
+        "delete+insert should be a valid Databricks incremental strategy, got: {result:?}"
+    );
+}

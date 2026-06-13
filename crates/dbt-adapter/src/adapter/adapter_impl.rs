@@ -502,7 +502,7 @@ impl AdapterImpl {
             Postgres | DuckDB => &[Append, DeleteInsert, Merge, Microbatch],
             Snowflake => &[Append, DeleteInsert, InsertOverwrite, Merge, Microbatch],
             Bigquery => &[Append],
-            Databricks => &[Append, Merge, InsertOverwrite, ReplaceWhere],
+            Databricks => &[Append, DeleteInsert, Merge, InsertOverwrite, ReplaceWhere],
             Redshift => &[Append, DeleteInsert, Merge, Microbatch],
             Fabric => &[Append, DeleteInsert, Merge, Microbatch],
             Salesforce => &[Append, Merge],
