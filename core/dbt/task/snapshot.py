@@ -26,38 +26,6 @@ SNAPSHOT_UNIQUE_KEY_SUGGESTION = (
 )
 
 
-def _is_duplicate_row_error(message: str) -> bool:
-    lowered = message.lower()
-    return any(indicator in lowered for indicator in DUPLICATE_ROW_INDICATORS)
-
-
-def _append_unique_key_suggestion(message: str) -> str:
-    if SNAPSHOT_UNIQUE_KEY_SUGGESTION in message:
-        return message
-
-    return f"{message}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}"
-
-
-def _get_exception_message(exc: Exception) -> str | None:
-    if hasattr(exc, "msg") and isinstance(exc.msg, str):
-        return exc.msg
-    if exc.args and isinstance(exc.args[0], str):
-        return exc.args[0]
-    return None
-
-
-def _set_exception_message(exc: Exception, message: str) -> None:
-    if hasattr(exc, "msg") and isinstance(exc.msg, str):
-        exc.msg = message
-        return
-    exc.args = (message, *exc.args[1:])
-
-
-def _add_snapshot_unique_key_suggestion(exc: Exception) -> None:
-    message = _get_exception_message(exc)
-    if message is None or not _is_duplicate_row_error(message):
-        return
-    _set_exception_message(exc, _append_unique_key_suggestion(message))
 
 
 class SnapshotRunner(ModelRunner):
@@ -84,8 +52,25 @@ class SnapshotRunner(ModelRunner):
             level=level,
         )
 
+    def _extract_msg(self, exc: Exception) -> Optional[str]:
+        if getattr(exc, "msg", None) and isinstance(exc.msg, str):
+            return exc.msg
+        if exc.args and isinstance(exc.args[0], str):
+            return exc.args[0]
+        return None
+
+    def _update_exc_msg(self, exc: Exception, new_msg: str) -> None:
+        if hasattr(exc, "msg") and isinstance(exc.msg, str):
+            exc.msg = new_msg
+        else:
+            exc.args = (new_msg, *exc.args[1:])
+
     def handle_exception(self, exc: Exception, ctx) -> str:
-        _add_snapshot_unique_key_suggestion(exc)
+        msg = self._extract_msg(exc)
+        if msg and SNAPSHOT_UNIQUE_KEY_SUGGESTION not in msg:
+            if any(ind in msg.lower() for ind in DUPLICATE_ROW_INDICATORS):
+                self._update_exc_msg(exc, f"{msg}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}")
+
         return super().handle_exception(exc, ctx)
 
 
