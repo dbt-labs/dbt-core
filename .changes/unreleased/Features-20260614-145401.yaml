@@ -1,0 +1,5 @@
+kind: Features
+body: Add schema, database, quoting, and contract fields to SourceConfig so `dbt ls --output json` returns full metadata for sources
+custom:
+  Author: shnhdan
+  Issue: "12505"
