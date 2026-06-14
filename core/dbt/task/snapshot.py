@@ -65,11 +65,19 @@ class SnapshotRunner(ModelRunner):
         else:
             exc.args = (new_msg, *exc.args[1:])
 
+    def _is_duplicate_row_error(self, msg: str) -> bool:
+        if SNAPSHOT_UNIQUE_KEY_SUGGESTION in msg:
+            return False
+        msg_lower = msg.lower()
+        for indicator in DUPLICATE_ROW_INDICATORS:
+            if indicator in msg_lower:
+                return True
+        return False
+
     def handle_exception(self, exc: Exception, ctx) -> str:
         msg = self._extract_msg(exc)
-        if msg and SNAPSHOT_UNIQUE_KEY_SUGGESTION not in msg:
-            if any(ind in msg.lower() for ind in DUPLICATE_ROW_INDICATORS):
-                self._update_exc_msg(exc, f"{msg}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}")
+        if msg and self._is_duplicate_row_error(msg):
+            self._update_exc_msg(exc, f"{msg}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}")
 
         return super().handle_exception(exc, ctx)
 
