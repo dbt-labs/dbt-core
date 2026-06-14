@@ -338,7 +338,7 @@ setup_shell_config() {
     shell_name=""
 
     # Detect shell and config file early
-    if [ -n "$SHELL" ]; then
+    if [ -n "${SHELL:-}" ]; then
         shell_name=$(basename "$SHELL")
     else
         if [ -f "$HOME/.bashrc" ]; then
