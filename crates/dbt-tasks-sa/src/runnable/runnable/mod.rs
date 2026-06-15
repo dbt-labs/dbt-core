@@ -14,9 +14,11 @@ use dbt_common::constants::RUNNING;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::status_reporter::report_completed;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_message};
+use dbt_common::tracing::dbt_metrics::InvocationMetricKey;
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::utils::add_task_context;
+use dbt_schemas::schemas::common::Severity;
 use dbt_schemas::schemas::manifest::saved_query::DbtSavedQuery;
 use dbt_schemas::schemas::{
     DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, InternalDbtNode,
@@ -191,34 +193,14 @@ impl Task for RunTask {
                             cached_test_failures,
                             self.node.as_any().downcast_ref::<DbtTest>(),
                         ) {
-                            let failures_usize = (*failures).max(0) as usize;
                             let severity =
                                 test.deprecated_config.severity.clone().unwrap_or_default();
-                            // Mirror the non-cached test path: bump the
-                            // matching invocation counter so the dbt
-                            // command's returncode reflects test failures /
-                            // warnings. Without this, cached failing tests
-                            // still report exit 0 even though their status
-                            // is correct.
-                            let (test_status, metric_key) = if failures_usize == 0 {
-                                (NodeStatus::TestPassed, None)
-                            } else {
-                                match severity {
-                                    dbt_schemas::schemas::common::Severity::Warn => (
-                                        NodeStatus::TestWarned,
-                                        Some(
-                                            dbt_common::tracing::dbt_metrics::InvocationMetricKey::TotalWarnings,
-                                        ),
-                                    ),
-                                    dbt_schemas::schemas::common::Severity::Error => (
-                                        NodeStatus::Errored,
-                                        Some(
-                                            dbt_common::tracing::dbt_metrics::InvocationMetricKey::TotalErrors,
-                                        ),
-                                    ),
-                                }
-                            };
-                            if let Some(key) = metric_key {
+                            let cached_status =
+                                cached_data_test_status(status, *failures, severity);
+                            // Cached failing/warn tests still need to affect
+                            // invocation warning/error metrics so command
+                            // status matches the non-cached test path.
+                            if let Some(key) = cached_status.metric_key {
                                 dbt_common::tracing::metrics::increment_metric(
                                     dbt_common::tracing::dbt_metrics::FusionMetricKey::InvocationMetric(key),
                                     1,
@@ -229,13 +211,13 @@ impl Task for RunTask {
                                 Stat::new(
                                     unique_id.clone(),
                                     start_time.into(),
-                                    Some(failures_usize),
-                                    test_status.clone(),
+                                    Some(cached_status.failures),
+                                    cached_status.stat_status.clone(),
                                     Some("NO-OP - cached test result".to_string()),
                                     ctx.thread_id,
                                 ),
                             );
-                            test_status
+                            cached_status.final_status
                         } else {
                             record_cache_skip(&unique_id, status, source);
                             status.clone()
@@ -850,6 +832,48 @@ fn elapsed_millis(started_at: Instant) -> i64 {
     i64::try_from(started_at.elapsed().as_millis()).unwrap_or(i64::MAX)
 }
 
+struct CachedDataTestStatus {
+    failures: usize,
+    stat_status: NodeStatus,
+    final_status: NodeStatus,
+    metric_key: Option<InvocationMetricKey>,
+}
+
+/// Converts a cached data test result into the statuses and metrics needed for reuse reporting.
+///
+/// Cached passing tests keep the run-cache reuse status as the task's final status while recording
+/// a passing test stat. Cached failures use the data test severity to report warn/error stats and
+/// increment the matching invocation metric so command status matches a normally executed test.
+fn cached_data_test_status(
+    reused_status: &NodeStatus,
+    failures: i64,
+    severity: Severity,
+) -> CachedDataTestStatus {
+    let failures = failures.max(0) as usize;
+    let (stat_status, metric_key) = if failures == 0 {
+        (NodeStatus::TestPassed, None)
+    } else {
+        match severity {
+            Severity::Warn => (
+                NodeStatus::TestWarned,
+                Some(InvocationMetricKey::TotalWarnings),
+            ),
+            Severity::Error => (NodeStatus::Errored, Some(InvocationMetricKey::TotalErrors)),
+        }
+    };
+
+    CachedDataTestStatus {
+        failures,
+        stat_status: stat_status.clone(),
+        final_status: if failures == 0 {
+            reused_status.clone()
+        } else {
+            stat_status
+        },
+        metric_key,
+    }
+}
+
 /// Receives the task result from the channel, consuming the receiver.
 /// Called once in `run_task()` before the local/remote split so both paths
 /// work with `Option<TaskResult>` instead of threading the receiver through.
@@ -1121,6 +1145,45 @@ mod tests {
     #[test]
     fn elapsed_millis_saturates_for_large_durations() {
         assert!(elapsed_millis(Instant::now()) >= 0);
+    }
+
+    #[test]
+    fn cached_passing_data_test_keeps_reused_final_status() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(&reused_status, 0, Severity::Error);
+
+        assert_eq!(status.failures, 0);
+        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(status.final_status, reused_status);
+        assert_eq!(status.metric_key, None);
+    }
+
+    #[test]
+    fn cached_failing_error_data_test_keeps_error_final_status() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(&reused_status, 2, Severity::Error);
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.stat_status, NodeStatus::Errored);
+        assert_eq!(status.final_status, NodeStatus::Errored);
+        assert_eq!(status.metric_key, Some(InvocationMetricKey::TotalErrors));
+    }
+
+    #[test]
+    fn cached_failing_warn_data_test_keeps_warn_final_status() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(&reused_status, 2, Severity::Warn);
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.stat_status, NodeStatus::TestWarned);
+        assert_eq!(status.final_status, NodeStatus::TestWarned);
+        assert_eq!(status.metric_key, Some(InvocationMetricKey::TotalWarnings));
     }
 
     #[test]
