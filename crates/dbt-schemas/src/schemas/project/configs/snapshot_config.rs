@@ -366,7 +366,7 @@ pub struct SnapshotConfig {
     #[serde(alias = "dataset")]
     pub schema: Option<String>,
     pub alias: Option<String>,
-    #[resolved(promote, default = DbtMaterialization::Table)]
+    #[resolved(promote, default = DbtMaterialization::Snapshot)]
     pub materialized: Option<DbtMaterialization>,
     pub strategy: Option<String>,
     pub unique_key: Option<StringOrArrayOfStrings>,
