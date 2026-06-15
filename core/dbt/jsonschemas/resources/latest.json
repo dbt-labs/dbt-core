@@ -1649,6 +1649,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -3559,6 +3565,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -3641,6 +3653,16 @@
             {
               "type": "string",
               "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionSnowflakeConfig"
+            },
+            {
+              "type": "null"
             }
           ]
         },
@@ -3981,6 +4003,27 @@
           "type": [
             "string",
             "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FunctionSnowflakeConfig": {
+      "description": "Snowflake-specific configuration for functions. Nested under the `snowflake` key inside `config:` in schema YAML (or `+snowflake:` under `functions:` in `dbt_project.yml`).",
+      "type": "object",
+      "properties": {
+        "quote_args": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -5763,6 +5806,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "resource_tags": {
@@ -7781,6 +7830,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -8932,6 +8987,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -10034,6 +10095,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "resource_tags": {
@@ -11330,6 +11397,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "resource_tags": {
