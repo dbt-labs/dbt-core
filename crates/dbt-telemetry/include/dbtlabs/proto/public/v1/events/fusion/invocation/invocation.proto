@@ -74,6 +74,10 @@ message InvocationEvalArgs {
   optional bool write_json = 23;
   // Write a catalog.json file to the target directory
   optional bool write_catalog = 24;
+  // Whether dbt State management (auto-deferral) is enabled for this invocation,
+  // resolved from --manage-state, DBT_ENGINE_MANAGE_STATE, or `flags.manage_state`
+  // in dbt_project.yml / user settings.
+  optional bool manage_state = 25;
 }
 
 // Invocation event holding identifying info and flattened attributes.

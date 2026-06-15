@@ -114,6 +114,11 @@ pub struct InvocationEvalArgs {
     /// Write a catalog.json file to the target directory
     #[prost(bool, optional, tag = "24")]
     pub write_catalog: ::core::option::Option<bool>,
+    /// Whether dbt State management (auto-deferral) is enabled for this invocation,
+    /// resolved from --manage-state, DBT_ENGINE_MANAGE_STATE, or `flags.manage_state`
+    /// in dbt_project.yml / user settings.
+    #[prost(bool, optional, tag = "25")]
+    pub manage_state: ::core::option::Option<bool>,
 }
 impl crate::StaticName for InvocationEvalArgs {
     const FULL_NAME: &'static str = "v1.public.events.fusion.invocation.InvocationEvalArgs";

@@ -488,6 +488,10 @@ pub struct EvalArgs {
     pub skip_semantic_manifest_validation: bool,
     pub export_saved_queries: bool,
     pub task_cache_url: String,
+    /// Whether dbt State management (auto-deferral) is enabled, resolved from
+    /// `--manage-state`, `DBT_ENGINE_MANAGE_STATE`, or `flags.manage_state` in
+    /// dbt_project.yml / user settings. Also surfaced on the invocation telemetry
+    /// span as `manage_state`.
     pub run_cache_service: bool,
     pub run_cache_mode: RunCacheMode,
     pub optimize_tests: HashSet<OptimizeTestsOptions>,

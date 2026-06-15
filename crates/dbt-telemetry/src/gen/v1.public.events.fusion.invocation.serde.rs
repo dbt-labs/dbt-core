@@ -267,6 +267,9 @@ impl serde::Serialize for InvocationEvalArgs {
         if self.write_catalog.is_some() {
             len += 1;
         }
+        if self.manage_state.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.invocation.InvocationEvalArgs", len)?;
         if !self.command.is_empty() {
             struct_ser.serialize_field("command", &self.command)?;
@@ -344,6 +347,9 @@ impl serde::Serialize for InvocationEvalArgs {
         if let Some(v) = self.write_catalog.as_ref() {
             struct_ser.serialize_field("write_catalog", v)?;
         }
+        if let Some(v) = self.manage_state.as_ref() {
+            struct_ser.serialize_field("manage_state", v)?;
+        }
         struct_ser.end()
     }
 }
@@ -392,6 +398,8 @@ impl<'de> serde::Deserialize<'de> for InvocationEvalArgs {
             "writeJson",
             "write_catalog",
             "writeCatalog",
+            "manage_state",
+            "manageState",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -420,6 +428,7 @@ impl<'de> serde::Deserialize<'de> for InvocationEvalArgs {
             Quiet,
             WriteJson,
             WriteCatalog,
+            ManageState,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -466,6 +475,7 @@ impl<'de> serde::Deserialize<'de> for InvocationEvalArgs {
                             "quiet" => Ok(GeneratedField::Quiet),
                             "writeJson" | "write_json" => Ok(GeneratedField::WriteJson),
                             "writeCatalog" | "write_catalog" => Ok(GeneratedField::WriteCatalog),
+                            "manageState" | "manage_state" => Ok(GeneratedField::ManageState),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -509,6 +519,7 @@ impl<'de> serde::Deserialize<'de> for InvocationEvalArgs {
                 let mut quiet__ = None;
                 let mut write_json__ = None;
                 let mut write_catalog__ = None;
+                let mut manage_state__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Command => {
@@ -659,6 +670,12 @@ impl<'de> serde::Deserialize<'de> for InvocationEvalArgs {
                             }
                             write_catalog__ = map_.next_value()?;
                         }
+                        GeneratedField::ManageState => {
+                            if manage_state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("manageState"));
+                            }
+                            manage_state__ = map_.next_value()?;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -689,6 +706,7 @@ impl<'de> serde::Deserialize<'de> for InvocationEvalArgs {
                     quiet: quiet__,
                     write_json: write_json__,
                     write_catalog: write_catalog__,
+                    manage_state: manage_state__,
                 })
             }
         }
