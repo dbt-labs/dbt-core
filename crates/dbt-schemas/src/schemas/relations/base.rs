@@ -533,11 +533,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         // get start/end times
         let (start, end) = run_filter.sample_times();
 
-        // Render with explicit UTC offset so non-UTC sessions (e.g. Snowflake
-        // with a session TIMEZONE other than UTC) interpret the literal as UTC,
-        // matching the microbatch DELETE predicate which also uses `to_rfc3339`.
-        let start = start.map(|t| t.to_rfc3339());
-        let end = end.map(|t| t.to_rfc3339());
+        // Render with explicit UTC offset so non-UTC sessions interpret the
+        // literal as UTC. Use microsecond precision (6 fractional digits) which
+        // is the maximum supported by BigQuery's TIMESTAMP type.
+        let start = start.map(|t| t.format("%Y-%m-%dT%H:%M:%S%.6f%:z").to_string());
+        let end = end.map(|t| t.format("%Y-%m-%dT%H:%M:%S%.6f%:z").to_string());
 
         // render the filter conditions
         let (start, end) = match self.adapter_type() {
