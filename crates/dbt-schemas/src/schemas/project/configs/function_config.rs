@@ -41,6 +41,16 @@ fn default_function_kind() -> Option<FunctionKind> {
     Some(FunctionKind::Scalar)
 }
 
+/// Snowflake-specific configuration for functions. Nested under the `snowflake`
+/// key inside `config:` in schema YAML (or `+snowflake:` under `functions:` in
+/// `dbt_project.yml`).
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
+pub struct FunctionSnowflakeConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub quote_args: Option<bool>,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectFunctionConfig {
@@ -82,6 +92,8 @@ pub struct ProjectFunctionConfig {
     pub entry_point: Option<String>,
     #[serde(rename = "+packages")]
     pub packages: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+snowflake")]
+    pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Additional properties for directory structure
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectFunctionConfig>>,
@@ -109,6 +121,7 @@ impl Default for ProjectFunctionConfig {
             runtime_version: None,
             entry_point: None,
             packages: None,
+            snowflake: None,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -158,6 +171,7 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
             runtime_version,
             entry_point,
             packages,
+            snowflake,
             __additional_properties__: _,
         } = self;
 
@@ -185,6 +199,7 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
                 volatility,
                 runtime_version,
                 entry_point,
+                snowflake,
             ]
         );
     }
@@ -233,6 +248,7 @@ pub struct FunctionConfig {
     pub runtime_version: Option<String>,
     pub entry_point: Option<String>,
     pub packages: Option<StringOrArrayOfStrings>,
+    pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Warehouse-specific configurations
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -287,6 +303,7 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
             runtime_version,
             entry_point,
             packages,
+            snowflake,
             __warehouse_specific_config__: warehouse_config,
         } = self;
 
@@ -319,6 +336,7 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
                 volatility,
                 runtime_version,
                 entry_point,
+                snowflake,
             ]
         );
     }
@@ -345,6 +363,7 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             runtime_version: config.runtime_version,
             entry_point: config.entry_point,
             packages: config.packages,
+            snowflake: config.snowflake,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig::default(),
         }
     }
@@ -370,6 +389,7 @@ impl FunctionConfig {
         let volatility_eq = self.volatility == other.volatility;
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
         let packages_eq = array_of_strings_eq(&self.packages, &other.packages);
+        let snowflake_eq = self.snowflake == other.snowflake;
         let warehouse_config_eq = same_warehouse_config(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
@@ -390,6 +410,7 @@ impl FunctionConfig {
             && volatility_eq
             && access_eq_result
             && packages_eq
+            && snowflake_eq
             && warehouse_config_eq;
 
         if !result {
@@ -496,6 +517,14 @@ impl FunctionConfig {
                         Some((
                             format!("{:?}", &self.packages),
                             format!("{:?}", &other.packages),
+                        )),
+                    ),
+                    (
+                        "snowflake",
+                        snowflake_eq,
+                        Some((
+                            format!("{:?}", &self.snowflake),
+                            format!("{:?}", &other.snowflake),
                         )),
                     ),
                     ("warehouse_config", warehouse_config_eq, None),
