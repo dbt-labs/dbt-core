@@ -836,6 +836,7 @@ pub enum JsonSchemaTypes {
     Packages(bool),
     Dependencies(bool),
     Telemetry(bool),
+    Catalogs(bool),
 }
 
 impl JsonSchemaTypes {
@@ -848,7 +849,8 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::DbtCloud(is_pre)
             | JsonSchemaTypes::Packages(is_pre)
             | JsonSchemaTypes::Dependencies(is_pre)
-            | JsonSchemaTypes::Telemetry(is_pre) => *is_pre,
+            | JsonSchemaTypes::Telemetry(is_pre)
+            | JsonSchemaTypes::Catalogs(is_pre) => *is_pre,
         }
     }
 
@@ -860,7 +862,8 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::Profile(_)
             | JsonSchemaTypes::DbtCloud(_)
             | JsonSchemaTypes::Packages(_)
-            | JsonSchemaTypes::Dependencies(_) => schemars::r#gen::SchemaSettings::default(),
+            | JsonSchemaTypes::Dependencies(_)
+            | JsonSchemaTypes::Catalogs(_) => schemars::r#gen::SchemaSettings::default(),
             JsonSchemaTypes::Telemetry(_) => schemars::r#gen::SchemaSettings::draft07(),
         }
     }
@@ -878,6 +881,7 @@ pub enum ClapSchemaTypes {
     Packages,
     Dependencies,
     Telemetry,
+    Catalogs,
 }
 
 impl ClapSchemaTypes {
@@ -891,6 +895,7 @@ impl ClapSchemaTypes {
             ClapSchemaTypes::Packages => JsonSchemaTypes::Packages(is_pre),
             ClapSchemaTypes::Dependencies => JsonSchemaTypes::Dependencies(is_pre),
             ClapSchemaTypes::Telemetry => JsonSchemaTypes::Telemetry(is_pre),
+            ClapSchemaTypes::Catalogs => JsonSchemaTypes::Catalogs(is_pre),
         }
     }
 }
