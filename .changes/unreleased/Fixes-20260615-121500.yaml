@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix BigQuery TIMESTAMP type precision issue when using --sample with microbatch event-time filtering. BigQuery only supports 6-digit (microsecond) precision, but dbt was generating 9-digit (nanosecond) precision literals.
+time: 2026-06-15T12:15:00.000000-00:00
+custom:
+    author: stva01
+    issue: "15242"
+    project: dbt-fusion
