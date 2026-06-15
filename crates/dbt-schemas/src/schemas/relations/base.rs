@@ -852,3 +852,27 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         unimplemented!("Available only for BigQuery and Redshift")
     }
 }
+#[cfg(test)]
+mod tests {
+
+    use chrono::{DateTime, Utc};
+
+    #[test]
+    fn test_bigquery_timestamp_precision() {
+        let dt = DateTime::parse_from_rfc3339("2026-06-05T03:50:56.538507786+00:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let formatted = dt.format("%Y-%m-%dT%H:%M:%S%.6f%:z").to_string();
+
+        assert!(
+            formatted.contains("538507"),
+            "Expected 6-digit precision in: {}",
+            formatted
+        );
+        assert!(
+            !formatted.contains("538507786"),
+            "Should not contain 9-digit precision"
+        );
+    }
+}
