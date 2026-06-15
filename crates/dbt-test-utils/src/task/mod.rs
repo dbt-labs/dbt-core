@@ -88,7 +88,7 @@ use dbt_common::ErrorCode;
 use dbt_common::FsError;
 pub use env::{ProjectEnv, TestEnv};
 pub use task_seq::G_DBT_TEST_UTILS_FEATURE_STACK;
-pub use task_seq::{CommandFn, TaskSeq, fs_cmd_vec};
+pub use task_seq::{CommandFn, FeatureStackFactory, TaskSeq, fs_cmd_vec};
 
 // Public tasks.
 pub use artifact_validation::ArtifactComparisonTask;

@@ -247,7 +247,6 @@ pub struct IoArgs {
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
-    pub beta_use_query_cache: bool,
     pub use_parquet_schema_store: bool,
     pub verify_parquet_schema_store: bool,
     pub host: String,

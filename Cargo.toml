@@ -644,7 +644,7 @@ tower-http = { version = "0.6", features = ["trace"] }
 open = "5"
 
 # When updating these lints mind that some crates may not inherit form workspace
-# Use only "warn" in this section if you want to deny a lint. CI run will turn these 
+# Use only "warn" in this section if you want to deny a lint. CI run will turn these
 # into deny, and we don't want to disallow local compilation of "dirty" code.
 
 [workspace.lints.clippy]
