@@ -216,12 +216,10 @@ impl TypeOps for DefaultTypeOps {
 
     fn parse_into_nullable_arrow_type(&self, s: &str) -> AdapterResult<(DataType, bool)> {
         let adapter_type = self.0;
-        SqlType::parse(adapter_type, s)
-            .map(|(sql_type, nullable)| {
-                let arrow_type = sql_type.pick_best_arrow_type(adapter_type);
-                (arrow_type, nullable)
-            })
-            .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))
+        let (sql_type, nullable) = SqlType::parse(adapter_type, s)
+            .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))?;
+        let data_type = sql_type.pick_best_arrow_type(adapter_type);
+        Ok((data_type, nullable))
     }
 
     fn adapt_seed_type(&self, _data_type: &DataType) -> Option<DataType> {
