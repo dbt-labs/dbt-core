@@ -3724,6 +3724,16 @@
             }
           ]
         },
+        "snowflake": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionSnowflakeConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "snowflake_initialization_warehouse": {
           "type": [
             "string",
@@ -4061,6 +4071,27 @@
           "type": [
             "string",
             "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FunctionSnowflakeConfig": {
+      "description": "Snowflake-specific configuration for functions. Nested under the `snowflake` key inside `config:` in schema YAML (or `+snowflake:` under `functions:` in `dbt_project.yml`).",
+      "type": "object",
+      "properties": {
+        "quote_args": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
