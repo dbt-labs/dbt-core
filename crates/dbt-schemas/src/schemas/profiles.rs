@@ -190,6 +190,7 @@ impl DbConfig {
                 "job_retries",
                 "job_creation_timeout_seconds",
                 "job_execution_timeout_seconds",
+                "reservation",
                 "timeout_seconds",
                 "client_id",
                 "token_uri",
@@ -801,6 +802,8 @@ pub struct BigqueryDbConfig {
     pub job_creation_timeout_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_execution_timeout_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reservation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_retries: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1529,6 +1532,7 @@ pub struct BigqueryTargetEnv {
     pub impersonate_service_account: Option<String>,
     pub job_creation_timeout_seconds: Option<i64>,
     pub job_execution_timeout_seconds: Option<i64>,
+    pub reservation: Option<String>,
     pub job_retries: Option<i64>,
     pub job_retry_deadline_seconds: Option<i64>,
     pub location: Option<String>,
@@ -1884,6 +1888,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     impersonate_service_account: config.impersonate_service_account.clone(),
                     job_creation_timeout_seconds: config.job_creation_timeout_seconds,
                     job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                    reservation: config.reservation.clone(),
                     job_retries: config.job_retries,
                     job_retry_deadline_seconds: config.job_retry_deadline_seconds,
                     location: config.location.clone(),
