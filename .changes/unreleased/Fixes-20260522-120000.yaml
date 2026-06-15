@@ -1,0 +1,11 @@
+kind: Fixes
+body: >-
+  Fix partial parsing raising a duplicate-metric CompilationError after a v2
+  inline model entry (semantic_model: true) is modified. Non-simple metrics
+  (cumulative, derived, ratio, conversion) stored in schema_file.metrics were
+  not cleaned up by _delete_v2_semantic_model_for_model, leaving stale
+  unique_ids that triggered a false duplicate on the next parse.
+time: 2026-05-22T12:00:00.0000000Z
+custom:
+    Author: b-per
+    Issue: "13004"
