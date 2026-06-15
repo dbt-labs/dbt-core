@@ -38,6 +38,8 @@
         {# generally you dont need to specify the language for sql functions #}
     {% elif language == 'python' %}
         LANGUAGE PYTHON
+    {% elif language == 'javascript' %}
+        LANGUAGE js
     {% else %}
         {{ 'LANGUAGE ' ~ language.upper() }}
     {% endif %}

@@ -1,7 +1,7 @@
 {# DIVERGENCE #}
 {# We check for the execute stage to block this out because the model and model.config #}
 {# don't exist at parse time and we get errors from the dispatch call otherwise #}
-{% materialization function, default, supported_languages=['sql', 'python'] %}
+{% materialization function, default, supported_languages=['sql', 'python', 'javascript'] %}
     {% set existing_relation = load_cached_relation(this) %}
     {% set target_relation = this.incorporate(type=this.Function) %}
 

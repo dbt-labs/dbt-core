@@ -194,6 +194,7 @@ pub mod schemas {
         pub use data_test_properties::DataTestProperties;
         pub use exposure_properties::ExposureProperties;
         pub use function_properties::{
+            FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL,
             FunctionArgument, FunctionKind, FunctionOverload, FunctionProperties,
             FunctionReturnType, Volatility,
         };
