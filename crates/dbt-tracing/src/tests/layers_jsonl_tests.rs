@@ -1,12 +1,10 @@
 use std::{borrow::Cow, fs};
 
-use crate::tracing::emit::{create_root_info_span, emit_info_event};
-use crate::tracing::init::create_tracing_subcriber_with_layer;
-use crate::tracing::layers::jsonl_writer::build_jsonl_layer_with_background_writer;
-use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
-use dbt_tracing::test_support::mocks::{
-    MockDynLogEvent, MockDynSpanEvent, MockUnknown, test_data_layer,
-};
+use crate::emit::{create_root_info_span, emit_info_event};
+use crate::init::create_tracing_subcriber_with_layer;
+use crate::layers::jsonl_writer::build_jsonl_layer_with_background_writer;
+use crate::test_support::mocks::{MockDynLogEvent, MockDynSpanEvent, MockUnknown, test_data_layer};
+use crate::{LogRecordInfo, TelemetryOutputFlags};
 use tracing::Level;
 
 fn prepend_test_marker(record: &LogRecordInfo) -> Cow<'_, LogRecordInfo> {

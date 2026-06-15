@@ -1,14 +1,13 @@
 use std::borrow::Cow;
 
-use dbt_tracing::{
+use crate::{
+    LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags,
     data_provider::DataProvider,
     error::{TracingError, TracingResult},
     layer::{ConsumerLayer, LogPreprocessorHook, TelemetryConsumer},
+    serialize::otlp::{export_log, export_span},
     shutdown::{TelemetryShutdown, TelemetryShutdownItem},
 };
-
-use dbt_telemetry::serialize::otlp::{export_log, export_span};
-use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags};
 
 use opentelemetry::{KeyValue, logs::LoggerProvider, trace::TracerProvider};
 use opentelemetry_otlp::WithExportConfig;
@@ -62,8 +61,8 @@ pub fn build_otlp_layer(
     let layer = OTLPExporterLayer::new_with_http_export(resource_config, log_preprocessor_hook)?;
 
     let shutdown_items: Vec<TelemetryShutdownItem> = vec![
-        Box::new(OtlpTracerProviderShutdown(layer.tracer_provider())),
-        Box::new(OtlpLoggerProviderShutdown(layer.logger_provider())),
+        Box::new(layer.tracer_provider()),
+        Box::new(layer.logger_provider()),
     ];
 
     Some((Box::new(layer), shutdown_items))
@@ -224,11 +223,9 @@ impl OTLPExporterLayer {
     }
 }
 
-struct OtlpTracerProviderShutdown(SdkTracerProvider);
-
-impl TelemetryShutdown for OtlpTracerProviderShutdown {
+impl TelemetryShutdown for SdkTracerProvider {
     fn shutdown(&mut self) -> TracingResult<()> {
-        SdkTracerProvider::shutdown(&self.0).map_err(|otel_error| {
+        SdkTracerProvider::shutdown(self).map_err(|otel_error| {
             TracingError::shutdown(format!(
                 "Failed to gracefully shutdown OTLP trace exporter: {otel_error}"
             ))
@@ -236,11 +233,9 @@ impl TelemetryShutdown for OtlpTracerProviderShutdown {
     }
 }
 
-struct OtlpLoggerProviderShutdown(SdkLoggerProvider);
-
-impl TelemetryShutdown for OtlpLoggerProviderShutdown {
+impl TelemetryShutdown for SdkLoggerProvider {
     fn shutdown(&mut self) -> TracingResult<()> {
-        SdkLoggerProvider::shutdown(&self.0).map_err(|otel_error| {
+        SdkLoggerProvider::shutdown(self).map_err(|otel_error| {
             TracingError::shutdown(format!(
                 "Failed to gracefully shutdown OTLP log exporter: {otel_error}"
             ))

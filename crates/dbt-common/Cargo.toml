@@ -40,7 +40,6 @@ dashmap = { workspace = true }
 dbt-yaml = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }
-parquet = { workspace = true }
 scc = { workspace = true }
 
 schemars = { workspace = true }
@@ -63,12 +62,7 @@ proto-rust = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
-# Embedded OTLP exporter for traces
 dbt-fusion-workspace-hack = { version = "0.1" }
-opentelemetry = { workspace = true }
-opentelemetry-otlp = { workspace = true }
-opentelemetry-semantic-conventions = { workspace = true }
-opentelemetry_sdk = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 dunce = "1.0.5"

@@ -3,21 +3,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 
-use dbt_telemetry::{
+use crate::{
     LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecord,
-    serialize::{
-        arrow::{TelemetryArrowSchemas, serialize_to_arrow},
-        traits::ArrowRegistryLookup,
-    },
-};
-use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
-
-use dbt_tracing::{
     data_provider::DataProvider,
     error::{TracingError, TracingResult},
     layer::{ConsumerLayer, TelemetryConsumer},
+    serialize::arrow::{TelemetryArrowSchemas, serialize_to_arrow},
+    serialize::traits::ArrowRegistryLookup,
     shutdown::{TelemetryShutdown, TelemetryShutdownItem},
 };
+use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 
 /// Build a parquet writer layer with a background writer. Do not wrap
 /// or buffer the writer, as the layer already does its own buffering
@@ -342,14 +337,14 @@ impl Drop for TelemetryParquetWriterHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow_schema::Schema;
-    use dbt_telemetry::{
+    use crate::test_support::mocks::{
+        MockDynLogEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
+    };
+    use crate::{
         LogRecordInfo, SeverityNumber, TelemetryOutputFlags, TelemetryRecord,
         serialize::arrow::{TelemetryArrowSchemas, deserialize_from_arrow},
     };
-    use dbt_tracing::test_support::mocks::{
-        MockDynLogEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
-    };
+    use arrow_schema::Schema;
     use std::io::{self, Cursor, Write};
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
@@ -560,7 +555,7 @@ mod tests {
             TelemetryParquetWriterLayer::new::<_, MockTelemetryEventRegistry>(mock).unwrap();
 
         let trace_id = uuid::Uuid::new_v4().as_u128();
-        let subscriber = crate::tracing::init::create_tracing_subcriber_with_layer(
+        let subscriber = crate::init::create_tracing_subcriber_with_layer(
             tracing::level_filters::LevelFilter::TRACE,
             test_data_layer(
                 trace_id,

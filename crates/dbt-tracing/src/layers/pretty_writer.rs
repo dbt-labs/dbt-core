@@ -1,8 +1,5 @@
-use dbt_telemetry::{
+use crate::{
     LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
-};
-
-use dbt_tracing::{
     data_provider::DataProvider, layer::TelemetryConsumer, shared_writer::SharedWriter,
 };
 

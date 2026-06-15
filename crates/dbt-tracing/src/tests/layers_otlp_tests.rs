@@ -3,17 +3,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::tracing::{
-    emit::{create_info_span, create_root_info_span, emit_info_event},
-    init::create_tracing_subcriber_with_layer,
-    layer::ConsumerLayer,
-    layers::otlp::{OTLPExporterLayer, OtlpResourceConfig},
-};
-
-use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
-use dbt_tracing::test_support::mocks::{
+use crate::emit::{create_info_span, create_root_info_span, emit_info_event};
+use crate::init::create_tracing_subcriber_with_layer;
+use crate::layer::ConsumerLayer;
+use crate::layers::otlp::{OTLPExporterLayer, OtlpResourceConfig};
+use crate::test_support::mocks::{
     MockDynLogEvent, MockDynSpanEvent, MockRootSpanEvent, test_data_layer,
 };
+use crate::{LogRecordInfo, TelemetryOutputFlags};
 use opentelemetry::{Key, KeyValue, Value as OtelValue, logs::AnyValue};
 use opentelemetry_sdk as sdk;
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};

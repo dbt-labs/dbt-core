@@ -7,9 +7,6 @@ use super::{
         json_compat_layer::{
             build_json_compat_layer, build_json_compat_layer_with_background_writer,
         },
-        jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},
-        otlp::{OtlpResourceConfig, build_otlp_layer},
-        parquet_writer::build_parquet_writer_layer,
         query_log::build_query_log_layer_with_background_writer,
         tui_layer::build_tui_layer,
     },
@@ -37,6 +34,11 @@ use dbt_error::{ErrorCode, FsError, FsResult};
 use dbt_telemetry::{LogMessage, LogRecordInfo, TelemetryEventTypeRegistry};
 use dbt_tracing::{
     layer::{ConsumerLayer, MiddlewareLayer},
+    layers::{
+        jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},
+        otlp::{OtlpResourceConfig, build_otlp_layer},
+        parquet_writer::build_parquet_writer_layer,
+    },
     rotating_file_writer::RotatingFileWriter,
     shutdown::TelemetryShutdownItem,
 };

@@ -1,19 +1,15 @@
-use crate::tracing::{
-    emit::{create_info_span_with_parent, emit_info_event},
-    event_info::store_event_attributes,
-    init::create_tracing_subcriber_with_layer,
-    layers::parquet_writer::build_parquet_writer_layer,
-    span_info,
+use crate::emit::{create_info_span_with_parent, emit_info_event};
+use crate::event_info::store_event_attributes;
+use crate::init::create_tracing_subcriber_with_layer;
+use crate::layers::data_layer::get_span_start_info_from_span;
+use crate::layers::parquet_writer::build_parquet_writer_layer;
+use crate::span_info;
+use crate::test_support::mocks::{
+    MockDynLogEvent, MockDynSpanEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
 };
-use dbt_telemetry::{
+use crate::{
     LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, TelemetryAttributes,
     TelemetryOutputFlags, TelemetryRecord, serialize::arrow::deserialize_from_arrow,
-};
-use dbt_tracing::{
-    layers::data_layer::get_span_start_info_from_span,
-    test_support::mocks::{
-        MockDynLogEvent, MockDynSpanEvent, MockTelemetryEventRegistry, MockUnknown, test_data_layer,
-    },
 };
 use std::{fs, panic::Location, time::SystemTime};
 

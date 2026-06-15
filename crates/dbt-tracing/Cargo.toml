@@ -21,8 +21,10 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-yaml = { workspace = true }
 erased-serde = { workspace = true }
 opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
+parquet = { workspace = true }
 rand = { workspace = true }
 scc = { workspace = true }
 schemars = { workspace = true }
@@ -43,6 +45,7 @@ uuid = { workspace = true, features = ["v7"] }
 fake = { workspace = true, optional = true }
 
 [dev-dependencies]
+bytes = { workspace = true }
 fake = { workspace = true }
 tempfile = { workspace = true }
 

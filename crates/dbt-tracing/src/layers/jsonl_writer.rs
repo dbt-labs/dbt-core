@@ -1,17 +1,14 @@
 use std::borrow::Cow;
 
-use dbt_telemetry::{
+use crate::{
     LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
-};
-use tracing::level_filters::LevelFilter;
-
-use dbt_tracing::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     layer::{ConsumerLayer, LogPreprocessorHook, TelemetryConsumer},
     shared_writer::SharedWriter,
     shutdown::TelemetryShutdownItem,
 };
+use tracing::level_filters::LevelFilter;
 
 /// Build jsonl layer for arbitrary writer. This will writer directly to
 /// the writer. If you want to write to slow IO sink, prefer `build_jsonl_layer_with_background_writer`

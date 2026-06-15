@@ -9,12 +9,13 @@
 //! generic telemetry API, the record envelopes, status/location metadata, and
 //! the serialization registry traits.
 //!
-//! The library is independent of any concrete event taxonomy or output format —
-//! it defines the traits and record types but ships no dbt-specific event
-//! schemas, formatters, or exporters. Users provide those: Fusion and dbt-core
-//! define their event types in `dbt-telemetry` (generated from protobuf), and
-//! the dbt/Fusion integration layer — CLI config, user-facing formatting, and
-//! export wiring — lives in `dbt-common::tracing`.
+//! The library is independent of any concrete event taxonomy. It defines the
+//! traits, record types, generic serialization, and dbt-agnostic output layers,
+//! but ships no dbt-specific event schemas or user-facing formatters. Users
+//! provide those: Fusion and dbt-core define their event types in
+//! `dbt-telemetry` (generated from protobuf), and the dbt/Fusion integration
+//! layer — CLI config, user-facing formatting, and export assembly — lives in
+//! `dbt-common::tracing`.
 //!
 //! [`tracing`]: https://docs.rs/tracing
 

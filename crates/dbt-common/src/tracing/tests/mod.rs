@@ -2,8 +2,4 @@ mod dbt_emit_tests;
 mod dbt_middleware_tests;
 mod layers_file_log_tests;
 mod layers_json_compat_tests;
-mod layers_jsonl_tests;
-mod layers_otlp_tests;
-mod layers_parquet_tests;
-mod layers_pretty_tests;
 mod metric_aggregator_tests;
