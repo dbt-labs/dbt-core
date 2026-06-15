@@ -313,7 +313,13 @@ pub fn resolve_nested_model_metrics(
                         group: metric_config.group.clone(),
                         created_at: chrono::Utc::now().timestamp() as f64,
                         metadata: None,
-                        label: metric_props.label.clone(),
+                        // fall back to metric_name matches core
+                        label: Some(
+                            metric_props
+                                .label
+                                .clone()
+                                .unwrap_or_else(|| metric_name.clone()),
+                        ),
                         metric_type: metric_props.type_.clone().unwrap_or_default(),
                         type_params,
                         filter: metric_props.filter.clone().map(|f| vec![f].into()),
@@ -575,7 +581,13 @@ pub fn resolve_top_level_metrics(
                 group: metric_metric_config.group.clone(),
                 created_at: chrono::Utc::now().timestamp() as f64,
                 metadata: None,
-                label: metric_props.label.clone(),
+                // fall back to metric_name matches core
+                label: Some(
+                    metric_props
+                        .label
+                        .clone()
+                        .unwrap_or_else(|| metric_name.clone()),
+                ),
                 metric_type,
                 type_params,
                 filter: metric_props.filter.clone().map(|f| vec![f].into()),
