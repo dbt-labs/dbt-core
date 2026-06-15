@@ -884,6 +884,27 @@
         "table"
       ]
     },
+    "FunctionSnowflakeConfig": {
+      "description": "Snowflake-specific configuration for functions. Nested under the `snowflake` key inside `config:` in schema YAML (or `+snowflake:` under `functions:` in `dbt_project.yml`).",
+      "type": "object",
+      "properties": {
+        "quote_args": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "GrantAccessToTarget": {
       "type": "object",
       "properties": {
@@ -1970,6 +1991,12 @@
             }
           ]
         },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+row_access_policy": {
           "type": [
             "string",
@@ -2465,6 +2492,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+snowflake": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionSnowflakeConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+static_analysis": {
@@ -3621,6 +3658,12 @@
             }
           ]
         },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+resource_tags": {
           "type": [
             "object",
@@ -4652,6 +4695,12 @@
             }
           ]
         },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+row_access_policy": {
           "type": [
             "string",
@@ -5578,6 +5627,12 @@
             }
           ]
         },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+row_access_policy": {
           "type": [
             "string",
@@ -6293,6 +6348,12 @@
             }
           ]
         },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+schedule": {
           "anyOf": [
             {
@@ -6960,6 +7021,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+row_access_policy": {
