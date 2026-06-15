@@ -196,6 +196,7 @@ class TestList:
                         "nodes": [],
                         "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
                     },
+                    "direct_parents": [],
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -243,6 +244,7 @@ class TestList:
                         "nodes": ["seed.test.seed"],
                         "macros": ["macro.dbt.is_incremental"],
                     },
+                    "direct_parents": ["seed.test.seed"],
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -290,6 +292,7 @@ class TestList:
                         "nodes": ["model.test.outer"],
                         "macros": [],
                     },
+                    "direct_parents": ["model.test.outer"],
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -337,6 +340,7 @@ class TestList:
                         "nodes": [],
                         "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
                     },
+                    "direct_parents": [],
                     "config": {
                         "enabled": True,
                         "group": "finance",
@@ -396,6 +400,7 @@ class TestList:
                         "nodes": [],
                         "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
                     },
+                    "direct_parents": [],
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -473,6 +478,7 @@ class TestList:
                         "static_analysis": None,
                     },
                     "depends_on": {"macros": [], "nodes": ["seed.test.seed"]},
+                    "direct_parents": ["seed.test.seed"],
                     "name": "model_to_unit_test",
                     "original_file_path": normalize("models/model_to_unit_test.sql"),
                     "package_name": "test",
@@ -540,6 +546,10 @@ class TestList:
                         "macros": [],
                         "nodes": ["source.test.my_source.my_table", "model.test.ephemeral"],
                     },
+                    "direct_parents": [
+                        "source.test.my_source.my_table",
+                        "model.test.ephemeral",
+                    ],
                     "tags": ["string_tag"],
                 },
                 {
@@ -549,6 +559,7 @@ class TestList:
                         "nodes": ["model.test.ephemeral"],
                         "macros": [],
                     },
+                    "direct_parents": ["model.test.ephemeral"],
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -616,6 +627,7 @@ class TestList:
                     "name": "outer",
                     "package_name": "test",
                     "depends_on": {"nodes": [], "macros": []},
+                    "direct_parents": [],
                     "tags": [],
                     "config": {
                         "enabled": True,

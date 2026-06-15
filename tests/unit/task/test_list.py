@@ -1,9 +1,11 @@
+import json
 from argparse import Namespace
 from unittest.mock import patch
 
 from dbt.flags import get_flags, set_from_args
 from dbt.task.list import ListTask
 from dbt_common.events.types import PrintEvent
+from tests.unit.fixtures import generic_test_node, model_node
 
 
 def test_list_output_results():
@@ -239,3 +241,57 @@ class TestGenerateJson:
 
                 result_data = json.loads(results[0])
                 assert result_data["config.meta.contact.email"] == "team@company.com"
+
+
+class TestDirectParentsInLsOutput:
+    def setup_method(self):
+        set_from_args(Namespace(models=None, output_keys=None), {})
+        self.task = ListTask(get_flags(), None, None)
+
+    def _ls_json(self, node) -> dict:
+        with patch.object(self.task, "args") as args:
+            args.output_keys = None
+            with patch.object(self.task, "_iterate_selected_nodes", return_value=[node]):
+                [raw] = list(self.task.generate_json())
+        return json.loads(raw)
+
+    def test_model_emits_direct_parents(self):
+        model = model_node()
+        model.direct_parents = ["model.test.upstream", "seed.test.seed"]
+
+        assert self._ls_json(model)["direct_parents"] == [
+            "model.test.upstream",
+            "seed.test.seed",
+        ]
+
+    def test_empty_direct_parents_is_emitted_not_omitted(self):
+        # Empty is authoritative ("no parents"), not "field missing".
+        model = model_node()
+        model.direct_parents = []
+
+        emitted = self._ls_json(model)
+
+        assert emitted["direct_parents"] == []
+
+    def test_non_model_has_no_direct_parents_field(self):
+        emitted = self._ls_json(generic_test_node())
+
+        assert "direct_parents" not in emitted
+
+    def test_emitted_list_is_a_copy(self):
+        model = model_node()
+        model.direct_parents = ["model.test.upstream"]
+
+        emitted = self._ls_json(model)
+        emitted["direct_parents"].append("tampered")
+
+        assert model.direct_parents == ["model.test.upstream"]
+
+    def test_serialization_strips_direct_parents(self):
+        # Pins the contract that motivates the re-injection in generate_json.
+        # If __post_serialize__ ever stops stripping, the re-injection becomes
+        # a duplicate write.
+        model = model_node()
+        model.direct_parents = ["model.test.upstream"]
+
+        assert "direct_parents" not in model.to_dict(omit_none=False)

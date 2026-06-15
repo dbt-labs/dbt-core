@@ -549,7 +549,41 @@ class ManifestLoader:
         self.check_microbatch_model_has_a_filtered_input()
         self.check_function_default_arguments_ordering()
 
+        self._backfill_direct_parents()
+
         return self.manifest
+
+    def _backfill_direct_parents(self) -> None:
+        """Ensure every in-project model has its `direct_parents` populated.
+
+        Why this exists
+        ---------------
+        `direct_parents` is the lineage field that DAG-drawing consumers
+        (the dbt IDE, anything parsing `dbt ls --output=json`) read. We
+        want one authoritative field per model so consumers don't have to
+        branch on "is this an external node? use direct_parents. is it
+        in-project? fall back to depends_on.nodes."
+
+        For external nodes (nodes supplied by plugins via `ModelNodeArgs`,
+        e.g. from publication artifacts) the plugin already sets
+        `direct_parents` at construction time to the *nearest public
+        ancestors* — a proper subset of `depends_on.nodes`, which for these
+        nodes carries the full transitive public-ancestor closure so cycle
+        detection still works across plugin boundaries.
+
+        For in-project models, nothing populates `direct_parents` during
+        parsing — the parser only sets `depends_on.nodes` from the
+        `{{ ref(...) }}` calls it sees in the SQL. Note that
+        `depends_on.nodes` on an in-project node is ALREADY just the
+        direct refs — parsing is not transitive. Transitive closure across
+        in-project models only emerges when the graph is walked at compile
+        time (in the Linker). So for in-project models the two fields hold
+        the same set; this method copies one into the other so consumers
+        have a single field to read.
+        """
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode) and not node.direct_parents:
+                node.direct_parents = list(node.depends_on.nodes)
 
     def safe_update_project_parser_files_partially(self, project_parser_files: Dict) -> Dict:
         if self.saved_manifest is None:

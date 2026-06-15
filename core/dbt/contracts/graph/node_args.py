@@ -22,6 +22,7 @@ class ModelNodeArgs:
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
     depends_on_nodes: List[str] = field(default_factory=list)
+    direct_parents: List[str] = field(default_factory=list)
     enabled: bool = True
 
     @property
