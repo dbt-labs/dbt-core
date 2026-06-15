@@ -158,7 +158,9 @@ fn augment_sql_resources_with_static_sources<T: ResolvableConfig<T>>(
     let existing: HashSet<(String, String)> = resources
         .iter()
         .filter_map(|r| match r {
-            SqlResource::Source((name, table, _)) => Some((name.clone(), table.clone())),
+            SqlResource::Source((name, table, _)) | SqlResource::StaticSource((name, table, _)) => {
+                Some((name.clone(), table.clone()))
+            }
             _ => None,
         })
         .collect();
@@ -173,7 +175,7 @@ fn augment_sql_resources_with_static_sources<T: ResolvableConfig<T>>(
         }
         let (name, table) = key;
         let span = call.span;
-        resources.push(SqlResource::Source((
+        resources.push(SqlResource::StaticSource((
             name,
             table,
             CodeLocation::new(span.start_line, span.start_col, span.start_offset),

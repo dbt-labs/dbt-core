@@ -1352,14 +1352,23 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         _options: &'a MetadataQueryOptions,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        // `__TABLES__` is dataset-scoped: FROM `project`.`dataset`.__TABLES__
+        // Using the two-part form `project.__TABLES__` is wrong — BigQuery
+        // treats it as `current_project.project.__TABLES__` (dataset named
+        // "project"), which 404s. Both parts need backtick quoting because
+        // project IDs often contain hyphens.
+        //
+        // `database` and `schema` are raw (unquoted) identifiers from
+        // `RelationPath`. Quoting is only applied at render time via
+        // `quote_policy`/`quote_part`, so these values are never pre-quoted
+        // and the unconditional backticks here cannot double-quote them.
         let sql = format!(
             "SELECT
                  dataset_id AS table_schema,
                  table_id AS table_name,
                  TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
                  (type = 2) AS is_view
-             FROM {database}.__TABLES__
-             WHERE dataset_id = '{schema}'"
+             FROM `{database}`.`{schema}`.__TABLES__"
         );
         let relations = relations.to_vec();
         let adapter = self.adapter.clone();

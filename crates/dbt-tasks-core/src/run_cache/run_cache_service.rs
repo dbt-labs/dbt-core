@@ -24,7 +24,6 @@ use dbt_adapter::relation::{create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
 use dbt_adapter_core::AdapterType;
 use dbt_common::adapter::dialect_of;
-use dbt_common::cancellation::never_cancels;
 use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
@@ -465,10 +464,18 @@ pub fn insert_compiled_view_definition(
 /// Used in `confirm_run_cache_service_execution` to stamp freshly-executed
 /// tables without re-querying `information_schema`.
 ///
-/// The "heuristic" is the assumption that a table's `last_modified` after
-/// Fusion writes it equals approximately "now." The error is bounded by
-/// local-vs-warehouse clock drift, negligible relative to `lag_tolerance`
-/// windows (minutes to hours).
+/// `Instant::now()` is recorded *before* the warehouse query fires so that
+/// the round-trip time (~50-100 ms) is baked into every subsequent `elapsed`
+/// calculation, making `now_ms()` reliably land above `LAST_ALTERED` despite
+/// small local-vs-warehouse clock skew on Snowflake/Redshift/BigQuery.
+///
+/// Databricks is intentionally excluded from the heuristic clock
+/// (`heuristic_clock_enabled_for_adapter`).  DESCRIBE HISTORY timestamps have
+/// millisecond precision and can land a few milliseconds above H due to clock
+/// skew, causing the service to see a dependency as "changed" and fall back
+/// to Execute.  For Databricks, confirms use the actual DESCRIBE HISTORY epoch
+/// directly via `refresh_final_last_modified_epoch_for_node`, making the
+/// stored and submitted epochs identical and the comparison exact.
 #[derive(Debug)]
 pub struct HeuristicClock {
     start_instant: std::time::Instant,
@@ -478,11 +485,6 @@ pub struct HeuristicClock {
 impl HeuristicClock {
     /// Sample the warehouse clock and return a bootstrapped clock, or `None`
     /// if the adapter is not opted in or the query fails.
-    ///
-    /// `Instant::now()` is recorded *before* the warehouse query fires so that
-    /// the round-trip time (~50-100 ms) is baked into every subsequent
-    /// `elapsed` calculation, making `now_ms()` reliably land above
-    /// `LAST_ALTERED` despite small Snowflake-vs-local clock skew.
     pub async fn bootstrap(ctx: &TaskRunnerCtx) -> Option<Self> {
         if !heuristic_clock_enabled_for_adapter(ctx.adapter_type()) {
             return None;
@@ -529,10 +531,12 @@ async fn warehouse_now_ms(ctx: &TaskRunnerCtx) -> Option<i64> {
 fn heuristic_clock_enabled_for_adapter(adapter_type: AdapterType) -> bool {
     matches!(
         adapter_type,
-        AdapterType::Snowflake
-            | AdapterType::Redshift
-            | AdapterType::Databricks
-            | AdapterType::Bigquery
+        // Databricks is intentionally excluded: DESCRIBE HISTORY timestamps have
+        // millisecond precision and can exceed H by a few ms due to local-vs-warehouse
+        // clock skew, causing the service to misidentify deps as "changed". Databricks
+        // confirms use the actual DESCRIBE HISTORY epoch directly instead, making the
+        // stored and submitted epochs consistent.
+        AdapterType::Snowflake | AdapterType::Redshift | AdapterType::Bigquery
     )
 }
 
@@ -632,9 +636,9 @@ fn collect_global_prefetch_relations(
 /// After this call, `last_modified_epoch_for_relation` returns a cache hit
 /// for every relation in the prefetch set, eliminating the per-node warehouse
 /// round-trips that `collect_table_modified_infos` would otherwise incur.
-/// Errors are fail-open: a failed prefetch is logged at trace level and the
-/// run continues; per-node fallback fetches will still succeed.
-async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) {
+/// A failed prefetch is a hard error: the command is aborted so that
+/// stale or missing metadata cannot silently produce incorrect results.
+async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) -> FsResult<()> {
     let (relations, overrides) = collect_global_prefetch_relations(
         ctx.adapter_type(),
         &ctx.inner.runnable_set,
@@ -642,11 +646,9 @@ async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) {
         ctx.nodes(),
     );
     if relations.is_empty() {
-        return;
+        return Ok(());
     }
-    if let Err(err) = bulk_prefetch_last_modified_by_schema(ctx, &relations, &overrides).await {
-        emit_trace_log_message(|| format!("dbt State global metadata prefetch failed: {err}"));
-    }
+    bulk_prefetch_last_modified_by_schema(ctx, &relations, &overrides).await
 }
 
 /// Prefetch last-modified epochs using per-schema dump queries rather than
@@ -658,8 +660,9 @@ async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) {
 /// (`loaded_at_query` / `loaded_at_field`) are handled separately via the
 /// existing per-table path so their custom freshness logic is preserved.
 ///
-/// Falls back to the per-table path for adapters where `freshness_all_in_schema`
-/// returns an empty result (the default implementation).
+/// An empty result from `freshness_all_in_schema` (adapter not implemented)
+/// leaves the cache empty for that group; per-node lookups handle the misses.
+/// Any error is propagated — the prefetch is mandatory.
 async fn bulk_prefetch_last_modified_by_schema(
     ctx: &TaskRunnerCtx,
     relations: &BTreeMap<String, Arc<dyn BaseRelation>>,
@@ -729,7 +732,32 @@ async fn bulk_prefetch_last_modified_by_schema(
             .map_err(into_fs_error)?;
 
         if dump.is_empty() {
-            // Adapter doesn't support schema dump — fall back to per-table.
+            // Empty result from the schema dump. This is typically caused by
+            // INFORMATION_SCHEMA eventual consistency: Fusion's global prefetch
+            // fires eagerly at run start (before any node executes), whereas the
+            // dbt-core plugin prefetches lazily on the first node-start event.
+            // The extra seconds of compilation time in the plugin's path are
+            // usually enough for Snowflake's INFORMATION_SCHEMA to propagate a
+            // table created by the immediately preceding run. Fusion doesn't get
+            // that grace period, so the dump can return empty even when the table
+            // actually exists.
+            //
+            // Fall back to freshness_with_overrides_and_options for this schema
+            // group. That call is still batched — one query per database group
+            // with all tables in a single WHERE clause (the old per-table predicate
+            // form rather than the schema-only dump form) — so it does not
+            // degenerate into one query per table. The fallback only fires when
+            // the schema dump returns empty, which is unusual, so the cost of the
+            // larger WHERE clause is acceptable.
+            emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "dbt State schema-level freshness dump returned empty for {db}.{sch}; \
+                     falling back to per-node warehouse queries for {} relations",
+                    semantic_to_name.len()
+                ),
+                None,
+            );
             let empty_overrides = BTreeMap::new();
             let freshness = metadata_adapter
                 .freshness_with_overrides_and_options(
@@ -740,18 +768,16 @@ async fn bulk_prefetch_last_modified_by_schema(
                 )
                 .await
                 .map_err(into_fs_error)?;
-            for (sem_fqn, name) in semantic_to_name {
+            for (sem_fqn, name) in &semantic_to_name {
                 let epoch = freshness
-                    .get(&sem_fqn)
+                    .get(sem_fqn)
                     .map(|m| m.last_altered.timestamp_millis());
                 ctx.inner
                     .run_cache_ctx
                     .run_cache_metadata
-                    .insert_last_modified_epoch(&name, epoch);
+                    .insert_last_modified_epoch(name, epoch);
             }
         } else {
-            // Schema dump succeeded — store everything returned and mark
-            // requested relations missing from the dump as non-existent.
             for (sem_fqn, name) in &semantic_to_name {
                 let epoch = dump.get(sem_fqn).map(|m| m.last_altered.timestamp_millis());
                 ctx.inner
@@ -759,7 +785,7 @@ async fn bulk_prefetch_last_modified_by_schema(
                     .run_cache_metadata
                     .insert_last_modified_epoch(name, epoch);
             }
-        }
+        };
     }
 
     Ok(())
@@ -767,28 +793,32 @@ async fn bulk_prefetch_last_modified_by_schema(
 
 /// Start-of-run hook. Fires once before any model executes.
 ///
-/// 1. Drives a `ViewDefinitionTraverser` traversal over all unselected upstream
-///    relations, warming the view-definition cache for the rest of the run.
-/// 2. Batch-prefetches `last_modified_epoch` for all selected nodes and their
-///    runtime dependencies into `run_cache_metadata`, so per-node submits
-///    resolve freshness from the in-process cache instead of issuing individual
-///    warehouse queries.
+/// Batch-prefetches `last_modified_epoch` for all selected nodes and their
+/// runtime dependencies into `run_cache_metadata`, so per-node submits
+/// resolve freshness from the in-process cache instead of issuing individual
+/// warehouse queries.
 ///
-/// Both steps are fail-open. The view traversal error is surfaced to the
-/// caller; the metadata prefetch is traced and swallowed.
+/// Note: the view-definition traversal that was previously run here as a
+/// pre-warm has been removed. It used `collect_view_traversal_roots` (a
+/// dep-graph-based approach) to approximate which relations the per-node
+/// SQL parser would find. For deferred models with `generate_alias_name`
+/// macros this produces incorrect FQNs (prod schema + dev alias) that do
+/// not exist in the warehouse, causing hard TABLE_NOT_FOUND failures.
+///
+/// The per-node path in `collect_query_dependencies` already handles view
+/// traversal correctly by parsing compiled SQL directly (matching the
+/// plugin's approach), and the traverser's shared cache means each view is
+/// fetched at most once per run. Total IO is identical — only the timing
+/// changes from eager/pre-run to lazy/per-node.
 pub async fn run_cache_service_before_run(ctx: &TaskRunnerCtx) -> AdapterResult<()> {
-    if let Some(traverser) = ctx.inner.run_cache_ctx.view_traverser.as_ref() {
-        let roots = collect_view_traversal_roots(ctx);
-        if !roots.is_empty() {
-            let token = ctx
-                .env
-                .get_adapter_ref()
-                .map(|a| a.cancellation_token())
-                .unwrap_or_else(never_cancels);
-            let _ = traverser.traverse(&roots, token).await?;
-        }
-    }
-    prefetch_global_last_modified_epochs(ctx).await;
+    prefetch_global_last_modified_epochs(ctx)
+        .await
+        .map_err(|e| {
+            dbt_adapter::errors::AdapterError::new(
+                dbt_adapter::errors::AdapterErrorKind::UnexpectedResult,
+                e.to_string(),
+            )
+        })?;
 
     if let Some(clock) = HeuristicClock::bootstrap(ctx).await {
         let _ = ctx.inner.run_cache_ctx.heuristic_clock.set(clock);
@@ -2099,18 +2129,14 @@ pub async fn refresh_final_last_modified_epoch_for_node(
 async fn last_modified_epoch_for_relation(
     ctx: &TaskRunnerCtx,
     name: &str,
-    relation: Arc<dyn BaseRelation>,
+    _relation: Arc<dyn BaseRelation>,
 ) -> FsResult<Option<i64>> {
-    if let Some(epoch) = ctx
+    Ok(ctx
         .inner
         .run_cache_ctx
         .run_cache_metadata
         .last_modified_epoch(name)
-    {
-        return Ok(epoch);
-    }
-
-    refresh_last_modified_epoch_for_relation(ctx, name, relation).await
+        .flatten())
 }
 
 async fn refresh_last_modified_epoch_for_relation(
@@ -2150,6 +2176,19 @@ async fn prefetch_last_modified_epochs(
     if misses.is_empty() {
         return;
     }
+    // Cache misses at submit time indicate the global prefetch didn't cover
+    // these relations (legitimate for post-clone invalidations and SQL-parser
+    // discovered refs) or that the schema dump returned empty. Log so this
+    // is visible when diagnosing unexpected per-node warehouse query volume.
+    emit_warn_log_message(
+        ErrorCode::StateServiceWarn,
+        format!(
+            "dbt State per-node freshness query for {} relation(s) not in prefetch cache: {}",
+            misses.len(),
+            misses.keys().cloned().collect::<Vec<_>>().join(", ")
+        ),
+        None,
+    );
     if let Err(err) = refresh_last_modified_epochs(ctx, &misses, overrides).await {
         emit_trace_log_message(|| format!("dbt State metadata prefetch failed: {err}"));
     }
@@ -2697,39 +2736,6 @@ fn record_submit_skipped(node: &dyn InternalDbtNodeAttributes, reason: &'static 
     emit_trace_log_message(|| {
         format!("dbt State service submit skipped for node {unique_id}: {reason}")
     });
-}
-
-/// Collects the root relation set for the start-of-run view-definition
-/// traversal: every relation referenced by any selected node, excluding
-/// relations belonging to selected nodes themselves. The compiled SQL
-/// of selected view models is fed into the cache by
-/// [`insert_compiled_view_definition`] once each model has rendered.
-fn collect_view_traversal_roots(ctx: &TaskRunnerCtx) -> Vec<Arc<dyn BaseRelation>> {
-    let adapter_type = ctx.adapter_type();
-    let selected = &ctx.inner.runnable_set;
-    let mut roots: BTreeMap<String, Arc<dyn BaseRelation>> = BTreeMap::new();
-
-    for selected_id in selected {
-        let Some(upstream_ids) = ctx.inner.runtime_deps.get(selected_id) else {
-            continue;
-        };
-        for upstream_id in upstream_ids {
-            if selected.contains(upstream_id) {
-                continue;
-            }
-            let Some(node) = ctx.nodes().get_node(upstream_id) else {
-                continue;
-            };
-            let Ok(relation) = create_relation_from_node(adapter_type, node, None) else {
-                continue;
-            };
-            roots
-                .entry(relation.semantic_fqn())
-                .or_insert_with(|| relation.into());
-        }
-    }
-
-    roots.into_values().collect()
 }
 
 #[cfg(test)]
@@ -3506,15 +3512,13 @@ mod tests {
 
     #[test]
     fn heuristic_clock_now_ms_equals_start_when_no_time_elapsed() {
-        // Freeze the clock by giving it a start_instant that was created just
-        // before we check; elapsed will be sub-millisecond so now_ms should
-        // equal start_ts_ms (integer truncation keeps the delta at zero).
+        // Immediately after construction elapsed is ~0 ms, so now_ms should
+        // equal start_ts_ms + HEURISTIC_CLOCK_SKEW_BUFFER_MS.
         let start_ts_ms: i64 = 1_700_000_000_000;
         let clock = HeuristicClock {
             start_ts_ms,
             start_instant: std::time::Instant::now(),
         };
-        // Elapsed is essentially zero immediately after construction.
         assert_eq!(clock.now_ms(), start_ts_ms);
     }
 

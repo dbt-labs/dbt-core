@@ -8,8 +8,13 @@ use minijinja::{ArgSpec, machinery::Span};
 /// Collected details about processed sql files
 #[derive(Debug, Clone)]
 pub struct SqlFileInfo<T: ResolvableConfig<T>> {
-    /// e.g. source('a', 'b')
+    /// e.g. source('a', 'b') — live sources that become runtime `depends_on` entries.
     pub sources: Vec<(String, String, CodeLocation)>,
+    /// Sources discovered by static AST analysis of dead Jinja branches.
+    ///
+    /// Included for schema fetching and lineage, but must NOT be promoted to
+    /// `depends_on.nodes` at resolve time — they were never actually executed.
+    pub static_sources: Vec<(String, String, CodeLocation)>,
     /// e.g. ref('a', 'b', 'c')
     pub refs: Vec<(String, Option<String>, Option<String>, CodeLocation)>,
     /// true if `this` is referenced in this .sql file, otherwise false
@@ -43,6 +48,7 @@ impl<T: ResolvableConfig<T>> Default for SqlFileInfo<T> {
     fn default() -> Self {
         Self {
             sources: Vec::new(),
+            static_sources: Vec::new(),
             refs: Vec::new(),
             this: false,
             metrics: Vec::new(),
@@ -71,6 +77,7 @@ impl<T: ResolvableConfig<T>> SqlFileInfo<T> {
         execute: bool,
     ) -> Self {
         let mut sources = Vec::new();
+        let mut static_sources = Vec::new();
         let mut refs = Vec::new();
         let mut this = false;
         let mut metrics = Vec::new();
@@ -85,6 +92,7 @@ impl<T: ResolvableConfig<T>> SqlFileInfo<T> {
         for resource in resources {
             match resource {
                 SqlResource::Source(source) => sources.push(source),
+                SqlResource::StaticSource(source) => static_sources.push(source),
                 SqlResource::Ref(reference) => refs.push(reference),
                 SqlResource::This => this = true,
                 SqlResource::Function(function) => functions.push(function),
@@ -112,6 +120,7 @@ impl<T: ResolvableConfig<T>> SqlFileInfo<T> {
 
         SqlFileInfo {
             sources,
+            static_sources,
             refs,
             this,
             metrics,

@@ -307,21 +307,31 @@ mod tests {
         .unwrap();
 
         assert_eq!(results.len(), 1, "Should have one result");
-        let sources: Vec<(String, String)> = results[0]
-            .sql_file_info
+        let info = &results[0].sql_file_info;
+
+        let live_sources: Vec<(String, String)> = info
             .sources
+            .iter()
+            .map(|(name, table, _)| (name.clone(), table.clone()))
+            .collect();
+        let static_sources: Vec<(String, String)> = info
+            .static_sources
             .iter()
             .map(|(name, table, _)| (name.clone(), table.clone()))
             .collect();
 
         assert!(
-            sources.contains(&("my_source".to_string(), "always_used".to_string())),
-            "expected the unconditional source to be collected, got {sources:?}"
+            live_sources.contains(&("my_source".to_string(), "always_used".to_string())),
+            "expected the unconditional source in live sources, got {live_sources:?}"
         );
         assert!(
-            sources.contains(&("my_source".to_string(), "conditional_only".to_string())),
-            "expected the source inside the false `if execute` branch to be \
-             statically discovered (dbt-fusion #1660), got {sources:?}"
+            static_sources.contains(&("my_source".to_string(), "conditional_only".to_string())),
+            "expected the dead-branch source in static_sources (dbt-fusion #1660), \
+             got {static_sources:?}"
+        );
+        assert!(
+            !live_sources.contains(&("my_source".to_string(), "conditional_only".to_string())),
+            "dead-branch source must NOT appear in live sources, got {live_sources:?}"
         );
     }
 
