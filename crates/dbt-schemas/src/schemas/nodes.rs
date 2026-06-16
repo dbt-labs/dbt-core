@@ -1607,7 +1607,29 @@ impl InternalDbtNode for DbtSeed {
             // warnings are logged about this. Implement these warnings later
             // after confirming they make sense. See:
             //https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/contracts/graph/nodes.py#L900-L933
-            let same_body_result = same_body(&self.__common_attr__, &other_seed.__common_attr__);
+            let mut same_body_result =
+                same_body(&self.__common_attr__, &other_seed.__common_attr__);
+
+            // Windows migration fallback: the new text-mode seed hash normalizes
+            // CRLF -> LF, so on Windows a freshly computed seed checksum won't match
+            // one stored by the old binary-mode hashing even when the file is
+            // unchanged. Recompute the current seed with the legacy hash and compare
+            // to the previous checksum, mirroring dbt-core's `same_seeds` fallback.
+            if !same_body_result && cfg!(windows) {
+                if let (DbtChecksum::Object(self_cs), Some(root_path)) = (
+                    &self.__common_attr__.checksum,
+                    self.__seed_attr__.root_path.as_ref(),
+                ) {
+                    if self_cs.name == "sha256" {
+                        let seed_path = root_path.join(&self.__common_attr__.path);
+                        if let Ok(bytes) = std::fs::read(&seed_path) {
+                            let legacy = DbtChecksum::seed_content_checksum_legacy(&bytes);
+                            same_body_result = legacy == other_seed.__common_attr__.checksum;
+                        }
+                    }
+                }
+            }
+
             let same_config_result = self.has_same_config(other, adapter_type);
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
@@ -6957,4 +6979,205 @@ impl InternalDbtNodeAttributes for DbtAnalysis {
 // Saved queries don't have a relation, individual exports do.
 pub fn is_invalid_for_relation_comparison(node: &dyn InternalDbtNode) -> bool {
     node.resource_type() == NodeType::UnitTest || node.resource_type() == NodeType::SavedQuery
+}
+
+#[cfg(test)]
+mod seed_has_same_content_tests {
+    use std::path::PathBuf;
+
+    use dbt_adapter_core::AdapterType;
+
+    use crate::schemas::common::{DbtChecksum, DbtChecksumObject};
+    #[cfg(windows)]
+    use crate::schemas::nodes::DbtSeedAttr;
+    use crate::schemas::nodes::{CommonAttributes, DbtSeed, InternalDbtNode};
+
+    // ─────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────
+
+    fn sha256(digest: &str) -> DbtChecksum {
+        DbtChecksum::Object(DbtChecksumObject {
+            name: "sha256".to_string(),
+            checksum: digest.to_string(),
+        })
+    }
+
+    fn path_checksum(path: &str) -> DbtChecksum {
+        DbtChecksum::Object(DbtChecksumObject {
+            name: "path".to_string(),
+            checksum: path.to_string(),
+        })
+    }
+
+    /// Build a minimal `DbtSeed` with the supplied checksum. All other
+    /// fields that `has_same_content` inspects (fqn, config, description)
+    /// are left at their `Default` so paired seeds compare equal on every
+    /// dimension except the one being tested.
+    fn seed_with_checksum(checksum: DbtChecksum) -> DbtSeed {
+        DbtSeed {
+            __common_attr__: CommonAttributes {
+                checksum,
+                unique_id: "seed.test.demo_seed".to_string(),
+                name: "demo_seed".to_string(),
+                package_name: "test".to_string(),
+                fqn: vec!["test".to_string(), "demo_seed".to_string()],
+                path: PathBuf::from("seeds/demo_seed.csv"),
+                original_file_path: PathBuf::from("seeds/demo_seed.csv"),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    /// Like `seed_with_checksum` but also sets `root_path` on `__seed_attr__`
+    /// so the Windows legacy-fallback code-path can locate the file.
+    #[cfg(windows)]
+    fn seed_with_checksum_and_root(checksum: DbtChecksum, root: PathBuf) -> DbtSeed {
+        DbtSeed {
+            __common_attr__: CommonAttributes {
+                checksum,
+                unique_id: "seed.test.demo_seed".to_string(),
+                name: "demo_seed".to_string(),
+                package_name: "test".to_string(),
+                fqn: vec!["test".to_string(), "demo_seed".to_string()],
+                path: PathBuf::from("seeds/demo_seed.csv"),
+                original_file_path: PathBuf::from("seeds/demo_seed.csv"),
+                ..Default::default()
+            },
+            __seed_attr__: DbtSeedAttr {
+                root_path: Some(root),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // has_same_content — body (checksum) comparisons
+    // ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn same_sha256_is_not_modified() {
+        let current = seed_with_checksum(sha256("abc123"));
+        let previous = seed_with_checksum(sha256("abc123"));
+        // Identical content hash → NOT state:modified
+        assert!(current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    #[test]
+    fn different_sha256_is_modified() {
+        let current = seed_with_checksum(sha256("abc123"));
+        let previous = seed_with_checksum(sha256("def456"));
+        // Different content hash → IS state:modified
+        assert!(!current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    #[test]
+    fn same_path_checksum_is_not_modified() {
+        // Both sides use path-based checksum (seed exceeds the limit on both runs).
+        // Same path → NOT modified (dbt-core's same_seeds behaviour for oversized seeds).
+        let current = seed_with_checksum(path_checksum("seeds/demo_seed.csv"));
+        let previous = seed_with_checksum(path_checksum("seeds/demo_seed.csv"));
+        assert!(current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    #[test]
+    fn different_path_checksums_is_modified() {
+        // Seed moved to a different path → IS modified.
+        let current = seed_with_checksum(path_checksum("seeds/demo_seed.csv"));
+        let previous = seed_with_checksum(path_checksum("seeds/old_seed.csv"));
+        assert!(!current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    #[test]
+    fn sha256_vs_path_is_modified() {
+        // Checksum *type* changed (e.g. limit was raised so the current run
+        // now hashes content, but the previous manifest stored a path checksum).
+        // The checksums can never be equal → IS modified.
+        let current = seed_with_checksum(sha256("abc123"));
+        let previous = seed_with_checksum(path_checksum("seeds/demo_seed.csv"));
+        assert!(!current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    #[test]
+    fn downcast_fails_for_non_seed_returns_false() {
+        use crate::schemas::nodes::DbtModel;
+        let current = seed_with_checksum(sha256("abc123"));
+        let non_seed = DbtModel::default();
+        assert!(!current.has_same_content(&non_seed as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Windows legacy-fallback
+    // ─────────────────────────────────────────────────────────────────
+
+    /// On Windows, if the new text-mode hash (CRLF→LF normalised) differs
+    /// from the old binary-mode hash stored in a previous-state manifest,
+    /// `has_same_content` re-hashes the file with the legacy method and
+    /// accepts it as "unchanged" when the legacy hash matches.
+    #[cfg(windows)]
+    #[test]
+    fn windows_legacy_fallback_accepts_unchanged_crlf_seed() {
+        use std::io::Write;
+
+        // Write a CRLF seed to a temp file.
+        let dir = std::env::temp_dir().join(format!(
+            "dbt_seed_legacy_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        let seed_path = dir.join("seeds").join("demo_seed.csv");
+        std::fs::create_dir_all(seed_path.parent().unwrap()).unwrap();
+        {
+            let mut f = std::fs::File::create(&seed_path).unwrap();
+            f.write_all(b"id,name\r\n1,Alice\r\n2,Bob\r\n").unwrap();
+        }
+
+        // Simulate "previous-state manifest produced by the old binary-mode hasher".
+        let legacy_checksum = DbtChecksum::seed_content_checksum_legacy(
+            &std::fs::read(&seed_path).expect("failed to read seed file"),
+        );
+
+        // Simulate "current run uses the new text-mode hasher (CRLF→LF)".
+        // On Windows these two hashes DIFFER for CRLF content.
+        let new_checksum = DbtChecksum::seed_content_checksum(std::io::BufReader::new(
+            std::fs::File::open(&seed_path).unwrap(),
+        ))
+        .expect("new hash failed");
+
+        // Confirm the premise: the two hashes are indeed different on Windows.
+        assert_ne!(
+            new_checksum, legacy_checksum,
+            "expected CRLF hashes to differ between text-mode and binary-mode on Windows"
+        );
+
+        // current = newly hashed (text-mode), previous = old manifest (legacy)
+        let current = seed_with_checksum_and_root(new_checksum, dir.clone());
+        let previous = seed_with_checksum(legacy_checksum);
+
+        // The fallback should re-hash with legacy and accept the seed as unchanged.
+        assert!(
+            current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB),
+            "Windows legacy fallback should treat an unchanged CRLF seed as not-modified"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Cross-platform guard: if both hashes already agree (LF-only content or
+    /// non-Windows platform), the fallback must not spuriously change the result.
+    #[test]
+    fn legacy_fallback_does_not_change_result_when_seeds_truly_differ() {
+        // Use in-memory seeds — no filesystem needed.
+        // current has sha256("abc"), previous has sha256("xyz"): a genuine change.
+        let current = seed_with_checksum(sha256("aaaa"));
+        let previous = seed_with_checksum(sha256("bbbb"));
+        // Even if the fallback were to run, it cannot conjure a matching hash —
+        // `root_path` is None so the filesystem code is skipped entirely.
+        assert!(!current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
 }

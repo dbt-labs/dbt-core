@@ -294,14 +294,11 @@ pub async fn resolve_seeds(
                 path: path.to_owned(),
                 name_span: dbt_common::Span::default(),
                 original_file_path: original_file_path.clone(),
-                checksum: DbtChecksum::seed_file_hash(
-                    std::fs::read(seed_file.base_path.join(&path))
-                        .map_err(|e| {
-                            fs_err!(ErrorCode::IoError, "Failed to read seed file: {}", e)
-                        })?
-                        .as_slice(),
+                checksum: DbtChecksum::seed_file_checksum(
+                    &seed_file.base_path.join(&path),
                     &original_file_path.to_string_lossy(),
-                ),
+                    arg.maximum_seed_size_mib,
+                )?,
                 patch_path: patch_path.clone(),
                 unique_id: unique_id.clone(),
                 fqn,

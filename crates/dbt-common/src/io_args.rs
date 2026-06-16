@@ -475,6 +475,9 @@ pub struct EvalArgs {
     pub write_catalog: bool,
     /// Show schema on the command line
     pub schema: Vec<JsonSchemaTypes>,
+    /// Maximum size (MiB) for seed files whose contents are hashed
+    /// 1 MiB default); `0` means "no limit".
+    pub maximum_seed_size_mib: u64,
 
     // -- fields from the private branch
     pub internal_packages_install_path: Option<PathBuf>,

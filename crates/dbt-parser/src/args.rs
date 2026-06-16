@@ -47,6 +47,9 @@ pub struct ResolveArgs {
     pub store_failures: bool,
     /// Whether to skip creating generic tests
     pub skip_creating_generic_tests: bool,
+    /// Maximum size (MiB) for seed files whose contents are hashed
+    /// 1 MiB default); `0` means "no limit".
+    pub maximum_seed_size_mib: u64,
 }
 
 impl ResolveArgs {
@@ -69,6 +72,7 @@ impl ResolveArgs {
             static_analysis: arg.static_analysis,
             store_failures: arg.store_failures,
             skip_creating_generic_tests: arg.skip_creating_generic_tests,
+            maximum_seed_size_mib: arg.maximum_seed_size_mib,
         })
     }
 }

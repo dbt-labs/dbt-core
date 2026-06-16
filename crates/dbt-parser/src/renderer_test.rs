@@ -93,6 +93,7 @@ mod tests {
             static_analysis: Some(dbt_common::io_args::StaticAnalysisKind::Strict),
             store_failures: false,
             skip_creating_generic_tests: false,
+            maximum_seed_size_mib: 1,
         };
 
         // Create base context with minimal required values
@@ -262,6 +263,7 @@ mod tests {
             static_analysis: Some(dbt_common::io_args::StaticAnalysisKind::Strict),
             store_failures: false,
             skip_creating_generic_tests: false,
+            maximum_seed_size_mib: 1,
         };
 
         let mut base_ctx = BTreeMap::new();

@@ -1714,6 +1714,12 @@ pub struct CommonArgs {
     )]
     pub store_failures: bool,
 
+    /// Maximum size (MiB) for seed files whose contents are hashed.
+    /// Larger seeds fall back to a path-based checksum. Set to 0 to
+    /// disable the limit (always hash contents). Defaults to 1 MiB when unset.
+    #[arg(global = true, long, env = "DBT_MAXIMUM_SEED_SIZE_MIB")]
+    pub maximum_seed_size_mib: Option<u64>,
+
     // --------------------------------------------------------------------------------------------
     // fs specific public options
     #[clap(
@@ -1964,6 +1970,7 @@ struct FlagsFile {
 #[derive(Debug, Default, Deserialize)]
 struct FlagsBlock {
     manage_state: Option<bool>,
+    maximum_seed_size_mib: Option<u64>,
 }
 
 fn manage_state_from_yaml(path: &Path) -> Option<bool> {
@@ -1971,6 +1978,14 @@ fn manage_state_from_yaml(path: &Path) -> Option<bool> {
     let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
     file.flags.and_then(|flags| flags.manage_state)
 }
+
+fn maximum_seed_size_mib_from_yaml(path: &Path) -> Option<u64> {
+    let content = stdfs::read_to_string(path).ok()?;
+    let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
+    file.flags.and_then(|flags| flags.maximum_seed_size_mib)
+}
+
+const DEFAULT_MAXIMUM_SEED_SIZE_MIB: u64 = 1;
 
 fn user_settings_path() -> Option<PathBuf> {
     env::var_os("HOME")
@@ -1985,6 +2000,12 @@ impl CommonArgs {
             env::var_os(MANAGE_STATE_ENV),
             user_settings_path(),
         )
+    }
+
+    fn resolve_maximum_seed_size_mib(&self, project_dir: &Path) -> u64 {
+        self.maximum_seed_size_mib
+            .or_else(|| maximum_seed_size_mib_from_yaml(&project_dir.join(DBT_PROJECT_YML)))
+            .unwrap_or(DEFAULT_MAXIMUM_SEED_SIZE_MIB)
     }
 
     fn get_manage_state_with(
@@ -2220,6 +2241,7 @@ impl CommonArgs {
             skip_creating_generic_tests: false,
             write_lineage: self.write_lineage,
             force_enable_linter: false,
+            maximum_seed_size_mib: self.resolve_maximum_seed_size_mib(in_dir),
         }
     }
 
