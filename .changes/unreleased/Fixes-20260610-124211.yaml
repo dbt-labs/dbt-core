@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Accept dbt-core-style type annotations on macro arguments (e.g. `param: str`)'
+time: 2026-06-10T12:42:11.217608725-07:00
+custom:
+  author: j-clemons
+  issue: ""
+  project: dbt-fusion

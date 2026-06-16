@@ -1,0 +1,7 @@
+kind: Fixes
+body: Unit tests on models that call dbt UDFs via function() no longer fail with a spurious JinjaError (dbt1501); the tested model's function dependencies are now allowed during unit test rendering
+time: 2026-06-12T15:05:41.914661-04:00
+custom:
+    author: aswanson
+    issue: "15246"
+    project: dbt-fusion

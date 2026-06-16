@@ -1,0 +1,7 @@
+kind: Fixes
+body: Support Jinja2 filter postfix attribute access (e.g. `rows|first.col`) in minijinja parser
+time: 2026-06-11T10:37:30.105376-05:00
+custom:
+    author: j-clemons
+    issue: ""
+    project: dbt-fusion

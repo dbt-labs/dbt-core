@@ -1,0 +1,7 @@
+kind: Features
+body: Add `dbt man --schema catalogs` to export a type-discriminated JSON schema for catalogs.yml v2
+time: 2026-06-08T21:00:25.825741-04:00
+custom:
+    author: dataders
+    issue: ""
+    project: dbt-fusion

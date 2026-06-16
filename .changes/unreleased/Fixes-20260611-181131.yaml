@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Spark: correctly classify existing relations as views so view models drop with DROP VIEW instead of DROP TABLE'
+time: 2026-06-11T18:11:31.363933+02:00
+custom:
+    author: serramatutu
+    issue: ""
+    project: dbt-fusion

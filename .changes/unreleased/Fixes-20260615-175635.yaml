@@ -1,0 +1,7 @@
+kind: Fixes
+body: finally and consciously decouple the DuckDB adapter from it's weird cousin Extended
+time: 2026-06-15T17:56:35.079714-04:00
+custom:
+    author: dataders
+    issue: ""
+    project: dbt-fusion
