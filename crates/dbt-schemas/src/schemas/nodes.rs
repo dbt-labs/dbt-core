@@ -1610,12 +1610,12 @@ impl InternalDbtNode for DbtSeed {
             let mut same_body_result =
                 same_body(&self.__common_attr__, &other_seed.__common_attr__);
 
-            // Windows migration fallback: the new text-mode seed hash normalizes
-            // CRLF -> LF, so on Windows a freshly computed seed checksum won't match
-            // one stored by the old binary-mode hashing even when the file is
-            // unchanged. Recompute the current seed with the legacy hash and compare
-            // to the previous checksum, mirroring dbt-core's `same_seeds` fallback.
-            if !same_body_result && cfg!(windows) {
+            // Migration fallback: the new text-mode seed hash normalizes CRLF -> LF,
+            // so a freshly computed seed checksum might not match one stored by the
+            // old binary-mode hashing even when the file is unchanged. Recompute the
+            // current seed with the legacy hash and compare to the previous checksum,
+            // mirroring dbt-core's `same_seeds` fallback.
+            if !same_body_result {
                 if let (DbtChecksum::Object(self_cs), Some(root_path)) = (
                     &self.__common_attr__.checksum,
                     self.__seed_attr__.root_path.as_ref(),
@@ -6988,9 +6988,7 @@ mod seed_has_same_content_tests {
     use dbt_adapter_core::AdapterType;
 
     use crate::schemas::common::{DbtChecksum, DbtChecksumObject};
-    #[cfg(windows)]
-    use crate::schemas::nodes::DbtSeedAttr;
-    use crate::schemas::nodes::{CommonAttributes, DbtSeed, InternalDbtNode};
+    use crate::schemas::nodes::{CommonAttributes, DbtSeed, DbtSeedAttr, InternalDbtNode};
 
     // ─────────────────────────────────────────────────────────────────
     // Helpers
@@ -7031,8 +7029,7 @@ mod seed_has_same_content_tests {
     }
 
     /// Like `seed_with_checksum` but also sets `root_path` on `__seed_attr__`
-    /// so the Windows legacy-fallback code-path can locate the file.
-    #[cfg(windows)]
+    /// so the legacy-fallback code-path can locate the file.
     fn seed_with_checksum_and_root(checksum: DbtChecksum, root: PathBuf) -> DbtSeed {
         DbtSeed {
             __common_attr__: CommonAttributes {
@@ -7109,16 +7106,15 @@ mod seed_has_same_content_tests {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // Windows legacy-fallback
+    // Legacy-fallback
     // ─────────────────────────────────────────────────────────────────
 
-    /// On Windows, if the new text-mode hash (CRLF→LF normalised) differs
+    /// If the new text-mode hash (CRLF→LF normalised) differs
     /// from the old binary-mode hash stored in a previous-state manifest,
     /// `has_same_content` re-hashes the file with the legacy method and
     /// accepts it as "unchanged" when the legacy hash matches.
-    #[cfg(windows)]
     #[test]
-    fn windows_legacy_fallback_accepts_unchanged_crlf_seed() {
+    fn legacy_fallback_accepts_unchanged_crlf_seed() {
         use std::io::Write;
 
         // Write a CRLF seed to a temp file.
@@ -7143,16 +7139,16 @@ mod seed_has_same_content_tests {
         );
 
         // Simulate "current run uses the new text-mode hasher (CRLF→LF)".
-        // On Windows these two hashes DIFFER for CRLF content.
+        // These two hashes differ for CRLF content.
         let new_checksum = DbtChecksum::seed_content_checksum(std::io::BufReader::new(
             std::fs::File::open(&seed_path).unwrap(),
         ))
         .expect("new hash failed");
 
-        // Confirm the premise: the two hashes are indeed different on Windows.
+        // Confirm the premise: the two hashes differ for CRLF content.
         assert_ne!(
             new_checksum, legacy_checksum,
-            "expected CRLF hashes to differ between text-mode and binary-mode on Windows"
+            "expected CRLF hashes to differ between text-mode and binary-mode"
         );
 
         // current = newly hashed (text-mode), previous = old manifest (legacy)
@@ -7162,7 +7158,7 @@ mod seed_has_same_content_tests {
         // The fallback should re-hash with legacy and accept the seed as unchanged.
         assert!(
             current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB),
-            "Windows legacy fallback should treat an unchanged CRLF seed as not-modified"
+            "legacy fallback should treat an unchanged CRLF seed as not-modified"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
