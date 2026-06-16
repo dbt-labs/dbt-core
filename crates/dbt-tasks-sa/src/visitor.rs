@@ -744,12 +744,16 @@ fn report_skipped_node_evaluations(
     skipped_nodes: &[Arc<dyn InternalDbtNodeAttributes>],
 ) {
     if let Some(reporter) = &ctx.inner.arg.io.status_reporter {
+        let upstream_target = node.dbt_nodes().into_iter().next().map(|upstream_node| {
+            let common = upstream_node.common();
+            (common.package_name.clone(), common.name.clone(), true)
+        });
         for skipped_node in skipped_nodes.iter() {
             reporter.collect_node_evaluation(
                 &skipped_node.common().unique_id,
                 get_execution_phase_from_task(node),
                 NodeOutcome::Skipped,
-                None,
+                upstream_target.clone(),
                 StaticAnalysisKind::Off,
                 (None, Span::default()),
             );
