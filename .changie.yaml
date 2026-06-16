@@ -90,7 +90,8 @@ footerFormat: |
   {{- end }}
   {{- if $contributorDict}}
   ### Contributors
-  {{- range $k,$v := $contributorDict }}
+  {{- range $k := (keys $contributorDict | sortAlpha) }}
+  {{- $v := get $contributorDict $k }}
   - [@{{$k}}](https://github.com/{{$k}}){{if $v}} ({{ range $index, $element := $v }}{{if $index}}, {{end}}{{$element}}{{end}}){{end}}
   {{- end }}
   {{- end }}

@@ -1,7 +1,7 @@
 # dbt Core changelog
 All notable changes to this project will be documented in this file.
 
-- This file covers dbt Core v2.0 (the Rust rewrite) beginning wtih `2.0.0-alpha.1`. For previous releases refer to:
+- This file covers dbt Core v2.0 (the Rust rewrite) beginning with `2.0.0-alpha.1`. For previous releases refer to:
   - dbt Core v1 (Python) changelog, see [the `1.latest` branch's `CHANGELOG.md`](https://github.com/dbt-labs/dbt-core/blob/1.latest/CHANGELOG.md).
   - the [dbt Fusion CHANGELOG for beta and preview release notes](https://github.com/dbt-labs/dbt-fusion/blob/main/CHANGELOG.md) for releases prior to `2.0.0-alpha.1`
 - Changes are listed under the (pre)release in which they first appear. Subsequent releases include changes from previous releases.

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Route view-traversal source extraction through TypeOps so the run-cache uses sdf-frontend bind-context in proprietary builds and the SA sqlparser path otherwise
-time: 2026-05-28T15:11:43.975015-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion
