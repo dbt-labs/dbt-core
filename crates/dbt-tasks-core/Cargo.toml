@@ -29,6 +29,7 @@ dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-state = { workspace = true }
 dbt-telemetry = { workspace = true }
+dbt-tracing = { workspace = true }
 dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
 

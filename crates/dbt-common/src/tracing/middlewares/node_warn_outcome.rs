@@ -1,6 +1,5 @@
-use dbt_telemetry::{
-    LogMessage, LogRecordInfo, NodeEvaluated, SeverityNumber, set_node_warning_outcome_warned,
-};
+use dbt_telemetry::{LogMessage, NodeEvaluated, set_node_warning_outcome_warned};
+use dbt_tracing::{LogRecordInfo, SeverityNumber};
 
 use super::super::{data_provider::DataProvider, layer::TelemetryMiddleware};
 

@@ -1,10 +1,7 @@
-use crate::{
-    SpanStatus, StatusCode, TelemetryOutputFlags,
-    attributes::{
-        ArrowSerializableTelemetryEvent, DbtTelemetryContext, StaticTelemetryEvent,
-        TelemetryContext, TelemetryEventRecType,
-    },
-    serialize::arrow::ArrowAttributes,
+use crate::{attributes::DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent, StatusCode,
+    TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 

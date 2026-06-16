@@ -5,13 +5,13 @@ use crate::schemas::profiles::DbtProfiles;
 use crate::schemas::project::DbtProject;
 use crate::schemas::properties::DbtPropertiesFile;
 use crate::schemas::selectors::SelectorFile;
-use crate::schemas::telemetry::TelemetryRecord;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::JsonSchemaTypes;
 use dbt_common::tracing::dbt_emit::println;
+use dbt_tracing::TelemetryRecord;
 
 use strum::IntoEnumIterator;
 

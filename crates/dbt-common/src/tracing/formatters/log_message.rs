@@ -4,7 +4,7 @@
 //! color formatting to messages.
 
 use dbt_error::ErrorCode;
-use dbt_telemetry::SeverityNumber;
+use dbt_tracing::SeverityNumber;
 
 use crate::{constants, pretty_string::color_quotes};
 

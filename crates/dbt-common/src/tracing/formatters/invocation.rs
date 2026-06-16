@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use console::Style;
 
-use dbt_telemetry::{Invocation, NodeType, SpanEndInfo};
+use dbt_telemetry::{Invocation, NodeType};
+use dbt_tracing::SpanEndInfo;
 use itertools::Itertools;
 
 use crate::tracing::{

@@ -18,13 +18,13 @@ use dbt_common::{
     },
 };
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use dbt_telemetry::StaticName as _;
 use dbt_telemetry::{
     ExecutionPhase, NodeCacheDetail, NodeCacheReason, NodeErrorType, NodeEvaluated, NodeOutcome,
     NodeOutcomeDetail, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
     PhaseExecuted, set_node_warning_outcome_no_warnings, set_node_warning_outcome_warned,
     update_dbt_core_event_code_for_node_processed_end,
 };
+use dbt_tracing::StaticName as _;
 use petgraph::graph::DiGraph;
 
 use crate::{

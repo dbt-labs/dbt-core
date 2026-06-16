@@ -23,7 +23,7 @@ pub struct PhaseExecuted {
     #[prost(uint64, optional, tag = "4")]
     pub node_count_error: ::core::option::Option<u64>,
 }
-impl crate::StaticName for PhaseExecuted {
+impl ::dbt_tracing::StaticName for PhaseExecuted {
     const FULL_NAME: &'static str = "v1.public.events.fusion.phase.PhaseExecuted";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.phase.PhaseExecuted";
 }

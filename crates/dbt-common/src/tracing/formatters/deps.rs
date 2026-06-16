@@ -1,8 +1,7 @@
 use std::sync::LazyLock;
 
-use dbt_telemetry::{
-    DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, PackageType, StatusCode,
-};
+use dbt_telemetry::{DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, PackageType};
+use dbt_tracing::StatusCode;
 
 use super::{
     color::{GREEN, RED, maybe_apply_color},

@@ -1,9 +1,8 @@
 pub use crate::proto::v1::public::events::fusion::dev::{CallTrace, DebugValue, Unknown};
-use crate::{
-    AnyTelemetryEvent, TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
-    schemas::RecordCodeLocation,
-    serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, RecordCodeLocation, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;

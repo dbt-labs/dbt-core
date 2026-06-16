@@ -49,7 +49,7 @@ pub struct QueryExecuted {
     #[prost(string, tag = "11")]
     pub dbt_core_event_code: ::prost::alloc::string::String,
 }
-impl crate::StaticName for QueryExecuted {
+impl ::dbt_tracing::StaticName for QueryExecuted {
     const FULL_NAME: &'static str = "v1.public.events.fusion.query.QueryExecuted";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.query.QueryExecuted";
 }
@@ -75,7 +75,7 @@ pub struct ConnectionLimitWait {
     #[prost(uint32, optional, tag = "2")]
     pub active_connections: ::core::option::Option<u32>,
 }
-impl crate::StaticName for ConnectionLimitWait {
+impl ::dbt_tracing::StaticName for ConnectionLimitWait {
     const FULL_NAME: &'static str = "v1.public.events.fusion.query.ConnectionLimitWait";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.query.ConnectionLimitWait";
 }
@@ -101,7 +101,7 @@ pub struct AdapterConnectionOpen {
     #[prost(string, tag = "2")]
     pub adapter_backend: ::prost::alloc::string::String,
 }
-impl crate::StaticName for AdapterConnectionOpen {
+impl ::dbt_tracing::StaticName for AdapterConnectionOpen {
     const FULL_NAME: &'static str = "v1.public.events.fusion.query.AdapterConnectionOpen";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.query.AdapterConnectionOpen";
 }
@@ -124,7 +124,7 @@ pub struct AdapterConnectionClose {
     #[prost(string, tag = "1")]
     pub repr: ::prost::alloc::string::String,
 }
-impl crate::StaticName for AdapterConnectionClose {
+impl ::dbt_tracing::StaticName for AdapterConnectionClose {
     const FULL_NAME: &'static str = "v1.public.events.fusion.query.AdapterConnectionClose";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.query.AdapterConnectionClose";
 }

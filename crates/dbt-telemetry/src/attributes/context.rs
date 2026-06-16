@@ -1,5 +1,5 @@
 use crate::proto::v1::public::events::fusion::phase::ExecutionPhase;
-pub use dbt_tracing::TelemetryContext;
+use dbt_tracing::TelemetryContext;
 
 /// dbt context extracted from dbt spans/events and propagated to children and logs.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

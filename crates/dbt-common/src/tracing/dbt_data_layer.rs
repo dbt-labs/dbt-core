@@ -1,6 +1,5 @@
-use dbt_telemetry::{
-    CallTrace, Invocation, LogMessage, TelemetryAttributes, Unknown, create_process_event_data,
-};
+use dbt_telemetry::{CallTrace, Invocation, LogMessage, Unknown, create_process_event_data};
+use dbt_tracing::TelemetryAttributes;
 
 use dbt_tracing::layers::data_layer::{
     RootSpanTraceContext, TelemetryDataLayerConfig, UnstructuredLogAttributesInput,

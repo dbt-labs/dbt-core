@@ -1,10 +1,7 @@
-use crate::{
-    SpanStatus, TelemetryOutputFlags,
-    attributes::{
-        ArrowSerializableTelemetryEvent, DbtTelemetryContext, StaticTelemetryEvent,
-        TelemetryContext, TelemetryEventRecType,
-    },
-    serialize::arrow::ArrowAttributes,
+use crate::{attributes::DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent,
+    TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
 };
 
 use prost::Name;
@@ -46,7 +43,7 @@ impl StaticTelemetryEvent for NodeEvaluated {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         // TODO: theoretically we may want to use a consistent scrambling/hashing of
         // identifiers as some may consider this sensitive
         let new_outcome_detail = match self.node_outcome_detail.as_ref() {
@@ -278,7 +275,7 @@ impl StaticTelemetryEvent for NodeProcessed {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         // Similar to NodeEvaluated, scrub sensitive data from test details
         let new_outcome_detail = match self.node_outcome_detail.as_ref() {
             Some(node_processed::NodeOutcomeDetail::NodeTestDetail(test_detail)) => {

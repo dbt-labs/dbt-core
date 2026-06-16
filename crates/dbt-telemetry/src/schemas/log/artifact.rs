@@ -1,7 +1,7 @@
-use crate::{
-    TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;
@@ -20,9 +20,7 @@ impl StaticTelemetryEvent for CompiledCode {
         true
     }
 
-    fn clone_without_sensitive_data(
-        &self,
-    ) -> Option<Box<dyn crate::attributes::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Self {
             sql: "[REDACTED]".to_string(),
             ..self.clone()
@@ -86,9 +84,7 @@ impl StaticTelemetryEvent for CompiledCodeInline {
         true
     }
 
-    fn clone_without_sensitive_data(
-        &self,
-    ) -> Option<Box<dyn crate::attributes::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Self {
             sql: "[REDACTED]".to_string(),
         }))

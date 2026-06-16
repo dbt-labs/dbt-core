@@ -1,8 +1,8 @@
 use crate::proto::v1::public::events::fusion::phase::ExecutionPhase;
-use crate::{
-    DbtTelemetryContext, TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
+use crate::{DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryContext, TelemetryEventRecType,
+    TelemetryOutputFlags,
 };
 use prost::Name;
 use serde_with::skip_serializing_none;
@@ -21,7 +21,7 @@ impl StaticTelemetryEvent for AssetParsed {
         false
     }
 
-    fn with_context(&mut self, context: &crate::TelemetryContext) {
+    fn with_context(&mut self, context: &TelemetryContext) {
         let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
             return;
         };

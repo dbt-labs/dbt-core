@@ -1,12 +1,11 @@
 pub use crate::proto::v1::public::events::fusion::log::{
     LogMessage, ProgressMessage, UserLogMessage,
 };
-use crate::{
-    ArrowSerializableTelemetryEvent, DbtTelemetryContext, StaticTelemetryEvent, TelemetryContext,
-    TelemetryEventRecType, TelemetryOutputFlags, schemas::RecordCodeLocation,
-    serialize::arrow::ArrowAttributes,
+use crate::{DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, RecordCodeLocation, StaticTelemetryEvent, TelemetryContext,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
-pub use dbt_tracing::SeverityNumber;
 use prost::Name;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;

@@ -7,11 +7,6 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
-pub use dbt_tracing::serialize::arrow::{
-    ArrowSpanLink, ArrowTelemetryRecord, TelemetryArrowSchemas, deserialize_from_arrow,
-    serialize_to_arrow,
-};
-
 /// A special type used to derive the schema for telemetry event attributes in arrow
 /// serialization, as well as a intermediate representation for serialization and deserialization.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -75,7 +70,7 @@ pub struct ArrowAttributes<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{TelemetryEventRecType, TelemetryEventTypeRegistry};
+    use crate::TelemetryEventTypeRegistry;
     use arrow::{
         array::{
             Array, ArrayRef, DictionaryArray, Int32Builder, LargeStringArray, StructArray,
@@ -88,7 +83,8 @@ mod tests {
     };
     use dbt_tracing::{
         LogRecordInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
-        TelemetryOutputFlags, TelemetryRecord,
+        TelemetryEventRecType, TelemetryOutputFlags, TelemetryRecord,
+        serialize::arrow::{TelemetryArrowSchemas, deserialize_from_arrow, serialize_to_arrow},
     };
     use fake::rand::SeedableRng;
     use fake::rand::rngs::StdRng;

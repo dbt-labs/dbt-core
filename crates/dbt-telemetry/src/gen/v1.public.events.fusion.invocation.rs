@@ -23,7 +23,7 @@ pub struct InvocationMetrics {
     #[prost(map = "string, uint64", tag = "5")]
     pub status_counts: ::std::collections::HashMap<::prost::alloc::string::String, u64>,
 }
-impl crate::StaticName for InvocationMetrics {
+impl ::dbt_tracing::StaticName for InvocationMetrics {
     const FULL_NAME: &'static str = "v1.public.events.fusion.invocation.InvocationMetrics";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.invocation.InvocationMetrics";
 }
@@ -120,7 +120,7 @@ pub struct InvocationEvalArgs {
     #[prost(bool, optional, tag = "25")]
     pub manage_state: ::core::option::Option<bool>,
 }
-impl crate::StaticName for InvocationEvalArgs {
+impl ::dbt_tracing::StaticName for InvocationEvalArgs {
     const FULL_NAME: &'static str = "v1.public.events.fusion.invocation.InvocationEvalArgs";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.invocation.InvocationEvalArgs";
 }
@@ -161,7 +161,7 @@ pub struct Invocation {
     #[prost(uint64, optional, tag = "6")]
     pub parent_span_id: ::core::option::Option<u64>,
 }
-impl crate::StaticName for Invocation {
+impl ::dbt_tracing::StaticName for Invocation {
     const FULL_NAME: &'static str = "v1.public.events.fusion.invocation.Invocation";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.invocation.Invocation";
 }

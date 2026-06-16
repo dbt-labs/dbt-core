@@ -6,8 +6,6 @@ pub mod proto;
 pub mod schemas;
 pub mod serialize;
 
-pub use dbt_tracing::StaticName;
-
 pub use attributes::*;
 pub use schemas::*;
 

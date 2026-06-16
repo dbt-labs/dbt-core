@@ -1,6 +1,5 @@
-use dbt_telemetry::{
-    Invocation, InvocationEvalArgs, TelemetryAttributes, create_process_event_data,
-};
+use dbt_telemetry::{Invocation, InvocationEvalArgs, create_process_event_data};
+use dbt_tracing::TelemetryAttributes;
 
 use crate::{io_args::EvalArgs, tracing::span_info::with_root_span};
 

@@ -1,7 +1,8 @@
 pub use crate::proto::v1::public::events::fusion::log::{ShowDataOutput, ShowDataOutputFormat};
-use crate::{
-    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
-    TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;
@@ -22,7 +23,7 @@ impl StaticTelemetryEvent for ShowDataOutput {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         let content = match self.output_format() {
             ShowDataOutputFormat::Tsv
             | ShowDataOutputFormat::Csv

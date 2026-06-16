@@ -144,7 +144,7 @@ CAVEAT: as of time of writing we are in transitioning from legacy `log` crate to
 ### Creating a Middleware
 
 ```rust
-use dbt_telemetry::{SpanEndInfo, LogRecordInfo};
+use dbt_tracing::{LogRecordInfo, SpanEndInfo};
 use crate::tracing::{TelemetryMiddleware, DataProviderMut, MetricKey};
 
 /// Example middleware that counts spans
@@ -171,7 +171,7 @@ impl TelemetryMiddleware for SpanCounter {
 ### Creating a Consumer
 
 ```rust
-use dbt_telemetry::{SpanEndInfo, TelemetryOutputFlags};
+use dbt_tracing::{SpanEndInfo, SpanStartInfo, TelemetryOutputFlags};
 use crate::tracing::{TelemetryConsumer, DataProvider};
 
 /// Example consumer that logs span durations

@@ -1,6 +1,10 @@
 use crate::collections::{HashMap, HashSet};
 use dbt_error::ErrorCode;
-use dbt_telemetry::{AnyTelemetryEvent, LogMessage, LogRecordInfo, SeverityNumber};
+use dbt_telemetry::LogMessage;
+use dbt_tracing::{
+    AnyTelemetryEvent, LogRecordInfo, SeverityNumber, SpanStartInfo, TelemetryEventRecType,
+    TelemetryOutputFlags,
+};
 
 use super::super::{
     data_provider::DataProvider,
@@ -35,11 +39,11 @@ impl AnyTelemetryEvent for ParsingErrorMessage {
         self.0.event_display_name()
     }
 
-    fn record_category(&self) -> dbt_telemetry::TelemetryEventRecType {
+    fn record_category(&self) -> TelemetryEventRecType {
         self.0.record_category()
     }
 
-    fn output_flags(&self) -> dbt_telemetry::TelemetryOutputFlags {
+    fn output_flags(&self) -> TelemetryOutputFlags {
         self.0.output_flags()
     }
 
@@ -113,9 +117,9 @@ impl TelemetryParsingErrorFilter {
 impl TelemetryMiddleware for TelemetryParsingErrorFilter {
     fn on_span_start(
         &self,
-        span: dbt_telemetry::SpanStartInfo,
+        span: SpanStartInfo,
         data_provider: &mut DataProvider<'_>,
-    ) -> Option<dbt_telemetry::SpanStartInfo> {
+    ) -> Option<SpanStartInfo> {
         // If our configuration requires filtering repeated deprecations from packages,
         // initialize the set to track seen deprecations.
         if !self.show_all_deprecations && span.parent_span_id.is_none() {

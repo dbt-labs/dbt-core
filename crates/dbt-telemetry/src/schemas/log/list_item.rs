@@ -1,7 +1,8 @@
 pub use crate::proto::v1::public::events::fusion::log::{ListItemOutput, ListOutputFormat};
-use crate::{
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
     ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
-    TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+    TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;

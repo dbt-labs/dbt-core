@@ -1,15 +1,16 @@
 use crate::{CodeLocationWithFile, fs_err};
 use dbt_error::ErrorCode;
-use dbt_telemetry::{LogMessage, SeverityNumber, TelemetryOutputFlags};
+use dbt_telemetry::LogMessage;
+use dbt_tracing::{SeverityNumber, TelemetryOutputFlags};
 use std::panic::Location;
 
 use crate::tracing::{
     dbt_emit::{emit_error_log_from_fs_error, emit_error_log_message, emit_warn_log_message},
-    emit::create_root_info_span,
-    init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
 };
+use dbt_tracing::emit::create_root_info_span;
+use dbt_tracing::init::create_tracing_subcriber_with_layer;
 
 use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 

@@ -1,6 +1,7 @@
 use std::io::Write;
 
-use dbt_telemetry::{QueryExecuted, SpanStartInfo, TelemetryRecordRef};
+use dbt_telemetry::QueryExecuted;
+use dbt_tracing::{SpanStartInfo, TelemetryRecordRef};
 
 use super::super::formatters::query_log::format_query_log;
 use dbt_tracing::{

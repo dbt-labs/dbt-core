@@ -22,7 +22,7 @@ pub mod debug_value {
         Bytes(::prost::alloc::vec::Vec<u8>),
     }
 }
-impl crate::StaticName for DebugValue {
+impl ::dbt_tracing::StaticName for DebugValue {
     const FULL_NAME: &'static str = "v1.public.events.fusion.dev.DebugValue";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.dev.DebugValue";
 }
@@ -58,7 +58,7 @@ pub struct CallTrace {
         DebugValue,
     >,
 }
-impl crate::StaticName for CallTrace {
+impl ::dbt_tracing::StaticName for CallTrace {
     const FULL_NAME: &'static str = "v1.public.events.fusion.dev.CallTrace";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.dev.CallTrace";
 }
@@ -88,7 +88,7 @@ pub struct Unknown {
     #[prost(uint32, tag = "3")]
     pub line: u32,
 }
-impl crate::StaticName for Unknown {
+impl ::dbt_tracing::StaticName for Unknown {
     const FULL_NAME: &'static str = "v1.public.events.fusion.dev.Unknown";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.dev.Unknown";
 }

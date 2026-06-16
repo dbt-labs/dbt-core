@@ -1,8 +1,6 @@
 use crate::tracing::{
     dbt_emit::emit_warn_log_message,
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
-    emit::create_root_info_span,
-    init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
     metrics::get_metric,
     middlewares::{
@@ -10,11 +8,13 @@ use crate::tracing::{
         warn_error_options::TelemetryWarnErrorOptionsMiddleware,
     },
 };
+use dbt_tracing::emit::create_root_info_span;
+use dbt_tracing::init::create_tracing_subcriber_with_layer;
 use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 use crate::ErrorCode;
 use crate::warn_error_options::{SupportedLegacyWarnError, WarnErrorOptionValue, WarnErrorOptions};
-use dbt_telemetry::{SeverityNumber, TelemetryOutputFlags};
+use dbt_tracing::{SeverityNumber, TelemetryOutputFlags};
 use tracing::level_filters::LevelFilter;
 
 #[test]

@@ -1,5 +1,5 @@
 use dbt_error::ErrorCode;
-use dbt_telemetry::AnyTelemetryEvent;
+use dbt_tracing::{AnyTelemetryEvent, TelemetryEventRecType, TelemetryOutputFlags};
 
 /// Private type to wrap messages intended for stdout printing only (essentially alternative to `println!`).
 #[derive(Debug)]
@@ -14,12 +14,12 @@ impl AnyTelemetryEvent for StdoutMessage {
         "Stdout Message".to_string()
     }
 
-    fn record_category(&self) -> dbt_telemetry::TelemetryEventRecType {
-        dbt_telemetry::TelemetryEventRecType::Log
+    fn record_category(&self) -> TelemetryEventRecType {
+        TelemetryEventRecType::Log
     }
 
-    fn output_flags(&self) -> dbt_telemetry::TelemetryOutputFlags {
-        dbt_telemetry::TelemetryOutputFlags::OUTPUT_CONSOLE
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        TelemetryOutputFlags::OUTPUT_CONSOLE
     }
 
     fn event_eq(&self, _: &dyn AnyTelemetryEvent) -> bool {
@@ -74,12 +74,12 @@ impl AnyTelemetryEvent for StderrMessage {
             .unwrap_or_else(|| "Stderr Message".to_string())
     }
 
-    fn record_category(&self) -> dbt_telemetry::TelemetryEventRecType {
-        dbt_telemetry::TelemetryEventRecType::Log
+    fn record_category(&self) -> TelemetryEventRecType {
+        TelemetryEventRecType::Log
     }
 
-    fn output_flags(&self) -> dbt_telemetry::TelemetryOutputFlags {
-        dbt_telemetry::TelemetryOutputFlags::OUTPUT_CONSOLE
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        TelemetryOutputFlags::OUTPUT_CONSOLE
     }
 
     fn event_eq(&self, _: &dyn AnyTelemetryEvent) -> bool {

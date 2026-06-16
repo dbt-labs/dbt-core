@@ -1,7 +1,7 @@
-use crate::{
-    TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 
 pub use crate::proto::v1::public::events::fusion::invocation::{
@@ -29,7 +29,7 @@ impl StaticTelemetryEvent for Invocation {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Invocation {
             raw_command: "<redacted>".to_string(),
             eval_args: self.eval_args.as_ref().map(|ea| InvocationEvalArgs {

@@ -6,7 +6,6 @@ use crate::{
             create_debug_span, create_info_span, create_root_info_span, emit_debug_event,
             emit_error_event, emit_info_event,
         },
-        init::create_tracing_subcriber_with_layer,
         layers::json_compat_layer::build_json_compat_layer,
         span_info::{record_span_status_from_attrs, update_span_attrs},
     },
@@ -17,12 +16,14 @@ use dbt_telemetry::{
     InvocationEvalArgs, ListItemOutput, ListOutputFormat, LogMessage, NodeEvaluated,
     NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed, NodeSkipReason,
     NodeSkipUpstreamDetail, NodeType, PackageType, ProgressMessage, QueryExecuted, QueryOutcome,
-    SeverityNumber, ShowDataOutput, ShowDataOutputFormat, ShowResult, ShowResultOutputFormat,
-    SourceFreshnessDetail, SourceFreshnessOutcome, TelemetryOutputFlags, UserLogMessage,
-    node_processed, update_dbt_core_event_code_for_node_processed_end,
+    ShowDataOutput, ShowDataOutputFormat, ShowResult, ShowResultOutputFormat,
+    SourceFreshnessDetail, SourceFreshnessOutcome, UserLogMessage, node_processed,
+    update_dbt_core_event_code_for_node_processed_end,
 };
+use dbt_tracing::init::create_tracing_subcriber_with_layer;
 use dbt_tracing::test_support::mocks::TestWriter;
 use dbt_tracing::test_support::mocks::{MockDynSpanEvent, test_data_layer};
+use dbt_tracing::{SeverityNumber, TelemetryOutputFlags};
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
 use uuid::Uuid;

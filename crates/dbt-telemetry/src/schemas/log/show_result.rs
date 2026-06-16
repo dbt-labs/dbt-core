@@ -1,7 +1,8 @@
 pub use crate::proto::v1::public::events::fusion::log::{ShowResult, ShowResultOutputFormat};
-use crate::{
-    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
-    TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;
@@ -26,7 +27,7 @@ impl StaticTelemetryEvent for ShowResult {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Self {
             content: "[REDACTED]".to_string(),
             ..self.clone()

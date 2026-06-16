@@ -1,7 +1,7 @@
 //! Registry for telemetry attribute types.
 
-use crate::StaticName;
 use arrow_schema::{DataType, Field, Fields, extension::Json as JsonExtensionType};
+use dbt_tracing::StaticName;
 use std::{collections::HashMap, sync::LazyLock};
 
 use super::AnyTelemetryEvent;
@@ -16,8 +16,8 @@ use crate::{
         QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes as DbtTelemetryArrowAttributes,
-    serialize::traits::ArrowRegistryLookup,
 };
+use dbt_tracing::serialize::traits::ArrowRegistryLookup;
 
 /// Helper function that converts trait deserializer method to one compatible with the registry.
 fn arrow_deserialize_for_type<T>(

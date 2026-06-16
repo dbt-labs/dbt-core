@@ -19,13 +19,10 @@ pub use dbt_tracing::async_tracing::{
 };
 pub use dbt_tracing::emit::{
     create_debug_span, create_debug_span_with_parent, create_info_span,
-    create_info_span_with_parent, create_root_info_span, is_trace_enabled,
+    create_info_span_with_parent, create_root_info_span,
 };
-pub use dbt_tracing::init::{BaseSubscriber, TelemetryHandle, init_tracing_with_consumer_layer};
-pub use dbt_tracing::{
-    data_provider, emit, error, event_info, filter, init, layer, metrics, reload, shutdown,
-    span_info,
-};
+pub use dbt_tracing::init::{TelemetryHandle, init_tracing_with_consumer_layer};
+pub use dbt_tracing::{data_provider, emit, error, event_info, layer, metrics, reload, span_info};
 pub use tracing_feature_handles::{TracingConfigProvider, noop_tracing_config_provider};
 
 #[cfg(test)]

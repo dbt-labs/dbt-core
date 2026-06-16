@@ -7,9 +7,6 @@
 mod context;
 mod registry;
 
-pub use context::{DbtTelemetryContext, TelemetryContext};
-pub use dbt_tracing::{
-    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryAttributes,
-    TelemetryEventRecType, TelemetryOutputFlags,
-};
+pub use context::DbtTelemetryContext;
+use dbt_tracing::{AnyTelemetryEvent, ArrowSerializableTelemetryEvent};
 pub use registry::TelemetryEventTypeRegistry;

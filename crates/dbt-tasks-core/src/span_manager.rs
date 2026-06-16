@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Deref};
 use dbt_common::{
     ErrorCode, FsResult, create_debug_span_with_parent, create_info_span_with_parent, fs_err,
 };
-use dbt_telemetry::TelemetryAttributes;
+use dbt_tracing::TelemetryAttributes;
 use tracing::{Span, span::Id as SpanId};
 
 /// A subset of severity level for spans, since other severity levels are not used here.

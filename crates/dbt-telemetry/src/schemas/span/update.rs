@@ -1,7 +1,8 @@
 pub use crate::proto::v1::public::events::fusion::update::PackageUpdate;
-use crate::{
-    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryOutputFlags,
-    attributes::TelemetryEventRecType, serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name as _;
 

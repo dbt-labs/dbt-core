@@ -5,10 +5,10 @@ use prost::Name as _;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
-use crate::{
-    ArrowSerializableTelemetryEvent, DbtTelemetryContext, SpanStatus, StaticTelemetryEvent,
+use crate::{DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent,
     TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
-    serialize::arrow::ArrowAttributes,
 };
 
 impl StaticTelemetryEvent for QueryExecuted {
@@ -37,7 +37,7 @@ impl StaticTelemetryEvent for QueryExecuted {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(QueryExecuted {
             sql: "<redacted>".to_string(), // Redact the SQL query
             query_description: None,       // Redact the query description

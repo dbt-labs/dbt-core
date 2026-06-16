@@ -1,5 +1,6 @@
 use dbt_error::ErrorCode;
-use dbt_telemetry::{LogMessage, LogRecordInfo};
+use dbt_telemetry::LogMessage;
+use dbt_tracing::LogRecordInfo;
 
 /// Checks if this log record is from an ErrorCode::ExitWithStatus which is
 /// a pseudo error used to short-circuit execution after a real error

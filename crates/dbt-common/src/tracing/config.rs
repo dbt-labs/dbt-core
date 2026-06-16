@@ -31,8 +31,9 @@ use crate::{
     warn_error_options::WarnErrorOptions,
 };
 use dbt_error::{ErrorCode, FsError, FsResult};
-use dbt_telemetry::{LogMessage, LogRecordInfo, TelemetryEventTypeRegistry};
+use dbt_telemetry::{LogMessage, TelemetryEventTypeRegistry};
 use dbt_tracing::{
+    LogRecordInfo,
     layer::{ConsumerLayer, MiddlewareLayer},
     layers::{
         jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},

@@ -1,7 +1,7 @@
-use crate::{
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
     TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 

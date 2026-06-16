@@ -20,7 +20,7 @@ pub struct GenericOpExecuted {
     #[prost(uint64, optional, tag = "3")]
     pub item_count_total: ::core::option::Option<u64>,
 }
-impl crate::StaticName for GenericOpExecuted {
+impl ::dbt_tracing::StaticName for GenericOpExecuted {
     const FULL_NAME: &'static str = "v1.public.events.fusion.generic.GenericOpExecuted";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.generic.GenericOpExecuted";
 }
@@ -62,7 +62,7 @@ pub struct GenericOpItemProcessed {
     #[prost(string, tag = "4")]
     pub target: ::prost::alloc::string::String,
 }
-impl crate::StaticName for GenericOpItemProcessed {
+impl ::dbt_tracing::StaticName for GenericOpItemProcessed {
     const FULL_NAME: &'static str = "v1.public.events.fusion.generic.GenericOpItemProcessed";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.generic.GenericOpItemProcessed";
 }

@@ -9,13 +9,15 @@ use std::{
 use crate::collections::HashSet;
 use console::Term;
 use dbt_telemetry::{
-    AnyTelemetryEvent, AssetParsed, CompiledCode, CompiledCodeInline, ConnectionLimitWait,
-    DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, ExecutionPhase,
-    GenericOpExecuted, GenericOpItemProcessed, HookProcessed, Invocation, ListItemOutput,
-    LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
-    PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult,
-    SpanEndInfo, SpanStartInfo, SpanStatus, StateModifiedDiff, StatusCode, TelemetryOutputFlags,
-    UserLogMessage,
+    AssetParsed, CompiledCode, CompiledCodeInline, ConnectionLimitWait, DepsAddPackage,
+    DepsAllPackagesInstalled, DepsPackageInstalled, ExecutionPhase, GenericOpExecuted,
+    GenericOpItemProcessed, HookProcessed, Invocation, ListItemOutput, LogMessage, NodeEvaluated,
+    NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage,
+    QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, UserLogMessage,
+};
+use dbt_tracing::{
+    AnyTelemetryEvent, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, SpanStatus,
+    StatusCode, TelemetryEventRecType, TelemetryOutputFlags,
 };
 use dbt_tui_progress::ProgressController;
 
@@ -112,8 +114,8 @@ impl AnyTelemetryEvent for TuiAllProcessingNodesGroup {
         "TuiAllProcessingNodesGroup".to_string()
     }
 
-    fn record_category(&self) -> dbt_telemetry::TelemetryEventRecType {
-        dbt_telemetry::TelemetryEventRecType::Span
+    fn record_category(&self) -> TelemetryEventRecType {
+        TelemetryEventRecType::Span
     }
 
     fn output_flags(&self) -> TelemetryOutputFlags {

@@ -11,8 +11,8 @@ use dbt_common::{
     constants::{DBT_LOG_DIR_NAME, DBT_TARGET_DIR_NAME},
     err, stdfs,
 };
-use dbt_telemetry::TelemetryRecord;
 use dbt_test_primitives::is_update_golden_files_mode;
+use dbt_tracing::TelemetryRecord;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use sha2::{Digest, Sha256};
 

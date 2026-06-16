@@ -1,10 +1,7 @@
-use crate::{
-    ExecutionPhase, SpanStatus, TelemetryOutputFlags,
-    attributes::{
-        ArrowSerializableTelemetryEvent, DbtTelemetryContext, StaticTelemetryEvent,
-        TelemetryContext, TelemetryEventRecType,
-    },
-    serialize::arrow::ArrowAttributes,
+use crate::{ExecutionPhase, attributes::DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent, TelemetryContext,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use serde_with::skip_serializing_none;

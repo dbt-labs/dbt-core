@@ -1,6 +1,6 @@
 pub use crate::pretty_string::{BLUE, CYAN, DIM, GREEN, MAGENTA, PLAIN, RED, WHITE, YELLOW};
 use console::Style;
-use dbt_telemetry::SeverityNumber;
+use dbt_tracing::SeverityNumber;
 
 pub fn severity_to_color_style(severity_number: SeverityNumber) -> &'static Style {
     match severity_number {
