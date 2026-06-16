@@ -453,6 +453,7 @@ pub async fn load(
 
     let (packages_lock, upstream_projects) = get_or_install_packages(
         &arg.io,
+        arg.command,
         &env,
         &packages_install_path,
         arg.install_deps,
