@@ -1,7 +1,0 @@
-kind: Features
-body: 'Homebrew distribution: install the dbt Fusion CLI with `brew install dbt` from the official tap.'
-time: 2026-05-27T09:32:39.74026+05:30
-custom:
-    author: itsnamangoyal
-    issue: ""
-    project: dbt-fusion

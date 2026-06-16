@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Add `manage_state` to invocation telemetry to track dbt State management (auto-deferral) enablement
-time: 2026-06-12T14:31:23.000000-06:00
-custom:
-    author: colin-rogers-dbt
-    issue: "10944"
-    project: dbt-fusion

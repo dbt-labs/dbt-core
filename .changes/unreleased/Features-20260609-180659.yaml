@@ -1,7 +1,0 @@
-kind: Features
-body: Issue compatibility warnings for package versions based on manual compatibility verification when available in Package Hub
-time: 2026-06-09T18:06:59.051358-07:00
-custom:
-    author: chayac
-    issue: ""
-    project: dbt-fusion

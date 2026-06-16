@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Upgrade Rust toolchain to 1.96
-time: 2026-06-11T17:18:21.769191701-04:00
-custom:
-    author: sadboy
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Remove "models" path segment in computed fqn for manifest parity with Core
-time: 2026-05-22T10:04:23.835932-04:00
-custom:
-    author: ajhlee-dbt
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Promote SA to strict for unit tests with overridden compute, allow unit test nodes to access LP if compute is sidecar.
-time: 2026-06-11T18:10:06.446814-04:00
-custom:
-    author: mach-kernel
-    issue: "10967"
-    project: dbt-fusion
