@@ -107,10 +107,6 @@ jobs:
         env:
           FISHTOWN_BOT_PAT: ${{ secrets.FISHTOWN_BOT_PAT }}
         run: |
-          if (-not $env:FISHTOWN_BOT_PAT) {
-            Write-Error "FISHTOWN_BOT_PAT secret not set — cannot submit. Either dry-run or add the secret."
-            exit 1
-          }
           Write-Host "→ $env:INSTALLER_URL"
           .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER `
             --version $env:VERSION `
