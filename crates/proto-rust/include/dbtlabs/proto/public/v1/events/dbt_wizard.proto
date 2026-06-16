@@ -207,13 +207,13 @@ message DbtWizardError {
   string event_id = 2;
   // Empty if error occurs before session starts.
   string session_id = 3;
-  // "sidecar_startup" | "provider_auth" | "turn_failure" | "panic" | "connection_lost"
+  // "sidecar_startup" | "provider_auth" | "thread_start" | "turn_failure" | "panic" | "connection_lost"
   string error_category = 4;
   // Structured code: "health_timeout", "401", "connection_refused", etc.
   string error_code = 5;
   // Rust error type name (no message content).
   string error_class = 6;
-  // "litellm_sidecar" | "app_server" | "tui" | "core" | "provider"
+  // "litellm_sidecar" | "app_server" | "tui" | "core" | "provider" | "cloud_requirements" | "mcp"
   string component = 7;
   // "anthropic" | "openai" | "bedrock" | "" if not provider-related.
   string provider = 8;
@@ -229,6 +229,8 @@ message DbtWizardError {
   int64 occurred_at = 18;
   // Whether the WIZARD_INTERNAL env var was set for this session.
   bool is_wizard_internal = 19;
+  // Stable anonymous client id, present even before a session exists.
+  string anonymous_id = 20;
 }
 
 // Emitted when a user submits feedback via /feedback.
