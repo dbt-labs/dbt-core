@@ -307,6 +307,7 @@ impl OAuthInteractiveResolver {
         let pkce = generate_pkce();
         let state = generate_state();
 
+        let src = std::env::var("DBT_SOURCE_APPLICATION").unwrap_or_else(|_| "core_v2".to_string());
         let auth_url = build_register_url(
             &self.register_url,
             &redirect_uri,
@@ -314,6 +315,7 @@ impl OAuthInteractiveResolver {
             &effective_scopes,
             &state,
             &pkce.challenge,
+            &src,
         )?;
 
         (self.opener)(&auth_url);
@@ -528,6 +530,7 @@ fn build_register_url(
     scope: &str,
     state: &str,
     code_challenge: &str,
+    src: &str,
 ) -> Result<String, AuthError> {
     let mut url = Url::parse(base)
         .map_err(|e| AuthError::Interactive(format!("invalid register URL '{base}': {e}")))?;
@@ -539,7 +542,7 @@ fn build_register_url(
         .append_pair("scope", scope)
         .append_pair("response_type", "code")
         .append_pair("code_challenge_method", "S256")
-        .append_pair("_dbtsrc", "core_v2");
+        .append_pair("_dbtsrc", src);
     Ok(url.to_string())
 }
 
@@ -1387,6 +1390,7 @@ mod tests {
             "account:read offline_access",
             "state-abc",
             "challenge-xyz",
+            "core_v2",
         )
         .unwrap();
         let parsed = Url::parse(&url).unwrap();
@@ -1409,6 +1413,24 @@ mod tests {
             Some("S256")
         );
         assert_eq!(pairs.get("response_type").map(String::as_str), Some("code"));
+        assert_eq!(pairs.get("_dbtsrc").map(String::as_str), Some("core_v2"));
+    }
+
+    #[test]
+    fn register_url_uses_provided_src() {
+        let url = build_register_url(
+            REGISTER_URL,
+            "http://localhost:29527/",
+            "client-id-x",
+            "account:read offline_access",
+            "state-abc",
+            "challenge-xyz",
+            "vsce",
+        )
+        .unwrap();
+        let parsed = Url::parse(&url).unwrap();
+        let pairs: HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+        assert_eq!(pairs.get("_dbtsrc").map(String::as_str), Some("vsce"));
     }
 
     #[test]
