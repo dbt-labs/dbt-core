@@ -331,6 +331,7 @@ pub async fn resolve_seeds(
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 unrendered_config,
+                persist_docs: properties_config.persist_docs.clone(),
                 ..Default::default()
             },
             __seed_attr__: DbtSeedAttr {
