@@ -2483,6 +2483,7 @@ impl AdapterImpl {
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L833
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L400
     /// DatabricksAdapter https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-spark/src/dbt/adapters/spark/impl.py#L500
+    /// RedshiftAdapter https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-redshift/src/dbt/adapters/redshift/impl.py#L347
     pub fn standardize_grants_dict(
         &self,
         grants_table: Arc<AgateTable>,
@@ -2499,7 +2500,7 @@ impl AdapterImpl {
         }
 
         match self.adapter_type() {
-            Postgres | Bigquery | Redshift | DuckDB => {
+            Postgres | Bigquery | DuckDB => {
                 let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
                 let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
 
@@ -2510,6 +2511,81 @@ impl AdapterImpl {
 
                     let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
                     list.push(grantee.to_string());
+                }
+
+                Ok(result)
+            }
+            Redshift => {
+                let mut result = IndexMap::new();
+                let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
+
+                if get_bool_config(self.engine().as_ref(), "datasharing")? {
+                    let identity_name_cols =
+                        record_batch.column_values::<StringArray>("identity_name")?;
+                    let identity_type_cols =
+                        record_batch.column_values::<StringArray>("identity_type")?;
+
+                    for i in 0..record_batch.num_rows() {
+                        let identity_name = identity_name_cols.value(i);
+                        let identity_type = identity_type_cols.value(i);
+                        let privilege = privilege_cols.value(i);
+
+                        if identity_type.eq_ignore_ascii_case("user") {
+                            // Legacy macro returned lowercase privilege_type; SHOW GRANTS returns uppercase. Lowercase here to preserve the contract.
+                            let grantees = result
+                                .entry(privilege.to_lowercase())
+                                .or_insert_with(Vec::new);
+                            grantees.push(identity_name.to_string());
+                        }
+                    }
+
+                    // Resolve the current user so we can filter it out of the
+                    // grantees. Prefer the `user` from the profile; when it is
+                    // absent (e.g. Identity Center / browser-based auth) fall
+                    // back to asking the warehouse who we are.
+                    //
+                    // `current_user` resolves to the initial connection user
+                    // on Redshift.
+                    let current_user = match self.engine().as_ref().config("user") {
+                        Some(user) if !user.is_empty() => user.into_owned(),
+                        _ => {
+                            let mut conn = self.borrow_tlocal_connection(None, None)?;
+                            let ctx = QueryCtx::default()
+                                .with_desc("standardize_grants_dict current_user");
+                            let batch = self.engine().execute(
+                                None,
+                                conn.as_mut(),
+                                &ctx,
+                                "SELECT current_user AS current_user",
+                                CancellationToken::never_cancels(),
+                            )?;
+                            let users = batch.column_values::<StringArray>("current_user")?;
+                            debug_assert_eq!(
+                                batch.num_rows(),
+                                1,
+                                "SELECT current_user must return exactly one row"
+                            );
+                            users.value(0).to_string()
+                        }
+                    };
+                    debug_assert!(
+                        !current_user.is_empty(),
+                        "current_user must resolve to a non-empty value"
+                    );
+                    for grantees in result.values_mut() {
+                        grantees.retain(|g| !g.eq_ignore_ascii_case(&current_user));
+                    }
+                    result.retain(|_, grantees| !grantees.is_empty());
+                } else {
+                    let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
+
+                    for i in 0..record_batch.num_rows() {
+                        let privilege = privilege_cols.value(i);
+                        let grantee = grantee_cols.value(i);
+
+                        let grantees = result.entry(privilege.to_string()).or_insert_with(Vec::new);
+                        grantees.push(grantee.to_string());
+                    }
                 }
 
                 Ok(result)
@@ -5389,6 +5465,120 @@ mod tests {
         let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
         let batch = record_batch_with_string_column("nspname", vec!["public"]);
         assert!(adapter.list_schemas_inner(batch).is_err());
+    }
+
+    // -- Redshift standardize_grants_dict tests -------------------------------
+
+    /// Mirrors the column shape of `SHOW GRANTS ON TABLE` per the Redshift
+    /// reference: https://docs.aws.amazon.com/redshift/latest/dg/r_SHOW_GRANTS.html
+    fn show_grants_table(
+        identity_names: Vec<&str>,
+        identity_types: Vec<&str>,
+        privilege_types: Vec<&str>,
+    ) -> Arc<AgateTable> {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("identity_name", DataType::Utf8, false),
+            Field::new("identity_type", DataType::Utf8, false),
+            Field::new("privilege_type", DataType::Utf8, false),
+        ]));
+        let arrs: Vec<ArrayRef> = vec![
+            Arc::new(StringArray::from(identity_names)),
+            Arc::new(StringArray::from(identity_types)),
+            Arc::new(StringArray::from(privilege_types)),
+        ];
+        Arc::new(AgateTable::from_record_batch(Arc::new(
+            RecordBatch::try_new(schema, arrs).unwrap(),
+        )))
+    }
+
+    /// Mirrors the `(grantee, privilege_type)` shape projected by the
+    /// pre-datasharing Redshift macro (and dbt's other Postgres-derived
+    /// adapters), modeled on `information_schema.role_table_grants`:
+    /// https://www.postgresql.org/docs/current/infoschema-role-table-grants.html
+    fn legacy_grants_table(grantees: Vec<&str>, privileges: Vec<&str>) -> Arc<AgateTable> {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("grantee", DataType::Utf8, false),
+            Field::new("privilege_type", DataType::Utf8, false),
+        ]));
+        let arrs: Vec<ArrayRef> = vec![
+            Arc::new(StringArray::from(grantees)),
+            Arc::new(StringArray::from(privileges)),
+        ];
+        Arc::new(AgateTable::from_record_batch(Arc::new(
+            RecordBatch::try_new(schema, arrs).unwrap(),
+        )))
+    }
+
+    fn redshift_adapter_with_datasharing() -> AdapterImpl {
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("datasharing".into(), true.into()),
+            ("user".into(), "dbt_runner".into()),
+        ]);
+        AdapterImpl::new(build_engine(Redshift, config), None)
+    }
+
+    #[test]
+    fn test_redshift_standardize_grants_dict_legacy() {
+        let adapter = AdapterImpl::new(engine(Redshift), None);
+        let table = legacy_grants_table(
+            vec!["alice", "bob", "alice"],
+            vec!["select", "select", "insert"],
+        );
+        let result = adapter.standardize_grants_dict(table).unwrap();
+        assert_eq!(
+            result["select"],
+            vec!["alice".to_string(), "bob".to_string()]
+        );
+        assert_eq!(result["insert"], vec!["alice".to_string()]);
+    }
+
+    #[test]
+    fn test_redshift_standardize_grants_dict_datasharing() {
+        let adapter = redshift_adapter_with_datasharing();
+        let table = show_grants_table(
+            vec!["alice", "bob", "alice"],
+            vec!["user", "user", "user"],
+            vec!["SELECT", "SELECT", "INSERT"],
+        );
+        let result = adapter.standardize_grants_dict(table).unwrap();
+        assert_eq!(
+            result["select"],
+            vec!["alice".to_string(), "bob".to_string()]
+        );
+        assert_eq!(result["insert"], vec!["alice".to_string()]);
+    }
+
+    #[test]
+    fn test_redshift_standardize_grants_dict_datasharing_filters_non_user_identities() {
+        let adapter = redshift_adapter_with_datasharing();
+        let table = show_grants_table(
+            vec!["alice", "analyst_role", "everyone", "ds:foo"],
+            vec!["user", "role", "public", "role"],
+            vec!["SELECT", "SELECT", "SELECT", "SELECT"],
+        );
+        let result = adapter.standardize_grants_dict(table).unwrap();
+        assert_eq!(result["select"], vec!["alice".to_string()]);
+    }
+
+    #[test]
+    fn test_redshift_standardize_grants_dict_datasharing_filters_current_user() {
+        let adapter = redshift_adapter_with_datasharing();
+        let table = show_grants_table(
+            vec!["dbt_runner", "DBT_RUNNER", "alice"],
+            vec!["user", "user", "user"],
+            vec!["SELECT", "INSERT", "SELECT"],
+        );
+        let result = adapter.standardize_grants_dict(table).unwrap();
+        assert_eq!(result["select"], vec!["alice".to_string()]);
+        assert!(!result.contains_key("insert"));
+    }
+
+    #[test]
+    fn test_redshift_standardize_grants_dict_datasharing_rejects_legacy_columns() {
+        let adapter = redshift_adapter_with_datasharing();
+        let table = legacy_grants_table(vec!["alice"], vec!["select"]);
+        assert!(adapter.standardize_grants_dict(table).is_err());
     }
 
     // -- standardize_grants_dict tests ----------------------------------------
