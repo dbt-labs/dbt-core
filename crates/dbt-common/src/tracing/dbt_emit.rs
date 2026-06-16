@@ -7,7 +7,7 @@ use dbt_telemetry::{LogMessage, ProgressMessage};
 
 use crate::{io_args::IoArgs, io_utils::StatusReporter};
 
-use super::emit::{
+use dbt_tracing::emit::{
     emit_debug_event, emit_error_event, emit_info_event, emit_trace_event, emit_warn_event,
 };
 

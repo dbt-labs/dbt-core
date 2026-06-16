@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use dbt_common::{
     ErrorCode, FsError, FsResult,
-    constants::{
-        DBT_COMPILED_DIR_NAME, DBT_CTE_PREFIX, DBT_EPHEMERAL_DIR_NAME, DBT_HOOKS_DIR_NAME,
-    },
+    constants::{DBT_CTE_PREFIX, DBT_EPHEMERAL_DIR_NAME},
     fs_err,
     io_args::IoArgs,
     stdfs, tokiofs, unexpected_fs_err,
@@ -299,14 +297,13 @@ pub async fn run_operation_on_run(
     )
     .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.clone()))?;
 
-    // Save the rendered sql to `target/compiled/{project}/dbt_project.yml/hooks/{name}`
-    let out_base_dir = io_args
-        .out_dir
-        .join(DBT_COMPILED_DIR_NAME)
-        .join(&operation.__common_attr__.package_name)
-        .join(DBT_HOOKS_DIR_NAME);
-    tokiofs::create_dir_all(out_base_dir.clone()).await?;
-    let compiled_path = out_base_dir.join(format!("{}.sql", operation.__common_attr__.name));
+    // Save the rendered sql to `target/compiled/{project}/dbt_project.yml/hooks/{name}.sql`,
+    // mirroring the run path obtained above and dbt-core's nested operation layout.
+    let compiled_path =
+        operation.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
+    if let Some(parent) = compiled_path.parent() {
+        tokiofs::create_dir_all(parent).await?;
+    }
     tokiofs::write(compiled_path, rendered_sql.as_bytes()).await?;
     Ok(rendered_sql)
 }

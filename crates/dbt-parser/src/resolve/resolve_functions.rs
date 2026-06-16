@@ -19,7 +19,10 @@ use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtFunction, NodeBaseAttributes,
         common::NodeDependsOn,
-        properties::{FunctionKind, FunctionProperties},
+        properties::{
+            FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FunctionKind,
+            FunctionProperties,
+        },
         ref_and_source::{DbtRef, DbtSourceWrapper},
     },
     state::{DbtPackage, DbtRuntimeConfig, NodeResolverTracker},
@@ -196,7 +199,9 @@ pub async fn resolve_functions(
                 raw_code: Some(raw_code),
                 checksum: sql_file_info.checksum,
                 language: if dbt_asset.is_python() {
-                    Some("python".to_string())
+                    Some(FUNCTION_LANGUAGE_PYTHON.to_string())
+                } else if dbt_asset.is_javascript() {
+                    Some(FUNCTION_LANGUAGE_JAVASCRIPT.to_string())
                 } else {
                     properties.language.clone()
                 },
@@ -264,7 +269,9 @@ pub async fn resolve_functions(
                     .unwrap_or(Access::Private),
                 group: properties.config.as_ref().and_then(|c| c.group.clone()),
                 language: if dbt_asset.is_python() {
-                    Some("python".to_string())
+                    Some(FUNCTION_LANGUAGE_PYTHON.to_string())
+                } else if dbt_asset.is_javascript() {
+                    Some(FUNCTION_LANGUAGE_JAVASCRIPT.to_string())
                 } else {
                     properties.language.clone()
                 },
@@ -285,9 +292,11 @@ pub async fn resolve_functions(
                     .function_kind
                     .clone()
                     .or(Some(FunctionKind::Scalar)),
+                volatility: model_config.volatility.clone(),
                 runtime_version: model_config.runtime_version.clone(),
                 entry_point: model_config.entry_point.clone(),
                 packages: model_config.packages.clone(),
+                snowflake: model_config.snowflake.clone(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),

@@ -53,6 +53,46 @@ message ExtensionActivated {
     // the type of adapter used in the project (snowflake, bigquery, etc)
     string adapter_type = 15;
 
+    // Outcome of OAuth session file load at activation.
+    v1.public.fields.vscode_types.OAuthSessionFileActionAtActivation oauth_session_file_action = 16;
+
+}
+
+message ExtensionLspCompileStart {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // this is the hash of the project's name, used for anonymized telemetry
+    string project_id = 4;
+
+    // the type of adapter used in the project (snowflake, bigquery, etc)
+    string adapter_type = 5;
+
+    // the unique id of the adapter used in the active profile eg. md5(hostname)
+    string adapter_unique_id = 6;
+
+    // the version of dbt used in the project
+    string dbt_version = 7;
+
+    // the type of compile
+    v1.public.fields.vscode_types.CompileType compile_type = 8;
+
+    // True if the compile was triggered by a user action (ie. saving a file)
+    bool user_initiated = 9;
+
+    // The event that triggered the compile
+    v1.public.fields.vscode_types.CompileCause compile_cause = 10;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 11;
+
+    // UUID to uniquely identify the event
+    string event_id = 12;
 }
 
 message ExtensionLspCompile {
@@ -153,6 +193,39 @@ message ExtensionColumnLineage {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 4;
+}
+
+// Emitted when the user interacts with the lineage panel (node click, context menu action,
+// grain switch, or toolbar action). A single event covers all interaction types; distinguish
+// between them via `interaction_type`.
+message ExtensionLineageInteraction {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // which kind of interaction the user performed
+    v1.public.fields.vscode_types.LineageInteractionType interaction_type = 5;
+
+    // grain active in the panel when the interaction was initiated.
+    // For LINEAGE_INTERACTION_TYPE_SWITCH_TO_* interactions, this is the
+    // source (from) grain, not the destination. Analytics can derive the
+    // destination from interaction_type.
+    v1.public.fields.vscode_types.LineageGrain grain = 6;
+
+    // dbt resource_type for the target node, when applicable
+    // (model, source, seed, snapshot, exposure, metric, etc.).
+    // Free string so new dbt resource types don't require a proto bump.
+    string resource_type = 7;
+
+    // selected lens value; set only when interaction_type == LINEAGE_INTERACTION_TYPE_LENS_CHANGED
+    string lens = 8;
 }
 
 message ExtensionShowCompiledFile {
@@ -323,4 +396,577 @@ message ExtensionGetSupportPanelClosed {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+}
+
+message ExtensionCompareViewed {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+}
+
+message ExtensionCompareStarted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // anonymized identifier for this compare session
+    string compare_id = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
+
+    // UUID to uniquely identify the event
+    string event_id = 6;
+}
+
+message ExtensionCompareFinished {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // anonymized identifier for this compare session
+    string compare_id = 4;
+
+    // duration of the compare operation in milliseconds
+    int64 duration_ms = 5;
+
+    // whether the compare operation completed successfully
+    bool compare_success = 6;
+
+    // Deprecated: use failure_mode and error_message instead
+    string failure_reason = 7 [deprecated = true];
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 8;
+
+    // UUID to uniquely identify the event
+    string event_id = 9;
+
+    // categorizes the type of failure that occurred
+    v1.public.fields.vscode_types.CompareFailureMode failure_mode = 10;
+
+    // detailed error message or logs from the failed operation
+    string error_message = 11;
+
+    // number of result rows reported by the compare artifact
+    uint32 artifact_results_count = 12;
+
+    // whether the compare artifact contained a project section
+    bool artifact_has_project = 13;
+
+    // dbt schema version reported by the compare artifact (e.g., the manifest schema URL/version)
+    string artifact_dbt_schema_version = 14;
+
+    // invocation_id reported by the compare artifact (correlates to the dbt run that produced it)
+    string artifact_invocation_id = 15;
+}
+
+// Emitted when the user opens (drills into) a single row in the Compare panel results table.
+// Pairs with ExtensionCompareStarted/Finished via compare_id.
+message ExtensionCompareRowOpened {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // anonymized identifier for the compare session this row belongs to
+    string compare_id = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
+
+    // UUID to uniquely identify the event
+    string event_id = 6;
+
+    // category of diff row that was opened.
+    // One of: 'value_diff' | 'added_record' | 'removed_record' | 'non_unique_record' | 'unknown'.
+    // Kept as a string for forward-compat (no enum needed today).
+    string diff_type = 7;
+}
+
+// Emited if the user dismiss a message prompting them to register the extension?
+message ExtensionRegistrationMessageDismissed {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+}
+
+// Emitted if the user starts the registration flow. There are several UI affordances to do this.
+message ExtensionRegisterStarted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // which registration path will be used
+    v1.public.fields.vscode_types.RegistrationTriggerMethod trigger_method = 6;
+
+    // identifier to correlate related registration events (matches RegisterClicked)
+    string correlation_id = 7;
+}
+
+// In vscode, extensions cannot automatically open external URLs
+// Instead, vscode shows the user a modal with the URL
+// The user can pick Open, Trust Domain, Copy, or Cancel
+// Open or Trust Domain result in the URL opening, and url_opened will be true
+// Cancel or Copy result in url_opened false
+// If the user copied the URL, they may paste it into a browser to continue registration
+message ExtensionRegistrationUrlAttempted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // whether the user opened the URL (Open/Trust = true, Cancel/Copy = false)
+    bool url_opened = 6;
+
+    // whether oauth parameters were included in the URL
+    bool oauth_params_included = 7;
+
+    // identifier to correlate related registration events (matches RegisterClicked)
+    string correlation_id = 8;
+}
+
+// Emitted when the user successfully completes registration
+message ExtensionRegistrationCompleted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // the actual registration method used
+    v1.public.fields.vscode_types.RegistrationMethod registration_method = 6;
+
+    // duration of the registration flow in milliseconds
+    int64 duration_ms = 7;
+
+    // identifier to correlate related registration events (matches RegisterClicked)
+    string correlation_id = 8;
+
+    // dbt Cloud account ID the user registered with
+    string account_id = 9;
+
+    // dbt Cloud user ID for the registered user
+    string user_id = 10;
+
+    // dbt Cloud hostname (e.g., cloud.getdbt.com)
+    string account_host = 11;
+}
+
+// Once a user starts registration, they must complete it within 10 minutes
+// After 10 minutes, the auth server shuts down and we emit this event
+message ExtensionRegistrationTimedOut {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // the registration trigger method that timed out (dbt_cloud.yml or web)
+    v1.public.fields.vscode_types.RegistrationTriggerMethod trigger_method = 6;
+
+    // duration until timeout in milliseconds
+    int64 timeout_duration_ms = 7;
+
+    // identifier to correlate related registration events (matches RegisterClicked)
+    string correlation_id = 8;
+}
+
+// Emitted when an error occurs during registration
+// These are most likely to be caused by issues in code (bugs, unanticipated cases, regressiones)
+message ExtensionRegistrationErrored {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // the registration method that errored (use UNSPECIFIED if not yet known)
+    v1.public.fields.vscode_types.RegistrationMethod registration_method = 6;
+
+    // type/category of error that occurred
+    string error_type = 7;
+
+    // sanitized error message (no PII)
+    string error_message = 8;
+
+    // duration until error in milliseconds
+    int64 duration_ms = 9;
+
+    // identifier to correlate related registration events (matches RegisterClicked)
+    string correlation_id = 10;
+}
+
+// Emitted when the user clicks a control to begin registration
+// Used to correlate subsequent registration events with the originating click
+message ExtensionRegisterClicked {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // UI element that was clicked to start registration (e.g., status bar, banner, extension info)
+    string target = 6;
+
+    // identifier to correlate related registration events
+    string correlation_id = 7;
+}
+
+message ExtensionModelDocsPanelOpened {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID generated per panel render; joins all 4 Model Docs events for one render
+    string correlation_id = 5;
+
+    // md5 hash of the dbt project name (anonymized) — same hash as ExtensionLspCompileStart.project_id
+    string project_id = 6;
+
+    // true if dbt Cloud credentials were available at panel-open time
+    bool cloud_configured = 7;
+}
+
+message ExtensionModelDocsManifestLoaded {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID generated per panel render; matches ExtensionModelDocsPanelOpened.correlation_id
+    string correlation_id = 5;
+
+    // md5 hash of the dbt project name (anonymized)
+    string project_id = 6;
+}
+
+message ExtensionModelDocsEnrichmentCompleted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID generated per panel render; matches ExtensionModelDocsPanelOpened.correlation_id
+    string correlation_id = 5;
+
+    // md5 hash of the dbt project name (anonymized)
+    string project_id = 6;
+
+    // which cloud-enrichment code path the render took
+    v1.public.fields.vscode_types.ModelDocsEnrichmentOutcome outcome = 7;
+
+    // wall-clock duration from start of enrichFromCloud() to outcome emission
+    int64 duration_ms = 8;
+
+    // sanitized error message (error.name + ": " + error.message, max 512 chars); empty on success/skip
+    string error_message = 9;
+}
+
+message ExtensionModelDocsViewInDbtClicked {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID generated per panel render; matches ExtensionModelDocsPanelOpened.correlation_id
+    string correlation_id = 5;
+
+    // md5 hash of the dbt project name (anonymized)
+    string project_id = 6;
+}
+
+// Emitted when the user interacts with the Get Started onboarding panel:
+// either clicking a CTA or transitioning a step's status (including completing all steps).
+message ExtensionGetStartedInteraction {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // type of interaction (CTA click or step transition)
+    v1.public.fields.vscode_types.GetStartedInteractionType interaction_type = 6;
+
+    // step the interaction targets; UNSPECIFIED for ALL_STEPS_COMPLETED
+    // and MIGRATE_WITH_AGENT_CLICKED (the migrate CTA is not itself one of the four steps)
+    v1.public.fields.vscode_types.GetStartedStepId step_id = 7;
+
+    // status of step_id at the time of the event
+    v1.public.fields.vscode_types.GetStartedStepStatus current_step_status = 8;
+
+    // count of steps with status=COMPLETED at the time of the event (0–4)
+    int32 steps_completed_count = 9;
+}
+
+// Emitted when a query begins in the Query Results panel.
+// Pairs with ExtensionQueryCompleted via query_id.
+message ExtensionQueryStarted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID identifying this query lifecycle; matches ExtensionQueryCompleted.query_id and
+    // ExtensionQueryResultInteracted.query_id for the same result set.
+    string query_id = 5;
+
+    // which entry point started the query
+    v1.public.fields.vscode_types.QueryOrigin query_origin = 6;
+
+    // adapter type used in the active profile (snowflake, bigquery, etc.)
+    string adapter_type = 7;
+
+    // md5 hash of the dbt project name (anonymized); same md5(project_name) used by compile events
+    string project_id = 8;
+}
+
+// Emitted when a query in the Query Results panel finishes (success, failure, cancellation,
+// or invalid target). Pairs with ExtensionQueryStarted via query_id.
+message ExtensionQueryCompleted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID identifying this query lifecycle; matches ExtensionQueryStarted.query_id.
+    string query_id = 5;
+
+    // which entry point started the query
+    v1.public.fields.vscode_types.QueryOrigin query_origin = 6;
+
+    // adapter type used in the active profile (snowflake, bigquery, etc.)
+    string adapter_type = 7;
+
+    // md5 hash of the dbt project name (anonymized)
+    string project_id = 8;
+
+    // wall-clock duration from start to completion in milliseconds
+    int64 duration_ms = 9;
+
+    // number of rows returned; 0 on non-success
+    int32 row_count = 10;
+
+    // outcome of the query
+    v1.public.fields.vscode_types.QueryCompletionStatus status = 11;
+
+    // sanitized error message (max 512 chars, newlines stripped); empty on success/cancel/invalid
+    string error_message = 12;
+}
+
+// Emitted when a user interacts with the Query Results panel after results render.
+// Correlates to a specific result set via query_id.
+message ExtensionQueryResultInteracted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID identifying the active result set; matches ExtensionQueryStarted.query_id.
+    string query_id = 5;
+
+    // which kind of interaction the user performed
+    v1.public.fields.vscode_types.QueryResultInteractionType interaction_type = 6;
+}
+
+// Emitted every time a trial-light gate fires for a user (CTA impression or action denial).
+message ExtensionTrialLightGateFired {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    // UI surface where the gate fired; reuses RegistrationTarget vocabulary
+    // (e.g. "compare_cta", "catalog_cta", "column_lineage_cta", "rename_cta").
+    string target = 6;
+
+    // User state at the moment the gate fired.
+    v1.public.fields.vscode_types.UserState user_state = 7;
+
+    // Whether this was a passive impression or an active block.
+    v1.public.fields.vscode_types.TrialLightGateKind gate_kind = 8;
+}
+
+// Emitted when the extension adopts an OAuth session from the on-disk session file
+// into SecretStorage (cross-process credential sharing).
+message ExtensionOAuthSessionAdopted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    v1.public.fields.vscode_types.OAuthSessionAdoptTrigger trigger = 6;
+}
+
+// Emitted when the extension persists its OAuth session to the on-disk session file.
+message ExtensionOAuthSessionPersisted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
+
+    // UUID to uniquely identify the event
+    string event_id = 5;
+
+    v1.public.fields.vscode_types.OAuthSessionPersistTrigger trigger = 6;
+
+    // True when this write created our slot for the first time (no prior slot existed).
+    bool is_first_write = 7;
 }

@@ -1,6 +1,11 @@
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use itertools::{EitherOrBoth, Itertools};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
+};
 
 use crate::{
     microbatch::BatchContext,
@@ -24,7 +29,9 @@ use dbt_common::{
     ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, io_args::IoArgs,
     path::get_target_write_path, unexpected_fs_err,
 };
-use dbt_jinja_utils::{jinja_environment::JinjaEnv, phases::run::build_run_node_context};
+use dbt_jinja_utils::{
+    jinja_environment::JinjaEnv, listener::JinjaTraceListener, phases::run::build_run_node_context,
+};
 use dbt_schemas::{
     materialization_resolver::MaterializationResolver,
     schemas::{
@@ -38,6 +45,7 @@ use dbt_tasks_core::test_aggregation::GenericTestRelationships;
 use dbt_telemetry::ExecutionPhase;
 use dbt_yaml::Verbatim;
 use minijinja::Value;
+use minijinja::listener::RenderingEventListener;
 use tracing::debug;
 
 /// Macro to handle NULL values in Arrow arrays
@@ -71,32 +79,71 @@ fn execute_materialization_macro(
 ) -> FsResult<Value> {
     let macro_string = format!("{macro_name}()");
     let expr = jinja_env.compile_expression(&macro_string)?;
-    expr.eval(context, &[]).map_err(|e| {
-        if e.code.is_database_error() {
-            // Format like dbt-core: show model name and path first, then the raw
-            // database error message indented.
-            let indented_body = e
-                .context
-                .lines()
-                .map(|line| format!("  {line}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            let message = format!(
-                "Database Error in {resource_type} {node_alias} ({})\n{indented_body}",
-                run_path.display(),
-            );
-            Box::new(dbt_common::FsError::new(e.code, message))
+    with_jinja_trace(&run_path, unique_id, |listeners| {
+        expr.eval(context, listeners).map_err(|e| {
+            if e.code.is_database_error() {
+                // Format like dbt-core: show model name and path first, then the raw
+                // database error message indented.
+                let indented_body = e
+                    .context
+                    .lines()
+                    .map(|line| format!("  {line}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let message = format!(
+                    "Database Error in {resource_type} {node_alias} ({})\n{indented_body}",
+                    run_path.display(),
+                );
+                Box::new(dbt_common::FsError::new(e.code, message))
+            } else {
+                // For non-database errors (macro syntax errors, config errors, etc.)
+                // keep the verbose format which helps debug the macro call chain.
+                let message = format!(
+                    "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
+                    e.context
+                );
+                let err = e.with_location(run_path.clone());
+                Box::new(err.with_context(message))
+            }
+        })
+    })
+}
+
+fn with_jinja_trace<F, T>(compiled_path: &Path, unique_id: &str, f: F) -> FsResult<T>
+where
+    F: FnOnce(&[Rc<dyn RenderingEventListener>]) -> FsResult<T>,
+{
+    let trace_listener =
+        if dbt_adapter::time_machine::is_replaying() || dbt_adapter::time_machine::is_recording() {
+            Some(Rc::new(JinjaTraceListener::new()))
         } else {
-            // For non-database errors (macro syntax errors, config errors, etc.)
-            // keep the verbose format which helps debug the macro call chain.
-            let message = format!(
-                "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
-                e.context
-            );
-            let err = e.with_location(run_path);
-            Box::new(err.with_context(message))
+            None
+        };
+    let listeners: Vec<Rc<dyn RenderingEventListener>> = trace_listener
+        .iter()
+        .map(|l| l.clone() as Rc<dyn RenderingEventListener>)
+        .collect();
+
+    f(&listeners).inspect_err(|_| {
+        if let Some(ref listener) = trace_listener {
+            dump_jinja_trace(listener, compiled_path, unique_id);
         }
     })
+}
+
+fn dump_jinja_trace(listener: &JinjaTraceListener, compiled_path: &Path, unique_id: &str) {
+    if listener.is_empty() {
+        return;
+    }
+    let trace = listener.format_trace();
+    let sanitized = unique_id.replace(['/', '\\', '.'], "_");
+    let filename = format!("jinja_trace_{sanitized}.txt");
+    if let Some(dir) = compiled_path.parent() {
+        let path = dir.join(&filename);
+        if std::fs::write(&path, &trace).is_ok() {
+            eprintln!("Jinja trace dump written to: {}", path.display());
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -977,17 +1024,29 @@ pub fn materialize_unit_test(
     )
     .with_file_name(format!("{}.sql", unit_test.__common_attr__.name));
 
-    let _ = jinja_env
-        .render_str(&format!("{{{{ {macro_name}() }}}}"), &mut context, &[])
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::JinjaError,
-                "Error materializing unit test {}: {}",
-                unit_test.__common_attr__.unique_id,
-                e
-            )
-            .with_location(compiled_path)
-        })?;
+    let _ = with_jinja_trace(
+        &compiled_path,
+        &unit_test.__common_attr__.unique_id,
+        |listeners| {
+            jinja_env
+                .render_str(
+                    &format!("{{{{ {macro_name}() }}}}"),
+                    &mut context,
+                    listeners,
+                )
+                .map_err(|e| {
+                    Box::new(
+                        fs_err!(
+                            ErrorCode::JinjaError,
+                            "Error materializing unit test {}: {}",
+                            unit_test.__common_attr__.unique_id,
+                            e
+                        )
+                        .with_location(compiled_path.clone()),
+                    )
+                })
+        },
+    )?;
 
     let expr = jinja_env.compile_expression("load_result('main').table")?;
     let table = expr
@@ -1046,17 +1105,25 @@ pub fn materialize_unit_test_fast_pass(
     )
     .with_file_name(format!("{}.sql", unit_test.__common_attr__.name));
 
-    let _render_str = jinja_env
-        .render_str(materialization, &mut context, &[])
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::JinjaError,
-                "Error materializing unit test {}: {}",
-                unit_test.__common_attr__.unique_id,
-                e
-            )
-            .with_location(compiled_path)
-        })?;
+    let _render_str = with_jinja_trace(
+        &compiled_path,
+        &unit_test.__common_attr__.unique_id,
+        |listeners| {
+            jinja_env
+                .render_str(materialization, &mut context, listeners)
+                .map_err(|e| {
+                    Box::new(
+                        fs_err!(
+                            ErrorCode::JinjaError,
+                            "Error materializing unit test {}: {}",
+                            unit_test.__common_attr__.unique_id,
+                            e
+                        )
+                        .with_location(compiled_path.clone()),
+                    )
+                })
+        },
+    )?;
 
     let expr = jinja_env.compile_expression("load_result('main').table")?;
     let table = expr
@@ -1279,28 +1346,34 @@ pub fn materialize_test(
         false
     };
 
-    let render_result = jinja_env
-        .render_str(&format!("{{{{ {macro_name}() }}}}"), &mut context, &[])
-        .map_err(|e| {
-            if e.code.is_database_error() {
-                let indented_body = e
-                    .context
-                    .lines()
-                    .map(|line| format!("  {line}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let message = format!("{unique_id} ({run_display_path})\n{indented_body}",);
-                Box::new(dbt_common::FsError::new(e.code, message))
-            } else {
-                Box::new(
-                    dbt_common::FsError::new(
-                        ErrorCode::JinjaError,
-                        format!("Error running test {unique_id}: {e}"),
+    let render_result = with_jinja_trace(&compiled_path, &unique_id, |listeners| {
+        jinja_env
+            .render_str(
+                &format!("{{{{ {macro_name}() }}}}"),
+                &mut context,
+                listeners,
+            )
+            .map_err(|e| {
+                if e.code.is_database_error() {
+                    let indented_body = e
+                        .context
+                        .lines()
+                        .map(|line| format!("  {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let message = format!("{unique_id} ({run_display_path})\n{indented_body}",);
+                    Box::new(dbt_common::FsError::new(e.code, message))
+                } else {
+                    Box::new(
+                        dbt_common::FsError::new(
+                            ErrorCode::JinjaError,
+                            format!("Error running test {unique_id}: {e}"),
+                        )
+                        .with_location(compiled_path.clone()),
                     )
-                    .with_location(compiled_path),
-                )
-            }
-        });
+                }
+            })
+    });
 
     if override_warehouse {
         let _ = adapter.restore_warehouse(&unique_id);

@@ -208,6 +208,8 @@ pub struct ProjectSnapshotConfig {
         deserialize_with = "u64_or_string_u64"
     )]
     pub job_execution_timeout_seconds: Option<u64>,
+    #[serde(rename = "+reservation")]
+    pub reservation: Option<String>,
     #[serde(rename = "+kms_key_name")]
     pub kms_key_name: Option<String>,
     #[serde(rename = "+labels")]
@@ -364,7 +366,7 @@ pub struct SnapshotConfig {
     #[serde(alias = "dataset")]
     pub schema: Option<String>,
     pub alias: Option<String>,
-    #[resolved(promote, default = DbtMaterialization::Table)]
+    #[resolved(promote, default = DbtMaterialization::Snapshot)]
     pub materialized: Option<DbtMaterialization>,
     pub strategy: Option<String>,
     pub unique_key: Option<StringOrArrayOfStrings>,
@@ -597,6 +599,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                reservation: config.reservation,
                 labels: config.labels,
                 labels_from_meta: config.labels_from_meta,
                 kms_key_name: config.kms_key_name,
@@ -725,6 +728,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             job_execution_timeout_seconds: config
                 .__warehouse_specific_config__
                 .job_execution_timeout_seconds,
+            reservation: config.__warehouse_specific_config__.reservation,
             labels: config.__warehouse_specific_config__.labels,
             labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
             kms_key_name: config.__warehouse_specific_config__.kms_key_name,

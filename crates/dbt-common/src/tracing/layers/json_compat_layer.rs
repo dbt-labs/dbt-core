@@ -14,9 +14,15 @@ use dbt_telemetry::{
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
 
-use super::super::{
+use dbt_tracing::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
+    layer::{ConsumerLayer, TelemetryConsumer},
+    shared_writer::SharedWriter,
+    shutdown::TelemetryShutdownItem,
+};
+
+use super::super::{
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     event_classifiers::is_exit_with_status_log,
     formatters::{
@@ -33,9 +39,6 @@ use super::super::{
         progress::format_progress_message,
         query_log::format_query_log,
     },
-    layer::{ConsumerLayer, TelemetryConsumer},
-    shared_writer::SharedWriter,
-    shutdown::TelemetryShutdownItem,
 };
 
 use crate::io_args::FsCommand;

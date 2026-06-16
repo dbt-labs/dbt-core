@@ -3636,6 +3636,10 @@ impl InternalDbtNodeAttributes for DbtFunction {
     }
 }
 
+// Only the path methods are overridden below. `common()`/`base()` and the
+// `get_node_evaluated_event` default that reads them remain `unimplemented!()`:
+// macros live in a separate `Nodes.macros` map and are never iterated as
+// `&dyn InternalDbtNode` into the runnable/event APIs, so those paths are unreachable.
 impl InternalDbtNode for DbtMacro {
     fn common(&self) -> &CommonAttributes {
         unimplemented!("macro common attributes access")
@@ -3651,6 +3655,27 @@ impl InternalDbtNode for DbtMacro {
     }
     fn resource_type(&self) -> NodeType {
         NodeType::Macro
+    }
+    /// Overridden because the default reads `self.common()`, which panics for
+    /// `DbtMacro` (a flat struct with no `CommonAttributes`). Returns the
+    /// already-project-root-relative `original_file_path` field directly.
+    fn get_node_definition_path(
+        &self,
+        _in_dir: &Path,
+        _out_dir: &Path,
+    ) -> std::borrow::Cow<'_, Path> {
+        self.original_file_path.as_path().into()
+    }
+    /// Overridden so direct callers don't hit the default's `self.common()`,
+    /// which panics for `DbtMacro`. Macros have no compiled/run artifact, so
+    /// every kind resolves to the definition path.
+    fn get_node_path_abs(
+        &self,
+        _path_kind: NodePathKind,
+        in_dir: &Path,
+        out_dir: &Path,
+    ) -> PathBuf {
+        self.get_node_definition_path(in_dir, out_dir).into_owned()
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -4590,7 +4615,7 @@ fn is_false(b: &bool) -> bool {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtExposure {
     pub __common_attr__: CommonAttributes,
@@ -5345,6 +5370,7 @@ impl AdapterAttr {
                     cluster_by: config.cluster_by.clone(),
                     hours_to_expiration: config.hours_to_expiration,
                     job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                    reservation: config.reservation.clone(),
                     labels: config.labels.clone(),
                     labels_from_meta: config.labels_from_meta,
                     kms_key_name: config.kms_key_name.clone(),
@@ -5447,6 +5473,7 @@ impl AdapterAttr {
                         cluster_by: config.cluster_by.clone(),
                         hours_to_expiration: config.hours_to_expiration,
                         job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                        reservation: config.reservation.clone(),
                         labels: config.labels.clone(),
                         labels_from_meta: config.labels_from_meta,
                         kms_key_name: config.kms_key_name.clone(),
@@ -5584,6 +5611,7 @@ pub struct BigQueryAttr {
     pub cluster_by: Option<ClusterConfig>,
     pub hours_to_expiration: Option<u64>,
     pub job_execution_timeout_seconds: Option<u64>,
+    pub reservation: Option<String>,
     pub labels: Option<IndexMap<String, String>>,
     pub labels_from_meta: Option<bool>,
     pub kms_key_name: Option<String>,
@@ -5689,11 +5717,12 @@ mod tests {
     use serde::Deserialize;
 
     use super::{
-        DbtAnalysis, DbtFunction, DbtSeed, DbtSnapshot, DbtSource, InternalDbtNode,
-        InternalDbtNodeAttributes, ModelConfig, NodePathKind, hooks_equal, normalize_description,
-        persist_docs_configs_equal, quoting_equal,
+        DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtSeed, DbtSnapshot, DbtSource,
+        InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind, hooks_equal,
+        normalize_description, persist_docs_configs_equal, quoting_equal,
     };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
+    use crate::schemas::manifest::{DbtMetric, DbtOperation, DbtSavedQuery};
     use crate::schemas::project::SnapshotMetaColumnNames;
     use dbt_adapter_core::AdapterType;
     use dbt_common::path::path_separator_eq;
@@ -5904,6 +5933,182 @@ mod tests {
                 .as_ref(),
             source.__common_attr__.path.as_path(),
         );
+    }
+
+    fn exposure_with_paths(name: &str, original_file_path: &str) -> DbtExposure {
+        let mut exposure = DbtExposure::default();
+        exposure.__common_attr__.name = name.to_string();
+        exposure.__common_attr__.package_name = "pkg".to_string();
+        exposure.__common_attr__.path = PathBuf::from(original_file_path);
+        exposure.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        exposure.__base_attr__.alias = name.to_string();
+        exposure
+    }
+
+    #[test]
+    fn exposure_node_paths_are_phase_accurate() {
+        let exposure = exposure_with_paths("weekly_dashboard", "models/exposures.yml");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        for kind in [
+            NodePathKind::Definition,
+            NodePathKind::Compiled,
+            NodePathKind::Executable,
+        ] {
+            assert_eq!(
+                exposure.get_node_path(kind, in_dir, out_dir).as_ref(),
+                Path::new("models/exposures.yml"),
+                "kind {kind:?} should fall back to the raw YAML definition path",
+            );
+        }
+
+        assert_eq!(
+            exposure
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            exposure.__common_attr__.path.as_path(),
+        );
+    }
+
+    fn metric_with_paths(name: &str, original_file_path: &str) -> DbtMetric {
+        let mut metric = DbtMetric::default();
+        metric.__common_attr__.name = name.to_string();
+        metric.__common_attr__.package_name = "pkg".to_string();
+        metric.__common_attr__.path = PathBuf::from(original_file_path);
+        metric.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        metric.__base_attr__.alias = name.to_string();
+        metric
+    }
+
+    #[test]
+    fn metric_node_paths_are_phase_accurate() {
+        let metric = metric_with_paths("revenue", "models/metrics.yml");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        for kind in [
+            NodePathKind::Definition,
+            NodePathKind::Compiled,
+            NodePathKind::Executable,
+        ] {
+            assert_eq!(
+                metric.get_node_path(kind, in_dir, out_dir).as_ref(),
+                Path::new("models/metrics.yml"),
+                "kind {kind:?} should fall back to the raw YAML definition path",
+            );
+        }
+
+        assert_eq!(
+            metric
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            metric.__common_attr__.path.as_path(),
+        );
+    }
+
+    fn saved_query_with_paths(name: &str, original_file_path: &str) -> DbtSavedQuery {
+        let mut saved_query = DbtSavedQuery::default();
+        saved_query.__common_attr__.name = name.to_string();
+        saved_query.__common_attr__.package_name = "pkg".to_string();
+        saved_query.__common_attr__.path = PathBuf::from(original_file_path);
+        saved_query.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        saved_query.__base_attr__.alias = name.to_string();
+        saved_query
+    }
+
+    #[test]
+    fn saved_query_node_paths_are_phase_accurate() {
+        let saved_query = saved_query_with_paths("daily_metrics", "models/saved_queries.yml");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        for kind in [
+            NodePathKind::Definition,
+            NodePathKind::Compiled,
+            NodePathKind::Executable,
+        ] {
+            assert_eq!(
+                saved_query.get_node_path(kind, in_dir, out_dir).as_ref(),
+                Path::new("models/saved_queries.yml"),
+                "kind {kind:?} should fall back to the raw YAML definition path",
+            );
+        }
+
+        assert_eq!(
+            saved_query
+                .get_node_path(NodePathKind::Definition, in_dir, out_dir)
+                .as_ref(),
+            saved_query.__common_attr__.path.as_path(),
+        );
+    }
+
+    fn operation_with_paths(name: &str, original_file_path: &str) -> DbtOperation {
+        let mut operation = DbtOperation::default();
+        operation.__common_attr__.name = name.to_string();
+        operation.__common_attr__.package_name = "pkg".to_string();
+        operation.__common_attr__.path = PathBuf::from("hooks").join(format!("{name}.sql"));
+        operation.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        operation
+    }
+
+    #[test]
+    fn operation_node_paths_are_phase_accurate() {
+        // on-run-start/on-run-end hooks are declared in dbt_project.yml; every phase reports the
+        // raw project file (operations fall through to the definition path in get_node_path).
+        let operation = operation_with_paths("on_run_start_0", "./dbt_project.yml");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        for kind in [
+            NodePathKind::Definition,
+            NodePathKind::Compiled,
+            NodePathKind::Executable,
+        ] {
+            assert_eq!(
+                operation.get_node_path(kind, in_dir, out_dir).as_ref(),
+                Path::new("./dbt_project.yml"),
+                "kind {kind:?} should fall back to the raw dbt_project.yml definition path",
+            );
+        }
+
+        // The compiled artifact path is what the run_operation writer relies on: the hook .sql is
+        // nested under the raw dbt_project.yml definition path (many-to-one layout).
+        assert_eq!(
+            operation.get_node_path_abs(NodePathKind::Compiled, in_dir, out_dir),
+            PathBuf::from(
+                "/workspace/target/compiled/pkg/dbt_project.yml/hooks/on_run_start_0.sql"
+            )
+        );
+    }
+
+    fn macro_with_paths(name: &str, original_file_path: &str) -> DbtMacro {
+        DbtMacro {
+            name: name.to_string(),
+            package_name: "pkg".to_string(),
+            path: PathBuf::from(original_file_path),
+            original_file_path: PathBuf::from(original_file_path),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn macro_node_paths_are_phase_accurate() {
+        let dbt_macro = macro_with_paths("my_macro", "macros/my_macro.sql");
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        for kind in [
+            NodePathKind::Definition,
+            NodePathKind::Compiled,
+            NodePathKind::Executable,
+        ] {
+            assert_eq!(
+                dbt_macro.get_node_path(kind, in_dir, out_dir).as_ref(),
+                Path::new("macros/my_macro.sql"),
+                "kind {kind:?} should resolve to the raw .sql definition path",
+            );
+        }
     }
 
     #[test]

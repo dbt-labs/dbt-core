@@ -37,7 +37,7 @@
     )
 {% endmacro %}
 
-{% macro bigquery__get_scalar_function_body_python() %}
+{% macro bigquery__get_function_body() %}
     r'''
 {{ model.compiled_code }}
     '''
@@ -45,5 +45,5 @@
 
 {% macro bigquery__scalar_function_python(target_relation) %}
     {{ bigquery__scalar_function_create_replace_signature_python(target_relation) }}
-    {{ bigquery__get_scalar_function_body_python() }}
+    {{ bigquery__get_function_body() }}
 {% endmacro %}

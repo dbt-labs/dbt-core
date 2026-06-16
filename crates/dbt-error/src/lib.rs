@@ -5,6 +5,7 @@ mod adapter_errors;
 mod code_location;
 mod codes;
 mod preprocessor_location;
+mod tracing;
 mod types;
 mod utils;
 

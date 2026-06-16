@@ -1,21 +1,22 @@
 syntax = "proto3";
 
 package v1.public.events.fusion;
-option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/fusion";
 
 import "dbtlabs/proto/public/v1/common/vortex_options.proto";
 import "dbtlabs/proto/public/v1/events/vortex.proto";
 
-/*
-RFC 2119 Expectations for using these events:
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/fusion";
 
-1. When the Fusion process starts it MUST emit the `Invocation` event once at the start of the process before any other events
-   a. The `invocation_id` field MUST be set to a globally unique ID
-   b. All fields that have a `Required` comment MUST be set
-   c. All other fields without a `Required` comment MAY be set and are optional if they can be found
-2. After the Fusion emits the `Invocation` event it MAY emit the `v1.events.fusion.CloudInvocation` at the start of the process before any other events
-3. Fusion MUST emit a `RunModel` event for every model in the project that is part of the Node Selector
-   a. Fusion MAY omit `RunModel` events for nodes that are not part of the Node Selector used https://docs.getdbt.com/reference/node-selection/syntax
+/*
+   RFC 2119 Expectations for using these events:
+
+   1. When the Fusion process starts it MUST emit the `Invocation` event once at the start of the process before any other events
+      a. The `invocation_id` field MUST be set to a globally unique ID
+      b. All fields that have a `Required` comment MUST be set
+      c. All other fields without a `Required` comment MAY be set and are optional if they can be found
+   2. After the Fusion emits the `Invocation` event it MAY emit the `v1.events.fusion.CloudInvocation` at the start of the process before any other events
+   3. Fusion MUST emit a `RunModel` event for every model in the project that is part of the Node Selector
+      a. Fusion MAY omit `RunModel` events for nodes that are not part of the Node Selector used https://docs.getdbt.com/reference/node-selection/syntax
 */
 
 // Adapter Info Event is responsible for foundational adapter information.
@@ -378,11 +379,11 @@ message Onboarding {
   string invocation_id = 3;
 
   // Onboarding semantics.
-  OnboardingScreen screen = 4;  // Which screen/step
-  OnboardingAction action = 5;  // What happened on that screen
-  bool success = 6;   // Only for RUN_FINISHED/STEP_COMPLETED; ignored otherwise
+  OnboardingScreen screen = 4; // Which screen/step
+  OnboardingAction action = 5; // What happened on that screen
+  bool success = 6; // Only for RUN_FINISHED/STEP_COMPLETED; ignored otherwise
 
-    // user_id is the UUID generated to identify a unique user. We store a cookie
+  // user_id is the UUID generated to identify a unique user. We store a cookie
   // or token in the user's local directory which we use to maintain user information
   // across sessions. This is usually found in ~/.dbt/.user.yml.
   string user_id = 7;
@@ -390,34 +391,82 @@ message Onboarding {
 
 enum OnboardingScreen {
   SCREEN_UNSPECIFIED = 0;
-  WELCOME            = 1;
-  PROFILE_CHECK      = 2;
-  PROFILE_FOUND      = 3;
-  PROFILE_SETUP      = 4;
-  LINK_ACCOUNT       = 5;
-  DBT_PARSE          = 6;
-  PARSE_ERROR_AUTOFIX= 7;
-  DBT_PARSE_RETRY    = 8;
-  PARSE_ERROR_FAIL   = 9;
-  COMPILE_NO_SA      = 10;
+  WELCOME = 1;
+  PROFILE_CHECK = 2;
+  PROFILE_FOUND = 3;
+  PROFILE_SETUP = 4;
+  LINK_ACCOUNT = 5;
+  DBT_PARSE = 6;
+  PARSE_ERROR_AUTOFIX = 7;
+  DBT_PARSE_RETRY = 8;
+  PARSE_ERROR_FAIL = 9;
+  COMPILE_NO_SA = 10;
   COMPILE_NO_SA_FAIL = 11;
-  COMPILE            = 12;
-  COMPILE_FAIL       = 13;
-  SUCCESS            = 14;
-  AGENTIC_AUTOFIX    = 15;
+  COMPILE = 12;
+  COMPILE_FAIL = 13;
+  SUCCESS = 14;
+  AGENTIC_AUTOFIX = 15;
   TRY_AGENTIC_AUTOFIX = 16;
   DOWNLOAD_AGENTS_MD = 17;
   COMPILE_SA_BASELINE = 18;
   COMPILE_SA_BASELINE_SUCCESS = 19;
-  LOGIN              = 20;
+  LOGIN = 20;
 }
 
 enum OnboardingAction {
   ACTION_UNSPECIFIED = 0;
-  INITIATED   = 1;  // flow start (WELCOME)
-  SCREEN_SHOWN= 2;  // screen displayed
-  RUN_STARTED = 3;  // parse/compile began
-  RUN_FINISHED= 4;  // parse/compile ended (use success)
+  INITIATED = 1; // flow start (WELCOME)
+  SCREEN_SHOWN = 2; // screen displayed
+  RUN_STARTED = 3; // parse/compile began
+  RUN_FINISHED = 4; // parse/compile ended (use success)
   STEP_COMPLETED = 5; // checkpoint reached (use success)
-  STEP_FAILED    = 6; // explicit failure
+  STEP_FAILED = 6; // explicit failure
+}
+
+// Login Event is emitted when the user runs `dbt login`. It captures whether
+// the attempt succeeded and, when possible, identity context derived from the
+// JWT or the local user cookie.
+message Login {
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
+
+  // This field is a toggle to enable enrichment of the message by the Vortex service.
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+  // Unique identifier for this event (UUID). Required.
+  string event_id = 2;
+
+  // Globally unique identifier for the fusion invocation. Required.
+  string invocation_id = 3;
+
+  // Whether the login attempt succeeded.
+  bool success = 4;
+
+  // Which OAuth flow completed the login. LOGIN_TYPE_UNSPECIFIED on failure.
+  LoginType login_type = 5;
+
+  // User cookie UUID from ~/.dbt/.user.yml.
+  string user_cookie = 6;
+
+  // MD5 hash of the project name from dbt_project.yml.
+  // Absent if run outside a dbt project.
+  optional string project_id = 7;
+
+  // Platform user ID from the "sub" JWT claim.
+  // Absent if no JWT is available.
+  optional uint64 platform_user_id = 8;
+
+  // Platform tenant account ID from the "https://dbt.com/account_id" JWT claim.
+  // Absent if no JWT is available.
+  optional uint64 platform_account_id = 9;
+
+  // Platform account identifier from the "https://dbt.com/account_identifier" JWT claim.
+  // Absent if no JWT is available or the claim is absent.
+  optional string platform_account_identifier = 10;
+}
+
+enum LoginType {
+  LOGIN_TYPE_UNSPECIFIED = 0;
+  PLATFORM = 1;
+  STATE = 2;
 }

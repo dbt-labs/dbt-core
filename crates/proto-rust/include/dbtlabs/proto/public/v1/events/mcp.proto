@@ -71,4 +71,7 @@ message ToolCalled {
 
   // Indicates where this request is coming from with the user_agent header. This is only relevant for remote MCP. For local MCP, the user_agent can be attained from the enrichment field.
   string user_agent = 20;
+
+  // Attribution identifier for tracking. Uses the format "type__value" (e.g. "thread_id__<x-dbt-copilot-thread-id>"). Only applicable to tool calls within an agent run in the dbt Platform.
+  string attribution_id = 21;
 }

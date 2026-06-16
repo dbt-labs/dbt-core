@@ -15,10 +15,10 @@ use dbt_common::tracing::{
 use dbt_features::feature_stack::FeatureStack;
 use once_cell::sync::OnceCell;
 use std::future::Future;
-use std::iter;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::{fs, iter};
 
 pub type FeatureStackFactory =
     dyn Fn(Box<dyn TracingConfigProvider>) -> Arc<FeatureStack> + Send + Sync;
@@ -31,8 +31,8 @@ pub type CommandFn = dyn Fn(
         Vec<String>,
         PathBuf,
         PathBuf,
-        std::fs::File,
-        std::fs::File,
+        fs::File,
+        fs::File,
         TracingReloadHandle,
     ) -> BoxedSendFuture<FsResult<()>>
     + Send
@@ -176,12 +176,20 @@ impl TaskSeq {
             data_layer,
         )?;
 
-        let mut test_env = project_env.create_test_env()?;
-        test_env = test_env.with_tracing_handle(reload_handle);
+        let mut set_env = set_env.to_vec();
 
-        let _cwd_guard = CurrentWorkingDirGuard::new(&project_env.absolute_project_dir);
+        let enable_query_cache_testing =
+            std::env::var("DBT_TEST_QUERY_CACHE") == Ok("1".to_string());
+        if enable_query_cache_testing {
+            set_env.push(("DBT_TEST_QUERY_CACHE", "1"));
+        }
 
-        run_test_tasks(&self.tasks, project_env, &test_env, set_env).await?;
+        {
+            let mut test_env = project_env.create_test_env()?;
+            test_env = test_env.with_tracing_handle(reload_handle.clone());
+            let _cwd_guard = CurrentWorkingDirGuard::new(&project_env.absolute_project_dir);
+            run_test_tasks(&self.tasks, project_env, &test_env, &set_env).await?;
+        }
 
         // Explicitly drop the guard only after all telemetry-producing work finishes.
         drop(process_span_guard);
@@ -248,7 +256,7 @@ async fn run_test_tasks(
         match task.run(project_env, test_env, index).await {
             Ok(()) => {}
             Err(TestError::GoldieMismatch(p)) => {
-                patches.extend(p.into_iter());
+                patches.extend(p);
             }
             Err(e) => return Err(e),
         }

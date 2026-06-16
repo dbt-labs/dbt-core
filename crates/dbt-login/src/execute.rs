@@ -5,7 +5,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_platform_auth::resolver::{INTERACTIVE_TIMEOUT, OAUTH_SCOPES, OAuthInteractiveResolver};
-use dbt_platform_auth::{AuthError, OAUTH_CLIENT_ID};
+use dbt_platform_auth::{AuthError, Credential, OAUTH_CLIENT_ID, OAuthSessionCache};
 use dbt_state::auth::scope::{Scope, determine_org_id};
 use dbt_state::auth::{
     BrowserFlow, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, StoredToken, TokenStore,
@@ -14,6 +14,8 @@ use dbt_state::service_client::RunCacheServiceError;
 use dbt_state::service_config::{
     DEFAULT_OAUTH_AUTH_URL, DEFAULT_OAUTH_CLIENT_ID, DEFAULT_OAUTH_TOKEN_URL,
 };
+use uuid::Uuid;
+use vortex_events::{LoginType, login_event};
 
 use crate::LoginHooks;
 use crate::state_guidance::{run_state_guidance, run_state_guidance_after_state_login};
@@ -34,7 +36,25 @@ fn interactive_login_scopes(default_scopes: &str, env_scopes: Option<&str>) -> S
     seen.join(" ")
 }
 
-pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken) -> FsResult<()> {
+/// Read the access token from the most recently stored platform OAuth session
+/// (if any). Used to populate JWT-derived telemetry fields on login failure.
+fn read_cached_access_token() -> Option<String> {
+    let home = dirs::home_dir()?;
+    let path = home.join(".dbt").join("oauth_sessions.json");
+    let bytes = std::fs::read(path).ok()?;
+    let cache: OAuthSessionCache = serde_json::from_slice(&bytes).ok()?;
+    cache
+        .sessions
+        .into_iter()
+        .find(|s| s.client_id == OAUTH_CLIENT_ID)
+        .map(|s| s.access_token)
+}
+
+pub async fn execute_login(
+    hooks: Arc<dyn LoginHooks>,
+    token: &CancellationToken,
+    invocation_id: &Uuid,
+) -> FsResult<()> {
     // Each opener captures its URL via a oneshot and returns immediately.
     // A separate task joins both URLs, combines them into a single browser open.
     let (state_url_tx, state_url_rx) = tokio::sync::oneshot::channel::<String>();
@@ -175,6 +195,8 @@ pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken
                 Some(org_id) => println!("dbt State login successful (org: {org_id})."),
                 None => println!("dbt State login successful."),
             }
+            // State login has no platform JWT; identity fields will be absent.
+            login_event(invocation_id, true, LoginType::State, None);
         }
         result = platform_resolver.resolve() => {
             let cred = match result {
@@ -184,6 +206,13 @@ pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken
                     eprintln!(
                         "Authentication failed. Re-run {} to try again.\n\n{e}",
                         console::style("dbt login").bold()
+                    );
+                    let cached_token = read_cached_access_token();
+                    login_event(
+                        invocation_id,
+                        false,
+                        LoginType::Unspecified,
+                        cached_token.as_deref(),
                     );
                     return Err(fs_err!(ErrorCode::AuthFailed, "authentication failed"));
                 }
@@ -199,6 +228,13 @@ pub async fn execute_login(hooks: Arc<dyn LoginHooks>, token: &CancellationToken
             let _ = post_login_fut.await;
 
             println!("Congratulations! You are now signed in.");
+
+            let access_token = if let Credential::OAuth(ref s) = cred {
+                Some(s.access_token.as_str())
+            } else {
+                None
+            };
+            login_event(invocation_id, true, LoginType::Platform, access_token);
         }
     }
 

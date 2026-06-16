@@ -3,7 +3,7 @@
 use dbt_common::{
     FsResult,
     cancellation::CancellationToken,
-    io_args::{FsCommand, LocalExecutionBackendKind},
+    io_args::LocalExecutionBackendKind,
     io_utils::{CSV_EXT, SQL_EXT},
     node_selector::{IndirectSelection, MethodName, SelectExpression, SelectionCriteria},
     tracing::emit::create_info_span,
@@ -90,12 +90,6 @@ impl CompilationPipeline {
             resolved_state.adapter_type,
         )?;
         let execute = Execute::from_compute_flag(local_execution_backend);
-        if matches!(execute, Execute::Local)
-            // Show can only schedule one node, so it should not be modified
-            && schedule_args.command != FsCommand::Show
-        {
-            schedule.modify_for_local_execution();
-        }
         if matches!(execute, Execute::Sidecar | Execute::Service) {
             modify_schedule_for_sidecar_compute_boundaries(&mut schedule, &resolved_state.nodes);
         }
@@ -226,9 +220,6 @@ pub async fn schedule_with_select(
         resolved_state.adapter_type,
     )?;
     let execute = Execute::from_compute_flag(local_execution_backend);
-    if matches!(execute, Execute::Local) {
-        schedule.modify_for_local_execution();
-    }
     if matches!(execute, Execute::Sidecar | Execute::Service) {
         modify_schedule_for_sidecar_compute_boundaries(&mut schedule, &resolved_state.nodes);
     }

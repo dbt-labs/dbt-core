@@ -2,7 +2,7 @@ use dbt_telemetry::{HookOutcome, NodeOutcome, NodeSkipReason, NodeType, TestOutc
 use error::{FsError, FsResult};
 use strum::FromRepr;
 
-use super::metrics::{MetricKey, get_metric};
+use dbt_tracing::metrics::{MetricKey, get_metric};
 
 const METRIC_KEY_NAMESPACE_SHIFT: u64 = 56;
 const METRIC_KEY_FAMILY_SHIFT: u64 = 48;

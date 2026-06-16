@@ -441,6 +441,19 @@ fn test_unary_operator_with_function() {
 }
 
 #[test]
+fn test_macro_inline_type_alias() {
+    let env = Environment::new();
+    let rv = env
+        .render_str(
+            r#"{% macro greet(name: str) %}Hello {{ name }}{% endmacro %}{{ greet("world") }}"#,
+            context! {},
+            &[],
+        )
+        .unwrap();
+    assert_eq!(rv.trim(), "Hello world");
+}
+
+#[test]
 fn test_macro_default_arg_referencing_other_arg() {
     let env = Environment::new();
 
@@ -465,4 +478,30 @@ fn test_macro_default_arg_referencing_other_arg() {
     assert_eq!(lines.len(), 2);
     assert_snapshot!(lines[0].trim(), @"something");
     assert_snapshot!(lines[1].trim(), @"account_number");
+}
+
+#[test]
+fn test_snapshot_dotted_name_matches_dbt_core_behavior() {
+    let mut env = Environment::new();
+    // dbt-core regex stops at the dot: `{% snapshot snp.sql %}` → name "snp".
+    // Fusion should do the same rather than failing with a parse error.
+    let result = env.add_template("snp.sql", "{% snapshot snp.sql %}SELECT 1{% endsnapshot %}");
+    assert!(
+        result.is_ok(),
+        "dotted snapshot name should parse as 'snp' to match dbt-core behavior, got: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn test_snapshot_paren_suffix_matches_dbt_core_behavior() {
+    let mut env = Environment::new();
+    // dbt-core also accepts `{% snapshot snp() %}` — the parens are ignored and
+    // the name is treated as "snp".
+    let result = env.add_template("snp.sql", "{% snapshot snp() %}SELECT 1{% endsnapshot %}");
+    assert!(
+        result.is_ok(),
+        "snapshot name with parens should parse as 'snp' to match dbt-core behavior, got: {:?}",
+        result.err()
+    );
 }

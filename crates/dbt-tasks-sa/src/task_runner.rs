@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use dbt_adapter::Adapter;
-use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -116,9 +115,7 @@ impl TaskRunner {
         run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
     ) -> FsResult<()> {
-        let persist_seed_data = self.hooks.should_persist_seed_data(run_task_args);
         let adapter_type = self.resolved_state.dbt_profile.db_config.adapter_type();
-        let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
         // Pre-register only *selected* seeds (not frontier dependencies) so that
         // frontier seeds don't mask "missing in remote" static analysis errors.
         let selected_seed_ids: Vec<&String> = schedule
@@ -129,30 +126,17 @@ impl TaskRunner {
                     && schedule.selected_nodes.contains(*uid)
             })
             .collect();
-        let registered_seeds = register_seeds::pre_register_seeds(
+        register_seeds::pre_register_seeds(
             &selected_seed_ids,
             &self.resolved_state.nodes.seeds,
             adapter_type,
             Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
             Arc::clone(&self.data_store),
             Arc::clone(self.adapter.engine().type_ops()),
-            persist_seed_data,
             &run_task_args.io.in_dir,
         )
         .await;
 
-        if execute == Execute::Local {
-            for seed in registered_seeds.into_iter() {
-                crate::utils::mirror_schema_to_frontier_cache(
-                    run_task_args.io.out_dir.as_ref(),
-                    &seed.canonical_fqn,
-                    &seed.unique_id,
-                    self.schema_store.as_ref(),
-                )?;
-                self.schema_store
-                    .register_schema(&seed.canonical_fqn, None, seed.schema, true)?;
-            }
-        }
         Ok(())
     }
 
@@ -202,11 +186,7 @@ impl TaskRunner {
 
     fn should_register_schemas(&self, run_task_args: &RunTasksArgs) -> bool {
         let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
-        let adapter_type = self.resolved_state.dbt_profile.db_config.adapter_type();
         (run_task_args.is_runnable() && execute == Execute::Remote)
-            || (run_task_args.is_runnable()
-                && adapter_type == AdapterType::DuckDB
-                && execute == Execute::Local)
             || run_task_args.command == FsCommand::Clone
     }
 

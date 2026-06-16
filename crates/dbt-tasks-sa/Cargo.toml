@@ -54,6 +54,7 @@ petgraph = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sqlparser = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 

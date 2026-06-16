@@ -1,4 +1,4 @@
-use dbt_common::node_selector::{IndirectSelection, SelectExpression};
+use dbt_common::node_selector::SelectExpression;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -115,12 +115,7 @@ pub fn resolve_final_selectors(
             exclude: arg.exclude.clone(),
         };
 
-        let default_mode = if arg.indirect_selection.is_some() {
-            arg.indirect_selection.unwrap()
-        } else {
-            // eager is the default
-            IndirectSelection::default()
-        };
+        let default_mode = arg.indirect_selection.unwrap_or_default();
 
         if let Some(ref mut include) = resolved.include {
             include.apply_default_indirect_selection(default_mode);
@@ -207,15 +202,11 @@ fn resolve_selector_definitions(
     for def in yaml.selectors {
         let resolved = parser.parse_definition(&def.definition)?;
         let is_default = match def.default.0 {
-            None => false,
             Some(SelectorDefaultSpec::Bool(b)) => b,
-            Some(SelectorDefaultSpec::Template(tmpl)) => {
-                if default_needed {
-                    render_default_template(&tmpl, jinja_env, root_package_name)?
-                } else {
-                    false
-                }
+            Some(SelectorDefaultSpec::Template(tmpl)) if default_needed => {
+                render_default_template(&tmpl, jinja_env, root_package_name)?
             }
+            _ => false,
         };
         resolved_selectors.insert(
             def.name.clone(),
@@ -387,7 +378,7 @@ mod tests {
             false,
             None,
             None,
-            Some(IndirectSelection::default()),
+            Some(dbt_common::node_selector::IndirectSelection::default()),
             None,
         ))
     }
@@ -404,7 +395,7 @@ mod tests {
             false,
             None,
             None,
-            Some(IndirectSelection::default()),
+            Some(dbt_common::node_selector::IndirectSelection::default()),
             Some(Box::new(SelectExpression::Or(vec![
                 atom(MethodName::Tag, "usage"),
                 atom(MethodName::Tag, "feed_service_now"),

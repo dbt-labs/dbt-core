@@ -22,7 +22,10 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::{Access, DbtIncrementalStrategy};
 use dbt_schemas::schemas::macros::{DbtDocsMacro, build_macro_units};
-use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
+use dbt_schemas::schemas::properties::{
+    FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL, FunctionKind,
+    MetricsProperties, ModelProperties,
+};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use crate::args::ResolveArgs;
@@ -368,6 +371,11 @@ pub async fn resolve(
 
     // Check access
     let nodes_with_access_errors = check_access(arg, &nodes, &all_runtime_configs);
+
+    // Validate function configuration against per-adapter capabilities:
+    // JS UDF language support, JS-aggregate restrictions, default arguments.
+    validate_function_config(arg, &nodes, adapter_type);
+
     resolver_hooks.post_resolve(
         &arg.io,
         &mut nodes,
@@ -470,6 +478,85 @@ fn check_access(
     }
 
     violations
+}
+
+/// Validate function configuration against per-adapter capabilities:
+/// - JavaScript UDFs are only supported on BigQuery and Snowflake.
+/// - JavaScript aggregate UDFs are not supported on Snowflake.
+/// - `default_value` on arguments is only supported on Snowflake, and defaulted
+///   arguments must form a trailing suffix of the argument list (mirrors
+///   `expand_default_fields` in the SQL binder, which only peels trailing
+///   defaults when expanding `CREATE FUNCTION` into candidate arities).
+fn validate_function_config(arg: &ResolveArgs, nodes: &Nodes, adapter_type: AdapterType) {
+    use AdapterType::*;
+    let status_reporter = arg.io.status_reporter.as_ref();
+    for function in nodes.functions.values() {
+        let name = &function.__common_attr__.name;
+        let language = function.__function_attr__.language.as_deref();
+        let function_kind = function.deprecated_config.function_kind.as_ref();
+
+        // JavaScript language + function-kind support
+        match (adapter_type, language) {
+            (Bigquery, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {}
+            (Snowflake, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
+                if function_kind == Some(&FunctionKind::Aggregate) {
+                    let err = fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Function '{}' is a JavaScript aggregate function and not supported on '{}'.",
+                        name,
+                        adapter_type,
+                    );
+                    emit_error_log_from_fs_error(&err, status_reporter);
+                    continue;
+                }
+            }
+            (_, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
+                let err = fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Function '{}' uses JavaScript, which is not supported on '{}'.",
+                    name,
+                    adapter_type,
+                );
+                emit_error_log_from_fs_error(&err, status_reporter);
+                continue;
+            }
+            // SQL / Python / unspecified: no per-adapter restrictions today.
+            (_, Some(FUNCTION_LANGUAGE_SQL)) | (_, Some(FUNCTION_LANGUAGE_PYTHON)) | (_, None) => {}
+            (_, Some(other)) => {
+                unimplemented!("No per-adapter validation defined for function language '{other}'")
+            }
+        }
+
+        // Default-value argument support
+        if let Some(arguments) = function.__function_attr__.arguments.as_ref()
+            && let Some(first_default) = arguments.iter().position(|a| a.default_value.is_some())
+        {
+            match adapter_type {
+                Snowflake => {
+                    if arguments[first_default..]
+                        .iter()
+                        .any(|a| a.default_value.is_none())
+                    {
+                        let err = fs_err!(
+                            ErrorCode::InvalidConfig,
+                            "Function '{}' has arguments with 'default_value' that are not at the end of the argument list. Defaulted arguments must form a trailing suffix.",
+                            name,
+                        );
+                        emit_error_log_from_fs_error(&err, status_reporter);
+                    }
+                }
+                _ => {
+                    let err = fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Function '{}' declares an argument with 'default_value', which is not supported on '{}'.",
+                        name,
+                        adapter_type,
+                    );
+                    emit_error_log_from_fs_error(&err, status_reporter);
+                }
+            }
+        }
+    }
 }
 
 fn microbatch_model_no_event_time_inputs_warnings(nodes: &Nodes) -> Vec<FsError> {

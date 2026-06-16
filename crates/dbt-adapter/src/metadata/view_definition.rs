@@ -4,7 +4,7 @@
 //! `fetch_view_definitions` returns. Recursive traversal that parses these
 //! definitions to discover upstream references is performed by callers.
 
-use dbt_frontend_common::Dialect;
+use dbt_adapter_core::AdapterType;
 
 /// A single fetched view definition.
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ pub struct ViewDefinition {
     pub definition: String,
 
     /// SQL dialect to use when parsing `definition`.
-    pub dialect: Dialect,
+    pub dialect: AdapterType,
 
     /// Catalog used to qualify any unqualified references inside `definition`.
     pub default_catalog: String,

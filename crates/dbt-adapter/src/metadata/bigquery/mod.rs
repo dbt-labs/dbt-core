@@ -16,7 +16,6 @@ use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
-use dbt_frontend_common::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::legacy_catalog::*;
@@ -1332,7 +1331,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                 acc.push(ViewDefinition {
                     fqn: input_rel.semantic_fqn(),
                     definition: definition.to_string(),
-                    dialect: Dialect::Bigquery,
+                    dialect: AdapterType::Bigquery,
                     default_catalog: catalog.to_string(),
                     default_schema: schema.to_string(),
                 });
@@ -1343,6 +1342,72 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         let keys = by_dataset.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
+    }
+
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        database: &'a str,
+        schema: &'a str,
+        relations: &'a [Arc<dyn BaseRelation>],
+        _options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        // `__TABLES__` is dataset-scoped: FROM `project`.`dataset`.__TABLES__
+        // Using the two-part form `project.__TABLES__` is wrong — BigQuery
+        // treats it as `current_project.project.__TABLES__` (dataset named
+        // "project"), which 404s. Both parts need backtick quoting because
+        // project IDs often contain hyphens.
+        //
+        // `database` and `schema` are raw (unquoted) identifiers from
+        // `RelationPath`. Quoting is only applied at render time via
+        // `quote_policy`/`quote_part`, so these values are never pre-quoted
+        // and the unconditional backticks here cannot double-quote them.
+        let sql = format!(
+            "SELECT
+                 dataset_id AS table_schema,
+                 table_id AS table_name,
+                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
+                 (type = 2) AS is_view
+             FROM `{database}`.`{schema}`.__TABLES__"
+        );
+        let relations = relations.to_vec();
+        let adapter = self.adapter.clone();
+        let factory = Box::new(AdapterConnectionFactory::new(
+            adapter.engine().clone(),
+            adapter.engine().threads(),
+        ));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let token_clone = token.clone();
+        let map_f = move |conn: &mut dyn Connection, _: &()| -> AdapterResult<Arc<RecordBatch>> {
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+            let (_, agate) = adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
+            Ok(agate.original_record_batch())
+        };
+
+        let reduce_f = move |acc: &mut Acc, _: (), batch_res: AdapterResult<Arc<RecordBatch>>| {
+            let batch = match batch_res {
+                Ok(b) => b,
+                Err(e) if e.message().contains("Error 404: Not found:") => return Ok(()),
+                Err(e) => return Err(Cancellable::Error(e)),
+            };
+            let schemas = batch.column_values::<StringArray>("table_schema")?;
+            let tables = batch.column_values::<StringArray>("table_name")?;
+            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
+            let is_views = batch.column_values::<BooleanArray>("is_view")?;
+            for i in 0..batch.num_rows() {
+                for fqn in find_matching_relation(schemas.value(i), tables.value(i), &relations)? {
+                    acc.insert(
+                        fqn,
+                        MetadataFreshness::from_micros(timestamps.value(i), is_views.value(i))?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(vec![()]), token)
     }
 }
 

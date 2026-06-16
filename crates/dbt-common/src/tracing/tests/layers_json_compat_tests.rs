@@ -1,4 +1,3 @@
-use super::mocks::TestWriter;
 use crate::{
     constants::DBT_TARGET_DIR_NAME,
     io_args::FsCommand,
@@ -10,7 +9,6 @@ use crate::{
         init::create_tracing_subcriber_with_layer,
         layers::json_compat_layer::build_json_compat_layer,
         span_info::{record_span_status_from_attrs, update_span_attrs},
-        tests::mocks::{MockDynSpanEvent, test_data_layer},
     },
 };
 use dbt_telemetry::{
@@ -23,6 +21,8 @@ use dbt_telemetry::{
     SourceFreshnessDetail, SourceFreshnessOutcome, TelemetryOutputFlags, UserLogMessage,
     node_processed, update_dbt_core_event_code_for_node_processed_end,
 };
+use dbt_tracing::test_support::mocks::TestWriter;
+use dbt_tracing::test_support::mocks::{MockDynSpanEvent, test_data_layer};
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
 use uuid::Uuid;

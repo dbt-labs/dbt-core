@@ -657,6 +657,33 @@ fn test_multiple_extended_includes_in_loop() {
     assert_eq!(rv, "012");
 }
 
+#[test]
+fn test_filter_postfix_attr_access() {
+    // `seq|first.key` is valid Jinja2: apply filter then access attribute on result.
+    let mut env = Environment::new();
+    env.add_template("test", "{{ items|first.name }}").unwrap();
+    let tmpl = env.get_template("test").unwrap();
+    let ctx = minijinja::context! { items => vec![
+        minijinja::context! { name => "alice" },
+        minijinja::context! { name => "bob" },
+    ]};
+    let rv = tmpl.render(ctx, &[]).unwrap();
+    assert_eq!(rv, "alice");
+
+    // Also valid inside block tags, e.g. {% if seq|first.val is none %}
+    env.add_template(
+        "test2",
+        "{% if items|first.name == 'alice' %}yes{% endif %}",
+    )
+    .unwrap();
+    let tmpl2 = env.get_template("test2").unwrap();
+    let ctx2 = minijinja::context! { items => vec![
+        minijinja::context! { name => "alice" },
+    ]};
+    let rv2 = tmpl2.render(ctx2, &[]).unwrap();
+    assert_eq!(rv2, "yes");
+}
+
 /// See https://github.com/mitsuhiko/minijinja/issues/551
 #[test]
 fn test_filter_caching() {

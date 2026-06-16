@@ -13,7 +13,7 @@ use crate::schemas::{
 
 use super::common::WhereFilterIntersection;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSavedQuery {
     pub __common_attr__: CommonAttributes,

@@ -363,7 +363,7 @@ impl Adapter {
 
         self.engine()
             .relation_cache()
-            .insert_many(collected_relations.into_iter());
+            .insert_many(collected_relations);
         Ok(())
     }
 

@@ -2,7 +2,7 @@ use dbt_telemetry::{
     CallTrace, Invocation, LogMessage, TelemetryAttributes, Unknown, create_process_event_data,
 };
 
-use super::layers::data_layer::{
+use dbt_tracing::layers::data_layer::{
     RootSpanTraceContext, TelemetryDataLayerConfig, UnstructuredLogAttributesInput,
     UnstructuredSpanAttributesInput,
 };
@@ -40,7 +40,10 @@ fn dbt_unstructured_span_attributes(
                 name: input.name.to_string(),
                 file,
                 line,
-                extra,
+                extra: extra
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into()))
+                    .collect(),
             }
             .into();
         }

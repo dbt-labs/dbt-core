@@ -92,6 +92,10 @@ impl DbtAsset {
         self.path.extension().and_then(|ext| ext.to_str()) == Some("py")
     }
 
+    pub fn is_javascript(&self) -> bool {
+        self.path.extension().and_then(|ext| ext.to_str()) == Some("js")
+    }
+
     /// Assumes all paths used are canonicalized
     pub fn to_display_path(&self, project_root: &Path) -> PathBuf {
         let absolute_path = self.base_path.join(&self.path);

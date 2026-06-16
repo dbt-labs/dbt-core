@@ -172,6 +172,7 @@ fn create_merged_db_config(
                 submission_method: None,
                 job_creation_timeout_seconds: None,
                 job_execution_timeout_seconds: None,
+                reservation: None,
                 job_retries: None,
                 job_retry_deadline_seconds: None,
                 target_name: None,
@@ -293,6 +294,7 @@ fn create_merged_db_config(
                     submission_method: None,
                     job_creation_timeout_seconds: None,
                     job_execution_timeout_seconds: None,
+                    reservation: None,
                     job_retries: None,
                     job_retry_deadline_seconds: None,
                     target_name: None,
@@ -317,6 +319,8 @@ fn create_merged_db_config(
                     job_execution_timeout_seconds: bigquery_v1
                         .job_execution_timeout_seconds
                         .map(|t| t as i64),
+                    // V1 Cloud API has no reservation field
+                    reservation: None,
                     priority: bigquery_v1.priority.as_ref().map(|p| format!("{p:?}")),
                     location: bigquery_v1.location.clone(),
                     maximum_bytes_billed: bigquery_v1.maximum_bytes_billed.map(|mb| mb as i64),

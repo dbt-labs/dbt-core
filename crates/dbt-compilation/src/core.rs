@@ -603,11 +603,8 @@ impl DbtLoadedProject {
         // recording. Route those runs through the factory so it builds a replay
         // adapter instead; sidecar execution still goes through the db_runner.
         let is_mantle_replay = matches!(&replay_mode, Some(ReplayMode::MantleReplay(_)));
-        let executes_locally = !introspect_enabled
-            || matches!(
-                execute,
-                Execute::Local | Execute::Sidecar | Execute::Service
-            );
+        let executes_locally =
+            !introspect_enabled || matches!(execute, Execute::Sidecar | Execute::Service);
         let use_local_mock_adapter = executes_locally && !is_mantle_replay;
         let adapter = if adapter_type == AdapterType::DuckDB {
             adapter_factory
@@ -656,7 +653,7 @@ impl DbtLoadedProject {
                 );
                 Arc::new(Adapter::new(Arc::new(adapter_impl), None, token.clone()))
             } else {
-                // Execute::Local or fallback: use mock adapter
+                // Fallback: use mock adapter
                 let mock = AdapterImpl::new_mock(
                     adapter_type,
                     flags.project_flags(),

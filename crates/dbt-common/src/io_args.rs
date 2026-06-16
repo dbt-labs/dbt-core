@@ -247,7 +247,6 @@ pub struct IoArgs {
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
-    pub beta_use_query_cache: bool,
     pub use_parquet_schema_store: bool,
     pub verify_parquet_schema_store: bool,
     pub host: String,
@@ -488,6 +487,10 @@ pub struct EvalArgs {
     pub skip_semantic_manifest_validation: bool,
     pub export_saved_queries: bool,
     pub task_cache_url: String,
+    /// Whether dbt State management (auto-deferral) is enabled, resolved from
+    /// `--manage-state`, `DBT_ENGINE_MANAGE_STATE`, or `flags.manage_state` in
+    /// dbt_project.yml / user settings. Also surfaced on the invocation telemetry
+    /// span as `manage_state`.
     pub run_cache_service: bool,
     pub run_cache_mode: RunCacheMode,
     pub optimize_tests: HashSet<OptimizeTestsOptions>,
@@ -832,6 +835,7 @@ pub enum JsonSchemaTypes {
     Packages(bool),
     Dependencies(bool),
     Telemetry(bool),
+    Catalogs(bool),
 }
 
 impl JsonSchemaTypes {
@@ -844,7 +848,8 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::DbtCloud(is_pre)
             | JsonSchemaTypes::Packages(is_pre)
             | JsonSchemaTypes::Dependencies(is_pre)
-            | JsonSchemaTypes::Telemetry(is_pre) => *is_pre,
+            | JsonSchemaTypes::Telemetry(is_pre)
+            | JsonSchemaTypes::Catalogs(is_pre) => *is_pre,
         }
     }
 
@@ -856,7 +861,8 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::Profile(_)
             | JsonSchemaTypes::DbtCloud(_)
             | JsonSchemaTypes::Packages(_)
-            | JsonSchemaTypes::Dependencies(_) => schemars::r#gen::SchemaSettings::default(),
+            | JsonSchemaTypes::Dependencies(_)
+            | JsonSchemaTypes::Catalogs(_) => schemars::r#gen::SchemaSettings::default(),
             JsonSchemaTypes::Telemetry(_) => schemars::r#gen::SchemaSettings::draft07(),
         }
     }
@@ -874,6 +880,7 @@ pub enum ClapSchemaTypes {
     Packages,
     Dependencies,
     Telemetry,
+    Catalogs,
 }
 
 impl ClapSchemaTypes {
@@ -887,6 +894,7 @@ impl ClapSchemaTypes {
             ClapSchemaTypes::Packages => JsonSchemaTypes::Packages(is_pre),
             ClapSchemaTypes::Dependencies => JsonSchemaTypes::Dependencies(is_pre),
             ClapSchemaTypes::Telemetry => JsonSchemaTypes::Telemetry(is_pre),
+            ClapSchemaTypes::Catalogs => JsonSchemaTypes::Catalogs(is_pre),
         }
     }
 }

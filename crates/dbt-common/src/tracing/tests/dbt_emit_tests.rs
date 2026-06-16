@@ -11,7 +11,7 @@ use crate::tracing::{
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
 };
 
-use super::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
+use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 #[test]
 fn test_convenience_log_message_functions() {

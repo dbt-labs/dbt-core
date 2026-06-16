@@ -313,7 +313,13 @@ pub fn resolve_nested_model_metrics(
                         group: metric_config.group.clone(),
                         created_at: chrono::Utc::now().timestamp() as f64,
                         metadata: None,
-                        label: metric_props.label.clone(),
+                        // fall back to metric_name matches core
+                        label: Some(
+                            metric_props
+                                .label
+                                .clone()
+                                .unwrap_or_else(|| metric_name.clone()),
+                        ),
                         metric_type: metric_props.type_.clone().unwrap_or_default(),
                         type_params,
                         filter: metric_props.filter.clone().map(|f| vec![f].into()),
@@ -443,17 +449,12 @@ pub fn resolve_top_level_metrics(
             MetricType::Ratio => {
                 let maybe_numerator = type_params.numerator.clone();
                 let maybe_denominator = type_params.denominator.clone();
-                if maybe_numerator.is_none() || maybe_denominator.is_none() {
-                    vec![]
+                if let Some(numerator) = maybe_numerator
+                    && let Some(denominator) = maybe_denominator
+                {
+                    vec![numerator.name, denominator.name]
                 } else {
-                    vec![
-                        maybe_numerator
-                            .expect("Numerator must be specified for ratio metric")
-                            .name,
-                        maybe_denominator
-                            .expect("Denominator must be specified for ratio metric")
-                            .name,
-                    ]
+                    vec![]
                 }
             }
             MetricType::Derived => {
@@ -474,16 +475,10 @@ pub fn resolve_top_level_metrics(
                     .unwrap_or_default()
                     .metric;
 
-                if maybe_cumulative_metric.is_none() {
-                    vec![]
+                if let Some(metric) = maybe_cumulative_metric {
+                    vec![metric.name]
                 } else {
-                    vec![
-                        maybe_cumulative_metric
-                            .expect(
-                                "cumulative_type_params.metric must exist for cumulative metric",
-                            )
-                            .name,
-                    ]
+                    vec![]
                 }
             }
             MetricType::Conversion => {
@@ -586,7 +581,13 @@ pub fn resolve_top_level_metrics(
                 group: metric_metric_config.group.clone(),
                 created_at: chrono::Utc::now().timestamp() as f64,
                 metadata: None,
-                label: metric_props.label.clone(),
+                // fall back to metric_name matches core
+                label: Some(
+                    metric_props
+                        .label
+                        .clone()
+                        .unwrap_or_else(|| metric_name.clone()),
+                ),
                 metric_type,
                 type_params,
                 filter: metric_props.filter.clone().map(|f| vec![f].into()),

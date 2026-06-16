@@ -5,9 +5,11 @@ use dbt_error::{FsError, FsResult};
 use super::{
     config::FsTraceConfig,
     dbt_data_layer::{dbt_data_layer_config, dbt_process_span_attributes},
+    tracing_feature_handles::TracingConfigProvider,
+};
+use dbt_tracing::{
     init::{TelemetryHandle, init_tracing_with_consumer_layer},
     layers::data_layer::TelemetryDataLayer,
-    tracing_feature_handles::TracingConfigProvider,
 };
 
 /// Initializes tracing with consumer layers defined by the provided configuration.

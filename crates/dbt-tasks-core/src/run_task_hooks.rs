@@ -26,12 +26,6 @@ pub trait RunTaskHooks: Send + Sync {
         node: Arc<dyn InternalDbtNodeAttributes>,
         task_result: Option<TaskResult>,
     ) -> FsResult<NodeStatus>;
-    async fn run_alt_compute_local(
-        &self,
-        ctx: &mut TaskRunnerCtx,
-        node: Arc<dyn InternalDbtNodeAttributes>,
-        task_result: Option<TaskResult>,
-    ) -> FsResult<NodeStatus>;
     async fn did_run_unit_test(
         &self,
         ctx: &mut TaskRunnerCtx,

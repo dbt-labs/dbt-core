@@ -2932,7 +2932,7 @@ fn compile_metric_filter_ctes(
                 // Resolve the derived expression: replace alias names with CTE column references.
                 // Sort by length (longest first) to prevent substring collisions.
                 let mut sorted_subs = sub_cols.clone();
-                sorted_subs.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+                sorted_subs.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
                 let mut resolved_expr = derived_expr.clone();
                 for (alias, col) in &sorted_subs {
                     let cte_ref = format!("__mf_{alias}.{col}");
@@ -6929,9 +6929,10 @@ fn compile_derived_metric_cte(
                 };
                 let mut reagg_sel: Vec<String> = Vec::new();
                 let mut reagg_grp: Vec<String> = Vec::new();
-                let mut gi = 1usize;
                 let mut cg_join_reagg = String::new();
-                for (gb, out_col) in spec.group_by.iter().zip(group_by_cols_outer.iter()) {
+                for (gi, (gb, out_col)) in
+                    (1usize..).zip(spec.group_by.iter().zip(group_by_cols_outer.iter()))
+                {
                     match gb {
                         GroupBySpec::TimeDimension {
                             granularity,
@@ -6975,7 +6976,6 @@ fn compile_derived_metric_cte(
                         }
                     }
                     reagg_grp.push(gi.to_string());
-                    gi += 1;
                 }
                 reagg_sel.push(format!("SUM(raw.{metric_col}) AS {}", metric.name));
                 let reagg_sql = format!(
@@ -7258,7 +7258,7 @@ fn compile_derived_metric_cte(
         })
         .collect();
     // Sort longest-first to prefer longer matches.
-    replacements.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    replacements.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
     // Pass 1: replace word matches with unique placeholders.
     for (find, placeholder, _) in &replacements {
         resolved_expr = replace_word(&resolved_expr, find, placeholder);
@@ -7574,10 +7574,11 @@ fn compile_derived_metric_cte(
                         .unwrap_or("metric_time");
                     let mut sel: Vec<String> = Vec::new();
                     let mut grp: Vec<String> = Vec::new();
-                    let mut gi = 1;
                     // Collect all query granularities for filtering.
                     let mut query_grans: Vec<&str> = Vec::new();
-                    for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                    for (gi, (gb, out_col)) in
+                        (1..).zip(spec.group_by.iter().zip(group_by_cols.iter()))
+                    {
                         if let GroupBySpec::TimeDimension { granularity, .. } = gb {
                             let trunc = render_date_trunc(
                                 granularity,
@@ -7590,7 +7591,6 @@ fn compile_derived_metric_cte(
                             sel.push(out_col.clone());
                         }
                         grp.push(gi.to_string());
-                        gi += 1;
                     }
                     sel.push(format!("SUM(base.{}) AS {}", input.name, input.name));
                     // Filter spine to only granularity-boundary dates (start of week, month, etc.)
@@ -7613,19 +7613,19 @@ fn compile_derived_metric_cte(
                         grp.join(", "),
                     );
                     ctes.push((reagg_name.clone(), sql));
-                } else if input.offset_window.is_some() {
+                } else if let Some(offset_window) = &input.offset_window {
                     let base_cte = input.name.clone();
                     let time_col = join_cols
                         .first()
                         .map(|s| s.as_str())
                         .unwrap_or("metric_time");
-                    let interval =
-                        render_interval_str(input.offset_window.as_ref().unwrap(), dialect);
+                    let interval = render_interval_str(offset_window, dialect);
                     let mut sel: Vec<String> = Vec::new();
                     let mut grp: Vec<String> = Vec::new();
-                    let mut gi = 1;
                     let mut cg_join = String::new();
-                    for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                    for (gi, (gb, out_col)) in
+                        (1..).zip(spec.group_by.iter().zip(group_by_cols.iter()))
+                    {
                         if let GroupBySpec::TimeDimension { granularity, .. } = gb {
                             if !is_standard_granularity(granularity) {
                                 if let Some((spine, cg_col)) =
@@ -7653,7 +7653,6 @@ fn compile_derived_metric_cte(
                             sel.push(out_col.clone());
                         }
                         grp.push(gi.to_string());
-                        gi += 1;
                     }
                     sel.push(format!("SUM(base.{}) AS {}", input.name, input.name));
                     let spine_cte = format!("{eff_cte}_spine");
@@ -7701,9 +7700,10 @@ fn compile_derived_metric_cte(
                             .unwrap_or("metric_time");
                         let mut sel: Vec<String> = Vec::new();
                         let mut grp: Vec<String> = Vec::new();
-                        let mut gi = 1;
                         let mut cg_join = String::new();
-                        for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                        for (gi, (gb, out_col)) in
+                            (1usize..).zip(spec.group_by.iter().zip(group_by_cols.iter()))
+                        {
                             if let GroupBySpec::TimeDimension { granularity, .. } = gb {
                                 if !is_standard_granularity(granularity) {
                                     if let Some((spine, cg_col)) =
@@ -7731,7 +7731,6 @@ fn compile_derived_metric_cte(
                                 sel.push(format!("base.{out_col}"));
                             }
                             grp.push(gi.to_string());
-                            gi += 1;
                         }
                         sel.push(format!("SUM(base.{}) AS {}", input.name, input.name));
                         let sql = format!(
@@ -7783,7 +7782,7 @@ fn compile_derived_metric_cte(
                     (alias.clone(), placeholder, final_ref)
                 })
                 .collect();
-            reps.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+            reps.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
             for (find, placeholder, _) in &reps {
                 reagg_expr = replace_word(&reagg_expr, find, placeholder);
             }
@@ -7849,11 +7848,9 @@ fn compile_derived_metric_cte(
                 // Just add GROUP BY for the custom gran column(s) + SUM the metric.
                 let mut cg_select: Vec<String> = Vec::new();
                 let mut cg_group: Vec<String> = Vec::new();
-                let mut cg_idx = 1;
-                for out_col in &group_by_cols {
+                for (cg_idx, out_col) in (1..).zip(group_by_cols.iter()) {
                     cg_select.push(out_col.clone());
                     cg_group.push(cg_idx.to_string());
-                    cg_idx += 1;
                 }
                 cg_select.push(format!("SUM({}) AS {}", metric.name, metric.name));
                 let inner_name = format!("{scoped_name}_ungrouped");

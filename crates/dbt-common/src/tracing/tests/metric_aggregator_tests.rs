@@ -5,9 +5,9 @@ use super::super::{
     layer::{ConsumerLayer, MiddlewareLayer},
     metrics::get_metric,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
-    tests::mocks::{MockDynSpanEvent, TestLayer, test_data_layer},
 };
 use dbt_telemetry::{LogMessage, TelemetryOutputFlags};
+use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 #[test]
 fn warning_logs_increment_warning_metric() {

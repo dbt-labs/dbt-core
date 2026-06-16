@@ -7,6 +7,7 @@ use dbt_adapter::sql_types::DefaultTypeOpsFactory;
 use dbt_common::FsError;
 use dbt_common::collections::DashMap;
 use dbt_dag::schedule::Schedule;
+use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
     DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
@@ -18,6 +19,7 @@ use dbt_tasks_core::context::ExtendedCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
 use dbt_tasks_core::{PreTaskRunData, RunTasksArgs};
 use dbt_tasks_sa::schema_hydrator::DefaultSchemaHydratorFactory;
+use dbt_tasks_sa::sources_extractor::DefaultSourcesExtractor;
 use dbt_tasks_sa::task::DefaultTasksForNodeFactory;
 use dbt_tasks_sa::task_runner_hooks::DefaultTaskRunnerHooksFactory;
 
@@ -35,11 +37,16 @@ use crate::tracing::TracingFeature;
 
 struct DefaultTaskRunnerCtxFactory {
     rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>,
+    sources_extractor: Arc<dyn SourcesExtractor>,
 }
 impl DefaultTaskRunnerCtxFactory {
-    fn new(rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>) -> Self {
+    fn new(
+        rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>,
+        sources_extractor: Arc<dyn SourcesExtractor>,
+    ) -> Self {
         Self {
             rendering_listener_factory,
+            sources_extractor,
         }
     }
 }
@@ -47,6 +54,10 @@ impl DefaultTaskRunnerCtxFactory {
 impl TaskRunnerCtxFactory for DefaultTaskRunnerCtxFactory {
     fn rendering_listener_factory(&self) -> Arc<dyn RenderingEventListenerFactory> {
         Arc::clone(&self.rendering_listener_factory)
+    }
+
+    fn sources_extractor(&self) -> Arc<dyn SourcesExtractor> {
+        Arc::clone(&self.sources_extractor)
     }
 
     fn build_node_hashes<'a>(
@@ -118,15 +129,19 @@ impl FeatureStackBuilder {
             let rendering_listener_factory: Arc<dyn RenderingEventListenerFactory> =
                 Arc::new(DefaultRenderingEventListenerFactory::default());
 
-            let task_runner_ctx_factory = Arc::new(DefaultTaskRunnerCtxFactory::new(Arc::clone(
-                &rendering_listener_factory,
-            ))) as Arc<dyn TaskRunnerCtxFactory>;
+            let sources_extractor = Arc::new(DefaultSourcesExtractor) as Arc<dyn SourcesExtractor>;
+
+            let task_runner_ctx_factory = Arc::new(DefaultTaskRunnerCtxFactory::new(
+                Arc::clone(&rendering_listener_factory),
+                Arc::clone(&sources_extractor),
+            )) as Arc<dyn TaskRunnerCtxFactory>;
 
             TaskRunnerFeature {
                 schema_hydrator_factory: Arc::new(DefaultSchemaHydratorFactory),
                 tasks_for_node_factory: Arc::new(DefaultTasksForNodeFactory),
                 compare_task_graph_builder: None,
                 rendering_listener_factory,
+                sources_extractor,
                 task_runner_ctx_factory,
                 hooks_factory: Arc::new(DefaultTaskRunnerHooksFactory),
             }

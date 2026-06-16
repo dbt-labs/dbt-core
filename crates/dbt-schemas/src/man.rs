@@ -1,3 +1,4 @@
+use crate::schemas::dbt_catalogs_v2::catalogs_v2_json_schema;
 use crate::schemas::dbt_cloud::DbtCloudConfig;
 use crate::schemas::packages::DbtPackages;
 use crate::schemas::profiles::DbtProfiles;
@@ -73,6 +74,12 @@ pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<()> {
             JsonSchemaTypes::Telemetry(_) => {
                 let schema = generator.into_root_schema_for::<TelemetryRecord>();
                 println(to_string_pretty(&schema)?);
+            }
+            JsonSchemaTypes::Catalogs(_) => {
+                // Built from the `catalogs.yml` parser's descriptor tables
+                // (see `dbt_catalogs_v2`), not a parallel serde type tree, so
+                // the schema cannot drift from the validation rules.
+                println(to_string_pretty(&catalogs_v2_json_schema())?);
             }
         };
     }

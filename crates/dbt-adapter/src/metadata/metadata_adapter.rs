@@ -338,6 +338,45 @@ pub trait MetadataAdapter: Send + Sync {
         self.freshness_with_overrides(relations, overrides, token)
     }
 
+    /// Fetch freshness for **all** tables in the given schema without
+    /// per-table filtering.
+    ///
+    /// This mirrors the plugin's
+    /// `_fetch_last_modified_epochs_from_schemas_in_catalog` which uses a
+    /// `table_schema IN (...)` filter rather than per-table predicates.  For
+    /// large projects the per-table OR-predicate on `INFORMATION_SCHEMA.TABLES`
+    /// can be slower than a plain schema dump; adapters that have validated
+    /// this approach should override this method.
+    ///
+    /// The default implementation returns an empty map, signalling to the
+    /// caller that it should fall back to `freshness_with_overrides_and_options`.
+    /// Fetch freshness for **all** tables in the given schema without
+    /// per-table filtering.
+    ///
+    /// This mirrors the plugin's
+    /// `_fetch_last_modified_epochs_from_schemas_in_catalog` which uses a
+    /// `table_schema IN (...)` filter rather than per-table predicates.  For
+    /// large projects the per-table OR-predicate on `INFORMATION_SCHEMA.TABLES`
+    /// can be slower than a plain schema dump; adapters that have validated
+    /// this approach should override this method.
+    ///
+    /// `relations` is the subset of input relations in this (database, schema)
+    /// group; adapters use `find_matching_relation` on the dump results to key
+    /// the returned map by the same semantic FQN as `relation.semantic_fqn()`.
+    ///
+    /// The default implementation returns an empty map, signalling to the
+    /// caller that it should fall back to `freshness_with_overrides_and_options`.
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        _database: &'a str,
+        _schema: &'a str,
+        _relations: &'a [Arc<dyn BaseRelation>],
+        _options: &'a MetadataQueryOptions,
+        _token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        Box::pin(async move { Ok(BTreeMap::new()) })
+    }
+
     /// Check whether each relation exists, keyed by semantic FQN.
     ///
     /// The default implementation uses `list_relations_in_parallel`, which is

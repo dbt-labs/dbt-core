@@ -1132,6 +1132,7 @@ fn process_python_models(
             config: merged_config,
             sql_file_info: crate::sql_file_info::SqlFileInfo {
                 sources: python_file_info.sources,
+                static_sources: vec![], // Python models have no dead-branch source discovery
                 refs: python_file_info.refs,
                 this: false,
                 metrics: vec![],

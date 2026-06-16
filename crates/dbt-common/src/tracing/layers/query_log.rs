@@ -2,15 +2,13 @@ use std::io::Write;
 
 use dbt_telemetry::{QueryExecuted, SpanStartInfo, TelemetryRecordRef};
 
-use super::{
-    super::{
-        background_writer::BackgroundWriter,
-        filter::{TelemetryFilterFn, disable_all_logs},
-        formatters::query_log::format_query_log,
-        layer::{ConsumerLayer, TelemetryConsumer},
-        shutdown::TelemetryShutdownItem,
-    },
-    pretty_writer::TelemetryPrettyWriterLayer,
+use super::super::formatters::query_log::format_query_log;
+use dbt_tracing::{
+    background_writer::BackgroundWriter,
+    filter::{TelemetryFilterFn, disable_all_logs},
+    layer::{ConsumerLayer, TelemetryConsumer},
+    layers::pretty_writer::TelemetryPrettyWriterLayer,
+    shutdown::TelemetryShutdownItem,
 };
 
 /// Wrapper for query_log layer that handles TelemetryRecordRef

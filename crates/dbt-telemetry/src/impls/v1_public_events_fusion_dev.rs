@@ -1,5 +1,6 @@
 use crate::proto::v1::public::events::fusion::dev::DebugValue;
 use crate::proto::v1::public::events::fusion::dev::debug_value::Value;
+use dbt_tracing::DebugValue as TracingDebugValue;
 
 const MAX_EXACT_I64_IN_F64: i64 = 1i64 << f64::MANTISSA_DIGITS;
 
@@ -80,6 +81,19 @@ impl From<&[u8]> for DebugValue {
     fn from(value: &[u8]) -> Self {
         DebugValue {
             value: Some(Value::Bytes(value.into())),
+        }
+    }
+}
+
+impl From<TracingDebugValue> for DebugValue {
+    fn from(value: TracingDebugValue) -> Self {
+        DebugValue {
+            value: Some(match value {
+                TracingDebugValue::Float64(value) => Value::Float64(value),
+                TracingDebugValue::Bool(value) => Value::Bool(value),
+                TracingDebugValue::String(value) => Value::String(value),
+                TracingDebugValue::Bytes(value) => Value::Bytes(value),
+            }),
         }
     }
 }

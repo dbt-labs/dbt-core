@@ -46,16 +46,18 @@ impl RelationType {
                 _ => panic!("unknown table type: {type_string}"),
             },
             // https://docs.databricks.com/aws/en/sql/language-manual/information-schema/tables#table-types
-            AdapterType::Databricks => match type_string.to_uppercase().as_str() {
-                "TABLE" => RelationType::Table,
-                "VIEW" => RelationType::View,
-                "MATERIALIZED_VIEW" => RelationType::MaterializedView,
-                "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
-                "STREAMING_TABLE" => RelationType::StreamingTable,
-                "METRIC_VIEW" => RelationType::MetricView,
-                "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
-                _ => panic!("unknown table type: {type_string}"),
-            },
+            AdapterType::Databricks | AdapterType::Spark => {
+                match type_string.to_uppercase().as_str() {
+                    "TABLE" => RelationType::Table,
+                    "VIEW" => RelationType::View,
+                    "MATERIALIZED_VIEW" => RelationType::MaterializedView,
+                    "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
+                    "STREAMING_TABLE" => RelationType::StreamingTable,
+                    "METRIC_VIEW" => RelationType::MetricView,
+                    "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
+                    _ => panic!("unknown table type: {type_string}"),
+                }
+            }
             _ => RelationType::from(type_string),
         }
     }

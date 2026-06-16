@@ -9,7 +9,8 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 fn main() -> ExitCode {
-    let cli_parser = DefaultCliParserFactory.create("dbt-core");
+    let version = env!("CARGO_PKG_VERSION");
+    let cli_parser = DefaultCliParserFactory.create("dbt-core", version);
     let cli = dbt_lib::prepare_cli_or_exit(&cli_parser);
 
     let mut arg = from_main(&cli);

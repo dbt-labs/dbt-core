@@ -117,11 +117,15 @@ Read-only consumers that process telemetry data. Consumers can:
 - Access custom extensions in root span
 
 **Examples**:
-- [`TelemetryJsonlWriterLayer`](/fs/sa/crates/dbt-common/src/tracing/layers/jsonl_writer.rs) - Writes JSONL to file/stdout
-- [`OTLPLayer`](/fs/sa/crates/dbt-common/src/tracing/layers/otlp.rs) - Exports to OpenTelemetry Protocol endpoints
-- [`ParquetWriter`](/fs/sa/crates/dbt-common/src/tracing/layers/parquet_writer.rs) - Writes Arrow/Parquet format
-- [`PrettyWriter`](/fs/sa/crates/dbt-common/src/tracing/layers/pretty_writer.rs) - Formatted CLI output
+- [`TelemetryJsonlWriterLayer`](/fs/sa/crates/dbt-tracing/src/layers/jsonl_writer.rs) - Writes JSONL to file/stdout
+- [`OTLPLayer`](/fs/sa/crates/dbt-tracing/src/layers/otlp.rs) - Exports to OpenTelemetry Protocol endpoints
+- [`ParquetWriter`](/fs/sa/crates/dbt-tracing/src/layers/parquet_writer.rs) - Writes Arrow/Parquet format
+- [`PrettyWriter`](/fs/sa/crates/dbt-tracing/src/layers/pretty_writer.rs) - Formatted CLI output
 - [`TUILayer`](/fs/sa/crates/dbt-common/src/tracing/layers/tui_layer.rs) - Interactive progress bars
+
+The generic output layers live in `dbt-tracing`; `dbt-common::tracing`
+assembles them with dbt-specific event registries, formatting, log cleanup, and
+CLI configuration.
 
 See trait definition in [`layer.rs`](/fs/sa/crates/dbt-common/src/tracing/layer.rs).
 

@@ -22,12 +22,21 @@
     {{ return(adapter.dispatch('formatted_scalar_function_args_sql', 'dbt')()) }}
 {% endmacro %}
 
+{% macro formatted_scalar_function_args_javascript() %}
+    {{ return(adapter.dispatch('formatted_scalar_function_args_javascript', 'dbt')()) }}
+{% endmacro %}
+
 {% macro default__formatted_scalar_function_args_sql() %}
     {% set args = [] %}
     {% for arg in model.arguments -%}
         {%- do args.append(arg.name ~ ' ' ~ arg.data_type) -%}
     {%- endfor %}
     {{ args | join(', ') }}
+{% endmacro %}
+
+{% macro default__formatted_scalar_function_args_javascript() %}
+    {% set msg = "formatted_scalar_function_args_javascript not implemented for adapter " ~ adapter.type() %}
+    {% do exceptions.raise_compiler_error(msg) %}
 {% endmacro %}
 
 {% macro scalar_function_body_sql() %}
@@ -42,6 +51,18 @@
 
 {% macro scalar_function_volatility_sql() %}
     {{ return(adapter.dispatch('scalar_function_volatility_sql', 'dbt')()) }}
+{% endmacro %}
+
+{% macro scalar_function_volatility_javascript() %}
+    {{ return(adapter.dispatch('scalar_function_volatility_javascript', 'dbt')()) }}
+{% endmacro %}
+
+{% macro default__scalar_function_volatility_javascript() %}
+    {% set volatility = model.config.get('volatility') %}
+    {% if volatility != none %}
+        {% set msg = "Volatility is not supported by " ~ adapter.type() ~ " in javascript UDF and will be ignored" %}
+        {% do exceptions.warn(msg) %}
+    {% endif %}
 {% endmacro %}
 
 {% macro default__scalar_function_volatility_sql() %}

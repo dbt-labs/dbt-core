@@ -190,6 +190,7 @@ impl DbConfig {
                 "job_retries",
                 "job_creation_timeout_seconds",
                 "job_execution_timeout_seconds",
+                "reservation",
                 "timeout_seconds",
                 "client_id",
                 "token_uri",
@@ -481,7 +482,6 @@ impl DbConfig {
 pub enum Execute {
     #[default]
     Remote,
-    Local,
     Sidecar,
     Service,
 }
@@ -490,7 +490,6 @@ impl Display for Execute {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Execute::Remote => write!(f, "remote"),
-            Execute::Local => write!(f, "local"),
             Execute::Sidecar => write!(f, "sidecar"),
             Execute::Service => write!(f, "service"),
         }
@@ -503,7 +502,9 @@ impl std::str::FromStr for Execute {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "remote" => Ok(Execute::Remote),
-            "local" => Ok(Execute::Local),
+            // "local" and "sidecar" both resolve to Sidecar; "local" is the
+            // legacy string that predates the rename and must keep parsing.
+            "local" | "sidecar" => Ok(Execute::Sidecar),
             _ => Err(format!("Invalid execute mode: {s}")),
         }
     }
@@ -523,8 +524,9 @@ impl Execute {
         use dbt_common::io_args::LocalExecutionBackendKind;
         match compute_flag {
             LocalExecutionBackendKind::Remote => Execute::Remote,
-            LocalExecutionBackendKind::Inline => Execute::Local,
-            LocalExecutionBackendKind::Worker => Execute::Sidecar,
+            LocalExecutionBackendKind::Inline | LocalExecutionBackendKind::Worker => {
+                Execute::Sidecar
+            }
             LocalExecutionBackendKind::Service => Execute::Service,
         }
     }
@@ -800,6 +802,8 @@ pub struct BigqueryDbConfig {
     pub job_creation_timeout_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_execution_timeout_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reservation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_retries: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1528,6 +1532,7 @@ pub struct BigqueryTargetEnv {
     pub impersonate_service_account: Option<String>,
     pub job_creation_timeout_seconds: Option<i64>,
     pub job_execution_timeout_seconds: Option<i64>,
+    pub reservation: Option<String>,
     pub job_retries: Option<i64>,
     pub job_retry_deadline_seconds: Option<i64>,
     pub location: Option<String>,
@@ -1883,6 +1888,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     impersonate_service_account: config.impersonate_service_account.clone(),
                     job_creation_timeout_seconds: config.job_creation_timeout_seconds,
                     job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                    reservation: config.reservation.clone(),
                     job_retries: config.job_retries,
                     job_retry_deadline_seconds: config.job_retry_deadline_seconds,
                     location: config.location.clone(),

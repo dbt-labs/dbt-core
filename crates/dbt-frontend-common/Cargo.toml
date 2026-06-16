@@ -18,6 +18,7 @@ arrow-schema = { workspace = true }
 counter = { workspace = true }
 datafusion-common = { workspace = true }
 datafusion-expr = { workspace = true }
+dbt-adapter-core = { workspace = true }
 dbt-antlr4 = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-ident = { workspace = true }

@@ -11,6 +11,7 @@ use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
+use minijinja::constants::{CURRENT_EXECUTION_PHASE, CURRENT_PATH, CURRENT_SPAN};
 use minijinja::{Value as MinijinjaValue, machinery::Span};
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 use std::{
@@ -335,6 +336,21 @@ where
         current_span: MinijinjaValue::from_serialize(Span::default()),
         current_execution_phase: "render".to_string(),
     };
+
+    ctx.insert(
+        CURRENT_PATH.to_string(),
+        MinijinjaValue::from(model.common().original_file_path.clone().to_string_lossy()),
+    );
+
+    ctx.insert(
+        CURRENT_SPAN.to_string(),
+        MinijinjaValue::from_serialize(Span::default()),
+    );
+
+    ctx.insert(
+        CURRENT_EXECUTION_PHASE.to_string(),
+        MinijinjaValue::from("render"),
+    );
 
     // Today's caller still consumes `BTreeMap<String, MinijinjaValue>`. We
     // serialize the typed overlay and `.extend(...)` onto the base — same

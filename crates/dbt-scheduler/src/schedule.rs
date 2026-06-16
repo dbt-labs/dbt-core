@@ -741,10 +741,7 @@ pub fn modify_schedule_for_sidecar_compute_boundaries(
         })
         .cloned()
         .collect();
-    for uid in removed_tests
-        .into_iter()
-        .chain(stale_test_nodes.into_iter())
-    {
+    for uid in removed_tests.into_iter().chain(stale_test_nodes) {
         // preserve invariants in schedule by propagating test node removal to dependent fields:
         // sorted_nodes = selected_nodes + frontier_nodes
         // deps = selected_nodes + frontier_nodes

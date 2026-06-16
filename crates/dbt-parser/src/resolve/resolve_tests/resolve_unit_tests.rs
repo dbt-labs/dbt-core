@@ -14,6 +14,7 @@ use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
+use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 
@@ -142,7 +143,7 @@ pub fn resolve_unit_tests(
             &package.dbt_project.all_source_paths(),
         );
 
-        let properties_config =
+        let mut properties_config =
             config_resolver.resolve_with_properties(&fqn, unit_test.config.as_ref());
         check_node_static_analysis(
             &properties_config,
@@ -152,6 +153,13 @@ pub fn resolve_unit_tests(
             arg.io.status_reporter.as_ref(),
         );
         validate_unit_test_compute(properties_config.compute, &mpe.relative_path)?;
+        // Sidecar needs a bound LP. Upgrade baseline to strict like the CLI
+        // does for non-remote --compute. Can disable via explicit off.
+        if properties_config.compute == Some(ComputeArg::Sidecar)
+            && *properties_config.static_analysis != StaticAnalysisKind::Off
+        {
+            properties_config.static_analysis = StaticAnalysisKind::Strict.into();
+        }
 
         let enabled = properties_config.enabled;
 

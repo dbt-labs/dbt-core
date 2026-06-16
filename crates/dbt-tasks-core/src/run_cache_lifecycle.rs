@@ -297,7 +297,7 @@ mod tests {
     fn lifecycle_requires_remote_compute() {
         assert!(!should_initialize_run_cache_service(
             &args(),
-            Execute::Local,
+            Execute::Sidecar,
             true,
             AdapterType::Snowflake,
         ));
@@ -307,7 +307,7 @@ mod tests {
 
         assert!(!should_initialize_run_cache_service(
             &args,
-            Execute::Local,
+            Execute::Sidecar,
             false,
             AdapterType::Snowflake,
         ));

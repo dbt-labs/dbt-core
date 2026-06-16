@@ -12,6 +12,13 @@ use minijinja::{ArgSpec, machinery::Span};
 pub enum SqlResource<T: ResolvableConfig<T>> {
     /// A source call (e.g. `{{ source('a', 'b') }}`)
     Source((String, String, CodeLocation)),
+    /// A source discovered by static AST analysis of a dead Jinja branch.
+    ///
+    /// Semantically the same as `Source` but must NOT become a runtime
+    /// `depends_on` entry — the branch never executed, so the source is
+    /// not an actual dependency of this model.  Consumers that only care
+    /// about schema fetching or lineage should treat it the same as `Source`.
+    StaticSource((String, String, CodeLocation)),
     /// A ref call (e.g. `{{ ref('a', 'b') }}`)
     Ref((String, Option<String>, Option<String>, CodeLocation)),
     /// A this call (e.g. `{{ this }}`)
@@ -39,6 +46,9 @@ impl<T: ResolvableConfig<T>> std::fmt::Display for SqlResource<T> {
         match self {
             SqlResource::Source((a, b, location)) => {
                 write!(f, "Source({a}, {b}, {location:?})")
+            }
+            SqlResource::StaticSource((a, b, location)) => {
+                write!(f, "StaticSource({a}, {b}, {location:?})")
             }
             SqlResource::Ref((a, b, c, location)) => {
                 write!(f, "Ref({a}, {b:?}, {c:?}, {location:?})")

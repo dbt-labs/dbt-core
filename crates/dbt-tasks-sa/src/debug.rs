@@ -144,7 +144,8 @@ pub async fn debug(
         arg.status_reporter.as_ref(),
     );
 
-    if execute == Execute::Local {
+    // Sidecar/DuckDB mode doesn't connect to a remote warehouse; skip the connection test.
+    if execute == Execute::Sidecar {
         emit_info_progress_message(
             create_progress_msg(ACTION_SKIPPED, "local connection test"),
             arg.status_reporter.as_ref(),
