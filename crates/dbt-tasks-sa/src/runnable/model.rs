@@ -11,7 +11,7 @@ use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, fs_err};
-use dbt_jinja_utils::phases::run::build_run_node_context;
+use dbt_jinja_utils::phases::run::{build_run_node_context, reset_result_store};
 use dbt_jinja_utils::utils::add_task_context;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtMaterialization};
@@ -172,6 +172,14 @@ pub fn execute_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
 
     // Inject incremental override flags per batch
     let mut ctx_for_batch = (*mb_unit.run_node_context).clone();
+
+    // Give each batch its own statement-result registry. The shared
+    // run_node_context bakes in a single ResultStore whose store/load closures
+    // are cloned (Arc) into every batch; with concurrent_batches the batches
+    // interleave store/load for the same statement name (e.g.
+    // get_columns_in_relation) and collide with MacroResultAlreadyLoadedError.
+    reset_result_store(&mut ctx_for_batch);
+
     if !mb_unit.batch_ctx.is_first() || mb_unit.is_incremental {
         ctx_for_batch.insert(
             "is_incremental".to_string(),

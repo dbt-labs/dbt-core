@@ -164,3 +164,56 @@ impl ResultStore {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use minijinja::value::Kwargs;
+
+    fn store_named(store: &ResultStore, name: &str) -> Result<Value, minijinja::Error> {
+        let store_raw = store.store_raw_result();
+        store_raw(&[Value::from(Kwargs::from_iter([(
+            "name",
+            Value::from(name),
+        )]))])
+    }
+
+    fn load_named(store: &ResultStore, name: &str) -> Result<Value, minijinja::Error> {
+        let load = store.load_result();
+        load(&[Value::from(name)])
+    }
+
+    /// The `statement(...)` macro pattern stores a named result and then loads
+    /// (consumes) it. Two microbatch batches that share one registry interleave
+    /// as store(A)/store(B)/load(A)/load(B); B's load then sees the consumed
+    /// sentinel and raises `MacroResultAlreadyLoadedError`. This reproduces the
+    /// `concurrent_batches=true` microbatch bug (fs#11019 follow-up), where the
+    /// collision is on `get_columns_in_relation` (Postgres) or
+    /// `run_query_statement` (Snowflake).
+    #[test]
+    fn shared_result_store_collides_across_batches() {
+        let shared = ResultStore::default();
+        store_named(&shared, "get_columns_in_relation").unwrap(); // batch A stores
+        store_named(&shared, "get_columns_in_relation").unwrap(); // batch B overwrites
+        load_named(&shared, "get_columns_in_relation").unwrap(); // batch A consumes
+        let err = load_named(&shared, "get_columns_in_relation").unwrap_err(); // batch B
+        assert_eq!(
+            err.kind(),
+            minijinja::ErrorKind::MacroResultAlreadyLoadedError
+        );
+    }
+
+    /// The fix gives each batch its own `ResultStore` (see
+    /// `reset_result_store`), so the same interleaving no longer collides.
+    #[test]
+    fn isolated_result_stores_do_not_collide_across_batches() {
+        let batch_a = ResultStore::default();
+        let batch_b = ResultStore::default();
+        store_named(&batch_a, "get_columns_in_relation").unwrap();
+        store_named(&batch_b, "get_columns_in_relation").unwrap();
+        load_named(&batch_a, "get_columns_in_relation").unwrap();
+        // batch B loads its own (still-present) result, not A's consumed one.
+        let v = load_named(&batch_b, "get_columns_in_relation").unwrap();
+        assert!(!v.is_none());
+    }
+}

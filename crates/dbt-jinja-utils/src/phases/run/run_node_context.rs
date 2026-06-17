@@ -231,6 +231,37 @@ pub fn extend_base_context_stateful_fn(
     );
 }
 
+/// Replace the statement-result-store closures (`store_result`/`load_result`/
+/// `store_raw_result`) in an existing run context with a fresh, isolated
+/// [`ResultStore`].
+///
+/// `build_run_node_context` bakes a single `ResultStore` into the context. That
+/// store is fine when a context is used once, but microbatch builds the context
+/// once per model and clones it for every batch (the closure `Value`s clone the
+/// store's `Arc`, so all batches share one statement registry). With
+/// `concurrent_batches = true` the batches run on separate threads and interleave
+/// `store`/`load` calls for the same statement name (e.g. `get_columns_in_relation`,
+/// or `run_query_statement` on Snowflake), so a batch can `load` a result a peer
+/// already consumed and hit `MacroResultAlreadyLoadedError`.
+///
+/// Calling this on each per-batch context gives every batch its own registry,
+/// mirroring dbt-core where each batch runner builds its own model context.
+pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
+    let result_store = ResultStore::default();
+    context.insert(
+        "store_result".to_owned(),
+        MinijinjaValue::from_function(result_store.store_result()),
+    );
+    context.insert(
+        "load_result".to_owned(),
+        MinijinjaValue::from_function(result_store.load_result()),
+    );
+    context.insert(
+        "store_raw_result".to_owned(),
+        MinijinjaValue::from_function(result_store.store_raw_result()),
+    );
+}
+
 /// Build a run context - parent function that orchestrates the context building
 #[allow(clippy::too_many_arguments)]
 pub fn build_run_node_context<S: Serialize>(
