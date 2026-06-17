@@ -1551,10 +1551,9 @@ pub struct ManifestExposureNodeBaseAttributes {
     #[serde(default)]
     pub metrics: Vec<Vec<String>>,
     #[serde(default)]
-    pub created_at: Option<f64>,
+    pub created_at: f64,
 }
 
-#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestExposure {
@@ -1595,7 +1594,7 @@ impl From<DbtExposure> for ManifestExposure {
                 sources: exposure.__base_attr__.sources,
                 metrics: exposure.__base_attr__.metrics,
                 unrendered_config: exposure.__exposure_attr__.unrendered_config,
-                created_at: None,
+                created_at: exposure.__exposure_attr__.created_at,
             },
             owner: exposure.__exposure_attr__.owner,
             label: exposure.__exposure_attr__.label,

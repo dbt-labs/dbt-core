@@ -4674,7 +4674,8 @@ pub struct DbtExposureAttr {
     pub type_: ExposureType,
     pub url: Option<String>,
     pub unrendered_config: BTreeMap<String, YmlValue>,
-    pub created_at: Option<f64>,
+    #[serde(default)]
+    pub created_at: f64,
 }
 
 #[skip_serializing_none]

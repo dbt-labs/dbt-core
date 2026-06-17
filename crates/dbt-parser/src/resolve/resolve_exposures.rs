@@ -210,7 +210,7 @@ pub async fn resolve_exposures(
                     type_: exposure.type_.clone(),
                     url: exposure.url,
                     unrendered_config,
-                    created_at: Default::default(),
+                    created_at: chrono::Utc::now().timestamp() as f64,
                 },
                 deprecated_config: exposure_properties_config.into(),
             };
