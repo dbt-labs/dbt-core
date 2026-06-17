@@ -1008,6 +1008,7 @@ pub async fn resolve_inner(
         token,
         jinja_type_checking_event_listener_factory.clone(),
         &nodes.models,
+        &disabled_nodes.models,
     )
     .await?;
     nodes.tests.extend(data_tests);

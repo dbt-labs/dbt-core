@@ -805,6 +805,17 @@ pub async fn resolve_models(
             }
             ModelStatus::Disabled => {
                 disabled_models.insert(unique_id.to_owned(), Arc::new(dbt_model));
+                if !arg.skip_creating_generic_tests {
+                    properties.as_testable().persist(
+                        package_name,
+                        &root_package.dbt_project.name,
+                        collected_generic_tests,
+                        test_name_truncations,
+                        adapter_type,
+                        &arg.io,
+                        patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                    )?;
+                }
             }
             ModelStatus::ParsingFailed => {}
         }

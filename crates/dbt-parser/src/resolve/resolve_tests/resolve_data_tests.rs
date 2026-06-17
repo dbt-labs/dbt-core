@@ -262,6 +262,7 @@ pub async fn resolve_data_tests(
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     models: &BTreeMap<String, Arc<DbtModel>>,
+    disabled_models: &BTreeMap<String, Arc<DbtModel>>,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
@@ -675,18 +676,31 @@ pub async fn resolve_data_tests(
             build_data_test_raw_code(inferred_test_metadata, components.alias.clone())
         };
 
-        match status {
-            ModelStatus::Enabled => {
-                if sql_file_info.execute {
-                    nodes_with_execute.insert(unique_id.to_owned(), dbt_test);
-                } else {
-                    nodes.insert(unique_id, Arc::new(dbt_test));
+        let parent_is_disabled = dbt_test
+            .__test_attr__
+            .attached_node
+            .as_deref()
+            .is_some_and(|id| disabled_models.contains_key(id));
+
+        // match core behavior: store tests for disabled models in nodes (not disabled_nodes) with enabled = false
+        if parent_is_disabled {
+            dbt_test.__base_attr__.enabled = false;
+            dbt_test.deprecated_config.enabled = Some(false);
+            nodes.insert(unique_id, Arc::new(dbt_test));
+        } else {
+            match status {
+                ModelStatus::Enabled => {
+                    if sql_file_info.execute {
+                        nodes_with_execute.insert(unique_id.to_owned(), dbt_test);
+                    } else {
+                        nodes.insert(unique_id, Arc::new(dbt_test));
+                    }
                 }
+                ModelStatus::Disabled => {
+                    disabled_tests.insert(unique_id, Arc::new(dbt_test));
+                }
+                ModelStatus::ParsingFailed => {}
             }
-            ModelStatus::Disabled => {
-                disabled_tests.insert(unique_id, Arc::new(dbt_test));
-            }
-            ModelStatus::ParsingFailed => {}
         }
     }
 

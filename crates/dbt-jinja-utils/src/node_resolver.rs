@@ -850,6 +850,13 @@ pub fn resolve_dependencies(
 
         let node_base = node.base_mut();
 
+        // Skip nodes already marked disabled (e.g. tests on disabled models).
+        // Their deps are irrelevant — they can never run — and resolving them
+        // would produce spurious NodeNotFoundOrDisabled warnings.
+        if !node_base.enabled {
+            continue;
+        }
+
         let mut has_disabled_or_missing_dependency = false;
 
         // Check refs
