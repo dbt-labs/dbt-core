@@ -191,6 +191,12 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 other.as_str()
             ),
         )),
+        (AdapterType::Databricks, V2CatalogType::Horizon) => Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Catalog '{catalog_name}' is a Horizon catalog accessed via Databricks catalog federation, which is read-only. Models cannot be materialized against it."
+            ),
+        )),
         (AdapterType::Databricks, other) => Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             format!(
@@ -1444,6 +1450,39 @@ catalogs:
                     .get("target_file_size")
                     .map(|s| s.as_str()),
                 Some("32MB")
+            );
+        }
+    }
+
+    #[test]
+    fn databricks_rejects_horizon_catalog_materialization() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: SF_HORIZON
+    type: horizon
+    table_format: iceberg
+    config:
+      databricks:
+        catalog_database: "MY_FOREIGN_CATALOG"
+"#,
+        );
+        let conf = json!({ "catalog_name": "SF_HORIZON" });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let err = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap_err();
+            assert!(
+                format!("{err}").contains("read-only"),
+                "unexpected error: {err}"
             );
         }
     }

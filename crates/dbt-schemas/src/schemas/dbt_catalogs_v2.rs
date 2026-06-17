@@ -120,6 +120,11 @@ const HORIZON_SNOWFLAKE_FIELDS: &[FieldSpec] = &[
         .doc("Catalog '{}' horizon/snowflake base_location_subpath is model-config only and may not be specified in catalogs.yml"),
 ];
 
+const HORIZON_DATABRICKS_FIELDS: &[FieldSpec] = &[FieldSpec::string("catalog_database")
+    .required()
+    .non_empty()
+    .doc("Name of the Databricks database linked to the external Horizon catalog.")];
+
 const LINKED_SNOWFLAKE_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("catalog_database")
         .required()
@@ -223,9 +228,12 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         type_name: "horizon",
         table_format: "iceberg",
-        description: "Snowflake-managed Iceberg catalog (Horizon). Snowflake platform only.",
-        presence: ConfigPresence::AllRequired,
-        platforms: &[PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS)],
+        description: "Snowflake-managed Iceberg catalog (Horizon). Supports config.snowflake and/or config.databricks.",
+        presence: ConfigPresence::AtLeastOne,
+        platforms: &[
+            PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
+            PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
+        ],
     },
     CatalogTypeSchema {
         type_name: "glue",
@@ -2425,5 +2433,115 @@ catalogs:
                 );
             }
         }
+    }
+
+    // ===== Catalog federation tests =====
+
+    #[test]
+    fn horizon_databricks_only_valid() {
+        let yaml = r#"
+catalogs:
+  - name: dbx_horizon
+    type: horizon
+    table_format: iceberg
+    config:
+      databricks:
+        catalog_database: "MY_FOREIGN_CATALOG"
+"#;
+        parse_and_validate(yaml).expect("horizon with databricks-only block should validate");
+    }
+
+    #[test]
+    fn horizon_snowflake_and_databricks_valid() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_both
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: my_external_volume
+      databricks:
+        catalog_database: "MY_FOREIGN_CATALOG"
+"#;
+        parse_and_validate(yaml).expect("horizon with both platform blocks should validate");
+    }
+
+    #[test]
+    fn horizon_requires_at_least_one_platform_block() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_empty
+    type: horizon
+    table_format: iceberg
+    config: {}
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("requires at least one config block"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn horizon_databricks_requires_catalog_database() {
+        let yaml = r#"
+catalogs:
+  - name: dbx_horizon
+    type: horizon
+    table_format: iceberg
+    config:
+      databricks: {}
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("requires 'catalog_database'"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn horizon_databricks_rejects_empty_catalog_database() {
+        let yaml = r#"
+catalogs:
+  - name: dbx_horizon
+    type: horizon
+    table_format: iceberg
+    config:
+      databricks:
+        catalog_database: "   "
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("'catalog_database' must be non-empty"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn horizon_databricks_rejects_unknown_key() {
+        let yaml = r#"
+catalogs:
+  - name: dbx_horizon
+    type: horizon
+    table_format: iceberg
+    config:
+      databricks:
+        catalog_database: "MY_CATALOG"
+        file_format: delta
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("Unknown key 'file_format'"),
+            "unexpected error: {msg}"
+        );
     }
 }
