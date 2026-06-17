@@ -215,10 +215,12 @@ impl Db {
         let mut database = db_builder.build(&mut driver)?;
         let connection = database.new_connection()?;
 
-        Ok(Self {
+        let mut db = Self {
             shared_database: Arc::new(Mutex::new(database)),
             connection,
-        })
+        };
+        db.disable_checkpoint()?;
+        Ok(db)
     }
 
     /// Create a new read-only connection to the **same** DuckDB database.
