@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use dbt_platform_auth::AuthChainBuilder;
+use dbt_platform_auth::AuthChain;
 use dbt_state::auth::{BrowserFlow, OAuthTokenSource, TokenStore};
 use dbt_state::service_config::{DEFAULT_OAUTH_AUTH_URL, RunCacheServiceConfig};
 use jsonwebtoken::{EncodingKey, Header, encode};
@@ -88,7 +88,7 @@ async fn browser_flow_end_to_end_writes_token_to_disk_with_600_perms() {
     // Empty chain so AuthChain::resolve() deterministically returns
     // NotAuthenticated and the test exercises the browser flow instead of
     // whatever platform credentials may be present on the host/CI.
-    let auth_chain = AuthChainBuilder::with_resolvers(vec![]).build();
+    let auth_chain = AuthChain::new(vec![]);
     let source = OAuthTokenSource::with_components(&config, store, flow, auth_chain).unwrap();
     let token = source.token().await.unwrap();
     assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");

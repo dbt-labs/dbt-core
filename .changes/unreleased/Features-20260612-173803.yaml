@@ -1,0 +1,7 @@
+kind: Features
+body: Allow the source application identifier sent during OAuth login to be configured via AuthChainBuilder or the DBT_OAUTH_SOURCE_APP environment variable
+time: 2026-06-12T17:38:03.311427-06:00
+custom:
+    author: kendru
+    issue: ""
+    project: dbt-fusion

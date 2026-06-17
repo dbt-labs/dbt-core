@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::sync::Mutex;
 
-use dbt_platform_auth::{AuthChain, AuthError, Credential};
+use dbt_platform_auth::{AuthChain, AuthChainBuilder, AuthError, Credential, OAUTH_CLIENT_ID};
 
 use crate::auth::browser_flow::{
     BrowserFlow, INTERACTIVE_TIMEOUT, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, TokenResponse,
@@ -93,7 +93,7 @@ impl OAuthTokenSource {
             cached: Arc::new(Mutex::new(None)),
             disk_loaded: Arc::new(AtomicBool::new(false)),
             interactive_flow,
-            auth_chain: AuthChain::default(),
+            auth_chain: AuthChainBuilder::new(OAUTH_CLIENT_ID).build(),
         })
     }
 
@@ -405,7 +405,6 @@ mod tests {
     use super::*;
     use crate::service_config::DEFAULT_OAUTH_AUTH_URL;
     use async_trait::async_trait;
-    use dbt_platform_auth::AuthChainBuilder;
     use dbt_platform_auth::resolver::{AuthResolver, EnvVarResolver};
     use jsonwebtoken::{EncodingKey, Header, encode};
     use serde::Serialize;
@@ -419,14 +418,14 @@ mod tests {
     /// interactive-flow or disk-cache paths and must not be influenced by the
     /// test process's env vars or `~/.dbt/*` files.
     fn empty_auth_chain() -> AuthChain {
-        AuthChainBuilder::with_resolvers(vec![]).build()
+        AuthChain::new(vec![])
     }
 
     /// Builds an `AuthChain` containing only `EnvVarResolver`. Pair with a
     /// `DbtCloudEnvGuard` so the env vars consumed by the resolver are scoped
     /// to the test.
     fn env_var_auth_chain() -> AuthChain {
-        AuthChainBuilder::with_resolvers(vec![AuthResolver::EnvVar(EnvVarResolver)]).build()
+        AuthChain::new(vec![AuthResolver::EnvVar(EnvVarResolver)])
     }
 
     /// Serializes any test that mutates `DBT_CLOUD_*` env vars.

@@ -1,16 +1,21 @@
-// Demonstrates AuthChain::interactive(), which extends the default non-interactive
-// chain with a browser-based OAuth login as a final fallback.
+// Demonstrates building an interactive AuthChain via AuthChainBuilder.
 //
 // Resolution order:
 //   1. EnvVarResolver       — env vars
 //   2. OAuthPassiveResolver — ~/.dbt/oauth_sessions.json (cached session or refresh)
 //   3. CloudYamlResolver    — dbt_cloud.yml
-//   4. OAuthInteractiveResolver — browser-based login (not yet implemented)
-use dbt_platform_auth::{AuthChain, AuthError, Credential};
+//   4. OAuthInteractiveResolver — browser-based login
+use dbt_platform_auth::{AuthChainBuilder, AuthError, Credential, OAUTH_CLIENT_ID};
 
 #[tokio::main]
 async fn main() {
-    match AuthChain::interactive().resolve().await {
+    match AuthChainBuilder::new(OAUTH_CLIENT_ID)
+        .source_application("core_v2")
+        .interactive()
+        .build()
+        .resolve()
+        .await
+    {
         Ok(cred) => {
             let kind = match &cred {
                 Credential::ServiceToken { .. } => "ServiceToken",

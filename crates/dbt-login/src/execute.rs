@@ -145,8 +145,11 @@ pub async fn execute_login(
     let env_scopes = std::env::var("DBT_OAUTH_SCOPES").ok();
     let requested_scopes = interactive_login_scopes(OAUTH_SCOPES, env_scopes.as_deref());
 
+    let source_app = std::env::var("DBT_OAUTH_SOURCE_APP").unwrap_or_else(|_| "core_v2".to_owned());
+
     let platform_resolver = OAuthInteractiveResolver::builder(OAUTH_CLIENT_ID)
         .scopes(requested_scopes)
+        .source_application(source_app)
         .opener(platform_opener)
         .abort_signal(platform_abort_rx)
         .build();

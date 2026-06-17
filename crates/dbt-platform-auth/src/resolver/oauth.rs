@@ -234,6 +234,7 @@ pub struct OAuthInteractiveResolver {
     redirect_port: u16,
     register_url: String,
     scopes: String,
+    source_application: Option<String>,
     http: reqwest::Client,
     cache_path: Option<PathBuf>,
     // Wrapped in Mutex so resolve() can take the receiver with &self.
@@ -307,7 +308,6 @@ impl OAuthInteractiveResolver {
         let pkce = generate_pkce();
         let state = generate_state();
 
-        let src = std::env::var("DBT_SOURCE_APPLICATION").unwrap_or_else(|_| "core_v2".to_string());
         let auth_url = build_register_url(
             &self.register_url,
             &redirect_uri,
@@ -315,7 +315,7 @@ impl OAuthInteractiveResolver {
             &effective_scopes,
             &state,
             &pkce.challenge,
-            &src,
+            self.source_application.as_deref(),
         )?;
 
         (self.opener)(&auth_url);
@@ -386,6 +386,7 @@ pub struct OAuthInteractiveResolverBuilder {
     redirect_port: Option<u16>,
     register_url: Option<String>,
     scopes: Option<String>,
+    source_application: Option<String>,
     http: Option<reqwest::Client>,
     cache_path: Option<PathBuf>,
     abort_signal: Option<tokio::sync::oneshot::Receiver<()>>,
@@ -400,6 +401,7 @@ impl OAuthInteractiveResolverBuilder {
             redirect_port: None,
             register_url: None,
             scopes: None,
+            source_application: None,
             http: None,
             cache_path: None,
             abort_signal: None,
@@ -428,6 +430,13 @@ impl OAuthInteractiveResolverBuilder {
 
     pub fn scopes(mut self, v: impl Into<String>) -> Self {
         self.scopes = Some(v.into());
+        self
+    }
+
+    /// Set the `_dbtsrc` query parameter sent with the authorization URL to
+    /// identify the application initiating the login flow.
+    pub fn source_application(mut self, v: impl Into<String>) -> Self {
+        self.source_application = Some(v.into());
         self
     }
 
@@ -464,6 +473,7 @@ impl OAuthInteractiveResolverBuilder {
             redirect_port: self.redirect_port.unwrap_or(LOOPBACK_PORT),
             register_url,
             scopes: self.scopes.unwrap_or_else(|| OAUTH_SCOPES.to_owned()),
+            source_application: self.source_application,
             http: self.http.unwrap_or_default(),
             cache_path: self.cache_path,
             abort_signal: std::sync::Mutex::new(self.abort_signal),
@@ -530,7 +540,7 @@ fn build_register_url(
     scope: &str,
     state: &str,
     code_challenge: &str,
-    src: &str,
+    source_application: Option<&str>,
 ) -> Result<String, AuthError> {
     let mut url = Url::parse(base)
         .map_err(|e| AuthError::Interactive(format!("invalid register URL '{base}': {e}")))?;
@@ -541,8 +551,10 @@ fn build_register_url(
         .append_pair("state", state)
         .append_pair("scope", scope)
         .append_pair("response_type", "code")
-        .append_pair("code_challenge_method", "S256")
-        .append_pair("_dbtsrc", src);
+        .append_pair("code_challenge_method", "S256");
+    if let Some(src) = source_application {
+        url.query_pairs_mut().append_pair("_dbtsrc", src);
+    }
     Ok(url.to_string())
 }
 
@@ -1390,7 +1402,7 @@ mod tests {
             "account:read offline_access",
             "state-abc",
             "challenge-xyz",
-            "core_v2",
+            None,
         )
         .unwrap();
         let parsed = Url::parse(&url).unwrap();
@@ -1413,11 +1425,11 @@ mod tests {
             Some("S256")
         );
         assert_eq!(pairs.get("response_type").map(String::as_str), Some("code"));
-        assert_eq!(pairs.get("_dbtsrc").map(String::as_str), Some("core_v2"));
+        assert!(!pairs.contains_key("_dbtsrc"));
     }
 
     #[test]
-    fn register_url_uses_provided_src() {
+    fn register_url_includes_dbtsrc_when_source_application_set() {
         let url = build_register_url(
             REGISTER_URL,
             "http://localhost:29527/",
@@ -1425,12 +1437,12 @@ mod tests {
             "account:read offline_access",
             "state-abc",
             "challenge-xyz",
-            "vsce",
+            Some("core_v2"),
         )
         .unwrap();
         let parsed = Url::parse(&url).unwrap();
         let pairs: HashMap<_, _> = parsed.query_pairs().into_owned().collect();
-        assert_eq!(pairs.get("_dbtsrc").map(String::as_str), Some("vsce"));
+        assert_eq!(pairs.get("_dbtsrc").map(String::as_str), Some("core_v2"));
     }
 
     #[test]
