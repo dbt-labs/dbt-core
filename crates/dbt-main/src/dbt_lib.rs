@@ -1415,6 +1415,21 @@ async fn run_docs_serve(
         .unwrap_or_else(|| std::path::PathBuf::from("./target"));
     let metadata_dir = target.join("metadata");
 
+    if !index_dir.exists() && !metadata_dir.exists() {
+        emit_error_log_message(
+            ErrorCode::Generic,
+            format!(
+                "dbt docs serve: no data to serve\n\n\
+                 Index directory not found: {}\n\
+                 Run `dbt --write-index <run|build|compile>` to generate parquet artifacts,\n\
+                 or pass `--target-path <DIR>` pointing at a directory whose `index/` subdirectory contains them.",
+                index_dir.display(),
+            ),
+            status_reporter,
+        );
+        return Err(FsError::exit_with_status(1));
+    }
+
     if let Some(md) = metadata_dir.exists().then_some(metadata_dir.as_path()) {
         if md.exists() {
             let mut state = IngestState::default();
@@ -1428,10 +1443,17 @@ async fn run_docs_serve(
         }
     }
 
-    let backend: Arc<dyn Backend> = Arc::new(
-        DuckDbViewsBackend::open(&index_dir)
-            .map_err(|e| dbt_common::fs_err!(ErrorCode::Generic, "{e}"))?,
-    );
+    let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
+        Ok(b) => b,
+        Err(err) => {
+            emit_error_log_message(
+                ErrorCode::Generic,
+                format!("dbt docs serve: {err}"),
+                status_reporter,
+            );
+            return Err(FsError::exit_with_status(1));
+        }
+    });
     let providers = (feature_stack.index.providers_factory)(backend);
 
     dbt_docs_server::run_with_args(Arc::new(args), providers)
