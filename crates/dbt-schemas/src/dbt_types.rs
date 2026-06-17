@@ -46,18 +46,25 @@ impl RelationType {
                 _ => panic!("unknown table type: {type_string}"),
             },
             // https://docs.databricks.com/aws/en/sql/language-manual/information-schema/tables#table-types
-            AdapterType::Databricks | AdapterType::Spark => {
-                match type_string.to_uppercase().as_str() {
-                    "TABLE" => RelationType::Table,
-                    "VIEW" => RelationType::View,
-                    "MATERIALIZED_VIEW" => RelationType::MaterializedView,
-                    "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
-                    "STREAMING_TABLE" => RelationType::StreamingTable,
-                    "METRIC_VIEW" => RelationType::MetricView,
-                    "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
-                    _ => panic!("unknown table type: {type_string}"),
-                }
-            }
+            AdapterType::Databricks => match type_string.to_uppercase().as_str() {
+                "TABLE" => RelationType::Table,
+                "VIEW" => RelationType::View,
+                "MATERIALIZED_VIEW" => RelationType::MaterializedView,
+                "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
+                "STREAMING_TABLE" => RelationType::StreamingTable,
+                "METRIC_VIEW" => RelationType::MetricView,
+                "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
+                _ => panic!("unknown table type: {type_string}"),
+            },
+            AdapterType::Spark => match type_string.to_uppercase().as_str() {
+                // These are the only table types Apache Spark's catalog reports
+                // (`CatalogTableType`) via `DESCRIBE TABLE EXTENDED`, identical over
+                // Thrift/Livy/Spark Connect: MANAGED, EXTERNAL, VIEW (released 3.5/4.0)
+                // https://github.com/apache/spark/blob/f0bb2e6a47d0ebda424ffd633fcea8644a597954/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/catalog/interface.scala#L1039
+                "MANAGED" | "EXTERNAL" => RelationType::Table,
+                "VIEW" => RelationType::View,
+                _ => panic!("unknown table type: {type_string}"),
+            },
             _ => RelationType::from(type_string),
         }
     }
@@ -99,5 +106,54 @@ impl From<&str> for RelationType {
             "function" => RelationType::Function,
             _ => panic!("Invalid relation type: {s}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spark_real_types_resolve_to_table_or_view() {
+        // Apache Spark's catalog table types (released 3.5/4.0): MANAGED, EXTERNAL,
+        // VIEW. MANAGED/EXTERNAL are tables (Spark 4 reports managed Hive tables as
+        // EXTERNAL via TRANSLATED_TO_EXTERNAL); VIEW is a view. All render to valid
+        // `drop table` / `drop view` (the bug was EXTERNAL -> `drop external`).
+        for t in ["EXTERNAL", "external", "MANAGED"] {
+            let rt = RelationType::from_adapter_type(AdapterType::Spark, t);
+            assert_eq!(rt, RelationType::Table, "Spark {t} should resolve to Table");
+            assert_eq!(rt.to_string(), "table");
+        }
+
+        let rt = RelationType::from_adapter_type(AdapterType::Spark, "VIEW");
+        assert_eq!(rt, RelationType::View, "Spark VIEW should resolve to View");
+        assert_eq!(rt.to_string(), "view");
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown table type")]
+    fn spark_rejects_non_spark_relation_types() {
+        // Databricks/Unity-Catalog-only types (FOREIGN, STREAMING_TABLE,
+        // *_SHALLOW_CLONE) cannot come from an Apache Spark catalog, so the Spark
+        // arm rejects them rather than silently coercing.
+        RelationType::from_adapter_type(AdapterType::Spark, "FOREIGN");
+    }
+
+    #[test]
+    fn databricks_external_still_resolves_to_external() {
+        // Databricks behavior is unchanged: EXTERNAL stays External, FOREIGN stays
+        // External, MANAGED is a table.
+        assert_eq!(
+            RelationType::from_adapter_type(AdapterType::Databricks, "EXTERNAL"),
+            RelationType::External
+        );
+        assert_eq!(
+            RelationType::from_adapter_type(AdapterType::Databricks, "FOREIGN"),
+            RelationType::External
+        );
+        assert_eq!(
+            RelationType::from_adapter_type(AdapterType::Databricks, "MANAGED"),
+            RelationType::Table
+        );
     }
 }
