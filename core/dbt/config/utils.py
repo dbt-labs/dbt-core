@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, Tuple
 
 from dbt import deprecations
 from dbt.clients import yaml_helper
@@ -80,9 +80,9 @@ def normalize_warn_error_options(warn_error_options: Dict[str, Any]) -> None:
             warn_error_options[key] = []
 
 
-def extract_fusion_only_warn_error_options(
+def partition_warn_error_options(
     warn_error_options: Dict[str, Any], valid_error_names: Set[str]
-) -> Set[str]:
+) -> Tuple[Set[str], Dict[str, Any]]:
 
     fusion_only_vocab = FUSION_WARN_ERROR_OPTION_NAMES - valid_error_names
 
@@ -90,27 +90,29 @@ def extract_fusion_only_warn_error_options(
         return isinstance(name, str) and name in fusion_only_vocab
 
     fusion_only_names: Set[str] = set()
+    core_fusion_warn_error_options = dict(warn_error_options)
     for key in ("error", "warn", "silence"):
         names = warn_error_options.get(key)
         if isinstance(names, list):
             fusion_only_names.update(filter(is_fusion_only, names))
-            warn_error_options[key] = [n for n in names if not is_fusion_only(n)]
-    return fusion_only_names
+            core_fusion_warn_error_options[key] = [n for n in names if not is_fusion_only(n)]
+    return fusion_only_names, core_fusion_warn_error_options
 
 
 def build_warn_error_options_v2(
     warn_error_options: Dict[str, Any], valid_error_names: Set[str]
 ) -> WarnErrorOptionsV2:
-    for name in sorted(
-        extract_fusion_only_warn_error_options(warn_error_options, valid_error_names)
-    ):
+    fusion_only_names, core_fusion_warn_error_options = partition_warn_error_options(
+        warn_error_options, valid_error_names
+    )
+    for name in sorted(fusion_only_names):
         fire_event(
             Note(msg=f"{name} is not being used because it's specific to the dbt Fusion engine.")
         )
 
     return WarnErrorOptionsV2(
-        error=warn_error_options.get("error", []),
-        warn=warn_error_options.get("warn", []),
-        silence=warn_error_options.get("silence", []),
+        error=core_fusion_warn_error_options.get("error", []),
+        warn=core_fusion_warn_error_options.get("warn", []),
+        silence=core_fusion_warn_error_options.get("silence", []),
         valid_error_names=valid_error_names,
     )

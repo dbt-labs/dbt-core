@@ -5,10 +5,7 @@ from click import Option
 
 from dbt.cli.flags import convert_config
 from dbt.cli.option_types import WarnErrorOptionsType
-from dbt.config.utils import (
-    build_warn_error_options_v2,
-    extract_fusion_only_warn_error_options,
-)
+from dbt.config.utils import build_warn_error_options_v2, partition_warn_error_options
 from dbt.events import ALL_EVENT_NAMES
 from dbt.events.fusion_warn_error_options import FUSION_WARN_ERROR_OPTION_NAMES
 from dbt_common.dataclass_schema import ValidationError
@@ -35,28 +32,32 @@ def _fusion_messages(catcher: EventCatcher) -> Set[str]:
     return {e.data.msg for e in catcher.caught_events if e.data.msg.endswith(suffix)}
 
 
-class TestExtractFusionOnlyWarnErrorOptions:
+class TestPartitionWarnErrorOptions:
     def test_strips_fusion_only_keeps_core_and_typos(self) -> None:
         weo = {
             "error": [SHARED_NAME, FUSION_CODE, FUSION_GROUP, "TotallyBogus"],
             "warn": [],
             "silence": ["DbtYamlValidationError"],
         }
-        removed = extract_fusion_only_warn_error_options(weo, ALL_EVENT_NAMES)
+        fusion_names, core_fusion_names = partition_warn_error_options(weo, ALL_EVENT_NAMES)
 
-        assert removed == {FUSION_CODE, FUSION_GROUP, "DbtYamlValidationError"}
-        assert weo["error"] == [SHARED_NAME, "TotallyBogus"]
-        assert weo["silence"] == []
+        assert fusion_names == {FUSION_CODE, FUSION_GROUP, "DbtYamlValidationError"}
+        assert core_fusion_names["error"] == [SHARED_NAME, "TotallyBogus"]
+        assert core_fusion_names["silence"] == []
+        # original dict is not mutated
+        assert weo["error"] == [SHARED_NAME, FUSION_CODE, FUSION_GROUP, "TotallyBogus"]
 
     def test_noop_when_no_fusion_names(self) -> None:
         weo = {"error": [SHARED_NAME], "warn": [], "silence": []}
-        assert extract_fusion_only_warn_error_options(weo, ALL_EVENT_NAMES) == set()
-        assert weo["error"] == [SHARED_NAME]
+        fusion_names, core_fusion_names = partition_warn_error_options(weo, ALL_EVENT_NAMES)
+        assert fusion_names == set()
+        assert core_fusion_names["error"] == [SHARED_NAME]
 
     def test_handles_missing_and_non_list_keys(self) -> None:
         weo = {"error": "all"}  # "all" is a str, not a list
-        assert extract_fusion_only_warn_error_options(weo, ALL_EVENT_NAMES) == set()
-        assert weo["error"] == "all"
+        fusion_names, core_fusion_names = partition_warn_error_options(weo, ALL_EVENT_NAMES)
+        assert fusion_names == set()
+        assert core_fusion_names["error"] == "all"
 
 
 class TestBuildWarnErrorOptionsV2:
