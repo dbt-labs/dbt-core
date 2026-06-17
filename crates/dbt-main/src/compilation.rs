@@ -1652,6 +1652,24 @@ impl DbtProjectCompilation {
         )?;
         token.check_cancellation()?;
 
+        if adapter.engine().has_query_cache() {
+            let reverse_deps =
+                // This is only true for the LSP currently.
+                // The reason why is because the LSP
+                // needs to have context of the entire project
+                // even when it schedules a select few nodes.
+                // This effectively gives context of the entire project.
+                if self.loaded_project().config().use_resolver_state_deps {
+                    self.resolved_state().create_reverse_deps()
+                } else {
+                    reverse(&schedule.deps)
+                };
+            adapter
+                .engine()
+                .set_query_cache_reverse_deps(reverse_deps)?;
+        }
+        token.check_cancellation()?;
+
         // FEATURES: render
         // Configure jinja env early (no node_resolver clone yet).
         // build_compiler_env is called AFTER Phase 2 defer to avoid Arc refcount issues.
@@ -1764,12 +1782,6 @@ impl DbtProjectCompilation {
         }
 
         let base_context = build_base_context(&resolved_state, &jinja_env);
-        if adapter.engine().has_query_cache() {
-            let reverse_deps = reverse(&schedule.deps);
-            adapter
-                .engine()
-                .set_query_cache_reverse_deps(reverse_deps)?;
-        }
         token.check_cancellation()?;
 
         render_all_model_constraint_refs_in_place(&mut resolved_state, &jinja_env, &base_context)?;
