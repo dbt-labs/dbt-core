@@ -83,48 +83,24 @@ def normalize_warn_error_options(warn_error_options: Dict[str, Any]) -> None:
 def extract_fusion_only_warn_error_options(
     warn_error_options: Dict[str, Any], valid_error_names: Set[str]
 ) -> Set[str]:
-    """Remove dbt Fusion-only warning names from error/warn/silence, in place.
 
-    A name is considered Fusion-only when it is recognized by the dbt Fusion
-    engine (``FUSION_WARN_ERROR_OPTION_NAMES``) but is *not* a valid dbt-core
-    event name. Such names are meaningless to dbt-core, so we strip them here
-    -- rather than letting ``WarnErrorOptionsV2`` reject them -- which lets a
-    project share ``warn_error_options`` between Fusion and Core. Names that are
-    valid dbt-core events (including the few that coincide with Fusion error
-    codes) are left untouched, and genuinely unknown names are left in place so
-    ``WarnErrorOptionsV2`` still raises on typos.
+    fusion_only_vocab = FUSION_WARN_ERROR_OPTION_NAMES - valid_error_names
 
-    Returns the set of Fusion-only names that were removed.
-    """
-    removed: Set[str] = set()
+    def is_fusion_only(name: Any) -> bool:
+        return isinstance(name, str) and name in fusion_only_vocab
+
+    fusion_only_names: Set[str] = set()
     for key in ("error", "warn", "silence"):
-        value = warn_error_options.get(key)
-        if not isinstance(value, list):
-            continue
-        kept = []
-        for name in value:
-            if (
-                isinstance(name, str)
-                and name in FUSION_WARN_ERROR_OPTION_NAMES
-                and name not in valid_error_names
-            ):
-                removed.add(name)
-            else:
-                kept.append(name)
-        warn_error_options[key] = kept
-    return removed
+        names = warn_error_options.get(key)
+        if isinstance(names, list):
+            fusion_only_names.update(filter(is_fusion_only, names))
+            warn_error_options[key] = [n for n in names if not is_fusion_only(n)]
+    return fusion_only_names
 
 
 def build_warn_error_options_v2(
     warn_error_options: Dict[str, Any], valid_error_names: Set[str]
 ) -> WarnErrorOptionsV2:
-    """Build a ``WarnErrorOptionsV2``, tolerating dbt Fusion-only warning names.
-
-    Fusion-only names are stripped and reported with a note (rather than raising)
-    so that configuration shared with the dbt Fusion engine still runs under
-    dbt-core. ``warn_error_options`` is expected to have already been passed
-    through ``normalize_warn_error_options``.
-    """
     for name in sorted(
         extract_fusion_only_warn_error_options(warn_error_options, valid_error_names)
     ):
