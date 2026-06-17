@@ -7,7 +7,8 @@ reload/shutdown handling, and serialization/export.
 
 This crate is not anonymous product-usage telemetry and is not a product
 analytics client. It does not define an application's event taxonomy; callers
-provide concrete event types, Arrow schemas, and registry lookup behavior.
+provide concrete event types, Arrow schemas, and registry lookup behavior for
+dynamic attributes.
 
 ## Architecture
 
@@ -88,9 +89,10 @@ than the raw layer API provides:
 
 ## Core Concepts
 
-- `AnyTelemetryEvent`, `StaticTelemetryEvent`, and
-  `ArrowSerializableTelemetryEvent` define the object-safe and typed event
-  boundaries used by records and serializers.
+- `AnyTelemetryEvent`, `StaticTelemetryEvent`,
+  `ArrowSerializableTelemetryEvent`, `ArrowRegistryLookup`, and
+  `JsonRegistryLookup` define the object-safe and typed event boundaries used
+  by records and serializers.
 - `TelemetryAttributes` wraps concrete typed events for transport through the
   tracing pipeline.
 - `TelemetryContext` carries inherited context such as application-specific
@@ -403,6 +405,14 @@ Arrow support lives in `src/serialize/arrow.rs`. Use
 `deserialize_from_arrow` with a caller-provided `ArrowRegistryLookup`
 implementation. The registry owns the concrete Arrow attribute type and the
 mapping from event type names to deserializers.
+
+JSON deserialization support lives in `src/serialize/json.rs`. Use
+`deserialize_from_json_str`, `deserialize_from_json_value`, or
+`deserialize_json_lines` with a caller-provided `JsonRegistryLookup`
+implementation. Serde parses the stable record envelope fields, while the
+registry maps each flattened `event_type` plus nested `attributes` payload back
+to a boxed `AnyTelemetryEvent`. The deserializer validates that span records
+use span attributes and log records use log attributes.
 
 OTLP support lives in `src/serialize/otlp.rs`. JSON envelope support lives in
 `src/serialize/envelope.rs`.

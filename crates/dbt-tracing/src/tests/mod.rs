@@ -8,6 +8,7 @@ mod layers_parquet_tests;
 mod layers_pretty_tests;
 mod metrics_tests;
 mod middleware_tests;
+mod serialize_json_tests;
 mod span_info_tests;
 
 pub(crate) use crate::test_support::mocks;

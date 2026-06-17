@@ -38,3 +38,12 @@ pub trait ArrowRegistryLookup {
         attributes: &Self::ArrowAttributes<'_>,
     ) -> Result<Box<dyn AnyTelemetryEvent>, String>;
 }
+
+/// Registry lookup boundary for typed JSON event deserialization.
+pub trait JsonRegistryLookup {
+    fn deserialize_json_attributes(
+        &self,
+        event_type: &str,
+        attributes: serde_json::Value,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, String>;
+}
