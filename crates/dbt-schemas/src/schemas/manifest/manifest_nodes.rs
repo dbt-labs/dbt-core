@@ -804,7 +804,7 @@ pub struct ManifestModel {
 pub struct ManifestModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compute: Option<ComputeArg>,
     pub alias: Option<String>,
     #[serde(alias = "project", alias = "data_space")]
@@ -821,6 +821,7 @@ pub struct ManifestModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_name: Option<String>,
     #[serde(
         default,
@@ -871,11 +872,19 @@ pub struct ManifestModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub packages: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub python_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub imports: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub secrets: Option<BTreeMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub external_access_integrations: Option<StringOrArrayOfStrings>,
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    #[serde(
+        default,
+        deserialize_with = "bool_or_string_bool",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub use_anonymous_sproc: Option<bool>,
     #[serde(
         default,
@@ -890,31 +899,51 @@ pub struct ManifestModelConfig {
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub concurrent_batches: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub merge_update_columns: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(
         default,
         serialize_with = "crate::schemas::serde::serialize_option_as_default"
     )]
     pub access: Option<Access>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub table_format: Option<String>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<ModelState>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub latest_version_pointer: Option<LatestVersionPointer>,
     pub sql_header: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub predicates: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub submission_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub python_job_config: Option<BTreeMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cluster_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub http_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub create_notebook: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub index_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_libs: Option<Vec<YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_folder_for_python: Option<bool>,
     /// Schema synchronization configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sync: Option<SyncConfig>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,

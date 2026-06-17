@@ -255,10 +255,14 @@ pub struct SourceConfig {
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     /// Specifies where the schema metadata originates: 'remote' (default) or 'local'
     #[resolved(promote)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema_origin: Option<SchemaOrigin>,
     /// Schema synchronization configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sync: Option<SyncConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub external_location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub formatter: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
