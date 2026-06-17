@@ -180,6 +180,24 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub user_folder_for_python: Option<bool>,
+    #[serde(
+        default,
+        rename = "+incremental_apply_config_changes",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub incremental_apply_config_changes: Option<bool>,
+    #[serde(
+        default,
+        rename = "+use_safer_relation_operations",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub use_safer_relation_operations: Option<bool>,
+    #[serde(
+        default,
+        rename = "+view_update_via_alter",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub view_update_via_alter: Option<bool>,
 
     // NOTE: This is only for BigQuery materialized views
     #[serde(rename = "+description")]
@@ -735,6 +753,9 @@ impl From<ProjectModelConfig> for ModelConfig {
                 enable_list_inference: config.enable_list_inference,
                 intermediate_format: config.intermediate_format,
                 storage_uri: config.storage_uri,
+                incremental_apply_config_changes: config.incremental_apply_config_changes,
+                use_safer_relation_operations: config.use_safer_relation_operations,
+                view_update_via_alter: config.view_update_via_alter,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
@@ -952,6 +973,13 @@ impl From<ModelConfig> for ProjectModelConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
             schedule: config.__warehouse_specific_config__.schedule,
+            incremental_apply_config_changes: config
+                .__warehouse_specific_config__
+                .incremental_apply_config_changes,
+            use_safer_relation_operations: config
+                .__warehouse_specific_config__
+                .use_safer_relation_operations,
+            view_update_via_alter: config.__warehouse_specific_config__.view_update_via_alter,
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,

@@ -644,6 +644,9 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
                 schedule: config.schedule,
+                incremental_apply_config_changes: None,
+                use_safer_relation_operations: None,
+                view_update_via_alter: None,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,

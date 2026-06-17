@@ -333,6 +333,9 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 enable_list_inference: None,
                 intermediate_format: None,
                 storage_uri: None,
+                incremental_apply_config_changes: None,
+                use_safer_relation_operations: None,
+                view_update_via_alter: None,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,

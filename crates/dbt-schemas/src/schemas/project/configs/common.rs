@@ -369,6 +369,12 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub skip_not_matched_step: Option<bool>,
     pub schedule: Option<Schedule>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub incremental_apply_config_changes: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub use_safer_relation_operations: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub view_update_via_alter: Option<bool>,
 
     // Snowflake
     pub table_tag: Option<String>,
@@ -519,6 +525,9 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
             skip_matched_step,
             skip_not_matched_step,
             schedule,
+            incremental_apply_config_changes,
+            use_safer_relation_operations,
+            view_update_via_alter,
 
             // Snowflake
             adapter_properties,
@@ -626,6 +635,9 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
                 enable_list_inference,
                 intermediate_format,
                 storage_uri,
+                incremental_apply_config_changes,
+                use_safer_relation_operations,
+                view_update_via_alter,
                 // Snowflake
                 table_tag,
                 row_access_policy,
