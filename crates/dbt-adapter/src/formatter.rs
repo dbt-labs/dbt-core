@@ -1,3 +1,4 @@
+use chrono::{DateTime, SecondsFormat, Utc};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use minijinja::Value;
@@ -71,6 +72,19 @@ impl SqlLiteralFormatter {
 
     pub fn format_datetime(&self, l: PyDateTime) -> String {
         format!("'{}'", l.isoformat())
+    }
+
+    /// Format a UTC timestamp as a SQL literal for this adapter.
+    ///
+    /// RFC 3339 allows any number of fractional-second digits (`"." 1*DIGIT`); chrono
+    /// emits nanoseconds by default because `DateTime<Utc>` is two `u32`s internally
+    /// (seconds + nanoseconds). BigQuery's TIMESTAMP parser is stricter than the RFC
+    /// and caps at microseconds, so we truncate to 6 digits to avoid a runtime parse error.
+    pub fn format_timestamp(&self, ts: DateTime<Utc>) -> String {
+        match self.adapter_type {
+            AdapterType::Bigquery => ts.to_rfc3339_opts(SecondsFormat::Micros, true),
+            _ => ts.to_rfc3339(),
+        }
     }
 
     pub fn none_value(&self) -> String {
@@ -147,6 +161,48 @@ pub fn format_sql_with_bindings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_timestamp_bigquery_truncates_to_microseconds() {
+        // BigQuery rejects nanosecond-precision RFC 3339 strings at parse time.
+        // Verify we emit exactly 6 fractional digits regardless of input precision.
+        let ts = DateTime::from_timestamp(1_700_000_000, 999).unwrap(); // 999 ns
+        let result = SqlLiteralFormatter::new(AdapterType::Bigquery).format_timestamp(ts);
+        let frac = result.split('.').nth(1).unwrap();
+        assert_eq!(
+            &frac[..6],
+            "000000",
+            "expected 6 fractional digits, got: {result}"
+        );
+        assert!(
+            !frac.chars().nth(6).is_some_and(|c| c.is_ascii_digit()),
+            "must not emit sub-microsecond digits: {result}"
+        );
+    }
+
+    #[test]
+    fn format_timestamp_non_bigquery_preserves_nanoseconds() {
+        // Non-BigQuery adapters must round-trip sub-microsecond precision;
+        // truncating here would silently corrupt time windows on those platforms.
+        let ts = DateTime::from_timestamp(1_700_000_000, 999).unwrap(); // 999 ns
+        let result = SqlLiteralFormatter::new(AdapterType::Snowflake).format_timestamp(ts);
+        assert!(
+            result.contains("000000999"),
+            "expected nanoseconds in output, got: {result}"
+        );
+    }
+
+    #[test]
+    fn format_timestamp_bigquery_uses_utc_z_suffix() {
+        // BigQuery TIMESTAMP literals must carry an explicit UTC indicator.
+        // to_rfc3339_opts with use_z=true produces "Z"; confirm we don't emit "+00:00".
+        let ts = DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+        let result = SqlLiteralFormatter::new(AdapterType::Bigquery).format_timestamp(ts);
+        assert!(
+            result.ends_with('Z'),
+            "expected Z suffix for UTC, got: {result}"
+        );
+    }
 
     #[test]
     fn test_bigquery_format_str() {

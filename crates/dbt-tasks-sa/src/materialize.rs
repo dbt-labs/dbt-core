@@ -828,6 +828,7 @@ pub fn materialize_microbatch_model(
     materialization_resolver: &Arc<MaterializationResolver>,
     jinja_env: Arc<JinjaEnv>,
     batch_ctx: &BatchContext,
+    adapter_type: AdapterType,
     mut run_node_context: BTreeMap<String, Value>,
     event_time_mapping: Arc<BTreeMap<String, String>>,
     io_args: &IoArgs,
@@ -835,6 +836,7 @@ pub fn materialize_microbatch_model(
     // Microbatch base context is shared
     extend_microbatch_node_context(
         batch_ctx,
+        adapter_type,
         model,
         node_resolver,
         runtime_config,

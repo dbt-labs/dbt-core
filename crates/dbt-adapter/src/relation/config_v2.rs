@@ -998,7 +998,7 @@ mod tests {
                 {
                     "description": "\"\"\"description\\nother_line\"\"\"",
                     "enable_refresh": true,
-                    "expiration_timestamp": "TIMESTAMP \u00271970-01-01T00:00:00.000001111+00:00\u0027",
+                    "expiration_timestamp": "TIMESTAMP \u00271970-01-01T00:00:00.000001Z\u0027",
                     "kms_key_name": "\u0027kms_key\u0027",
                     "labels": [
                         [
@@ -1080,7 +1080,7 @@ mod tests {
                 {
                     "description": "\"\"\"new description\\nother_line\"\"\"",
                     "enable_refresh": false,
-                    "expiration_timestamp": "TIMESTAMP \u00271970-01-01T00:00:00.000002222+00:00\u0027",
+                    "expiration_timestamp": "TIMESTAMP \u00271970-01-01T00:00:00.000002Z\u0027",
                     "kms_key_name": "\u0027new_kms_key\u0027",
                     "labels": [
                         [

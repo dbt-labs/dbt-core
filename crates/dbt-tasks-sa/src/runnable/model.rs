@@ -199,6 +199,7 @@ pub fn execute_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
         &ctx.inner.materialization_resolver,
         ctx.env.clone(),
         &mb_unit.batch_ctx,
+        ctx.adapter_type(),
         ctx_for_batch,
         mb_unit.event_time_mapping,
         &ctx.inner.arg.io,
