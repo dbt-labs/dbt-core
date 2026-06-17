@@ -2782,6 +2782,21 @@ impl AdapterImpl {
         }
     }
 
+    /// Parse the single-row `location` result of the BigQuery SCHEMATA query.
+    ///
+    /// Returns `None` for an empty result without reading the column. This covers
+    /// the zero-column batch that replay returns for the SCHEMATA query, which is
+    /// never recorded by Mantle during `get_relation` (see dbt9002).
+    fn parse_dataset_location(batch: &RecordBatch) -> AdapterResult<Option<String>> {
+        debug_assert!(batch.num_rows() <= 1);
+        if batch.num_rows() == 1 {
+            let location = batch.column_values::<StringArray>("location")?;
+            Ok(Some(location.value(0).to_owned()))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1241
     pub fn get_dataset_location(
         &self,
@@ -2808,14 +2823,7 @@ impl AdapterImpl {
                     .engine()
                     .execute(Some(state), conn, &ctx, &sql, token)?;
 
-                let location = batch.column_values::<StringArray>("location")?;
-                debug_assert!(batch.num_rows() <= 1);
-                if batch.num_rows() == 1 {
-                    let loc = location.value(0).to_owned();
-                    Ok(Some(loc))
-                } else {
-                    Ok(None)
-                }
+                Self::parse_dataset_location(&batch)
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fabric
             | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
@@ -5649,6 +5657,34 @@ mod tests {
         let result = adapter.standardize_grants_dict(table);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
+    }
+
+    // -- get_dataset_location parsing tests -----------------------------------
+
+    #[test]
+    fn test_parse_dataset_location_empty_batch_returns_none() {
+        // Regression: `AdapterGetRelationRecord` is skipped in replay, so Fusion
+        // re-executes its BigQuery `get_relation`, which calls `get_dataset_location`.
+        // That SCHEMATA query is never recorded by Mantle, so replay returns a
+        // zero-column batch. Parsing must return None instead of erroring with
+        // `expected column location not found, available are: []`.
+        let batch = RecordBatch::new_empty(Arc::new(Schema::empty()));
+        let result = AdapterImpl::parse_dataset_location(&batch);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_parse_dataset_location_single_row_returns_location() {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "location",
+            DataType::Utf8,
+            true,
+        )]));
+        let location = Arc::new(StringArray::from(vec!["US"])) as ArrayRef;
+        let batch = RecordBatch::try_new(schema, vec![location]).unwrap();
+        let result = AdapterImpl::parse_dataset_location(&batch).unwrap();
+        assert_eq!(result, Some("US".to_string()));
     }
 
     // -- BigQuery job_execution_timeout_seconds tests -------------------------
