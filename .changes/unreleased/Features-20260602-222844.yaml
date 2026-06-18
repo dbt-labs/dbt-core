@@ -1,0 +1,7 @@
+kind: Features
+body: dbt docs serve reports actual login status in GET /api/v1/distribution
+time: 2026-06-02T22:28:44.783586-07:00
+custom:
+    author: eddowh
+    issue: ""
+    project: dbt-fusion

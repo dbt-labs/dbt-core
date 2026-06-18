@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix v2-parser path - emit hook operation nodes with original_file_path of ./dbt_project.yml (package-internal) and path with .sql extension so dbt-core writes compiled hook artifacts to the same per-package location it does without --use-v2-parser
+time: 2026-06-01T13:51:07-06:00
+custom:
+    author: aiguofer
+    issue: ''
+    project: dbt-fusion

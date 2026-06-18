@@ -1,0 +1,7 @@
+kind: Fixes
+body: Read DuckDB catalog column_index as a 32-bit integer instead of a decimal, fixing a type-mismatch error when collecting DuckDB column metadata
+time: 2026-06-02T17:51:21.629234+05:30
+custom:
+    author: tauhid621
+    issue: ""
+    project: dbt-fusion

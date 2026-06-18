@@ -1,0 +1,7 @@
+kind: Fixes
+body: LSP false dbt1089 warning
+time: 2026-06-04T12:43:45.9831-05:00
+custom:
+    author: j-clemons
+    issue: "15153"
+    project: dbt-fusion

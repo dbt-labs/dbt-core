@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Re-enable and re-wire the dbt-repl integration test suite, disabled during the dbt-main modularization
+time: 2026-06-02T22:45:42.877012-07:00
+custom:
+    author: ""
+    issue: ""
+    project: dbt-fusion

@@ -1,0 +1,7 @@
+kind: Fixes
+body: dbt State auth no longer caches the organization ID; it is always resolved from the live token scope, avoiding unnecessary browser re-authentication when a user's organization access changes between invocations
+time: 2026-06-01T10:38:06.540385-07:00
+custom:
+    author: izeigerman
+    issue: ""
+    project: dbt-fusion

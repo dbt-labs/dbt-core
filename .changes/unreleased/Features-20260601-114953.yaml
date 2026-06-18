@@ -1,0 +1,7 @@
+kind: Features
+body: 'Redshift: use SHOW TABLES FROM SCHEMA for cross-database source freshness when datasharing is enabled'
+time: 2026-06-01T11:49:53.41966+05:30
+custom:
+    author: ragesh-g
+    issue: "9024"
+    project: dbt-fusion

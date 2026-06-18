@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: 'conformance: add `resolve-repro` subcommand (run_id → S3 artifact path via Datadog) and broaden `fetch-repro` to resolve the Teleport app + bucket per cell (global prod/prod-emea/prod-au, us-multicell, jp1), with --app/--aws-role/--bucket overrides for cells whose account isn''t auto-resolved (eu/us2/us3/onprem)'
+time: 2026-06-07T13:26:37.572536-07:00
+custom:
+    author: akbog
+    issue: ""
+    project: internal

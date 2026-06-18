@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix /api/v1/search returning 500 when dbt_rt.run_results parquet is absent (project never run with --use-index)
+time: 2026-05-31T23:05:11.89375-07:00
+custom:
+    author: eddowh
+    issue: ''
+    project: dbt-fusion

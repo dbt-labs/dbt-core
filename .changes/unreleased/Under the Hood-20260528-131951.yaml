@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Serialize external and its subfields for manifest parity with Core
+time: 2026-05-28T13:19:51.264587-04:00
+custom:
+    author: ajhlee-dbt
+    issue: ""
+    project: dbt-fusion

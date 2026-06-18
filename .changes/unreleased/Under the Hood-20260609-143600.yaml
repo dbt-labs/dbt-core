@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: 'Bump bigquery driver for WIF auth support'
+time: 2026-06-09T14:36:00.203641+05:30
+custom:
+    author: ragesh-g
+    issue: ""
+    project: dbt-fusion

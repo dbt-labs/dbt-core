@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add `cargo ci homebrew render` and `cargo ci homebrew publish` subcommands for rendering and publishing Homebrew formulas.
+time: 2026-05-27T11:23:59.126487+05:30
+custom:
+    author: itsnamangoyal
+    issue: ""
+    project: internal

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix YAML selector `selector:` shorthand being silently ignored inside exclude/union, and fix nested `exclude` being dropped from the serialized manifest
+time: 2026-06-01T14:07:14.489005943-07:00
+custom:
+    author: lottaquestions
+    issue: "15140"
+    project: dbt-core
