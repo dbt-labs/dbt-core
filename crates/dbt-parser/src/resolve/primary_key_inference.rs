@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use dbt_schemas::schemas::common::ConstraintType;
+use dbt_schemas::schemas::common::{ConstraintType, DbtUniqueKey};
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::ResolvableConfig;
 use dbt_schemas::schemas::{DbtModel, DbtTest, Nodes};
@@ -24,6 +24,14 @@ fn unversioned_model_unique_id(unique_id: &str) -> &str {
         }
     }
     unique_id
+}
+
+fn infer_from_unique_key(model: &DbtModel) -> Vec<String> {
+    match &model.deprecated_config.unique_key {
+        Some(DbtUniqueKey::Single(s)) => vec![s.clone()],
+        Some(DbtUniqueKey::Multiple(v)) if !v.is_empty() => v.clone(),
+        _ => vec![],
+    }
 }
 
 fn infer_from_constraints(model: &DbtModel) -> Option<Vec<String>> {
@@ -174,6 +182,10 @@ fn build_model_to_tests_map<'a>(
 ///      c. If none, columns marked unique by disabled tests.
 ///      d. Otherwise, no primary key is inferred.
 ///
+/// 4) config.unique_key
+///    - Incremental models commonly set `unique_key` for merge/upsert deduplication.
+///      Used as a lowest-priority fallback when no constraint or test signal exists.
+///
 /// Implementation details:
 /// - Disabled tests are included to mirror dbt semantics where uniqueness intent
 ///   may be present even if currently disabled; not_null must still hold.
@@ -208,9 +220,14 @@ pub fn infer_and_apply_primary_keys(nodes: &mut Nodes, disabled_nodes: &Nodes) {
         }
 
         let inferred = infer_from_tests(&tests_for_model);
-
         if !inferred.is_empty() {
             pk_updates.push((model_id.clone(), inferred));
+            continue;
+        }
+
+        let from_unique_key = infer_from_unique_key(model);
+        if !from_unique_key.is_empty() {
+            pk_updates.push((model_id.clone(), from_unique_key));
         }
     }
 
@@ -227,6 +244,7 @@ pub fn infer_and_apply_primary_keys(nodes: &mut Nodes, disabled_nodes: &Nodes) {
 mod tests {
     use super::*;
     use dbt_schemas::schemas::nodes::{DbtTestAttr, TestMetadata};
+    use dbt_schemas::schemas::project::ModelConfig;
     use dbt_schemas::schemas::{CommonAttributes, IntrospectionKind, NodeBaseAttributes};
 
     fn empty_nodes() -> Nodes {
@@ -349,6 +367,108 @@ mod tests {
         assert_eq!(
             Arc::as_ref(updated).__model_attr__.primary_key,
             vec!["id".to_string()]
+        );
+    }
+
+    #[test]
+    fn pk_from_unique_key_single() {
+        let mut nodes = empty_nodes();
+        let disabled = empty_nodes();
+
+        let mut model: DbtModel = DbtModel {
+            __common_attr__: CommonAttributes {
+                unique_id: "model.pkg.orders".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        model.deprecated_config = ModelConfig {
+            unique_key: Some(DbtUniqueKey::Single("order_id".to_string())),
+            ..Default::default()
+        };
+        nodes
+            .models
+            .insert("model.pkg.orders".to_string(), Arc::new(model));
+
+        infer_and_apply_primary_keys(&mut nodes, &disabled);
+
+        let updated = nodes.models.get("model.pkg.orders").unwrap();
+        assert_eq!(
+            Arc::as_ref(updated).__model_attr__.primary_key,
+            vec!["order_id".to_string()]
+        );
+    }
+
+    #[test]
+    fn pk_from_unique_key_multiple() {
+        let mut nodes = empty_nodes();
+        let disabled = empty_nodes();
+
+        let mut model: DbtModel = DbtModel {
+            __common_attr__: CommonAttributes {
+                unique_id: "model.pkg.order_items".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        model.deprecated_config = ModelConfig {
+            unique_key: Some(DbtUniqueKey::Multiple(vec![
+                "order_id".to_string(),
+                "item_id".to_string(),
+            ])),
+            ..Default::default()
+        };
+        nodes
+            .models
+            .insert("model.pkg.order_items".to_string(), Arc::new(model));
+
+        infer_and_apply_primary_keys(&mut nodes, &disabled);
+
+        let updated = nodes.models.get("model.pkg.order_items").unwrap();
+        assert_eq!(
+            Arc::as_ref(updated).__model_attr__.primary_key,
+            vec!["order_id".to_string(), "item_id".to_string()]
+        );
+    }
+
+    #[test]
+    fn constraint_takes_precedence_over_unique_key() {
+        let mut nodes = empty_nodes();
+        let disabled = empty_nodes();
+
+        let mut model: DbtModel = DbtModel {
+            __common_attr__: CommonAttributes {
+                unique_id: "model.pkg.m".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        model.__model_attr__.constraints =
+            vec![dbt_schemas::schemas::properties::ModelConstraint {
+                type_: ConstraintType::PrimaryKey,
+                columns: Some(vec!["id".to_string()]),
+                expression: None,
+                name: None,
+                to: None,
+                to_columns: None,
+                warn_unsupported: None,
+                warn_unenforced: None,
+            }];
+        model.deprecated_config = ModelConfig {
+            unique_key: Some(DbtUniqueKey::Single("other_col".to_string())),
+            ..Default::default()
+        };
+        nodes
+            .models
+            .insert("model.pkg.m".to_string(), Arc::new(model));
+
+        infer_and_apply_primary_keys(&mut nodes, &disabled);
+
+        let updated = nodes.models.get("model.pkg.m").unwrap();
+        assert_eq!(
+            Arc::as_ref(updated).__model_attr__.primary_key,
+            vec!["id".to_string()],
+            "constraint must win over unique_key"
         );
     }
 }
