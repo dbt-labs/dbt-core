@@ -760,23 +760,43 @@ jobs:
           PR_BRANCH="changelog/backport-v${VERSION}"
           git switch -c "$PR_BRANCH"
 
-          # Changelog paths only, scoped to the release commit — excludes the
-          # version bump.
-          PATCH="$(mktemp)"
-          git diff "origin/${RELEASE_BRANCH}~1" "origin/${RELEASE_BRANCH}" \
-            -- .changes CHANGELOG.md > "$PATCH"
+          REL="origin/${RELEASE_BRANCH}"
 
-          # Skip cleanly when there's nothing to backport, or when the delta is
-          # already on main (e.g. a prior backport PR merged before a re-run) —
-          # `--reverse --check` succeeds only if the patch is already applied.
-          if [ ! -s "$PATCH" ] || git apply --reverse --check "$PATCH" 2>/dev/null; then
+          # Handle each part of the changelog delta with the right tool rather
+          # than one patch — main may be a different lineage than the release
+          # branch's parent, so the version bump never comes along and the
+          # batched-away entries may not even exist here.
+
+          # 1. The new release-notes file changie generated for this version.
+          git checkout "$REL" -- ".changes/${VERSION}.md"
+
+          # 2. Remove the unreleased entries the release batched away, but only
+          #    those still present — main may never have had them, or a prior
+          #    backport already removed them (--ignore-unmatch, not an error).
+          DELETED="$(git diff --diff-filter=D --name-only "${REL}~1" "$REL" -- .changes/unreleased)"
+          if [ -n "$DELETED" ]; then
+            printf '%s\n' "$DELETED" | xargs git rm -q --ignore-unmatch --
+          fi
+
+          # 3. Regenerated CHANGELOG.md, applied as a patch (not a copy) so
+          #    sections added to main concurrently survive — `--3way` merges,
+          #    and `--reverse --check` lets a re-run after merge skip cleanly.
+          PATCH="$(mktemp)"
+          git diff "${REL}~1" "$REL" -- CHANGELOG.md > "$PATCH"
+          if [ -s "$PATCH" ] && ! git apply --reverse --check "$PATCH" 2>/dev/null; then
+            git apply --index --3way "$PATCH"
+          fi
+
+          git add -A .changes CHANGELOG.md
+
+          # Nothing new relative to main (e.g. a prior backport PR already
+          # merged before this re-run) — skip cleanly to stay idempotent.
+          if git diff --cached --quiet; then
             echo "::notice::No changelog delta to backport for v${VERSION}."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # `--3way` falls back to a merge if main has drifted.
-          git apply --index --3way "$PATCH"
           git commit -m "chore: backport v${VERSION} changelog to main"
 
           # Fetch any existing remote branch so --force-with-lease can guard
