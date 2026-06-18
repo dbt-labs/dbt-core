@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Unify TypeOps source-extraction methods into a single extract_upstreams; absorb the standalone sdf_frontend dep_analysis::extract_sources_from_str into the same canonical path
-time: 2026-06-01T09:51:49.253308-07:00
-custom:
-    author: vgapeyev
-    issue: ""
-    project: internal

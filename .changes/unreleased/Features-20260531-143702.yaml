@@ -1,7 +1,0 @@
-kind: Features
-body: Detect how dbt was installed (Homebrew, pip, winget, or the standalone installer) and surface the matching upgrade command; `dbt system update` now refuses to overwrite a binary managed by a package manager unless `--force` is passed.
-time: 2026-05-31T14:37:02.500099+05:30
-custom:
-    author: "tauhid621"
-    issue: ""
-    project: dbt-fusion

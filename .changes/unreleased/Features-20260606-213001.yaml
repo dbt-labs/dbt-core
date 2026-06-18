@@ -1,7 +1,0 @@
-kind: Features
-body: 'Add daily conformance-analysis collection: scheduled GHA collects the previous UTC day and uploads per-day error-lines parquet to S3; new `cargo conformance fetch`/`push` sync the bucket and `collect --start/--end` + `log-overlap --days N` enable multi-day analysis'
-time: 2026-06-06T21:30:01.744384-07:00
-custom:
-    author: akbog
-    issue: ""
-    project: internal

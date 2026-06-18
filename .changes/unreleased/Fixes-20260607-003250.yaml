@@ -1,7 +1,0 @@
-kind: Fixes
-body: Allow target variables to be used in dbt_project.yml
-time: 2026-06-07T00:32:50.100693-04:00
-custom:
-    author: ajhlee-dbt
-    issue: ""
-    project: dbt-fusion

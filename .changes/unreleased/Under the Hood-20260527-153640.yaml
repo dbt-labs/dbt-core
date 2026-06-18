@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: 'Improve ClickHouse init: remove database and make password optional'
-time: 2026-05-27T15:36:40.602874-04:00
-custom:
-    author: koletzilla
-    issue: "1679"
-    project: dbt-fusion

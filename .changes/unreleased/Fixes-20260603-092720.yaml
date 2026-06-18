@@ -1,7 +1,0 @@
-kind: Fixes
-body: Include Databricks-specific config attributes (auto_liquid_cluster, databricks_tags) in the semantic extras so dbt state comparison detects changes to them
-time: 2026-06-03T09:27:20.987518-07:00
-custom:
-    author: izeigerman
-    issue: ""
-    project: dbt-fusion
