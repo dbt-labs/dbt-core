@@ -1,0 +1,21 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+name = "dbt-python"
+version.workspace = true
+
+[lib]
+# maturin turns this into dbt/_core.cpython-<abi>-<platform>.so
+# so `from dbt._core import dbtRunner` works alongside python/dbt/runner.py
+name = "dbt_core_pyo3"
+crate-type = ["cdylib"]
+
+[dependencies]
+dbt-base = { workspace = true }
+dbt-clap-core = { workspace = true }
+dbt-common = { workspace = true }
+dbt-features = { workspace = true }
+dbt-main = { workspace = true }
+pyo3 = { workspace = true }
+tokio = { workspace = true }

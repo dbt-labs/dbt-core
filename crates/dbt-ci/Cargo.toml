@@ -32,6 +32,7 @@ reqwest = { workspace = true, features = ["multipart"] }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 toml_edit = { workspace = true }
+walkdir = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]

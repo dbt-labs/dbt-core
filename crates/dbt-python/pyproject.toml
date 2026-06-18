@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "dbt-core"
+requires-python = ">=3.9"
+dynamic = ["version"]
+
+[tool.maturin]
+# The compiled extension lands at dbt/_core.so inside the installed package.
+module-name = "dbt._core"
+# Pure-Python sources shipped alongside the extension.
+python-source = "../../python"

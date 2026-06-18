@@ -35,6 +35,10 @@ pub struct PackArgs {
     /// Script name inside the wheel. Defaults to `[project].name`.
     #[arg(long)]
     pub bin_name: Option<String>,
+
+    /// Directory of Python source files to embed in the wheel (relative paths preserved).
+    #[arg(long, value_name = "DIR")]
+    pub python_src: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]

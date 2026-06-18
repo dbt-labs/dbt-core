@@ -54,7 +54,7 @@ fn run(args: PackArgs) -> Result<()> {
     }
 
     for bin in &binaries {
-        let path = pack_wheel(&spec, &version_pep440, &bin_name, bin, &out_dir)
+        let path = pack_wheel(&spec, &version_pep440, &bin_name, bin, &out_dir, args.python_src.as_deref())
             .with_context(|| format!("pack {}", bin.path.display()))?;
         eprintln!("✓ {}", path.display());
     }
@@ -108,6 +108,7 @@ fn pack_wheel(
     bin_name: &str,
     bin: &Binary,
     out_dir: &Path,
+    python_src: Option<&Path>,
 ) -> Result<PathBuf> {
     let platform_tag = target_to_platform_tag(&bin.target_triple)
         .ok_or_else(|| anyhow!("unsupported target triple {:?}", bin.target_triple))?;
@@ -136,6 +137,26 @@ fn pack_wheel(
         render_wheel_file(&platform_tag).into_bytes(),
         0o644,
     ));
+
+    if let Some(src_dir) = python_src {
+        for entry in walkdir::WalkDir::new(src_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let abs_path = entry.path();
+            let rel = abs_path
+                .strip_prefix(src_dir)
+                .with_context(|| format!("strip prefix from {}", abs_path.display()))?;
+            let zip_path = rel
+                .to_str()
+                .ok_or_else(|| anyhow!("non-UTF-8 path: {}", rel.display()))?
+                .replace('\\', "/");
+            let bytes =
+                fs::read(abs_path).with_context(|| format!("read {}", abs_path.display()))?;
+            entries.push((zip_path, bytes, 0o644));
+        }
+    }
 
     let record_path = format!("{dist_info}/RECORD");
     let record = render_record(&entries, &record_path);
@@ -368,7 +389,7 @@ mod tests {
             description_content_type: Some("text/markdown".to_string()),
         };
 
-        let out = pack_wheel(&spec, "2.0.0a1", "dbt-sa-cli", &bin, dir).unwrap();
+        let out = pack_wheel(&spec, "2.0.0a1", "dbt-sa-cli", &bin, dir, None).unwrap();
         assert!(out.exists());
         assert_eq!(
             out.file_name().unwrap().to_str().unwrap(),
@@ -450,7 +471,7 @@ mod tests {
             description: None,
             description_content_type: None,
         };
-        let out = pack_wheel(&spec, "2.0.0", "dbt-sa-cli", &bin, dir).unwrap();
+        let out = pack_wheel(&spec, "2.0.0", "dbt-sa-cli", &bin, dir, None).unwrap();
         assert_eq!(
             out.file_name().unwrap().to_str().unwrap(),
             "dbt_sa_cli-2.0.0-py3-none-win_amd64.whl"

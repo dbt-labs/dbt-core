@@ -80,6 +80,7 @@ members = [
   "crates/dbt-ci",
   "crates/dbt-login",
   "crates/dbt-platform-auth",
+  "crates/dbt-python",
 ]
 exclude = [
   "wizard/wizard-app/src-tauri",
