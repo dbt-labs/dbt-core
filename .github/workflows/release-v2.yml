@@ -99,88 +99,19 @@ defaults:
 
 jobs:
   # ------------------------------------------------------------------
-  # Cut release/vX.Y.Z, bump workspace version, push the branch.
+  # Cut release/vX.Y.Z, bump workspace version, generate the changelog,
+  # push the branch.
+  # Exposes branch/tag/version outputs that the rest of the pipeline hangs off.
   # ------------------------------------------------------------------
   prepare-release:
     name: Prepare release branch
-    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
     permissions:
       contents: write
-    outputs:
-      branch: ${{ steps.bump.outputs.branch }}
-      tag: ${{ steps.bump.outputs.tag }}
+    uses: ./.github/workflows/release-prep-v2.yml
+    with:
       version: ${{ inputs.version }}
-    env:
-      CARGO_INCREMENTAL: 0
-      RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ inputs.source_ref }}
-          fetch-tags: true
-
-      - name: Reject pre-existing tag
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
-            echo "::error::Tag v$VERSION already exists. Pick a new version."
-            exit 1
-          fi
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry and dbt-ci build
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
-        with:
-          shared-key: cargo-ci-tool
-          cache-targets: "true"
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
-        with:
-          version: "v0.12.0"
-
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Cut release branch and bump version
-        id: bump
-        env:
-          VERSION: ${{ inputs.version }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          if [ "$DRY_RUN" = "true" ]; then
-            BRANCH="release/dry-run/v${VERSION}-${GITHUB_RUN_ID}"
-          else
-            BRANCH="release/v${VERSION}"
-          fi
-
-          if [ "$DRY_RUN" != "true" ] && git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            echo "::error::Branch $BRANCH already exists. Delete it or pick a new version."
-            exit 1
-          fi
-
-          git switch -c "$BRANCH"
-
-          # Validates SemVer shape, writes [workspace.package].version, refreshes Cargo.lock.
-          cargo ci bump-cargo-version "$VERSION"
-
-          git add Cargo.toml Cargo.lock
-          git commit \
-            -m "chore: release v${VERSION}" \
-            -m "Release workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          git push origin "$BRANCH"
-
-          {
-            echo "branch=$BRANCH"
-            echo "tag=v${VERSION}"
-          } >> "$GITHUB_OUTPUT"
+      dry_run: ${{ inputs.dry_run }}
+      source_ref: ${{ inputs.source_ref }}
 
   # ------------------------------------------------------------------
   # Build the binary per target via `cargo build`. This is the
@@ -199,7 +130,6 @@ jobs:
       CARGO_INCREMENTAL: 0
       RUST_BACKTRACE: 1
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
       BINARY_NAME: dbt-sa-cli
       PACKAGE_NAME: dbt-core
     strategy:
@@ -439,7 +369,6 @@ jobs:
       RUST_BACKTRACE: 1
       RUST_MIN_STACK: "8388608"
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
@@ -508,7 +437,6 @@ jobs:
     env:
       CARGO_INCREMENTAL: 0
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
@@ -658,7 +586,6 @@ jobs:
     env:
       CARGO_INCREMENTAL: 0
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
@@ -799,3 +726,119 @@ jobs:
     permissions:
       contents: read
     secrets: inherit
+
+  # Open a PR back to main with only the release commit's changelog delta
+  # (new `.changes/<version>.md`, regenerated CHANGELOG.md, deleted
+  # unreleased entries) — the version bump stays on the release branch.
+  changelog-backport:
+    name: Backport changelog to main
+    needs: [prepare-release, publish-pypi, github-release]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0  # need the release commit and its parent
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build changelog backport branch
+        id: backport
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          RELEASE_BRANCH: ${{ needs.prepare-release.outputs.branch }}
+        run: |
+          git fetch origin "$RELEASE_BRANCH"
+
+          PR_BRANCH="changelog/backport-v${VERSION}"
+          git switch -c "$PR_BRANCH"
+
+          REL="origin/${RELEASE_BRANCH}"
+
+          # Handle each part of the changelog delta with the right tool rather
+          # than one patch — main may be a different lineage than the release
+          # branch's parent, so the version bump never comes along and the
+          # batched-away entries may not even exist here.
+
+          # 1. The new release-notes file changie generated for this version.
+          git checkout "$REL" -- ".changes/${VERSION}.md"
+
+          # 2. Remove the unreleased entries the release batched away, but only
+          #    those still present — main may never have had them, or a prior
+          #    backport already removed them (--ignore-unmatch, not an error).
+          DELETED="$(git diff --diff-filter=D --name-only "${REL}~1" "$REL" -- .changes/unreleased)"
+          if [ -n "$DELETED" ]; then
+            printf '%s\n' "$DELETED" | xargs git rm -q --ignore-unmatch --
+          fi
+
+          # 3. Regenerated CHANGELOG.md, applied as a patch (not a copy) so
+          #    sections added to main concurrently survive — `--3way` merges,
+          #    and `--reverse --check` lets a re-run after merge skip cleanly.
+          PATCH="$(mktemp)"
+          git diff "${REL}~1" "$REL" -- CHANGELOG.md > "$PATCH"
+          if [ -s "$PATCH" ] && ! git apply --reverse --check "$PATCH" 2>/dev/null; then
+            git apply --index --3way "$PATCH"
+          fi
+
+          git add -A .changes CHANGELOG.md
+
+          # Nothing new relative to main (e.g. a prior backport PR already
+          # merged before this re-run) — skip cleanly to stay idempotent.
+          if git diff --cached --quiet; then
+            echo "::notice::No changelog delta to backport for v${VERSION}."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "chore: backport v${VERSION} changelog to main"
+
+          # Fetch any existing remote branch so --force-with-lease can guard
+          # against clobbering unexpected updates while staying re-run safe.
+          git fetch origin "$PR_BRANCH" 2>/dev/null || true
+          git push --force-with-lease origin "$PR_BRANCH"
+
+          {
+            echo "skip=false"
+            echo "pr_branch=$PR_BRANCH"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open or update pull request
+        if: steps.backport.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          PR_BRANCH: ${{ steps.backport.outputs.pr_branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Only an open PR is updated by the force-push; a closed/merged one
+          # shouldn't block recreating the backport.
+          STATE="$(gh pr view "$PR_BRANCH" --json state --jq .state 2>/dev/null || true)"
+          if [ "$STATE" = "OPEN" ]; then
+            echo "PR for $PR_BRANCH is open; the force-pushed branch updates it."
+            exit 0
+          fi
+
+          gh pr create \
+            --base main \
+            --head "$PR_BRANCH" \
+            --title "chore: backport v${VERSION} changelog to main" \
+            --body "$(cat <<EOF
+          Backports the changelog generated by the \`v${VERSION}\` release back to main.
+
+          Contains only the changelog delta from the release commit:
+          - new \`.changes/${VERSION}.md\`
+          - regenerated \`CHANGELOG.md\`
+          - deletion of the \`.changes/unreleased/*.yaml\` entries \`changie batch\` consumed
+
+          The Cargo version bump is intentionally excluded — main keeps its own version.
+
+          Release workflow: ${RUN_URL}
+          EOF
+          )"
