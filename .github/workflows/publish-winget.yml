@@ -30,9 +30,8 @@
 # `windows-latest` even though every other release publisher runs on
 # Ubuntu.
 #
-# Submit requires `secrets.FISHTOWN_BOT_PAT` — the same PAT the homebrew
-# tap flow uses; needs `public_repo` scope. wingetcreate submits from
-# `<pat-owner>/winget-pkgs`.
+# Submit requires `secrets.WINGET_PUBLISH_PAT`; needs `public_repo` scope.
+# wingetcreate submits from `<pat-owner>/winget-pkgs`.
 
 name: Publish winget manifests
 
@@ -105,11 +104,11 @@ jobs:
         if: ${{ !inputs.dry_run }}
         shell: pwsh
         env:
-          FISHTOWN_BOT_PAT: ${{ secrets.FISHTOWN_BOT_PAT }}
+          WINGET_PUBLISH_PAT: ${{ secrets.WINGET_PUBLISH_PAT }}
         run: |
           Write-Host "→ $env:INSTALLER_URL"
           .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER `
             --version $env:VERSION `
             --urls $env:INSTALLER_URL `
             --submit `
-            --token $env:FISHTOWN_BOT_PAT
+            --token $env:WINGET_PUBLISH_PAT
