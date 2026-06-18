@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix v2-parser path - hydrate ColumnInfo.dimension and ColumnInfo.entity from the column when YAML omits required fields, and skip serializing Option::None so dbt-core's mashumaro can deserialize fusion's writable manifest into ColumnDimension/ColumnEntity dict-form variants
-time: 2026-06-01T13:35:51-06:00
-custom:
-    author: aiguofer
-    issue: ''
-    project: dbt-fusion

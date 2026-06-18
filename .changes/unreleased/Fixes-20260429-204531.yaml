@@ -1,7 +1,0 @@
-kind: Fixes
-body: equals macro now uses IS NOT DISTINCT FROM clause for comparison
-time: 2026-04-29T20:45:31.672337+05:30
-custom:
-    author: sriramr98
-    issue: "9803"
-    project: dbt-fusion

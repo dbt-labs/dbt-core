@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Snapshot errors and logs now show phase-accurate paths for artifacts
-time: 2026-05-26T11:34:07.010833-05:00
-custom:
-    author: HannanNaeem
-    issue: ""
-    project: dbt-fusion

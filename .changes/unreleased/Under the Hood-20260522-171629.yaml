@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Manifest parity with core fixes for groups
-time: 2026-05-22T17:16:29.321597-04:00
-custom:
-    author: ajhlee-dbt
-    issue: ""
-    project: dbt-fusion

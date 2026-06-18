@@ -1,7 +1,0 @@
-kind: Fixes
-body: (fix adapter/databricks) retry on retryable errors
-time: 2026-06-03T16:38:39.598829329-07:00
-custom:
-    author: xuliangs
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix v2-parser path - only blank path and original_file_path on public model nodes imported via publication artifacts; keep paths for public models from locally-resolved (local/git/registry) packages so dbt-core can write per-model compiled SQL instead of crashing with Errno 21 trying to write to an empty path
-time: 2026-06-01T13:37:30-06:00
-custom:
-    author: aiguofer
-    issue: ''
-    project: dbt-fusion

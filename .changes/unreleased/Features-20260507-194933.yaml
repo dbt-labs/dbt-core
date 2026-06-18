@@ -1,7 +1,0 @@
-kind: Features
-body: Added --empty support in seed command.
-time: 2026-05-07T19:49:33.280996+05:30
-custom:
-    author: sriramr98
-    issue: ""
-    project: dbt-fusion

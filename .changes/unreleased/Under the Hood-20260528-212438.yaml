@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Refactor dbt-deps install to a trait-based PackageInstaller running concurrently via futures::join_all; per-variant impls only do install work and populate a shared InstallOutcome, while span lifecycle, telemetry, and error-path partial-progress stamping live in the trait default
-time: 2026-05-28T21:24:38.362681+03:00
-custom:
-    author: agarovat
-    issue: ""
-    project: dbt-fusion

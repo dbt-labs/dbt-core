@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix v2-parser path - preserve raw user-provided source identifier (including any embedded quote characters) on __source_attr__.identifier so dbt-core's source(...).identifier round-trips for packages like fivetran/zendesk that pre-quote reserved-word table names (e.g. Snowflake's GROUP)
-time: 2026-05-31T23:07:15.000000-07:00
-custom:
-    author: aiguofer
-    issue: ''
-    project: dbt-fusion

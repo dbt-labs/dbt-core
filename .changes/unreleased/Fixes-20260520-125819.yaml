@@ -1,7 +1,0 @@
-kind: Fixes
-body: update try_or_compiler_error to match dbt-core
-time: 2026-05-20T12:58:19.139229596-07:00
-custom:
-    author: xuliangs
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Preserve runtime invocation/run-result timestamps during direct fusion metadata ingest so dbt_rt.invocations.generated_at and dbt_rt.run_results.created_at are populated again
-time: 2026-05-31T22:46:38.065292-07:00
-custom:
-    author: eakmanrq
-    issue: ""
-    project: dbt-index
