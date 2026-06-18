@@ -1,7 +1,0 @@
-kind: Fixes
-body: '`Relation` now renders properly when the `region` is set on `project` or `database`'
-time: 2026-06-04T19:24:54.304439+02:00
-custom:
-    author: serramatutu
-    issue: "15157"
-    project: dbt-fusion

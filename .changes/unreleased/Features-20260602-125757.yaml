@@ -1,7 +1,0 @@
-kind: Features
-body: (fabric) supports dbt init
-time: 2026-06-02T12:57:57.738420636-07:00
-custom:
-    author: xuliangs
-    issue: ""
-    project: dbt-fusion

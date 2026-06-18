@@ -1,7 +1,0 @@
-kind: Fixes
-body: Disable dbt State for unsupported adapters
-time: 2026-06-02T12:34:03.238541-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: 'perf(dbt-lineage): --write-lineage overhead reduced from +20s to +2.4s at 5 843 models: bypass build_lineage_environment via direct LineageRow→CLL edge extraction, fix redundant epoch-0 compaction'
-time: 2026-05-29T16:28:38.887120494-07:00
-custom:
-    author: ' '
-    issue: ' '
-    project: dbt-index
