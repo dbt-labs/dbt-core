@@ -24,7 +24,7 @@ use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
     access_eq, array_of_strings_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
-    same_warehouse_config,
+    same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{
@@ -371,7 +371,12 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
 
 impl FunctionConfig {
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
-    pub fn same_config(&self, other: &FunctionConfig) -> bool {
+    pub fn same_config(
+        &self,
+        other: &FunctionConfig,
+        self_unrendered_config: &BTreeMap<String, YmlValue>,
+        other_unrendered_config: &BTreeMap<String, YmlValue>,
+    ) -> bool {
         // Compare all fields individually
         let enabled_eq = self.enabled == other.enabled;
         let alias_eq = self.alias == other.alias;
@@ -390,9 +395,11 @@ impl FunctionConfig {
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
         let packages_eq = array_of_strings_eq(&self.packages, &other.packages);
         let snowflake_eq = self.snowflake == other.snowflake;
-        let warehouse_config_eq = same_warehouse_config(
+        let warehouse_config_eq = same_warehouse_config_with_unrendered(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
+            self_unrendered_config,
+            other_unrendered_config,
         );
 
         let result = enabled_eq
@@ -616,7 +623,8 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(a.same_config(&b));
+        let empty_uc = BTreeMap::new();
+        assert!(a.same_config(&b, &empty_uc, &empty_uc));
 
         let c = FunctionConfig {
             packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
@@ -625,6 +633,6 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!a.same_config(&c));
+        assert!(!a.same_config(&c, &empty_uc, &empty_uc));
     }
 }

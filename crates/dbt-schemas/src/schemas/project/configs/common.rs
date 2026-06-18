@@ -1500,6 +1500,205 @@ pub fn same_warehouse_config(
     result
 }
 
+/// `unrendered_config` keys that correspond to [`WarehouseSpecificNodeConfig`] fields.
+///
+/// `WarehouseSpecificNodeConfig` carries no `#[serde(rename)]`, so each field's
+/// `unrendered_config` key is exactly its Rust field identifier. Keep this list in sync
+/// with the struct definition (the `default_to` destructuring above is the source of
+/// truth); the `warehouse_specific_config_keys_cover_struct` test guards against drift.
+pub const WAREHOUSE_SPECIFIC_CONFIG_KEYS: &[&str] = &[
+    // Shared
+    "partition_by",
+    "cluster_by",
+    "adapter_properties",
+    // BigQuery
+    "description",
+    "hours_to_expiration",
+    "job_execution_timeout_seconds",
+    "reservation",
+    "labels",
+    "labels_from_meta",
+    "kms_key_name",
+    "require_partition_filter",
+    "partition_expiration_days",
+    "grant_access_to",
+    "partitions",
+    "enable_refresh",
+    "refresh_interval_minutes",
+    "resource_tags",
+    "max_staleness",
+    "jar_file_uri",
+    "timeout",
+    "batch_id",
+    "dataproc_cluster_name",
+    "notebook_template_id",
+    "intermediate_format",
+    "enable_list_inference",
+    "storage_uri",
+    // Databricks + BigQuery
+    "file_format",
+    // Databricks
+    "catalog_name",
+    "location_root",
+    "use_uniform",
+    "tblproperties",
+    "include_full_name_in_path",
+    "liquid_clustered_by",
+    "auto_liquid_cluster",
+    "clustered_by",
+    "buckets",
+    "catalog",
+    "databricks_tags",
+    "compression",
+    "databricks_compute",
+    "target_alias",
+    "source_alias",
+    "matched_condition",
+    "not_matched_condition",
+    "not_matched_by_source_condition",
+    "not_matched_by_source_action",
+    "merge_with_schema_evolution",
+    "skip_matched_step",
+    "skip_not_matched_step",
+    "schedule",
+    "incremental_apply_config_changes",
+    "use_safer_relation_operations",
+    "view_update_via_alter",
+    // Snowflake
+    "table_tag",
+    "row_access_policy",
+    "external_volume",
+    "base_location_root",
+    "base_location_subpath",
+    "change_tracking",
+    "data_retention_time_in_days",
+    "max_data_extension_time_in_days",
+    "storage_serialization_policy",
+    "target_file_size",
+    "target_lag",
+    "snowflake_initialization_warehouse",
+    "snowflake_warehouse",
+    "refresh_warehouse",
+    "immutable_where",
+    "refresh_mode",
+    "initialize",
+    "scheduler",
+    "tmp_relation_type",
+    "query_tag",
+    "automatic_clustering",
+    "copy_grants",
+    "copy_tags",
+    "secure",
+    "transient",
+    "iceberg_version",
+    // Redshift
+    "auto_refresh",
+    "backup",
+    "bind",
+    "dist",
+    "sort",
+    "sort_type",
+    // MsSql
+    "as_columnstore",
+    // Athena
+    "table_type",
+    // Postgres
+    "indexes",
+    // Salesforce
+    "primary_key",
+    "category",
+];
+
+/// Compare two `unrendered_config` values, treating absent/`null`/empty as equivalent and
+/// canonicalizing trailing newlines on strings. Mirrors the semantics used by
+/// `check_configs_modified`'s unrendered path in `prev_state`.
+fn unrendered_value_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) -> bool {
+    fn is_effectively_empty(v: &YmlValue) -> bool {
+        match v {
+            YmlValue::Null(_) => true,
+            YmlValue::Sequence(seq, _) => seq.is_empty(),
+            YmlValue::Mapping(map, _) => map.is_empty(),
+            _ => false,
+        }
+    }
+
+    fn canonicalize_str(s: &str) -> &str {
+        s.strip_suffix("\r\n")
+            .or_else(|| s.strip_suffix('\n'))
+            .unwrap_or(s)
+    }
+
+    match (a, b) {
+        (None, None) => true,
+        (None, Some(v)) | (Some(v), None) => is_effectively_empty(v),
+        (Some(YmlValue::String(sa, _)), Some(YmlValue::String(sb, _))) => {
+            canonicalize_str(sa) == canonicalize_str(sb)
+        }
+        (Some(va), Some(vb)) => va == vb,
+    }
+}
+
+/// Compare the warehouse-specific portion of two `unrendered_config` maps.
+///
+/// Only the keys in [`WAREHOUSE_SPECIFIC_CONFIG_KEYS`] are considered; a key missing on a side
+/// reads as absent (absent-vs-absent is equal), intentionally ignoring target-derived rendering
+/// differences. Any differences are reported via `log_state_mod_diff` under the
+/// `warehouse_config_unrendered` category.
+fn same_warehouse_config_unrendered(
+    self_uc: &BTreeMap<String, YmlValue>,
+    other_uc: &BTreeMap<String, YmlValue>,
+) -> bool {
+    // One entry per state-modified check: (check_name, is_equal, Some((self, other))).
+    type StateModCheck = (&'static str, bool, Option<(String, String)>);
+    let mut diffs: Vec<StateModCheck> = Vec::new();
+    for &key in WAREHOUSE_SPECIFIC_CONFIG_KEYS {
+        let a = self_uc.get(key);
+        let b = other_uc.get(key);
+        if !unrendered_value_eq(a, b) {
+            diffs.push((key, false, Some((format!("{:?}", a), format!("{:?}", b)))));
+        }
+    }
+
+    if diffs.is_empty() {
+        true
+    } else {
+        log_state_mod_diff(
+            "unique_id in next warehouse_config_unrendered log",
+            "warehouse_config_unrendered",
+            diffs,
+        );
+        false
+    }
+}
+
+/// Unrendered-aware warehouse-specific config comparison.
+///
+/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
+/// config rather than the rendered values, so environment-aware Jinja configs in
+/// `dbt_project.yml` (e.g. `+copy_grants: "{{ true if target.name in ('prod') else false }}"`)
+/// that render differently per target are not treated as modifications. See dbt-core#15263.
+///
+/// Semantics: `same = unrendered_same || rendered_same`.
+///   1. Compare the configured (unrendered) warehouse values; if equal, the configs are the same.
+///   2. Otherwise fall back to the rendered field-by-field comparison ([`same_warehouse_config`]).
+///
+/// Both steps report any differences they find via `log_state_mod_diff`. This is strictly more
+/// lenient than [`same_warehouse_config`] alone (it can only turn a rendered "different" into
+/// "same"), preserving backward compatibility.
+pub fn same_warehouse_config_with_unrendered(
+    self_wh: &WarehouseSpecificNodeConfig,
+    other_wh: &WarehouseSpecificNodeConfig,
+    self_uc: &BTreeMap<String, YmlValue>,
+    other_uc: &BTreeMap<String, YmlValue>,
+) -> bool {
+    if same_warehouse_config_unrendered(self_uc, other_uc) {
+        return true;
+    }
+    // The configured (unrendered) values differ (already logged); fall back to the rendered
+    // comparison, which logs its own per-field differences.
+    same_warehouse_config(self_wh, other_wh)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1628,5 +1827,198 @@ mod tests {
 
         assert!(!tags_eq(&left, &right));
         assert!(!tags_eq(&right, &left));
+    }
+
+    fn uc(entries: &[(&str, YmlValue)]) -> BTreeMap<String, YmlValue> {
+        entries
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn test_same_warehouse_config_unrendered_copy_grants_jinja_equal() {
+        // Environment-aware jinja config in dbt_project.yml: identical unrendered strings.
+        let jinja =
+            YmlValue::string("{{ true if target.name in ('prod') else false }}".to_string());
+        let a = uc(&[("copy_grants", jinja.clone())]);
+        let b = uc(&[("copy_grants", jinja)]);
+        assert!(same_warehouse_config_unrendered(&a, &b));
+    }
+
+    #[test]
+    fn test_same_warehouse_config_unrendered_detects_real_change() {
+        // A genuine change to the configured value must be detected.
+        let a = uc(&[("copy_grants", YmlValue::string("{{ true }}".to_string()))]);
+        let b = uc(&[("copy_grants", YmlValue::string("{{ false }}".to_string()))]);
+        assert!(!same_warehouse_config_unrendered(&a, &b));
+    }
+
+    #[test]
+    fn test_same_warehouse_config_unrendered_ignores_non_warehouse_keys() {
+        // Keys that are not warehouse-specific must not affect the comparison.
+        let a = uc(&[("materialized", YmlValue::string("table".to_string()))]);
+        let b = uc(&[("materialized", YmlValue::string("view".to_string()))]);
+        assert!(same_warehouse_config_unrendered(&a, &b));
+    }
+
+    #[test]
+    fn test_with_unrendered_prefers_unrendered_then_falls_back_to_rendered() {
+        // Repro for dbt-core#15263: rendered copy_grants differs (true vs false) but the
+        // unrendered jinja string matches -> not modified.
+        let jinja =
+            YmlValue::string("{{ true if target.name in ('prod') else false }}".to_string());
+        let self_uc = uc(&[("copy_grants", jinja.clone())]);
+        let other_uc = uc(&[("copy_grants", jinja)]);
+        let self_wh = WarehouseSpecificNodeConfig {
+            copy_grants: Some(false),
+            ..Default::default()
+        };
+        let other_wh = WarehouseSpecificNodeConfig {
+            copy_grants: Some(true),
+            ..Default::default()
+        };
+        assert!(same_warehouse_config_with_unrendered(
+            &self_wh, &other_wh, &self_uc, &other_uc
+        ));
+
+        // When neither unrendered nor rendered match, the node is modified.
+        let self_uc2 = uc(&[("copy_grants", YmlValue::string("{{ true }}".to_string()))]);
+        let other_uc2 = uc(&[("copy_grants", YmlValue::string("{{ false }}".to_string()))]);
+        assert!(!same_warehouse_config_with_unrendered(
+            &self_wh, &other_wh, &self_uc2, &other_uc2
+        ));
+
+        // When unrendered differs but rendered matches, fall back to rendered -> same.
+        let same_wh = WarehouseSpecificNodeConfig {
+            copy_grants: Some(true),
+            ..Default::default()
+        };
+        assert!(same_warehouse_config_with_unrendered(
+            &same_wh, &same_wh, &self_uc2, &other_uc2
+        ));
+    }
+
+    #[test]
+    fn warehouse_specific_config_keys_cover_struct() {
+        // Guard against drift: every serialized field of WarehouseSpecificNodeConfig (with all
+        // fields populated) must appear in WAREHOUSE_SPECIFIC_CONFIG_KEYS, and vice versa. If a
+        // new warehouse field is added, this test fails until the key list is updated.
+        use std::collections::BTreeSet;
+
+        // Populate every field so `skip_serializing_none` does not drop any key.
+        let cfg = WarehouseSpecificNodeConfig {
+            partition_by: Some(PartitionConfig::String("p".to_string())),
+            cluster_by: Some(ClusterConfig::String("c".to_string())),
+            adapter_properties: Some(Default::default()),
+            description: Some("d".to_string()),
+            hours_to_expiration: Some(1),
+            job_execution_timeout_seconds: Some(1),
+            reservation: Some("r".to_string()),
+            labels: Some(Default::default()),
+            labels_from_meta: Some(false),
+            kms_key_name: Some("k".to_string()),
+            require_partition_filter: Some(false),
+            partition_expiration_days: Some(1),
+            grant_access_to: Some(Default::default()),
+            partitions: Some(PartitionsConfig::Strings(vec!["p".to_string()])),
+            enable_refresh: Some(false),
+            refresh_interval_minutes: Some(1.0),
+            resource_tags: Some(Default::default()),
+            max_staleness: Some("m".to_string()),
+            jar_file_uri: Some("j".to_string()),
+            timeout: Some(1),
+            batch_id: Some("b".to_string()),
+            dataproc_cluster_name: Some("c".to_string()),
+            notebook_template_id: Some(1),
+            intermediate_format: Some("i".to_string()),
+            enable_list_inference: Some(false),
+            storage_uri: Some("s".to_string()),
+            file_format: Some("f".to_string()),
+            catalog_name: Some("c".to_string()),
+            location_root: Some("l".to_string()),
+            use_uniform: Some(false),
+            tblproperties: Some(Default::default()),
+            include_full_name_in_path: Some(false),
+            liquid_clustered_by: Some(StringOrArrayOfStrings::String("l".to_string())),
+            auto_liquid_cluster: Some(false),
+            clustered_by: Some(StringOrArrayOfStrings::String("c".to_string())),
+            buckets: Some(1),
+            catalog: Some("c".to_string()),
+            databricks_tags: Some(Default::default()),
+            compression: Some("c".to_string()),
+            databricks_compute: Some("c".to_string()),
+            target_alias: Some("t".to_string()),
+            source_alias: Some("s".to_string()),
+            matched_condition: Some("m".to_string()),
+            not_matched_condition: Some("n".to_string()),
+            not_matched_by_source_condition: Some("n".to_string()),
+            not_matched_by_source_action: Some("n".to_string()),
+            merge_with_schema_evolution: Some(false),
+            skip_matched_step: Some(false),
+            skip_not_matched_step: Some(false),
+            schedule: Some(Schedule::String("s".to_string())),
+            incremental_apply_config_changes: Some(false),
+            use_safer_relation_operations: Some(false),
+            view_update_via_alter: Some(false),
+            table_tag: Some("t".to_string()),
+            row_access_policy: Some("r".to_string()),
+            external_volume: Some("e".to_string()),
+            base_location_root: Some("b".to_string()),
+            base_location_subpath: Some("b".to_string()),
+            change_tracking: Some(false),
+            data_retention_time_in_days: Some(1),
+            max_data_extension_time_in_days: Some(1),
+            storage_serialization_policy: Some("s".to_string()),
+            target_file_size: Some("t".to_string()),
+            target_lag: Some("t".to_string()),
+            snowflake_initialization_warehouse: Some("s".to_string()),
+            snowflake_warehouse: Some("s".to_string()),
+            refresh_warehouse: Some("r".to_string()),
+            immutable_where: Some("i".to_string()),
+            refresh_mode: Some("r".to_string()),
+            initialize: Some("i".to_string()),
+            scheduler: Some("s".to_string()),
+            tmp_relation_type: Some("t".to_string()),
+            query_tag: Some(QueryTag("q".to_string())),
+            automatic_clustering: Some(false),
+            copy_grants: Some(false),
+            copy_tags: Some(false),
+            secure: Some(false),
+            transient: Some(false),
+            iceberg_version: Some(1),
+            auto_refresh: Some(false),
+            backup: Some(false),
+            bind: Some(false),
+            dist: Some("d".to_string()),
+            sort: Some(StringOrArrayOfStrings::String("s".to_string())),
+            sort_type: Some("s".to_string()),
+            as_columnstore: Some(false),
+            table_type: Some("t".to_string()),
+            indexes: Default::default(),
+            primary_key: Default::default(),
+            category: Some(DataLakeObjectCategory::Other),
+        };
+
+        let value = dbt_yaml::to_value(&cfg).expect("serialize warehouse config");
+        let serialized_keys: BTreeSet<String> = match value {
+            YmlValue::Mapping(map, _) => map
+                .keys()
+                .filter_map(|k| k.as_str().map(|s| s.to_string()))
+                .collect(),
+            other => panic!("expected mapping, got {other:?}"),
+        };
+        let listed_keys: BTreeSet<String> = WAREHOUSE_SPECIFIC_CONFIG_KEYS
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        let missing: Vec<&String> = serialized_keys.difference(&listed_keys).collect();
+        let extra: Vec<&String> = listed_keys.difference(&serialized_keys).collect();
+        assert!(
+            missing.is_empty() && extra.is_empty(),
+            "WAREHOUSE_SPECIFIC_CONFIG_KEYS out of sync with WarehouseSpecificNodeConfig.\n  \
+             missing (in struct, not list): {missing:?}\n  extra (in list, not struct): {extra:?}",
+        );
     }
 }

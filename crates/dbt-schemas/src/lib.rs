@@ -138,7 +138,10 @@ pub mod schemas {
         pub use configs::analysis_config::{
             AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,
         };
-        pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
+        pub use configs::common::{
+            WarehouseSpecificNodeConfig, same_warehouse_config,
+            same_warehouse_config_with_unrendered,
+        };
         pub use configs::config_keys::ConfigKeys;
         pub use configs::data_test_config::{
             DataTestConfig, ProjectDataTestConfig, ResolvedDataTestConfig,

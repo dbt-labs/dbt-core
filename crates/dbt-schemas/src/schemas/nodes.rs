@@ -20,7 +20,7 @@ use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serializ
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{grants_eq, meta_eq, tags_eq, tags_eq_vec};
-use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
+use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config_with_unrendered};
 use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
@@ -1164,9 +1164,11 @@ impl InternalDbtNode for DbtModel {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            let deprecated_config_eq = self
-                .deprecated_config
-                .same_config(&other_model.deprecated_config);
+            let deprecated_config_eq = self.deprecated_config.same_config(
+                &other_model.deprecated_config,
+                &self.__base_attr__.unrendered_config,
+                &other_model.__base_attr__.unrendered_config,
+            );
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -1318,7 +1320,12 @@ fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterializ
 
 /// Helper functions for smart comparison of SeedConfig fields that considers
 /// None vs Some(empty) representations as equivalent
-fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
+fn seed_configs_equal(
+    left: &SeedConfig,
+    right: &SeedConfig,
+    left_uc: &BTreeMap<String, YmlValue>,
+    right_uc: &BTreeMap<String, YmlValue>,
+) -> bool {
     // Compare each field with smart empty comparison
     let column_types_eq = btree_map_equal(&left.column_types, &right.column_types);
     let docs_eq = docs_config_equal(&left.docs, &right.docs);
@@ -1334,9 +1341,11 @@ fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
     let pre_hook_eq = hooks_equal(&left.pre_hook, &right.pre_hook);
     // quoting_equal(&left.quoting, &right.quoting) && // TODO: re-enable when no longer using mantle/core manifests in IA
     let materialized_eq = seed_materialized_eq(&left.materialized, &right.materialized);
-    let warehouse_config_eq = same_warehouse_config(
+    let warehouse_config_eq = same_warehouse_config_with_unrendered(
         &left.__warehouse_specific_config__,
         &right.__warehouse_specific_config__,
+        left_uc,
+        right_uc,
     );
 
     let result = column_types_eq
@@ -1583,8 +1592,12 @@ impl InternalDbtNode for DbtSeed {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-            let deprecated_config_eq =
-                seed_configs_equal(&self.deprecated_config, &other_model.deprecated_config);
+            let deprecated_config_eq = seed_configs_equal(
+                &self.deprecated_config,
+                &other_model.deprecated_config,
+                &self.__base_attr__.unrendered_config,
+                &other_model.__base_attr__.unrendered_config,
+            );
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -1933,9 +1946,11 @@ impl InternalDbtNode for DbtUnitTest {
                     (None, Some(v)) | (Some(v), None) => **v == default_sa,
                     (Some(a), Some(b)) => a == b,
                 };
-            let warehouse_config_eq = same_warehouse_config(
+            let warehouse_config_eq = same_warehouse_config_with_unrendered(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
+                &self.__base_attr__.unrendered_config,
+                &other.__base_attr__.unrendered_config,
             );
 
             let result = enabled_eq && static_analysis_eq && warehouse_config_eq;
@@ -2173,9 +2188,11 @@ impl InternalDbtNode for DbtSource {
                     (Some(a), Some(b)) => a == b,
                 };
 
-            let warehouse_config_eq = same_warehouse_config(
+            let warehouse_config_eq = same_warehouse_config_with_unrendered(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
+                &self.__base_attr__.unrendered_config,
+                &other_source.__base_attr__.unrendered_config,
             );
 
             let result = enabled_eq
@@ -2453,9 +2470,11 @@ impl InternalDbtNode for DbtSnapshot {
                 self_config.invalidate_hard_deletes == other_config.invalidate_hard_deletes;
 
             // Adapter specific configs
-            let warehouse_config_eq = same_warehouse_config(
+            let warehouse_config_eq = same_warehouse_config_with_unrendered(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
+                &self.__base_attr__.unrendered_config,
+                &other_snapshot.__base_attr__.unrendered_config,
             );
 
             let result = alias_eq
@@ -3572,9 +3591,11 @@ impl InternalDbtNode for DbtFunction {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
-            let deprecated_config_eq = self
-                .deprecated_config
-                .same_config(&other_function.deprecated_config);
+            let deprecated_config_eq = self.deprecated_config.same_config(
+                &other_function.deprecated_config,
+                &self.__base_attr__.unrendered_config,
+                &other_function.__base_attr__.unrendered_config,
+            );
 
             if !deprecated_config_eq {
                 log_state_mod_diff(

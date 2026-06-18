@@ -40,7 +40,7 @@ use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
-    same_warehouse_config,
+    same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
@@ -1221,7 +1221,12 @@ impl ModelConfig {
     }
 
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
-    pub fn same_config(&self, other: &ModelConfig) -> bool {
+    pub fn same_config(
+        &self,
+        other: &ModelConfig,
+        self_uc: &BTreeMap<String, YmlValue>,
+        other_uc: &BTreeMap<String, YmlValue>,
+    ) -> bool {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
@@ -1277,9 +1282,11 @@ impl ModelConfig {
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
         let predicates_eq = self.predicates == other.predicates;
-        let warehouse_config_eq = same_warehouse_config(
+        let warehouse_config_eq = same_warehouse_config_with_unrendered(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
+            self_uc,
+            other_uc,
         );
 
         let result = enabled_eq
