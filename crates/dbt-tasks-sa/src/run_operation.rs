@@ -241,25 +241,32 @@ pub async fn run_operation_on_run(
     let default_listener_factory = DefaultRenderingEventListenerFactory::default();
     let listener_factory = listener_factory.unwrap_or(&default_listener_factory);
 
-    // First, wrap the raw_code with reset_span and render it
-    let raw_code_with_reset_span = format!(
-        "{{% do reset_span('{}', {}, {}, {}, {}, {}, {}) %}}\n{}",
-        operation
-            .__common_attr__
-            .original_file_path
-            .to_string_lossy(),
-        operation.span().start.line as u32,
-        operation.span().start.column as u32,
-        operation.span().start.index as u32,
-        operation.span().end.line as u32,
-        operation.span().end.column as u32,
-        operation.span().end.index as u32,
-        operation
-            .__common_attr__
-            .raw_code
-            .as_ref()
-            .expect("raw_code is required in operation"),
-    );
+    // First, wrap the raw_code with reset_span and render it.
+    // Skip reset_span when the span is invalid (e.g. after deserialization from JSON
+    // in partial-parse mode, where the dbt_yaml Spanned wrapper loses its source span).
+    let raw_code = operation
+        .__common_attr__
+        .raw_code
+        .as_ref()
+        .expect("raw_code is required in operation");
+    let raw_code_with_reset_span = if operation.span().is_valid() {
+        format!(
+            "{{% do reset_span('{}', {}, {}, {}, {}, {}, {}) %}}\n{}",
+            operation
+                .__common_attr__
+                .original_file_path
+                .to_string_lossy(),
+            operation.span().start.line as u32,
+            operation.span().start.column as u32,
+            operation.span().start.index as u32,
+            operation.span().end.line as u32,
+            operation.span().end.column as u32,
+            operation.span().end.index as u32,
+            raw_code,
+        )
+    } else {
+        raw_code.to_string()
+    };
 
     operation_ctx.insert(
         "write".to_owned(),

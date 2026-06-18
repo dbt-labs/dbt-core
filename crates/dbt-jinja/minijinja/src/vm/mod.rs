@@ -922,10 +922,10 @@ impl<'env> Vm<'env> {
                         let end_offset = args[6].as_i64().unwrap_or_default() as u32;
                         state.ctx.current_path = PathBuf::from(file_path);
                         state.ctx.current_span = Span {
-                            start_line: start_line - this_span.end_line,
+                            start_line: start_line.saturating_sub(this_span.end_line),
                             start_col,
                             start_offset,
-                            end_line: end_line - this_span.end_line,
+                            end_line: end_line.saturating_sub(this_span.end_line),
                             end_col,
                             end_offset,
                         };
