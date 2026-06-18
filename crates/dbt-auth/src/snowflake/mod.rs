@@ -1,6 +1,6 @@
 mod key_format;
 
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, PrivateKeySource};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 use database::Builder as DatabaseBuilder;
 use dbt_xdbc::database::LogLevel;
 use dbt_xdbc::{Backend, database, snowflake};
@@ -99,11 +99,15 @@ enum SnowflakeAuthIR<'a> {
         user: &'a str,
         password: &'a str,
     },
-    Keypair {
+    KeypairPath {
         user: &'a str,
-        password: &'a str,
-        key_source: PrivateKeySource<'a>,
-        private_key_passphrase: Option<&'a str>,
+        path: &'a str,
+        passphrase: Option<&'a str>,
+    },
+    KeypairInline {
+        user: &'a str,
+        private_key: &'a str,
+        passphrase: Option<&'a str>,
     },
     NativeOauth {
         client_id: &'a str,
@@ -121,7 +125,6 @@ enum SnowflakeAuthIR<'a> {
     },
     Sso {
         user: &'a str,
-        password: &'a str,
     },
     Pat {
         user: &'a str,
@@ -158,62 +161,53 @@ impl<'a> SnowflakeAuthIR<'a> {
                 builder.with_named_option(snowflake::AUTH_TOKEN, access_token)?;
                 builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
             }
-            Self::Sso { user, password } => {
+            Self::Sso { user } => {
                 builder.with_username(user);
-                builder.with_password(password);
+                builder.with_password(ADBC_STUB_PASSWORD);
                 builder.with_named_option(
                     snowflake::AUTH_TYPE,
                     snowflake::auth_type::EXTERNAL_BROWSER,
                 )?;
                 builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
             }
-            Self::Keypair {
+            Self::KeypairPath {
                 user,
-                password,
-                key_source,
-                private_key_passphrase,
+                path,
+                passphrase,
             } => {
                 builder.with_username(user);
-                builder.with_password(password);
+                builder.with_password(ADBC_STUB_PASSWORD);
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
-                match key_source {
-                    PrivateKeySource::FilePath(path) => {
-                        fs::metadata(path).map_err(|_| {
-                            AuthError::config(format!("Private key file not found: '{path}'"))
-                        })?;
-                        // If there's a passphrase, pass to the PKCS#8_VALUE param
-                        // If no passphrase, just pass the path
-                        if let Some(pass) = private_key_passphrase {
-                            let key_content = fs::read_to_string(path).map_err(|_| {
-                                AuthError::config(format!(
-                                    "Could not read from key file: '{}'",
-                                    path
-                                ))
-                            })?;
-                            builder.with_named_option(
-                                snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                                key_format::normalize_key(&key_content)?,
-                            )?;
-                            builder.with_named_option(
-                                snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD,
-                                pass,
-                            )?;
-                        } else {
-                            builder.with_named_option(snowflake::JWT_PRIVATE_KEY, path)?;
-                        }
-                    }
-                    PrivateKeySource::Raw(raw) => {
-                        builder.with_named_option(
-                            snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                            key_format::normalize_key(raw)?,
-                        )?;
-                        if let Some(pass) = private_key_passphrase {
-                            builder.with_named_option(
-                                snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD,
-                                pass,
-                            )?;
-                        }
-                    }
+                fs::metadata(path).map_err(|_| {
+                    AuthError::config(format!("Private key file not found: '{path}'"))
+                })?;
+                if let Some(pass) = passphrase {
+                    let key_content = fs::read_to_string(path).map_err(|_| {
+                        AuthError::config(format!("Could not read from key file: '{path}'"))
+                    })?;
+                    builder.with_named_option(
+                        snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
+                        key_format::normalize_key(&key_content)?,
+                    )?;
+                    builder.with_named_option(snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass)?;
+                } else {
+                    builder.with_named_option(snowflake::JWT_PRIVATE_KEY, path)?;
+                }
+            }
+            Self::KeypairInline {
+                user,
+                private_key,
+                passphrase,
+            } => {
+                builder.with_username(user);
+                builder.with_password(ADBC_STUB_PASSWORD);
+                builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
+                builder.with_named_option(
+                    snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
+                    key_format::normalize_key(private_key)?,
+                )?;
+                if let Some(pass) = passphrase {
+                    builder.with_named_option(snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass)?;
                 }
             }
             Self::WarehouseMFA { user, password } => {
@@ -282,23 +276,25 @@ fn parse_auth_inner<'a>(
                 let pk_raw = config.get_str("private_key");
                 let pk_pass = config.get_str("private_key_passphrase");
 
-                let source = match (pk_path, pk_raw) {
+                let user = config.get_str("user").expect("validated above");
+                match (pk_path, pk_raw) {
                     (Some(_), Some(_)) => Err(AuthError::config(
                         "Cannot specify both 'private_key' and 'private_key_path'",
                     )),
-                    (Some(path), None) => Ok(PrivateKeySource::FilePath(path)),
-                    (None, Some(raw)) => Ok(PrivateKeySource::Raw(raw)),
+                    (Some(path), None) => Ok(SnowflakeAuthIR::KeypairPath {
+                        user,
+                        path,
+                        passphrase: pk_pass,
+                    }),
+                    (None, Some(raw)) => Ok(SnowflakeAuthIR::KeypairInline {
+                        user,
+                        private_key: raw,
+                        passphrase: pk_pass,
+                    }),
                     (None, None) => Err(AuthError::config(
                         "Keypair authentication requires exactly one of 'private_key' or 'private_key_path'",
                     )),
-                }?;
-
-                Ok(SnowflakeAuthIR::Keypair {
-                    user: config.get_str("user").expect("validated above"),
-                    password: ADBC_STUB_PASSWORD,
-                    key_source: source,
-                    private_key_passphrase: pk_pass,
-                })
+                }
             }
             "sso" => {
                 if config.contains_key("password") {
@@ -307,10 +303,7 @@ fn parse_auth_inner<'a>(
 
                 config
                     .get_str("user")
-                    .map(|user| SnowflakeAuthIR::Sso {
-                        user,
-                        password: ADBC_STUB_PASSWORD,
-                    })
+                    .map(|user| SnowflakeAuthIR::Sso { user })
                     .ok_or_else(|| {
                         AuthError::config("Snowflake SSO authentication requires 'user'.")
                     })
@@ -419,11 +412,10 @@ fn parse_auth_inner<'a>(
                             warn_ignored_auth_field(warnings, "keypair", "password");
                         }
 
-                        Ok(SnowflakeAuthIR::Keypair {
+                        Ok(SnowflakeAuthIR::KeypairPath {
                             user: config.get_str("user").expect("validated above"),
-                            password: ADBC_STUB_PASSWORD,
-                            key_source: PrivateKeySource::FilePath(value),
-                            private_key_passphrase: config.get_str("private_key_passphrase"),
+                            path: value,
+                            passphrase: config.get_str("private_key_passphrase"),
                         })
                     }
                     "private_key" => {
@@ -436,11 +428,10 @@ fn parse_auth_inner<'a>(
                             warn_ignored_auth_field(warnings, "keypair", "password");
                         }
 
-                        Ok(SnowflakeAuthIR::Keypair {
+                        Ok(SnowflakeAuthIR::KeypairInline {
                             user: config.get_str("user").expect("validated above"),
-                            password: ADBC_STUB_PASSWORD,
-                            key_source: PrivateKeySource::Raw(value),
-                            private_key_passphrase: config.get_str("private_key_passphrase"),
+                            private_key: value,
+                            passphrase: config.get_str("private_key_passphrase"),
                         })
                     }
                     "private_key_passphrase" => {
@@ -457,22 +448,21 @@ fn parse_auth_inner<'a>(
                         let path = config.get_str("private_key_path");
                         let raw = config.get_str("private_key");
 
-                        let source = match (path, raw) {
-                            (Some(p), _) => PrivateKeySource::FilePath(p),
-                            (None, Some(r)) => PrivateKeySource::Raw(r),
-                            (None, None) => {
-                                return Err(AuthError::config(
-                                    "Found 'private_key_passphrase' but missing 'private_key_path' or 'private_key'",
-                                ));
-                            }
-                        };
-
-                        Ok(SnowflakeAuthIR::Keypair {
-                            user: config.get_str("user").expect("validated above"),
-                            password: ADBC_STUB_PASSWORD,
-                            key_source: source,
-                            private_key_passphrase: Some(value),
-                        })
+                        match (path, raw) {
+                            (Some(p), _) => Ok(SnowflakeAuthIR::KeypairPath {
+                                user: config.get_str("user").expect("validated above"),
+                                path: p,
+                                passphrase: Some(value),
+                            }),
+                            (None, Some(r)) => Ok(SnowflakeAuthIR::KeypairInline {
+                                user: config.get_str("user").expect("validated above"),
+                                private_key: r,
+                                passphrase: Some(value),
+                            }),
+                            (None, None) => Err(AuthError::config(
+                                "Found 'private_key_passphrase' but missing 'private_key_path' or 'private_key'",
+                            )),
+                        }
                     }
                     "oauth_client_id" | "oauth_client_secret" => {
                         // TODO(versusfacit): reenable warnings when possible
@@ -510,10 +500,7 @@ fn parse_auth_inner<'a>(
 
                             config
                                 .get_str("user")
-                                .map(|user| SnowflakeAuthIR::Sso {
-                                    user,
-                                    password: ADBC_STUB_PASSWORD,
-                                })
+                                .map(|user| SnowflakeAuthIR::Sso { user })
                                 .ok_or_else(|| {
                                     AuthError::config(
                                         "Snowflake SSO authentication requires 'user'.",
