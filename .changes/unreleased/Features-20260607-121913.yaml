@@ -1,7 +1,0 @@
-kind: Features
-body: 'Add `cargo conformance report`: a self-contained static HTML UI for an log-overlap run — templates ranked by impact, the concrete strings filling each drain3 `<*>` wildcard, and drill-down into the original log lines'
-time: 2026-06-07T12:19:13.534876-07:00
-custom:
-    author: akbog
-    issue: ""
-    project: internal

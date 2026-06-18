@@ -1,7 +1,0 @@
-kind: Features
-body: Emit project-wide catalogs count on the parse-time ResourceCounts telemetry event
-time: 2026-06-01T16:54:15.5274-04:00
-custom:
-    author: dataders
-    issue: ""
-    project: dbt-fusion

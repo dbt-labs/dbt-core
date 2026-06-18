@@ -1,6 +1,0 @@
-kind: Fixes
-body: (fix adapters/databricks) restore token-first dispatch for Databricks OAuth so dbt Studio's U2M flow works correctly.
-custom:
-    author: xuliangs
-    issue: "14588"
-    project: dbt-fusion

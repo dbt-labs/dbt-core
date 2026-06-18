@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'sidecar: DATEADD on TIMESTAMPTZ no longer fails the DuckDB binder under --compute sidecar'
-time: 2026-06-08T16:06:39.574921-04:00
-custom:
-    author: mach-kernel
-    issue: "10888"
-    project: dbt-fusion

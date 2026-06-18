@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Search results are now ranked by relevance: exact name matches appear first, followed by prefix matches, then field-priority matches (name, column, tag, fqn, description), with resource type and modeling layer as tiebreakers.'
-time: 2026-06-03T14:17:28.857105-07:00
-custom:
-    author: eddowh
-    issue: ""
-    project: dbt-fusion

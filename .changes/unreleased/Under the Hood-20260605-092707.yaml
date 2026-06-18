@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Remove quoting field from SourceConfig; adapter-specific quoting defaults are now applied directly during source resolution instead of being propagated through the config struct
-time: 2026-06-05T09:27:07.161115-06:00
-custom:
-    author: aiguofer
-    issue: "10078"
-    project: dbt-fusion
