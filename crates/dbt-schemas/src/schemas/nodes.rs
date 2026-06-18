@@ -19,7 +19,9 @@ use crate::schemas::common::{ExternalTable, PersistDocsConfig, hooks_equal, norm
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
-use crate::schemas::project::configs::common::{grants_eq, meta_eq, tags_eq, tags_eq_vec};
+use crate::schemas::project::configs::common::{
+    grants_eq_with_unrendered, meta_eq, tags_eq, tags_eq_vec,
+};
 use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config_with_unrendered};
 use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
@@ -1330,7 +1332,8 @@ fn seed_configs_equal(
     let column_types_eq = btree_map_equal(&left.column_types, &right.column_types);
     let docs_eq = docs_config_equal(&left.docs, &right.docs);
     let enabled_eq = left.enabled == right.enabled;
-    let grants_eq_result = grants_eq(&left.grants, &right.grants);
+    let grants_eq_result =
+        grants_eq_with_unrendered(&left.grants, &right.grants, left_uc, right_uc);
     let quote_columns_eq = left.quote_columns == right.quote_columns;
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
     let event_time_eq = left.event_time == right.event_time;
@@ -2450,7 +2453,12 @@ impl InternalDbtNode for DbtSnapshot {
             let post_hook_eq = hooks_equal(&self_config.post_hook, &other_config.post_hook);
             let persist_docs_eq =
                 persist_docs_configs_equal(&self_config.persist_docs, &other_config.persist_docs);
-            let grants_eq = grants_eq(&self_config.grants, &other_config.grants);
+            let grants_eq = grants_eq_with_unrendered(
+                &self_config.grants,
+                &other_config.grants,
+                &self.__base_attr__.unrendered_config,
+                &other_snapshot.__base_attr__.unrendered_config,
+            );
             let event_time_eq = self_config.event_time == other_config.event_time;
             let quoting_eq =
                 quoting_equal(&self_config.quoting, &other_config.quoting, adapter_type);

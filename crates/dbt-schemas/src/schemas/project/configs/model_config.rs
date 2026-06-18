@@ -39,8 +39,8 @@ use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
-    same_warehouse_config_with_unrendered,
+    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq_with_unrendered, meta_eq,
+    omissible_option_eq, same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
@@ -1224,8 +1224,8 @@ impl ModelConfig {
     pub fn same_config(
         &self,
         other: &ModelConfig,
-        self_uc: &BTreeMap<String, YmlValue>,
-        other_uc: &BTreeMap<String, YmlValue>,
+        self_unrendered_config: &BTreeMap<String, YmlValue>,
+        other_unrendered_config: &BTreeMap<String, YmlValue>,
     ) -> bool {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
@@ -1254,7 +1254,12 @@ impl ModelConfig {
             &other.on_configuration_change,
         ); // Custom comparison for on_configuration_change
         let on_error_eq = self.on_error == other.on_error;
-        let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
+        let grants_eq_result = grants_eq_with_unrendered(
+            &self.grants,
+            &other.grants,
+            self_unrendered_config,
+            other_unrendered_config,
+        ); // Custom comparison for grants
         let packages_eq = packages_and_imports_eq(&self.packages, &other.packages); // Custom comparison for packages
         let imports_eq = packages_and_imports_eq(&self.imports, &other.imports); // Custom comparison for imports (same function as packages)
         let python_version_eq = self.python_version == other.python_version;
@@ -1285,8 +1290,8 @@ impl ModelConfig {
         let warehouse_config_eq = same_warehouse_config_with_unrendered(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
-            self_uc,
-            other_uc,
+            self_unrendered_config,
+            other_unrendered_config,
         );
 
         let result = enabled_eq

@@ -772,6 +772,44 @@ pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
     }
 }
 
+/// Unrendered-aware `grants` comparison.
+///
+/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
+/// config rather than the rendered values, so environment-aware Jinja `grants` configs in
+/// `dbt_project.yml` (e.g.
+/// `+grants: {select: "{{ ['ANALYTICS_RMP'] if target.name == 'prod' else [] }}"}`) that render
+/// to different grantee lists per target are not treated as modifications. This is the `grants`
+/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15302.
+///
+/// Semantics: `same = (grants configured && unrendered_same) || rendered_same`.
+///   1. If `grants` is configured (present in `unrendered_config`) on at least one side and the
+///      configured (unrendered) values are equal, the grants are the same.
+///   2. Otherwise fall back to the rendered comparison ([`grants_eq`]).
+///
+/// The "present on at least one side" guard is important: unlike the warehouse-specific config
+/// (which compares a whole bundle of keys at once), `grants` is a single key, so an
+/// absent-on-both unrendered `grants` must fall back to the rendered comparison rather than be
+/// treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core manifest that
+/// does not populate `unrendered_config.grants`) would be masked.
+///
+/// This is strictly more lenient than [`grants_eq`] alone (it can only turn a rendered
+/// "different" into "same"), preserving backward compatibility.
+pub fn grants_eq_with_unrendered(
+    a: &OmissibleGrantConfig,
+    b: &OmissibleGrantConfig,
+    self_unrendered_config: &BTreeMap<String, YmlValue>,
+    other_unrendered_config: &BTreeMap<String, YmlValue>,
+) -> bool {
+    let self_grants = self_unrendered_config.get("grants");
+    let other_grants = other_unrendered_config.get("grants");
+    if (self_grants.is_some() || other_grants.is_some())
+        && unrendered_value_eq(self_grants, other_grants)
+    {
+        return true;
+    }
+    grants_eq(a, b)
+}
+
 /// Compare warehouse-specific configurations field by field
 pub fn same_warehouse_config(
     self_wh: &WarehouseSpecificNodeConfig,
@@ -1834,6 +1872,81 @@ mod tests {
             .iter()
             .map(|(k, v)| (k.to_string(), v.clone()))
             .collect()
+    }
+
+    /// Build an `OmissibleGrantConfig` with a single `select` privilege granted to `roles`.
+    fn grants(roles: &[&str]) -> OmissibleGrantConfig {
+        use crate::schemas::serde::GrantConfig;
+        use dbt_common::serde_utils::Omissible;
+        let mut map = IndexMap::new();
+        map.insert(
+            "select".to_string(),
+            StringOrArrayOfStrings::ArrayOfStrings(roles.iter().map(|s| s.to_string()).collect()),
+        );
+        OmissibleGrantConfig(Omissible::Present(GrantConfig(map)))
+    }
+
+    /// Parse a YAML fragment into the `unrendered_config` map shape used at the call sites.
+    fn uc_yaml(yaml: &str) -> BTreeMap<String, YmlValue> {
+        let value: YmlValue = dbt_yaml::from_str(yaml).expect("parse unrendered config yaml");
+        match value {
+            YmlValue::Mapping(map, _) => map
+                .into_iter()
+                .filter_map(|(k, v)| k.as_str().map(|s| (s.to_string(), v)))
+                .collect(),
+            other => panic!("expected mapping, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_grants_eq_with_unrendered_jinja_equal_ignores_rendered_diff() {
+        // Repro for dbt-core#15302 (grants sibling of #15263): an environment-aware grants
+        // config renders to ["ANALYTICS_RMP"] on prod and [] elsewhere, but the unrendered
+        // jinja string is identical -> not modified, even though the rendered grants differ.
+        let self_unrendered_config = uc_yaml(
+            "grants:\n  select: \"{{ ['ANALYTICS_RMP'] if target.name == 'prod' else [] }}\"",
+        );
+        let other_unrendered_config = self_unrendered_config.clone();
+        // Rendered grants differ across targets.
+        assert!(grants_eq_with_unrendered(
+            &grants(&["ANALYTICS_RMP"]),
+            &grants(&[]),
+            &self_unrendered_config,
+            &other_unrendered_config,
+        ));
+    }
+
+    #[test]
+    fn test_grants_eq_with_unrendered_detects_real_change() {
+        // A genuine change to the configured (unrendered) grants must still be detected when
+        // the rendered values also differ.
+        let self_unrendered_config = uc_yaml("grants:\n  select: [ROLE_A]");
+        let other_unrendered_config = uc_yaml("grants:\n  select: [ROLE_B]");
+        assert!(!grants_eq_with_unrendered(
+            &grants(&["ROLE_A"]),
+            &grants(&["ROLE_B"]),
+            &self_unrendered_config,
+            &other_unrendered_config,
+        ));
+    }
+
+    #[test]
+    fn test_grants_eq_with_unrendered_falls_back_to_rendered() {
+        // When grants are not present in the unrendered config (absent on both sides), the
+        // comparison falls back to the rendered values.
+        let empty_uc: BTreeMap<String, YmlValue> = BTreeMap::new();
+        assert!(grants_eq_with_unrendered(
+            &grants(&["ROLE_A"]),
+            &grants(&["ROLE_A"]),
+            &empty_uc,
+            &empty_uc,
+        ));
+        assert!(!grants_eq_with_unrendered(
+            &grants(&["ROLE_A"]),
+            &grants(&["ROLE_B"]),
+            &empty_uc,
+            &empty_uc,
+        ));
     }
 
     #[test]

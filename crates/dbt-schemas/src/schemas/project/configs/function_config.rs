@@ -23,8 +23,8 @@ use crate::schemas::common::{Access, DbtQuoting};
 use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
-    access_eq, array_of_strings_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
-    same_warehouse_config_with_unrendered,
+    access_eq, array_of_strings_eq, docs_eq, grants_eq_with_unrendered, meta_eq,
+    omissible_option_eq, same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{
@@ -385,7 +385,12 @@ impl FunctionConfig {
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let group_eq = self.group == other.group;
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
-        let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
+        let grants_eq_result = grants_eq_with_unrendered(
+            &self.grants,
+            &other.grants,
+            self_unrendered_config,
+            other_unrendered_config,
+        ); // Custom comparison for grants
         let quoting_eq = self.quoting == other.quoting;
         let on_configuration_change_eq =
             self.on_configuration_change == other.on_configuration_change;
