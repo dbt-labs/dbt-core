@@ -145,10 +145,6 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "80a8eeabbb1a2913efc423c1bfddcd99bc5acffc19422181a9f7e8ddec54ed9b",
     ),
     (
-        ("databricks", "apple-darwin", "aarch64", "0.21.0+dbt0.21.5"),
-        "09d79701b729a52854862ba34f8756ae93f1f45a8ba33dd8300194beb5adca14",
-    ),
-    (
         ("databricks", "apple-darwin", "aarch64", "0.21.0+dbt0.21.6"),
         "56528db01bce2834d601acb45fe2b6f0ed1e80b7856078fb51f769c1459591ec",
     ),
@@ -161,8 +157,8 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "cc2d50145a4420309c95a65a39b51dc2731279ffe1fa44898462aff7ceda8c3c",
     ),
     (
-        ("databricks", "apple-darwin", "x86_64", "0.21.0+dbt0.21.5"),
-        "4b38c2b39a41c057d021e2a5f558e316bcaa9b5b1ef41468398fee51958e801b",
+        ("databricks", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.11"),
+        "e9e15cc3dfb74683f753098d25a6e70bc0f5ecb8a4ca0a20ed0bc0db89935506",
     ),
     (
         ("databricks", "apple-darwin", "x86_64", "0.21.0+dbt0.21.6"),
@@ -177,8 +173,8 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "81c6d69d88cfb467c90aa9f16e65548f64ae4c10e8a5c23061a4e9dad9e84021",
     ),
     (
-        ("databricks", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0+dbt0.21.5"),
-        "8f497697b5fe676f07d7a79e4539307c2e145458aafc67ad812a915bb44bbaaf",
+        ("databricks", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.21.11"),
+        "d83af05b478c6e3b0b945ac823bd0edd465a15091060df2f986969516bef9252",
     ),
     (
         ("databricks", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0+dbt0.21.6"),
@@ -193,8 +189,8 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "c8744e1a902357f49ee3ef21c6b366334a786af6394790751b0d5b9196857354",
     ),
     (
-        ("databricks", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.21.5"),
-        "bafc65d554eb39614c9878cf66b07c11b578dec895923ca2f5b08261d8171219",
+        ("databricks", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.21.11"),
+        "8d8bc2d435ea7384521c03fe563d46cc609070bae5dcbc090ef4142d2da2b9b7",
     ),
     (
         ("databricks", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.21.6"),
@@ -209,8 +205,8 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "24846db74ed1b4a9da2535b1215999f700668f8a5e9ccdb3a66ca6822f0175e9",
     ),
     (
-        ("databricks", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.21.5"),
-        "73cce7c25c517f3b75be60c908e447d385aeab0f28a17107319a5b1763c64c02",
+        ("databricks", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.21.11"),
+        "50c20e05aedc0fe1cc9325f751953d307a1e743cbac334b27f19f96539e91ba3",
     ),
     (
         ("databricks", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.21.6"),
@@ -223,6 +219,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("databricks", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.10"),
         "30fdb72ed127c68ec3bf9c0c411eb6e3fa847e670407004612d4c2efdefec37d",
+    ),
+    (
+        ("databricks", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.11"),
+        "097926ba6db8df800159cef3ec845ac649d1bf34d8c8d420f6ec98c3022424a7",
     ),
     (
         ("duckdb", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.0.20"),
