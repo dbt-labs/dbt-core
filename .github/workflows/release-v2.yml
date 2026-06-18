@@ -761,19 +761,28 @@ jobs:
           git switch -c "$PR_BRANCH"
 
           # Changelog paths only, scoped to the release commit — excludes the
-          # version bump. `--3way` falls back to a merge if main has drifted.
+          # version bump.
+          PATCH="$(mktemp)"
           git diff "origin/${RELEASE_BRANCH}~1" "origin/${RELEASE_BRANCH}" \
-            -- .changes CHANGELOG.md \
-            | git apply --index --3way
+            -- .changes CHANGELOG.md > "$PATCH"
 
-          if git diff --cached --quiet; then
+          # Skip cleanly when there's nothing to backport, or when the delta is
+          # already on main (e.g. a prior backport PR merged before a re-run) —
+          # `--reverse --check` succeeds only if the patch is already applied.
+          if [ ! -s "$PATCH" ] || git apply --reverse --check "$PATCH" 2>/dev/null; then
             echo "::notice::No changelog delta to backport for v${VERSION}."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          # `--3way` falls back to a merge if main has drifted.
+          git apply --index --3way "$PATCH"
           git commit -m "chore: backport v${VERSION} changelog to main"
-          git push --force origin "$PR_BRANCH"  # workflow-owned; idempotent re-runs
+
+          # Fetch any existing remote branch so --force-with-lease can guard
+          # against clobbering unexpected updates while staying re-run safe.
+          git fetch origin "$PR_BRANCH" 2>/dev/null || true
+          git push --force-with-lease origin "$PR_BRANCH"
 
           {
             echo "skip=false"
@@ -788,8 +797,11 @@ jobs:
           PR_BRANCH: ${{ steps.backport.outputs.pr_branch }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          if gh pr view "$PR_BRANCH" --json state --jq .state >/dev/null 2>&1; then
-            echo "PR for $PR_BRANCH already exists; the force-pushed branch updates it."
+          # Only an open PR is updated by the force-push; a closed/merged one
+          # shouldn't block recreating the backport.
+          STATE="$(gh pr view "$PR_BRANCH" --json state --jq .state 2>/dev/null || true)"
+          if [ "$STATE" = "OPEN" ]; then
+            echo "PR for $PR_BRANCH is open; the force-pushed branch updates it."
             exit 0
           fi
 
