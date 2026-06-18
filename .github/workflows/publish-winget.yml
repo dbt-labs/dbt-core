@@ -100,8 +100,30 @@ jobs:
           name: winget-manifests-${{ inputs.version }}
           path: manifests-out/
 
-      - name: Submit to microsoft/winget-pkgs
+      # wingetcreate has no "nothing changed" detection — it opens a PR (or
+      # errors) on every submit. This workflow only ever changes the version
+      # + installer URL/hash, all deterministic from VERSION, so if the
+      # version dir already exists upstream there is nothing for us to submit.
+      # Skip it to avoid a redundant PR on re-runs.
+      - name: Check if version already published
         if: ${{ !inputs.dry_run }}
+        id: published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/d/dbtLabs/dbt-core/${VERSION}"
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" "$url")
+          case "$code" in
+            200) echo "Version ${VERSION} already published — skipping submit."; echo "exists=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "Version ${VERSION} not yet published — will submit."; echo "exists=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Unexpected HTTP $code checking winget-pkgs for ${VERSION}"; exit 1 ;;
+          esac
+
+      - name: Submit to microsoft/winget-pkgs
+        if: ${{ !inputs.dry_run && steps.published.outputs.exists != 'true' }}
         shell: pwsh
         env:
           WINGET_PUBLISH_PAT: ${{ secrets.WINGET_PUBLISH_PAT }}
