@@ -842,3 +842,19 @@ jobs:
           Release workflow: ${RUN_URL}
           EOF
           )"
+
+  # Submits an updated dbtLabs.dbt-core manifest to microsoft/winget-pkgs
+  # via `wingetcreate update` using the Windows installer archive from the
+  # `github-release` job. Skipped for pre-release versions (anything with
+  # a `-` in the SemVer) — winget users only get stable releases. Runs in
+  # parallel with `publish-homebrew`; both fan out from `github-release`.
+  publish-winget:
+    needs: [github-release]
+    if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
+    uses: ./.github/workflows/publish-winget.yml
+    with:
+      version: ${{ needs.prepare-release.outputs.version }}
+      dry_run: ${{ inputs.dry_run }}
+    permissions:
+      contents: read
+    secrets: inherit
