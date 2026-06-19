@@ -10,7 +10,10 @@ pub struct DuckDbAuth {
 
 impl DuckDbAuth {
     pub fn new(backend: Backend) -> Self {
-        debug_assert!(matches!(backend, Backend::DuckDB | Backend::DuckDBExtended));
+        debug_assert!(matches!(
+            backend,
+            Backend::DuckDB | Backend::DuckDBExtended | Backend::Fdcs
+        ));
         Self { backend }
     }
 }
@@ -61,7 +64,7 @@ mod tests {
 
     #[test]
     fn configure_preserves_duckdb_backend_variant() {
-        for backend in [Backend::DuckDB, Backend::DuckDBExtended] {
+        for backend in [Backend::DuckDB, Backend::DuckDBExtended, Backend::Fdcs] {
             let auth = DuckDbAuth::new(backend);
             let builder = auth
                 .configure(&AdapterConfig::new(Default::default()))
