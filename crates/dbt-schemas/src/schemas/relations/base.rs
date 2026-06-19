@@ -58,6 +58,32 @@ impl TableFormat {
             TableFormat::DuckLake => "ducklake",
         }
     }
+
+    /// Parse a stored/string table_format case-insensitively, `None` for
+    /// unknown values. For callers that must distinguish "explicitly default"
+    /// from "absent/unrecognized" (e.g. replay reconstruction).
+    pub fn try_from_str_ci(s: &str) -> Option<TableFormat> {
+        if s.eq_ignore_ascii_case("iceberg") {
+            Some(TableFormat::Iceberg)
+        } else if s.eq_ignore_ascii_case("ducklake") {
+            Some(TableFormat::DuckLake)
+        } else if s.eq_ignore_ascii_case("default") {
+            Some(TableFormat::Default)
+        } else {
+            None
+        }
+    }
+
+    /// Parse a stored/string table_format case-insensitively. Unknown values
+    /// (including empty) fall back to `Default`. Lets callers stop matching on
+    /// raw `== "iceberg"` strings.
+    pub fn from_str_ci(s: &str) -> TableFormat {
+        Self::try_from_str_ci(s).unwrap_or(TableFormat::Default)
+    }
+
+    pub fn is_iceberg(&self) -> bool {
+        matches!(self, TableFormat::Iceberg)
+    }
 }
 
 /// dbt-adapters/src/dbt/adapters/contracts/relation.py
