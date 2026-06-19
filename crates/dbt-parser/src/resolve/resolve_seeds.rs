@@ -388,6 +388,7 @@ pub async fn resolve_seeds(
                         adapter_type,
                         io_args,
                         patch_path.as_ref().unwrap_or(&path),
+                        false,
                     )?;
                 }
             }

@@ -590,6 +590,7 @@ pub async fn resolve_snapshots(
                             adapter_type,
                             &arg.io,
                             patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                            false,
                         )?;
                     }
                 }

@@ -579,6 +579,7 @@ pub async fn resolve_sources(
                         adapter_type,
                         io_args,
                         &mpe.relative_path,
+                        false,
                     )?;
                 }
             }

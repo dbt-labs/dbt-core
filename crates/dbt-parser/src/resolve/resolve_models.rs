@@ -800,6 +800,7 @@ pub async fn resolve_models(
                         adapter_type,
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                        false,
                     )?;
                 }
             }
@@ -814,6 +815,7 @@ pub async fn resolve_models(
                         adapter_type,
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                        true,
                     )?;
                 }
             }

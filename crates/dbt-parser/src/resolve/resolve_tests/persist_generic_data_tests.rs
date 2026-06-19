@@ -64,6 +64,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         adapter_type: AdapterType,
         io_args: &IoArgs,
         original_file_path: &PathBuf,
+        suppress_deprecated_test_validation: bool,
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
         // Process tests for each version (or single resource)
@@ -84,6 +85,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         &mut seen_tests,
                         test_name_truncations,
                         &[],
+                        suppress_deprecated_test_validation,
                     )?;
                     collected_generic_tests.push(test_asset);
                 }
@@ -114,6 +116,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             &mut seen_tests,
                             test_name_truncations,
                             &entry.tags,
+                            suppress_deprecated_test_validation,
                         )?;
                         collected_generic_tests.push(test_asset);
                     }
@@ -138,6 +141,7 @@ fn persist_inner(
     seen_tests: &mut HashSet<String>,
     test_name_truncations: &mut HashMap<String, String>,
     column_tags: &[String],
+    suppress_deprecated_test_validation: bool,
 ) -> FsResult<GenericTestAsset> {
     // If this is not the root project, we need to pass the project name as a dependency package name
     let dependecy_package_name = if project_name != root_project_name {
@@ -152,6 +156,7 @@ fn persist_inner(
         column_name,
         io_args,
         dependecy_package_name,
+        suppress_deprecated_test_validation,
     )?;
 
     let TestDetails {
@@ -301,6 +306,7 @@ fn get_test_details(
     column_name: Option<&str>,
     io_args: &IoArgs,
     dependency_package_name: Option<&str>,
+    suppress_deprecated_test_validation: bool,
 ) -> FsResult<TestDetails> {
     let mut kwargs = BTreeMap::new();
     let mut config: Option<DataTestConfig> = None;
@@ -356,6 +362,7 @@ fn get_test_details(
                     &mk.config,
                     io_args,
                     dependency_package_name,
+                    suppress_deprecated_test_validation,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
                 jinja_set_vars.extend(extraction_result.jinja_set_vars);
@@ -378,6 +385,7 @@ fn get_test_details(
                     &inner.config,
                     io_args,
                     dependency_package_name,
+                    suppress_deprecated_test_validation,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
                 jinja_set_vars.extend(extraction_result.jinja_set_vars);
@@ -440,6 +448,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     existing_config: &Option<DataTestConfig>,
     io_args: &IoArgs,
     dependency_package_name: Option<&str>,
+    suppress_deprecated_test_validation: bool,
 ) -> FsResult<KwargsExtractionResult> {
     // Start with existing config
     let mut final_config = existing_config.clone();
@@ -495,7 +504,9 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             message
         );
 
-        emit_strict_parse_error(&schema_error, dependency_package_name, io_args);
+        if !suppress_deprecated_test_validation {
+            emit_strict_parse_error(&schema_error, dependency_package_name, io_args);
+        }
     }
     for (key, value) in deprecated.clone() {
         let json_value = serde_json::to_value(value.clone()).unwrap_or(Value::Null);
@@ -1749,6 +1760,7 @@ mod tests {
             &existing_config,
             &io_args,
             None,
+            false,
         )
         .unwrap();
         let kwargs = extraction_result.kwargs;
@@ -2683,6 +2695,7 @@ mod tests {
             &existing_config,
             &io_args,
             None,
+            false,
         )
         .unwrap();
 
@@ -2793,6 +2806,7 @@ mod tests {
             &existing_config,
             &io_args,
             None,
+            false,
         )
         .unwrap();
 
@@ -2942,6 +2956,7 @@ mod tests {
             &existing_config,
             &io_args,
             None,
+            false,
         )
         .unwrap();
 
@@ -3333,6 +3348,7 @@ mod tests {
             None,
             &io_args,
             None,
+            false,
         )
         .unwrap();
 
