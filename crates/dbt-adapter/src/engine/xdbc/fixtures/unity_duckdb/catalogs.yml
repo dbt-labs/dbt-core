@@ -1,7 +1,7 @@
 # Scenario: Databricks Unity Catalog Iceberg REST catalog attached on duckdb.
-# Exercises: READ_ONLY true by default for Unity — writes need duckdb 1.5.4 /
-# duckdb-iceberg#1017 (gated to #10950), so the base attaches read-only. No
-# write-compat ATTACH options are emitted (they don't exist on released duckdb).
+# Exercises: read-write attach (READ_ONLY false) + Unity's write-compat default
+# (DISABLE_MULTI_TABLE_COMMIT true) emitted when the user did not set it. These
+# options require duckdb 1.5.4 / duckdb-iceberg#1017.
 catalogs:
   - name: unity_demo
     type: unity
