@@ -32,13 +32,16 @@ pub enum DuckDbWriteStrategy {
     /// External Iceberg catalogs (any catalog whose `table_format` is iceberg):
     /// write the target in place — `duckdb__create_table_as` emits an empty
     /// `CREATE` followed by `INSERT`, and the table materialization skips the
-    /// temp-table + rename dance entirely: staged `CREATE ... AS SELECT` is not
-    /// supported over Iceberg REST attachments on released duckdb (stage-create
-    /// lands with duckdb-iceberg#1017), so there is no temp table to rename.
-    ///
-    /// (A third state, `CreateThenInsert`, arrives with the stacked
-    /// Horizon/Unity PR's `stage_create_tables: false` opt-out.)
+    /// temp-table + rename dance entirely, since Iceberg REST attachments do
+    /// not support `ALTER ... RENAME`. The iceberg default: empty `CREATE` +
+    /// `INSERT` works whether or not the REST catalog supports staged creates.
     DirectCreate,
+    /// Iceberg catalog whose user opted in to staged creates with
+    /// `stage_create_tables: true` (the duckdb-iceberg#1017 write-compat ATTACH
+    /// option, duckdb's upstream default): `CREATE ... AS SELECT` directly
+    /// against the target, still skipping the temp-table + rename dance
+    /// (renames remain unsupported over Iceberg REST).
+    DirectCreateAsSelect,
 }
 
 impl DuckDbWriteStrategy {
@@ -46,6 +49,7 @@ impl DuckDbWriteStrategy {
         match self {
             DuckDbWriteStrategy::CreateAsSelect => "create_as_select",
             DuckDbWriteStrategy::DirectCreate => "direct_create",
+            DuckDbWriteStrategy::DirectCreateAsSelect => "direct_create_as_select",
         }
     }
 }
@@ -1455,16 +1459,28 @@ impl CatalogRelation {
         }
     }
 
+    /// The user's explicit `stage_create_tables` from catalogs.yml
+    /// `config.duckdb`, if set — mirrors the duckdb-iceberg#1017
+    /// `STAGE_CREATE_TABLES` ATTACH option and steers
+    /// [`Self::duckdb_write_strategy`].
+    fn stage_create_tables_override(&self) -> Option<bool> {
+        self.adapter_properties
+            .get("stage_create_tables")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+    }
+
     /// Adapter-generic Jinja surface for materializations: whether dbt's write
     /// path stage-creates (`CREATE ... AS SELECT`) for this relation. For
     /// DuckDB this is derived from [`Self::duckdb_write_strategy`] — the FSM is
     /// the single write-path decision point — so the key can never disagree
-    /// with the SQL the macros actually emit.
+    /// with the SQL the macros actually emit. (`stage_create_tables` in
+    /// catalogs.yml feeds the FSM, not this key directly.)
     pub fn supports_stage_create(&self) -> bool {
         match self.adapter_type {
-            AdapterType::DuckDB => {
-                self.duckdb_write_strategy() == DuckDbWriteStrategy::CreateAsSelect
-            }
+            AdapterType::DuckDB => matches!(
+                self.duckdb_write_strategy(),
+                DuckDbWriteStrategy::CreateAsSelect | DuckDbWriteStrategy::DirectCreateAsSelect
+            ),
             _ => true,
         }
     }
@@ -1489,7 +1505,16 @@ impl CatalogRelation {
                     .catalog_type
                     .eq_ignore_ascii_case(V2CatalogType::DuckLake.as_str());
                 if !is_ducklake && TableFormat::from_str_ci(&self.table_format).is_iceberg() {
-                    DuckDbWriteStrategy::DirectCreate
+                    // `stage_create_tables: true` opts in to staged creates, so
+                    // dbt may CTAS the target in place; unset or false stays on
+                    // the empty CREATE + INSERT that works under either ATTACH
+                    // mode (Horizon rejects staged creates — its preset default
+                    // is false).
+                    if self.stage_create_tables_override() == Some(true) {
+                        DuckDbWriteStrategy::DirectCreateAsSelect
+                    } else {
+                        DuckDbWriteStrategy::DirectCreate
+                    }
                 } else {
                     DuckDbWriteStrategy::CreateAsSelect
                 }
