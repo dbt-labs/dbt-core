@@ -316,7 +316,15 @@ class ReadFilesFromDiff:
                 # Get the existing source_file object and update the contents and mod time
                 source_file = self.files[file_id]
                 source_file.contents = input_file.content
-                source_file.checksum = FileHash.from_contents(input_file.content)
+                # Normalize line endings/whitespace before hashing so that
+                # content delivered via a file diff (e.g. dbt Cloud / the
+                # ``--partial-parse-file-diff`` path) produces the same checksum
+                # as the same file read from disk, which normalizes via
+                # load_source_file(). Otherwise a CRLF author vs LF baseline
+                # falsely reports state:modified (#11473).
+                source_file.checksum = FileHash.from_contents(
+                    normalize_file_contents(input_file.content)
+                )
                 source_file.path.modification_time = input_file.modification_time
                 # Handle creation of dictionary version of schema file content
                 if isinstance(source_file, SchemaSourceFile) and source_file.contents:
@@ -378,7 +386,10 @@ class ReadFilesFromDiff:
             source_file = source_file_cls(
                 path=input_file_path,
                 contents=input_file.content,
-                checksum=FileHash.from_contents(input_file.content),
+                # Match the on-disk read path (load_source_file) so a file
+                # added via a file diff hashes the same regardless of the line
+                # endings of the platform it was authored on (#11473).
+                checksum=FileHash.from_contents(normalize_file_contents(input_file.content)),
                 project_name=project_name,
                 parse_file_type=parse_ft,
             )
