@@ -1,13 +1,13 @@
-# Scenario: Two catalogs of different types, no DuckLake.
+# Scenario: Two catalogs of the same type, no DuckLake.
 # Exercises: emission order preserved; NO `INSTALL ducklake` prelude.
 catalogs:
-  - name: aws_glue
-    type: glue
+  - name: rest_a
+    type: iceberg_rest
     table_format: iceberg
     config:
       duckdb:
-        endpoint_type: GLUE
-        attach_as: aws_glue
+        endpoint: "https://rest-a.example.com"
+        attach_as: rest_a
   - name: rest_demo
     type: iceberg_rest
     table_format: iceberg

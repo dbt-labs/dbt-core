@@ -2,9 +2,9 @@
 # Exercises: Configuration error for empty alias after sanitization.
 catalogs:
   - name: bad_alias
-    type: glue
+    type: iceberg_rest
     table_format: iceberg
     config:
       duckdb:
         attach_as: "!!!"
-        endpoint_type: GLUE
+        endpoint: "https://rest.example.com"
