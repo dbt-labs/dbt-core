@@ -84,11 +84,15 @@ jobs:
       - name: Render manifests (dry-run)
         if: ${{ inputs.dry_run }}
         shell: pwsh
+        env:
+          # Authenticates wingetcreate's API reads to avoid the anonymous rate limit.
+          WINGET_PUBLISH_PAT: ${{ secrets.WINGET_PUBLISH_PAT }}
         run: |
           Write-Host "→ $env:INSTALLER_URL"
           .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER `
             --version $env:VERSION `
             --urls $env:INSTALLER_URL `
+            --token $env:WINGET_PUBLISH_PAT `
             --out manifests-out
           Write-Host "---rendered manifests---"
           Get-ChildItem -Recurse manifests-out
