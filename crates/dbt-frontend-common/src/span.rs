@@ -2,6 +2,23 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CodeLocation;
 
+/// A recorded `{{ reclassify(expr, 'from', 'to') }}` call: the byte offsets of
+/// the (warehouse-safe) inner expression in the rendered SQL, plus the label
+/// mutation. Produced during rendering and matched against bound expression
+/// spans by the binder so the classifier propagation walker can apply the
+/// mutation without a second render pass.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReclassifySpan {
+    /// Start byte offset of the inner expression in the rendered SQL (inclusive).
+    pub start: u32,
+    /// End byte offset of the inner expression in the rendered SQL (exclusive).
+    pub stop: u32,
+    /// Classifier label to remove (or wildcard `classifier.*`).
+    pub from_label: String,
+    /// Replacement label (empty string to declassify).
+    pub to_label: String,
+}
+
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Serialize, Deserialize, Hash, Ord,
 )]

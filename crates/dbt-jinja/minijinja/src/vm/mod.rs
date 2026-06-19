@@ -1043,9 +1043,22 @@ impl<'env> Vm<'env> {
                             });
                         }
 
+                        // Notify listeners around the call with the resolved name and
+                        // args so they can observe the rendered-output position before
+                        // and after. Domain-agnostic: the vm attaches no meaning to the
+                        // function (e.g. reclassify span capture lives in a listener).
+                        listeners.iter().for_each(|listener| {
+                            listener.on_function_call_start(&function_name, args);
+                        });
+
                         state.record_pending_call_site(listeners, this_span);
                         let rv = call_wrapper(listeners, || func.call(state, args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?;
+
+                        listeners.iter().for_each(|listener| {
+                            listener.on_function_call_end(&function_name);
+                        });
+
                         // Handle CallerReturn: when a return() was called inside a {% call %} block,
                         // the caller() function wraps it in CallerReturn. We unwrap it here and
                         // mark this frame as an explicit return so the value propagates out of

@@ -1548,11 +1548,11 @@ pub fn merge_meta(
 }
 
 /// Merge two tag lists, deduplicating and sorting the result.
-pub fn merge_tags(
-    base_tags: Option<Vec<String>>,
-    update_tags: Option<Vec<String>>,
+pub fn merge_vec(
+    base_vec: Option<Vec<String>>,
+    update_vec: Option<Vec<String>>,
 ) -> Option<Vec<String>> {
-    match (base_tags, update_tags) {
+    match (base_vec, update_vec) {
         // If both are None, result is None
         (None, None) => None,
         // If either has a value (even empty), we preserve that semantic meaning
@@ -2505,6 +2505,40 @@ period: hour
             msg.contains("count: None") && msg.contains("period: Some(hour)"),
             "expected diagnostic to echo the offending values; got: {msg}"
         );
+    }
+
+    #[test]
+    fn test_merge_classifiers_unions_and_deduplicates() {
+        let base = Some(vec!["finance".to_string(), "pii".to_string()]);
+        let update = Some(vec!["pii".to_string(), "gdpr".to_string()]);
+        let result = merge_vec(base, update);
+        assert_eq!(
+            result,
+            Some(vec![
+                "finance".to_string(),
+                "gdpr".to_string(),
+                "pii".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_merge_classifiers_none_child_inherits_parent() {
+        let base = Some(vec!["pii".to_string()]);
+        let result = merge_vec(base, None);
+        assert_eq!(result, Some(vec!["pii".to_string()]));
+    }
+
+    #[test]
+    fn test_merge_classifiers_none_parent_uses_child() {
+        let update = Some(vec!["finance".to_string()]);
+        let result = merge_vec(None, update);
+        assert_eq!(result, Some(vec!["finance".to_string()]));
+    }
+
+    #[test]
+    fn test_merge_classifiers_both_none_is_none() {
+        assert_eq!(merge_vec(None, None), None);
     }
 
     #[test]

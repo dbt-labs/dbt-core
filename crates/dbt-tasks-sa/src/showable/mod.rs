@@ -11,7 +11,7 @@ use dbt_common::tracing::{
     dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_message},
     emit::emit_info_event,
 };
-use dbt_common::{ErrorCode, FsResult, err, io_args};
+use dbt_common::{ErrorCode, FsResult, MacroSpansOnly, err, io_args};
 use dbt_jinja_utils::utils::{macro_spans_to_macro_span_vec, render_sql};
 use dbt_pretty_table::{make_column_names, pretty_data_table};
 use dbt_scheduler::instructions::{Instruction, SqlInstruction};
@@ -107,8 +107,10 @@ where
     let sql_instruction = SqlInstruction {
         fqn,
         sql: final_rendered_sql.clone(),
-        macro_spans: macro_spans_to_macro_span_vec(&macro_spans),
         original_path: filename,
+        spans: Box::new(MacroSpansOnly {
+            macro_spans: macro_spans_to_macro_span_vec(&macro_spans),
+        }),
     };
 
     let batches_result = if use_worker_backend {

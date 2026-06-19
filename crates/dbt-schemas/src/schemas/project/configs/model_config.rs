@@ -31,6 +31,7 @@ use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange, OnError};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
+use crate::schemas::project::configs::common::default_classifiers;
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
@@ -459,6 +460,8 @@ pub struct ProjectModelConfig {
     pub table_format: Option<String>,
     #[serde(rename = "+tags")]
     pub tags: Omissible<StringOrArrayOfStrings>,
+    #[serde(rename = "+classifiers")]
+    pub classifiers: Omissible<StringOrArrayOfStrings>,
     #[serde(rename = "+target_lag")]
     pub target_lag: Option<String>,
     #[serde(rename = "+target_file_size")]
@@ -546,6 +549,11 @@ pub struct ModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
+    pub classifiers: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
     // serialize_with ensures meta is always present (as {} when None) for Jinja macros
@@ -698,6 +706,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             sync: config.sync,
             table_format: config.table_format,
             tags: config.tags.into_inner(),
+            classifiers: config.classifiers.into_inner(),
             unique_key: config.unique_key,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: config.description,
@@ -868,6 +877,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             static_analysis: config.static_analysis,
             table_format: config.table_format,
             tags: config.tags.into(),
+            classifiers: config.classifiers.into(),
             transient: config.__warehouse_specific_config__.transient,
             unique_key: config.unique_key,
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
@@ -1004,6 +1014,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
             pre_hook,
             meta,
             tags,
+            classifiers,
             quoting,
 
             // Flattened config (already handled above)
@@ -1084,6 +1095,8 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
+        #[allow(unused, clippy::let_unit_value)]
+        let classifiers = default_classifiers(classifiers, &parent.classifiers);
         #[allow(unused, clippy::let_unit_value)]
         let column_types = default_column_types(column_types, &parent.column_types);
         #[allow(unused, clippy::let_unit_value)]
@@ -1760,6 +1773,66 @@ mod tests {
     use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
+
+    #[test]
+    fn test_classifiers_merge_in_default_to() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "finance".to_string(),
+                "pii".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "gdpr".to_string(),
+                "pii".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(
+            child.classifiers,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "finance".to_string(),
+                "gdpr".to_string(),
+                "pii".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_classifiers_none_child_inherits_parent() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pii".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            classifiers: None,
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(
+            child.classifiers,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pii".to_string(),
+            ]))
+        );
+    }
 
     #[test]
     fn test_model_config_state_parses() {

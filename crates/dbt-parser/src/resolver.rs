@@ -10,13 +10,13 @@ use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
+use dbt_jinja_utils::JinjaFactory;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{
     NodeResolver, check_for_model_deprecations, resolve_dependencies,
 };
 use dbt_jinja_utils::phases::parse::build_resolve_context;
-use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
 use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
@@ -102,6 +102,7 @@ pub async fn resolve(
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     resolver_hooks: Arc<dyn ResolverHooks>,
+    jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
@@ -156,27 +157,31 @@ pub async fn resolve(
     let root_project_quoting =
         resolve_package_quoting(*dbt_state.root_project().quoting, adapter_type);
 
-    let jinja_env = Arc::new(initialize_parse_jinja_environment(
-        root_project_name,
-        &dbt_state.dbt_profile.profile,
-        &dbt_state.dbt_profile.target,
-        adapter_type,
-        dbt_state.dbt_profile.db_config.clone(),
-        root_project_quoting,
-        build_macro_units(&macros.macros),
-        dbt_state.vars.clone(),
-        dbt_state.cli_vars.clone(),
-        dbt_state.root_project_flags(),
-        dbt_state.run_started_at,
-        invocation_args,
-        macros
-            .macros
-            .values()
-            .map(|m| m.package_name.clone())
-            .collect(),
-        arg.io.clone(),
-        dbt_state.catalogs.clone(),
-    )?);
+    // The factory builds the environment (and registers any extra functions it
+    // provides) before any model SQL is rendered for static analysis.
+    let jinja_env = Arc::new(
+        jinja_factory.create_parse_jinja_environment(
+            root_project_name,
+            &dbt_state.dbt_profile.profile,
+            &dbt_state.dbt_profile.target,
+            adapter_type,
+            dbt_state.dbt_profile.db_config.clone(),
+            root_project_quoting,
+            build_macro_units(&macros.macros),
+            dbt_state.vars.clone(),
+            dbt_state.cli_vars.clone(),
+            dbt_state.root_project_flags(),
+            dbt_state.run_started_at,
+            invocation_args,
+            macros
+                .macros
+                .values()
+                .map(|m| m.package_name.clone())
+                .collect(),
+            arg.io.clone(),
+            dbt_state.catalogs.clone(),
+        )?,
+    );
 
     // Load and resolve selectors
     let resolved_selectors_map = resolve_selectors_from_yaml(arg, root_project_name, &jinja_env)?;

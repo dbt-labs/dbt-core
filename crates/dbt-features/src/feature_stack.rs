@@ -8,6 +8,7 @@ use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
 use crate::cli::CliFeature;
 use crate::index::IndexFeature;
+use crate::jinja::JinjaFeature;
 use crate::loader::LoaderFeature;
 use crate::metricflow::MetricflowFeature;
 use crate::resolver::ResolverFeature;
@@ -55,6 +56,7 @@ pub struct FeatureStack {
     pub task_runner: TaskRunnerFeature,
     pub resolver: ResolverFeature,
     pub loader: LoaderFeature,
+    pub jinja: JinjaFeature,
     pub login_hooks: Arc<dyn LoginHooks>,
     pub version_check_enabled: bool,
     // TODO: add more features here

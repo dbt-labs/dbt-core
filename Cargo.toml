@@ -18,6 +18,7 @@ members = [
   "crates/dbt-cloud-api",
   "crates/dbt-cloud-config",
   "crates/dbt-df-providers",
+  "crates/dbt-classification-types",
   "crates/dbt-features",
   "crates/dbt-tasks-core",
   "crates/dbt-tasks-sa",
@@ -218,6 +219,7 @@ dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
 dbt-base = { path = "crates/dbt-base" }
 dbt-clap-core = { path = "crates/dbt-clap-core" }
+dbt-classification-types = { path = "crates/dbt-classification-types" }
 dbt-cloud-api = { path = "crates/dbt-cloud-api" }
 dbt-cloud-config = { path = "crates/dbt-cloud-config" }
 dbt-common = { path = "crates/dbt-common" }

@@ -4566,8 +4566,13 @@ pub struct CommonAttributes {
     // Meta
     pub description: Option<String>,
 
-    // Tags and Meta
+    // Tags, Classifiers, and Meta
     pub tags: Vec<String>,
+    // `classifiers` was added after many node recordings/manifests were
+    // captured; default to empty so deserializing older payloads (e.g. replay
+    // fixtures, prior manifests) that lack the field does not fail.
+    #[serde(default)]
+    pub classifiers: Vec<String>,
     pub meta: IndexMap<String, YmlValue>,
 }
 

@@ -99,6 +99,9 @@ pub struct ManifestCommonAttributes {
     pub tags: Vec<String>,
 
     #[serde(default)]
+    pub classifiers: Vec<String>,
+
+    #[serde(default)]
     pub meta: IndexMap<String, YmlValue>,
 }
 
@@ -125,6 +128,8 @@ pub struct ManifestMaterializableCommonAttributes {
     pub description: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub classifiers: Vec<String>,
     #[serde(default)]
     pub meta: IndexMap<String, YmlValue>,
 }
@@ -217,6 +222,7 @@ impl From<DbtSeed> for ManifestSeed {
                 patch_path: seed.__common_attr__.patch_path,
                 description: seed.__common_attr__.description,
                 tags: seed.__common_attr__.tags,
+                classifiers: seed.__common_attr__.classifiers,
                 meta: seed.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -289,6 +295,7 @@ impl From<DbtUnitTest> for ManifestUnitTest {
                 patch_path: unit_test.__common_attr__.patch_path,
                 description: unit_test.__common_attr__.description,
                 tags: unit_test.__common_attr__.tags,
+                classifiers: unit_test.__common_attr__.classifiers,
                 meta: unit_test.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -372,6 +379,7 @@ impl From<DbtTest> for ManifestDataTest {
 
                 description: test.__common_attr__.description,
                 tags: test.__common_attr__.tags,
+                classifiers: test.__common_attr__.classifiers,
                 meta: test.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -601,6 +609,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
                 patch_path: snapshot.__common_attr__.patch_path,
                 description: snapshot.__common_attr__.description,
                 tags: snapshot.__common_attr__.tags,
+                classifiers: snapshot.__common_attr__.classifiers,
                 meta: snapshot.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -685,6 +694,7 @@ impl From<DbtSource> for ManifestSource {
                 patch_path: source.__common_attr__.patch_path,
                 description: source.__common_attr__.description,
                 tags: source.__common_attr__.tags,
+                classifiers: source.__common_attr__.classifiers,
                 meta: source.__common_attr__.meta,
             },
             relation_name: source.__base_attr__.relation_name,
@@ -821,6 +831,7 @@ pub struct ManifestModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    pub classifiers: Option<StringOrArrayOfStrings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_name: Option<String>,
     #[serde(
@@ -1090,6 +1101,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             database: config.database,
             schema: config.schema,
             tags: config.tags,
+            classifiers: config.classifiers,
             catalog_name: config.catalog_name,
             meta: config.meta,
             group: config.group,
@@ -1160,6 +1172,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             database: config.database,
             schema: config.schema,
             tags: config.tags,
+            classifiers: config.classifiers,
             catalog_name: config.catalog_name,
             compute: config.compute,
             meta: config.meta,
@@ -1246,6 +1259,7 @@ impl From<DbtModel> for ManifestModel {
                 patch_path: model.__common_attr__.patch_path,
                 description: model.__common_attr__.description,
                 tags: model.__common_attr__.tags,
+                classifiers: model.__common_attr__.classifiers,
                 meta: model.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -1330,6 +1344,7 @@ impl From<DbtAnalysis> for ManifestAnalysis {
                 patch_path: analysis.__common_attr__.patch_path,
                 description: analysis.__common_attr__.description,
                 tags: analysis.__common_attr__.tags,
+                classifiers: analysis.__common_attr__.classifiers,
                 meta: analysis.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -1503,6 +1518,7 @@ impl From<DbtFunction> for ManifestFunction {
                 original_file_path: function.__common_attr__.original_file_path,
                 description: function.__common_attr__.description,
                 tags: function.__common_attr__.tags,
+                classifiers: function.__common_attr__.classifiers,
                 meta: function.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -1586,6 +1602,7 @@ impl From<DbtExposure> for ManifestExposure {
                 original_file_path: exposure.__common_attr__.original_file_path,
                 description: exposure.__common_attr__.description,
                 tags: exposure.__common_attr__.tags,
+                classifiers: exposure.__common_attr__.classifiers,
                 meta: exposure.__common_attr__.meta,
             },
             __base_attr__: ManifestExposureNodeBaseAttributes {
@@ -1665,6 +1682,7 @@ impl From<DbtMetric> for ManifestMetric {
                 original_file_path: metric.__common_attr__.original_file_path,
                 description: Some(metric.__common_attr__.description.unwrap_or_default()),
                 tags: metric.__common_attr__.tags,
+                classifiers: metric.__common_attr__.classifiers,
                 meta: metric.__common_attr__.meta,
             },
             __base_attr__: ManifestMetricNodeBaseAttributes {
@@ -1825,6 +1843,7 @@ impl From<DbtSemanticModel> for ManifestSemanticModel {
                 original_file_path: semantic_model.__common_attr__.original_file_path,
                 description: semantic_model.__common_attr__.description,
                 tags: semantic_model.__common_attr__.tags,
+                classifiers: semantic_model.__common_attr__.classifiers,
                 meta: semantic_model.__common_attr__.meta,
             },
             __base_attr__: ManifestSemanticModelNodeBaseAttributes {
@@ -1866,6 +1885,7 @@ impl From<ManifestSemanticModel> for DbtSemanticModel {
                 original_file_path: manifest_model.__common_attr__.original_file_path,
                 description: manifest_model.__common_attr__.description,
                 tags: manifest_model.__common_attr__.tags,
+                classifiers: manifest_model.__common_attr__.classifiers,
                 meta: manifest_model.__common_attr__.meta,
                 ..Default::default()
             },
@@ -1996,6 +2016,7 @@ impl From<DbtSavedQuery> for ManifestSavedQuery {
                 original_file_path: saved_query.__common_attr__.original_file_path,
                 description: saved_query.__common_attr__.description,
                 tags: saved_query.__common_attr__.tags,
+                classifiers: saved_query.__common_attr__.classifiers,
                 meta: saved_query.__common_attr__.meta,
             },
             __base_attr__: ManifestSavedQueryNodeBaseAttributes {

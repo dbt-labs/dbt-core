@@ -15,7 +15,7 @@ use crate::default_to;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::merge_meta;
-use crate::schemas::common::merge_tags;
+use crate::schemas::common::merge_vec;
 use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
@@ -107,7 +107,19 @@ pub fn default_meta_and_tags(
     let child_tags_vec = child_tags.take().map(|tags| tags.into());
     let parent_tags_vec = parent_tags.clone().map(|tags| tags.into());
     *child_tags =
-        merge_tags(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
+        merge_vec(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
+}
+
+/// Helper function to handle default_to logic for classifiers.
+/// Merges child and parent classifiers into a deduped, sorted union.
+pub fn default_classifiers(
+    child_classifiers: &mut Option<StringOrArrayOfStrings>,
+    parent_classifiers: &Option<StringOrArrayOfStrings>,
+) {
+    let child_vec = child_classifiers.take().map(|c| c.into());
+    let parent_vec = parent_classifiers.clone().map(|c| c.into());
+    *child_classifiers =
+        merge_vec(child_vec, parent_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
 }
 
 /// Helper function to handle default_to logic for packages
@@ -2132,6 +2144,39 @@ mod tests {
             missing.is_empty() && extra.is_empty(),
             "WAREHOUSE_SPECIFIC_CONFIG_KEYS out of sync with WarehouseSpecificNodeConfig.\n  \
              missing (in struct, not list): {missing:?}\n  extra (in list, not struct): {extra:?}",
+        );
+    }
+
+    #[test]
+    fn test_default_classifiers_merges_child_and_parent() {
+        let mut child = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "gdpr".to_string(),
+        ]));
+        let parent = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "pii".to_string(),
+        ]));
+        default_classifiers(&mut child, &parent);
+        assert_eq!(
+            child,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "gdpr".to_string(),
+                "pii".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_default_classifiers_none_child_inherits_parent() {
+        let mut child: Option<StringOrArrayOfStrings> = None;
+        let parent = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "pii".to_string(),
+        ]));
+        default_classifiers(&mut child, &parent);
+        assert_eq!(
+            child,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pii".to_string(),
+            ]))
         );
     }
 }

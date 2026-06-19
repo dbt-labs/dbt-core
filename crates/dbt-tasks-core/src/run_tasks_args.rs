@@ -48,6 +48,13 @@ pub struct RunTasksArgs {
     pub write_json: bool,
     /// Whether to write metadata parquet epoch files during command execution.
     pub write_metadata: bool,
+    /// Whether the Parquet index is being written (`--write-index`). Gates
+    /// classifier propagation, which only has a consumer when the index is built.
+    pub write_index: bool,
+    /// Whether to seed classifier propagation with Snowflake column tags
+    /// (Phase 1) and write propagated labels back to Snowflake on Run
+    /// (Phase 3).  See `propagation_of_snowflake_tags.md` §3a.
+    pub classify_with_warehouse_tags: bool,
     /// Whether to compute and write column-level lineage into compile/cll parquet.
     pub write_lineage: bool,
     /// Whether this is the main command or a subcommand
@@ -112,10 +119,12 @@ impl RunTasksArgs {
             resolved_schema: String::new(),
             update_deps: arg.update_deps,
             vars: arg.vars.clone(),
+            classify_with_warehouse_tags: arg.classify_with_warehouse_tags,
             format: arg.format,
             limit: arg.limit,
             write_json: arg.write_json,
             write_metadata: arg.write_metadata,
+            write_index: arg.write_index,
             write_lineage: arg.write_lineage,
             from_main: arg.from_main,
             num_threads: arg.num_threads.unwrap_or(0),

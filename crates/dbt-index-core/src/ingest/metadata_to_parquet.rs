@@ -534,6 +534,7 @@ pub struct CompileFields {
     pub grain: Vec<String>,
     pub grain_declared: Vec<String>,
     pub grain_tested: Vec<String>,
+    pub classifiers: Vec<String>,
     pub table_role: Option<String>,
 }
 
@@ -610,6 +611,7 @@ pub fn load_compile_nodes_map(
         "grain",
         "grain_declared",
         "grain_tested",
+        "classifiers",
         "table_role",
     ];
 
@@ -625,6 +627,7 @@ pub fn load_compile_nodes_map(
             let grain_col = str_col(batch, "grain");
             let gdecl_col = str_col(batch, "grain_declared");
             let gtest_col = str_col(batch, "grain_tested");
+            let classifiers_col = str_col(batch, "classifiers");
             let trole_col = str_col(batch, "table_role");
             for i in 0..batch.num_rows() {
                 let Some(uid) = get_str(uid_col, i) else {
@@ -639,6 +642,9 @@ pub fn load_compile_nodes_map(
                 let grain_tested = get_str(gtest_col, i)
                     .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
                     .unwrap_or_default();
+                let classifiers = get_str(classifiers_col, i)
+                    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+                    .unwrap_or_default();
                 map.insert(
                     uid,
                     CompileFields {
@@ -648,6 +654,7 @@ pub fn load_compile_nodes_map(
                         grain,
                         grain_declared,
                         grain_tested,
+                        classifiers,
                         table_role: get_str(trole_col, i),
                     },
                 );
@@ -703,6 +710,7 @@ pub struct OwnedNodeRow {
     pub grain: Vec<String>,
     pub grain_declared: Vec<String>,
     pub grain_tested: Vec<String>,
+    pub classifiers: Vec<String>,
     pub ingested_at: String,
 }
 
@@ -786,19 +794,32 @@ fn write_parse_nodes(
                             .map(|c| c.value(i) == "model")
                             .unwrap_or(false);
                         if is_model {
-                            // For models: extract only `config` as a raw string — avoid
-                            // full JSON parse of the ~800-byte payload.
-                            let config_raw = payload_col
-                                .filter(|c| !c.is_null(i))
-                                .and_then(|c| extract_json_field_raw(c.value(i), "config"))
-                                .map(|s| Value::String(s.to_string()));
-                            if let Some(cfg) = config_raw {
-                                let mut obj = serde_json::Map::new();
-                                obj.insert("config".to_string(), cfg);
-                                Value::Object(obj)
-                            } else {
-                                Value::Object(serde_json::Map::new())
+                            // For models: extract only the fields the parse-node
+                            // ingest actually reads, as raw strings — avoid a full
+                            // JSON parse of the (multi-KB) payload.
+                            let raw = payload_col.filter(|c| !c.is_null(i)).map(|c| c.value(i));
+                            let mut obj = serde_json::Map::new();
+                            if let Some(cfg) = raw.and_then(|r| extract_json_field_raw(r, "config"))
+                            {
+                                obj.insert("config".to_string(), Value::String(cfg.to_string()));
                             }
+                            // `contract` lives on `__model_attr__` (the canonical
+                            // source the manifest reads) and the top-level `config`
+                            // is frequently empty (`{}`), so we must carry
+                            // `__model_attr__.contract` through the model trim or
+                            // `contract_enforced` is silently lost. Pull just the
+                            // `contract` sub-object to keep the trimmed payload small.
+                            if let Some(ma) = raw
+                                .and_then(|r| extract_json_field_raw(r, "__model_attr__"))
+                                .and_then(|s| serde_json::from_str::<Value>(s).ok())
+                            {
+                                if let Some(contract) = ma.get("contract") {
+                                    let mut ma_obj = serde_json::Map::new();
+                                    ma_obj.insert("contract".to_string(), contract.clone());
+                                    obj.insert("__model_attr__".to_string(), Value::Object(ma_obj));
+                                }
+                            }
+                            Value::Object(obj)
                         } else {
                             // Non-model nodes (macros, docs, sources, etc.): full parse needed.
                             payload_col
@@ -941,6 +962,7 @@ fn write_parse_nodes(
             grain_declared: r.grain_declared.clone(),
             grain_tested: r.grain_tested.clone(),
             grain_inferred: vec![],
+            classifiers: r.classifiers.clone(),
             table_role: r.table_role.as_deref(),
             ingested_at: &r.ingested_at,
         })
@@ -1133,8 +1155,31 @@ pub fn extract_parse_nodes_batch(
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let contract_enforced = payload
-            .get("contract")
+        // `contract` is mirrored on the model `config` (and on `DbtModelAttr`
+        // under `__model_attr__`); it is NOT at the payload top level. For model
+        // nodes, `payloads[i]` above extracts ONLY the `config` field — and stores
+        // it as a *raw JSON string*, not a parsed object — as a perf optimization
+        // (no `__model_attr__`). So we must parse that string to reach
+        // `config.contract.enforced`, which is the path actually populated here;
+        // `__model_attr__.contract` and a bare top-level `contract` are kept as
+        // fallbacks for other (non-model / fully-parsed) payload shapes. The
+        // original read targeted top-level `contract` (the old `manifest.json`
+        // serialization) and silently always returned `false` once the source
+        // became the trimmed `DbtModel` payload.
+        let config_obj: Option<Value> = match payload.get("config") {
+            Some(Value::String(s)) => serde_json::from_str(s).ok(),
+            Some(v) => Some(v.clone()),
+            None => None,
+        };
+        let contract_enforced = config_obj
+            .as_ref()
+            .and_then(|c| c.get("contract"))
+            .or_else(|| {
+                payload
+                    .get("__model_attr__")
+                    .and_then(|m| m.get("contract"))
+            })
+            .or_else(|| payload.get("contract"))
             .and_then(|c| c.get("enforced"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
@@ -1206,6 +1251,7 @@ pub fn extract_parse_nodes_batch(
                 grain,
                 grain_declared,
                 grain_tested,
+                classifiers,
             ) = if let Some(c) = compile_map.get(&uid) {
                 (
                     c.compiled_code.clone(),
@@ -1215,9 +1261,10 @@ pub fn extract_parse_nodes_batch(
                     c.grain.clone(),
                     c.grain_declared.clone(),
                     c.grain_tested.clone(),
+                    c.classifiers.clone(),
                 )
             } else {
-                (None, None, None, None, vec![], vec![], vec![])
+                (None, None, None, None, vec![], vec![], vec![], vec![])
             };
             node_rows.push(OwnedNodeRow {
                 unique_id: uid.clone(),
@@ -1259,6 +1306,7 @@ pub fn extract_parse_nodes_batch(
                 grain,
                 grain_declared,
                 grain_tested,
+                classifiers,
                 ingested_at: ts.clone(),
             });
         }
@@ -1676,6 +1724,9 @@ fn write_parse_columns(
                     "declared_type": get_str(type_col, i),
                     "description": get_str(desc_col, i),
                     "tags": tags,
+                    // Placeholder; the real (declared ∪ propagated) classifiers
+                    // arrive via the compile/columns merge.
+                    "classifiers": Vec::<String>::new(),
                     "ingested_at": ts,
                 }));
             }
@@ -1973,10 +2024,15 @@ fn write_compile_columns(
         for batch in read_parquet_batches(path)? {
             use arrow_array::Array;
             let uid_col = str_col(&batch, "unique_id");
-            // Single pass: build mask and update seen_ids simultaneously.
-            // For each row: alive? not yet seen? → keep, mark seen.
+            // A compile epoch writes ALL columns for a node atomically, so a node
+            // has multiple rows (one per column) in the same batch. Dedup is
+            // per-NODE across epochs (newest wins): keep every column-row of a
+            // node not yet seen in a newer epoch, and only mark the node seen
+            // AFTER the batch — marking per-row would drop all but the first
+            // column of each node.
             let mut keep = Vec::with_capacity(batch.num_rows());
             let mut any_keep = false;
+            let mut batch_uids: HashSet<String> = HashSet::new();
             for i in 0..batch.num_rows() {
                 let Some(uid) = uid_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
                     keep.push(false);
@@ -1990,10 +2046,11 @@ fn write_compile_columns(
                     keep.push(false);
                     continue;
                 }
-                seen_ids.insert(uid.to_string());
+                batch_uids.insert(uid.to_string());
                 keep.push(true);
                 any_keep = true;
             }
+            seen_ids.extend(batch_uids);
             if !any_keep {
                 continue;
             }
@@ -2158,6 +2215,10 @@ fn project_catalog_columns_batches(
             let null_str = new_null_array(&DataType::Utf8, nrows);
             let null_bool = new_null_array(&DataType::Boolean, nrows);
             let null_list = empty_list_array(nrows);
+            // classifiers: catalog columns carry none; the catalog merge into
+            // node_columns preserves any classifiers already set by the compile
+            // merge (it modifies existing rows in place).
+            let classifiers_null = empty_list_array(nrows);
 
             let columns: Vec<arrow_array::ArrayRef> = vec![
                 uid_out,                  // unique_id
@@ -2173,6 +2234,7 @@ fn project_catalog_columns_batches(
                 null_bool,        // quote
                 null_str.clone(), // granularity
                 null_list,        // tags
+                classifiers_null, // classifiers
                 null_str.clone(), // meta
                 null_str.clone(), // column_constraints
                 null_str.clone(), // tests
@@ -2344,6 +2406,13 @@ fn project_compile_columns_batches(
             let null_bool = new_null_array(&DataType::Boolean, nrows);
             // tags: List<Utf8> non-nullable — all-zero offsets, empty values buffer.
             let null_list = empty_list_array(nrows);
+            // classifiers: carry the real List<Utf8> from the compile/columns batch.
+            let classifiers_out: arrow_array::ArrayRef = batch
+                .schema()
+                .index_of("classifiers")
+                .ok()
+                .map(|i| batch.column(i).clone())
+                .unwrap_or_else(|| empty_list_array(nrows));
 
             let columns: Vec<arrow_array::ArrayRef> = vec![
                 uid_out,          // unique_id
@@ -2359,6 +2428,7 @@ fn project_compile_columns_batches(
                 null_bool,        // quote
                 null_str.clone(), // granularity
                 null_list,        // tags
+                classifiers_out,  // classifiers
                 null_str.clone(), // meta
                 null_str.clone(), // column_constraints
                 null_str.clone(), // tests

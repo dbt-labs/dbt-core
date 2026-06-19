@@ -22,7 +22,7 @@ use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::static_analysis::is_static_analysis_off_or_baseline;
 use dbt_common::stats::NodeStatus;
 use dbt_common::stdfs;
-use dbt_common::{ErrorCode, FsResult, err, fs_err};
+use dbt_common::{ErrorCode, FsResult, MacroSpansOnly, err, fs_err};
 use dbt_jinja_utils::phases::compile::DependencyValidationConfig;
 use dbt_jinja_utils::phases::run::build_run_node_context;
 use dbt_jinja_utils::utils::add_task_context;
@@ -1452,8 +1452,8 @@ WITH
                 node.__common_attr__.name.clone(),
             ],
             sql: rendered_sql,
-            macro_spans,
             original_path: relative_path_unit_test,
+            spans: Box::new(MacroSpansOnly { macro_spans }),
         },
         config_map,
     ))

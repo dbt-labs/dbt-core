@@ -24,6 +24,7 @@ workspace = true
 dbt-adapter = { workspace = true }
 dbt-adapter-core = { workspace = true }
 dbt-agate = { workspace = true }
+dbt-classification-types = { workspace = true }
 dbt-common = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-jinja-ctx = { workspace = true }

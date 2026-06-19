@@ -47,7 +47,7 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::DocsConfig;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::common::merge_tags;
+use dbt_schemas::schemas::common::merge_vec;
 use dbt_schemas::schemas::nodes::DbtModel;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
@@ -408,7 +408,7 @@ pub async fn resolve_data_tests(
         let column_tags = test_path_to_test_asset
             .get(&dbt_asset.path)
             .map(|asset| asset.column_tags.clone());
-        let tags = merge_tags(test_tags, column_tags);
+        let tags = merge_vec(test_tags, column_tags);
 
         // To conform to the unique_id format in dbt-core, we need to hash the test name
         // plus the test metadata (namespace, name, kwargs) and append the last 10 characters
@@ -543,6 +543,7 @@ pub async fn resolve_data_tests(
                 raw_code: Some("will_be_updated_below".to_string()),
                 language: Some("sql".to_string()),
                 tags: tags.unwrap_or_default(),
+                classifiers: Default::default(),
                 meta: test_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {

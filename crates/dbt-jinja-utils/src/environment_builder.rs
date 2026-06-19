@@ -380,6 +380,23 @@ impl JinjaEnvBuilder {
             Value::from_object(dbt_and_adapters_namespace),
         );
 
+        // Register the dbt_classification macro package — embedded SQL
+        // shipped with `dbt-classification` for the Snowflake tag
+        // round-trip.  These macros are dialect-specific by content but
+        // are registered unconditionally; they only execute when the
+        // adapter-gated Phase 1 / Phase 3 callers in `dbt-tasks`
+        // actually look them up.  See propagation_of_snowflake_tags.md §4.2.
+        for (template_name, sql) in dbt_classification_types::propagation_macro_templates() {
+            self.env
+                .add_template_owned(template_name, sql, None)
+                .map_err(|e| {
+                    FsError::from_jinja_err(
+                        e,
+                        "Failed to register dbt_classification propagation macro",
+                    )
+                })?;
+        }
+
         Ok(self)
     }
 

@@ -1460,6 +1460,14 @@ pub struct CommonArgs {
     /// Introspect flag
     #[arg(global = true, long,  default_value = "false", action = ArgAction::SetTrue,  env = "DBT_INTROSPECT", value_parser = BoolishValueParser::new(),hide = true)]
     pub introspect: bool,
+
+    /// Seed classifier propagation with column tags pulled from the Snowflake
+    /// warehouse before the Analyze phase, and write the propagated labels
+    /// back as column tags on materialized downstream tables/views after Run.
+    /// Only valid for the Snowflake adapter, and requires --write-index.
+    #[arg(global = true, long = "classify-with-warehouse-tags", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub classify_with_warehouse_tags: bool,
+
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(),hide = true)]
     pub no_introspect: bool,
 
@@ -2210,6 +2218,7 @@ impl CommonArgs {
             write_catalog: self.write_catalog,
             write_metadata: self.write_metadata || self.write_index,
             write_index: self.write_index,
+            classify_with_warehouse_tags: self.classify_with_warehouse_tags,
             index_dir: self.index_dir.clone(),
             metadata_dir: self.metadata_dir.clone(),
             fail_fast: self.fail_fast,

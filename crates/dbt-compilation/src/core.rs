@@ -23,7 +23,8 @@ use dbt_common::{
 };
 use dbt_error::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::{
-    flags::Flags, jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
+    JinjaFactory, flags::Flags, jinja_environment::JinjaEnv,
+    listener::JinjaTypeCheckingEventListenerFactory,
 };
 use dbt_loader::{
     args::{IoArgs, LoadArgs},
@@ -56,6 +57,7 @@ pub struct DbtLoadedProject {
     /// DO NOT EXPOSE. Callers should use [DbtLoadedProject::init_adapter].
     adapter_factory: Arc<dyn AdapterFactory>,
     dbt_state: Arc<DbtState>,
+    jinja_factory: Arc<dyn JinjaFactory>,
 }
 
 /// Phase 1: Load and hydrate cache with optional previous state for incremental compilation
@@ -69,6 +71,7 @@ async fn load_phase(
     tracing_config: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
     loader_hooks: Arc<dyn LoaderHooks>,
+    jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<DbtLoadedProject> {
     // Set previous state for incremental compilation if provided
     if let Some(prev_dbt_state) = maybe_prev_loaded_project
@@ -94,6 +97,7 @@ async fn load_phase(
         type_ops_factory,
         adapter_factory,
         dbt_state: Arc::new(dbt_state),
+        jinja_factory,
     })
 }
 
@@ -168,6 +172,7 @@ async fn resolve_phase(
         token,
         jinja_type_checking_event_listener_factory,
         resolver_hooks,
+        loaded_project.jinja_factory.clone(),
     )
     .await?;
     // Add unchanged nodes back if we have cache
@@ -412,6 +417,7 @@ impl DbtLoadedProject {
         tracing_config: Option<&dyn TracingConfigProvider>,
         token: &CancellationToken,
         loader_hooks: Arc<dyn LoaderHooks>,
+        jinja_factory: Arc<dyn JinjaFactory>,
     ) -> FsResult<DbtLoadedProject> {
         load_phase(
             config,
@@ -423,6 +429,7 @@ impl DbtLoadedProject {
             tracing_config,
             token,
             loader_hooks,
+            jinja_factory,
         )
         .await
     }
@@ -473,12 +480,14 @@ impl DbtLoadedProject {
         type_ops_factory: Arc<dyn TypeOpsFactory>,
         adapter_factory: Arc<dyn AdapterFactory>,
         dbt_state: Arc<DbtState>,
+        jinja_factory: Arc<dyn JinjaFactory>,
     ) -> Self {
         Self {
             config,
             type_ops_factory,
             adapter_factory,
             dbt_state,
+            jinja_factory,
         }
     }
 
@@ -493,7 +502,9 @@ impl DbtLoadedProject {
         let root_project_name = self.root_project_name();
         let root_project_quoting = self.root_project_quoting();
         let macros = &resolved_state.macros;
-        dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment(
+        // The factory builds the env (and registers any extra functions it
+        // provides) before it is used to render model SQL.
+        self.jinja_factory.create_parse_jinja_environment(
             root_project_name,
             &dbt_state.dbt_profile.profile,
             &dbt_state.dbt_profile.target,

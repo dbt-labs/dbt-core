@@ -205,6 +205,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             checksum: DbtChecksum::default(),
             language: None,
             tags: vec![],
+            classifiers: vec![],
             meta: IndexMap::new(),
         },
         __base_attr__: NodeBaseAttributes {

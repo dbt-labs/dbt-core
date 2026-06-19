@@ -54,8 +54,7 @@ use dbt_index_core::ingest::metadata_to_parquet::{
 use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_init::init;
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv,
-    listener::{DefaultJinjaTypeCheckEventListenerFactory, JinjaTypeCheckingEventListenerFactory},
+    jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
     utils::get_catalog_by_relations,
 };
 use dbt_loader::{
@@ -498,7 +497,7 @@ struct AllPhasesExecutor<'a> {
     feature_stack: Arc<FeatureStack>,
     start: SystemTime,
     // simple support objects
-    jinja_type_checking_event_listener_factory: Arc<DefaultJinjaTypeCheckEventListenerFactory>,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     version_check_handle: Option<tokio::task::JoinHandle<Option<String>>>,
 }
@@ -511,15 +510,17 @@ impl<'a> AllPhasesExecutor<'a> {
         task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     ) -> Self {
         let start = SystemTime::now();
+        let jinja_type_checking_event_listener_factory = feature_stack
+            .jinja
+            .factory
+            .create_type_checking_listener_factory();
 
         Self {
             arg,
             cli,
             feature_stack,
             start,
-            jinja_type_checking_event_listener_factory: Arc::new(
-                DefaultJinjaTypeCheckEventListenerFactory::default(),
-            ),
+            jinja_type_checking_event_listener_factory,
             task_runner_hooks_factory,
             version_check_handle: None,
         }
@@ -1062,8 +1063,7 @@ impl<'a> AllPhasesExecutor<'a> {
 
             let macro_depends_on = self
                 .jinja_type_checking_event_listener_factory
-                .depends_on()
-                .clone();
+                .all_macro_depends_on();
 
             Arc::new(update_manifest(
                 &run_task_args,
@@ -1127,6 +1127,15 @@ impl<'a> AllPhasesExecutor<'a> {
                 .lineage_grain_infos(&run_task_results)
                 .await?;
 
+            // Classifier propagation results (proprietary hook; empty in OSS).
+            // Merged with manifest-declared classifiers inside write_metadata_parquet.
+            let (node_classifiers, column_classifiers) = self
+                .feature_stack
+                .index
+                .hooks
+                .classifier_results(&run_task_results)
+                .await?;
+
             let recomputed_targets: HashSet<String> = if matches!(
                 self.arg.command,
                 FsCommand::Compile | FsCommand::Build | FsCommand::Run
@@ -1151,6 +1160,8 @@ impl<'a> AllPhasesExecutor<'a> {
                     None,
                     &recomputed_targets,
                     &grain_infos,
+                    &node_classifiers,
+                    &column_classifiers,
                 );
             } else if !self.arg.write_lineage {
                 write_metadata_parquet(
@@ -1161,6 +1172,8 @@ impl<'a> AllPhasesExecutor<'a> {
                     Some(&[]),
                     &recomputed_targets,
                     &grain_infos,
+                    &node_classifiers,
+                    &column_classifiers,
                 );
             } else {
                 let t_ble = {
@@ -1200,6 +1213,8 @@ impl<'a> AllPhasesExecutor<'a> {
                             Some(&column_lineage),
                             &recomputed_targets,
                             &grain_infos,
+                            &node_classifiers,
+                            &column_classifiers,
                         );
                     }
                     Err(e) => {
@@ -1217,6 +1232,8 @@ impl<'a> AllPhasesExecutor<'a> {
                             Some(&[]),
                             &empty_targets,
                             &grain_infos,
+                            &node_classifiers,
+                            &column_classifiers,
                         );
                     }
                 }
@@ -1276,6 +1293,20 @@ impl<'a> AllPhasesExecutor<'a> {
                         self.arg.io.status_reporter.as_ref(),
                     ),
                 }
+
+                // Post-index hook: ingest the classifier registry and run the
+                // classifier "checks" gate. Returning `Err` aborts the build
+                // (a failing check is a policy violation). No-op in OSS.
+                self.feature_stack
+                    .index
+                    .hooks
+                    .did_write_index(
+                        self.arg.as_ref(),
+                        &index_dir,
+                        &run_task_results,
+                        resolved_state.as_ref(),
+                    )
+                    .await?;
             }
         }
 

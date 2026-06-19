@@ -7,6 +7,7 @@ use std::path::Path;
 use crate::compiler::tokens::Token;
 use crate::layout::JinjaLayoutEventKind;
 use crate::output_tracker::OutputTracker;
+use crate::value::Value;
 use crate::{machinery::Span, CodeLocation};
 
 /// A listener for rendering events. This is used for LSP
@@ -60,6 +61,16 @@ pub trait RenderingEventListener: std::fmt::Debug {
 
     /// Called when a function is being exited.
     fn on_function_end(&self);
+
+    /// Called immediately before a named function call is evaluated, with the
+    /// resolved function `name` and its `args`. Paired with
+    /// [`on_function_call_end`](Self::on_function_call_end) around the call so a
+    /// listener can observe the rendered-output position before and after the
+    /// call. Domain-agnostic: the engine attaches no meaning to `name`.
+    fn on_function_call_start(&self, _name: &str, _args: &[Value]) {}
+
+    /// Called immediately after a named function call is evaluated.
+    fn on_function_call_end(&self, _name: &str) {}
 
     /// Called when a macro is invoked during rendering, to track macro dependencies.
     /// The `template_name` has the form `{package_name}.{macro_name}`.

@@ -381,6 +381,7 @@ pub fn update_node_columns(
             meta: existing.map(|col| col.meta.clone()).unwrap_or_default(),
             tags: existing.map(|col| col.tags.clone()).unwrap_or_default(),
             policy_tags: existing.and_then(|col| col.policy_tags.clone()),
+            classifiers: existing.and_then(|col| col.classifiers.clone()),
             databricks_tags: existing.and_then(|col| col.databricks_tags.clone()),
             column_mask: existing.and_then(|col| col.column_mask.clone()),
             quote: existing.and_then(|col| col.quote),

@@ -535,6 +535,11 @@ pub struct EvalArgs {
     /// How to load internal (embedded) dbt packages
     pub internal_package_mode: InternalPackageMode,
     /// Whether to skip running post hook operations.
+    /// Seed classifier propagation with Snowflake column tags and write
+    /// propagated labels back to Snowflake post-Run.  Only meaningful on
+    /// Snowflake adapter; combined with `write_index = true` to be valid.
+    /// Mirrors the `--classify-with-warehouse-tags` CLI flag.
+    pub classify_with_warehouse_tags: bool,
     pub skip_post_hooks: bool,
     /// Write metadata parquet epoch files (parse/nodes, compile/nodes, compile/columns, etc.)
     pub write_metadata: bool,

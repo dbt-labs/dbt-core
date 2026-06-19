@@ -156,6 +156,10 @@ impl FeatureStackBuilder {
 
         let login_hooks = Arc::new(DefaultLoginHooks);
 
+        let jinja = crate::jinja::JinjaFeature {
+            factory: Arc::new(dbt_jinja_utils::DefaultJinjaFactory),
+        };
+
         let stack = FeatureStack {
             instrumentation,
             cli,
@@ -168,6 +172,7 @@ impl FeatureStackBuilder {
             task_runner,
             resolver,
             loader,
+            jinja,
             login_hooks,
             version_check_enabled,
         };

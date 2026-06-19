@@ -15,7 +15,7 @@ use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
 use dbt_jinja_utils::utils::generate_relation_name;
 use dbt_schemas::schemas::common::{
     DbtChecksum, DbtMaterialization, DbtQuoting, FreshnessDefinition, FreshnessRules,
-    NodeDependsOn, merge_meta, merge_tags, normalize_quoting,
+    NodeDependsOn, merge_meta, merge_vec, normalize_quoting,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::SourceConfig;
@@ -345,7 +345,7 @@ pub async fn resolve_sources(
                 let source_tags: Option<Vec<String>> = c.tags.take().map(|t| t.into());
                 let table_tags: Option<Vec<String>> = table_config.tags.clone().map(|t| t.into());
                 c.tags =
-                    merge_tags(source_tags, table_tags).map(StringOrArrayOfStrings::ArrayOfStrings);
+                    merge_vec(source_tags, table_tags).map(StringOrArrayOfStrings::ArrayOfStrings);
                 c.meta = merge_meta(c.meta.take(), table_config.meta.clone());
                 let merged = merge_loaded_at_pair(
                     c.loaded_at_field.as_deref(),
@@ -499,6 +499,7 @@ pub async fn resolve_sources(
                     .clone()
                     .map(|t| t.into())
                     .unwrap_or_default(),
+                classifiers: Default::default(),
                 raw_code: None,
                 checksum: DbtChecksum::default(),
                 language: None,

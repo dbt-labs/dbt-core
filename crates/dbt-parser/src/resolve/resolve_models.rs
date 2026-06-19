@@ -579,6 +579,11 @@ pub async fn resolve_models(
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
+                classifiers: model_config
+                    .classifiers
+                    .clone()
+                    .map(|c| c.into())
+                    .unwrap_or_default(),
                 meta: model_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {

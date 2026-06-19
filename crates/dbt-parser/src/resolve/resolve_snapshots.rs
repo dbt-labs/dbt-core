@@ -447,6 +447,7 @@ pub async fn resolve_snapshots(
                         .clone()
                         .map(|tags| tags.into())
                         .unwrap_or_default(),
+                    classifiers: Default::default(),
                     meta: snapshot_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {

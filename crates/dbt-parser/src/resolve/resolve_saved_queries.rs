@@ -264,6 +264,7 @@ pub async fn resolve_saved_queries(
                         .clone()
                         .map(|tags| tags.into())
                         .unwrap_or_default(),
+                    classifiers: Default::default(),
                     meta: saved_query_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {

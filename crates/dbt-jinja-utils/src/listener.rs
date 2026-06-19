@@ -15,7 +15,7 @@ use minijinja::{
 };
 
 use dbt_common::{
-    ErrorCode,
+    CompiledSpans, ErrorCode,
     io_args::IoArgs,
     tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message},
 };
@@ -44,6 +44,30 @@ pub trait RenderingEventListenerFactory: Send + Sync {
 
     /// get macro spans
     fn drain_macro_spans(&self, filename: &Path) -> MacroSpans;
+
+    /// Builds the [`CompiledSpans`] for a freshly rendered node from its
+    /// converted macro spans. The default carries macro spans only; an
+    /// implementation may override this to attach additional spans associated
+    /// with `filename`.
+    fn compiled_spans(
+        &self,
+        macro_spans: Vec<dbt_common::MacroSpan>,
+        _filename: &Path,
+    ) -> Box<dyn CompiledSpans> {
+        Box::new(dbt_common::MacroSpansOnly { macro_spans })
+    }
+
+    /// Rebuilds the [`CompiledSpans`] for a node restored from the compiled-SQL
+    /// cache. The default ignores `reclassify_spans`; an implementation may
+    /// override this to reattach them.
+    fn create_spans(
+        &self,
+        macro_spans: Vec<dbt_common::MacroSpan>,
+        reclassify_spans: Vec<dbt_frontend_common::span::ReclassifySpan>,
+    ) -> Box<dyn CompiledSpans> {
+        let _ = reclassify_spans;
+        Box::new(dbt_common::MacroSpansOnly { macro_spans })
+    }
 }
 
 /// Default implementation of the `ListenerFactory` trait
@@ -79,6 +103,36 @@ impl DefaultRenderingEventListenerFactory {
             io_args,
         }
     }
+
+    /// Creates the default listeners and returns the shared output-tracker
+    /// location used by the macro-span listener, so an additional listener
+    /// (e.g. a reclassify capture listener supplied by a decorating factory)
+    /// can observe the same rendered-output position. `create_listeners`
+    /// delegates here and discards the location.
+    pub fn create_listeners_with_tracker(
+        &self,
+        filename: &Path,
+    ) -> (
+        Vec<Rc<dyn RenderingEventListener>>,
+        Rc<OutputTrackerLocation>,
+    ) {
+        // Share the output tracker location so other listeners can observe the
+        // current render position at the moment their hooks fire.
+        let shared_tracker = Rc::new(OutputTrackerLocation::default());
+        let mut listeners: Vec<Rc<dyn RenderingEventListener>> = vec![Rc::new(
+            DefaultRenderingEventListener::with_tracker(self.quiet, shared_tracker.clone()),
+        )];
+
+        if self.check_mangled_refs {
+            listeners.push(Rc::new(crate::mangled_ref::MangledRefWarningPrinter::new(
+                filename.to_path_buf(),
+                self.io_args.clone(),
+                shared_tracker.clone(),
+            )));
+        }
+
+        (listeners, shared_tracker)
+    }
 }
 
 impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
@@ -88,27 +142,7 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
         filename: &Path,
         _offset: &dbt_frontend_common::error::CodeLocation,
     ) -> Vec<Rc<dyn RenderingEventListener>> {
-        let mut listeners: Vec<Rc<dyn RenderingEventListener>> = vec![];
-
-        if self.check_mangled_refs {
-            // Share the output tracker location so MangledRefWarningPrinter can observe
-            // the current render position at the moment on_ref_or_source fires.
-            let shared_tracker = Rc::new(OutputTrackerLocation::default());
-            listeners.push(Rc::new(DefaultRenderingEventListener::with_tracker(
-                self.quiet,
-                shared_tracker.clone(),
-            )));
-            listeners.push(Rc::new(crate::mangled_ref::MangledRefWarningPrinter::new(
-                filename.to_path_buf(),
-                self.io_args.clone(),
-                shared_tracker,
-            )));
-        } else {
-            // Always add the default listener for macro spans
-            listeners.push(Rc::new(DefaultRenderingEventListener::new(self.quiet)));
-        }
-
-        listeners
+        self.create_listeners_with_tracker(filename).0
     }
 
     fn destroy_listener(&self, filename: &Path, listener: Rc<dyn RenderingEventListener>) {
@@ -167,6 +201,12 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
     /// has no data for the given key (e.g. in LSP mode).
     fn get_macro_depends_on(&self, _unique_id: &str) -> Vec<String> {
         vec![]
+    }
+
+    /// Snapshot of the full macro depends-on graph accumulated during this
+    /// invocation (node unique-id -> set of macro unique-ids). Empty by default.
+    fn all_macro_depends_on(&self) -> BTreeMap<String, BTreeSet<String>> {
+        BTreeMap::new()
     }
 
     /// Determines whether or not the listener factory is able to capture
@@ -240,6 +280,10 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
             .get(unique_id)
             .map(|s| s.iter().cloned().collect())
             .unwrap_or_default()
+    }
+
+    fn all_macro_depends_on(&self) -> BTreeMap<String, BTreeSet<String>> {
+        self.all_depends_on.read().unwrap().clone()
     }
 }
 

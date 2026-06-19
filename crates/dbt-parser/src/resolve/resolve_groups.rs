@@ -71,6 +71,7 @@ pub async fn resolve_groups(
                     language: None,
                     raw_code: None,
                     tags: vec![],
+                    classifiers: Default::default(),
                     meta: group_properties_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {

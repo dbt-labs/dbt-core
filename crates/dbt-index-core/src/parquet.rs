@@ -101,6 +101,21 @@ fn write_table_items_typed<T: serde::Serialize>(
 
 /// Convenience wrapper: write a table from `serde_json::Value` rows.
 pub fn write_table(path: &Path, schema: SchemaRef, rows: &[Value]) -> Result<(), IndexError> {
+    // `classifiers` is a non-nullable list column on `nodes`/`node_columns`.
+    // serde_arrow requires every non-nullable field to be present in each JSON
+    // row, but callers that build rows from `serde_json::Value` (manifest
+    // extraction, tests) routinely omit it. Default it to an empty array so the
+    // write succeeds, mirroring the catalog-column path which already does this.
+    if schema.fields().iter().any(|f| f.name() == "classifiers") {
+        let mut owned: Vec<Value> = rows.to_vec();
+        for row in &mut owned {
+            if let Some(obj) = row.as_object_mut() {
+                obj.entry("classifiers")
+                    .or_insert_with(|| Value::Array(vec![]));
+            }
+        }
+        return write_table_items(path, schema, &owned);
+    }
     write_table_items(path, schema, rows)
 }
 
@@ -885,11 +900,17 @@ impl IndexWriter {
         let table = "node_columns";
         let path = self.index_dir.join(format!("dbt.{table}.parquet"));
 
-        // Build lookup: (unique_id, column_name) → (column_index, inferred_type, description)
+        // Build lookup keyed by (unique_id, LOWERCASED column_name) so compile
+        // rows match the parse rows case-insensitively. Snowflake uppercases
+        // unquoted identifiers in the inferred schema (`EMAIL`) while parse rows
+        // use the manifest casing (`email`); a case-sensitive key would miss the
+        // match and append a duplicate row, splitting classifiers across two rows.
         struct CompileInfo {
+            column_name: String,
             column_index: Option<i64>,
             inferred_type: Option<String>,
             description: Option<String>,
+            classifiers: Vec<String>,
         }
         let mut compile_map: HashMap<(String, String), CompileInfo> = HashMap::new();
         for batch in &compile_batches {
@@ -908,6 +929,9 @@ impl IndexWriter {
             let desc_col = batch
                 .column_by_name("description")
                 .and_then(|c| c.as_any().downcast_ref::<arrow_array::StringArray>());
+            let class_col = batch
+                .column_by_name("classifiers")
+                .and_then(|c| c.as_any().downcast_ref::<arrow_array::ListArray>());
             for i in 0..batch.num_rows() {
                 let Some(uid) = uid_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
                     continue;
@@ -915,9 +939,25 @@ impl IndexWriter {
                 let Some(cname) = cname_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
                     continue;
                 };
+                let classifiers: Vec<String> = class_col
+                    .filter(|c| !c.is_null(i))
+                    .map(|c| {
+                        let item = c.value(i);
+                        item.as_any()
+                            .downcast_ref::<arrow_array::StringArray>()
+                            .map(|sa| {
+                                (0..sa.len())
+                                    .filter(|&j| !sa.is_null(j))
+                                    .map(|j| sa.value(j).to_string())
+                                    .collect()
+                            })
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or_default();
                 compile_map.insert(
-                    (uid.to_string(), cname.to_string()),
+                    (uid.to_string(), cname.to_ascii_lowercase()),
                     CompileInfo {
+                        column_name: cname.to_string(),
                         column_index: idx_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)),
                         inferred_type: itype_col
                             .filter(|c| !c.is_null(i))
@@ -925,6 +965,7 @@ impl IndexWriter {
                         description: desc_col
                             .filter(|c| !c.is_null(i))
                             .map(|c| c.value(i).to_string()),
+                        classifiers,
                     },
                 );
             }
@@ -946,7 +987,7 @@ impl IndexWriter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let key = (uid, cname);
+                let key = (uid, cname.to_ascii_lowercase());
                 if let Some(ci) = compile_map.get(&key) {
                     if let Some(idx) = ci.column_index {
                         map.insert("column_index".to_string(), Value::Number(idx.into()));
@@ -958,20 +999,39 @@ impl IndexWriter {
                     if let Some(ref d) = ci.description {
                         map.insert("description".to_string(), Value::String(d.clone()));
                     }
+                    // Classifiers are authoritative from the compile epoch (the
+                    // merged declared ∪ propagated set); overwrite the parse
+                    // placeholder when present.
+                    if !ci.classifiers.is_empty() {
+                        map.insert(
+                            "classifiers".to_string(),
+                            Value::Array(
+                                ci.classifiers
+                                    .iter()
+                                    .map(|s| Value::String(s.clone()))
+                                    .collect(),
+                            ),
+                        );
+                    }
                 }
                 seen_keys.insert(key);
                 rows.push(Value::Object(map));
             }
         }
 
-        // Append compile rows that had no existing parse match
+        // Append compile rows that had no existing parse match. `cname` here is
+        // the lowercased match key; use `ci.column_name` for the stored name to
+        // preserve the original (warehouse) casing.
         for ((uid, cname), ci) in &compile_map {
             if seen_keys.contains(&(uid.clone(), cname.clone())) {
                 continue;
             }
             let mut obj = Map::new();
             obj.insert("unique_id".to_string(), Value::String(uid.clone()));
-            obj.insert("column_name".to_string(), Value::String(cname.clone()));
+            obj.insert(
+                "column_name".to_string(),
+                Value::String(ci.column_name.clone()),
+            );
             if let Some(idx) = ci.column_index {
                 obj.insert("column_index".to_string(), Value::Number(idx.into()));
             }
@@ -982,6 +1042,15 @@ impl IndexWriter {
                 obj.insert("description".to_string(), Value::String(d.clone()));
             }
             obj.insert("tags".to_string(), Value::Array(vec![]));
+            obj.insert(
+                "classifiers".to_string(),
+                Value::Array(
+                    ci.classifiers
+                        .iter()
+                        .map(|s| Value::String(s.clone()))
+                        .collect(),
+                ),
+            );
             obj.insert("ingested_at".to_string(), Value::String(self.now.clone()));
             rows.push(Value::Object(obj));
         }
@@ -1114,6 +1183,9 @@ impl IndexWriter {
                 obj.insert("catalog_comment".to_string(), Value::String(cc.clone()));
             }
             obj.insert("tags".to_string(), Value::Array(vec![]));
+            // `classifiers` is a non-nullable list column; catalog-only columns
+            // carry none, but the field must be present for serde_arrow.
+            obj.insert("classifiers".to_string(), Value::Array(vec![]));
             obj.insert("ingested_at".to_string(), Value::String(self.now.clone()));
             rows.push(Value::Object(obj));
         }
@@ -1409,6 +1481,7 @@ define_row! {
         [utf8]  pub patch_path: Option<String>,
         [utf8]  pub time_spine: Option<String>,
         [list_utf8!] pub tags: Vec<String>,
+        [list_utf8!] pub classifiers: Vec<String>,
         [utf8]  pub meta: Option<String>,
         [utf8]  pub ai_context: Option<String>,
         [utf8]  pub source_name: Option<&'a str>,
@@ -1458,6 +1531,7 @@ define_row! {
         [bool]  pub quote: Option<bool>,
         [utf8]  pub granularity: Option<&'a str>,
         [list_utf8!] pub tags: Vec<String>,
+        [list_utf8!] pub classifiers: Vec<String>,
         [utf8]  pub meta: Option<String>,
         [utf8]  pub column_constraints: Option<String>,
         [utf8]  pub tests: Option<String>,

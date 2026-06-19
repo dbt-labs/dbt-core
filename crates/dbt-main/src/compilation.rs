@@ -21,6 +21,7 @@ use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
 use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_jinja_utils::{
+    JinjaFactory,
     invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
     listener::JinjaTypeCheckingEventListenerFactory,
@@ -198,6 +199,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             Some(feature_stack.tracing.config_provider.as_ref()),
             &self.token,
             feature_stack.loader.hooks.clone(),
+            feature_stack.jinja.factory.clone(),
         )
         .await?;
         self.token.check_cancellation()?;
@@ -325,6 +327,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
         &self,
         type_ops_factory: Arc<dyn TypeOpsFactory>,
         adapter_factory: Arc<dyn AdapterFactory>,
+        jinja_factory: Arc<dyn JinjaFactory>,
     ) {
         let config = CompilationConfig {
             use_build_cache_for_scheduling: true,
@@ -347,6 +350,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             self.cli.as_ref(),
             type_ops_factory,
             adapter_factory,
+            jinja_factory,
         ) {
             (PrevCompilationResult::Incremental(_), _) => {
                 emit_info_log_message(
@@ -426,6 +430,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 self.run_verify_partial_parse(
                     feature_stack.adapter.type_ops_factory.clone(),
                     feature_stack.adapter.adapter_factory.clone(),
+                    feature_stack.jinja.factory.clone(),
                 );
             }
         }
@@ -455,6 +460,8 @@ impl<'a> CompilationPhasesExecutor<'a> {
 
             let empty_targets = HashSet::new();
             let empty_grain_infos = HashMap::new();
+            let empty_node_classifiers = HashMap::new();
+            let empty_column_classifiers = HashMap::new();
             write_metadata_parquet(
                 &self.arg,
                 manifest,
@@ -463,6 +470,8 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 None,
                 &empty_targets,
                 &empty_grain_infos,
+                &empty_node_classifiers,
+                &empty_column_classifiers,
             );
 
             let index_dir = self.arg.index_dir();
@@ -928,6 +937,7 @@ impl DbtProjectCompilation {
                 cli,
                 Arc::clone(&feature_stack.adapter.type_ops_factory),
                 Arc::clone(&feature_stack.adapter.adapter_factory),
+                Arc::clone(&feature_stack.jinja.factory),
             ) {
                 (PrevCompilationResult::Incremental(prev), lazy) => (Some(prev), lazy),
                 (PrevCompilationResult::FullParse, _) => {
