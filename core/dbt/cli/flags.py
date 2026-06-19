@@ -16,7 +16,7 @@ from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.config.user_settings import get_user_setting_flags
-from dbt.config.utils import normalize_warn_error_options
+from dbt.config.utils import build_warn_error_options_v2, normalize_warn_error_options
 from dbt.contracts.project import ProjectFlags
 from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
 from dbt.events import ALL_EVENT_NAMES
@@ -26,7 +26,6 @@ from dbt_common.clients import jinja
 from dbt_common.events import functions
 from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
-from dbt_common.helper_types import WarnErrorOptionsV2
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -63,12 +62,7 @@ def convert_config(config_name, config_value):
     ret = config_value
     if config_name.lower() == "warn_error_options" and type(config_value) == dict:
         normalize_warn_error_options(ret)
-        ret = WarnErrorOptionsV2(
-            error=config_value.get("error", []),
-            warn=config_value.get("warn", []),
-            silence=config_value.get("silence", []),
-            valid_error_names=ALL_EVENT_NAMES,
-        )
+        ret = build_warn_error_options_v2(ret, ALL_EVENT_NAMES)
     return ret
 
 
