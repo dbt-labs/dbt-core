@@ -160,7 +160,17 @@ const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
     FieldSpec::boolean("purge_requested"),
     FieldSpec::boolean("encode_entire_prefix"),
     FieldSpec::boolean("read_only")
-        .doc("Attach the catalog read-only. Horizon/Unity attach read-only on released DuckDB; read-write requires DuckDB 1.5.4 (see #10950)."),
+        .doc("Attach the catalog read-only. Read-write (read_only: false) on Horizon/Unity requires DuckDB 1.5.4 / duckdb-iceberg#1017."),
+    // Write-compat ATTACH options for managed-storage Iceberg REST (Horizon/Unity);
+    // these require DuckDB 1.5.4 / duckdb-iceberg#1017.
+    FieldSpec::boolean("stage_create_tables")
+        .doc("Opt into staged CREATE TABLE AS SELECT writes (direct CTAS into the target catalog)."),
+    FieldSpec::boolean("disable_multi_table_commit")
+        .doc("Disable multi-table commits (Unity write-compat default)."),
+    FieldSpec::boolean("skip_create_table_metadata_updates")
+        .doc("Skip metadata updates on CREATE TABLE (write-compat)."),
+    FieldSpec::boolean("remove_files_on_delete")
+        .doc("Remove underlying data files when a table is dropped (write-compat)."),
 ];
 
 const UNITY_DATABRICKS_FIELDS: &[FieldSpec] = &[
@@ -892,7 +902,6 @@ impl CatalogRegistry {
                             catalog.name
                         );
                     }
-                    Self::forbid_duckdb_writes(duckdb, catalog, "horizon")?;
                 }
             }
             V2CatalogType::Unity => {
@@ -901,7 +910,6 @@ impl CatalogRegistry {
                 }
                 if let Some(duckdb) = catalog.config_block("duckdb") {
                     Self::validate_duckdb_semantics(duckdb, catalog, "unity")?;
-                    Self::forbid_duckdb_writes(duckdb, catalog, "unity")?;
                 }
             }
             V2CatalogType::BiglakeMetastore => {
@@ -1231,25 +1239,6 @@ impl CatalogRegistry {
         Ok(())
     }
 
-    /// Horizon/Unity duckdb catalogs are read-only on released duckdb — their
-    /// write path needs duckdb 1.5.4 / duckdb-iceberg#1017 (gated to #10950).
-    /// Reject `read_only: false` so users get a clear config error rather than a
-    /// runtime write failure. (Unset defaults to read-only at attach time.)
-    fn forbid_duckdb_writes(
-        duckdb: &yml::Mapping,
-        catalog: &CatalogSpecV2View<'_>,
-        type_name: &str,
-    ) -> FsResult<()> {
-        if let Some(false) = try_get_bool(duckdb, "read_only")? {
-            return err!(
-                code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => field_span(duckdb, "read_only").cloned(),
-                "Catalog '{}' {}/duckdb is read-only on released duckdb; writes ('read_only: false') require duckdb 1.5.4 (see #10950). Remove 'read_only' or set it to true.",
-                catalog.name, type_name
-            );
-        }
-        Ok(())
-    }
 
     fn validate_unity_semantics(
         databricks: &yml::Mapping,
@@ -2626,7 +2615,8 @@ catalogs:
     }
 
     #[test]
-    fn horizon_duckdb_forbids_writes() {
+    fn horizon_duckdb_allows_writes() {
+        // read_only: false + the #1017 write-compat options validate now.
         let yaml = r#"
 catalogs:
   - name: horizon_demo
@@ -2637,15 +2627,15 @@ catalogs:
         warehouse: "horizon_wh"
         endpoint: "https://horizon.example.com/catalog"
         read_only: false
+        stage_create_tables: false
+        disable_multi_table_commit: true
 "#;
-        let res = parse_and_validate(yaml);
-        let msg = format!("{res:?}");
-        assert!(res.is_err(), "expected error but got Ok");
-        assert!(msg.contains("read-only"), "unexpected error: {msg}");
+        parse_and_validate(yaml)
+            .expect("read-write horizon + write-compat options should validate");
     }
 
     #[test]
-    fn unity_duckdb_forbids_writes() {
+    fn unity_duckdb_allows_writes() {
         let yaml = r#"
 catalogs:
   - name: unity_demo
@@ -2656,10 +2646,29 @@ catalogs:
         warehouse: "unity_wh"
         endpoint: "https://dbc.example.com/api/2.1/unity-catalog/iceberg"
         read_only: false
+        disable_multi_table_commit: true
+"#;
+        parse_and_validate(yaml)
+            .expect("read-write unity + disable_multi_table_commit should validate");
+    }
+
+    #[test]
+    fn duckdb_blank_default_region_invalid() {
+        let yaml = r#"
+catalogs:
+  - name: bad_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        default_region: ""
 "#;
         let res = parse_and_validate(yaml);
-        let msg = format!("{res:?}");
-        assert!(res.is_err(), "expected error but got Ok");
-        assert!(msg.contains("read-only"), "unexpected error: {msg}");
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("default_region"),
+            "unexpected: {res:?}"
+        );
     }
 }
