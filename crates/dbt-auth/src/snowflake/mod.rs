@@ -1,6 +1,6 @@
 mod key_format;
 
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, AuthWarningPrinter};
 use database::Builder as DatabaseBuilder;
 use dbt_xdbc::database::LogLevel;
 use dbt_xdbc::{Backend, database, snowflake};
@@ -133,7 +133,11 @@ enum SnowflakeAuthIR<'a> {
 }
 
 impl<'a> SnowflakeAuthIR<'a> {
-    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+    pub fn apply(
+        self,
+        warning_printer: &dyn AuthWarningPrinter,
+        mut builder: DatabaseBuilder,
+    ) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::NativeOauth {
                 client_id,
@@ -187,7 +191,7 @@ impl<'a> SnowflakeAuthIR<'a> {
                     })?;
                     builder.with_named_option(
                         snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                        key_format::normalize_key(&key_content)?,
+                        key_format::normalize_key(warning_printer, &key_content)?,
                     )?;
                     builder.with_named_option(snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass)?;
                 } else {
@@ -204,7 +208,7 @@ impl<'a> SnowflakeAuthIR<'a> {
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
                 builder.with_named_option(
                     snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                    key_format::normalize_key(private_key)?,
+                    key_format::normalize_key(warning_printer, private_key)?,
                 )?;
                 if let Some(pass) = passphrase {
                     builder.with_named_option(snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass)?;
@@ -650,7 +654,9 @@ fn apply_connection_args(
     Ok(builder)
 }
 
-pub struct SnowflakeAuth;
+pub struct SnowflakeAuth {
+    pub(crate) warning_printer: Box<dyn AuthWarningPrinter>,
+}
 
 impl Auth for SnowflakeAuth {
     fn backend(&self) -> Backend {
@@ -660,7 +666,7 @@ impl Auth for SnowflakeAuth {
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         let (auth_ir, warnings) = parse_auth(config)?;
         let builder = database::Builder::new(self.backend());
-        let builder = auth_ir.apply(builder)?;
+        let builder = auth_ir.apply(&*self.warning_printer, builder)?;
         let builder = apply_connection_args(config, builder)?;
         Ok(AuthOutcome { builder, warnings })
     }
@@ -723,7 +729,9 @@ mod tests {
     }
 
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) {
-        let auth = SnowflakeAuth {};
+        let auth = SnowflakeAuth {
+            warning_printer: Box::new(crate::NoopAuthWarningPrinter),
+        };
         let auth_result = auth
             .configure(&AdapterConfig::new(config))
             .expect("configure");
@@ -816,7 +824,9 @@ mod tests {
     fn test_simple_pass_with_invalid_driver_log_level() {
         let mut config = base_config();
         config.insert("driver_log_level".into(), "bogus".into());
-        let auth = SnowflakeAuth {};
+        let auth = SnowflakeAuth {
+            warning_printer: Box::new(crate::NoopAuthWarningPrinter),
+        };
         let result = auth.configure(&AdapterConfig::new(config));
         match result {
             Err(AuthError::Config(msg)) => {
@@ -1320,7 +1330,9 @@ mod tests {
 
     #[test]
     fn test_invalid_private_key_path() {
-        let auth = SnowflakeAuth {};
+        let auth = SnowflakeAuth {
+            warning_printer: Box::new(crate::NoopAuthWarningPrinter),
+        };
         let bad_path = "this_file_does_not_exist.p8";
 
         macro_rules! assert_file_not_found {

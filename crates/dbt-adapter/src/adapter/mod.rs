@@ -19,11 +19,13 @@ use crate::time_machine::TimeMachine;
 use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
 
+use crate::auth::DefaultAuthWarningPrinter;
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
-use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
+use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
+use dbt_common::io_utils::StatusReporter;
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
@@ -160,6 +162,7 @@ impl Adapter {
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
+        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Adapter {
         let state = Self::make_parse_adapter_state(
@@ -168,6 +171,7 @@ impl Adapter {
             package_quoting,
             type_ops,
             Arc::new(RelationCache::default()),
+            status_reporter,
             catalogs,
         );
         Adapter {
@@ -183,11 +187,14 @@ impl Adapter {
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,
+        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
 
-        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
+        let warning_printer = Box::new(DefaultAuthWarningPrinter::new(status_reporter))
+            as Box<dyn AuthWarningPrinter>;
+        let auth: Arc<dyn Auth> = auth_for_backend(warning_printer, backend).into();
         let adapter_config = AdapterConfig::new(config);
         let quoting = package_quoting
             .try_into()

@@ -38,6 +38,16 @@ pub struct AuthOutcome {
     pub warnings: Vec<String>,
 }
 
+pub trait AuthWarningPrinter: Send + Sync {
+    fn warn(&self, msg: &str);
+}
+
+pub struct NoopAuthWarningPrinter;
+
+impl AuthWarningPrinter for NoopAuthWarningPrinter {
+    fn warn(&self, _msg: &str) {}
+}
+
 /// Authorization trait.
 pub trait Auth: Send + Sync {
     /// Return the XDBC backend this authenticator is for.
@@ -65,9 +75,12 @@ macro_rules! auth_configure_pipeline {
 }
 
 /// Factory function to create an Auth instance based on the backend type.
-pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
+pub fn auth_for_backend(
+    warning_printer: Box<dyn AuthWarningPrinter>,
+    backend: Backend,
+) -> Box<dyn Auth> {
     match backend {
-        Backend::Snowflake => Box::new(snowflake::SnowflakeAuth {}),
+        Backend::Snowflake => Box::new(snowflake::SnowflakeAuth { warning_printer }),
         Backend::Postgres => Box::new(postgres::PostgresAuth {}),
         Backend::BigQuery => Box::new(bigquery::BigqueryAuth {}),
         Backend::Databricks | Backend::DatabricksODBC => Box::new(databricks::DatabricksAuth {}),

@@ -401,6 +401,7 @@ mod tests {
                 DEFAULT_DBT_QUOTING,
                 Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
                 None,
+                None,
             ));
             env.add_global("adapter", adapter.as_value());
             let empty_blocks = BTreeMap::new();

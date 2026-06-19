@@ -35,9 +35,7 @@ pub mod stmt_splitter;
 pub mod time_machine;
 
 // Re-export types and modules that were moved to dbt_auth
-pub mod auth {
-    pub use dbt_auth::Auth;
-}
+pub mod auth;
 pub mod config {
     pub use dbt_auth::AdapterConfig;
 }

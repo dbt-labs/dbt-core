@@ -598,6 +598,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
+            None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(Arc::new(adapter) as Arc<Adapter>)
@@ -685,6 +686,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
+            None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(Arc::new(adapter) as Arc<Adapter>)
@@ -746,6 +748,7 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
+            None,
             None,
         );
         let env = JinjaEnvBuilder::new()
@@ -895,6 +898,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
+            None,
         );
 
         // Root package has no macros
@@ -946,6 +950,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
+            None,
         );
 
         let globals = BTreeMap::from([(
@@ -990,6 +995,7 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
+            None,
             None,
         );
 
@@ -1051,6 +1057,7 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
+            None,
             None,
         );
 

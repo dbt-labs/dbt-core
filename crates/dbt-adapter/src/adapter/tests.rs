@@ -6,6 +6,7 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use crate::sql_types::DefaultTypeOps;
 use crate::stmt_splitter::DefaultStmtSplitter;
 use dbt_adapter_core::AdapterType;
+
 use dbt_common::cancellation::never_cancels;
 use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
 use indexmap::IndexMap;
@@ -33,6 +34,7 @@ fn make_duckdb_parse_adapter() -> Arc<Adapter> {
         dbt_yaml::Mapping::new(),
         DEFAULT_DBT_QUOTING,
         Arc::new(DefaultTypeOps::new(AdapterType::DuckDB)),
+        None,
         None,
     );
     Arc::new(adapter)

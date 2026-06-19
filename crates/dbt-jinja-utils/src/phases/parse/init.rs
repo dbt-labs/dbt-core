@@ -73,6 +73,7 @@ pub fn initialize_parse_jinja_environment(
         adapter_config_mapping,
         package_quoting,
         type_formatter,
+        io_args.status_reporter.clone(),
         catalogs,
     ));
 

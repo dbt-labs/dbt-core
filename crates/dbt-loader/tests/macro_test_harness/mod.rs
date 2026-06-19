@@ -519,6 +519,7 @@ impl MacroTestHarnessBuilder {
             quoting,
             Arc::new(DefaultTypeOps::new(self.adapter_type)),
             None,
+            None,
         ));
 
         let builder = JinjaEnvBuilder::new()

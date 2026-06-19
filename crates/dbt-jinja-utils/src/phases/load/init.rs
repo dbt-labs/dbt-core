@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use chrono::DateTime;
 use chrono_tz::Tz;
 use dbt_adapter::{Adapter, sql_types::DefaultTypeOps};
+
 use dbt_adapter_core::AdapterType;
 use dbt_common::{
     ErrorCode, FsResult, fs_err, io_args::IoArgs, warn_error_options::WarnErrorOptions,
@@ -54,6 +55,7 @@ pub fn initialize_load_jinja_environment(
         adapter_config_mapping,
         package_quoting,
         type_ops,
+        io_args.status_reporter.clone(),
         catalogs,
     );
 

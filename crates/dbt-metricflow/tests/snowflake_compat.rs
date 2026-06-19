@@ -22,7 +22,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use arrow_array::RecordBatch;
-use dbt_auth::{AdapterConfig, auth_for_backend};
+use dbt_auth::{AdapterConfig, NoopAuthWarningPrinter, auth_for_backend};
 use dbt_metricflow::{Dialect, InMemoryMetricStore};
 use dbt_profile::ProfileEnvironment;
 use dbt_xdbc::{Backend, LoadStrategy, connection, driver};
@@ -82,7 +82,7 @@ impl SnowflakeConn {
 
         let backend = Backend::Snowflake;
         let adapter_config = AdapterConfig::new(resolved.credentials);
-        let auth = auth_for_backend(backend);
+        let auth = auth_for_backend(Box::new(NoopAuthWarningPrinter), backend);
         let db_builder = auth
             .configure(&adapter_config)
             .expect("auth configuration failed")
