@@ -887,7 +887,12 @@ impl CatalogRelation {
         if let Some(dp) = get_yaml_str(duckdb, "data_path") {
             adapter_properties.insert("data_path".to_string(), dp.to_string());
         }
-        adapter_properties.insert("catalog_linked_database".to_string(), alias);
+        // Route models to the DuckLake ATTACH alias (the attached database),
+        // mirroring the Iceberg REST path. `duckdb__generate_database_name`
+        // reads `attached_database` to override `target.database`; without it,
+        // `+catalog_name: <ducklake>` models silently land in the built-in
+        // profile database instead of the DuckLake catalog.
+        adapter_properties.insert("attached_database".to_string(), alias);
 
         Ok(CatalogRelation {
             adapter_type: AdapterType::DuckDB,
@@ -1805,10 +1810,11 @@ catalogs:
         );
         assert_eq!(
             r.adapter_properties
-                .get("catalog_linked_database")
+                .get("attached_database")
                 .map(|s| s.as_str()),
             Some("my_lake")
         );
+        assert!(!r.adapter_properties.contains_key("catalog_linked_database"));
         assert!(!r.adapter_properties.contains_key("data_path"));
     }
 
@@ -1847,9 +1853,10 @@ catalogs:
         );
         assert_eq!(
             r.adapter_properties
-                .get("catalog_linked_database")
+                .get("attached_database")
                 .map(|s| s.as_str()),
             Some("lake")
         );
+        assert!(!r.adapter_properties.contains_key("catalog_linked_database"));
     }
 }

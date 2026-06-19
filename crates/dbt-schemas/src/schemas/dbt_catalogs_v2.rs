@@ -188,9 +188,14 @@ const DUCKLAKE_DUCKDB_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("data_path").non_empty(),
     FieldSpec::string("attach_as").non_empty(),
     FieldSpec::string("metadata_schema").non_empty(),
+    FieldSpec::string("metadata_catalog").non_empty(),
+    FieldSpec::u32_plain("data_inlining_row_limit")
+        .doc("Inline row groups smaller than this many rows into the metadata catalog."),
     FieldSpec::boolean("create_if_not_exists"),
     FieldSpec::boolean("read_only"),
     FieldSpec::boolean("encrypted"),
+    FieldSpec::boolean("automatic_migration"),
+    FieldSpec::boolean("override_data_path"),
 ];
 
 const LOCAL_FILESYSTEM_DUCKDB_FIELDS: &[FieldSpec] = &[
@@ -2262,9 +2267,13 @@ catalogs:
         data_path: "data/"
         attach_as: "lake"
         metadata_schema: "my_schema"
+        metadata_catalog: "lake_db"
+        data_inlining_row_limit: 100
         create_if_not_exists: true
         read_only: false
         encrypted: false
+        automatic_migration: true
+        override_data_path: true
 "#;
         parse_and_validate(yaml).expect("ducklake full config should validate");
     }

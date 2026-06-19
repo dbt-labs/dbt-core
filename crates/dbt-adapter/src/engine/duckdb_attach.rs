@@ -114,10 +114,29 @@ fn build_duckdb_ducklake_attach_stmt(
             escape_string_literal(metadata_schema, AdapterType::DuckDB)
         ));
     }
+    // The catalog/database name inside the metadata store (e.g. a named DuckDB
+    // catalog, or the database for a postgres/mysql metadata backend).
+    if let Some(metadata_catalog) = duckdb_get_str(duckdb, "metadata_catalog") {
+        push_opt(format!(
+            "METADATA_CATALOG '{}'",
+            escape_string_literal(metadata_catalog, AdapterType::DuckDB)
+        ));
+    }
+    // Row count below which DuckLake inlines inserts into the metadata DB
+    // rather than writing a Parquet data file.
+    if let Some(row_limit) = duckdb_get_i64(duckdb, "data_inlining_row_limit") {
+        push_opt(format!("DATA_INLINING_ROW_LIMIT {row_limit}"));
+    }
     for (key, sql_key) in [
         ("create_if_not_exists", "CREATE_IF_NOT_EXISTS"),
         ("read_only", "READ_ONLY"),
         ("encrypted", "ENCRYPTED"),
+        // Auto-migrate the catalog's DuckLake format version on attach (needed
+        // when a newer DuckLake wrote a catalog an older reader must open).
+        ("automatic_migration", "AUTOMATIC_MIGRATION"),
+        // Allow attaching with a DATA_PATH that differs from the one recorded
+        // in an existing catalog (otherwise the mismatch is a hard error).
+        ("override_data_path", "OVERRIDE_DATA_PATH"),
     ] {
         if let Some(val) = duckdb_get_bool(duckdb, key)? {
             push_opt(format!("{sql_key} {val}"));
@@ -222,6 +241,12 @@ fn duckdb_get_str<'a>(duckdb: &'a dbt_yaml::Mapping, key: &str) -> Option<&'a st
     duckdb
         .get(dbt_yaml::Value::from(key))
         .and_then(|v| v.as_str())
+}
+
+fn duckdb_get_i64(duckdb: &dbt_yaml::Mapping, key: &str) -> Option<i64> {
+    duckdb
+        .get(dbt_yaml::Value::from(key))
+        .and_then(|v| v.as_i64())
 }
 
 /// Boolean ATTACH options accept the same lenient YAML the schema validator
