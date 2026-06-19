@@ -61,7 +61,7 @@ use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
-use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
+use dbt_schemas::schemas::dbt_catalogs_v2::{DbtCatalogsV2View, V2CatalogType, V2TableFormat};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
@@ -433,62 +433,23 @@ impl AdapterImpl {
 
         // Check v2 catalogs first: if this database matches an attached catalog,
         // return the appropriate table format so that macros can skip CASCADE / ALTER TABLE RENAME.
-        if load_catalogs::fetch_use_catalogs_v2() {
-            if let Some(catalogs) = load_catalogs::fetch_catalogs() {
-                if let Ok(view) = catalogs.view_v2() {
-                    for catalog in &view.catalogs {
-                        if let Some(duckdb_block) = catalog.config_block("duckdb") {
-                            let alias = duckdb_block
-                                .get(dbt_yaml::Value::from("attach_as"))
-                                .and_then(|v| v.as_str())
-                                .unwrap_or(catalog.name);
-                            let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
-                            if alias.eq_ignore_ascii_case(database) {
-                                return match catalog.catalog_type {
-                                    V2CatalogType::DuckLake => TableFormat::DuckLake,
-                                    _ => TableFormat::Iceberg,
-                                };
-                            }
-                        }
-                    }
-                }
-            }
+        if let Some(format) = table_format_for_database_from_v2(database) {
+            return format;
         }
 
-        // Legacy path: check profile-level attach: entries
+        // Legacy path: check profile-level attach: entries. Each entry resolves
+        // independently to an (alias, table_format) or is skipped.
         let Some(attach_val) = self.get_db_config_value("attach") else {
             return TableFormat::Default;
         };
         let YmlValue::Sequence(seq, _) = attach_val else {
             return TableFormat::Default;
         };
-        for item in seq {
-            let YmlValue::Mapping(map, _) = item else {
-                continue;
-            };
-            let Some(path) = map.get("path").and_then(|v| v.as_str()) else {
-                continue;
-            };
-            let attach_info = DuckDBPathInfo::parse_path(Some(path));
-            let explicit_ducklake = map
-                .get("is_ducklake")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            if !explicit_ducklake && !attach_info.is_ducklake {
-                continue;
-            }
-
-            let attachment_db = map
-                .get("alias")
-                .and_then(|v| v.as_str())
-                .map(ToOwned::to_owned)
-                .unwrap_or_else(|| attach_info.database.to_owned());
-            if attachment_db.eq_ignore_ascii_case(database) {
-                return TableFormat::DuckLake;
-            }
-        }
-
-        TableFormat::Default
+        seq.iter()
+            .filter_map(classify_attach_entry)
+            .find(|(alias, _)| alias.eq_ignore_ascii_case(database))
+            .map(|(_, format)| format)
+            .unwrap_or(TableFormat::Default)
     }
 
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1749
@@ -4448,6 +4409,84 @@ impl AdapterImpl {
     }
 }
 
+fn table_format_for_database_from_v2(database: &str) -> Option<TableFormat> {
+    // Used by adapter.table_format(relation) when a Jinja relation only gives
+    // us its database/catalog. The attached DuckDB alias is the bridge back to
+    // catalogs.yml, which tells macros whether DuckDB needs Iceberg/DuckLake
+    // DDL behavior for that relation. The v2 view is fetched here (rather than at
+    // the call site) so the caller stays a single Option check.
+    if !load_catalogs::fetch_use_catalogs_v2() {
+        return None;
+    }
+    let catalogs = load_catalogs::fetch_catalogs()?;
+    let view = catalogs.view_v2().ok()?;
+    table_format_for_database_in_view(database, &view)
+}
+
+/// Map a DuckDB attached-database alias back to its catalogs.yml table format.
+/// Split from the global fetch above so it can be unit-tested with a constructed view.
+fn table_format_for_database_in_view(
+    database: &str,
+    view: &DbtCatalogsV2View<'_>,
+) -> Option<TableFormat> {
+    for catalog in &view.catalogs {
+        let Some(duckdb_block) = catalog.config_block("duckdb") else {
+            continue;
+        };
+        let alias = duckdb_block
+            .get(dbt_yaml::Value::from("attach_as"))
+            .and_then(|v| v.as_str())
+            .unwrap_or(catalog.name);
+        let alias = dbt_adapter_sql::ident::sanitize_identifier(alias, DuckDB);
+        if alias.eq_ignore_ascii_case(database) {
+            return Some(match catalog.catalog_type {
+                V2CatalogType::DuckLake => TableFormat::DuckLake,
+                _ if matches!(catalog.table_format, V2TableFormat::Iceberg) => TableFormat::Iceberg,
+                _ => TableFormat::Default,
+            });
+        }
+    }
+    None
+}
+
+/// Resolve one profile-level `attach:` entry to its `(alias, table_format)`, or
+/// `None` when the entry is not an Iceberg/DuckLake attachment we route on.
+/// Each entry yields a single outcome — no cross-entry sentinel state.
+fn classify_attach_entry(item: &YmlValue) -> Option<(String, TableFormat)> {
+    let YmlValue::Mapping(map, _) = item else {
+        return None;
+    };
+    let path = map.get("path").and_then(|v| v.as_str())?;
+    let explicit_type = map
+        .get("type")
+        .and_then(|v| v.as_str())
+        .map(str::to_ascii_lowercase);
+    let attach_info = DuckDBPathInfo::parse_path(Some(path));
+
+    // Iceberg takes precedence over DuckLake when an entry is tagged both ways
+    // (matches the prior explicit_iceberg-first branch order).
+    let format = if explicit_type.as_deref() == Some("iceberg") {
+        TableFormat::Iceberg
+    } else if explicit_type.as_deref() == Some("ducklake")
+        || map
+            .get("is_ducklake")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        || attach_info.is_ducklake
+    {
+        TableFormat::DuckLake
+    } else {
+        return None;
+    };
+
+    let alias = map
+        .get("alias")
+        .and_then(|v| v.as_str())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| attach_info.database.to_owned());
+    Some((alias, format))
+}
+
 /// Reads `job_execution_timeout_seconds` from the BigQuery adapter attr of the current
 /// model or snapshot in the Jinja state. Returns `None` if the state has no model or the
 /// model has no BigQuery timeout configured.
@@ -4960,12 +4999,67 @@ mod tests {
     use dbt_adapter_core::AdapterType;
     use dbt_auth::auth_for_backend;
     use dbt_common::AdapterResult;
+    use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
     use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};
     use dbt_yaml::Mapping;
 
     use minijinja::{Environment, State, Value};
+
+    #[test]
+    fn classify_attach_entry_resolves_format_and_alias() {
+        let parse =
+            |yaml: &str| -> dbt_yaml::Value { dbt_yaml::from_str(yaml).expect("valid YAML") };
+
+        // Explicit type wins and the alias is taken verbatim.
+        assert_eq!(
+            classify_attach_entry(&parse("path: /data/lake\ntype: iceberg\nalias: ice")),
+            Some(("ice".to_string(), TableFormat::Iceberg))
+        );
+        assert_eq!(
+            classify_attach_entry(&parse("path: /data/dl\ntype: ducklake\nalias: dl")),
+            Some(("dl".to_string(), TableFormat::DuckLake))
+        );
+        // The is_ducklake flag also selects DuckLake.
+        assert_eq!(
+            classify_attach_entry(&parse("path: /data/dl\nis_ducklake: true\nalias: dl2")),
+            Some(("dl2".to_string(), TableFormat::DuckLake))
+        );
+        // Iceberg takes precedence when an entry is tagged both ways.
+        assert_eq!(
+            classify_attach_entry(&parse(
+                "path: /data/x\ntype: iceberg\nis_ducklake: true\nalias: both"
+            )),
+            Some(("both".to_string(), TableFormat::Iceberg))
+        );
+        // Neither iceberg nor ducklake -> not routed.
+        assert_eq!(
+            classify_attach_entry(&parse("path: /data/plain\nalias: plain")),
+            None
+        );
+        // Missing path / non-mapping -> not routed.
+        assert_eq!(
+            classify_attach_entry(&parse("type: iceberg\nalias: x")),
+            None
+        );
+        assert_eq!(classify_attach_entry(&parse("- a\n- b")), None);
+        // Alias falls back to the database parsed from the path when absent.
+        assert!(matches!(
+            classify_attach_entry(&parse("path: /data/warehouse.duckdb\ntype: iceberg")),
+            Some((alias, TableFormat::Iceberg)) if !alias.is_empty()
+        ));
+    }
+
+    fn with_catalogs_v2_view(yaml: &str, test: impl FnOnce(&DbtCatalogsV2View<'_>)) {
+        let parsed: dbt_yaml::Value = dbt_yaml::from_str(yaml).expect("valid YAML");
+        let dbt_yaml::Value::Mapping(repr, span) = parsed else {
+            panic!("expected YAML mapping");
+        };
+        let catalogs = DbtCatalogs::new(repr, span);
+        let view = catalogs.view_v2().expect("valid catalogs v2 view");
+        test(&view);
+    }
 
     fn engine(adapter_type: AdapterType) -> Arc<dyn AdapterEngine> {
         let config = match adapter_type {
@@ -5113,6 +5207,69 @@ mod tests {
         assert_eq!(
             adapter.table_format_for_database("main"),
             TableFormat::Default
+        );
+    }
+
+    #[test]
+    fn test_table_format_profile_level_iceberg_attachment() {
+        let attach = YmlValue::Sequence(
+            vec![YmlValue::Mapping(
+                Mapping::from_iter([
+                    ("path".into(), "demo".into()),
+                    ("alias".into(), "iceberg_demo".into()),
+                    ("type".into(), "iceberg".into()),
+                ]),
+                Default::default(),
+            )],
+            Default::default(),
+        );
+        let config = Mapping::from_iter([
+            ("path".into(), "demo.duckdb".into()),
+            ("attach".into(), attach),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(DuckDB, config), None);
+
+        assert_eq!(
+            adapter.table_format_for_database("iceberg_demo"),
+            TableFormat::Iceberg
+        );
+        assert_eq!(
+            adapter.table_format_for_database("demo"),
+            TableFormat::Default
+        );
+    }
+
+    #[test]
+    fn test_table_format_v2_uses_catalog_table_format() {
+        with_catalogs_v2_view(
+            r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: https://snowflake.example.com/polaris/api/catalog
+        warehouse: HORIZON_CATALOG
+  - name: remote_catalog
+    type: local_filesystem
+    table_format: default
+    config:
+      duckdb:
+        root_path: /tmp/remote
+        attach_as: remote_db
+"#,
+            |view| {
+                assert_eq!(
+                    table_format_for_database_in_view("horizon_demo", view),
+                    Some(TableFormat::Iceberg)
+                );
+                assert_eq!(
+                    table_format_for_database_in_view("remote_db", view),
+                    Some(TableFormat::Default)
+                );
+                assert_eq!(table_format_for_database_in_view("missing", view), None);
+            },
         );
     }
 
