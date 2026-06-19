@@ -8,7 +8,7 @@
 
   {# DIVERGENCE: adapter.build_catalog_relation is Fusion-only (see issue #10659). Under
      dbt-core (1.x) there is no iceberg table-format routing, so use the standard temp+rename flow. #}
-  {% set use_direct_create = (adapter.build_catalog_relation(config.model).duckdb_write_strategy == 'direct_create') if dbt_version.startswith('2.') else false %}
+  {% set use_direct_create = (adapter.build_catalog_relation(config.model).duckdb_write_strategy in ['direct_create', 'direct_create_as_select']) if dbt_version.startswith('2.') else false %}
   {%- set existing_relation = none if use_direct_create else load_cached_relation(this) -%}
   {%- set intermediate_relation = target_relation if use_direct_create else make_intermediate_relation(target_relation) -%}
   {%- set preexisting_intermediate_relation = none if use_direct_create else load_cached_relation(intermediate_relation) -%}
