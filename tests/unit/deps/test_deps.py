@@ -1,6 +1,8 @@
 import os
+import tempfile
 import unittest
 from argparse import Namespace
+from contextlib import nullcontext
 from copy import deepcopy
 from unittest import mock
 
@@ -21,10 +23,12 @@ from dbt.deps.local import LocalPinnedPackage, LocalUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.deps.resolver import resolve_packages
 from dbt.deps.tarball import TarballUnpinnedPackage
+from dbt.events.types import DepsLockUpdating
 from dbt.flags import set_from_args
 from dbt.task.deps import DepsTask
 from dbt.version import get_installed_version
 from dbt_common.dataclass_schema import ValidationError
+from dbt_common.events.types import Note
 from dbt_common.semver import VersionSpecifier
 
 set_from_args(Namespace(WARN_ERROR=False), None)
@@ -1241,3 +1245,106 @@ class TestCheckForDuplicatePackagesWithBooleans(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result["packages"]), 1)
         self.assertIn("dbt-utils-extra", result["packages"][0]["git"])
+
+
+class TestDepsLockWriteErrors(unittest.TestCase):
+    """Regression tests for dbt-labs/dbt-core#9241.
+
+    `dbt deps` must not crash when it cannot write ``package-lock.yml`` (for
+    example, a read-only project directory or a read-only mounted volume in a
+    container). ``DepsTask.lock()`` should catch the filesystem error, emit a
+    ``Note`` so the failure is visible, and let ``dbt deps`` proceed without
+    updating the lock file.
+    """
+
+    def _run_lock_with_open_error(self, error):
+        """Drive ``DepsTask.lock()`` for a project that has packages but whose
+        lock-file path cannot be opened for writing. Returns the fired events.
+        """
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+        task.cli_vars = {}
+        task.project = mock.MagicMock()
+        task.project.project_root = "/read-only-project"
+        task.project.packages.packages = ["a-package"]
+
+        fired = []
+
+        with mock.patch("dbt.task.deps.resolve_packages", return_value=[]), mock.patch(
+            "dbt.task.deps.downloads_directory", return_value=nullcontext()
+        ), mock.patch("dbt.task.deps.PackageRenderer"), mock.patch(
+            "dbt.task.deps._create_sha1_hash", return_value="hash"
+        ), mock.patch(
+            "dbt.task.deps.fire_event", side_effect=fired.append
+        ), mock.patch(
+            "builtins.open", side_effect=error
+        ):
+            # Must not raise: an unhandled error here is the bug in #9241.
+            task.lock()
+
+        return fired
+
+    def test_lock_handles_permission_error(self):
+        # A read-only directory/file raises PermissionError (errno EACCES).
+        fired = self._run_lock_with_open_error(PermissionError(13, "Permission denied"))
+
+        fired_types = [type(event) for event in fired]
+        self.assertIn(Note, fired_types)
+        self.assertNotIn(DepsLockUpdating, fired_types)
+
+        note = next(event for event in fired if isinstance(event, Note))
+        self.assertIn("/read-only-project", note.msg)
+        self.assertIn("Proceeding without updating the lock file", note.msg)
+
+    def test_lock_handles_read_only_filesystem_error(self):
+        # A read-only mounted volume raises a bare OSError (errno EROFS), which
+        # is NOT a PermissionError. Catching OSError (not PermissionError) is
+        # what covers the common container case.
+        fired = self._run_lock_with_open_error(OSError(30, "Read-only file system"))
+
+        fired_types = [type(event) for event in fired]
+        self.assertIn(Note, fired_types)
+        self.assertNotIn(DepsLockUpdating, fired_types)
+
+        note = next(event for event in fired if isinstance(event, Note))
+        self.assertIn("/read-only-project", note.msg)
+        self.assertIn("Proceeding without updating the lock file", note.msg)
+
+    def test_lock_preserves_existing_lock_file_on_write_failure(self):
+        # If writing the new lock file fails part-way through (for example, a
+        # full disk), the atomic write must leave an existing package-lock.yml
+        # intact rather than truncating it to an empty or partial file.
+        with tempfile.TemporaryDirectory() as project_root:
+            lock_path = f"{project_root}/package-lock.yml"
+            original_contents = "packages:\n- package: dbt-labs/dbt_utils\n  version: 1.0.0\n"
+            with open(lock_path, "w") as existing_lock:
+                existing_lock.write(original_contents)
+
+            with mock.patch("dbt.task.deps.BaseTask.__init__"):
+                task = DepsTask.__new__(DepsTask)
+            task.cli_vars = {}
+            task.project = mock.MagicMock()
+            task.project.project_root = project_root
+            task.project.packages.packages = ["a-package"]
+
+            fired = []
+
+            with mock.patch("dbt.task.deps.resolve_packages", return_value=[]), mock.patch(
+                "dbt.task.deps.downloads_directory", return_value=nullcontext()
+            ), mock.patch("dbt.task.deps.PackageRenderer"), mock.patch(
+                "dbt.task.deps._create_sha1_hash", return_value="hash"
+            ), mock.patch(
+                "dbt.task.deps.fire_event", side_effect=fired.append
+            ), mock.patch(
+                "dbt.task.deps.yaml.dump", side_effect=OSError(28, "No space left on device")
+            ):
+                # Must not raise, and must not corrupt the existing lock file.
+                task.lock()
+
+            with open(lock_path) as preserved_lock:
+                self.assertEqual(preserved_lock.read(), original_contents)
+            self.assertFalse(os.path.exists(f"{lock_path}.tmp"))
+
+            fired_types = [type(event) for event in fired]
+            self.assertIn(Note, fired_types)
+            self.assertNotIn(DepsLockUpdating, fired_types)
