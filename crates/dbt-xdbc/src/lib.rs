@@ -93,6 +93,7 @@ pub const POSTGRES_DRIVER_VERSION: &str = "0.21.0+dbt0.21.0";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.11";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.4";
 pub const DUCKDB_DRIVER_VERSION: &str = "1.5.4";
+pub const FDCS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.1";
 pub const DUCKDB_EXTENDED_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.26";
 pub const CLICKHOUSE_DRIVER_VERSION: &str = "0.1.0-alpha.2";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.22.0";

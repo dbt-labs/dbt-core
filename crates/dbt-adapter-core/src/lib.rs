@@ -56,6 +56,8 @@ pub enum AdapterType {
     Dremio,
     /// Oracle
     Oracle,
+    /// Fdcs
+    Fdcs,
 }
 
 impl AdapterType {
@@ -84,7 +86,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Redshift => '"',
         Postgres | Salesforce => '"',
         Fabric => '"',
-        DuckDB => '"',
+        DuckDB | Fdcs => '"',
         Athena | Trino | Starburst => '"',
         Datafusion => '"',
         // https://clickhouse.com/docs/sql-reference/syntax#identifiers
@@ -131,6 +133,7 @@ pub fn adapter_type_supports_static_analysis(adapter_type: AdapterType) -> bool 
             | AdapterType::Databricks
             | AdapterType::Spark
             | AdapterType::DuckDB
+            | AdapterType::Fdcs
     )
 }
 
@@ -148,6 +151,7 @@ pub const NON_EXPERIMENTAL_ADAPTERS: &[AdapterType] = &[
     AdapterType::Redshift,
     AdapterType::DuckDB,
     AdapterType::Salesforce,
+    AdapterType::Fdcs,
 ];
 
 #[cfg(test)]
@@ -172,6 +176,7 @@ mod tests {
             ("sTarburst", AdapterType::Starburst),
             ("tRino", AdapterType::Trino),
             ("dAtafusion", AdapterType::Datafusion),
+            ("fDcs", AdapterType::Fdcs),
         ];
         for (input, expected) in cases {
             let res = input.parse::<AdapterType>();
@@ -218,6 +223,7 @@ mod tests {
                 (AdapterType::Datafusion, "datafusion"),
                 (AdapterType::Dremio, "dremio"),
                 (AdapterType::Oracle, "oracle"),
+                (AdapterType::Fdcs, "fdcs"),
             ]
         );
     }
@@ -239,6 +245,7 @@ mod tests {
             AdapterType::Salesforce,
             AdapterType::Fabric,
             AdapterType::DuckDB,
+            AdapterType::Fdcs,
             AdapterType::Athena,
             AdapterType::Trino,
             AdapterType::Starburst,
@@ -271,6 +278,7 @@ mod tests {
             AdapterType::Databricks,
             AdapterType::Spark,
             AdapterType::DuckDB,
+            AdapterType::Fdcs,
         ];
 
         for adapter_type in AdapterType::iter() {
