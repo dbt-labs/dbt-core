@@ -72,7 +72,7 @@
 
     {{ sql_header if sql_header is not none }}
 
-    {%- if not temporary and write_strategy != 'create_as_select' %}
+    {%- if not temporary and write_strategy == 'direct_create' %}
       {% if contract_config.enforced %}
         {#-- DuckDB doesnt support constraints on temp tables --#}
         create table
