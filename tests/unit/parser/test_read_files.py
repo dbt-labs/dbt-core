@@ -1,13 +1,10 @@
+from types import SimpleNamespace
+
 import pytest
 
 from dbt.artifacts.resources.base import FileHash
 from dbt.contracts.files import FilePath, ParseFileType, SchemaSourceFile, SourceFile
-from dbt.parser.read_files import (
-    FileDiff,
-    InputFile,
-    ReadFilesFromDiff,
-    normalize_file_contents,
-)
+from dbt.parser.read_files import FileDiff, InputFile, ReadFilesFromDiff, normalize_file_contents
 
 
 @pytest.mark.parametrize(
@@ -106,6 +103,62 @@ def test_read_files_from_diff_normalizes_line_endings(
     reader.read_files()
 
     actual = reader.files[file_id].checksum
+    # CRLF content hashes the same as the normalized LF baseline (no false-modified).
+    assert actual == FileHash.from_contents(normalize_file_contents(crlf_content))
+    assert actual == FileHash.from_contents(normalize_file_contents(lf_content))
+    # And specifically NOT the raw CRLF hash (the pre-fix, CRLF-sensitive behavior).
+    assert actual != FileHash.from_contents(crlf_content)
+
+
+def _stub_project(project_root="/project"):
+    """Minimal stand-in for a dbt Project exposing only the path attributes
+    ReadFilesFromDiff.get_project_file_types() reads when resolving an *added*
+    file's parse type. Only ``model_paths`` contains ``models`` so a
+    ``models/*.sql`` file resolves unambiguously to a model."""
+    return SimpleNamespace(
+        project_root=project_root,
+        macro_paths=["macros"],
+        model_paths=["models"],
+        snapshot_paths=["snapshots"],
+        analysis_paths=["analyses"],
+        test_paths=["tests"],
+        generic_test_paths=["tests/generic"],
+        seed_paths=["seeds"],
+        docs_paths=["docs"],
+        all_source_paths=["models-properties"],
+        fixture_paths=["fixtures"],
+        function_paths=["functions"],
+    )
+
+
+def test_read_files_from_diff_added_normalizes_line_endings():
+    """The *added* branch of ReadFilesFromDiff hashes brand-new files at a
+    second site (read_files.py, the ``self.file_diff.added`` loop) that is
+    distinct from the *changed* branch covered above. A model added via the file
+    diff with CRLF line endings must hash the same as its normalized LF
+    equivalent so it is not falsely flagged ``state:modified`` (#11473). This
+    guards that site without needing the heavier functional harness."""
+    lf_content = "select 1 as id\nfrom my_table\n"
+    crlf_content = lf_content.replace("\n", "\r\n")
+
+    reader = ReadFilesFromDiff(
+        root_project_name="test",
+        all_projects={"test": _stub_project()},
+        file_diff=FileDiff(
+            deleted=[],
+            changed=[],
+            added=[InputFile(path="models/crlf_added.sql", content=crlf_content)],
+        ),
+        saved_files={},
+    )
+    reader.read_files()
+
+    # Exactly one file is added; read its checksum from the created entry rather
+    # than reconstructing the file_id (which is built with the OS path separator).
+    added_files = list(reader.files.values())
+    assert len(added_files) == 1
+    assert added_files[0].parse_file_type == ParseFileType.Model
+    actual = added_files[0].checksum
     # CRLF content hashes the same as the normalized LF baseline (no false-modified).
     assert actual == FileHash.from_contents(normalize_file_contents(crlf_content))
     assert actual == FileHash.from_contents(normalize_file_contents(lf_content))
