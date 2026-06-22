@@ -279,9 +279,8 @@ impl AdapterImpl {
                             as Box<dyn MetadataAdapter>,
                         Redshift => Box::new(RedshiftMetadataAdapter::new(engine))
                             as Box<dyn MetadataAdapter>,
-                        Salesforce => {
-                            Box::new(SalesforceMetadataAdapter::new()) as Box<dyn MetadataAdapter>
-                        }
+                        Salesforce => Box::new(SalesforceMetadataAdapter::new(engine))
+                            as Box<dyn MetadataAdapter>,
                         Postgres => Box::new(PostgresMetadataAdapter::new(engine))
                             as Box<dyn MetadataAdapter>,
                         DuckDB => {

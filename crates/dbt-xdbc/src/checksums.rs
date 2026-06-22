@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 177] = [
+); 182] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -497,6 +497,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "dd1eaf5090467e878316398381000d752a1e59d01856afef5ae516033b0ec73e",
     ),
     (
+        ("salesforce", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.22.1"),
+        "a1b67a3ed75972b231a2af4037e5d21565c821f728004cd9b7a45b63b3d8f166",
+    ),
+    (
         ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.4"),
         "d0b94c4d28569cc95c0a07cb4218b053727ea9df13ed0ef2f55b3a920351d589",
     ),
@@ -511,6 +515,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("salesforce", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.22.0"),
         "9676f55baa15ee703447ae13f5e6afaaf2f45e6f59ccbb443b19452017e9d94d",
+    ),
+    (
+        ("salesforce", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.22.1"),
+        "a80cf5ea730bf9c7e437bd04f613b3bc17cca2b2e3b4c793e40ecf568f83305d",
     ),
     (
         ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.4"),
@@ -529,6 +537,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "d45e958e253e1852ca116d20615889631ffb354c2c1d3b73ed74a30521795589",
     ),
     (
+        ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.22.1"),
+        "b9a9d02b194105aaa45e31e48b8da2331821dd3e22645fce740706655950cca5",
+    ),
+    (
         ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.4"),
         "a1eb2b25f4f4bf63c731fdc5d47bbca621e4bd23c6201b28d6f98ba85e400951",
     ),
@@ -545,6 +557,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "ecdaf290e104068013c8645578df0c548e1abe32370d03364f31d92accf29fb3",
     ),
     (
+        ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.22.1"),
+        "4d3e17a3afbffb4e22c193c254e5709d4c6006a17fb737ef94063aca4a0c9ec7",
+    ),
+    (
         ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.4"),
         "f73ad9a1bc6f6f418a9abb3ca54723da32f9b70e28b610d772aa796cc4d83641",
     ),
@@ -559,6 +575,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("salesforce", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.22.0"),
         "315a502177cd6dd0d9ca1d8bc8df44c545f6b1c7da4575300af94e7c4405d299",
+    ),
+    (
+        ("salesforce", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.22.1"),
+        "4f71b4f0ccdf5823a2fe70e0f8ccd76edcd3abbcae13bbe0fa92e0a8d529179d",
     ),
     (
         ("snowflake", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
