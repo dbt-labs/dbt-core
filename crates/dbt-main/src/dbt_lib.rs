@@ -275,6 +275,7 @@ async fn do_execute_fs(
                     serve_args,
                     &feature_stack,
                     eval_arg.io.status_reporter.as_ref(),
+                    &eval_arg.io.in_dir,
                 )
                 .await
             }
@@ -1431,12 +1432,15 @@ async fn run_docs_serve(
     serve_args: ClapDocsServeArgs,
     feature_stack: &Arc<FeatureStack>,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+    project_dir: &std::path::Path,
 ) -> FsResult<()> {
+    let has_dbt_state = dbt_clap_core::CommonArgs::default().get_manage_state(project_dir);
     let args = dbt_docs_server::DocsServeArgs {
         target_path: serve_args.target_path,
         host: serve_args.host,
         port: serve_args.port,
         no_open: serve_args.no_open,
+        has_dbt_state,
     };
     let index_dir = dbt_docs_server::resolve_index_dir(&args);
 

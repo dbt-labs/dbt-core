@@ -24,7 +24,7 @@ use crate::state::AppState;
 /// never touches `dbt-index` or any other proprietary surface.
 pub async fn run_with_args(args: Arc<DocsServeArgs>, providers: Providers) -> io::Result<()> {
     let index_dir = resolve_index_dir(&args);
-    let state = Arc::new(AppState::new(index_dir, providers));
+    let state = Arc::new(AppState::new(index_dir, providers, args.has_dbt_state));
     serve(args, state).await
 }
 

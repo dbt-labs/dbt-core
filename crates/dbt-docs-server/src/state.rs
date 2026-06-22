@@ -10,6 +10,7 @@ pub use dbt_docs_core::DistInfo;
 pub struct AppState {
     pub index_dir: PathBuf,
     pub providers: Providers,
+    pub has_dbt_state: bool,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -20,13 +21,15 @@ pub type SharedState = Arc<AppState>;
 #[derive(Debug, Clone, Serialize)]
 pub struct Capabilities {
     pub has_column_lineage: bool,
+    pub has_dbt_state: bool,
 }
 
 impl AppState {
-    pub fn new(index_dir: PathBuf, providers: Providers) -> Self {
+    pub fn new(index_dir: PathBuf, providers: Providers, has_dbt_state: bool) -> Self {
         Self {
             index_dir,
             providers,
+            has_dbt_state,
         }
     }
 
@@ -42,9 +45,14 @@ impl AppState {
         self.providers.column_lineage.is_available()
     }
 
+    pub fn has_dbt_state(&self) -> bool {
+        self.has_dbt_state
+    }
+
     pub fn capabilities(&self) -> Capabilities {
         Capabilities {
             has_column_lineage: self.has_column_lineage(),
+            has_dbt_state: self.has_dbt_state(),
         }
     }
 }

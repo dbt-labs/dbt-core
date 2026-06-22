@@ -20,6 +20,7 @@ pub struct DocsServeArgs {
     pub host: String,
     pub port: u16,
     pub no_open: bool,
+    pub has_dbt_state: bool,
 }
 
 mod assets;

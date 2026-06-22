@@ -152,7 +152,11 @@ fn make_state(backend: MockBackend) -> Arc<AppState> {
         backend: Arc::new(backend),
         ..Providers::default()
     };
-    Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers))
+    Arc::new(AppState::new(
+        std::path::PathBuf::from("/tmp"),
+        providers,
+        false,
+    ))
 }
 
 fn files_schema() -> Arc<Schema> {

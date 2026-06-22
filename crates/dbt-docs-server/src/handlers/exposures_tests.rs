@@ -54,6 +54,7 @@ fn make_state(backend: ExposureMockBackend) -> Arc<AppState> {
         ..Providers::default()
     };
     Arc::new(AppState {
+        has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
     })

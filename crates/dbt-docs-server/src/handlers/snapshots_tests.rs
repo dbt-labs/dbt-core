@@ -96,6 +96,7 @@ fn make_state(backend: SnapshotDetailMockBackend) -> Arc<AppState> {
         ..Providers::default()
     };
     Arc::new(AppState {
+        has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
     })
@@ -733,6 +734,7 @@ fn make_list_state(backend: SnapshotListMockBackend) -> Arc<AppState> {
         ..Providers::default()
     };
     Arc::new(AppState {
+        has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
     })

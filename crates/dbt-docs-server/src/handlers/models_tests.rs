@@ -183,7 +183,11 @@ fn make_state(backend: MockBackend) -> Arc<AppState> {
         backend: Arc::new(backend),
         ..Providers::default()
     };
-    Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers))
+    Arc::new(AppState::new(
+        std::path::PathBuf::from("/tmp"),
+        providers,
+        false,
+    ))
 }
 
 /// Schema shared by all list-endpoint batch builders — keeps field order in sync.
@@ -721,7 +725,11 @@ fn make_detail_state(backend: DetailMockBackend) -> Arc<AppState> {
         backend: Arc::new(backend),
         ..Providers::default()
     };
-    Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers))
+    Arc::new(AppState::new(
+        std::path::PathBuf::from("/tmp"),
+        providers,
+        false,
+    ))
 }
 
 // ── Batch builders ───────────────────────────────────────────────────────────
