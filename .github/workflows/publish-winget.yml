@@ -72,9 +72,11 @@ jobs:
       PACKAGE_IDENTIFIER: dbtLabs.dbt-core
       VERSION: ${{ inputs.version }}
     steps:
-      - name: Compute installer URL
+      - name: Compute installer URL and release date
         shell: bash
-        run: echo "INSTALLER_URL=https://github.com/dbt-labs/dbt-core/releases/download/v${VERSION}/dbt-core-${VERSION}-x86_64-pc-windows-msvc.zip" >> "$GITHUB_ENV"
+        run: |
+          echo "INSTALLER_URL=https://github.com/dbt-labs/dbt-core/releases/download/v${VERSION}/dbt-core-${VERSION}-x86_64-pc-windows-msvc.zip" >> "$GITHUB_ENV"
+          echo "RELEASE_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
 
       - name: Install wingetcreate
         shell: pwsh
@@ -92,6 +94,7 @@ jobs:
           .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER `
             --version $env:VERSION `
             --urls $env:INSTALLER_URL `
+            --release-date $env:RELEASE_DATE `
             --token $env:WINGET_PUBLISH_PAT `
             --out manifests-out
           Write-Host "---rendered manifests---"
@@ -136,5 +139,6 @@ jobs:
           .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER `
             --version $env:VERSION `
             --urls $env:INSTALLER_URL `
+            --release-date $env:RELEASE_DATE `
             --submit `
             --token $env:WINGET_PUBLISH_PAT
