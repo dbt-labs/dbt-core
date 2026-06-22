@@ -281,6 +281,10 @@ impl DbConfig {
                 "schema",
                 "encryption",
                 "certificate_validation",
+                "certificate_fingerprint",
+                "connection_timeout",
+                "query_timeout",
+                "idle_timeout",
             ],
             DbConfig::ClickHouse(_) => &[
                 "database",
@@ -1248,6 +1252,12 @@ pub struct ExasolDbConfig {
     pub certificate_fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_timeout: Option<StringOrInteger>,
+    /// Per-statement execution timeout in seconds (0 = no limit)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_timeout: Option<StringOrInteger>,
+    /// Idle connection timeout in seconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_timeout: Option<StringOrInteger>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
 }
