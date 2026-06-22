@@ -10,6 +10,7 @@ use dbt_adapter::AdapterType;
 use dbt_frontend_common::{FullyQualifiedName, ident::Identifier};
 use sqlparser::ast::{ObjectName, Query, TableFactor, Visit, Visitor};
 use sqlparser::parser::Parser;
+use sqlparser::tokenizer::Token;
 
 use crate::sql::dialect::sqlparser_dialect_for;
 
@@ -51,6 +52,40 @@ pub(crate) fn extract_sources_from_str(
         sources: BTreeSet::new(),
     };
     let _ = statements.visit(&mut visitor);
+    Ok(visitor.sources)
+}
+
+/// Extract upstream table references from a complete SQL expression rather
+/// than a full statement. Custom materializations may wrap expression-only
+/// model SQL in their own executable statement.
+pub(crate) fn extract_sources_from_standalone_expression(
+    sql: &str,
+    adapter_type: AdapterType,
+    default_catalog: &str,
+    default_schema: &str,
+) -> Result<BTreeSet<FullyQualifiedName>, ExtractSourcesError> {
+    let mut parser = Parser::new(sqlparser_dialect_for(adapter_type))
+        .try_with_sql(sql)
+        .map_err(|e| ExtractSourcesError::Parse(e.to_string()))?;
+    let expr = parser
+        .parse_expr()
+        .map_err(|e| ExtractSourcesError::Parse(e.to_string()))?;
+    match parser.peek_token().token {
+        Token::EOF => {}
+        other => {
+            return Err(ExtractSourcesError::Parse(format!(
+                "expected end of expression, found {other}"
+            )));
+        }
+    }
+    let mut visitor = SourceExtractor {
+        adapter_type,
+        default_catalog,
+        default_schema,
+        cte_scopes: Vec::new(),
+        sources: BTreeSet::new(),
+    };
+    let _ = expr.visit(&mut visitor);
     Ok(visitor.sources)
 }
 
@@ -400,5 +435,43 @@ mod tests {
         );
         assert_eq!(sources.len(), 1);
         assert!(sources.contains(&fqn("mydb", "myschema", "t")));
+    }
+
+    #[test]
+    fn standalone_literal_expression_is_valid() {
+        let sources = extract_sources_from_standalone_expression(
+            "'alice'",
+            AdapterType::Snowflake,
+            "db",
+            "s",
+        )
+        .unwrap();
+        assert!(sources.is_empty());
+    }
+
+    #[test]
+    fn standalone_subquery_expression_extracts_sources() {
+        let sources = extract_sources_from_standalone_expression(
+            "(select max(id) from raw.users)",
+            AdapterType::Snowflake,
+            "db",
+            "s",
+        )
+        .unwrap();
+        assert_eq!(sources.len(), 1);
+        assert!(sources.contains(&fqn("db", "RAW", "USERS")));
+    }
+
+    #[test]
+    fn standalone_expression_must_consume_full_input() {
+        assert!(
+            extract_sources_from_standalone_expression(
+                "'alice' from raw.users",
+                AdapterType::Snowflake,
+                "db",
+                "s",
+            )
+            .is_err()
+        );
     }
 }

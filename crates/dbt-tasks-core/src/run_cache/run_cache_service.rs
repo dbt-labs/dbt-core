@@ -29,6 +29,7 @@ use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_frontend_common::ident::FullyQualifiedName;
+use dbt_frontend_common::named_reference::NamedReference;
 use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_schemas::schemas::common::{DbtMaterialization, ModelFreshnessRules, ResolvedQuoting};
 use dbt_schemas::schemas::profiles::DbConfig;
@@ -1509,7 +1510,6 @@ async fn prepare_write_only_execution_record(
             record_unsupported_node(node, "non-SQL model");
             return Ok(None);
         }
-
         let full_refresh = effective_full_refresh(
             ctx.inner.arg.full_refresh,
             model.deprecated_config.full_refresh,
@@ -2369,13 +2369,16 @@ async fn collect_query_dependencies(
     if is_view {
         return Ok(CollectedViewQueryDependencies::for_view());
     }
-    let relations = parse_sql_relations_for_run_cache(
+    let relations = match parse_sql_relations_for_run_cache(
         ctx,
         sql,
         &node.database(),
         &node.schema(),
         node.base().quoting_ignore_case,
-    )?;
+    ) {
+        Ok(relations) => relations,
+        Err(err) => return query_dependencies_for_parse_error(ctx, node, sql, err).await,
+    };
     if relations.is_empty() {
         return Ok(CollectedViewQueryDependencies::complete(
             Vec::new(),
@@ -2384,11 +2387,18 @@ async fn collect_query_dependencies(
         ));
     }
 
-    let Some(adapter) = ctx.env.get_adapter_ref() else {
+    collect_query_dependencies_from_relations(ctx, node, relations).await
+}
+
+async fn collect_query_dependencies_from_relations(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    relations: BTreeMap<String, Arc<dyn BaseRelation>>,
+) -> FsResult<CollectedViewQueryDependencies> {
+    let Some(traverser) = ctx.inner.run_cache_ctx.view_traverser.as_deref() else {
         return Ok(CollectedViewQueryDependencies::incomplete());
     };
-
-    let Some(traverser) = ctx.inner.run_cache_ctx.view_traverser.as_deref() else {
+    let Some(adapter) = ctx.env.get_adapter_ref() else {
         return Ok(CollectedViewQueryDependencies::incomplete());
     };
 
@@ -2431,6 +2441,69 @@ async fn collect_query_dependencies(
     ))
 }
 
+async fn query_dependencies_for_parse_error(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    sql: &str,
+    err: Box<FsError>,
+) -> FsResult<CollectedViewQueryDependencies> {
+    if !node_uses_custom_materialization(node) {
+        return Err(err);
+    }
+
+    let unique_id = node.unique_id();
+    let upstreams = match extract_standalone_expression_upstreams_for_run_cache(
+        ctx.adapter_type(),
+        sql,
+        &node.database(),
+        &node.schema(),
+        node.base().quoting_ignore_case,
+        ctx.inner.sources_extractor.as_ref(),
+    ) {
+        Ok(upstreams) => upstreams,
+        Err(standalone_err) => {
+            emit_trace_log_message(|| {
+                format!(
+                    "dbt State dependency extraction incomplete for custom materialization {unique_id}: {err}; standalone expression extraction also failed: {standalone_err}"
+                )
+            });
+            return Ok(CollectedViewQueryDependencies::incomplete());
+        }
+    };
+    let relations = if upstreams.is_empty() {
+        BTreeMap::new()
+    } else {
+        let Some(adapter) = ctx.env.get_adapter_ref() else {
+            return Ok(CollectedViewQueryDependencies::incomplete());
+        };
+        relations_from_upstreams(
+            ctx.adapter_type(),
+            upstreams,
+            adapter.engine().type_ops().as_ref(),
+        )?
+    };
+
+    if relations.is_empty() {
+        emit_trace_log_message(|| {
+            format!(
+                "dbt State dependency extraction accepted standalone SQL expression for custom materialization {unique_id}"
+            )
+        });
+        return Ok(CollectedViewQueryDependencies::complete(
+            Vec::new(),
+            BTreeSet::new(),
+            BTreeMap::new(),
+        ));
+    }
+    collect_query_dependencies_from_relations(ctx, node, relations).await
+}
+
+fn node_uses_custom_materialization(node: &dyn InternalDbtNodeAttributes) -> bool {
+    node.as_any()
+        .downcast_ref::<DbtModel>()
+        .is_some_and(|model| matches!(model.materialized(), DbtMaterialization::Unknown(_)))
+}
+
 fn parse_sql_relations_for_run_cache(
     ctx: &TaskRunnerCtx,
     sql: &str,
@@ -2463,8 +2536,43 @@ fn parse_sql_relations_for_adapter(
     sources_extractor: &dyn SourcesExtractor,
     type_ops: &dyn TypeOps,
 ) -> FsResult<BTreeMap<String, Arc<dyn BaseRelation>>> {
-    let upstreams = sources_extractor
-        .extract_upstreams(
+    let upstreams = match sources_extractor.extract_upstreams(
+        adapter_type,
+        sql,
+        default_catalog,
+        default_schema,
+        quoted_name_ignore_case,
+    ) {
+        Ok(upstreams) => upstreams,
+        Err(statement_err) => sources_extractor
+            .extract_standalone_expression_upstreams(
+                adapter_type,
+                sql,
+                default_catalog,
+                default_schema,
+                quoted_name_ignore_case,
+            )
+            .map_err(|expression_err| {
+                fs_err!(
+                    ErrorCode::Generic,
+                    "failed to extract upstreams from SQL as statement or expression: statement parse failed: {statement_err}; expression parse failed: {expression_err}"
+                )
+            })?,
+    };
+
+    relations_from_upstreams(adapter_type, upstreams, type_ops)
+}
+
+fn extract_standalone_expression_upstreams_for_run_cache(
+    adapter_type: AdapterType,
+    sql: &str,
+    default_catalog: &str,
+    default_schema: &str,
+    quoted_name_ignore_case: bool,
+    sources_extractor: &dyn SourcesExtractor,
+) -> FsResult<Vec<NamedReference<FullyQualifiedName>>> {
+    sources_extractor
+        .extract_standalone_expression_upstreams(
             adapter_type,
             sql,
             default_catalog,
@@ -2476,8 +2584,14 @@ fn parse_sql_relations_for_adapter(
                 ErrorCode::Generic,
                 "failed to extract upstreams from SQL: {e}"
             )
-        })?;
+        })
+}
 
+fn relations_from_upstreams(
+    adapter_type: AdapterType,
+    upstreams: Vec<NamedReference<FullyQualifiedName>>,
+    type_ops: &dyn TypeOps,
+) -> FsResult<BTreeMap<String, Arc<dyn BaseRelation>>> {
     let mut relations = BTreeMap::new();
     for upstream in upstreams.into_iter() {
         if upstream.table().as_str().starts_with('@') {
@@ -2502,7 +2616,7 @@ fn parse_sql_relations_for_adapter(
 }
 
 fn quoting_for_upstream(
-    upstream: &dbt_frontend_common::named_reference::NamedReference<FullyQualifiedName>,
+    upstream: &NamedReference<FullyQualifiedName>,
     type_ops: &dyn TypeOps,
 ) -> ResolvedQuoting {
     ResolvedQuoting {
@@ -2545,7 +2659,6 @@ fn full_refresh_blocks_model_submit(materialization: DbtMaterialization) -> bool
             | DbtMaterialization::MaterializedView
             | DbtMaterialization::DynamicTable
             | DbtMaterialization::StreamingTable
-            | DbtMaterialization::Unknown(_)
     )
 }
 
@@ -2741,10 +2854,48 @@ fn record_submit_skipped(node: &dyn InternalDbtNodeAttributes, reason: &'static 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::any::Any;
+    use std::future::Future;
+    use std::path::{Path, PathBuf};
+    use std::pin::Pin;
+    use std::sync::Mutex;
+
+    use crate::RunTasksArgs;
+    use crate::context::{ExtendedCtx, RunCacheCtx, TaskRunnerCtxInner};
+    use arrow::array::RecordBatch;
+    use arrow_schema::{Schema, SchemaRef};
+    use dbt_adapter::sql_types::DefaultTypeOps;
+    use dbt_common::collections::DashMap;
     use dbt_common::io_args::RunCacheMode;
-    use dbt_schemas::schemas::common::{FreshnessPeriod, UpdatesOn};
+    use dbt_common::{CompiledSpans, MacroSpan};
+    use dbt_dag::schedule::Schedule;
+    use dbt_frontend_common::FullyQualifiedName;
+    use dbt_frontend_common::error::{
+        CodeLocation, ErrorCode as FrontendErrorCode, FrontendError, FrontendResult,
+    };
+    use dbt_frontend_common::named_reference::NamedReference;
+    use dbt_frontend_common::sources_extractor::SourcesExtractor;
+    use dbt_frontend_common::span::ReclassifySpan;
+    use dbt_jinja_utils::jinja_environment::JinjaEnv;
+    use dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory;
+    use dbt_schema_store::mock_store::{MockDataStore, MockSchemaStore};
+    use dbt_schemas::schemas::Nodes;
+    use dbt_schemas::schemas::common::{FreshnessPeriod, ResolvedQuoting, UpdatesOn};
+    use dbt_schemas::schemas::profiles::{Execute, SnowflakeDbConfig};
     use dbt_schemas::schemas::properties::{ModelFreshness, ModelState};
-    use dbt_state::proto::query_cache::{ReadyToCloneResponse, ReadyToExecuteResponse};
+    use dbt_schemas::state::{
+        DbtProfile, DbtRuntimeConfig, DummyNodeResolverTracker, Macros, Operations, RenderResults,
+        ResolverState,
+    };
+    use dbt_state::metadata_cache::RunCacheMetadataCache;
+    use dbt_state::proto::query_cache::{
+        ConfirmExecutionResponse, ReadyToCloneResponse, ReadyToExecuteResponse,
+        RecordExecutionsRequest, RecordExecutionsResponse,
+    };
+    use dbt_state::service_client::{
+        ClientVersionStatus, RunCacheServiceClient, RunCacheServiceError,
+    };
+    use dbt_state::service_config::RunCacheServiceConfig;
 
     fn model_with_state(state: ModelState) -> DbtModel {
         let mut model = DbtModel::default();
@@ -2922,6 +3073,9 @@ mod tests {
         ));
         assert!(full_refresh_blocks_model_submit(DbtMaterialization::View));
         assert!(!full_refresh_blocks_model_submit(DbtMaterialization::Table));
+        assert!(!full_refresh_blocks_model_submit(
+            DbtMaterialization::Unknown("custom_table".to_string())
+        ));
     }
 
     #[test]
@@ -2932,6 +3086,354 @@ mod tests {
         assert!(is_no_op_model_materialization(DbtMaterialization::Inline));
         assert!(!is_no_op_model_materialization(DbtMaterialization::View));
         assert!(!is_no_op_model_materialization(DbtMaterialization::Table));
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_submits_compiled_sql_as_custom_execution_type() {
+        let client = Arc::new(RecordingRunCacheClient::default());
+        let ctx = test_task_runner_ctx(Some(
+            client.clone() as dbt_state::service_client::SharedRunCacheServiceClient
+        ));
+        let model = make_model(
+            "model.test.user_name_only_model",
+            "db",
+            "dbt_test",
+            "user_name_only_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+
+        let decision = run_cache_service_before_execution(
+            &ctx,
+            model.as_ref(),
+            &task_result_with_sql("'alice'"),
+        )
+        .await;
+
+        assert_eq!(
+            client.submitted_sql(),
+            vec!["'alice'".to_string()],
+            "custom materializations should mirror dbt-core/query-cache by submitting compiled model SQL"
+        );
+        assert_eq!(
+            client.submitted_execution_types(),
+            vec![dbt_state::proto::query_cache::ModelExecutionType::DbtCustom as i32],
+            "custom materializations should be marked DBT_CUSTOM"
+        );
+        assert!(matches!(
+            decision,
+            RunCacheServiceDecision::Execute {
+                after_success: RunCacheAfterSuccess::Confirm(_),
+                sao_guard: None,
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_submits_compiled_sql_during_full_refresh() {
+        let client = Arc::new(RecordingRunCacheClient::default());
+        let ctx = test_task_runner_ctx_with_mode_and_full_refresh(
+            Some(client.clone() as dbt_state::service_client::SharedRunCacheServiceClient),
+            RunCacheMode::ReadWrite,
+            true,
+        );
+        let model = make_model(
+            "model.test.user_name_only_model",
+            "db",
+            "dbt_test",
+            "user_name_only_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+
+        let decision = run_cache_service_before_execution(
+            &ctx,
+            model.as_ref(),
+            &task_result_with_sql("'alice'"),
+        )
+        .await;
+
+        assert_eq!(client.submitted_sql(), vec!["'alice'".to_string()]);
+        assert!(matches!(
+            decision,
+            RunCacheServiceDecision::Execute {
+                after_success: RunCacheAfterSuccess::Confirm(_),
+                sao_guard: None,
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_parse_failure_without_manifest_deps_is_incomplete() {
+        let ctx = test_task_runner_ctx_with_mode_and_sources_extractor(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(FailingSourcesExtractor),
+        );
+        let model = make_model(
+            "model.test.user_name_only_model",
+            "db",
+            "dbt_test",
+            "user_name_only_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+
+        let deps = query_dependencies_for_parse_error(
+            &ctx,
+            model.as_ref(),
+            "'alice' from raw.users",
+            synthetic_extraction_error(),
+        )
+        .await
+        .expect("custom materialization parse failures should fail open");
+
+        assert!(!deps.metadata_complete);
+        assert!(deps.dependencies.is_empty());
+        assert!(deps.seen_tables.is_empty());
+        assert!(deps.parser_seen_relations.is_empty());
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_standalone_expression_parse_failure_is_complete() {
+        let ctx = test_task_runner_ctx_with_mode_and_sources_extractor(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(ExpressionOnlySourcesExtractor),
+        );
+        let model = make_model(
+            "model.test.user_name_only_model",
+            "db",
+            "dbt_test",
+            "user_name_only_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+
+        let deps = query_dependencies_for_parse_error(
+            &ctx,
+            model.as_ref(),
+            "'alice'",
+            synthetic_extraction_error(),
+        )
+        .await
+        .expect("expression-only custom materialization SQL should be cacheable");
+
+        assert!(deps.metadata_complete);
+        assert!(deps.dependencies.is_empty());
+        assert!(deps.seen_tables.is_empty());
+        assert!(deps.parser_seen_relations.is_empty());
+    }
+
+    #[test]
+    fn parse_sql_relations_for_adapter_accepts_standalone_expression() {
+        let type_ops = DefaultTypeOps::new(AdapterType::Snowflake);
+        let relations = parse_sql_relations_for_adapter(
+            AdapterType::Snowflake,
+            "(select max(id) from raw.users)",
+            "db",
+            "dbt_test",
+            false,
+            &ExpressionOnlySourcesExtractor,
+            &type_ops,
+        )
+        .expect("expression-only SQL should produce run-cache relations");
+
+        assert!(relations.contains_key(&fqn_of("db", "raw", "users")));
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_standalone_expression_with_no_upstreams_is_complete() {
+        let ctx = test_task_runner_ctx_with_mode_and_sources_extractor(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(EmptySourcesExtractor),
+        );
+        let model = make_model(
+            "model.test.user_name_only_model",
+            "db",
+            "dbt_test",
+            "user_name_only_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+
+        let deps = query_dependencies_for_parse_error(
+            &ctx,
+            model.as_ref(),
+            "'alice'",
+            synthetic_extraction_error(),
+        )
+        .await
+        .expect("expression-only SQL without upstreams should be cacheable");
+
+        assert!(deps.metadata_complete);
+        assert!(deps.dependencies.is_empty());
+        assert!(deps.seen_tables.is_empty());
+        assert!(deps.parser_seen_relations.is_empty());
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_parse_failure_with_manifest_deps_is_incomplete() {
+        let mut model = make_model(
+            "model.test.user_name_model",
+            "db",
+            "dbt_test",
+            "user_name_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+        Arc::make_mut(&mut model)
+            .__base_attr__
+            .depends_on
+            .nodes
+            .push("source.test.raw.users".to_string());
+        let source = make_source("source.test.raw.users", "db", "raw", "users");
+        let ctx = test_task_runner_ctx_with_nodes(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(FailingSourcesExtractor),
+            nodes_from(vec![model.clone()], vec![source]),
+            ["model.test.user_name_model".to_string()]
+                .into_iter()
+                .collect(),
+        );
+
+        let deps = query_dependencies_for_parse_error(
+            &ctx,
+            model.as_ref(),
+            "'alice' from raw.users",
+            synthetic_extraction_error(),
+        )
+        .await
+        .expect("custom materialization parse failures should fail open");
+
+        assert!(!deps.metadata_complete);
+        assert!(deps.dependencies.is_empty());
+        assert!(deps.seen_tables.is_empty());
+        assert!(deps.parser_seen_relations.is_empty());
+    }
+
+    #[tokio::test]
+    async fn built_in_materialization_parse_failure_returns_error() {
+        let ctx = test_task_runner_ctx(None);
+        let model = make_model(
+            "model.test.user_name_model",
+            "db",
+            "dbt_test",
+            "user_name_model",
+            DbtMaterialization::Table,
+        );
+
+        assert!(
+            query_dependencies_for_parse_error(
+                &ctx,
+                model.as_ref(),
+                "'alice'",
+                synthetic_extraction_error(),
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_compiled_sql_honors_dbt_state_skip() {
+        let client = Arc::new(RecordingRunCacheClient::with_response(
+            skip_execution_response(),
+        ));
+        let ctx = test_task_runner_ctx(Some(
+            client.clone() as dbt_state::service_client::SharedRunCacheServiceClient
+        ));
+        let model = make_model(
+            "model.test.user_name_only_model",
+            "db",
+            "dbt_test",
+            "user_name_only_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+
+        let decision = run_cache_service_before_execution(
+            &ctx,
+            model.as_ref(),
+            &task_result_with_sql("'alice'"),
+        )
+        .await;
+
+        assert_eq!(client.submitted_sql(), vec!["'alice'".to_string()]);
+        assert!(matches!(
+            decision,
+            RunCacheServiceDecision::Skip {
+                status: NodeStatus::ReusedNoChanges(_),
+                ..
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_compiled_sql_records_in_write_only_mode() {
+        let client = Arc::new(RecordingRunCacheClient::default());
+        let ctx = test_task_runner_ctx_with_mode(
+            Some(client.clone() as dbt_state::service_client::SharedRunCacheServiceClient),
+            RunCacheMode::WriteOnly,
+        );
+        let model = make_model(
+            "model.test.user_name_only_model",
+            "db",
+            "dbt_test",
+            "user_name_only_model",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+
+        let decision = run_cache_service_before_execution(
+            &ctx,
+            model.as_ref(),
+            &task_result_with_sql("'alice'"),
+        )
+        .await;
+
+        assert_eq!(
+            client.submitted_sql(),
+            Vec::<String>::new(),
+            "write-only custom materializations must prepare a record without asking for a service decision"
+        );
+        assert!(matches!(
+            decision,
+            RunCacheServiceDecision::Execute {
+                after_success: RunCacheAfterSuccess::Record(_),
+                sao_guard: None,
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn table_materialization_submits_rendered_sql_before_materialization() {
+        let client = Arc::new(RecordingRunCacheClient::default());
+        let ctx = test_task_runner_ctx(Some(
+            client.clone() as dbt_state::service_client::SharedRunCacheServiceClient
+        ));
+        let model = make_model(
+            "model.test.user_name_model",
+            "db",
+            "dbt_test",
+            "user_name_model",
+            DbtMaterialization::Table,
+        );
+
+        assert!(matches!(
+            run_cache_service_before_execution(
+                &ctx,
+                model.as_ref(),
+                &task_result_with_sql("select 'alice' as first_name"),
+            )
+            .await,
+            RunCacheServiceDecision::Execute {
+                after_success: RunCacheAfterSuccess::Confirm(_),
+                sao_guard: None,
+            }
+        ));
+        assert_eq!(
+            client.submitted_sql(),
+            vec!["select 'alice' as first_name".to_string()]
+        );
     }
 
     #[test]
@@ -3300,6 +3802,414 @@ mod tests {
         SubmitSqlResponse { response: None }
     }
 
+    struct RecordingRunCacheClient {
+        submitted: Mutex<Vec<SubmitEnrichedSqlRequest>>,
+        response: SubmitSqlResponse,
+    }
+
+    impl Default for RecordingRunCacheClient {
+        fn default() -> Self {
+            Self {
+                submitted: Mutex::new(Vec::new()),
+                response: ready_to_execute_response(),
+            }
+        }
+    }
+
+    impl RecordingRunCacheClient {
+        fn with_response(response: SubmitSqlResponse) -> Self {
+            Self {
+                response,
+                ..Self::default()
+            }
+        }
+
+        fn submitted_sql(&self) -> Vec<String> {
+            self.submitted
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|request| request.sql.clone())
+                .collect()
+        }
+
+        fn submitted_execution_types(&self) -> Vec<i32> {
+            self.submitted
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|request| request.execution_type)
+                .collect()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl RunCacheServiceClient for RecordingRunCacheClient {
+        async fn validate_client_version(
+            &self,
+        ) -> Result<ClientVersionStatus, RunCacheServiceError> {
+            Ok(ClientVersionStatus::Supported)
+        }
+
+        async fn submit_enriched_sql(
+            &self,
+            request: SubmitEnrichedSqlRequest,
+        ) -> Result<SubmitSqlResponse, RunCacheServiceError> {
+            self.submitted.lock().unwrap().push(request);
+            Ok(self.response.clone())
+        }
+
+        async fn submit_values(
+            &self,
+            _request: SubmitValuesRequest,
+        ) -> Result<SubmitSqlResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn confirm_execution(
+            &self,
+            _request: ConfirmExecutionRequest,
+        ) -> Result<ConfirmExecutionResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn record_executions(
+            &self,
+            _request: RecordExecutionsRequest,
+        ) -> Result<RecordExecutionsResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestExtendedCtx;
+
+    impl ExtendedCtx for TestExtendedCtx {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn into_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+
+        fn on_test_failure(
+            &self,
+            _ctx: &TaskRunnerCtx,
+            _node: &Arc<dyn crate::task::Task>,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+            Box::pin(async {})
+        }
+
+        fn is_sidecar(&self) -> bool {
+            false
+        }
+    }
+
+    struct TestCompiledSqlCache;
+
+    impl crate::CompiledSqlCache for TestCompiledSqlCache {
+        fn get_compiled_sql_path(
+            &self,
+            _io: &dbt_common::io_args::IoArgs,
+            common: &dbt_schemas::schemas::CommonAttributes,
+        ) -> PathBuf {
+            Path::new("target").join(&common.unique_id)
+        }
+
+        fn try_get_compiled_sql(
+            &self,
+            _io: &dbt_common::io_args::IoArgs,
+            _common: &dbt_schemas::schemas::CommonAttributes,
+        ) -> Option<(String, Vec<MacroSpan>, Vec<ReclassifySpan>)> {
+            None
+        }
+
+        fn set_compiled_sql(
+            &self,
+            _io: &dbt_common::io_args::IoArgs,
+            _common: &dbt_schemas::schemas::CommonAttributes,
+            _rendered_sql_maybe_with_cte: &str,
+            _spans: &dyn CompiledSpans,
+        ) -> FsResult<()> {
+            Ok(())
+        }
+
+        fn clear(&self, _unique_id: &str) {}
+    }
+
+    struct TestAdhocRunner;
+
+    impl crate::AdhocRunner for TestAdhocRunner {
+        fn run_adhoc<'a>(
+            self: Arc<Self>,
+            _instruction: &'a dbt_scheduler::instructions::Instruction,
+            _rendered_sql: &'a str,
+            _unique_id: Option<&'a str>,
+            _connection: &'a mut Option<Box<dyn dbt_xdbc::Connection>>,
+        ) -> Pin<Box<dyn Future<Output = FsResult<(Vec<RecordBatch>, SchemaRef)>> + Send + 'a>>
+        {
+            Box::pin(async { Ok((Vec::new(), Arc::new(Schema::empty()))) })
+        }
+    }
+
+    struct EmptySourcesExtractor;
+
+    impl SourcesExtractor for EmptySourcesExtractor {
+        fn extract_upstreams(
+            &self,
+            _adapter_type: AdapterType,
+            _sql: &str,
+            _default_catalog: &str,
+            _default_schema: &str,
+            _quoted_name_ignore_case: bool,
+        ) -> FrontendResult<Vec<NamedReference<FullyQualifiedName>>> {
+            Ok(Vec::new())
+        }
+
+        fn extract_standalone_expression_upstreams(
+            &self,
+            _adapter_type: AdapterType,
+            _sql: &str,
+            _default_catalog: &str,
+            _default_schema: &str,
+            _quoted_name_ignore_case: bool,
+        ) -> FrontendResult<Vec<NamedReference<FullyQualifiedName>>> {
+            Ok(Vec::new())
+        }
+    }
+
+    struct FailingSourcesExtractor;
+
+    fn synthetic_extraction_error() -> Box<FsError> {
+        fs_err!(ErrorCode::Generic, "synthetic extraction failure")
+    }
+
+    impl SourcesExtractor for FailingSourcesExtractor {
+        fn extract_upstreams(
+            &self,
+            _adapter_type: AdapterType,
+            _sql: &str,
+            _default_catalog: &str,
+            _default_schema: &str,
+            _quoted_name_ignore_case: bool,
+        ) -> FrontendResult<Vec<NamedReference<FullyQualifiedName>>> {
+            Err(Box::new(synthetic_frontend_error()))
+        }
+
+        fn extract_standalone_expression_upstreams(
+            &self,
+            _adapter_type: AdapterType,
+            _sql: &str,
+            _default_catalog: &str,
+            _default_schema: &str,
+            _quoted_name_ignore_case: bool,
+        ) -> FrontendResult<Vec<NamedReference<FullyQualifiedName>>> {
+            Err(Box::new(synthetic_frontend_error()))
+        }
+    }
+
+    struct ExpressionOnlySourcesExtractor;
+
+    impl SourcesExtractor for ExpressionOnlySourcesExtractor {
+        fn extract_upstreams(
+            &self,
+            _adapter_type: AdapterType,
+            _sql: &str,
+            _default_catalog: &str,
+            _default_schema: &str,
+            _quoted_name_ignore_case: bool,
+        ) -> FrontendResult<Vec<NamedReference<FullyQualifiedName>>> {
+            Err(Box::new(synthetic_frontend_error()))
+        }
+
+        fn extract_standalone_expression_upstreams(
+            &self,
+            _adapter_type: AdapterType,
+            sql: &str,
+            _default_catalog: &str,
+            _default_schema: &str,
+            _quoted_name_ignore_case: bool,
+        ) -> FrontendResult<Vec<NamedReference<FullyQualifiedName>>> {
+            if sql == "'alice'" {
+                Ok(Vec::new())
+            } else if sql == "(select max(id) from raw.users)" {
+                Ok(vec![FullyQualifiedName::new("db", "raw", "users").into()])
+            } else {
+                Err(Box::new(synthetic_frontend_error()))
+            }
+        }
+    }
+
+    fn synthetic_frontend_error() -> FrontendError {
+        FrontendError::new(
+            FrontendErrorCode::Unexpected,
+            CodeLocation::default(),
+            "synthetic extraction failure",
+        )
+    }
+
+    fn task_result_with_sql(sql: &str) -> TaskResult {
+        TaskResult {
+            sql_instruction: dbt_scheduler::instructions::SqlInstruction {
+                sql: sql.to_string(),
+                ..Default::default()
+            },
+            config_map: Arc::new(DashMap::default()),
+            lp_instruction: None,
+        }
+    }
+
+    fn test_task_runner_ctx(
+        run_cache_service_client: Option<dbt_state::service_client::SharedRunCacheServiceClient>,
+    ) -> TaskRunnerCtx {
+        test_task_runner_ctx_with_mode(run_cache_service_client, RunCacheMode::ReadWrite)
+    }
+
+    fn test_task_runner_ctx_with_mode(
+        run_cache_service_client: Option<dbt_state::service_client::SharedRunCacheServiceClient>,
+        run_cache_mode: RunCacheMode,
+    ) -> TaskRunnerCtx {
+        test_task_runner_ctx_with_mode_and_full_refresh(
+            run_cache_service_client,
+            run_cache_mode,
+            false,
+        )
+    }
+
+    fn test_task_runner_ctx_with_mode_and_full_refresh(
+        run_cache_service_client: Option<dbt_state::service_client::SharedRunCacheServiceClient>,
+        run_cache_mode: RunCacheMode,
+        full_refresh: bool,
+    ) -> TaskRunnerCtx {
+        test_task_runner_ctx_with_mode_and_sources_extractor(
+            run_cache_service_client,
+            run_cache_mode,
+            full_refresh,
+            Arc::new(EmptySourcesExtractor),
+        )
+    }
+
+    fn test_task_runner_ctx_with_mode_and_sources_extractor(
+        run_cache_service_client: Option<dbt_state::service_client::SharedRunCacheServiceClient>,
+        run_cache_mode: RunCacheMode,
+        full_refresh: bool,
+        sources_extractor: Arc<dyn SourcesExtractor>,
+    ) -> TaskRunnerCtx {
+        test_task_runner_ctx_with_nodes(
+            run_cache_service_client,
+            run_cache_mode,
+            full_refresh,
+            sources_extractor,
+            Nodes::default(),
+            BTreeSet::new(),
+        )
+    }
+
+    fn test_task_runner_ctx_with_nodes(
+        run_cache_service_client: Option<dbt_state::service_client::SharedRunCacheServiceClient>,
+        run_cache_mode: RunCacheMode,
+        full_refresh: bool,
+        sources_extractor: Arc<dyn SourcesExtractor>,
+        nodes: Nodes,
+        selected_nodes: BTreeSet<String>,
+    ) -> TaskRunnerCtx {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::ERROR)
+            .try_init();
+        let span = tracing::error_span!("run_cache_service_test");
+        let _guard = span.enter();
+
+        let resolver_state = Arc::new(test_resolver_state_with_nodes(nodes));
+        let args = RunTasksArgs {
+            run_cache_mode,
+            run_cache_service: true,
+            full_refresh,
+            ..Default::default()
+        };
+        let schedule = Schedule {
+            selected_nodes,
+            ..Default::default()
+        };
+
+        let inner = TaskRunnerCtxInner::new(
+            Arc::new(args),
+            "worker-0".to_string(),
+            schedule,
+            BTreeMap::new(),
+            DashMap::default(),
+            Box::new(TestExtendedCtx),
+            Arc::new(TestCompiledSqlCache),
+            Arc::new(TestAdhocRunner),
+            &resolver_state,
+            Default::default(),
+            Arc::new(crate::span_manager::SpanManager::new_empty()),
+            Execute::Remote,
+            sources_extractor,
+            RunCacheCtx {
+                run_cache_metadata: Arc::new(RunCacheMetadataCache::new()),
+                run_cache_dev_cloned_nodes: DashMap::default(),
+                run_cache_deferred_fqns: BTreeSet::new(),
+                run_cache_service_requested: true,
+                run_cache_service_config: Some(RunCacheServiceConfig::disabled()),
+                run_cache_service_client,
+                view_traverser: None,
+                heuristic_clock: std::sync::OnceLock::new(),
+            },
+        );
+
+        TaskRunnerCtx {
+            inner: Arc::new(inner),
+            env: Arc::new(JinjaEnv::new(minijinja::Environment::new())),
+            schema_cache: Arc::new(MockSchemaStore::new()),
+            data_store: Arc::new(MockDataStore::new()),
+            resolver_state,
+            rendering_listener_factory: Arc::new(DefaultRenderingEventListenerFactory::default()),
+            thread_id: 0,
+        }
+    }
+
+    fn test_resolver_state_with_nodes(nodes: Nodes) -> ResolverState {
+        ResolverState {
+            root_project_name: "test".to_string(),
+            adapter_type: AdapterType::Snowflake,
+            nodes,
+            disabled_nodes: Nodes::default(),
+            macros: Macros::default(),
+            operations: Operations::default(),
+            dbt_profile: DbtProfile {
+                profile: "default".to_string(),
+                target: "dev".to_string(),
+                defer_to_target: None,
+                db_config: DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default()),
+                schema: "dbt_test".to_string(),
+                database: "db".to_string(),
+                relative_profile_path: PathBuf::new(),
+                threads: None,
+            },
+            render_results: RenderResults::default(),
+            node_resolver: Arc::new(DummyNodeResolverTracker),
+            get_relation_calls: Default::default(),
+            get_columns_in_relation_calls: Default::default(),
+            patterned_dangling_sources: Default::default(),
+            run_started_at: chrono::Utc::now().with_timezone(&chrono_tz::UTC),
+            runtime_config: Arc::new(DbtRuntimeConfig::default()),
+            manifest_path_configs: BTreeMap::new(),
+            manifest_selectors: BTreeMap::new(),
+            resolved_selectors: Default::default(),
+            root_project_quoting: ResolvedQuoting::default(),
+            defer_nodes: None,
+            nodes_with_resolution_errors: Default::default(),
+            nodes_with_access_errors: Default::default(),
+            semantic_layer_spec_is_legacy: false,
+            test_name_truncations: Default::default(),
+        }
+    }
+
     // ── collect_global_prefetch_relations tests ──────────────────────────────
 
     fn make_model(
@@ -3311,6 +4221,7 @@ mod tests {
     ) -> Arc<DbtModel> {
         let mut model = DbtModel::default();
         model.__common_attr__.unique_id = unique_id.to_string();
+        model.__common_attr__.language = Some("sql".to_string());
         model.__base_attr__.database = db.to_string();
         model.__base_attr__.schema = schema.to_string();
         model.__base_attr__.alias = alias.to_string();
@@ -3328,11 +4239,8 @@ mod tests {
         Arc::new(source)
     }
 
-    fn nodes_from(
-        models: Vec<Arc<DbtModel>>,
-        sources: Vec<Arc<DbtSource>>,
-    ) -> dbt_schemas::schemas::Nodes {
-        let mut nodes = dbt_schemas::schemas::Nodes::default();
+    fn nodes_from(models: Vec<Arc<DbtModel>>, sources: Vec<Arc<DbtSource>>) -> Nodes {
+        let mut nodes = Nodes::default();
         for m in models {
             nodes.models.insert(m.__common_attr__.unique_id.clone(), m);
         }
