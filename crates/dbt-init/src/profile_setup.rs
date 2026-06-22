@@ -1,6 +1,7 @@
 use crate::adapter_config::{
     setup_bigquery_profile, setup_clickhouse_profile, setup_databricks_profile,
-    setup_fabric_profile, setup_postgres_profile, setup_redshift_profile, setup_snowflake_profile,
+    setup_exasol_profile, setup_fabric_profile, setup_postgres_profile, setup_redshift_profile,
+    setup_snowflake_profile,
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{
@@ -194,6 +195,7 @@ impl ProfileSetup {
             AdapterType::Databricks,
             AdapterType::Bigquery,
             AdapterType::ClickHouse,
+            AdapterType::Exasol,
             AdapterType::Postgres,
             AdapterType::Redshift,
             AdapterType::Fabric,
@@ -417,7 +419,13 @@ impl ProfileSetup {
                     clickhouse_config.map(Box::as_ref),
                 )?)
             }
-            AdapterType::Exasol => todo!("Exasol"),
+            AdapterType::Exasol => {
+                let exasol_config = match existing_config {
+                    Some(DbConfig::Exasol(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Exasol(setup_exasol_profile(exasol_config.map(Box::as_ref))?)
+            }
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),

@@ -67,11 +67,36 @@ impl SqlLiteralFormatter {
     }
 
     pub fn format_date(&self, l: PyDate) -> String {
-        format!("'{}'", l.date.format("%Y-%m-%d"))
+        let d = l.date.format("%Y-%m-%d");
+        match self.adapter_type {
+            // Exasol: typed DATE literal, independent of NLS_DATE_FORMAT.
+            AdapterType::Exasol => format!("DATE '{d}'"),
+            _ => format!("'{d}'"),
+        }
     }
 
     pub fn format_datetime(&self, l: PyDateTime) -> String {
-        format!("'{}'", l.isoformat())
+        match self.adapter_type {
+            // Exasol: typed TIMESTAMP literal, NLS-independent. A quoted ISO
+            // string would be cast via NLS_TIMESTAMP_FORMAT, which rejects 'T'.
+            // TIMESTAMP literals also take no time-zone offset, so tz-aware
+            // values are converted to UTC and formatted naive.
+            AdapterType::Exasol => {
+                use minijinja_contrib::modules::py_datetime::datetime::DateTimeState;
+                let naive = match &l.state {
+                    DateTimeState::Naive(ndt) => *ndt,
+                    DateTimeState::Aware(adt) => adt.naive_utc(),
+                    DateTimeState::FixedOffset(fdt) => fdt.naive_utc(),
+                };
+                let formatted = naive.format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+                let formatted = formatted
+                    .strip_suffix(".000000")
+                    .map(str::to_string)
+                    .unwrap_or(formatted);
+                format!("TIMESTAMP '{formatted}'")
+            }
+            _ => format!("'{}'", l.isoformat()),
+        }
     }
 
     /// Format a UTC timestamp as a SQL literal for this adapter.
@@ -234,5 +259,90 @@ mod tests {
         assert_eq!(f.format_str(""), "''");
         assert_eq!(f.format_str("hello"), "'hello'");
         assert_eq!(f.format_str("Mom\\Baby"), "'Mom\\\\Baby'");
+    }
+
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+    use minijinja_contrib::modules::py_datetime::datetime::DateTimeState;
+
+    /// Build a naive (no-timezone) PyDateTime directly from its public fields.
+    fn naive_datetime(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> PyDateTime {
+        let date = NaiveDate::from_ymd_opt(y, mo, d).unwrap();
+        let time = NaiveTime::from_hms_opt(h, mi, s).unwrap();
+        PyDateTime {
+            state: DateTimeState::Naive(NaiveDateTime::new(date, time)),
+            tzinfo: None,
+        }
+    }
+
+    fn py_date(y: i32, mo: u32, d: u32) -> PyDate {
+        PyDate::new(NaiveDate::from_ymd_opt(y, mo, d).unwrap())
+    }
+
+    #[test]
+    fn test_exasol_format_datetime() {
+        let f = SqlLiteralFormatter::new(AdapterType::Exasol);
+        let out = f.format_datetime(naive_datetime(2024, 1, 1, 8, 0, 0));
+        assert!(
+            out.starts_with("TIMESTAMP '"),
+            "expected TIMESTAMP literal, got {out}"
+        );
+        assert!(out.contains(' '), "expected a space separator, got {out}");
+        // trim the keyword first — `TIMESTAMP` legitimately contains a 'T'
+        let quoted = out.trim_start_matches("TIMESTAMP ");
+        assert!(
+            !quoted.contains('T'),
+            "Exasol timestamp value must not use the ISO 'T' separator, got {out}"
+        );
+        assert_eq!(out, "TIMESTAMP '2024-01-01 08:00:00'");
+    }
+
+    #[test]
+    fn test_exasol_format_datetime_tz_aware() {
+        use chrono::{FixedOffset, TimeZone};
+        let f = SqlLiteralFormatter::new(AdapterType::Exasol);
+        // Exasol TIMESTAMP literals reject offsets ('Z', '+02:00'); aware
+        // values must be converted to UTC and rendered naive.
+        let fdt = FixedOffset::east_opt(2 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2024, 1, 1, 10, 0, 0)
+            .unwrap();
+        let dt = PyDateTime {
+            state: DateTimeState::FixedOffset(fdt),
+            tzinfo: None,
+        };
+        assert_eq!(f.format_datetime(dt), "TIMESTAMP '2024-01-01 08:00:00'");
+    }
+
+    #[test]
+    fn test_exasol_format_date() {
+        let f = SqlLiteralFormatter::new(AdapterType::Exasol);
+        let out = f.format_date(py_date(2024, 1, 1));
+        // Exasol emits a typed DATE literal.
+        assert!(
+            out.starts_with("DATE '"),
+            "expected DATE literal, got {out}"
+        );
+        assert_eq!(out, "DATE '2024-01-01'");
+    }
+
+    #[test]
+    fn test_postgres_format_datetime() {
+        let f = SqlLiteralFormatter::new(AdapterType::Postgres);
+        let out = f.format_datetime(naive_datetime(2024, 1, 1, 8, 0, 0));
+        // Non-Exasol adapters keep the quoted ISO string with the 'T' separator.
+        assert!(
+            out.starts_with('\''),
+            "expected a quoted literal, got {out}"
+        );
+        assert!(out.contains('T'), "expected ISO 'T' separator, got {out}");
+        assert_eq!(out, "'2024-01-01T08:00:00'");
+    }
+
+    #[test]
+    fn test_postgres_format_date() {
+        let f = SqlLiteralFormatter::new(AdapterType::Postgres);
+        let out = f.format_date(py_date(2024, 1, 1));
+        // Non-Exasol adapters emit a plain quoted date string.
+        assert_eq!(out, "'2024-01-01'");
     }
 }
