@@ -16,8 +16,38 @@ use uuid::Uuid;
 use dbt_common::{ErrorCode, err};
 use dbt_common::{FsResult, constants::DBT_CDN_URL};
 
+/// Enforces that dbt may remove its own binary, raising a `NotSupported` error
+/// otherwise. Only the standalone installer's binary is self-managed; removing a
+/// binary owned by Homebrew, pip, or winget would leave that manager pointing at
+/// a file that no longer exists, so we refuse and surface that manager's
+/// uninstall command instead.
+fn ensure_is_not_managed_installation(
+    install_method: crate::install_method::InstallMethod,
+) -> FsResult<()> {
+    if install_method.is_self_updatable() {
+        return Ok(());
+    }
+    match install_method.uninstall_command() {
+        Some(command) => err!(
+            ErrorCode::NotSupported,
+            "dbt was installed via {}. To uninstall, run:\n\n    {}\n\n\
+             (Removing the binary here would leave {} thinking dbt is still installed.)",
+            install_method.label(),
+            command,
+            install_method.label(),
+        ),
+        None => err!(
+            ErrorCode::NotSupported,
+            "dbt was installed by another package manager, so it can't uninstall itself. \
+             Please uninstall dbt using the package manager you installed it with."
+        ),
+    }
+}
+
 #[cfg_attr(target_os = "windows", allow(unreachable_code))]
 pub async fn exec_uninstall() -> FsResult<()> {
+    ensure_is_not_managed_installation(crate::install_method::InstallMethod::detect())?;
+
     println!("Removing dbt from your system");
 
     let mut curr_path = String::new();
@@ -136,4 +166,43 @@ pub async fn exec_uninstall() -> FsResult<()> {
 
     println!("Successfully removed dbt.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::install_method::InstallMethod;
+
+    #[test]
+    fn direct_install_may_self_uninstall() {
+        assert!(ensure_is_not_managed_installation(InstallMethod::Direct).is_ok());
+    }
+
+    #[test]
+    fn package_managed_installs_surface_their_uninstall_command() {
+        for method in [
+            InstallMethod::Homebrew,
+            InstallMethod::Pip,
+            InstallMethod::Winget,
+        ] {
+            let err = ensure_is_not_managed_installation(method)
+                .expect_err(&format!("{method:?} should be blocked"));
+            let command = method.uninstall_command().expect("has uninstall command");
+            assert!(
+                err.context.contains(&command),
+                "{method:?} message should mention `{command}`, got: {}",
+                err.context
+            );
+        }
+    }
+
+    #[test]
+    fn other_install_gets_generic_fallback() {
+        let err = ensure_is_not_managed_installation(InstallMethod::Other)
+            .expect_err("Other should be blocked");
+        assert!(
+            err.context
+                .contains("package manager you installed it with")
+        );
+    }
 }

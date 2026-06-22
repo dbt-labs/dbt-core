@@ -83,6 +83,21 @@ impl InstallMethod {
         Some(command)
     }
 
+    /// The uninstall command to surface, or `None` for [`InstallMethod::Direct`]
+    /// (which removes itself via `dbt system uninstall`) and
+    /// [`InstallMethod::Other`] (defer to the manager the user installed dbt
+    /// with). Removing a package-managed binary directly would leave the
+    /// manager's bookkeeping pointing at a file that no longer exists.
+    pub fn uninstall_command(self) -> Option<String> {
+        let command = match self {
+            InstallMethod::Homebrew => "brew uninstall dbt",
+            InstallMethod::Pip => "pip uninstall dbt",
+            InstallMethod::Winget => "winget uninstall --id dbtLabs.dbt --exact",
+            InstallMethod::Direct | InstallMethod::Other => return None,
+        };
+        Some(command.to_string())
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             InstallMethod::Homebrew => "Homebrew",
@@ -252,6 +267,24 @@ mod tests {
             Some("dbt system update")
         );
         assert_eq!(InstallMethod::Other.upgrade_command(None), None);
+    }
+
+    #[test]
+    fn uninstall_commands_match_method() {
+        assert_eq!(
+            InstallMethod::Homebrew.uninstall_command().as_deref(),
+            Some("brew uninstall dbt")
+        );
+        assert_eq!(
+            InstallMethod::Pip.uninstall_command().as_deref(),
+            Some("pip uninstall dbt")
+        );
+        assert_eq!(
+            InstallMethod::Winget.uninstall_command().as_deref(),
+            Some("winget uninstall --id dbtLabs.dbt --exact")
+        );
+        assert_eq!(InstallMethod::Direct.uninstall_command(), None);
+        assert_eq!(InstallMethod::Other.uninstall_command(), None);
     }
 
     #[test]
