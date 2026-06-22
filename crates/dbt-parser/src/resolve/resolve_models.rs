@@ -49,6 +49,7 @@ use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::NodeBaseAttributes;
 use dbt_schemas::schemas::TimeSpine;
 use dbt_schemas::schemas::TimeSpinePrimaryColumn;
+use dbt_schemas::schemas::common::Access;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
@@ -440,6 +441,15 @@ pub async fn resolve_models(
         let resolved_versioned = resolve_versioned_fields(maybe_version.as_ref(), &properties);
         let model_constraints = resolved_versioned.constraints;
         let model_description = resolved_versioned.description;
+        if let Some(raw) = resolved_versioned.invalid_access.as_deref() {
+            let err = fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => dbt_asset.path.clone(),
+                "Invalid access type '{}' — must be one of: private, protected, public",
+                raw,
+            );
+            emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+        }
 
         // Iterate over metrics and construct the dependencies
         let mut metrics = Vec::new();
@@ -723,7 +733,11 @@ pub async fn resolve_models(
                 deprecation_date,
                 primary_key: vec![], // applied in resolver.rs -> primary_key_inference.rs
                 time_spine,
-                access: model_config.access.clone().unwrap_or_default(),
+                access: resolved_versioned
+                    .access
+                    .clone()
+                    .or_else(|| model_config.access.clone())
+                    .unwrap_or_default(),
                 group: model_config.group.clone(),
                 contract: model_config.contract.clone(),
                 incremental_strategy: model_config.incremental_strategy.clone(),
@@ -918,13 +932,19 @@ pub async fn resolve_models(
 ///   - `columns` -> `process_versioned_columns` (include/exclude merge)
 ///   - `config`  -> `VersionInfo.version_config` (deep merge)
 ///   - `meta`    -> top-level only, no per-version semantics
-///   - `access`, `docs`, `data_tests` -> not yet wired (flow through other
-///     pipelines; see follow-up issues)
+///   - `docs`, `data_tests` -> not yet wired (flow through other pipelines;
+///     see follow-up issues)
 struct ResolvedVersionedFields {
     description: String,
     constraints: Vec<ModelConstraint>,
     /// Per-version only; no fallback to top-level (dbt-core parity).
     deprecation_date: Option<String>,
+    access: Option<Access>,
+    /// Non-empty, non-parseable access string supplied at the version level. Kept separate from
+    /// `access` rather than typed as `Option<Access>` in `Versions` because serde would reject
+    /// `access: ""` as an unknown variant before we can apply dbt-core's empty-string-is-None
+    /// fallthrough semantics.
+    invalid_access: Option<String>,
 }
 
 fn resolve_versioned_fields(
@@ -964,10 +984,23 @@ fn resolve_versioned_fields(
         properties.deprecation_date.clone()
     };
 
+    // dbt-core: `unparsed_version.access or target.access`. Empty string is
+    // falsy in Python -> fall through to the top-level (config) value.
+    let raw_access = version_match.and_then(|v| v.access.clone().filter(|s| !s.is_empty()));
+    let (access, invalid_access) = match raw_access {
+        Some(raw) => match raw.parse::<Access>() {
+            Ok(a) => (Some(a), None),
+            Err(()) => (None, Some(raw)),
+        },
+        None => (None, None),
+    };
+
     ResolvedVersionedFields {
         description,
         constraints,
         deprecation_date,
+        access,
+        invalid_access,
     }
 }
 
