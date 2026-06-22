@@ -1945,6 +1945,53 @@ __additional_properties__: {}
         let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
         assert_eq!(lag_tolerance.count, Some(0));
         assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::minute));
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: "1s"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::second));
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: 1 second
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::second));
+    }
+
+    #[test]
+    fn test_project_model_config_state_lag_tolerance_parses_structured_seconds() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance:
+    count: 1
+    period: second
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::second));
     }
 
     #[test]

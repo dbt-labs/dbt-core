@@ -196,6 +196,7 @@ impl ModelFreshnessRules {
         let period = self.period.as_ref().expect("period is required");
         count
             * match period {
+                FreshnessPeriod::second => 1,
                 FreshnessPeriod::minute => 60,
                 FreshnessPeriod::hour => 60 * 60,
                 FreshnessPeriod::day => 60 * 60 * 24,
@@ -229,6 +230,11 @@ where
 fn model_freshness_rules_from_duration(duration: &str) -> Result<ModelFreshnessRules, String> {
     let parsed = humantime::parse_duration(duration)
         .map_err(|e| format!("invalid lag_tolerance duration {duration:?}: {e}"))?;
+    if parsed.subsec_nanos() != 0 {
+        return Err(format!(
+            "invalid lag_tolerance duration {duration:?}: expected a whole number of seconds, minutes, hours, or days"
+        ));
+    }
     let seconds = parsed.as_secs();
 
     let (count, period) = if seconds == 0 {
@@ -240,9 +246,7 @@ fn model_freshness_rules_from_duration(duration: &str) -> Result<ModelFreshnessR
     } else if seconds % 60 == 0 {
         (seconds / 60, FreshnessPeriod::minute)
     } else {
-        return Err(format!(
-            "invalid lag_tolerance duration {duration:?}: expected a whole number of minutes, hours, or days"
-        ));
+        (seconds, FreshnessPeriod::second)
     };
 
     let count = i64::try_from(count).map_err(|_| {
@@ -259,6 +263,7 @@ fn model_freshness_rules_from_duration(duration: &str) -> Result<ModelFreshnessR
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum FreshnessPeriod {
+    second,
     minute,
     hour,
     day,
@@ -268,6 +273,7 @@ impl FromStr for FreshnessPeriod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "second" => Ok(FreshnessPeriod::second),
             "minute" => Ok(FreshnessPeriod::minute),
             "hour" => Ok(FreshnessPeriod::hour),
             "day" => Ok(FreshnessPeriod::day),
@@ -278,6 +284,7 @@ impl FromStr for FreshnessPeriod {
 impl std::fmt::Display for FreshnessPeriod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let period_str = match self {
+            FreshnessPeriod::second => "second",
             FreshnessPeriod::minute => "minute",
             FreshnessPeriod::hour => "hour",
             FreshnessPeriod::day => "day",
