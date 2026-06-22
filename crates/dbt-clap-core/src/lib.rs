@@ -57,6 +57,21 @@ use self::commands::{CommandParser, ExtensionCommandParser};
 
 pub const DEFAULT_LIMIT: &str = "10";
 pub const DEFAULT_FORMAT: DisplayFormat = DisplayFormat::Table;
+
+/// `--help` heading labels used to group flags into sections.
+///
+/// Defined here as constants so a heading is named in exactly one place and
+/// can be reused by both the core CLI and the extension CLI (`dbt-clap`).
+pub mod help_headings {
+    pub const PROJECT: &str = "Project";
+    pub const SELECTION: &str = "Selection";
+    pub const EXECUTION: &str = "Execution";
+    pub const LOGGING: &str = "Logging";
+    pub const ARTIFACTS: &str = "Artifacts";
+    pub const EVENT_TIME: &str = "Microbatch Event Time";
+    pub const SAMPLE: &str = "Sample";
+    pub const ADVANCED: &str = "Advanced";
+}
 const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
 const USER_SETTINGS_YML: &str = ".dbt/user_settings.yml";
 
@@ -572,10 +587,15 @@ pub struct CompileArgs {
     pub full_refresh: bool,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -739,10 +759,15 @@ pub struct ShowArgs {
     pub unchecked: bool,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -854,10 +879,15 @@ pub struct TestArgs {
     pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -931,10 +961,15 @@ pub struct BuildArgs {
     pub sample: Option<String>,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -1063,10 +1098,15 @@ pub struct RunArgs {
     pub sample: Option<String>,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -1351,63 +1391,117 @@ impl RetryArgs {
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CommonArgs {
     /// The target to execute
-    #[arg(global = true, short = 't', long, env = "DBT_TARGET")]
+    #[arg(
+        global = true,
+        short = 't',
+        long,
+        env = "DBT_TARGET",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub target: Option<String>,
 
     /// The directory to load the dbt project from
-    #[arg(global = true, long, env = "DBT_PROJECT_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PROJECT_DIR",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub project_dir: Option<PathBuf>,
 
     /// The profile to use
-    #[arg(global = true, long, env = "DBT_PROFILE")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PROFILE",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub profile: Option<String>,
 
     /// The directory to load the profiles from
-    #[arg(global = true, long, env = "DBT_PROFILES_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PROFILES_DIR",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub profiles_dir: Option<PathBuf>,
 
     /// The directory to install packages
-    #[arg(global = true, long, env = "DBT_PACKAGES_INSTALL_PATH")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PACKAGES_INSTALL_PATH",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub packages_install_path: Option<PathBuf>,
 
     /// The output directory for all produced assets
-    #[arg(global = true, long, env = "DBT_TARGET_PATH")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_TARGET_PATH",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub target_path: Option<PathBuf>,
 
     /// Supply var bindings in yml format e.g. '{key: value}' or as separate key: value pairs
     // has no ENV_VAR
-    #[arg(global = true, long,value_parser = check_key_value_cli_arg, )]
+    #[arg(global = true, long, value_parser = check_key_value_cli_arg, help_heading = help_headings::PROJECT, hide_short_help = true)]
     pub vars: Option<BTreeMap<String, YValue>>,
 
     /// Select nodes to run
     // has no ENV_VAR
-    #[arg(global = true, long, short = 's', value_parser = check_selector, num_args(1..), value_delimiter = ' ', group = "selector_or_select")]
+    #[arg(global = true, long, short = 's', value_parser = check_selector, num_args(1..), value_delimiter = ' ', group = "selector_or_select", help_heading = help_headings::SELECTION, hide_short_help = true)]
     // This is a deprecated legacy alias for '--select'. It is not visible in the help and should be removed (eventually).
     #[clap(alias("models"), short_alias('m'))]
     pub select: Option<Vec<String>>,
 
     /// Select nodes to exclude
     // has no ENV_VAR
-    #[arg(global = true, long, value_parser = check_selector, num_args(1..), value_delimiter = ' ')]
+    #[arg(global = true, long, value_parser = check_selector, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SELECTION, hide_short_help = true)]
     pub exclude: Option<Vec<String>>,
 
     /// The name of the yml defined selector to use
-    #[arg(global = true, long, group = "selector_or_select")]
+    #[arg(
+        global = true,
+        long,
+        group = "selector_or_select",
+        help_heading = help_headings::SELECTION,
+        hide_short_help = true
+    )]
     pub selector: Option<String>,
 
     /// Choose which tests to select adjacent to resources: eager (most inclusive), cautious (most exclusive), buildable (inbetween) or empty.
-    #[arg(global = true, long, env = "DBT_INDIRECT_SELECTION")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_INDIRECT_SELECTION",
+        help_heading = help_headings::SELECTION,
+        hide_short_help = true
+    )]
     pub indirect_selection: Option<IndirectSelection>,
 
     /// Suppress all non-error logging to stdout. Does not affect {{ print() }} macro calls.
-    #[arg(global = true, long, env = "DBT_QUIET", short = 'q', default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, env = "DBT_QUIET", short = 'q', default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub quiet: bool,
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
     pub no_quiet: bool,
 
     /// The number of threads to use [Run with --threads 0 to use max_cpu [default: max_cpu]]
     // has no ENV_VAR
-    #[arg(global = true, long)]
+    #[arg(
+        global = true,
+        long,
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub threads: Option<usize>,
 
     /// Force sequential task execution and sequential parser rendering. Does
@@ -1422,16 +1516,30 @@ pub struct CommonArgs {
         long = "compute",
         value_enum,
         env = "DBT_COMPUTE",
-        default_value = "remote"
+        default_value = "remote",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
     )]
     pub compute: ComputeArg,
 
     /// Host address
-    #[arg(long, default_value = "127.0.0.1", value_name = "HOST")]
+    #[arg(
+        long,
+        default_value = "127.0.0.1",
+        value_name = "HOST",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub host: String,
 
     /// Port number
-    #[arg(long, default_value_t = 8000, value_name = "PORT")]
+    #[arg(
+        long,
+        default_value_t = 8000,
+        value_name = "PORT",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub port: u16,
 
     /// Warn on error
@@ -1452,7 +1560,7 @@ pub struct CommonArgs {
     pub show_all_deprecations: bool,
 
     /// Display debug logging during dbt execution. Useful for debugging and making bug reports.
-    #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new(), help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub debug: bool,
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new(), hide = true)]
     pub no_debug: bool,
@@ -1472,37 +1580,49 @@ pub struct CommonArgs {
     pub no_introspect: bool,
 
     /// Write JSON artifacts to disk [env: DBT_WRITE_JSON=]. Use --no-write-json to suppress writing JSON artifacts.
-    #[arg(global = true, long,  default_value_t=true,  action = ArgAction::SetTrue, env = "DBT_WRITE_JSON", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_WRITE_JSON", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_json: bool,
     #[arg(global = true,long,action = ArgAction::SetTrue,  default_value_t=false, value_parser = BoolishValueParser::new(),hide = true)]
     pub no_write_json: bool,
 
     /// Write a catalog.json file to the target directory
-    #[arg(global = true, long, default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_WRITE_CATALOG", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_CATALOG", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_catalog: bool,
 
     /// Enable full metadata output: incremental parse cache, epoch parquet state, and no JSON
     /// artifacts. Implies --partial-parse --no-write-json.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_metadata: bool,
 
     /// Write parquet index to target/index/. Implies --write-metadata so that epoch parquet
     /// is produced, then converts metadata → index parquet via the snapshot writer.
-    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_index: bool,
 
     /// Directory for metadata parquet output (default: <target>/metadata/)
-    #[arg(global = true, long, env = "DBT_METADATA_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_METADATA_DIR",
+        help_heading = help_headings::ARTIFACTS,
+        hide_short_help = true
+    )]
     pub metadata_dir: Option<PathBuf>,
 
     /// Directory for index parquet output (default: <target>/index/)
-    #[arg(global = true, long, env = "DBT_INDEX_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_INDEX_DIR",
+        help_heading = help_headings::ARTIFACTS,
+        hide_short_help = true
+    )]
     pub index_dir: Option<PathBuf>,
 
     /// Compute and write column-level lineage into compile/cll parquet.
     /// Requires --write-metadata and --static-analysis strict. Omitting this flag
     /// skips the expensive CLL graph build, keeping --write-metadata fast.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_lineage: bool,
 
     // Support for query cache
@@ -1536,7 +1656,7 @@ pub struct CommonArgs {
     pub skip_write_msgpack_if_exist: bool,
 
     // If set, resolve unselected nodes by deferring to the manifest within the --state directory.
-    #[arg(global = true, long = "defer", action = ArgAction::SetTrue, env = "DBT_DEFER", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "defer", action = ArgAction::SetTrue, env = "DBT_DEFER", value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub defer: bool,
     #[arg(global = true, long= "no-defer", default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
     pub no_defer: bool,
@@ -1546,7 +1666,13 @@ pub struct CommonArgs {
     pub defer_state: Option<PathBuf>,
 
     /// Unless overridden, use this state directory for both state comparison and deferral.
-    #[arg(global = true, long, env = "DBT_STATE")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_STATE",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub state: Option<PathBuf>,
 
     // Stop execution on first failure.
@@ -1570,12 +1696,24 @@ pub struct CommonArgs {
     // logging
     //
     /// Set 'log-path' for the current run, overriding 'DBT_LOG_PATH'.
-    #[arg(global = true, long, env = "DBT_LOG_PATH")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_PATH",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_path: Option<PathBuf>,
 
     /// Set 'otel-file-name' for the current run, overriding 'DBT_OTEL_FILE_NAME'.
     /// If set, OTEL telemetry will be written to `$log_path/otel-file-name`.
-    #[arg(global = true, long = "otel-file-name", env = "DBT_OTEL_FILE_NAME")]
+    #[arg(
+        global = true,
+        long = "otel-file-name",
+        env = "DBT_OTEL_FILE_NAME",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub otel_file_name: Option<String>,
 
     /// Set 'otel-parquet-file-name' for the current run, overriding 'DBT_OTEL_PARQUET_FILE_NAME'.
@@ -1583,7 +1721,9 @@ pub struct CommonArgs {
     #[arg(
         global = true,
         long = "otel-parquet-file-name",
-        env = "DBT_OTEL_PARQUET_FILE_NAME"
+        env = "DBT_OTEL_PARQUET_FILE_NAME",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
     )]
     pub otel_parquet_file_name: Option<String>,
 
@@ -1592,18 +1732,38 @@ pub struct CommonArgs {
     pub log_file_max_bytes: u64,
 
     /// Set logging format; use --log-format-file to override.
-    #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Default,)]
+    #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Default, help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub log_format: LogFormat,
 
     /// Set log file format, overriding the default and --log-format setting.
-    #[arg(global = true, long, env = "DBT_LOG_FORMAT_FILE")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_FORMAT_FILE",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_format_file: Option<LogFormat>,
 
     /// Set minimum severity for console/log file; use --log-level-file to set log file severity separately.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL", ignore_case = true)]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_LEVEL",
+        ignore_case = true,
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_level: Option<LogLevel>,
     /// Set minimum log file severity, overriding the default and --log-level setting.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE", ignore_case = true)]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_LEVEL_FILE",
+        ignore_case = true,
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_level_file: Option<LogLevel>,
 
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_MACRO_DEBUGGING", value_parser = BoolishValueParser::new(),hide = true)]
@@ -1633,7 +1793,7 @@ pub struct CommonArgs {
     /// Select only nodes whose source files have changed since the last --partial-parse run,
     /// plus all their downstream dependents. Implies --partial-parse.
     /// Use with --partial-load for full speed: --partial-load --dirty
-    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_DIRTY", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_DIRTY", value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub dirty: bool,
 
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_VERIFY_PARTIAL_PARSE", value_parser = BoolishValueParser::new(), hide = true)]
@@ -1663,9 +1823,9 @@ pub struct CommonArgs {
     pub record_timing_info: Option<PathBuf>,
 
     // Send anonymous usage stats to dbt Labs.
-    #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_SEND_ANONYMOUS_USAGE_STATS", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_SEND_ANONYMOUS_USAGE_STATS", value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub send_anonymous_usage_stats: bool,
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub no_send_anonymous_usage_stats: bool,
 
     // Use the static parser.
@@ -1701,7 +1861,7 @@ pub struct CommonArgs {
     #[arg(global = true, long , default_value_t=true,  action = ArgAction::SetTrue, env = "DBT_VERSION_CHECK", value_parser = BoolishValueParser::new(), hide=true)]
     pub version_check: bool,
     /// Disable online version check for dbt-fusion updates
-    #[arg(global = true, long = "no-version-check", default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_DISABLE_VERSION_CHECK", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "no-version-check", default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_DISABLE_VERSION_CHECK", value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub no_version_check: bool,
 
     // If set, run models in a project while building only the schemas
@@ -1718,7 +1878,9 @@ pub struct CommonArgs {
         default_value_t = false,
         action = ArgAction::SetTrue,
         env = "DBT_STORE_FAILURES",
-        value_parser = BoolishValueParser::new()
+        value_parser = BoolishValueParser::new(),
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
     )]
     pub store_failures: bool,
 
@@ -1733,7 +1895,9 @@ pub struct CommonArgs {
     #[clap(
     long,
     num_args(0..),
-    help = "Show produced artifacts [default: 'progress']\n"
+    help = "Show produced artifacts [default: 'progress']\n",
+    help_heading = help_headings::ADVANCED,
+    hide_short_help = true
 )]
     pub show: Vec<ShowOptions>,
 
@@ -1753,7 +1917,7 @@ pub struct CommonArgs {
     pub task_cache_url: String,
 
     /// Enable service-backed dbt State without legacy task-cache coordination
-    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, env = MANAGE_STATE_ENV, value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, env = MANAGE_STATE_ENV, value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub manage_state: bool,
     /// Disable service-backed dbt State
     #[arg(global = true, long = "no-manage-state", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
@@ -1844,11 +2008,11 @@ pub struct CommonArgs {
     pub skip_unreferenced_table_check: bool,
 
     /// Override the invocation ID with a UUID string or integer.
-    #[arg(global = true, env = "DBT_INVOCATION_ID", long, value_parser = parse_invocation_id)]
+    #[arg(global = true, env = "DBT_INVOCATION_ID", long, value_parser = parse_invocation_id, help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub invocation_id: Option<Uuid>,
 
     /// Set the parent span ID for trace correlation (16-character hex or u64).
-    #[arg(global = true, env = "DBT_PARENT_SPAN_ID", long, value_parser = parse_parent_span_id)]
+    #[arg(global = true, env = "DBT_PARENT_SPAN_ID", long, value_parser = parse_parent_span_id, help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub parent_span_id: Option<u64>,
 
     /// Skip installation of private dependencies (useful for build conformance testing)
@@ -1856,11 +2020,23 @@ pub struct CommonArgs {
     pub skip_private_deps: bool,
 
     /// If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).
-    #[arg(global = true, long, env = "DBT_EVENT_TIME_END")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_EVENT_TIME_END",
+        help_heading = help_headings::EVENT_TIME,
+        hide_short_help = true
+    )]
     pub event_time_end: Option<String>,
 
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
-    #[arg(global = true, long, env = "DBT_EVENT_TIME_START")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_EVENT_TIME_START",
+        help_heading = help_headings::EVENT_TIME,
+        hide_short_help = true
+    )]
     pub event_time_start: Option<String>,
 
     /// How to load internal (embedded) dbt packages: embedded (default), forcewrite, readfromdisk
@@ -1874,7 +2050,7 @@ pub struct CommonArgs {
     pub internal_package_mode: InternalPackageMode,
 
     /// When installing packages from Package Hub, use v2-compatible downloads if available
-    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = false, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub use_v2_compatible_package_downloads: bool,
 
     /// If set, the maximum number of bytes that the ANTLR parser is allowed to
