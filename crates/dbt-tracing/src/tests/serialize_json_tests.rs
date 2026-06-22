@@ -221,20 +221,25 @@ fn invalid_trace_id_or_span_id_fails() {
 }
 
 #[test]
-fn deserialize_json_lines_reports_invalid_line_number() {
+fn deserialize_json_lines_collects_invalid_line_errors() {
     let valid =
         serde_json::to_string(&TelemetryRecordRef::SpanStart(&span_start_record())).unwrap();
     let mut invalid = span_start_json_value();
     invalid["span_id"] = json!("not-hex");
 
-    let err = deserialize_json_lines(
+    let (records, errors) = deserialize_json_lines(
         &format!("{valid}\n{}", serde_json::to_string(&invalid).unwrap()),
         &MockJsonRegistry,
-    )
-    .unwrap_err();
+    );
 
-    assert!(err.to_string().contains("line 2"));
-    assert!(err.to_string().contains("invalid span_id"));
+    assert_eq!(
+        records,
+        vec![TelemetryRecord::SpanStart(span_start_record())]
+    );
+    assert_eq!(errors.len(), 1);
+    let err = errors[0].to_string();
+    assert!(err.contains("line 2"));
+    assert!(err.contains("invalid span_id"));
 }
 
 fn deserialize_record_ref(record: TelemetryRecordRef<'_>) -> TelemetryRecord {

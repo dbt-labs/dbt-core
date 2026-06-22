@@ -144,6 +144,12 @@ pub struct LogMessage {
     pub dbt_core_event_code: ::core::option::Option<::prost::alloc::string::String>,
     /// Original severity before user up/down-grade configuration applied.
     #[prost(enumeration = "super::compat::SeverityNumber", tag = "3")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "::fake::Fake::fake::<super::compat::SeverityNumber>(&::fake::Faker) as i32"
+        )
+    )]
     pub original_severity_number: i32,
     #[prost(string, tag = "4")]
     pub original_severity_text: ::prost::alloc::string::String,
@@ -222,6 +228,12 @@ pub struct UserLogMessage {
     pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Execution phase (if known) during which this log was emitted.
     #[prost(enumeration = "super::phase::ExecutionPhase", optional, tag = "4")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "Some(::fake::Fake::fake::<super::phase::ExecutionPhase>(&::fake::Faker) as i32)"
+        )
+    )]
     pub phase: ::core::option::Option<i32>,
     /// Package name (project or dependency) from which this log was emitted.
     #[prost(string, optional, tag = "5")]

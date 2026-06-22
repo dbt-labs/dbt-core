@@ -210,6 +210,14 @@ impl TelemetryRecord {
             TelemetryRecord::LogRecord(info) => &info.attributes,
         }
     }
+
+    pub fn as_ref(&self) -> TelemetryRecordRef<'_> {
+        match self {
+            TelemetryRecord::SpanStart(info) => TelemetryRecordRef::SpanStart(info),
+            TelemetryRecord::SpanEnd(info) => TelemetryRecordRef::SpanEnd(info),
+            TelemetryRecord::LogRecord(info) => TelemetryRecordRef::LogRecord(info),
+        }
+    }
 }
 
 // Provides a default discriminant so downstream record types that embed

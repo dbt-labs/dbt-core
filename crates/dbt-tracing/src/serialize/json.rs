@@ -45,25 +45,24 @@ where
     deserialize_from_json_str(&input, registry)
 }
 
-pub fn deserialize_json_lines<R>(
-    input: &str,
-    registry: &R,
-) -> Result<Vec<TelemetryRecord>, BoxError>
+pub fn deserialize_json_lines<R>(input: &str, registry: &R) -> (Vec<TelemetryRecord>, Vec<BoxError>)
 where
     R: JsonRegistryLookup,
 {
-    input
-        .lines()
-        .enumerate()
-        .map(|(idx, line)| {
-            deserialize_from_json_str(line, registry).map_err(|err| {
-                invalid_data(format!(
-                    "failed to deserialize JSON line {}: {err}",
-                    idx + 1
-                ))
-            })
-        })
-        .collect()
+    let mut records = Vec::new();
+    let mut errors = Vec::new();
+
+    for (idx, line) in input.lines().enumerate() {
+        match deserialize_from_json_str(line, registry) {
+            Ok(record) => records.push(record),
+            Err(err) => errors.push(invalid_data(format!(
+                "failed to deserialize JSON line {}: {err}",
+                idx + 1
+            ))),
+        }
+    }
+
+    (records, errors)
 }
 
 #[derive(Deserialize)]

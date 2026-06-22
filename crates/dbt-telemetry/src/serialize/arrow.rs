@@ -82,13 +82,9 @@ mod tests {
         util::display::FormatOptions,
     };
     use dbt_tracing::{
-        LogRecordInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
-        TelemetryEventRecType, TelemetryOutputFlags, TelemetryRecord,
+        TelemetryEventRecType, TelemetryOutputFlags,
         serialize::arrow::{TelemetryArrowSchemas, deserialize_from_arrow, serialize_to_arrow},
     };
-    use fake::rand::SeedableRng;
-    use fake::rand::rngs::StdRng;
-    use fake::{Fake, Faker};
     use parquet::{
         arrow::{ArrowWriter, arrow_reader::ParquetRecordBatchReaderBuilder},
         basic::Compression,
@@ -96,119 +92,15 @@ mod tests {
     };
 
     use super::*;
-    use std::hash::{Hash, Hasher};
     use std::sync::Arc;
-    use std::time::SystemTime;
     use std::{
-        collections::{HashMap, HashSet, hash_map::DefaultHasher},
+        collections::{HashMap, HashSet},
         rc::Rc,
     };
 
-    // Generate pseudo-random but deterministic values for testing
-    fn hash_seed(seed: &str) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        seed.hash(&mut hasher);
-        hasher.finish()
-    }
-
-    fn create_all_fake_attributes(seed: &str) -> Vec<TelemetryAttributes> {
-        let mut attributes = Vec::new();
-        for event_type in TelemetryEventTypeRegistry::public().iter() {
-            let faker = TelemetryEventTypeRegistry::public()
-                .get_faker(event_type)
-                .unwrap_or_else(|| panic!("No faker defined for event type \"{event_type}\""));
-
-            // Faker returns a vector of attribute variants
-            for attr_boxed in faker(seed) {
-                let attrs = TelemetryAttributes::new(attr_boxed);
-
-                // Skip variants that are known to not be serialized
-                if !attrs
-                    .output_flags()
-                    .contains(TelemetryOutputFlags::EXPORT_PARQUET)
-                {
-                    continue;
-                }
-
-                attributes.push(attrs);
-            }
-        }
-        attributes
-    }
-
-    fn create_test_span_start(seed: &str, attributes: TelemetryAttributes) -> TelemetryRecord {
-        let hashed_seed = hash_seed(seed);
-        let mut rng = StdRng::seed_from_u64(hashed_seed);
-        let trace_id = Faker.fake_with_rng(&mut rng);
-        let span_id = Faker.fake_with_rng(&mut rng);
-        let parent_span_id = Faker.fake_with_rng(&mut rng);
-        let start_time = Faker.fake_with_rng(&mut rng);
-
-        TelemetryRecord::SpanStart(SpanStartInfo {
-            trace_id,
-            span_id,
-            parent_span_id: Some(parent_span_id),
-            links: None,
-            span_name: attributes.event_display_name(),
-            start_time_unix_nano: SystemTime::UNIX_EPOCH
-                + std::time::Duration::from_nanos(start_time),
-            attributes,
-            severity_number: Faker.fake_with_rng(&mut rng),
-            severity_text: ["TRACE", "DEBUG", "INFO", "WARN"][(hashed_seed % 4) as usize]
-                .to_string(),
-        })
-    }
-
-    fn create_test_span_end(seed: &str, span_start: &TelemetryRecord) -> TelemetryRecord {
-        let TelemetryRecord::SpanStart(span_start_info) = span_start else {
-            panic!("Expected SpanStart record");
-        };
-
-        let hashed_seed = hash_seed(seed);
-        let mut rng = StdRng::seed_from_u64(hashed_seed);
-        let elapsed = Faker.fake_with_rng(&mut rng);
-
-        TelemetryRecord::SpanEnd(SpanEndInfo {
-            trace_id: span_start_info.trace_id,
-            span_id: span_start_info.span_id,
-            parent_span_id: span_start_info.parent_span_id,
-            links: span_start_info.links.clone(),
-            span_name: span_start_info.span_name.clone(),
-            start_time_unix_nano: span_start_info.start_time_unix_nano,
-            end_time_unix_nano: span_start_info.start_time_unix_nano
-                + std::time::Duration::from_nanos(elapsed),
-            attributes: span_start_info.attributes.clone(),
-            status: Some(SpanStatus {
-                code: [StatusCode::Unset, StatusCode::Ok, StatusCode::Error]
-                    [(hashed_seed % 3) as usize],
-                message: Some(format!("status_{}", hashed_seed % 100)),
-            }),
-            severity_number: Faker.fake_with_rng(&mut rng),
-            severity_text: ["TRACE", "DEBUG", "INFO", "WARN"][(hashed_seed % 4) as usize]
-                .to_string(),
-        })
-    }
-
-    fn create_test_log_record(seed: &str, attributes: TelemetryAttributes) -> TelemetryRecord {
-        let hashed_seed = hash_seed(seed);
-        let mut rng = StdRng::seed_from_u64(hashed_seed);
-        let trace_id = Faker.fake_with_rng(&mut rng);
-        let span_id = Faker.fake_with_rng(&mut rng);
-        let log_time = Faker.fake_with_rng(&mut rng);
-
-        TelemetryRecord::LogRecord(LogRecordInfo {
-            time_unix_nano: SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(log_time),
-            trace_id,
-            span_id: Some(span_id),
-            event_id: Faker.fake_with_rng(&mut rng),
-            span_name: Some(attributes.event_display_name()),
-            severity_number: Faker.fake_with_rng(&mut rng),
-            severity_text: ["ERROR", "WARN", "INFO", "DEBUG"][(hashed_seed % 4) as usize]
-                .to_string(),
-            body: format!("Log message {}", hashed_seed % 10000),
-            attributes,
-        })
-    }
+    use crate::test_utils::{
+        create_all_fake_attributes, create_all_fake_records, create_test_log_record,
+    };
 
     fn cast_array(
         array: &ArrayRef,
@@ -456,10 +348,14 @@ mod tests {
 
     #[test]
     fn test_deserialize_from_arrow_schema_normalization() {
-        let attributes = create_all_fake_attributes("schema_norm_seed")
-            .into_iter()
-            .find(|attrs| matches!(attrs.record_category(), TelemetryEventRecType::Log))
-            .expect("expected at least one log attribute");
+        let attributes = create_all_fake_attributes(
+            "schema_norm_seed",
+            TelemetryEventTypeRegistry::public(),
+            TelemetryOutputFlags::EXPORT_PARQUET,
+        )
+        .into_iter()
+        .find(|attrs| matches!(attrs.record_category(), TelemetryEventRecType::Log))
+        .expect("expected at least one log attribute");
 
         let log_record = create_test_log_record("schema_norm_seed", attributes);
         let records = vec![log_record];
@@ -512,26 +408,11 @@ mod tests {
     #[test]
     fn test_arrow_roundtrip_all_record_types() {
         // Create records of each record & event (aka attribute) type with a pseudo-random seed
-        let mut original_records = vec![];
-        create_all_fake_attributes("test_seed")
-            .iter()
-            .for_each(|attributes| {
-                match attributes.record_category() {
-                    // Span types
-                    TelemetryEventRecType::Span => {
-                        let span_start = create_test_span_start("test_seed", attributes.clone());
-                        // Create a matching span end for the start
-                        let span_end = create_test_span_end("test_seed", &span_start);
-                        original_records.push(span_start);
-                        original_records.push(span_end);
-                    }
-                    TelemetryEventRecType::Log => {
-                        // Create a log record
-                        let log_record = create_test_log_record("test_seed", attributes.clone());
-                        original_records.push(log_record);
-                    }
-                }
-            });
+        let original_records = create_all_fake_records(
+            "test_seed",
+            TelemetryEventTypeRegistry::public(),
+            TelemetryOutputFlags::EXPORT_PARQUET,
+        );
 
         let schemas = TelemetryArrowSchemas::new::<TelemetryEventTypeRegistry>();
         let batch = serialize_to_arrow(&original_records, &schemas).unwrap();
