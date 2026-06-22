@@ -5,6 +5,7 @@ pub mod pack;
 pub mod publish;
 pub mod pyproject;
 pub(crate) mod release_version;
+pub(crate) mod sdist;
 pub mod utils;
 
 pub use args::{

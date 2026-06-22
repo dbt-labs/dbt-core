@@ -102,6 +102,16 @@ fn collect_binaries(dir: &Path) -> Result<Vec<Binary>> {
     Ok(out)
 }
 
+/// PEP 491 wheel filename; the single source of truth shared by `pack` and `sdist`.
+pub(crate) fn wheel_filename(
+    dist_normalized: &str,
+    version_pep440: &str,
+    platform_tag: &str,
+) -> String {
+    format!("{dist_normalized}-{version_pep440}-py3-none-{platform_tag}.whl")
+}
+
+/// Packs one binary into a wheel under `out_dir`, returning the wheel path.
 fn pack_wheel(
     spec: &Spec,
     version_pep440: &str,
@@ -112,7 +122,7 @@ fn pack_wheel(
     let platform_tag = target_to_platform_tag(&bin.target_triple)
         .ok_or_else(|| anyhow!("unsupported target triple {:?}", bin.target_triple))?;
     let dist = normalize_wheel_name(&spec.wheel_name);
-    let wheel_filename = format!("{dist}-{version_pep440}-py3-none-{platform_tag}.whl");
+    let wheel_filename = wheel_filename(&dist, version_pep440, &platform_tag);
     let wheel_path = out_dir.join(&wheel_filename);
     let dist_info = format!("{dist}-{version_pep440}.dist-info");
     let data_scripts = format!("{dist}-{version_pep440}.data/scripts");
@@ -177,7 +187,7 @@ fn render_record(entries: &[(String, Vec<u8>, u32)], record_path: &str) -> Strin
     out
 }
 
-fn render_metadata(spec: &Spec, version_pep440: &str) -> String {
+pub(crate) fn render_metadata(spec: &Spec, version_pep440: &str) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "Metadata-Version: 2.1");
     let _ = writeln!(out, "Name: {}", spec.wheel_name);

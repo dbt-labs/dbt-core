@@ -1,7 +1,35 @@
+use anyhow::{Result, bail};
+use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use toml_edit::DocumentMut;
+
+/// Lowercase hex sha256 of `data`; the one hashing form shared across the crate.
+pub(crate) fn sha256_hex(data: &[u8]) -> String {
+    hex::encode(Sha256::digest(data))
+}
+
+/// Rejects a download base url that isn't `https://`, so wheels are never
+/// fetched over an insecure transport.
+pub(crate) fn require_https(base_url: &str) -> Result<()> {
+    if !base_url.starts_with("https://") {
+        bail!("download base url must be an https URL, got {base_url:?}");
+    }
+    Ok(())
+}
+
+/// Retry only on errors that may heal: timeouts, connect failures, body blips.
+/// `is_request()` (builder/config errors) is excluded — it won't change on retry.
+pub(crate) fn is_transient(e: &reqwest::Error) -> bool {
+    e.is_timeout() || e.is_connect() || e.is_body()
+}
+
+/// Exponential backoff between HTTP retries: 500ms, 1s, 2s, 4s, …
+pub(crate) fn backoff(attempt: u32) -> Duration {
+    Duration::from_millis(500u64 * (1u64 << (attempt - 1)))
+}
 
 /// Nearest ancestor of `CARGO_MANIFEST_DIR` whose `Cargo.toml` has a
 /// `[workspace]` table. Falls back to cwd (then `.`) if no ancestor matches.

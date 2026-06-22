@@ -8,13 +8,22 @@ pub struct PypiPublishArgs {
     #[arg(long, value_enum)]
     pub environment: Environment,
 
-    /// Wheel source dir. Defaults to `<workspace>/target/wheels`.
+    /// Wheel source dir for wheel-upload mode. Defaults to `<workspace>/target/wheels`.
     #[arg(long)]
     pub dist: Option<PathBuf>,
 
-    /// Restrict to wheels stamped with this SemVer.
+    /// Restrict to artifacts with this SemVer. Required in sdist mode.
     #[arg(long)]
     pub version: Option<String>,
+
+    /// sdist mode: build the sdist from this release's wheels at this https base
+    /// URL, then publish only the sdist. Requires `--version` and `--target`.
+    #[arg(long, value_name = "URL", requires = "version")]
+    pub download_base_url: Option<String>,
+
+    /// Cargo target triple to include in the sdist manifest (repeatable). sdist mode only.
+    #[arg(long = "target", value_name = "TRIPLE", action = clap::ArgAction::Append, requires = "download_base_url")]
+    pub targets: Vec<String>,
 }
 
 #[derive(Args, Debug)]
