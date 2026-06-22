@@ -30,7 +30,7 @@ impl ColumnBuilder {
             Postgres | Salesforce | DuckDB | Alt => Ok(Self::build_postgres_like(field, type_ops)),
             Fabric => Ok(Self::build_fabric(field, type_ops)),
             ClickHouse => Self::build_clickhouse(field, type_ops),
-            Exasol => Ok(Self::build_postgres_like(field, type_ops)),
+            Exasol => Ok(Self::build_exasol(field, type_ops)),
             Starburst => todo!("Starburst"),
             Athena => todo!("Athena"),
             Trino => todo!("Trino"),
@@ -508,6 +508,39 @@ impl ColumnBuilder {
             numeric_precision,
             // If it is an integer, the scale is 0, otherwise it is the scale of the number.
             numeric_scale,
+        )
+    }
+
+    fn build_exasol(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
+        use AdapterType::Exasol;
+        let data_type = field.data_type();
+        let char_size = sql_types::var_size(Exasol, data_type);
+        let (numeric_precision, numeric_scale) = {
+            let precision_scale = sql_types::numeric_precision_scale(Exasol, data_type)
+                .ok()
+                .flatten();
+            match precision_scale {
+                Some((p, Some(s))) => (Some(p), Some(s)),
+                Some((p, None)) => (Some(p), None),
+                None => (None, None),
+            }
+        };
+
+        let mut rendered_type = String::new();
+        if type_ops
+            .format_arrow_type_as_sql(data_type, &mut rendered_type)
+            .is_err()
+        {
+            rendered_type = data_type.to_string();
+        }
+
+        Column::new(
+            Exasol,
+            field.name().to_string(),
+            rendered_type,
+            char_size.map(|p| p as u32),
+            numeric_precision.map(|p| p as u64),
+            numeric_scale.map(|s| s as u64),
         )
     }
 

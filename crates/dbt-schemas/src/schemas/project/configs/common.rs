@@ -253,6 +253,13 @@ pub struct WarehouseSpecificNodeConfig {
     pub ttl: Option<String>,
     pub settings: Option<BTreeMap<String, YmlValue>>,
     pub query_settings: Option<BTreeMap<String, YmlValue>>,
+
+    // Exasol
+    // Key names match the Python dbt-exasol adapter so existing projects
+    // migrate without config changes.
+    pub partition_by_config: Option<StringOrArrayOfStrings>,
+    pub distribute_by_config: Option<StringOrArrayOfStrings>,
+    pub primary_key_config: Option<StringOrArrayOfStrings>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
