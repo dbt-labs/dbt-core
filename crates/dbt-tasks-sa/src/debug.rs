@@ -1,3 +1,4 @@
+use std::io;
 use std::process::{Command, Output};
 use std::sync::Arc;
 
@@ -12,34 +13,155 @@ use dbt_schemas::schemas::profiles::{DbConfig, Execute};
 use dbt_telemetry::ProgressMessage;
 use dbt_xdbc::QueryCtx;
 
-// Action labels for debug command progress messages (without padding - formatter handles padding)
-const ACTION_DEBUGGING: &str = "Debugging";
-const ACTION_DEBUGGED: &str = "Debugged";
-const ACTION_SKIPPED: &str = "Skipped";
-
 // dbt-core event codes for JSON compatibility
 const DBT_CORE_DEBUG_CMD_OUT: &str = "Z047";
 const DBT_CORE_DEBUG_CMD_RESULT: &str = "Z048";
 
-struct DependencyStatus {
-    installed: bool,
-    detail: Option<String>,
+#[derive(Clone, Copy)]
+enum DebugAction {
+    Debugging,
+    Debugged,
+    Skipped,
+}
+
+impl DebugAction {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Debugging => "Debugging",
+            Self::Debugged => "Debugged",
+            Self::Skipped => "Skipped",
+        }
+    }
+
+    fn event_code(self) -> &'static str {
+        match self {
+            Self::Debugged => DBT_CORE_DEBUG_CMD_RESULT,
+            Self::Debugging | Self::Skipped => DBT_CORE_DEBUG_CMD_OUT,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Dependency {
+    program: &'static str,
+}
+
+impl Dependency {
+    const GIT: Self = Self { program: "git" };
+
+    fn check(self) -> DependencyStatus {
+        match Command::new(self.program).arg("--help").output() {
+            Ok(output) if output.status.success() => DependencyStatus::Installed,
+            Ok(output) => DependencyStatus::Error(self.command_failure_detail(&output)),
+            Err(error) => DependencyStatus::Error(self.spawn_failure_detail(&error)),
+        }
+    }
+
+    fn command_failure_detail(self, output: &Output) -> String {
+        let output_text = String::from_utf8_lossy(if output.stderr.is_empty() {
+            &output.stdout
+        } else {
+            &output.stderr
+        })
+        .trim()
+        .to_string();
+
+        let mut lines = Vec::new();
+        if !output_text.is_empty() {
+            lines.push(format!("Error from {} --help: {output_text}", self.program));
+        } else if let Some(code) = output.status.code() {
+            lines.push(format!(
+                "`{} --help` exited with status code {code}.",
+                self.program
+            ));
+        } else {
+            lines.push(format!("`{} --help` failed.", self.program));
+        }
+        lines.push(self.help_hint());
+        lines.join("\n")
+    }
+
+    fn spawn_failure_detail(self, error: &io::Error) -> String {
+        format!(
+            "Error from {} --help: {error}\n{}",
+            self.program,
+            self.help_hint()
+        )
+    }
+
+    fn help_hint(self) -> String {
+        format!(
+            "Make sure that `{}` is installed in your shell and that `{} --help` can execute successfully.",
+            self.program, self.program
+        )
+    }
+}
+
+enum DependencyStatus {
+    Installed,
+    Error(String),
+}
+
+impl DependencyStatus {
+    fn into_display(self, dependency: Dependency) -> (bool, String) {
+        match self {
+            Self::Installed => (true, format!("{}: OK", dependency.program)),
+            Self::Error(detail) => (
+                false,
+                format!(
+                    "{}: ERROR\n    {}",
+                    dependency.program,
+                    detail.replace('\n', "\n    ")
+                ),
+            ),
+        }
+    }
 }
 
 /// Helper to create progress message
-fn create_progress_msg(action: &str, target: &str) -> ProgressMessage {
-    let dbt_core_event_code = if action == ACTION_DEBUGGED {
-        DBT_CORE_DEBUG_CMD_RESULT.to_string()
-    } else {
-        DBT_CORE_DEBUG_CMD_OUT.to_string()
-    };
-
+fn create_progress_msg(action: DebugAction, target: impl Into<String>) -> ProgressMessage {
     ProgressMessage::new_with_code(
-        action.to_string(),
-        target.to_string(),
+        action.label().to_string(),
+        target.into(),
         None,
-        dbt_core_event_code,
+        action.event_code().to_string(),
     )
+}
+
+fn emit_debug_progress(
+    status_reporter: Option<&Arc<dyn StatusReporter>>,
+    action: DebugAction,
+    target: impl Into<String>,
+) {
+    emit_info_progress_message(create_progress_msg(action, target), status_reporter);
+}
+
+fn emit_dependency_debug_progress(status_reporter: Option<&Arc<dyn StatusReporter>>) -> bool {
+    let (all_checks_passed, dependency_displays) = [Dependency::GIT].into_iter().fold(
+        (true, Vec::new()),
+        |(all_checks_passed, mut dependency_displays), dependency| {
+            let (dependency_ok, dependency_display) = dependency.check().into_display(dependency);
+            dependency_displays.push(dependency_display);
+            (all_checks_passed && dependency_ok, dependency_displays)
+        },
+    );
+
+    emit_debug_progress(
+        status_reporter,
+        DebugAction::Debugging,
+        format!("dependencies:\n  {}", dependency_displays.join("\n  ")),
+    );
+
+    all_checks_passed
+}
+
+fn connection_details_display(db_config: &DbConfig) -> FsResult<String> {
+    let mapping = db_config.to_connection_mapping().unwrap();
+    Ok(serde_json::to_string_pretty(&mapping)?
+        .trim_matches('{')
+        .trim_matches('}')
+        .trim()
+        .to_string())
 }
 
 pub struct DebugArgs {
@@ -72,16 +194,18 @@ pub async fn debug(
 
     // profile info
     let profile_display = format!("profile: {}", arg.target.clone().unwrap_or_default());
-    emit_info_progress_message(
-        create_progress_msg(ACTION_DEBUGGING, &profile_display),
+    emit_debug_progress(
         arg.status_reporter.as_ref(),
+        DebugAction::Debugging,
+        profile_display,
     );
 
     // dbt version
     let dbt_version_display = format!("dbt version: {}", env!("CARGO_PKG_VERSION"));
-    emit_info_progress_message(
-        create_progress_msg(ACTION_DEBUGGING, &dbt_version_display),
+    emit_debug_progress(
         arg.status_reporter.as_ref(),
+        DebugAction::Debugging,
+        dbt_version_display,
     );
 
     // platform info
@@ -91,73 +215,44 @@ pub async fn debug(
         std::env::consts::ARCH,
         std::env::consts::FAMILY
     );
-    emit_info_progress_message(
-        create_progress_msg(ACTION_DEBUGGING, &platform_info_display),
+    emit_debug_progress(
         arg.status_reporter.as_ref(),
+        DebugAction::Debugging,
+        platform_info_display,
     );
 
     let adapter_type = db_config.adapter_type();
     let execute = Execute::from_compute_flag(arg.local_execution_backend);
     let adapter_info_display = format!("adapter type: {} ({})", adapter_type, execute);
-    emit_info_progress_message(
-        create_progress_msg(ACTION_DEBUGGING, &adapter_info_display),
+    emit_debug_progress(
         arg.status_reporter.as_ref(),
+        DebugAction::Debugging,
+        adapter_info_display,
     );
 
     // Skip dependency info if --connection is set
     if arg.connection {
-        emit_info_progress_message(
-            create_progress_msg(ACTION_SKIPPED, "steps before connection testing"),
+        emit_debug_progress(
             arg.status_reporter.as_ref(),
+            DebugAction::Skipped,
+            "steps before connection testing",
         );
-    } else {
-        // dependency info
-        let dependencies = ["git"];
-        let mut dependency_displays = Vec::new();
-        for dep in dependencies {
-            let dependency_status = dependency_installed(dep);
-            let status = if dependency_status.installed {
-                format!("{dep}: OK")
-            } else {
-                all_debug_checks_passed = false;
-                let detail = dependency_status
-                    .detail
-                    .map(|detail| format!("\n    {}", detail.replace('\n', "\n    ")))
-                    .unwrap_or_default();
-                format!("{dep}: ERROR{detail}")
-            };
-            dependency_displays.push(status);
-        }
-
-        emit_info_progress_message(
-            create_progress_msg(
-                ACTION_DEBUGGING,
-                &format!("dependencies:\n  {}", dependency_displays.join("\n  ")),
-            ),
-            arg.status_reporter.as_ref(),
-        );
+    } else if !emit_dependency_debug_progress(arg.status_reporter.as_ref()) {
+        all_debug_checks_passed = false;
     }
 
     // Format connection details, omitting any secrets via into_connection_mapping().
-    let mapping = db_config.to_connection_mapping().unwrap();
-    let connection_details = serde_json::to_string_pretty(&mapping)?
-        .trim_matches('{')
-        .trim_matches('}')
-        .trim()
-        .to_string();
-
-    emit_info_progress_message(
-        create_progress_msg(
-            ACTION_DEBUGGING,
-            &format!("connection:\n  {}", connection_details),
-        ),
+    emit_debug_progress(
         arg.status_reporter.as_ref(),
+        DebugAction::Debugging,
+        format!("connection:\n  {}", connection_details_display(&db_config)?),
     );
 
     if execute == Execute::Local {
-        emit_info_progress_message(
-            create_progress_msg(ACTION_SKIPPED, "local connection test"),
+        emit_debug_progress(
             arg.status_reporter.as_ref(),
+            DebugAction::Skipped,
+            "local connection test",
         );
     } else {
         let mut config_as_mapping = db_config.to_mapping().unwrap();
@@ -210,83 +305,32 @@ pub async fn debug(
                     None => "Unable to confirm. Consider enabling the Snowflake system parameter allow_id_token, to open fewer browser tabs during authentication. See https://docs.getdbt.com/docs/local/connect-data-platform/snowflake-setup?version=2.0#supported-authentication-types for more info.".to_string(),
                 };
 
-            emit_info_progress_message(
-                create_progress_msg(
-                    ACTION_DEBUGGING,
-                    &format!(
-                        "externalbrowser connection caching: {}",
-                        allow_token_id_result
-                    ),
-                ),
+            emit_debug_progress(
                 arg.status_reporter.as_ref(),
+                DebugAction::Debugging,
+                format!(
+                    "externalbrowser connection caching: {}",
+                    allow_token_id_result
+                ),
             );
         }
 
-        emit_info_progress_message(
-            create_progress_msg(ACTION_DEBUGGING, "connection test: OK"),
+        emit_debug_progress(
             arg.status_reporter.as_ref(),
+            DebugAction::Debugging,
+            "connection test: OK",
         );
     }
 
     if all_debug_checks_passed {
-        emit_info_progress_message(
-            create_progress_msg(ACTION_DEBUGGED, "All checks passed!"),
+        emit_debug_progress(
             arg.status_reporter.as_ref(),
+            DebugAction::Debugged,
+            "All checks passed!",
         );
     }
 
     Ok(())
-}
-
-fn dependency_installed(dependency: &str) -> DependencyStatus {
-    match Command::new(dependency).arg("--help").output() {
-        Ok(output) if output.status.success() => DependencyStatus {
-            installed: true,
-            detail: None,
-        },
-        Ok(output) => DependencyStatus {
-            installed: false,
-            detail: Some(format_dependency_command_failure(dependency, &output)),
-        },
-        Err(error) => DependencyStatus {
-            installed: false,
-            detail: Some(format_dependency_spawn_failure(dependency, &error)),
-        },
-    }
-}
-
-fn format_dependency_command_failure(dependency: &str, output: &Output) -> String {
-    let output_text = String::from_utf8_lossy(if output.stderr.is_empty() {
-        &output.stdout
-    } else {
-        &output.stderr
-    })
-    .trim()
-    .to_string();
-
-    let mut lines = Vec::new();
-    if !output_text.is_empty() {
-        lines.push(format!("Error from {dependency} --help: {output_text}"));
-    } else if let Some(code) = output.status.code() {
-        lines.push(format!("`{dependency} --help` exited with status code {code}."));
-    } else {
-        lines.push(format!("`{dependency} --help` failed."));
-    }
-    lines.push(dependency_help_hint(dependency));
-    lines.join("\n")
-}
-
-fn format_dependency_spawn_failure(dependency: &str, error: &std::io::Error) -> String {
-    format!(
-        "Error from {dependency} --help: {error}\n{}",
-        dependency_help_hint(dependency)
-    )
-}
-
-fn dependency_help_hint(dependency: &str) -> String {
-    format!(
-        "Make sure that `{dependency}` is installed in your shell and that `{dependency} --help` can execute successfully."
-    )
 }
 
 #[cfg(test)]
@@ -297,9 +341,14 @@ mod tests {
 
     #[test]
     fn test_dependency_not_installed() {
-        let result = dependency_installed("not_installed");
-        assert!(!result.installed);
-        let detail = result.detail.as_deref().unwrap_or_default();
+        let dependency = Dependency {
+            program: "not_installed",
+        };
+        let result = dependency.check();
+        let detail = match result {
+            DependencyStatus::Installed => panic!("expected a missing dependency error"),
+            DependencyStatus::Error(detail) => detail,
+        };
         assert!(detail.contains("Make sure that `not_installed` is installed"));
     }
 
@@ -312,7 +361,7 @@ mod tests {
             stderr: b"xcrun: error: invalid active developer path".to_vec(),
         };
 
-        let message = format_dependency_command_failure("git", &output);
+        let message = Dependency::GIT.command_failure_detail(&output);
 
         assert!(
             message.contains("Error from git --help: xcrun: error: invalid active developer path")
@@ -329,7 +378,7 @@ mod tests {
             stderr: Vec::new(),
         };
 
-        let message = format_dependency_command_failure("git", &output);
+        let message = Dependency::GIT.command_failure_detail(&output);
 
         assert!(message.contains("Error from git --help: git help failed"));
     }
