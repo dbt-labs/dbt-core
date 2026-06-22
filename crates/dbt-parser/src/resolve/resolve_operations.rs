@@ -215,7 +215,7 @@ fn new_operation(
                                 operation.__base_attr__.refs.push(DbtRef {
                                     name,
                                     package,
-                                    version: version.map(|v| v.into()),
+                                    version,
                                     location: Some(CodeLocationWithFile::new(
                                         location.line,
                                         location.col,

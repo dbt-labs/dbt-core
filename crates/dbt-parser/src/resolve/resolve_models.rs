@@ -68,7 +68,7 @@ use dbt_schemas::schemas::project::ResolvedModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
-use dbt_schemas::schemas::serde::StringOrInteger;
+use dbt_schemas::schemas::serde::NodeVersion;
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
@@ -90,9 +90,7 @@ use super::validate_models::validate_model;
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
 /// `ref('pkg', 'name', version=N)` from a constraint `to:` string (also accepts `v=` alias).
 /// Returns `(package, name, version)`. Mirrors dbt-core's `statically_parse_ref_or_source`.
-fn parse_ref_from_constraint(
-    to: &str,
-) -> Option<(Option<String>, String, Option<StringOrInteger>)> {
+fn parse_ref_from_constraint(to: &str) -> Option<(Option<String>, String, Option<NodeVersion>)> {
     let s = to.trim();
     if !s.starts_with("ref(") || !s.ends_with(')') {
         return None;
@@ -100,7 +98,7 @@ fn parse_ref_from_constraint(
     let inner = s[4..s.len() - 1].trim();
 
     let mut positional: Vec<&str> = Vec::new();
-    let mut version: Option<StringOrInteger> = None;
+    let mut version: Option<NodeVersion> = None;
 
     for part in inner.split(',') {
         let part = part.trim();
@@ -108,11 +106,17 @@ fn parse_ref_from_constraint(
             .strip_prefix("version=")
             .or_else(|| part.strip_prefix("v="))
         {
-            let v = v.trim().trim_matches(|c| c == '\'' || c == '"');
-            version = Some(if let Ok(n) = v.parse::<i64>() {
-                StringOrInteger::Integer(n)
+            let v = v.trim();
+            let is_quoted = v.starts_with('\'') || v.starts_with('"');
+            let v = v.trim_matches(|c| c == '\'' || c == '"');
+            version = Some(if is_quoted {
+                NodeVersion::String(v.to_string())
+            } else if let Ok(n) = v.parse::<i64>() {
+                NodeVersion::Integer(n)
+            } else if let Ok(f) = v.parse::<f64>() {
+                NodeVersion::Float(f)
             } else {
-                StringOrInteger::String(v.to_string())
+                NodeVersion::String(v.to_string())
             });
         } else {
             positional.push(part.trim_matches(|c| c == '\'' || c == '"'));
@@ -441,6 +445,7 @@ pub async fn resolve_models(
         let resolved_versioned = resolve_versioned_fields(maybe_version.as_ref(), &properties);
         let model_constraints = resolved_versioned.constraints;
         let model_description = resolved_versioned.description;
+
         if let Some(raw) = resolved_versioned.invalid_access.as_deref() {
             let err = fs_err!(
                 code => ErrorCode::InvalidConfig,
@@ -617,7 +622,7 @@ pub async fn resolve_models(
                     .map(|(model, project, version, location)| DbtRef {
                         name: model.to_owned(),
                         package: project.to_owned(),
-                        version: version.clone().map(|v| v.into()),
+                        version: version.clone(),
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .chain(
@@ -1383,7 +1388,7 @@ fn merge_python_config(
 #[cfg(test)]
 mod tests {
     use super::{parse_ref_from_constraint, parse_source_from_constraint};
-    use dbt_schemas::schemas::serde::StringOrInteger;
+    use dbt_schemas::schemas::serde::NodeVersion;
 
     #[test]
     fn test_parse_ref_single_arg() {
@@ -1421,11 +1426,7 @@ mod tests {
     fn test_parse_ref_version_kwarg_integer() {
         assert_eq!(
             parse_ref_from_constraint("ref('my_model', version=2)"),
-            Some((
-                None,
-                "my_model".to_string(),
-                Some(StringOrInteger::Integer(2))
-            ))
+            Some((None, "my_model".to_string(), Some(NodeVersion::Integer(2))))
         );
     }
 
@@ -1433,11 +1434,7 @@ mod tests {
     fn test_parse_ref_v_kwarg_alias() {
         assert_eq!(
             parse_ref_from_constraint("ref('my_model', v=1)"),
-            Some((
-                None,
-                "my_model".to_string(),
-                Some(StringOrInteger::Integer(1))
-            ))
+            Some((None, "my_model".to_string(), Some(NodeVersion::Integer(1))))
         );
     }
 
@@ -1448,7 +1445,7 @@ mod tests {
             Some((
                 None,
                 "my_model".to_string(),
-                Some(StringOrInteger::String("1.0".to_string()))
+                Some(NodeVersion::String("1.0".to_string()))
             ))
         );
     }
@@ -1460,8 +1457,34 @@ mod tests {
             Some((
                 Some("my_pkg".to_string()),
                 "my_model".to_string(),
-                Some(StringOrInteger::Integer(3))
+                Some(NodeVersion::Integer(3))
             ))
+        );
+    }
+
+    /// A quoted version must stay a string even when it looks numeric. This guards
+    /// the `is_quoted` branch: `version="2"` is `String("2")`, distinct from the
+    /// unquoted `version=2` which is `Integer(2)`. The existing `'1.0'` test would
+    /// pass either way, so it does not exercise this branch.
+    #[test]
+    fn test_parse_ref_version_kwarg_quoted_integer() {
+        assert_eq!(
+            parse_ref_from_constraint(r#"ref('my_model', version="2")"#),
+            Some((
+                None,
+                "my_model".to_string(),
+                Some(NodeVersion::String("2".to_string()))
+            ))
+        );
+    }
+
+    /// Unquoted non-integral version parses as a float (mirrors dbt-core's numeric
+    /// coercion), distinct from the quoted string form.
+    #[test]
+    fn test_parse_ref_version_kwarg_unquoted_float() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_model', version=1.5)"),
+            Some((None, "my_model".to_string(), Some(NodeVersion::Float(1.5))))
         );
     }
 

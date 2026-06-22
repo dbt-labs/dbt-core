@@ -237,7 +237,7 @@ pub async fn resolve_functions(
                     .map(|(model, project, version, location)| DbtRef {
                         name: model.to_owned(),
                         package: project.to_owned(),
-                        version: version.clone().map(|v| v.into()),
+                        version: version.clone(),
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .collect(),

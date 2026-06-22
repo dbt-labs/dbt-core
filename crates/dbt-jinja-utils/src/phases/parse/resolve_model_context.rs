@@ -29,7 +29,7 @@ use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtModel, NodeBaseAttributes,
         common::{DbtChecksum, DbtQuoting, NodeDependsOn},
-        serde::yml_value_to_minijinja,
+        serde::{NodeVersion, yml_value_to_minijinja},
     },
     state::DbtRuntimeConfig,
 };
@@ -397,8 +397,8 @@ impl<T: ResolvableConfig<T>> Object for ResolveRefFunction<T> {
             ));
         }
 
-        // Check for version in kwargs
-        let version = parser.consume_optional_either_from_kwargs::<String>("version", "v");
+        // Check for version in kwargs — preserve original literal type (int, float, or string)
+        let version = parser.consume_optional_either_from_kwargs::<NodeVersion>("version", "v");
 
         let model_name = name;
         let namespace = package;

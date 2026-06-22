@@ -3,12 +3,13 @@
 use std::fmt::Debug;
 
 use dbt_schemas::schemas::project::ResolvableConfig;
+use dbt_schemas::schemas::serde::NodeVersion;
 
 use dbt_frontend_common::error::CodeLocation;
 use minijinja::{ArgSpec, machinery::Span};
 
 /// Resources that are encountered while rendering sql and macros
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SqlResource<T: ResolvableConfig<T>> {
     /// A source call (e.g. `{{ source('a', 'b') }}`)
     Source((String, String, CodeLocation)),
@@ -20,7 +21,7 @@ pub enum SqlResource<T: ResolvableConfig<T>> {
     /// about schema fetching or lineage should treat it the same as `Source`.
     StaticSource((String, String, CodeLocation)),
     /// A ref call (e.g. `{{ ref('a', 'b') }}`)
-    Ref((String, Option<String>, Option<String>, CodeLocation)),
+    Ref((String, Option<String>, Option<NodeVersion>, CodeLocation)),
     /// A this call (e.g. `{{ this }}`)
     This,
     /// A function call (e.g. `{{ function('a', 'b') }}`)

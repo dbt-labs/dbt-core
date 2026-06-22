@@ -2,7 +2,7 @@
 
 use dbt_frontend_common::error::CodeLocation;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
-use dbt_schemas::schemas::{common::DbtChecksum, project::ResolvableConfig};
+use dbt_schemas::schemas::{common::DbtChecksum, project::ResolvableConfig, serde::NodeVersion};
 use minijinja::{ArgSpec, machinery::Span};
 
 /// Collected details about processed sql files
@@ -16,7 +16,7 @@ pub struct SqlFileInfo<T: ResolvableConfig<T>> {
     /// `depends_on.nodes` at resolve time — they were never actually executed.
     pub static_sources: Vec<(String, String, CodeLocation)>,
     /// e.g. ref('a', 'b', 'c')
-    pub refs: Vec<(String, Option<String>, Option<String>, CodeLocation)>,
+    pub refs: Vec<(String, Option<String>, Option<NodeVersion>, CodeLocation)>,
     /// true if `this` is referenced in this .sql file, otherwise false
     pub this: bool,
     /// e.g. metric('a', 'b')

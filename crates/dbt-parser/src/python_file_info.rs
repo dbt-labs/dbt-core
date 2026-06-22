@@ -4,7 +4,7 @@
 //! analogous to SqlFileInfo for SQL models.
 
 use dbt_frontend_common::error::CodeLocation;
-use dbt_schemas::schemas::{common::DbtChecksum, project::ResolvableConfig};
+use dbt_schemas::schemas::{common::DbtChecksum, project::ResolvableConfig, serde::NodeVersion};
 
 /// Collected details about processed Python files
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub struct PythonFileInfo<T: ResolvableConfig<T>> {
     pub sources: Vec<(String, String, CodeLocation)>,
 
     /// e.g. dbt.ref('a', 'b', 'c')
-    pub refs: Vec<(String, Option<String>, Option<String>, CodeLocation)>,
+    pub refs: Vec<(String, Option<String>, Option<NodeVersion>, CodeLocation)>,
 
     /// e.g. dbt.config(materialized='table')
     pub config: Box<T>,

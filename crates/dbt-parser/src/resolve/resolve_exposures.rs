@@ -286,7 +286,7 @@ pub fn resolve_yaml_depends_on(
                 dependent_refs.push(DbtRef {
                     name: ref_info.0,
                     package: ref_info.1,
-                    version: ref_info.2.map(|v| v.into()),
+                    version: ref_info.2,
                     location: Some(ref_info.3.with_file(relative_path)),
                 });
             }

@@ -2,14 +2,14 @@ use dbt_common::CodeLocationWithFile;
 use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
-use super::serde::StringOrInteger;
+use super::serde::NodeVersion;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtRef {
     pub name: String,
     pub package: Option<String>,
-    pub version: Option<StringOrInteger>,
+    pub version: Option<NodeVersion>,
     #[serde(skip_serializing)]
     pub location: Option<CodeLocationWithFile>,
 }
