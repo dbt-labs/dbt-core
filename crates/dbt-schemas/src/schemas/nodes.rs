@@ -20,7 +20,7 @@ use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serializ
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    grants_eq_with_unrendered, meta_eq, tags_eq, tags_eq_vec,
+    grants_eq_with_unrendered, meta_eq, tags_eq, tags_eq_vec, unrendered_value_eq,
 };
 use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config_with_unrendered};
 use crate::schemas::relations::default_dbt_quoting_for;
@@ -1320,21 +1320,64 @@ fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterializ
     }
 }
 
+/// Unrendered-aware `quote_columns` comparison.
+///
+/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
+/// config rather than the rendered values, so an environment-aware Jinja `quote_columns` config in
+/// `dbt_project.yml` (e.g. `+quote_columns: "{{ true if target.name == 'prod' else false }}"`) that
+/// renders to a different boolean per target is not treated as a modification. This is the
+/// `quote_columns` sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
+///
+/// Semantics: `same = (quote_columns configured && unrendered_same) || rendered_same`.
+///   1. If `quote_columns` is configured (present in `unrendered_config`) on at least one side and
+///      the configured (unrendered) values are equal, the configs are the same.
+///   2. Otherwise fall back to the rendered comparison (`left == right`).
+///
+/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `quote_columns`
+/// is a single key, so an absent-on-both unrendered value must fall back to the rendered comparison
+/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
+/// manifest that does not populate `unrendered_config.quote_columns`) would be masked.
+///
+/// This is strictly more lenient than the rendered equality alone (it can only turn a rendered
+/// "different" into "same"), preserving backward compatibility.
+fn quote_columns_eq_with_unrendered(
+    left: &Option<bool>,
+    right: &Option<bool>,
+    left_unrendered_config: &BTreeMap<String, YmlValue>,
+    right_unrendered_config: &BTreeMap<String, YmlValue>,
+) -> bool {
+    let left_qc = left_unrendered_config.get("quote_columns");
+    let right_qc = right_unrendered_config.get("quote_columns");
+    if (left_qc.is_some() || right_qc.is_some()) && unrendered_value_eq(left_qc, right_qc) {
+        return true;
+    }
+    left == right
+}
+
 /// Helper functions for smart comparison of SeedConfig fields that considers
 /// None vs Some(empty) representations as equivalent
 fn seed_configs_equal(
     left: &SeedConfig,
     right: &SeedConfig,
-    left_uc: &BTreeMap<String, YmlValue>,
-    right_uc: &BTreeMap<String, YmlValue>,
+    left_unrendered_config: &BTreeMap<String, YmlValue>,
+    right_unrendered_config: &BTreeMap<String, YmlValue>,
 ) -> bool {
     // Compare each field with smart empty comparison
     let column_types_eq = btree_map_equal(&left.column_types, &right.column_types);
     let docs_eq = docs_config_equal(&left.docs, &right.docs);
     let enabled_eq = left.enabled == right.enabled;
-    let grants_eq_result =
-        grants_eq_with_unrendered(&left.grants, &right.grants, left_uc, right_uc);
-    let quote_columns_eq = left.quote_columns == right.quote_columns;
+    let grants_eq_result = grants_eq_with_unrendered(
+        &left.grants,
+        &right.grants,
+        left_unrendered_config,
+        right_unrendered_config,
+    );
+    let quote_columns_eq = quote_columns_eq_with_unrendered(
+        &left.quote_columns,
+        &right.quote_columns,
+        left_unrendered_config,
+        right_unrendered_config,
+    );
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
     let event_time_eq = left.event_time == right.event_time;
     let full_refresh_eq = left.full_refresh == right.full_refresh;
@@ -1347,8 +1390,8 @@ fn seed_configs_equal(
     let warehouse_config_eq = same_warehouse_config_with_unrendered(
         &left.__warehouse_specific_config__,
         &right.__warehouse_specific_config__,
-        left_uc,
-        right_uc,
+        left_unrendered_config,
+        right_unrendered_config,
     );
 
     let result = column_types_eq

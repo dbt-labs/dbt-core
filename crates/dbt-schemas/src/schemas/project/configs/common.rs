@@ -1662,7 +1662,7 @@ pub const WAREHOUSE_SPECIFIC_CONFIG_KEYS: &[&str] = &[
 /// Compare two `unrendered_config` values, treating absent/`null`/empty as equivalent and
 /// canonicalizing trailing newlines on strings. Mirrors the semantics used by
 /// `check_configs_modified`'s unrendered path in `prev_state`.
-fn unrendered_value_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) -> bool {
+pub(crate) fn unrendered_value_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) -> bool {
     fn is_effectively_empty(v: &YmlValue) -> bool {
         match v {
             YmlValue::Null(_) => true,
