@@ -1386,7 +1386,12 @@ fn seed_configs_equal(
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
     let event_time_eq = left.event_time == right.event_time;
     let full_refresh_eq = left.full_refresh == right.full_refresh;
-    let meta_eq = indexmap_yml_value_equal(&left.meta, &right.meta);
+    let meta_eq = meta_eq_with_unrendered(
+        &left.meta,
+        &right.meta,
+        left_unrendered_config,
+        right_unrendered_config,
+    );
     let persist_docs_eq = persist_docs_configs_equal(&left.persist_docs, &right.persist_docs);
     let post_hook_eq = hooks_equal(&left.post_hook, &right.post_hook);
     let pre_hook_eq = hooks_equal(&left.pre_hook, &right.pre_hook);
@@ -1579,6 +1584,40 @@ fn indexmap_yml_value_equal(
         (None, Some(r)) => r.is_empty(),
         (Some(l), None) => l.is_empty(),
     }
+}
+
+/// Unrendered-aware `meta` comparison.
+///
+/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
+/// config rather than the rendered values, so an environment-aware Jinja `meta` config in
+/// `dbt_project.yml` (e.g. `+meta: {owner: "{{ 'prod_team' if target.name == 'prod' else 'dev_team' }}"}`)
+/// that renders to different values per target is not treated as a modification. This is the `meta`
+/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
+///
+/// Semantics: `same = (meta configured && unrendered_same) || rendered_same`.
+///   1. If `meta` is configured (present in `unrendered_config`) on at least one side and the
+///      configured (unrendered) values are equal, the meta is the same.
+///   2. Otherwise fall back to the rendered comparison ([`indexmap_yml_value_equal`]).
+///
+/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `meta` is a
+/// single key, so an absent-on-both unrendered `meta` must fall back to the rendered comparison
+/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
+/// manifest that does not populate `unrendered_config.meta`) would be masked.
+///
+/// This is strictly more lenient than [`indexmap_yml_value_equal`] alone (it can only turn a
+/// rendered "different" into "same"), preserving backward compatibility.
+fn meta_eq_with_unrendered(
+    left: &Option<IndexMap<String, YmlValue>>,
+    right: &Option<IndexMap<String, YmlValue>>,
+    left_unrendered_config: &BTreeMap<String, YmlValue>,
+    right_unrendered_config: &BTreeMap<String, YmlValue>,
+) -> bool {
+    let left_meta = left_unrendered_config.get("meta");
+    let right_meta = right_unrendered_config.get("meta");
+    if (left_meta.is_some() || right_meta.is_some()) && unrendered_value_eq(left_meta, right_meta) {
+        return true;
+    }
+    indexmap_yml_value_equal(left, right)
 }
 
 /// Compare DocsConfig considering None vs Some(default) as equal
