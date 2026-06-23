@@ -306,7 +306,17 @@ fn accumulate_node_processed_phase_duration(
     wall_duration_ms: Option<u64>,
     phase_ev: Option<&NodeEvaluated>,
 ) {
-    let idle_time_ms = phase_ev.and_then(|ev| ev.idle_time_ms).unwrap_or_default();
+    let idle_time_ms = phase_ev
+        .and_then(|ev| {
+            if ev.node_outcome() == NodeOutcome::Success
+                && ev.node_skip_reason() == NodeSkipReason::Cached
+            {
+                wall_duration_ms
+            } else {
+                ev.idle_time_ms
+            }
+        })
+        .unwrap_or_default();
 
     if let Some(duration) = wall_duration_ms {
         let net_duration = duration.saturating_sub(idle_time_ms);
@@ -629,4 +639,99 @@ pub fn populate_span_manager(
     )?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_telemetry::{
+        TestEvaluationDetail, TestOutcome, node_processed::NodeOutcomeDetail as ProcessedDetail,
+    };
+
+    fn node_processed() -> NodeProcessed {
+        NodeProcessed::start(
+            "test.project.accepted_values_orders_is_today_order__True".to_string(),
+            "accepted_values_orders_is_today_order__True".to_string(),
+            None,
+            Some("dbt_test__audit".to_string()),
+            None,
+            None,
+            None,
+            NodeType::Test,
+            Some(ExecutionPhase::Run),
+            "models/marts/orders.yml".to_string(),
+            Some(37),
+            Some(13),
+            "checksum".to_string(),
+            true,
+            None,
+        )
+    }
+
+    fn node_evaluated(phase: ExecutionPhase) -> NodeEvaluated {
+        NodeEvaluated::start(
+            "test.project.accepted_values_orders_is_today_order__True".to_string(),
+            "accepted_values_orders_is_today_order__True".to_string(),
+            None,
+            Some("dbt_test__audit".to_string()),
+            None,
+            None,
+            None,
+            NodeType::Test,
+            phase,
+            "models/marts/orders.yml".to_string(),
+            Some(37),
+            Some(13),
+            "checksum".to_string(),
+        )
+    }
+
+    #[test]
+    fn cached_warning_test_run_outcome_overrides_prior_no_op_phase() {
+        let mut processed = node_processed();
+
+        let mut cache_hydration = node_evaluated(ExecutionPhase::NodeCacheHydration);
+        cache_hydration.set_node_outcome(NodeOutcome::Success);
+        update_node_processed_from_node_evaluated(&mut processed, &cache_hydration);
+        assert_eq!(processed.node_outcome(), NodeOutcome::Skipped);
+        assert_eq!(processed.node_skip_reason(), NodeSkipReason::NoOp);
+
+        let mut run = node_evaluated(ExecutionPhase::Run);
+        run.set_node_outcome(NodeOutcome::Success);
+        run.set_node_skip_reason(NodeSkipReason::Cached);
+        run.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+        ));
+
+        update_node_processed_from_node_evaluated(&mut processed, &run);
+
+        assert_eq!(processed.node_outcome(), NodeOutcome::Success);
+        assert_eq!(processed.node_skip_reason(), NodeSkipReason::Cached);
+        match processed.node_outcome_detail {
+            Some(ProcessedDetail::NodeTestDetail(detail)) => {
+                assert_eq!(detail.test_outcome(), TestOutcome::Warned);
+                assert_eq!(detail.failing_rows, 2);
+            }
+            other => panic!("expected warned test detail, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cached_warning_test_duration_is_idle_time() {
+        let mut processed = node_processed();
+        let mut run = node_evaluated(ExecutionPhase::Run);
+        run.set_node_outcome(NodeOutcome::Success);
+        run.set_node_skip_reason(NodeSkipReason::Cached);
+        run.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+        ));
+
+        accumulate_node_processed_phase_duration(&mut processed, Some(250), Some(&run));
+        update_node_processed_from_node_evaluated(&mut processed, &run);
+
+        assert_eq!(processed.duration_ms, Some(0));
+        assert_eq!(processed.idle_time_ms, Some(250));
+        assert_eq!(processed.node_outcome(), NodeOutcome::Success);
+        assert_eq!(processed.node_skip_reason(), NodeSkipReason::Cached);
+    }
 }
