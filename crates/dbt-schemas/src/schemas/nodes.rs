@@ -1363,7 +1363,12 @@ fn seed_configs_equal(
     right_unrendered_config: &BTreeMap<String, YmlValue>,
 ) -> bool {
     // Compare each field with smart empty comparison
-    let column_types_eq = btree_map_equal(&left.column_types, &right.column_types);
+    let column_types_eq = column_types_eq_with_unrendered(
+        &left.column_types,
+        &right.column_types,
+        left_unrendered_config,
+        right_unrendered_config,
+    );
     let docs_eq = docs_config_equal(&left.docs, &right.docs);
     let enabled_eq = left.enabled == right.enabled;
     let grants_eq_result = grants_eq_with_unrendered(
@@ -1526,6 +1531,41 @@ fn btree_map_equal(
         (None, Some(r)) => r.is_empty(),
         (Some(l), None) => l.is_empty(),
     }
+}
+
+/// Unrendered-aware `column_types` comparison.
+///
+/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
+/// config rather than the rendered values, so environment-aware Jinja `column_types` configs in
+/// `dbt_project.yml` (e.g.
+/// `+column_types: {id: "{{ 'integer' if target.name == 'prod' else 'bigint' }}"}`) that render
+/// to different types per target are not treated as modifications. This is the `column_types`
+/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
+///
+/// Semantics: `same = (column_types configured && unrendered_same) || rendered_same`.
+///   1. If `column_types` is configured (present in `unrendered_config`) on at least one side and
+///      the configured (unrendered) values are equal, the column types are the same.
+///   2. Otherwise fall back to the rendered comparison ([`btree_map_equal`]).
+///
+/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `column_types`
+/// is a single key, so an absent-on-both unrendered `column_types` must fall back to the rendered
+/// comparison rather than be treated as equal — otherwise a genuine rendered change (e.g. from a
+/// Mantle/core manifest that does not populate `unrendered_config.column_types`) would be masked.
+///
+/// This is strictly more lenient than [`btree_map_equal`] alone (it can only turn a rendered
+/// "different" into "same"), preserving backward compatibility.
+fn column_types_eq_with_unrendered(
+    left: &Option<BTreeMap<Spanned<String>, String>>,
+    right: &Option<BTreeMap<Spanned<String>, String>>,
+    left_unrendered_config: &BTreeMap<String, YmlValue>,
+    right_unrendered_config: &BTreeMap<String, YmlValue>,
+) -> bool {
+    let left_ct = left_unrendered_config.get("column_types");
+    let right_ct = right_unrendered_config.get("column_types");
+    if (left_ct.is_some() || right_ct.is_some()) && unrendered_value_eq(left_ct, right_ct) {
+        return true;
+    }
+    btree_map_equal(left, right)
 }
 
 /// Compare IndexMap<String, YmlValue> considering None vs Some(empty) as equal
