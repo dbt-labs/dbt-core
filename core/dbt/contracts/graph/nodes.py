@@ -1025,9 +1025,20 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
                     force_warn_or_error_handling=True,
                     event_group_type=EventGroupType.PARSE,
                 )
-            else:
+            elif not result:
                 fire_or_defer_event(
                     SeedExceedsLimitAndPathChanged(package_name=self.package_name, name=self.name),
+                    node=self,
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
+                )
+            else:
+                fire_or_defer_event(
+                    SeedExceedsLimitChecksumChanged(
+                        package_name=self.package_name,
+                        name=self.name,
+                        checksum_name=other.checksum.name,
+                    ),
                     node=self,
                     force_warn_or_error_handling=True,
                     event_group_type=EventGroupType.PARSE,

@@ -5,7 +5,7 @@ from dbt.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task import group_lookup
-from dbt.task.base import BaseRunner
+from dbt.task.base import BaseRunner, ExecutionContext
 from dbt.task.run import ModelRunner, RunTask
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
@@ -26,6 +26,40 @@ SNAPSHOT_UNIQUE_KEY_SUGGESTION = (
 )
 
 
+def _extract_exc_msg(exc: Exception) -> Optional[str]:
+    """Return the human-readable message of exc, preferring a ``.msg`` attribute
+    (as dbt exceptions expose) and falling back to the first positional arg."""
+    msg_attr = getattr(exc, "msg", None)
+    if isinstance(msg_attr, str):
+        return msg_attr
+    if exc.args and isinstance(exc.args[0], str):
+        return exc.args[0]
+    return None
+
+
+def _is_duplicate_row_error(msg: str) -> bool:
+    """Heuristically detect the adapter errors raised when a snapshot merge
+    matches more than one source row (i.e. a non-unique unique_key)."""
+    if SNAPSHOT_UNIQUE_KEY_SUGGESTION in msg:
+        return False
+    msg_lower = msg.lower()
+    return any(indicator in msg_lower for indicator in DUPLICATE_ROW_INDICATORS)
+
+
+def _add_snapshot_unique_key_suggestion(exc: Exception) -> None:
+    """When exc looks like a duplicate-row error from a snapshot merge, append a
+    hint pointing at the unique_key docs. Idempotent, and updates whichever of
+    ``.msg`` / ``args`` carries the message so the suggestion is visible
+    regardless of how the exception is rendered."""
+    msg = _extract_exc_msg(exc)
+    if not msg or not _is_duplicate_row_error(msg):
+        return
+
+    new_msg = f"{msg}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}"
+    if isinstance(getattr(exc, "msg", None), str):
+        setattr(exc, "msg", new_msg)
+    else:
+        exc.args = (new_msg, *exc.args[1:])
 
 
 class SnapshotRunner(ModelRunner):
@@ -52,34 +86,9 @@ class SnapshotRunner(ModelRunner):
             level=level,
         )
 
-    def _extract_msg(self, exc: Exception) -> Optional[str]:
-        if getattr(exc, "msg", None) and isinstance(exc.msg, str):
-            return exc.msg
-        if exc.args and isinstance(exc.args[0], str):
-            return exc.args[0]
-        return None
-
-    def _update_exc_msg(self, exc: Exception, new_msg: str) -> None:
-        if hasattr(exc, "msg") and isinstance(exc.msg, str):
-            exc.msg = new_msg
-        else:
-            exc.args = (new_msg, *exc.args[1:])
-
-    def _is_duplicate_row_error(self, msg: str) -> bool:
-        if SNAPSHOT_UNIQUE_KEY_SUGGESTION in msg:
-            return False
-        msg_lower = msg.lower()
-        for indicator in DUPLICATE_ROW_INDICATORS:
-            if indicator in msg_lower:
-                return True
-        return False
-
-    def handle_exception(self, exc: Exception, ctx) -> str:
-        msg = self._extract_msg(exc)
-        if msg and self._is_duplicate_row_error(msg):
-            self._update_exc_msg(exc, f"{msg}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}")
-
-        return super().handle_exception(exc, ctx)
+    def handle_exception(self, e: Exception, ctx: ExecutionContext) -> str:
+        _add_snapshot_unique_key_suggestion(e)
+        return super().handle_exception(e, ctx)
 
 
 class SnapshotTask(RunTask):

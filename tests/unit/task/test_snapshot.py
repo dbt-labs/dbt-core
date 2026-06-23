@@ -28,8 +28,7 @@ def test_does_not_add_suggestion_for_unrelated_error():
 
 def test_does_not_duplicate_unique_key_suggestion():
     exc = Exception(
-        "Duplicate row detected during DML action\n\n"
-        f"{SNAPSHOT_UNIQUE_KEY_SUGGESTION}"
+        "Duplicate row detected during DML action\n\n" f"{SNAPSHOT_UNIQUE_KEY_SUGGESTION}"
     )
 
     _add_snapshot_unique_key_suggestion(exc)
@@ -38,9 +37,7 @@ def test_does_not_duplicate_unique_key_suggestion():
 
 
 def test_adds_unique_key_suggestion_to_msg_attribute():
-    exc = FakeDbtException(
-        "UPDATE/MERGE must match at most one source row"
-    )
+    exc = FakeDbtException("UPDATE/MERGE must match at most one source row")
 
     _add_snapshot_unique_key_suggestion(exc)
 
