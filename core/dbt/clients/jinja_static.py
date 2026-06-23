@@ -15,6 +15,16 @@ if typing.TYPE_CHECKING:
 
 
 _TESTING_MACRO_CACHE: Dict[str, Any] = {}
+_COMPARE_OPS = {
+    "eq": "==",
+    "ne": "!=",
+    "lt": "<",
+    "lteq": "<=",
+    "gt": ">",
+    "gteq": ">=",
+    "in": "in",
+    "notin": "not in",
+}
 
 
 def statically_check_has_jinja(source: Optional[str]) -> bool:
@@ -249,73 +259,70 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
     return unrendered_config
 
 
-_COMPARE_OPS = {
-    "eq": "==",
-    "ne": "!=",
-    "lt": "<",
-    "lteq": "<=",
-    "gt": ">",
-    "gteq": ">=",
-    "in": "in",
-    "notin": "not in",
-}
+def construct_static_kwarg_value(kwarg) -> str:
+    try:
+        # jinja2 nodes define fields dynamically; kw typed Any to avoid attr errors.
+        kw: Any = kwarg
+        kw_val: Any = kw.value
+        # If the final value is a plain string constant, return it without quotes.
+        # Nested string args (e.g. inside env_var) keep their repr() quoting.
+        if isinstance(kw_val, jinja2.nodes.Const):
+            # Re-bind to Any after narrowing so .value access stays untyped.
+            const_val: Any = kw_val
+            if isinstance(const_val.value, str):
+                return const_val.value
+        return _reconstruct_node(kw_val)
+    except Exception:
+        # Sensitive codepath — fall back to the original AST repr on any error
+        return str(kwarg)
 
 
 def _reconstruct_node(node) -> str:
     """Reconstruct a Jinja2 AST node back to a source-like expression string."""
+    # jinja2 nodes define their fields dynamically; mypy stubs don't include them.
+    # `n` is typed Any so attribute access below bypasses the missing-attr errors
+    # while `node` is still used for isinstance checks.
+    n: Any = node
     if isinstance(node, jinja2.nodes.Const):
-        return repr(node.value)
+        return repr(n.value)
     if isinstance(node, jinja2.nodes.Name):
-        return node.name
+        return n.name
     if isinstance(node, jinja2.nodes.Call):
-        func = _reconstruct_node(node.node)
-        parts: List[str] = [_reconstruct_node(a) for a in node.args]
-        parts += [f"{kw.key}={_reconstruct_node(kw.value)}" for kw in node.kwargs]
-        if node.dyn_args is not None:
-            parts.append(f"*{_reconstruct_node(node.dyn_args)}")
-        if node.dyn_kwargs is not None:
-            parts.append(f"**{_reconstruct_node(node.dyn_kwargs)}")
+        func = _reconstruct_node(n.node)
+        parts: List[str] = [_reconstruct_node(a) for a in n.args]
+        parts += [f"{kw.key}={_reconstruct_node(kw.value)}" for kw in n.kwargs]
+        if n.dyn_args is not None:
+            parts.append(f"*{_reconstruct_node(n.dyn_args)}")
+        if n.dyn_kwargs is not None:
+            parts.append(f"**{_reconstruct_node(n.dyn_kwargs)}")
         return f"{func}({', '.join(parts)})"
     if isinstance(node, jinja2.nodes.List):
-        return f"[{', '.join(_reconstruct_node(i) for i in node.items)}]"
+        return f"[{', '.join(_reconstruct_node(i) for i in n.items)}]"
     if isinstance(node, jinja2.nodes.Tuple):
-        items = [_reconstruct_node(i) for i in node.items]
+        items = [_reconstruct_node(i) for i in n.items]
         return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
     if isinstance(node, jinja2.nodes.Dict):
-        pairs = [f"{_reconstruct_node(p.key)}: {_reconstruct_node(p.value)}" for p in node.items]
+        pairs = [f"{_reconstruct_node(p.key)}: {_reconstruct_node(p.value)}" for p in n.items]
         return "{" + ", ".join(pairs) + "}"
     if isinstance(node, jinja2.nodes.Getattr):
-        return f"{_reconstruct_node(node.node)}.{node.attr}"
+        return f"{_reconstruct_node(n.node)}.{n.attr}"
     if isinstance(node, jinja2.nodes.Getitem):
-        return f"{_reconstruct_node(node.node)}[{_reconstruct_node(node.arg)}]"
+        return f"{_reconstruct_node(n.node)}[{_reconstruct_node(n.arg)}]"
     if isinstance(node, jinja2.nodes.Concat):
-        return " ~ ".join(_reconstruct_node(n) for n in node.nodes)
+        return " ~ ".join(_reconstruct_node(child) for child in n.nodes)
     if isinstance(node, jinja2.nodes.Compare):
-        expr = _reconstruct_node(node.expr)
+        expr = _reconstruct_node(n.expr)
         ops = " ".join(
-            f"{_COMPARE_OPS.get(op.op, op.op)} {_reconstruct_node(op.expr)}"
-            for op in node.ops
+            f"{_COMPARE_OPS.get(op.op, op.op)} {_reconstruct_node(op.expr)}" for op in n.ops
         )
         return f"{expr} {ops}"
     if isinstance(node, jinja2.nodes.Not):
-        return f"not {_reconstruct_node(node.node)}"
+        return f"not {_reconstruct_node(n.node)}"
     if isinstance(node, jinja2.nodes.Neg):
-        return f"-{_reconstruct_node(node.node)}"
+        return f"-{_reconstruct_node(n.node)}"
     if isinstance(node, jinja2.nodes.And):
-        return f"{_reconstruct_node(node.left)} and {_reconstruct_node(node.right)}"
+        return f"{_reconstruct_node(n.left)} and {_reconstruct_node(n.right)}"
     if isinstance(node, jinja2.nodes.Or):
-        return f"{_reconstruct_node(node.left)} or {_reconstruct_node(node.right)}"
+        return f"{_reconstruct_node(n.left)} or {_reconstruct_node(n.right)}"
     # Fallback for any unhandled node type — preserves existing behaviour
     return str(node)
-
-
-def construct_static_kwarg_value(kwarg) -> str:
-    try:
-        # If the final value is a plain string constant, return it without quotes.
-        # Nested string args (e.g. inside env_var) keep their repr() quoting.
-        if isinstance(kwarg.value, jinja2.nodes.Const) and isinstance(kwarg.value.value, str):
-            return kwarg.value.value
-        return _reconstruct_node(kwarg.value)
-    except Exception:
-        # Sensitive codepath — fall back to the original AST repr on any error
-        return str(kwarg)
