@@ -324,7 +324,10 @@ fn find_adbc_libs_directory() -> Option<PathBuf> {
                 find_upward_dir(&starting_dir, &arrow_adbc_pkg_rel_path, ARROW_HEIGHT_MAX)
             })
             .inspect(|arrow_repo| {
-                if !env_var_bool("DISABLE_AUTO_DRIVER_REBUILD").unwrap() {
+                if !env_var_bool("DISABLE_AUTO_DRIVER_REBUILD")
+                    .unwrap()
+                    .unwrap_or(false)
+                {
                     rebuild_drivers(arrow_repo).unwrap();
                 }
             });
@@ -424,7 +427,8 @@ impl AdbcDriver {
                     // the drivers are not downloaded from the CDN and are instead loaded from
                     // either the repo root lib/ directory or an arrow-adbc repo whose root is
                     // a sibling to this fs repo.
-                    let disable_cdn_driver_cache = env_var_bool("DISABLE_CDN_DRIVER_CACHE")?;
+                    let disable_cdn_driver_cache =
+                        env_var_bool("DISABLE_CDN_DRIVER_CACHE")?.unwrap_or(false);
                     if disable_cdn_driver_cache {
                         eprintln!(
                             "WARNING: {} ADBC driver is being loaded from {} in debug mode.",

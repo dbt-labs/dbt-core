@@ -287,7 +287,10 @@ pub fn is_installable_driver(backend: Backend) -> bool {
     // NOTE(serramatutu): Allow us to debug drivers locally without needing them to be installable via CDN.
     #[cfg(debug_assertions)]
     {
-        if env_var::env_var_bool("DISABLE_CDN_DRIVER_CACHE").unwrap_or(false) {
+        if env_var::env_var_bool("DISABLE_CDN_DRIVER_CACHE")
+            .unwrap()
+            .unwrap_or(false)
+        {
             return true;
         }
     }

@@ -1,6 +1,29 @@
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
+pub const NON_EXPERIMENTAL_ADAPTERS: &[AdapterType] = &[
+    AdapterType::Snowflake,
+    AdapterType::Bigquery,
+    AdapterType::Databricks,
+    AdapterType::Redshift,
+    AdapterType::DuckDB,
+    AdapterType::Salesforce,
+];
+
+pub const STATIC_ANALYSIS_SUPPORTED_ADAPTERS: &[AdapterType] = &[
+    AdapterType::Snowflake,
+    AdapterType::Bigquery,
+    AdapterType::Redshift,
+    AdapterType::Databricks,
+    AdapterType::Spark,
+    AdapterType::DuckDB,
+];
+
+/// Adapters that support concurrent execution of microbatch models.
+///
+/// This mirrors dbt-core's adapter capability for `Capability.MicrobatchConcurrency`.
+pub const MICROBATCH_SUPPORTED_ADAPTERS: &[AdapterType] = &[AdapterType::Snowflake];
+
 /// The type of the adapter.
 ///
 /// Used to identify the specific database adapter being used.
@@ -80,7 +103,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
     use AdapterType::*;
     match adapter_type {
         Snowflake => '"',
-        // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-bigquery/src/dbt/adapters/bigquery/relation.py#L30
+        // https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers
         Bigquery => '`',
         Databricks | Spark => '`',
         Redshift => '"',
@@ -91,6 +114,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Datafusion => '"',
         // https://clickhouse.com/docs/sql-reference/syntax#identifiers
         ClickHouse => '`',
+        // Exasol is PostgreSQL-compatible, so it uses double quotes for identifiers.
         Exasol => '"',
         Dremio => todo!("Dremio"),
         Oracle => todo!("Oracle"),
@@ -123,36 +147,6 @@ impl ExecutionPhase {
         }
     }
 }
-
-pub fn adapter_type_supports_static_analysis(adapter_type: AdapterType) -> bool {
-    matches!(
-        adapter_type,
-        AdapterType::Snowflake
-            | AdapterType::Bigquery
-            | AdapterType::Redshift
-            | AdapterType::Databricks
-            | AdapterType::Spark
-            | AdapterType::DuckDB
-            | AdapterType::Fdcs
-    )
-}
-
-/// Returns whether the adapter supports concurrent execution of microbatch models.
-///
-/// This mirrors dbt-core's adapter capability for `Capability.MicrobatchConcurrency`.
-pub fn adapter_type_supports_microbatch_concurrency(adapter_type: AdapterType) -> bool {
-    matches!(adapter_type, AdapterType::Snowflake)
-}
-
-pub const NON_EXPERIMENTAL_ADAPTERS: &[AdapterType] = &[
-    AdapterType::Snowflake,
-    AdapterType::Bigquery,
-    AdapterType::Databricks,
-    AdapterType::Redshift,
-    AdapterType::DuckDB,
-    AdapterType::Salesforce,
-    AdapterType::Fdcs,
-];
 
 #[cfg(test)]
 mod tests {
@@ -267,37 +261,5 @@ mod tests {
         assert_eq!(ExecutionPhase::Analyze.as_str(), "analyze");
         assert_eq!(ExecutionPhase::Run.as_str(), "run");
         assert_eq!(DBT_EXECUTION_PHASES, ["render", "analyze", "run"]);
-    }
-
-    #[test]
-    fn test_static_analysis_support_matrix() {
-        let supported = [
-            AdapterType::Snowflake,
-            AdapterType::Bigquery,
-            AdapterType::Redshift,
-            AdapterType::Databricks,
-            AdapterType::Spark,
-            AdapterType::DuckDB,
-            AdapterType::Fdcs,
-        ];
-
-        for adapter_type in AdapterType::iter() {
-            assert_eq!(
-                adapter_type_supports_static_analysis(adapter_type),
-                supported.contains(&adapter_type),
-                "{adapter_type:?}",
-            );
-        }
-    }
-
-    #[test]
-    fn test_microbatch_concurrency_support_matrix() {
-        for adapter_type in AdapterType::iter() {
-            assert_eq!(
-                adapter_type_supports_microbatch_concurrency(adapter_type),
-                adapter_type == AdapterType::Snowflake,
-                "{adapter_type:?}",
-            );
-        }
     }
 }

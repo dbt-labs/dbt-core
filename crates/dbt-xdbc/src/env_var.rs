@@ -5,13 +5,13 @@ use std::env;
 const TRUE_VALUES: [&str; 4] = ["1", "true", "yes", "on"];
 const FALSE_VALUES: [&str; 5] = ["0", "false", "no", "off", ""];
 
-pub fn env_var_bool(var_name: &str) -> Result<bool> {
+pub fn env_var_bool(var_name: &str) -> Result<Option<bool>> {
     match env::var_os(var_name) {
         Some(val) => {
             if TRUE_VALUES.iter().any(|s| val.eq_ignore_ascii_case(s)) {
-                Ok(true)
+                Ok(Some(true))
             } else if FALSE_VALUES.iter().any(|s| val.eq_ignore_ascii_case(s)) {
-                Ok(false)
+                Ok(Some(false))
             } else {
                 let err = Error::with_message_and_status(
                     format!(
@@ -25,7 +25,7 @@ pub fn env_var_bool(var_name: &str) -> Result<bool> {
                 Err(err)
             }
         }
-        None => Ok(false),
+        None => Ok(None),
     }
 }
 
@@ -59,12 +59,12 @@ mod tests {
         let name = "DBT_XDBC_TEST_BOOL_VALUES";
 
         remove_test_var(name);
-        assert!(!env_var_bool(name).unwrap());
+        assert!(!env_var_bool(name).unwrap().unwrap_or(false));
 
         for value in ["1", "TRUE", "yes", "On"] {
             set_test_var(name, value);
             assert!(
-                env_var_bool(name).unwrap(),
+                env_var_bool(name).unwrap().unwrap_or(false),
                 "{value:?} should parse as true"
             );
         }
@@ -72,7 +72,7 @@ mod tests {
         for value in ["0", "FALSE", "no", "Off", ""] {
             set_test_var(name, value);
             assert!(
-                !env_var_bool(name).unwrap(),
+                !env_var_bool(name).unwrap().unwrap_or(false),
                 "{value:?} should parse as false"
             );
         }

@@ -1,6 +1,6 @@
 use crate::warn_error_options::WarnErrorOptions;
 use clap::ValueEnum;
-use dbt_adapter_core::AdapterType;
+use dbt_adapter_core::{AdapterType, STATIC_ANALYSIS_SUPPORTED_ADAPTERS};
 use dbt_base::{HashMap, HashSet};
 use dbt_telemetry::NodeType;
 use dbt_yaml::{JsonSchema, Value};
@@ -633,7 +633,7 @@ impl EvalArgsBuilder {
     /// Disable the static analysis for a specific adapter if the relevant dialect is unsupported.
     /// Otherwise, it's a noop
     pub fn disable_static_analysis_if_not_supported(mut self, adapter_type: AdapterType) -> Self {
-        let supported = dbt_adapter_core::adapter_type_supports_static_analysis(adapter_type);
+        let supported = STATIC_ANALYSIS_SUPPORTED_ADAPTERS.contains(&adapter_type);
 
         // FIXME(serramatutu): there is a bug in Postgres' frontend parser that makes
         // all our recordings invalid if enable it, but we can't disable it otherwise

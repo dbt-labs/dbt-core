@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
 use chrono::Utc;
-use dbt_adapter_core::{AdapterType, adapter_type_supports_microbatch_concurrency};
+use dbt_adapter_core::{AdapterType, MICROBATCH_SUPPORTED_ADAPTERS};
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::{get_snapshot_compiled_path, get_target_write_path};
@@ -1264,7 +1264,7 @@ impl InternalDbtNode for DbtModel {
         usize::from(
             uses_microbatch
                 && forces_concurrent_batches
-                && !adapter_type_supports_microbatch_concurrency(adapter_type),
+                && !MICROBATCH_SUPPORTED_ADAPTERS.contains(&adapter_type),
         )
     }
 
