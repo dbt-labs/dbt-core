@@ -87,32 +87,26 @@ class TestStaticallyParseUnrenderedConfig:
         [
             (
                 "{{ config(materialized='view') }}",
-                {"materialized": "Keyword(key='materialized', value=Const(value='view'))"},
+                {"materialized": "view"},
             ),
             (
                 "{{ config(materialized='view', enabled=True) }}",
                 {
-                    "materialized": "Keyword(key='materialized', value=Const(value='view'))",
-                    "enabled": "Keyword(key='enabled', value=Const(value=True))",
+                    "materialized": "view",
+                    "enabled": "True",
                 },
             ),
             (
                 "{{ config(materialized=env_var('test')) }}",
-                {
-                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[], dyn_args=None, dyn_kwargs=None))"
-                },
+                {"materialized": "env_var('test')"},
             ),
             (
                 "{{ config(materialized=env_var('test', default='default')) }}",
-                {
-                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[Keyword(key='default', value=Const(value='default'))], dyn_args=None, dyn_kwargs=None))"
-                },
+                {"materialized": "env_var('test', default='default')"},
             ),
             (
                 "{{ config(materialized=env_var('test', default=env_var('default'))) }}",
-                {
-                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[Keyword(key='default', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='default')], kwargs=[], dyn_args=None, dyn_kwargs=None))], dyn_args=None, dyn_kwargs=None))"
-                },
+                {"materialized": "env_var('test', default=env_var('default'))"},
             ),
         ],
     )

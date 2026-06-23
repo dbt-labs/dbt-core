@@ -249,8 +249,73 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
     return unrendered_config
 
 
+_COMPARE_OPS = {
+    "eq": "==",
+    "ne": "!=",
+    "lt": "<",
+    "lteq": "<=",
+    "gt": ">",
+    "gteq": ">=",
+    "in": "in",
+    "notin": "not in",
+}
+
+
+def _reconstruct_node(node) -> str:
+    """Reconstruct a Jinja2 AST node back to a source-like expression string."""
+    if isinstance(node, jinja2.nodes.Const):
+        return repr(node.value)
+    if isinstance(node, jinja2.nodes.Name):
+        return node.name
+    if isinstance(node, jinja2.nodes.Call):
+        func = _reconstruct_node(node.node)
+        parts: List[str] = [_reconstruct_node(a) for a in node.args]
+        parts += [f"{kw.key}={_reconstruct_node(kw.value)}" for kw in node.kwargs]
+        if node.dyn_args is not None:
+            parts.append(f"*{_reconstruct_node(node.dyn_args)}")
+        if node.dyn_kwargs is not None:
+            parts.append(f"**{_reconstruct_node(node.dyn_kwargs)}")
+        return f"{func}({', '.join(parts)})"
+    if isinstance(node, jinja2.nodes.List):
+        return f"[{', '.join(_reconstruct_node(i) for i in node.items)}]"
+    if isinstance(node, jinja2.nodes.Tuple):
+        items = [_reconstruct_node(i) for i in node.items]
+        return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
+    if isinstance(node, jinja2.nodes.Dict):
+        pairs = [f"{_reconstruct_node(p.key)}: {_reconstruct_node(p.value)}" for p in node.items]
+        return "{" + ", ".join(pairs) + "}"
+    if isinstance(node, jinja2.nodes.Getattr):
+        return f"{_reconstruct_node(node.node)}.{node.attr}"
+    if isinstance(node, jinja2.nodes.Getitem):
+        return f"{_reconstruct_node(node.node)}[{_reconstruct_node(node.arg)}]"
+    if isinstance(node, jinja2.nodes.Concat):
+        return " ~ ".join(_reconstruct_node(n) for n in node.nodes)
+    if isinstance(node, jinja2.nodes.Compare):
+        expr = _reconstruct_node(node.expr)
+        ops = " ".join(
+            f"{_COMPARE_OPS.get(op.op, op.op)} {_reconstruct_node(op.expr)}"
+            for op in node.ops
+        )
+        return f"{expr} {ops}"
+    if isinstance(node, jinja2.nodes.Not):
+        return f"not {_reconstruct_node(node.node)}"
+    if isinstance(node, jinja2.nodes.Neg):
+        return f"-{_reconstruct_node(node.node)}"
+    if isinstance(node, jinja2.nodes.And):
+        return f"{_reconstruct_node(node.left)} and {_reconstruct_node(node.right)}"
+    if isinstance(node, jinja2.nodes.Or):
+        return f"{_reconstruct_node(node.left)} or {_reconstruct_node(node.right)}"
+    # Fallback for any unhandled node type — preserves existing behaviour
+    return str(node)
+
+
 def construct_static_kwarg_value(kwarg) -> str:
-    # Instead of trying to re-assemble complex kwarg value, simply stringify the value.
-    # This is still useful to be able to detect changes in unrendered configs, even if it is
-    # not an exact representation of the user input.
-    return str(kwarg)
+    try:
+        # If the final value is a plain string constant, return it without quotes.
+        # Nested string args (e.g. inside env_var) keep their repr() quoting.
+        if isinstance(kwarg.value, jinja2.nodes.Const) and isinstance(kwarg.value.value, str):
+            return kwarg.value.value
+        return _reconstruct_node(kwarg.value)
+    except Exception:
+        # Sensitive codepath — fall back to the original AST repr on any error
+        return str(kwarg)
