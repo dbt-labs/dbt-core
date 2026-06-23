@@ -1404,6 +1404,8 @@ impl From<DbtOperation> for ManifestOperation {
         Self {
             __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: operation.__common_attr__.unique_id,
+                database: operation.__base_attr__.database,
+                schema: operation.__base_attr__.schema,
                 name: operation.__common_attr__.name,
                 package_name: operation.__common_attr__.package_name,
                 fqn: operation.__common_attr__.fqn,
@@ -1411,7 +1413,9 @@ impl From<DbtOperation> for ManifestOperation {
                 original_file_path: operation.__common_attr__.original_file_path,
                 patch_path: operation.__common_attr__.patch_path,
                 description: operation.__common_attr__.description,
-                ..Default::default()
+                tags: operation.__common_attr__.tags,
+                classifiers: Default::default(),
+                meta: operation.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
                 alias: operation.__base_attr__.alias,

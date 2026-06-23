@@ -19,7 +19,7 @@ use dbt_jinja_utils::{
 };
 use dbt_schemas::{
     schemas::{
-        CommonAttributes,
+        CommonAttributes, NodeBaseAttributes,
         common::{DbtChecksum, DbtQuoting},
         manifest::DbtOperation,
         project::DbtProject,
@@ -134,13 +134,18 @@ fn new_operation(
                 path: PathBuf::from("hooks").join(format!("{name}.sql")),
                 original_file_path: original_file_path.clone(),
                 unique_id,
-                fqn: vec![project_name.to_string(), "hooks".to_string(), name],
+                fqn: vec![project_name.to_string(), "hooks".to_string(), name.clone()],
                 checksum: DbtChecksum::hash(operation_sql.trim().as_bytes()),
                 raw_code: Some(operation_sql.to_string()),
                 language: Some("sql".to_string()),
                 ..Default::default()
             },
-            __base_attr__: Default::default(),
+            __base_attr__: NodeBaseAttributes {
+                alias: name,
+                database: database.to_string(),
+                schema: schema.to_string(),
+                ..Default::default()
+            },
             __other__: BTreeMap::new(),
         };
 
