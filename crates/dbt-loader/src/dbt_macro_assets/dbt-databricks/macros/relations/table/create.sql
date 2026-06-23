@@ -5,7 +5,7 @@
   {% set model_constraints = model.get('constraints', []) %}
   {% set columns_and_constraints = adapter.parse_columns_and_constraints(existing_columns, model_columns, model_constraints) %}
   {% set target_relation = relation.enrich(columns_and_constraints[1]) %}
-  
+
   {% call statement('main') %}
     {{ get_create_table_sql(target_relation, columns_and_constraints[0], compiled_code) }}
   {% endcall %}
@@ -32,7 +32,15 @@
     {{ get_assert_columns_equivalent(compiled_code) }}
   {%- endif -%}
 
-  {%- if catalog_relation.file_format in ('delta', 'iceberg') %}
+  {#-- DIVERGENCE BEGIN: catalogs v2 derives CREATE OR REPLACE support from the resolved catalog relation. --#}
+  {%- if dbt_version.startswith('2.') and adapter.behavior.use_catalogs_v2.no_warn -%}
+    {%- set use_create_or_replace = catalog_relation.supports_create_or_replace() -%}
+  {%- else -%}
+    {#-- NOTE: file_format is never 'iceberg' (it resolves to 'parquet'); preserving upstream behavior. --#}
+    {%- set use_create_or_replace = catalog_relation.file_format in ('delta', 'iceberg') -%}
+  {%- endif -%}
+  {#-- DIVERGENCE END --#}
+  {%- if use_create_or_replace %}
   create or replace table {{ target_relation.render() }}
   {% else %}
   create table {{ target_relation.render() }}
@@ -56,7 +64,15 @@
     {%- if temporary -%}
       {{ create_temporary_view(relation, compiled_code) }}
     {%- else -%}
-      {% if catalog_relation.file_format == 'delta' %}
+      {#-- DIVERGENCE BEGIN: catalogs v2 derives CREATE OR REPLACE support from the resolved catalog relation. --#}
+      {%- if dbt_version.startswith('2.') and adapter.behavior.use_catalogs_v2.no_warn -%}
+        {%- set use_create_or_replace = catalog_relation.supports_create_or_replace() -%}
+      {%- else -%}
+        {#-- NOTE: misses iceberg (file_format resolves to 'parquet'); preserving upstream behavior. --#}
+        {%- set use_create_or_replace = catalog_relation.file_format == 'delta' -%}
+      {%- endif -%}
+      {#-- DIVERGENCE END --#}
+      {% if use_create_or_replace %}
         create or replace table {{ relation.render() }}
       {% else %}
         create table {{ relation.render() }}

@@ -464,7 +464,7 @@ impl CatalogRelation {
     }
 
     // https://github.com/databricks/dbt-databricks/blob/ba47ba15fb194e048866f4ce396a7eda71db2596/dbt/adapters/databricks/constants.py
-    fn default_catalog_relation_databricks() -> CatalogRelation {
+    pub fn default_catalog_relation_databricks() -> CatalogRelation {
         CatalogRelation {
             adapter_type: AdapterType::Databricks,
             catalog_name: None,
@@ -1419,6 +1419,22 @@ impl CatalogRelation {
 
     // === end HACK
 
+    pub fn supports_create_or_replace(&self) -> bool {
+        match self.adapter_type {
+            AdapterType::Databricks => {
+                self.table_format.eq_ignore_ascii_case("iceberg")
+                    || self
+                        .file_format
+                        .as_deref()
+                        .is_some_and(|f| f.eq_ignore_ascii_case("delta"))
+            }
+            _ => unimplemented!(
+                "supports_create_or_replace is not implemented for {:?}",
+                self.adapter_type
+            ),
+        }
+    }
+
     // helper for get_value in impl Object
     fn gate_by_adapter(
         &self,
@@ -1560,6 +1576,33 @@ impl Object for CatalogRelation {
 
             _ => Value::from(()),
         })
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &minijinja::State<'_, '_>,
+        name: &str,
+        _args: &[Value],
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
+    ) -> Result<Value, minijinja::Error> {
+        match name {
+            "supports_create_or_replace" => {
+                if load_catalogs::fetch_use_catalogs_v2() {
+                    Ok(self.gate_by_adapter(vec![AdapterType::Databricks], || {
+                        Value::from(self.supports_create_or_replace())
+                    }))
+                } else {
+                    Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "catalog_relation.supports_create_or_replace() is only available under catalogs v2",
+                    ))
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::UnknownMethod,
+                format!("Unknown method on CatalogRelation: '{name}'"),
+            )),
+        }
     }
 
     fn render(self: &Arc<Self>, f: &mut Formatter<'_>) -> std::fmt::Result {
