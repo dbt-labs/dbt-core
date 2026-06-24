@@ -64,32 +64,18 @@ fn collect_function_dependencies(
     node: &dyn InternalDbtNodeAttributes,
     resolver_state: &ResolverState,
 ) -> FsResult<Vec<Arc<DbtFunction>>> {
-    let mut visiting = BTreeSet::new();
-    let mut visited = BTreeSet::new();
-    let mut functions = Vec::new();
+    let mut collector = FunctionDependencyCollector::new(resolver_state);
 
     for dep_id in &node.base().depends_on.nodes {
-        visit_function(
-            dep_id,
-            resolver_state,
-            &mut visiting,
-            &mut visited,
-            &mut functions,
-        )?;
+        collector.visit(dep_id)?;
     }
 
     for configured_name in configured_inline_udf_names(node) {
         let function = resolve_configured_function(&configured_name, node, resolver_state)?;
-        visit_function(
-            &function.__common_attr__.unique_id,
-            resolver_state,
-            &mut visiting,
-            &mut visited,
-            &mut functions,
-        )?;
+        collector.visit(&function.__common_attr__.unique_id)?;
     }
 
-    Ok(functions)
+    Ok(collector.functions)
 }
 
 fn configured_inline_udf_names(node: &dyn InternalDbtNodeAttributes) -> Vec<String> {
@@ -240,37 +226,62 @@ fn require_unique_function_match(
     }
 }
 
-fn visit_function(
-    unique_id: &str,
-    resolver_state: &ResolverState,
-    visiting: &mut BTreeSet<String>,
-    visited: &mut BTreeSet<String>,
-    functions: &mut Vec<Arc<DbtFunction>>,
-) -> FsResult<()> {
-    if visited.contains(unique_id) {
+struct FunctionDependencyCollector<'a> {
+    resolver_state: &'a ResolverState,
+    visiting: BTreeSet<String>,
+    visited: BTreeSet<String>,
+    functions: Vec<Arc<DbtFunction>>,
+}
+
+impl<'a> FunctionDependencyCollector<'a> {
+    fn new(resolver_state: &'a ResolverState) -> Self {
+        Self {
+            resolver_state,
+            visiting: BTreeSet::new(),
+            visited: BTreeSet::new(),
+            functions: Vec::new(),
+        }
+    }
+
+    fn visit(&mut self, unique_id: &str) -> FsResult<()> {
+        if self.visited.contains(unique_id) {
+            return Ok(());
+        }
+
+        let Some(function) = self.resolver_state.nodes.functions.get(unique_id).cloned() else {
+            return Ok(());
+        };
+        reject_disabled_function(&function)?;
+
+        if !self.visiting.insert(unique_id.to_string()) {
+            return err!(
+                ErrorCode::CyclicDependency,
+                "Cycle detected while collecting Trino inline UDF dependencies at '{}'",
+                unique_id
+            );
+        }
+
+        for dep_id in &function.__base_attr__.depends_on.nodes {
+            self.visit(dep_id)?;
+        }
+
+        self.visiting.remove(unique_id);
+        self.visited.insert(unique_id.to_string());
+        self.functions.push(function);
+        Ok(())
+    }
+}
+
+fn reject_disabled_function(function: &DbtFunction) -> FsResult<()> {
+    if function.__base_attr__.enabled {
         return Ok(());
     }
 
-    let Some(function) = resolver_state.nodes.functions.get(unique_id).cloned() else {
-        return Ok(());
-    };
-
-    if !visiting.insert(unique_id.to_string()) {
-        return err!(
-            ErrorCode::CyclicDependency,
-            "Cycle detected while collecting Trino inline UDF dependencies at '{}'",
-            unique_id
-        );
-    }
-
-    for dep_id in &function.__base_attr__.depends_on.nodes {
-        visit_function(dep_id, resolver_state, visiting, visited, functions)?;
-    }
-
-    visiting.remove(unique_id);
-    visited.insert(unique_id.to_string());
-    functions.push(function);
-    Ok(())
+    err!(
+        ErrorCode::DisabledDependency,
+        "Attempted to use disabled function '{}'",
+        function.__common_attr__.name
+    )
 }
 
 fn build_inline_declaration(function: &DbtFunction, body: &str) -> FsResult<String> {
