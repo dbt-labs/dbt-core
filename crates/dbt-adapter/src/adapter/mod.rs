@@ -80,6 +80,13 @@ enum InnerAdapter {
 
 use InnerAdapter::*;
 
+/// Per-node connection state that must be reset after materialization.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeOverride {
+    Database,
+    Warehouse,
+}
+
 /// Type bridge adapter
 ///
 /// This adapter converts untyped method calls (those that use Value)
@@ -3219,33 +3226,37 @@ impl Adapter {
     ///
     /// # Returns
     ///
-    /// Returns true if the warehouse was overridden, false otherwise
+    /// Returns the required reset state if the warehouse was switched.
     #[tracing::instrument(skip(self), level = "trace")]
-    pub fn use_warehouse(&self, warehouse: Option<String>, node_id: &str) -> FsResult<bool> {
+    pub fn use_warehouse(
+        &self,
+        warehouse: Option<String>,
+        node_id: &str,
+    ) -> FsResult<Option<NodeOverride>> {
         // TODO(jason): Record/replay non-jinja internal calls non-invasively
         // https://github.com/dbt-labs/fs/issues/7736
         if let Some(tm) = self.time_machine()
             && tm.is_replaying()
         {
-            return Ok(false);
+            return Ok(None);
         }
 
         match &self.inner {
             Typed { adapter, .. } => {
-                if warehouse.is_none() {
-                    return Ok(false);
-                }
+                let Some(warehouse) = warehouse else {
+                    return Ok(None);
+                };
 
                 let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
                 adapter.use_warehouse(
                     conn.as_mut(),
-                    warehouse.unwrap(),
+                    warehouse,
                     node_id,
                     self.cancellation_token.clone(),
                 )?;
-                Ok(true)
+                Ok(Some(NodeOverride::Warehouse))
             }
-            Parse(_) => Ok(false),
+            Parse(_) => Ok(None),
         }
     }
 
@@ -3270,6 +3281,79 @@ impl Adapter {
                     node_id,
                     self.cancellation_token.clone(),
                 )?;
+                Ok(())
+            }
+            Parse(_) => Ok(()),
+        }
+    }
+
+    /// Used internally to execute a Redshift `USE <database>` statement, switching the active
+    /// database for a cross-database node. Returns the required reset state for the caller to
+    /// restore after materialization if `USE` ran. Only valid during runtime for Redshift.
+    ///
+    /// Ref: dbt-labs/dbt-adapters#1787
+    pub fn use_database(
+        &self,
+        target_database: &str,
+        node_id: &str,
+    ) -> FsResult<Option<NodeOverride>> {
+        match &self.inner {
+            Typed { adapter, .. } => match adapter.adapter_type() {
+                AdapterType::Redshift => {
+                    // TODO(jason): Record/replay non-jinja internal calls non-invasively
+                    // https://github.com/dbt-labs/fs/issues/7736
+                    if let Some(tm) = self.time_machine()
+                        && tm.is_replaying()
+                    {
+                        return Ok(None);
+                    }
+
+                    let engine = adapter.engine();
+                    if !adapter_impl::get_bool_config(engine.as_ref(), "datasharing")? {
+                        return Ok(None);
+                    }
+                    let Some(configured_database) = engine.config("database") else {
+                        return Ok(None);
+                    };
+                    let target_database = target_database.trim_matches('\"');
+                    if target_database.is_empty()
+                        || target_database.eq_ignore_ascii_case(configured_database.as_ref())
+                    {
+                        return Ok(None);
+                    }
+                    let database = target_database.to_ascii_lowercase();
+
+                    let mut conn =
+                        adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
+                    adapter.use_database(
+                        conn.as_mut(),
+                        database,
+                        node_id,
+                        self.cancellation_token.clone(),
+                    )?;
+                    Ok(Some(NodeOverride::Database))
+                }
+                other => unreachable!("use_database should only run for Redshift, got {other:?}"),
+            },
+            Parse(_) => unreachable!("use_database should only run during runtime materialization"),
+        }
+    }
+
+    /// Used internally to execute a Redshift `RESET USE` statement.
+    #[tracing::instrument(skip(self), level = "trace")]
+    pub fn reset_database(&self, node_id: &str) -> FsResult<()> {
+        // TODO(jason): Record/replay non-jinja internal calls non-invasively
+        // https://github.com/dbt-labs/fs/issues/7736
+        if let Some(tm) = self.time_machine()
+            && tm.is_replaying()
+        {
+            return Ok(());
+        }
+
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
+                adapter.reset_database(conn.as_mut(), node_id, self.cancellation_token.clone())?;
                 Ok(())
             }
             Parse(_) => Ok(()),

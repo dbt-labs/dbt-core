@@ -356,6 +356,52 @@ impl AdapterImpl {
         Ok(())
     }
 
+    /// Execute Redshift `USE <database>` so cross-database models run in the
+    /// right scope. Only valid for Redshift.
+    ///
+    /// Ref: dbt-labs/dbt-adapters#1787
+    pub fn use_database(
+        &self,
+        conn: &'_ mut dyn Connection,
+        database: String,
+        node_id: &str,
+        token: CancellationToken,
+    ) -> FsResult<()> {
+        match self.adapter_type() {
+            Redshift => {
+                let ctx = QueryCtx::default().with_node_id(node_id);
+                let sql = format!("USE {}", quote_ident(Redshift, &database));
+                self.exec_stmt(&ctx, conn, &sql, false, token)?;
+                Ok(())
+            }
+            other => {
+                unreachable!("only Redshift adapter should call use_database, got {other:?}")
+            }
+        }
+    }
+
+    /// Execute `RESET USE` for Redshift after [`Self::use_database`] switched the
+    /// active database. Only valid for Redshift.
+    ///
+    /// Ref: dbt-labs/dbt-adapters#1787
+    pub fn reset_database(
+        &self,
+        conn: &'_ mut dyn Connection,
+        node_id: &str,
+        token: CancellationToken,
+    ) -> FsResult<()> {
+        match self.adapter_type() {
+            Redshift => {
+                let ctx = QueryCtx::default().with_node_id(node_id);
+                self.exec_stmt(&ctx, conn, "RESET USE", false, token)?;
+            }
+            other => {
+                unreachable!("only Redshift adapter should call reset_database, got {other:?}")
+            }
+        }
+        Ok(())
+    }
+
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L655
     pub fn cache_added(
         &self,
@@ -5147,6 +5193,40 @@ mod tests {
             adapter.table_format_for_database("main"),
             TableFormat::Default
         );
+    }
+
+    #[test]
+    fn use_database_skips_redshift_without_datasharing_or_database_change() {
+        use crate::adapter::Adapter;
+        let wrap = |inner: AdapterImpl| {
+            Adapter::new(Arc::new(inner), None, CancellationToken::never_cancels())
+        };
+
+        // Redshift without `datasharing` never switches.
+        let no_ds = wrap(AdapterImpl::new(
+            build_engine(
+                Redshift,
+                Mapping::from_iter([("database".into(), "dev".into())]),
+            ),
+            None,
+        ));
+        assert_eq!(no_ds.use_database("analytics", "n").unwrap(), None);
+
+        // Redshift + datasharing: target equal to the default (case-insensitive) or empty
+        // → no switch.
+        let ds = wrap(AdapterImpl::new(
+            build_engine(
+                Redshift,
+                Mapping::from_iter([
+                    ("database".into(), "dev".into()),
+                    ("datasharing".into(), true.into()),
+                ]),
+            ),
+            None,
+        ));
+        assert_eq!(ds.use_database("dev", "n").unwrap(), None);
+        assert_eq!(ds.use_database("DEV", "n").unwrap(), None);
+        assert_eq!(ds.use_database("", "n").unwrap(), None);
     }
 
     // Checks that get_persist_doc_columns generates an explicit empty comment update only when the existing

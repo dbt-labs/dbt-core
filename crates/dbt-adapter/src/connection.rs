@@ -114,6 +114,14 @@ pub fn recycle_thread_local_connection() {
     }
 }
 
+/// Drop this thread's cached connection instead of recycling it, so a connection
+/// left in the wrong scope by a failed `RESET USE` / warehouse restore can't be
+/// handed to another node.
+pub fn drop_thread_local_connection() {
+    let conn = CONNECTION.with(|c| c.take());
+    drop(conn);
+}
+
 /// Drop guard that recycles this thread's cached adapter connection.
 ///
 /// Create this at the start of a blocking task body that may borrow an adapter
@@ -800,6 +808,34 @@ mod tests {
                 1,
                 "connection should be reused from the recycling pool"
             );
+        });
+    }
+
+    #[test]
+    fn drop_thread_local_connection_drops_and_does_not_recycle() {
+        run_on_fresh_thread(|| {
+            // Put a connection in the thread-local
+            CONNECTION.with(|c| {
+                c.replace(Some(make_conn()));
+            });
+
+            // Ensure the connection is in the thread-local
+            CONNECTION.with(|c| {
+                let conn = c.take();
+                assert!(conn.is_some());
+                c.replace(conn); // put it back
+            });
+
+            drop_thread_local_connection();
+
+            // Ensure thread-local is empty (connection was dropped)
+            CONNECTION.with(|c| {
+                let conn = c.take();
+                assert!(conn.is_none());
+            });
+
+            // Ensure the connection was dropped, not recycled into the pool
+            assert!(RECYCLING_POOL.recycle().is_none());
         });
     }
 }

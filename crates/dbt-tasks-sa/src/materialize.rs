@@ -22,6 +22,9 @@ use arrow::{
     util::pretty::{pretty_format_batches, print_batches},
 };
 use chrono::DateTime;
+use dbt_adapter::Adapter;
+use dbt_adapter::adapter::NodeOverride;
+use dbt_adapter::connection::drop_thread_local_connection;
 use dbt_adapter::relation::{RelationObject, do_create_relation};
 use dbt_adapter_core::AdapterType;
 use dbt_agate::{AgateTable, MappedSequence, Tuple};
@@ -107,6 +110,64 @@ fn execute_materialization_macro(
             }
         })
     })
+}
+
+fn apply_node_overrides(
+    adapter: &Adapter,
+    adapter_type: AdapterType,
+    custom_warehouse: Option<String>,
+    target_database: &str,
+    unique_id: &str,
+) -> FsResult<Vec<NodeOverride>> {
+    let mut node_overrides = Vec::new();
+    if let Some(warehouse) = custom_warehouse
+        && let Some(node_override) = adapter.use_warehouse(Some(warehouse), unique_id)?
+    {
+        node_overrides.push(node_override);
+    }
+    if adapter_type == AdapterType::Redshift
+        && let Some(node_override) = adapter.use_database(target_database, unique_id)?
+    {
+        node_overrides.push(node_override);
+    }
+    Ok(node_overrides)
+}
+
+/// Reset the per-node connection overrides (`USE` database / `use warehouse`) after a
+/// materialization. If a reset fails the connection is stuck in the wrong scope, so drop it
+/// (do NOT recycle) so no other node inherits it, then fail this node loudly with a clear
+/// error; the run continues on other nodes.
+///
+/// TODO: redundant once the recycling pool is segregated by config fingerprint.
+fn reset_node_overrides(
+    adapter: &Adapter,
+    unique_id: &str,
+    targets: &[NodeOverride],
+) -> FsResult<()> {
+    for target in targets.iter().copied() {
+        let result = match target {
+            NodeOverride::Database => adapter.reset_database(unique_id).map_err(|e| {
+                fs_err!(
+                    ErrorCode::ExecutionError,
+                    "Failed to reset database context (RESET USE) for node '{unique_id}': {e}"
+                )
+            }),
+            NodeOverride::Warehouse => adapter.restore_warehouse(unique_id).map_err(|e| {
+                fs_err!(
+                    ErrorCode::ExecutionError,
+                    "Failed to restore warehouse for node '{unique_id}': {e}"
+                )
+            }),
+        };
+
+        if let Err(err) = result {
+            // A failed reset leaves the connection in the wrong scope: drop it
+            // so no other node inherits it.
+            drop_thread_local_connection();
+            return Err(err);
+        }
+    }
+    Ok(())
 }
 
 fn with_jinja_trace<F, T>(compiled_path: &Path, unique_id: &str, f: F) -> FsResult<T>
@@ -437,12 +498,14 @@ pub fn materialize_clone<S: serde::Serialize>(
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
         .into_owned();
 
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &node.base().database,
+        &unique_id,
+    )?;
+
     let res = execute_materialization_macro(
         jinja_env,
         &macro_name,
@@ -452,9 +515,8 @@ pub fn materialize_clone<S: serde::Serialize>(
         &node_alias,
         run_path,
     );
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     res
 }
 #[allow(clippy::too_many_arguments)]
@@ -548,12 +610,13 @@ pub fn materialize_model(
         None
     };
 
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &model.__base_attr__.database,
+        &unique_id,
+    )?;
 
     let result = execute_materialization_macro(
         jinja_env,
@@ -565,9 +628,7 @@ pub fn materialize_model(
         run_path,
     );
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     result
 }
 
@@ -882,12 +943,13 @@ pub fn materialize_microbatch_model(
         .into_owned();
     let unique_id = model.__common_attr__.unique_id.clone();
 
-    // Execute the materialization macro
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &model.__base_attr__.database,
+        &unique_id,
+    )?;
 
     let result = execute_materialization_macro(
         jinja_env,
@@ -899,9 +961,7 @@ pub fn materialize_microbatch_model(
         run_path,
     );
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     result
 }
 
@@ -958,12 +1018,13 @@ pub fn materialize_snapshot(
         None
     };
 
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &snapshot.__base_attr__.database,
+        &unique_id,
+    )?;
 
     let result = execute_materialization_macro(
         jinja_env,
@@ -975,9 +1036,7 @@ pub fn materialize_snapshot(
         run_path,
     );
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     result
 }
 
@@ -1338,15 +1397,13 @@ pub fn materialize_test(
         .display()
         .to_string();
 
-    // Apply custom warehouse if configured (e.g., snowflake_warehouse in test config)
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter
-            .use_warehouse(Some(warehouse), &unique_id)
-            .map_err(|e| *e)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &test.__base_attr__.database,
+        &unique_id,
+    )?;
 
     let render_result = with_jinja_trace(&compiled_path, &unique_id, |listeners| {
         jinja_env
@@ -1377,9 +1434,7 @@ pub fn materialize_test(
             })
     });
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
 
     // If render_result is an error but the test is configured with severity warn, return a warning result
     if render_result.is_err() && matches!(test.deprecated_config.severity, Some(Severity::Warn)) {
