@@ -57,6 +57,7 @@ fn make_state(backend: ExposureMockBackend) -> Arc<AppState> {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
+        do_not_track: false,
     })
 }
 

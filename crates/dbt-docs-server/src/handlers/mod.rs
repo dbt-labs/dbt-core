@@ -5,6 +5,7 @@ pub mod exposures;
 pub mod files;
 pub mod groups;
 pub mod health;
+pub mod identity;
 pub mod lineage;
 pub mod macros;
 pub mod metrics;

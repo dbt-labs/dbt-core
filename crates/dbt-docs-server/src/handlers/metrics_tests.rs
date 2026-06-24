@@ -65,6 +65,7 @@ fn make_state(backend: MetricDetailMockBackend) -> Arc<AppState> {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
+        do_not_track: false,
     })
 }
 
@@ -620,6 +621,7 @@ fn make_list_state(backend: MetricListMockBackend) -> Arc<AppState> {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
+        do_not_track: false,
     })
 }
 

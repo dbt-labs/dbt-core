@@ -72,6 +72,7 @@ fn make_state(backend: LineageMockBackend) -> Arc<AppState> {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
+        do_not_track: false,
     })
 }
 
@@ -408,6 +409,7 @@ fn make_state_no_sq(backend: NoSavedQueriesBackend) -> Arc<AppState> {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
+        do_not_track: false,
     })
 }
 

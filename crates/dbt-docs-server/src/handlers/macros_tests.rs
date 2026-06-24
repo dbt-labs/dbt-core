@@ -56,6 +56,7 @@ fn make_state(backend: MacroDetailMockBackend) -> Arc<AppState> {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
+        do_not_track: false,
     })
 }
 
@@ -459,6 +460,7 @@ fn make_list_state(backend: MacroListMockBackend) -> Arc<AppState> {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
         providers,
+        do_not_track: false,
     })
 }
 

@@ -11,6 +11,7 @@ pub struct AppState {
     pub index_dir: PathBuf,
     pub providers: Providers,
     pub has_dbt_state: bool,
+    pub do_not_track: bool,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -26,11 +27,20 @@ pub struct Capabilities {
 
 impl AppState {
     pub fn new(index_dir: PathBuf, providers: Providers, has_dbt_state: bool) -> Self {
+        let do_not_track = std::env::var("DO_NOT_TRACK").as_deref() == Ok("1");
         Self {
             index_dir,
             providers,
             has_dbt_state,
+            do_not_track,
         }
+    }
+
+    /// Override `do_not_track` for testing — avoids env var mutation in tests.
+    #[cfg(test)]
+    pub fn with_do_not_track(mut self, value: bool) -> Self {
+        self.do_not_track = value;
+        self
     }
 
     pub fn dist_info(&self) -> DistInfo {
