@@ -9,7 +9,7 @@ use arrow::datatypes::*;
 use arrow::util::display::FormatOptions;
 use arrow_array::{
     Array, ArrowPrimitiveType, BooleanArray, GenericByteArray, GenericListArray, MapArray,
-    OffsetSizeTrait,
+    OffsetSizeTrait, StructArray,
 };
 use arrow_buffer::i256;
 use arrow_schema::ArrowError;
@@ -585,6 +585,52 @@ impl ArrayConverter for MapConverter {
 
 // }}}
 
+// Struct {{{
+struct StructConverter {
+    fields: Fields,
+    field_converters: Vec<Box<dyn ArrayConverter>>,
+    nulls: Option<NullBuffer>,
+}
+
+impl StructConverter {
+    pub fn new(array: &StructArray) -> Result<Self, ArrowError> {
+        debug_assert_eq!(
+            array.fields().len(),
+            array.columns().len(),
+            "struct field count must match column count"
+        );
+        let mut field_converters = Vec::with_capacity(array.num_columns());
+        for column in array.columns() {
+            field_converters.push(make_array_converter(column.as_ref())?);
+        }
+        Ok(Self {
+            fields: array.fields().clone(),
+            field_converters,
+            nulls: array.nulls().cloned(),
+        })
+    }
+
+    #[inline(always)]
+    pub fn is_valid(&self, idx: usize) -> bool {
+        self.nulls.as_ref().is_none_or(|nulls| nulls.is_valid(idx))
+    }
+}
+
+impl ArrayConverter for StructConverter {
+    fn to_value(&self, idx: usize) -> Value {
+        if self.is_valid(idx) {
+            let mut elems = ValueMap::with_capacity(self.fields.len());
+            for (field, conv) in self.fields.iter().zip(self.field_converters.iter()) {
+                elems.insert(Value::from(field.name().as_str()), conv.to_value(idx));
+            }
+            Value::from(elems)
+        } else {
+            Value::from(())
+        }
+    }
+}
+// }}}
+
 pub fn make_array_converter(array: &dyn Array) -> Result<Box<dyn ArrayConverter>, ArrowError> {
     let converter: Box<dyn ArrayConverter> = match array.data_type() {
         DataType::Boolean => Box::new(BooleanArrayConverter::new(array.as_boolean())),
@@ -687,6 +733,7 @@ pub fn make_array_converter(array: &dyn Array) -> Result<Box<dyn ArrayConverter>
             Box::new(LargeListArrayConverter::new(array.as_list::<i64>())?)
         }
         DataType::Map(_field, _is_sorted) => Box::new(MapConverter::new(array.as_map())?),
+        DataType::Struct(_fields) => Box::new(StructConverter::new(array.as_struct())?),
         _ => {
             // FALLBACK: Turn every Arrow value into a [minijinja::Value] string.
             let format_options = FormatOptions::new().with_null("None");
@@ -711,7 +758,7 @@ mod tests {
         Time32SecondArray, Time64MicrosecondArray, Time64NanosecondArray,
         TimestampMicrosecondArray, TimestampMillisecondArray, TimestampNanosecondArray,
         TimestampSecondArray, UInt64Array,
-        builder::{Int32Builder, ListBuilder, MapBuilder, StringBuilder},
+        builder::{Int32Builder, ListBuilder, MapBuilder, StringBuilder, StructBuilder},
     };
 
     use arrow_buffer::Buffer;
@@ -1179,5 +1226,83 @@ mod tests {
                 Value::from(())               // None
             ]
         );
+    }
+
+    #[test]
+    fn test_struct_values() {
+        // struct<a:int, b:string> -> dict, with field nulls preserved.
+        let a: ArrayRef = Arc::new(Int32Array::from(vec![Some(1), Some(2)]));
+        let b: ArrayRef = Arc::new(StringArray::from(vec![Some("x"), None]));
+        let array = StructArray::from(vec![
+            (Arc::new(Field::new("a", DataType::Int32, true)), a),
+            (Arc::new(Field::new("b", DataType::Utf8, true)), b),
+        ]);
+
+        let result = arrow_to_values(&array).unwrap();
+
+        let mut row0 = ValueMap::new();
+        row0.insert(Value::from("a"), Value::from(1));
+        row0.insert(Value::from("b"), Value::from("x"));
+        let mut row1 = ValueMap::new();
+        row1.insert(Value::from("a"), Value::from(2));
+        row1.insert(Value::from("b"), Value::from(()));
+
+        assert_eq!(result, vec![Value::from(row0), Value::from(row1)]);
+    }
+
+    #[test]
+    fn test_struct_values_with_offset() {
+        // A *sliced* struct array (non-zero offset) must convert the right rows.
+        // The converter indexes struct children by row index, relying on Arrow
+        // propagating slice offset/length into the child arrays.
+        let a: ArrayRef = Arc::new(Int32Array::from(vec![Some(1), Some(2), Some(3)]));
+        let b: ArrayRef = Arc::new(StringArray::from(vec![Some("x"), Some("y"), Some("z")]));
+        let array: ArrayRef = Arc::new(StructArray::from(vec![
+            (Arc::new(Field::new("a", DataType::Int32, true)), a),
+            (Arc::new(Field::new("b", DataType::Utf8, true)), b),
+        ]));
+
+        // Drop the first row -> remaining rows {a:2,b:"y"}, {a:3,b:"z"}.
+        let sliced = array.slice(1, 2);
+        let result = arrow_to_values(sliced.as_ref()).unwrap();
+
+        let mut row0 = ValueMap::new();
+        row0.insert(Value::from("a"), Value::from(2));
+        row0.insert(Value::from("b"), Value::from("y"));
+        let mut row1 = ValueMap::new();
+        row1.insert(Value::from("a"), Value::from(3));
+        row1.insert(Value::from("b"), Value::from("z"));
+
+        assert_eq!(result, vec![Value::from(row0), Value::from(row1)]);
+    }
+
+    #[test]
+    fn test_map_with_struct_values() {
+        // map<string, struct<a:int>> -- renders as a nested dict.
+        let value_fields = vec![Field::new("a", DataType::Int32, true)];
+        let mut builder = MapBuilder::new(
+            None,
+            StringBuilder::new(),
+            StructBuilder::from_fields(value_fields, 1),
+        );
+
+        // {"k": {"a": 1}}
+        builder.keys().append_value("k");
+        {
+            let vb = builder.values();
+            vb.field_builder::<Int32Builder>(0).unwrap().append_value(1);
+            vb.append(true);
+        }
+        builder.append(true).unwrap();
+
+        let array = builder.finish();
+        let result = arrow_to_values(&array).unwrap();
+
+        let mut inner = ValueMap::new();
+        inner.insert(Value::from("a"), Value::from(1));
+        let mut outer = ValueMap::new();
+        outer.insert(Value::from("k"), Value::from(inner));
+
+        assert_eq!(result, vec![Value::from(outer)]);
     }
 }
