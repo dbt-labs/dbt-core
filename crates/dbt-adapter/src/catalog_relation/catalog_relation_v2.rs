@@ -176,22 +176,14 @@ pub(super) fn from_model_config_and_catalogs_v2(
         (AdapterType::Bigquery, V2CatalogType::BiglakeMetastore) => {
             CatalogRelation::build_bigquery_biglake_with_catalogs_v2(model, catalog, &catalog_name)
         }
-        (AdapterType::DuckDB, V2CatalogType::IcebergRest) => {
-            CatalogRelation::build_duckdb_with_catalogs_v2(model, catalog, &catalog_name)
-        }
-        // Horizon/Unity are Iceberg REST under the hood, but duckdb attaches them
-        // read-only (writes need duckdb 1.5.4 / duckdb-iceberg#1017, gated to
-        // #10950). A model resolving its catalog here is declaring write intent,
-        // so reject it now with a config error instead of letting the
-        // materialization fail mid-run on duckdb's read-only enforcement.
-        (AdapterType::DuckDB, V2CatalogType::Horizon)
-        | (AdapterType::DuckDB, V2CatalogType::Unity) => Err(AdapterError::new(
-            AdapterErrorKind::Configuration,
-            format!(
-                "Catalog '{catalog_name}' (type '{}') is read-only on DuckDB: models cannot target it, only read it as a source. Write support requires duckdb 1.5.4 (#10950).",
-                catalog.catalog_type.as_str()
-            ),
-        )),
+        // Horizon/Unity are Iceberg REST under the hood; with duckdb 1.5.4's
+        // write-compat ATTACH options they are writable, so models may target
+        // them and they build the same relation as a generic Iceberg REST
+        // catalog (this lifts the base PR's read-only model-target gate).
+        (
+            AdapterType::DuckDB,
+            V2CatalogType::IcebergRest | V2CatalogType::Horizon | V2CatalogType::Unity,
+        ) => CatalogRelation::build_duckdb_with_catalogs_v2(model, catalog, &catalog_name),
         (AdapterType::DuckDB, V2CatalogType::DuckLake) => {
             CatalogRelation::build_duckdb_ducklake_with_catalogs_v2(model, catalog, &catalog_name)
         }
@@ -836,6 +828,18 @@ impl CatalogRelation {
             adapter_properties.insert("secret".to_string(), secret.clone());
         }
         adapter_properties.insert("attached_database".to_string(), alias);
+        // stage_create_tables steers the write strategy (CTAS opt-in), so it
+        // rides on the relation. Same string-bool coercion as the ATTACH
+        // composer so a YAML `"true"` cannot diverge between the two readers.
+        if let Some(stage_create_tables) =
+            dbt_common::serde_utils::try_get_bool(duckdb, "stage_create_tables")
+                .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, format!("{e}")))?
+        {
+            adapter_properties.insert(
+                "stage_create_tables".to_string(),
+                stage_create_tables.to_string(),
+            );
+        }
 
         Ok(CatalogRelation {
             adapter_type: AdapterType::DuckDB,
@@ -1723,9 +1727,11 @@ catalogs:
     }
 
     #[test]
-    fn duckdb_v2_horizon_unity_model_targets_rejected() {
-        // Horizon/Unity attach read-only on released duckdb; a model targeting
-        // one must fail with a config error, not a runtime read-only error.
+    fn duckdb_v2_horizon_unity_model_targets_build() {
+        // Writes are enabled for Horizon/Unity in this PR (duckdb 1.5.4
+        // write-compat), lifting the base PR's read-only model-target gate:
+        // a model naming one as its catalog builds a relation like any other
+        // Iceberg REST catalog.
         for (cat_type, endpoint) in [
             ("horizon", "https://horizon.example.com/catalog"),
             (
@@ -1736,7 +1742,7 @@ catalogs:
             let catalogs = load_catalogs_yaml(&format!(
                 r#"
 catalogs:
-  - name: readonly_cat
+  - name: writable_cat
     type: {cat_type}
     table_format: iceberg
     config:
@@ -1745,15 +1751,65 @@ catalogs:
         warehouse: "wh"
 "#
             ));
-            let conf = json!({ "catalog_name": "readonly_cat" });
+            let conf = json!({ "catalog_name": "writable_cat" });
             let m = model(AdapterType::DuckDB, conf);
 
-            let err =
-                from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs))
-                    .unwrap_err();
-            assert!(
-                format!("{err}").contains("read-only on DuckDB"),
-                "expected read-only rejection for {cat_type}, got: {err}"
+            let r = from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs))
+                .unwrap_or_else(|e| panic!("expected {cat_type} relation to build, got: {e}"));
+            assert_eq!(r.catalog_name.as_deref(), Some("writable_cat"));
+            assert_eq!(r.catalog_type, cat_type);
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+        }
+    }
+
+    #[test]
+    fn duckdb_v2_stage_create_tables_steers_write_strategy() {
+        // Unset (and explicit false): iceberg catalogs write via the safe empty
+        // CREATE + INSERT. Explicit `stage_create_tables: true` opts in to
+        // staged creates, so dbt may CTAS the target in place
+        // (duckdb-iceberg#1017).
+        for (cfg_line, expected, stage_creates) in [
+            ("", DuckDbWriteStrategy::DirectCreate, false),
+            (
+                "        stage_create_tables: false",
+                DuckDbWriteStrategy::DirectCreate,
+                false,
+            ),
+            (
+                "        stage_create_tables: true",
+                DuckDbWriteStrategy::DirectCreateAsSelect,
+                true,
+            ),
+            (
+                // YAML string bools coerce like the ATTACH composer does.
+                "        stage_create_tables: \"true\"",
+                DuckDbWriteStrategy::DirectCreateAsSelect,
+                true,
+            ),
+        ] {
+            let catalogs = load_catalogs_yaml(&format!(
+                r#"
+catalogs:
+  - name: writable_cat
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://horizon.example.com/catalog"
+        warehouse: "wh"
+{cfg_line}
+"#
+            ));
+            let conf = json!({ "catalog_name": "writable_cat" });
+            let m = model(AdapterType::DuckDB, conf);
+
+            let r = from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs))
+                .unwrap_or_else(|e| panic!("expected relation to build for {cfg_line:?}: {e}"));
+            assert_eq!(r.duckdb_write_strategy(), expected, "cfg: {cfg_line:?}");
+            assert_eq!(
+                r.supports_stage_create(),
+                stage_creates,
+                "cfg: {cfg_line:?}"
             );
         }
     }

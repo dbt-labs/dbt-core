@@ -13,10 +13,13 @@ fn catalog_relation(write_strategy: &str) -> Value {
     let catalog_relation = Arc::new(MockJinjaObject::new());
     catalog_relation.set_attr("duckdb_write_strategy", Value::from(write_strategy));
     // Some macros may still read supports_stage_create directly; keep it consistent
-    // with the strategy (only create_as_select stage-creates directly from SELECT).
+    // with the strategy (the CTAS strategies stage-create directly from SELECT).
     catalog_relation.set_attr(
         "supports_stage_create",
-        Value::from(write_strategy == "create_as_select"),
+        Value::from(matches!(
+            write_strategy,
+            "create_as_select" | "direct_create_as_select"
+        )),
     );
     Value::from_dyn_object(catalog_relation)
 }
@@ -173,14 +176,13 @@ fn rename_relation_alters_iceberg_without_committing_connection() {
     );
 }
 
-#[test]
-fn table_materialization_writes_iceberg_target_directly() {
+fn render_table_materialization(write_strategy: &'static str) -> MacroTestHarness {
     let harness = build_harness("iceberg_demo", "ducklake_demo");
     harness
         .mock()
         .on("table_format", |_| Ok(Value::from("iceberg")));
-    harness.mock().on("build_catalog_relation", |_| {
-        Ok(catalog_relation("direct_create"))
+    harness.mock().on("build_catalog_relation", move |_| {
+        Ok(catalog_relation(write_strategy))
     });
     harness.mock().on("get_relation", |_| Ok(Value::from(())));
     harness.mock().on("drop_relation", |_| Ok(Value::UNDEFINED));
@@ -227,6 +229,12 @@ fn table_materialization_writes_iceberg_target_directly() {
     harness
         .render("{{ materialization_table_duckdb() }}", ctx)
         .expect("render should succeed");
+    harness
+}
+
+#[test]
+fn table_materialization_writes_iceberg_target_directly() {
+    let harness = render_table_materialization("direct_create");
 
     harness
         .mock()
@@ -252,5 +260,34 @@ fn table_materialization_writes_iceberg_target_directly() {
     assert!(
         !executed.contains(" as ("),
         "Iceberg table materialization should not use CTAS, got: {executed}"
+    );
+}
+
+#[test]
+fn table_materialization_ctas_in_place_for_staged_create_opt_in() {
+    // `stage_create_tables: true` (duckdb-iceberg#1017) → direct_create_as_select:
+    // CTAS straight into the target, still no temp-table + rename dance.
+    let harness = render_table_materialization("direct_create_as_select");
+
+    harness
+        .mock()
+        .observed_calls()
+        .assert_not_called("rename_relation");
+    harness
+        .mock()
+        .observed_calls()
+        .assert_not_called("get_relation");
+    let executed = executed_sql(harness.mock()).join("\n");
+    assert!(
+        !executed.contains("__dbt_tmp"),
+        "staged-create opt-in should not use an intermediate relation, got: {executed}"
+    );
+    assert!(
+        executed.contains(" as ("),
+        "staged-create opt-in should CTAS the target, got: {executed}"
+    );
+    assert!(
+        !executed.contains("insert into"),
+        "staged-create opt-in should not create-then-insert, got: {executed}"
     );
 }

@@ -179,9 +179,8 @@ fn build_duckdb_catalog_attach_stmt(
         ));
     }
 
-    // NOTE: region is supplied via the S3 secret on official duckdb-iceberg 1.5.3,
-    // not a DEFAULT_REGION attach option (1.5.3 rejects it as an unknown option).
     for (key, sql_key) in [
+        ("default_region", "DEFAULT_REGION"),
         ("default_schema", "DEFAULT_SCHEMA"),
         ("max_table_staleness", "MAX_TABLE_STALENESS"),
         ("authorization_type", "AUTHORIZATION_TYPE"),
@@ -195,11 +194,17 @@ fn build_duckdb_catalog_attach_stmt(
         }
     }
     // The write-compat options (STAGE_CREATE_TABLES, DISABLE_MULTI_TABLE_COMMIT,
-    // SKIP_CREATE_TABLE_METADATA_UPDATES, REMOVE_FILES_ON_DELETE) only exist in
-    // duckdb-iceberg #1017 (duckdb 1.5.4); official 1.5.3 rejects them. They are
-    // reintroduced in the stacked Iceberg-REST PR alongside Horizon/Unity.
+    // SKIP_CREATE_TABLE_METADATA_UPDATES, REMOVE_FILES_ON_DELETE) require
+    // duckdb 1.5.4 / duckdb-iceberg#1017.
     for (key, sql_key) in [
         ("support_nested_namespaces", "SUPPORT_NESTED_NAMESPACES"),
+        ("stage_create_tables", "STAGE_CREATE_TABLES"),
+        ("disable_multi_table_commit", "DISABLE_MULTI_TABLE_COMMIT"),
+        (
+            "skip_create_table_metadata_updates",
+            "SKIP_CREATE_TABLE_METADATA_UPDATES",
+        ),
+        ("remove_files_on_delete", "REMOVE_FILES_ON_DELETE"),
         ("purge_requested", "PURGE_REQUESTED"),
     ] {
         if let Some(val) = duckdb_get_bool(duckdb, key)? {
@@ -207,17 +212,16 @@ fn build_duckdb_catalog_attach_stmt(
         }
     }
     // duckdb's AUTOMATIC access mode resolves to read-only for a remote Iceberg
-    // REST catalog, which blocks CREATE/INSERT. Generic Iceberg REST writes work
-    // on released duckdb, so it attaches read-write by default. Horizon/Unity
-    // writes need duckdb 1.5.4 (gated to #10950), so they default read-only here;
-    // validation forbids `read_only: false` for them, so this only yields
-    // READ_ONLY true. A user-supplied `read_only` config overrides the default.
-    let read_only_default = matches!(
-        catalog.catalog_type,
-        V2CatalogType::Horizon | V2CatalogType::Unity
-    );
-    let read_only = duckdb_get_bool(duckdb, "read_only")?.unwrap_or(read_only_default);
+    // REST catalog, which blocks CREATE/INSERT. dbt writes to its catalogs, so
+    // attach read-write by default; a user-supplied `read_only` config overrides.
+    let read_only = duckdb_get_bool(duckdb, "read_only")?.unwrap_or(false);
     opts.push(format!("READ_ONLY {read_only}"));
+    // Preset write-compat defaults per catalog type for keys the user did not set.
+    for (config_key, default_clause) in catalog_attach_defaults(catalog.catalog_type) {
+        if !duckdb_has_key(duckdb, config_key) {
+            opts.push((*default_clause).to_string());
+        }
+    }
     if duckdb_get_bool(duckdb, "encode_entire_prefix")?.unwrap_or(false) {
         opts.push("ENCODE_ENTIRE_PREFIX true".to_string());
     }
@@ -258,4 +262,47 @@ fn duckdb_get_i64(duckdb: &dbt_yaml::Mapping, key: &str) -> Option<i64> {
 fn duckdb_get_bool(duckdb: &dbt_yaml::Mapping, key: &str) -> AdapterResult<Option<bool>> {
     dbt_common::serde_utils::try_get_bool(duckdb, key)
         .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, format!("{e}")))
+}
+
+fn duckdb_has_key(duckdb: &dbt_yaml::Mapping, key: &str) -> bool {
+    duckdb.get(dbt_yaml::Value::from(key)).is_some()
+}
+
+/// DuckDB Iceberg `ATTACH` write-compat defaults per catalog type, encoding
+/// dbt's maintainer knowledge of each managed-storage backend. Each entry is
+/// `(config.duckdb key, full SQL option clause)`; the clause is emitted only
+/// when the user has not set that key, so explicit user values always win.
+/// These options require duckdb 1.5.4 / duckdb-iceberg#1017.
+fn catalog_attach_defaults(catalog_type: V2CatalogType) -> &'static [(&'static str, &'static str)] {
+    match catalog_type {
+        // Snowflake Horizon (Polaris) Iceberg REST: OAuth2 + vended credentials,
+        // and a write path that supports neither staged creates nor multi-table
+        // commits.
+        V2CatalogType::Horizon => &[
+            ("authorization_type", "AUTHORIZATION_TYPE 'OAUTH2'"),
+            (
+                "access_delegation_mode",
+                "ACCESS_DELEGATION_MODE 'VENDED_CREDENTIALS'",
+            ),
+            ("stage_create_tables", "STAGE_CREATE_TABLES false"),
+            (
+                "disable_multi_table_commit",
+                "DISABLE_MULTI_TABLE_COMMIT true",
+            ),
+            (
+                "skip_create_table_metadata_updates",
+                "SKIP_CREATE_TABLE_METADATA_UPDATES true",
+            ),
+            ("remove_files_on_delete", "REMOVE_FILES_ON_DELETE false"),
+        ],
+        // Databricks Unity Catalog's Iceberg REST endpoint does not support the
+        // REST multi-table commit, so default it off; single-table commits work.
+        // (Other write-path options are left to DuckDB's defaults pending
+        // confirmation against a live Unity catalog.)
+        V2CatalogType::Unity => &[(
+            "disable_multi_table_commit",
+            "DISABLE_MULTI_TABLE_COMMIT true",
+        )],
+        _ => &[],
+    }
 }
