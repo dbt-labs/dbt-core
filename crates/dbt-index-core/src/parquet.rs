@@ -45,7 +45,8 @@ fn write_table_items<T: serde::Serialize>(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let file = std::fs::File::create(path)?;
+    let tmp = path.with_extension("parquet.tmp");
+    let file = std::fs::File::create(&tmp)?;
     let props = WriterProperties::builder()
         .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap())) // fastest ZSTD; ~same size as level 3 at this scale
         .build();
@@ -66,6 +67,7 @@ fn write_table_items<T: serde::Serialize>(
     writer
         .close()
         .map_err(|e| IndexError::Other(format!("ArrowWriter close: {e}")))?;
+    std::fs::rename(&tmp, path)?;
     Ok(())
 }
 
@@ -79,7 +81,8 @@ fn write_table_items_typed<T: serde::Serialize>(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let file = std::fs::File::create(path)?;
+    let tmp = path.with_extension("parquet.tmp");
+    let file = std::fs::File::create(&tmp)?;
     let props = WriterProperties::builder()
         .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap()))
         .build();
@@ -96,6 +99,7 @@ fn write_table_items_typed<T: serde::Serialize>(
     writer
         .close()
         .map_err(|e| IndexError::Other(format!("ArrowWriter close: {e}")))?;
+    std::fs::rename(&tmp, path)?;
     Ok(())
 }
 
@@ -797,10 +801,11 @@ impl IndexWriter {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
+        let tmp = path.with_extension("parquet.tmp");
         let props = WriterProperties::builder()
             .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap()))
             .build();
-        let file = std::fs::File::create(&path)?;
+        let file = std::fs::File::create(&tmp)?;
         let mut writer = ArrowWriter::try_new(file, schema, Some(props))
             .map_err(|e| IndexError::Other(format!("ArrowWriter: {e}")))?;
         for batch in batches {
@@ -811,6 +816,7 @@ impl IndexWriter {
         writer
             .close()
             .map_err(|e| IndexError::Other(format!("ArrowWriter close: {e}")))?;
+        std::fs::rename(&tmp, &path)?;
         self.count += 1;
         Ok(())
     }
