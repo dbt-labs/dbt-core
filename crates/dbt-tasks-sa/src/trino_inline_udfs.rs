@@ -424,9 +424,7 @@ fn validate_identifier(kind: &str, value: &str) -> FsResult<()> {
         );
     };
 
-    if !(first == '_' || first.is_ascii_alphabetic())
-        || !chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
-    {
+    if !is_identifier_start(first) || !chars.all(is_identifier_part) {
         return err!(
             ErrorCode::InvalidConfig,
             "Trino inline UDF {kind} '{}' must be an unquoted SQL identifier",
@@ -434,6 +432,14 @@ fn validate_identifier(kind: &str, value: &str) -> FsResult<()> {
         );
     }
     Ok(())
+}
+
+fn is_identifier_start(c: char) -> bool {
+    c == '_' || c.is_ascii_alphabetic()
+}
+
+fn is_identifier_part(c: char) -> bool {
+    c == '_' || c.is_ascii_alphanumeric()
 }
 
 fn insert_inline_declarations(
