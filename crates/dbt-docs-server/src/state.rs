@@ -12,6 +12,7 @@ pub struct AppState {
     pub providers: Providers,
     pub has_dbt_state: bool,
     pub do_not_track: bool,
+    pub send_anonymous_usage_stats: bool,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -26,13 +27,19 @@ pub struct Capabilities {
 }
 
 impl AppState {
-    pub fn new(index_dir: PathBuf, providers: Providers, has_dbt_state: bool) -> Self {
+    pub fn new(
+        index_dir: PathBuf,
+        providers: Providers,
+        has_dbt_state: bool,
+        send_anonymous_usage_stats: bool,
+    ) -> Self {
         let do_not_track = std::env::var("DO_NOT_TRACK").as_deref() == Ok("1");
         Self {
             index_dir,
             providers,
             has_dbt_state,
             do_not_track,
+            send_anonymous_usage_stats,
         }
     }
 
@@ -40,6 +47,12 @@ impl AppState {
     #[cfg(test)]
     pub fn with_do_not_track(mut self, value: bool) -> Self {
         self.do_not_track = value;
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_send_anonymous_usage_stats(mut self, value: bool) -> Self {
+        self.send_anonymous_usage_stats = value;
         self
     }
 

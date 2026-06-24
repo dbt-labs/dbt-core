@@ -12,6 +12,7 @@ fn make_state(do_not_track: bool) -> Arc<AppState> {
             std::path::PathBuf::from("/tmp"),
             Providers::default(),
             false,
+            true,
         )
         .with_do_not_track(do_not_track),
     )
@@ -38,4 +39,49 @@ async fn is_logged_in_always_false() {
     let state = make_state(false);
     let response = get_identity(State(state)).await;
     assert!(!response.is_logged_in);
+}
+
+#[tokio::test]
+async fn yaml_opt_out_disables_analytics() {
+    let state = Arc::new(
+        AppState::new(
+            std::path::PathBuf::from("/tmp"),
+            Providers::default(),
+            false,
+            false,
+        )
+        .with_do_not_track(false),
+    );
+    let response = get_identity(State(state)).await;
+    assert!(!response.analytics_enabled);
+}
+
+#[tokio::test]
+async fn yaml_opt_in_keeps_analytics() {
+    let state = Arc::new(
+        AppState::new(
+            std::path::PathBuf::from("/tmp"),
+            Providers::default(),
+            false,
+            true,
+        )
+        .with_do_not_track(false),
+    );
+    let response = get_identity(State(state)).await;
+    assert!(response.analytics_enabled);
+}
+
+#[tokio::test]
+async fn do_not_track_overrides_yaml_consent() {
+    let state = Arc::new(
+        AppState::new(
+            std::path::PathBuf::from("/tmp"),
+            Providers::default(),
+            false,
+            true,
+        )
+        .with_do_not_track(true),
+    );
+    let response = get_identity(State(state)).await;
+    assert!(!response.analytics_enabled);
 }

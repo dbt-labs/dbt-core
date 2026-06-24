@@ -91,6 +91,7 @@ fn make_state(backend: SemanticModelMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 
@@ -712,6 +713,7 @@ fn make_list_state(backend: SemanticModelListMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 

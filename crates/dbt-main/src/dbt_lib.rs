@@ -268,14 +268,15 @@ async fn do_execute_fs(
                 .await
             }
         };
-    } else if let Command::Core(Docs(docs_args)) = cli.command {
-        return match docs_args.subcommand {
+    } else if let Command::Core(Docs(docs_args)) = &cli.command {
+        return match &docs_args.subcommand {
             Some(DocsSubcommand::Serve(serve_args)) => {
                 run_docs_serve(
-                    serve_args,
+                    serve_args.clone(),
                     &feature_stack,
                     eval_arg.io.status_reporter.as_ref(),
                     &eval_arg.io.in_dir,
+                    &cli.common_args(),
                 )
                 .await
             }
@@ -1433,14 +1434,18 @@ async fn run_docs_serve(
     feature_stack: &Arc<FeatureStack>,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
     project_dir: &std::path::Path,
+    common_args: &dbt_clap_core::CommonArgs,
 ) -> FsResult<()> {
-    let has_dbt_state = dbt_clap_core::CommonArgs::default().get_manage_state(project_dir);
+    let has_dbt_state = common_args.get_manage_state(project_dir);
+    let send_anonymous_usage_stats =
+        common_args.get_send_anonymous_usage_stats_for_project(project_dir);
     let args = dbt_docs_server::DocsServeArgs {
         target_path: serve_args.target_path,
         host: serve_args.host,
         port: serve_args.port,
         no_open: serve_args.no_open,
         has_dbt_state,
+        send_anonymous_usage_stats,
     };
     let index_dir = dbt_docs_server::resolve_index_dir(&args);
 

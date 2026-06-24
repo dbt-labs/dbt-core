@@ -58,6 +58,7 @@ fn make_state(backend: ExposureMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 

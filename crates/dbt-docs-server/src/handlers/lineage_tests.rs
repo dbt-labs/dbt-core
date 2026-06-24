@@ -73,6 +73,7 @@ fn make_state(backend: LineageMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 
@@ -410,6 +411,7 @@ fn make_state_no_sq(backend: NoSavedQueriesBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 

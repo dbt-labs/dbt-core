@@ -100,6 +100,7 @@ fn make_state(backend: SnapshotDetailMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 
@@ -739,6 +740,7 @@ fn make_list_state(backend: SnapshotListMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 

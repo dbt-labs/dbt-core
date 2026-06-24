@@ -97,6 +97,7 @@ fn make_state(backend: SourceDetailMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 
@@ -811,6 +812,7 @@ fn make_list_state(backend: SourceListMockBackend) -> Arc<AppState> {
         index_dir: PathBuf::from("/tmp"),
         providers,
         do_not_track: false,
+        send_anonymous_usage_stats: true,
     })
 }
 

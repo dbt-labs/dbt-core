@@ -418,7 +418,7 @@ mod tests {
             backend: Arc::new(backend),
             ..Providers::default()
         };
-        Arc::new(AppState::new("target/index".into(), providers, false))
+        Arc::new(AppState::new("target/index".into(), providers, false, true))
     }
 
     fn counts_schema() -> Arc<Schema> {
@@ -623,7 +623,7 @@ mod tests {
             backend: Arc::new(backend),
             ..Providers::default()
         };
-        Arc::new(AppState::new("target/index".into(), providers, false))
+        Arc::new(AppState::new("target/index".into(), providers, false, true))
     }
 
     #[tokio::test]

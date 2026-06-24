@@ -187,6 +187,7 @@ fn make_state(backend: MockBackend) -> Arc<AppState> {
         std::path::PathBuf::from("/tmp"),
         providers,
         false,
+        true,
     ))
 }
 
@@ -729,6 +730,7 @@ fn make_detail_state(backend: DetailMockBackend) -> Arc<AppState> {
         std::path::PathBuf::from("/tmp"),
         providers,
         false,
+        true,
     ))
 }
 

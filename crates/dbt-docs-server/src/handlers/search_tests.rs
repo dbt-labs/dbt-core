@@ -249,6 +249,7 @@ fn make_state(backend: SearchMockBackend) -> Arc<AppState> {
         std::path::PathBuf::from("/tmp"),
         providers,
         false,
+        true,
     ))
 }
 
@@ -1450,6 +1451,7 @@ fn make_ranking_state() -> (Arc<AppState>, Arc<InMemoryDuckDbBackend>) {
         std::path::PathBuf::from("/tmp"),
         providers,
         false,
+        true,
     ));
     (state, backend)
 }
@@ -1668,6 +1670,7 @@ async fn search_multi_token_ranking_field_priority() {
         std::path::PathBuf::from("/tmp"),
         providers,
         false,
+        true,
     ));
 
     let params = SearchQueryParams {

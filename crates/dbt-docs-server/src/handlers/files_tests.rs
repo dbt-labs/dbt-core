@@ -156,6 +156,7 @@ fn make_state(backend: MockBackend) -> Arc<AppState> {
         std::path::PathBuf::from("/tmp"),
         providers,
         false,
+        true,
     ))
 }
 

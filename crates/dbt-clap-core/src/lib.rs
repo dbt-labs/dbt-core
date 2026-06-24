@@ -2155,6 +2155,7 @@ struct FlagsFile {
 struct FlagsBlock {
     manage_state: Option<bool>,
     maximum_seed_size_mib: Option<u64>,
+    send_anonymous_usage_stats: Option<bool>,
 }
 
 fn manage_state_from_yaml(path: &Path) -> Option<bool> {
@@ -2167,6 +2168,13 @@ fn maximum_seed_size_mib_from_yaml(path: &Path) -> Option<u64> {
     let content = stdfs::read_to_string(path).ok()?;
     let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
     file.flags.and_then(|flags| flags.maximum_seed_size_mib)
+}
+
+fn send_anonymous_usage_stats_from_yaml(path: &Path) -> Option<bool> {
+    let content = stdfs::read_to_string(path).ok()?;
+    let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
+    file.flags
+        .and_then(|flags| flags.send_anonymous_usage_stats)
 }
 
 const DEFAULT_MAXIMUM_SEED_SIZE_MIB: u64 = 1;
@@ -2436,6 +2444,25 @@ impl CommonArgs {
         } else {
             self.send_anonymous_usage_stats
         }
+    }
+
+    /// Resolve send_anonymous_usage_stats with precedence:
+    /// `--no-send-anonymous-usage-stats` > DBT_SEND_ANONYMOUS_USAGE_STATS env > project yaml flags > true
+    ///
+    /// Note: the clap flag has `default_value_t = true`, so an explicit
+    /// `--send-anonymous-usage-stats=true` is indistinguishable from the default and will
+    /// NOT override a YAML `false`. Only the explicit opt-out (`--no-`) and the env var are
+    /// detectable here.
+    pub fn get_send_anonymous_usage_stats_for_project(&self, project_dir: &Path) -> bool {
+        if self.no_send_anonymous_usage_stats {
+            return false;
+        }
+        if let Some(value) = env::var_os("DBT_SEND_ANONYMOUS_USAGE_STATS") {
+            return BoolishValueParser::new()
+                .parse_ref(&clap::Command::new("dbt-fusion"), None, value.as_ref())
+                .unwrap_or(true);
+        }
+        send_anonymous_usage_stats_from_yaml(&project_dir.join(DBT_PROJECT_YML)).unwrap_or(true)
     }
 
     pub fn get_introspect(&self) -> bool {
@@ -2827,5 +2854,125 @@ mod tests {
                 "expected `{name}` to be a project command"
             );
         }
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_missing_file_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        assert!(send_anonymous_usage_stats_from_yaml(&path).is_none());
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_opt_out_returns_false() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "flags:\n  send_anonymous_usage_stats: false\n").unwrap();
+        assert_eq!(send_anonymous_usage_stats_from_yaml(&path), Some(false));
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_opt_in_returns_true() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "flags:\n  send_anonymous_usage_stats: true\n").unwrap();
+        assert_eq!(send_anonymous_usage_stats_from_yaml(&path), Some(true));
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_malformed_yaml_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "flags: ][[\n").unwrap();
+        assert!(send_anonymous_usage_stats_from_yaml(&path).is_none());
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_no_flags_key_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "name: my_project\nversion: 1.0.0\n").unwrap();
+        assert!(send_anonymous_usage_stats_from_yaml(&path).is_none());
+    }
+
+    /// Serializes tests that mutate `DBT_SEND_ANONYMOUS_USAGE_STATS`, since env vars are
+    /// process-global and Rust runs tests in parallel within a binary.
+    static SEND_STATS_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn write_yaml_with_stats(dir: &Path, value: bool) -> PathBuf {
+        let path = dir.join("dbt_project.yml");
+        std::fs::write(
+            &path,
+            format!("flags:\n  send_anonymous_usage_stats: {value}\n"),
+        )
+        .unwrap();
+        path
+    }
+
+    #[test]
+    fn get_send_anonymous_usage_stats_for_project_opt_out_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        // yaml says true, but the explicit `--no-` opt-out wins.
+        write_yaml_with_stats(dir.path(), true);
+        let args = CommonArgs {
+            no_send_anonymous_usage_stats: true,
+            ..Default::default()
+        };
+        assert!(!args.get_send_anonymous_usage_stats_for_project(dir.path()));
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn get_send_anonymous_usage_stats_for_project_env_false_overrides_yaml_true() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        write_yaml_with_stats(dir.path(), true);
+        let args = CommonArgs::default();
+        unsafe { env::set_var("DBT_SEND_ANONYMOUS_USAGE_STATS", "false") };
+        let result = args.get_send_anonymous_usage_stats_for_project(dir.path());
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        assert!(!result);
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn get_send_anonymous_usage_stats_for_project_env_true_overrides_yaml_false() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        write_yaml_with_stats(dir.path(), false);
+        let args = CommonArgs::default();
+        unsafe { env::set_var("DBT_SEND_ANONYMOUS_USAGE_STATS", "true") };
+        let result = args.get_send_anonymous_usage_stats_for_project(dir.path());
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        assert!(result);
+    }
+
+    #[test]
+    fn get_send_anonymous_usage_stats_for_project_yaml_only_fallback() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // Ensure no ambient env var leaks in.
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        let dir = tempfile::tempdir().unwrap();
+        write_yaml_with_stats(dir.path(), false);
+        let args = CommonArgs::default();
+        assert!(!args.get_send_anonymous_usage_stats_for_project(dir.path()));
+    }
+
+    #[test]
+    fn get_send_anonymous_usage_stats_for_project_defaults_true() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        // No yaml file, no env, no opt-out → default true.
+        let dir = tempfile::tempdir().unwrap();
+        let args = CommonArgs::default();
+        assert!(args.get_send_anonymous_usage_stats_for_project(dir.path()));
     }
 }

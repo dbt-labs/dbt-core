@@ -11,6 +11,7 @@ fn make_state(has_dbt_state: bool) -> Arc<AppState> {
         std::path::PathBuf::from("/tmp"),
         Providers::default(),
         has_dbt_state,
+        true,
     ))
 }
 

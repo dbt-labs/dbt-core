@@ -13,7 +13,7 @@ pub struct IdentityResponse {
 pub async fn get_identity(State(state): State<SharedState>) -> Json<IdentityResponse> {
     Json(IdentityResponse {
         is_logged_in: false,
-        analytics_enabled: !state.do_not_track,
+        analytics_enabled: !state.do_not_track && state.send_anonymous_usage_stats,
     })
 }
 
