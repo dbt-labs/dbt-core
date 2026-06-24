@@ -64,6 +64,7 @@ pub mod install;
 pub mod athena;
 pub mod bigquery;
 pub mod databricks;
+pub mod fdcs;
 pub mod redshift;
 pub mod salesforce;
 pub mod snowflake;
