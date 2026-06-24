@@ -13,7 +13,6 @@ use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_trace_event;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use dbt_telemetry::AdapterConnectionOpen;
 use dbt_xdbc::semaphore::Semaphore;
@@ -320,7 +319,7 @@ impl XdbcEngine {
     }
 
     /// Build v2 catalog-driven `ATTACH IF NOT EXISTS` statements for DuckDB
-    /// Glue, Iceberg REST, and DuckLake catalogs.
+    /// Horizon, Glue, Iceberg REST, Unity Catalog, and DuckLake catalogs.
     ///
     /// Reads the global catalogs v2 state, extracts every catalog that has a
     /// `config.duckdb` block, and emits one ATTACH per catalog. Duplicate
@@ -337,218 +336,8 @@ impl XdbcEngine {
         let Ok(view) = catalogs.view_v2() else {
             return Ok(Vec::new());
         };
-        compose_v2_catalog_attach_stmts(&view)
+        super::duckdb_attach::compose_v2_catalog_attach_stmts(&view)
     }
-}
-
-/// Pure: compose the DuckDB v2-catalog ATTACH statements for a parsed
-/// `DbtCatalogsV2View`. Returns the statements in emission order, with a
-/// leading `INSTALL ducklake` prelude when any DuckLake catalog is present.
-///
-/// Local filesystem catalogs intentionally do not emit ATTACH SQL; they provide
-/// file roots and defaults consumed by source rendering and external writes.
-///
-/// Errors when alias sanitization produces an empty alias or a duplicate
-/// alias across catalogs.
-fn compose_v2_catalog_attach_stmts(view: &DbtCatalogsV2View<'_>) -> AdapterResult<Vec<String>> {
-    // INSTALL ducklake must lead all ATTACHes but we can't know it's needed until we've seen the catalogs
-    let mut needs_ducklake = false;
-    let mut stmts: Vec<String> = Vec::new();
-    let mut seen_aliases: HashMap<String, &str> = HashMap::new();
-
-    for (catalog, duckdb) in view
-        .catalogs
-        .iter()
-        .filter(|catalog| {
-            matches!(
-                catalog.catalog_type,
-                V2CatalogType::Glue | V2CatalogType::IcebergRest | V2CatalogType::DuckLake
-            )
-        })
-        .filter_map(|catalog| {
-            catalog
-                .config_block("duckdb")
-                .map(|duckdb| (catalog, duckdb))
-        })
-    {
-        let (alias, stmt) = match catalog.catalog_type {
-            V2CatalogType::DuckLake => {
-                needs_ducklake = true;
-                build_duckdb_ducklake_attach_stmt(catalog, duckdb)?
-            }
-            _ => build_duckdb_catalog_attach_stmt(catalog, duckdb)?,
-        };
-        if let Some(prior) = seen_aliases.get(&alias) {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                format!(
-                    "Catalog '{}' duckdb attach alias '{alias}' collides with catalog '{prior}'",
-                    catalog.name
-                ),
-            ));
-        }
-        seen_aliases.insert(alias, catalog.name);
-        stmts.push(stmt);
-    }
-
-    if needs_ducklake {
-        stmts.insert(0, "INSTALL ducklake".to_string());
-    }
-
-    Ok(stmts)
-}
-
-fn build_duckdb_ducklake_attach_stmt(
-    catalog: &CatalogSpecV2View<'_>,
-    duckdb: &dbt_yaml::Mapping,
-) -> AdapterResult<(String, String)> {
-    let alias = crate::catalog_relation::sanitize_duckdb_identifier(
-        duckdb_get_str(duckdb, "attach_as").unwrap_or(catalog.name),
-    );
-    if alias.is_empty() {
-        return Err(AdapterError::new(
-            AdapterErrorKind::Configuration,
-            format!(
-                "Catalog '{}' duckdb attach alias is empty after sanitization",
-                catalog.name
-            ),
-        ));
-    }
-
-    let metadata_path = duckdb_get_str(duckdb, "metadata_path").unwrap_or_default();
-    let mut opts = String::new();
-    let mut push_opt = |opt: String| {
-        if !opts.is_empty() {
-            opts.push_str(", ");
-        }
-        opts.push_str(&opt);
-    };
-    if let Some(data_path) = duckdb_get_str(duckdb, "data_path") {
-        push_opt(format!(
-            "DATA_PATH '{}'",
-            escape_duckdb_single_quotes(data_path)
-        ));
-    }
-    if let Some(metadata_schema) = duckdb_get_str(duckdb, "metadata_schema") {
-        push_opt(format!(
-            "METADATA_SCHEMA '{}'",
-            escape_duckdb_single_quotes(metadata_schema)
-        ));
-    }
-    for (key, sql_key) in [
-        ("create_if_not_exists", "CREATE_IF_NOT_EXISTS"),
-        ("read_only", "READ_ONLY"),
-        ("encrypted", "ENCRYPTED"),
-    ] {
-        if let Some(val) = duckdb_get_bool(duckdb, key) {
-            push_opt(format!("{sql_key} {val}"));
-        }
-    }
-
-    let source = format!("'ducklake:{}'", escape_duckdb_single_quotes(metadata_path));
-    let mut stmt = format!("ATTACH IF NOT EXISTS {source} AS {alias}");
-    if !opts.is_empty() {
-        stmt.push_str(" (");
-        stmt.push_str(&opts);
-        stmt.push(')');
-    }
-
-    Ok((alias, stmt))
-}
-
-fn build_duckdb_catalog_attach_stmt(
-    catalog: &CatalogSpecV2View<'_>,
-    duckdb: &dbt_yaml::Mapping,
-) -> AdapterResult<(String, String)> {
-    let alias = crate::catalog_relation::sanitize_duckdb_identifier(
-        duckdb_get_str(duckdb, "attach_as").unwrap_or(catalog.name),
-    );
-    if alias.is_empty() {
-        return Err(AdapterError::new(
-            AdapterErrorKind::Configuration,
-            format!(
-                "Catalog '{}' duckdb attach alias is empty after sanitization",
-                catalog.name
-            ),
-        ));
-    }
-
-    let endpoint_type = duckdb_get_str(duckdb, "endpoint_type");
-    let mut opts = vec!["TYPE ICEBERG".to_string()];
-    if let Some(secret) = duckdb_get_str(duckdb, "secret") {
-        let secret = crate::catalog_relation::sanitize_duckdb_identifier(secret);
-        if !secret.is_empty() {
-            opts.push(format!("SECRET {secret}"));
-        }
-    }
-    if let Some(et) = endpoint_type {
-        opts.push(format!(
-            "ENDPOINT_TYPE {}",
-            crate::catalog_relation::sanitize_duckdb_identifier(et)
-        ));
-    }
-    if let Some(ep) = duckdb_get_str(duckdb, "endpoint") {
-        opts.push(format!("ENDPOINT '{}'", escape_duckdb_single_quotes(ep)));
-    }
-
-    for (key, sql_key) in [
-        ("default_region", "DEFAULT_REGION"),
-        ("default_schema", "DEFAULT_SCHEMA"),
-        ("max_table_staleness", "MAX_TABLE_STALENESS"),
-        ("authorization_type", "AUTHORIZATION_TYPE"),
-        ("access_delegation_mode", "ACCESS_DELEGATION_MODE"),
-    ] {
-        if let Some(val) = duckdb_get_str(duckdb, key) {
-            opts.push(format!("{sql_key} '{}'", escape_duckdb_single_quotes(val)));
-        }
-    }
-    for (key, sql_key) in [
-        ("support_nested_namespaces", "SUPPORT_NESTED_NAMESPACES"),
-        ("support_stage_create", "SUPPORT_STAGE_CREATE"),
-        ("purge_requested", "PURGE_REQUESTED"),
-    ] {
-        if let Some(val) = duckdb_get_bool(duckdb, key) {
-            opts.push(format!("{sql_key} {val}"));
-        }
-    }
-    if duckdb_get_bool(duckdb, "encode_entire_prefix").unwrap_or(false) {
-        opts.push("ENCODE_ENTIRE_PREFIX true".to_string());
-    }
-
-    // For Iceberg REST catalogs, source is the warehouse name, not the endpoint
-    // URL. DuckDB's Glue shortcut uses ":" for the default account catalog.
-    let warehouse = match endpoint_type {
-        Some(et) if et.eq_ignore_ascii_case("GLUE") => {
-            duckdb_get_str(duckdb, "warehouse").unwrap_or(":")
-        }
-        _ => duckdb_get_str(duckdb, "warehouse").unwrap_or(catalog.name),
-    };
-    let source = format!("'{}'", escape_duckdb_single_quotes(warehouse));
-
-    Ok((
-        alias.clone(),
-        format!(
-            "ATTACH IF NOT EXISTS {source} AS {alias} ({})",
-            opts.join(", ")
-        ),
-    ))
-}
-
-fn duckdb_get_str<'a>(duckdb: &'a dbt_yaml::Mapping, key: &str) -> Option<&'a str> {
-    duckdb
-        .get(dbt_yaml::Value::from(key))
-        .and_then(|v| v.as_str())
-}
-
-fn duckdb_get_bool(duckdb: &dbt_yaml::Mapping, key: &str) -> Option<bool> {
-    duckdb
-        .get(dbt_yaml::Value::from(key))
-        .and_then(|v| v.as_bool())
-}
-
-/// Escape single quotes for SQL string literals (`'` → `''`).
-fn escape_duckdb_single_quotes(s: &str) -> String {
-    s.replace('\'', "''")
 }
 
 impl AdapterEngine for XdbcEngine {
@@ -770,52 +559,5 @@ Original error: {}",
             AdapterError::new(adbc_error_to_adapter_error(err).kind(), message)
         }
         _ => adbc_error_to_adapter_error(err),
-    }
-}
-
-#[cfg(test)]
-mod duckdb_attach_snapshot_tests {
-    //! File-driven snapshot tests for `compose_v2_catalog_attach_stmts`.
-    //!
-    //! Each fixture under `xdbc/fixtures/<scenario>/catalogs.yml` is parsed via
-    //! `DbtCatalogs::view_v2()` and the joined ATTACH (and optional
-    //! `INSTALL ducklake`) statements are snapshotted to a sibling
-    //! `output.snap` so input + expected output are reviewable side-by-side.
-    //! Update goldens with `cargo insta review` or `cargo insta accept`.
-    use super::compose_v2_catalog_attach_stmts;
-    use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
-
-    fn render(yaml: &str) -> String {
-        let parsed: dbt_yaml::Value = dbt_yaml::from_str(yaml).expect("valid YAML");
-        let dbt_yaml::Value::Mapping(repr, span) = parsed else {
-            panic!("fixture must be a top-level mapping");
-        };
-        let catalogs = DbtCatalogs::new(repr, span);
-        let view = catalogs.view_v2().expect("valid v2 catalog view");
-        match compose_v2_catalog_attach_stmts(&view) {
-            Ok(stmts) => stmts.join("\n"),
-            Err(e) => format!("error: {:?}: {}", e.kind(), e),
-        }
-    }
-
-    #[test]
-    #[allow(clippy::disallowed_methods)]
-    fn duckdb_attach_fixtures() {
-        insta::glob!("xdbc/fixtures", "*/catalogs.yml", |path| {
-            let yaml = std::fs::read_to_string(path).expect("read fixture");
-            let scenario_dir = path
-                .parent()
-                .expect("fixture has a parent directory")
-                .to_path_buf();
-            insta::with_settings!(
-                {
-                    prepend_module_to_snapshot => false,
-                    snapshot_path => &scenario_dir,
-                    snapshot_suffix => "",
-                    omit_expression => true,
-                },
-                { insta::assert_snapshot!("output", render(&yaml)) }
-            );
-        });
     }
 }

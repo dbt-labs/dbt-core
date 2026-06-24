@@ -159,6 +159,8 @@ const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
     FieldSpec::boolean("support_stage_create"),
     FieldSpec::boolean("purge_requested"),
     FieldSpec::boolean("encode_entire_prefix"),
+    FieldSpec::boolean("read_only")
+        .doc("Attach the catalog read-only. Horizon/Unity attach read-only on released DuckDB; read-write requires DuckDB 1.5.4 (see #10950)."),
 ];
 
 const UNITY_DATABRICKS_FIELDS: &[FieldSpec] = &[
@@ -186,9 +188,14 @@ const DUCKLAKE_DUCKDB_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("data_path").non_empty(),
     FieldSpec::string("attach_as").non_empty(),
     FieldSpec::string("metadata_schema").non_empty(),
+    FieldSpec::string("metadata_catalog").non_empty(),
+    FieldSpec::u32_plain("data_inlining_row_limit")
+        .doc("Inline row groups smaller than this many rows into the metadata catalog."),
     FieldSpec::boolean("create_if_not_exists"),
     FieldSpec::boolean("read_only"),
     FieldSpec::boolean("encrypted"),
+    FieldSpec::boolean("automatic_migration"),
+    FieldSpec::boolean("override_data_path"),
 ];
 
 const LOCAL_FILESYSTEM_DUCKDB_FIELDS: &[FieldSpec] = &[
@@ -228,11 +235,12 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         type_name: "horizon",
         table_format: "iceberg",
-        description: "Snowflake-managed Iceberg catalog (Horizon). Supports config.snowflake and/or config.databricks.",
+        description: "Snowflake-managed Iceberg catalog (Horizon). Supports config.snowflake (native), config.databricks, and/or config.duckdb (read-only attach via DuckDB).",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
+            PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -258,11 +266,12 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         type_name: "unity",
         table_format: "iceberg",
-        description: "Databricks Unity catalog. Supports config.snowflake and/or config.databricks.",
+        description: "Databricks Unity catalog. Supports config.snowflake, config.databricks, and/or config.duckdb (read-only attach via DuckDB).",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", UNITY_DATABRICKS_FIELDS),
+            PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -871,9 +880,28 @@ impl CatalogRegistry {
                     Self::validate_duckdb_semantics(duckdb, catalog, "iceberg_rest")?;
                 }
             }
+            V2CatalogType::Horizon => {
+                if let Some(duckdb) = catalog.config_block("duckdb") {
+                    Self::validate_duckdb_semantics(duckdb, catalog, "horizon")?;
+                    // Horizon attached via DuckDB needs the Snowflake warehouse name.
+                    if get_str(duckdb, "warehouse")?.is_none() {
+                        return err!(
+                            code => ErrorCode::InvalidConfig,
+                            hacky_yml_loc => catalog.field_span("type").cloned(),
+                            "Catalog '{}' horizon/duckdb config requires 'warehouse'",
+                            catalog.name
+                        );
+                    }
+                    Self::forbid_duckdb_writes(duckdb, catalog, "horizon")?;
+                }
+            }
             V2CatalogType::Unity => {
                 if let Some(databricks) = catalog.config_block("databricks") {
                     Self::validate_unity_semantics(databricks, catalog)?;
+                }
+                if let Some(duckdb) = catalog.config_block("duckdb") {
+                    Self::validate_duckdb_semantics(duckdb, catalog, "unity")?;
+                    Self::forbid_duckdb_writes(duckdb, catalog, "unity")?;
                 }
             }
             V2CatalogType::BiglakeMetastore => {
@@ -881,8 +909,7 @@ impl CatalogRegistry {
                     Self::validate_biglake_semantics(bigquery, catalog)?;
                 }
             }
-            V2CatalogType::Horizon
-            | V2CatalogType::HiveMetastore
+            V2CatalogType::HiveMetastore
             | V2CatalogType::DuckLake
             | V2CatalogType::LocalFilesystem => {}
         }
@@ -1201,6 +1228,26 @@ impl CatalogRegistry {
             }
         }
 
+        Ok(())
+    }
+
+    /// Horizon/Unity duckdb catalogs are read-only on released duckdb — their
+    /// write path needs duckdb 1.5.4 / duckdb-iceberg#1017 (gated to #10950).
+    /// Reject `read_only: false` so users get a clear config error rather than a
+    /// runtime write failure. (Unset defaults to read-only at attach time.)
+    fn forbid_duckdb_writes(
+        duckdb: &yml::Mapping,
+        catalog: &CatalogSpecV2View<'_>,
+        type_name: &str,
+    ) -> FsResult<()> {
+        if let Some(false) = try_get_bool(duckdb, "read_only")? {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "read_only").cloned(),
+                "Catalog '{}' {}/duckdb is read-only on released duckdb; writes ('read_only: false') require duckdb 1.5.4 (see #10950). Remove 'read_only' or set it to true.",
+                catalog.name, type_name
+            );
+        }
         Ok(())
     }
 
@@ -1865,26 +1912,6 @@ catalogs:
         );
     }
 
-    #[test]
-    fn unity_duckdb_v2_rejected() {
-        let yaml = r#"
-catalogs:
-  - name: unity_duck
-    type: unity
-    table_format: iceberg
-    config:
-      duckdb:
-        endpoint: "https://example.com"
-"#;
-        let res = parse_and_validate(yaml);
-        let msg = format!("{res:?}");
-        assert!(res.is_err(), "expected error but got Ok");
-        assert!(
-            msg.contains("does not support duckdb on the unity"),
-            "unexpected error: {msg}"
-        );
-    }
-
     // -----------------------------------------------------------------------
     // DuckDB config: endpoint_type
     // -----------------------------------------------------------------------
@@ -2240,9 +2267,13 @@ catalogs:
         data_path: "data/"
         attach_as: "lake"
         metadata_schema: "my_schema"
+        metadata_catalog: "lake_db"
+        data_inlining_row_limit: 100
         create_if_not_exists: true
         read_only: false
         encrypted: false
+        automatic_migration: true
+        override_data_path: true
 "#;
         parse_and_validate(yaml).expect("ducklake full config should validate");
     }
@@ -2543,5 +2574,92 @@ catalogs:
             msg.contains("Unknown key 'file_format'"),
             "unexpected error: {msg}"
         );
+    }
+
+    #[test]
+    fn horizon_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "horizon_wh"
+        endpoint: "https://horizon.example.com/catalog"
+        secret: "horizon_secret"
+        default_schema: "demo"
+"#;
+        parse_and_validate(yaml).expect("read-only horizon + duckdb should validate");
+    }
+
+    #[test]
+    fn unity_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: unity_demo
+    type: unity
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "unity_wh"
+        endpoint: "https://dbc.example.com/api/2.1/unity-catalog/iceberg"
+"#;
+        parse_and_validate(yaml).expect("read-only unity + duckdb should validate");
+    }
+
+    #[test]
+    fn horizon_duckdb_requires_warehouse() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://horizon.example.com/catalog"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("'warehouse'"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn horizon_duckdb_forbids_writes() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "horizon_wh"
+        endpoint: "https://horizon.example.com/catalog"
+        read_only: false
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("read-only"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn unity_duckdb_forbids_writes() {
+        let yaml = r#"
+catalogs:
+  - name: unity_demo
+    type: unity
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "unity_wh"
+        endpoint: "https://dbc.example.com/api/2.1/unity-catalog/iceberg"
+        read_only: false
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("read-only"), "unexpected error: {msg}");
     }
 }

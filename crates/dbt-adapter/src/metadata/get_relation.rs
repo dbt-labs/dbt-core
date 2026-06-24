@@ -772,15 +772,56 @@ fn duckdb_get_relation(
         identifier.to_lowercase()
     };
 
+    if !schema.is_empty()
+        && !identifier.is_empty()
+        && crate::metadata::duckdb::is_duckdb_v2_external_iceberg_catalog_database(database)
+    {
+        // DuckDB's information_schema can omit or misreport Iceberg REST
+        // attached-catalog tables. A targeted DESCRIBE is the narrow fallback:
+        // it reuses the normal relation construction after proving the table
+        // exists, without enabling broad schema listing for these catalogs.
+        let quote = |id: &str| dbt_adapter_sql::ident::quote_identifier(id, AdapterType::DuckDB);
+        let relation_name = format!(
+            "{}.{}.{}",
+            quote(database),
+            quote(&query_schema),
+            quote(&query_identifier),
+        );
+        let sql = format!("DESCRIBE {relation_name}");
+        let result = adapter
+            .engine()
+            .execute(Some(state), conn, ctx, &sql, token);
+
+        match result {
+            Ok(_) => {
+                let relation = do_create_relation(
+                    adapter.adapter_type(),
+                    database.to_string(),
+                    schema.to_string(),
+                    Some(identifier.to_string()),
+                    Some(RelationType::Table),
+                    adapter.quoting(),
+                )?;
+                return Ok(Some(relation));
+            }
+            Err(err) if crate::metadata::duckdb::is_missing_relation_error(&err) => {
+                return Ok(None);
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
     // Query INFORMATION_SCHEMA.TABLES for relation metadata
     // DuckDB's table_type values: BASE TABLE, VIEW, LOCAL TEMPORARY
     let sql = format!(
         r#"
             SELECT table_type as type
             FROM information_schema.tables
-            WHERE table_schema = '{query_schema}'
-              AND table_name = '{query_identifier}'
+            WHERE table_schema = '{}'
+              AND table_name = '{}'
         "#,
+        dbt_adapter_sql::ident::escape_string_literal(&query_schema, AdapterType::DuckDB),
+        dbt_adapter_sql::ident::escape_string_literal(&query_identifier, AdapterType::DuckDB),
     );
 
     let batch = adapter

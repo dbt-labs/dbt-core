@@ -226,3 +226,83 @@ pub fn must_be_quoted(id: &str, backend: AdapterType) -> bool {
     // Reserved keywords MUST to be quoted to avoid confusing the lexer/parser
     is_keyword_ignore_ascii_case(id, backend).is_some()
 }
+
+/// Reduce `name` to a bare, injection-safe identifier for `backend`, dropping any
+/// character the backend won't accept unquoted.
+///
+/// DuckDB: keep only ASCII alphanumerics and `_` — used for ATTACH aliases so the
+/// routing database name matches the attached alias exactly, and so a catalog/alias
+/// name can never break out of a quoted identifier or inject SQL. We filter over
+/// `bytes()`: the continuation bytes of a multi-byte UTF-8 scalar always have their
+/// high bit set, so `is_ascii_alphanumeric` rejects them and no interior byte leaks
+/// through. Other backends currently pass the name through unchanged.
+pub fn sanitize_identifier(name: &str, backend: AdapterType) -> String {
+    match backend {
+        AdapterType::DuckDB => name
+            .bytes()
+            .filter(|&b| b.is_ascii_alphanumeric() || b == b'_')
+            .map(char::from)
+            .collect(),
+        _ => name.to_string(),
+    }
+}
+
+/// Render `id` as an unconditionally quoted identifier for `backend`, escaping
+/// embedded quote characters by doubling. Unlike [`Ident::new`], which quotes
+/// only when required, this always quotes — for composing SQL over identifiers
+/// of unknown provenance (e.g. DuckDB `DESCRIBE "db"."schema"."table"`), where
+/// an unquoted rendering could re-interpret case or special characters.
+pub fn quote_identifier(id: &str, backend: AdapterType) -> String {
+    Ident::unquoted(canonical_quote(backend), id)
+        .display(backend)
+        .to_string()
+}
+
+/// Escape `s` for inclusion inside a single-quoted SQL *string literal*, so a
+/// value can never terminate the literal early. The literal-value member of
+/// the family next to [`sanitize_identifier`] (strip) and [`quote_identifier`]
+/// (quote), which handle identifiers.
+pub fn escape_string_literal(s: &str, _backend: AdapterType) -> String {
+    // ANSI '' doubling — correct for every currently supported backend.
+    // Dialects with different literal-escape rules (e.g. backslash-escaped
+    // strings) grow a match arm on `_backend` when they arrive.
+    s.replace('\'', "''")
+}
+
+#[cfg(test)]
+mod sanitize_tests {
+    use super::*;
+
+    #[test]
+    fn quote_identifier_always_quotes_and_escapes() {
+        assert_eq!(
+            quote_identifier("orders", AdapterType::DuckDB),
+            "\"orders\""
+        );
+        assert_eq!(
+            quote_identifier("od\"d", AdapterType::DuckDB),
+            "\"od\"\"d\""
+        );
+        assert_eq!(quote_identifier("col", AdapterType::Bigquery), "`col`");
+    }
+
+    #[test]
+    fn escape_string_literal_doubles_single_quotes() {
+        let e = |s: &str| escape_string_literal(s, AdapterType::DuckDB);
+        assert_eq!(e("o'brien"), "o''brien");
+        assert_eq!(e("'; DROP TABLE x; --"), "''; DROP TABLE x; --");
+        assert_eq!(e("plain"), "plain");
+    }
+
+    #[test]
+    fn duckdb_sanitize_strips_sql_metacharacters() {
+        let s = |n: &str| sanitize_identifier(n, AdapterType::DuckDB);
+        assert_eq!(s("foo\";DROP TABLE bar;--"), "fooDROPTABLEbar");
+        assert_eq!(s("my.catalog.name"), "mycatalogname");
+        assert_eq!(s("'); DROP"), "DROP");
+        assert_eq!(s("a b\tc\n"), "abc");
+        assert_eq!(s("under_score123"), "under_score123");
+        // Multi-byte Unicode is dropped entirely (no stray continuation bytes).
+        assert_eq!(s("café—x"), "cafx");
+    }
+}

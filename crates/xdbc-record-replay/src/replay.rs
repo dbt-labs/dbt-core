@@ -56,11 +56,15 @@ impl Connection for ReplayConnection {
     }
 
     fn commit(&mut self) -> AdbcResult<()> {
-        unimplemented!("ADBC connection commit in replay engine")
+        // Replay connections do not maintain transaction state, but the adapter
+        // can still call commit while exercising DuckDB materialization macros.
+        Ok(())
     }
 
     fn rollback(&mut self) -> AdbcResult<()> {
-        unimplemented!("ADBC connection rollback in replay engine")
+        // See commit(): replay is deterministic trace playback, not a live
+        // transactional backend.
+        Ok(())
     }
 
     #[allow(deprecated)]
@@ -341,4 +345,25 @@ fn replay_file_execute<'a>(
         .read_batches(&data_path)
         .map_err(|e| to_adbc_error(e, Some(&data_path)))?;
     Ok(reader)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use dbt_xdbc::Connection;
+
+    use crate::Config;
+
+    use super::ReplayConnection;
+
+    #[test]
+    fn transaction_methods_are_noops() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut conn =
+            ReplayConnection::new(dir.path().to_path_buf(), Arc::new(Config::default()), 0);
+
+        conn.commit().expect("commit should be a replay no-op");
+        conn.rollback().expect("rollback should be a replay no-op");
+    }
 }

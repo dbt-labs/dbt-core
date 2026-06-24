@@ -2,6 +2,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::dbt_catalogs::CatalogType;
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
+use dbt_schemas::schemas::relations::base::TableFormat;
 
 use dbt_yaml::{Mapping as YmlMapping, Span, Value as YmlValue};
 use minijinja::{
@@ -18,13 +19,35 @@ use crate::load_catalogs;
 
 mod catalog_relation_v2;
 
-/// Keep only ASCII alphanumeric and underscore characters (SQL identifier safety).
-/// Used for DuckDB ATTACH aliases so that the routing database name matches the
-/// attached alias exactly.
-pub(crate) fn sanitize_duckdb_identifier(name: &str) -> String {
-    name.chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .collect()
+/// How DuckDB must write a table for this relation's catalog / table format.
+///
+/// One named state replaces the `supports_stage_create` × `is_iceberg` boolean
+/// matrix the macros used to re-derive. Exposed to Jinja as a string-enum via
+/// the `duckdb_write_strategy` key so materializations branch on a single value
+/// instead of nested booleans.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DuckDbWriteStrategy {
+    /// `CREATE ... AS SELECT` directly (plain DuckDB tables, DuckLake).
+    CreateAsSelect,
+    /// External Iceberg catalogs (any catalog whose `table_format` is iceberg):
+    /// write the target in place — `duckdb__create_table_as` emits an empty
+    /// `CREATE` followed by `INSERT`, and the table materialization skips the
+    /// temp-table + rename dance entirely: staged `CREATE ... AS SELECT` is not
+    /// supported over Iceberg REST attachments on released duckdb (stage-create
+    /// lands with duckdb-iceberg#1017), so there is no temp table to rename.
+    ///
+    /// (A third state, `CreateThenInsert`, arrives with the stacked
+    /// Horizon/Unity PR's `stage_create_tables: false` opt-out.)
+    DirectCreate,
+}
+
+impl DuckDbWriteStrategy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DuckDbWriteStrategy::CreateAsSelect => "create_as_select",
+            DuckDbWriteStrategy::DirectCreate => "direct_create",
+        }
+    }
 }
 
 const BIGQUERY_INFO_SCHEMA: &str = "INFO_SCHEMA";
@@ -1447,6 +1470,52 @@ impl CatalogRelation {
             Value::from(())
         }
     }
+
+    /// Adapter-generic Jinja surface for materializations: whether dbt's write
+    /// path stage-creates (`CREATE ... AS SELECT`) for this relation. For
+    /// DuckDB this is derived from [`Self::duckdb_write_strategy`] — the FSM is
+    /// the single write-path decision point — so the key can never disagree
+    /// with the SQL the macros actually emit.
+    pub fn supports_stage_create(&self) -> bool {
+        match self.adapter_type {
+            AdapterType::DuckDB => {
+                self.duckdb_write_strategy() == DuckDbWriteStrategy::CreateAsSelect
+            }
+            _ => true,
+        }
+    }
+
+    /// The single write-path decision for DuckDB materializations. Collapses the
+    /// `supports_stage_create` × `table_format == 'iceberg'` boolean matrix the
+    /// macros used to re-derive into one named state, exposed to Jinja via the
+    /// `duckdb_write_strategy` key.
+    ///
+    /// TODO(catalog-relation-typed-fields): once non-DuckDB adapters carry typed
+    /// eager fields too, this can be precomputed/stored at construction rather
+    /// than derived. Tracked alongside the String->enum migration follow-up.
+    pub fn duckdb_write_strategy(&self) -> DuckDbWriteStrategy {
+        match self.adapter_type {
+            AdapterType::DuckDB => {
+                // Only true Iceberg catalogs use the direct-create path. DuckLake
+                // always writes via the standard CTAS flow, so guard on
+                // catalog_type as well as table_format — a stray `table_format`
+                // on a DuckLake catalog (which schema validation rejects, but
+                // defend in depth) must not route here.
+                let is_ducklake = self
+                    .catalog_type
+                    .eq_ignore_ascii_case(V2CatalogType::DuckLake.as_str());
+                if !is_ducklake && TableFormat::from_str_ci(&self.table_format).is_iceberg() {
+                    DuckDbWriteStrategy::DirectCreate
+                } else {
+                    DuckDbWriteStrategy::CreateAsSelect
+                }
+            }
+            // The Jinja key is exposed on every CatalogRelation; only DuckDB
+            // materializations consume it, but never let it mislead (a Snowflake
+            // iceberg relation is not a duckdb direct-create target).
+            _ => DuckDbWriteStrategy::CreateAsSelect,
+        }
+    }
 }
 
 #[inline]
@@ -1485,6 +1554,9 @@ impl Object for CatalogRelation {
 
             "catalog_type" => Self::map_str_val(self.catalog_type.as_str()),
             "table_format" => Self::map_str_val(self.table_format.as_str()),
+            "supports_stage_create" => Value::from(self.supports_stage_create()),
+            // Single write-path state the DuckDB materializations branch on.
+            "duckdb_write_strategy" => Value::from(self.duckdb_write_strategy().as_str()),
 
             // common optional
             "base_location" => Self::map_opt_str(self.base_location.clone()),

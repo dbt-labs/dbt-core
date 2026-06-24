@@ -22,6 +22,7 @@ use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
 use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::duckdb::DuckDBMetadataAdapter;
+use crate::metadata::duckdb::{classify_attach_entry, duckdb_table_format_for_database};
 use crate::metadata::fabric::FabricMetadataAdapter;
 use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
@@ -61,7 +62,6 @@ use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
-use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
@@ -435,62 +435,23 @@ impl AdapterImpl {
 
         // Check v2 catalogs first: if this database matches an attached catalog,
         // return the appropriate table format so that macros can skip CASCADE / ALTER TABLE RENAME.
-        if load_catalogs::fetch_use_catalogs_v2() {
-            if let Some(catalogs) = load_catalogs::fetch_catalogs() {
-                if let Ok(view) = catalogs.view_v2() {
-                    for catalog in &view.catalogs {
-                        if let Some(duckdb_block) = catalog.config_block("duckdb") {
-                            let alias = duckdb_block
-                                .get(dbt_yaml::Value::from("attach_as"))
-                                .and_then(|v| v.as_str())
-                                .unwrap_or(catalog.name);
-                            let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
-                            if alias.eq_ignore_ascii_case(database) {
-                                return match catalog.catalog_type {
-                                    V2CatalogType::DuckLake => TableFormat::DuckLake,
-                                    _ => TableFormat::Iceberg,
-                                };
-                            }
-                        }
-                    }
-                }
-            }
+        if let Some(format) = duckdb_table_format_for_database(database) {
+            return format;
         }
 
-        // Legacy path: check profile-level attach: entries
+        // Legacy path: check profile-level attach: entries. Each entry resolves
+        // independently to an (alias, table_format) or is skipped.
         let Some(attach_val) = self.get_db_config_value("attach") else {
             return TableFormat::Default;
         };
         let YmlValue::Sequence(seq, _) = attach_val else {
             return TableFormat::Default;
         };
-        for item in seq {
-            let YmlValue::Mapping(map, _) = item else {
-                continue;
-            };
-            let Some(path) = map.get("path").and_then(|v| v.as_str()) else {
-                continue;
-            };
-            let attach_info = DuckDBPathInfo::parse_path(Some(path));
-            let explicit_ducklake = map
-                .get("is_ducklake")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            if !explicit_ducklake && !attach_info.is_ducklake {
-                continue;
-            }
-
-            let attachment_db = map
-                .get("alias")
-                .and_then(|v| v.as_str())
-                .map(ToOwned::to_owned)
-                .unwrap_or_else(|| attach_info.database.to_owned());
-            if attachment_db.eq_ignore_ascii_case(database) {
-                return TableFormat::DuckLake;
-            }
-        }
-
-        TableFormat::Default
+        seq.iter()
+            .filter_map(classify_attach_entry)
+            .find(|(alias, _)| alias.eq_ignore_ascii_case(database))
+            .map(|(_, format)| format)
+            .unwrap_or(TableFormat::Default)
     }
 
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1749
@@ -5145,6 +5106,35 @@ mod tests {
         );
         assert_eq!(
             adapter.table_format_for_database("main"),
+            TableFormat::Default
+        );
+    }
+
+    #[test]
+    fn test_table_format_profile_level_iceberg_attachment() {
+        let attach = YmlValue::Sequence(
+            vec![YmlValue::Mapping(
+                Mapping::from_iter([
+                    ("path".into(), "demo".into()),
+                    ("alias".into(), "iceberg_demo".into()),
+                    ("type".into(), "iceberg".into()),
+                ]),
+                Default::default(),
+            )],
+            Default::default(),
+        );
+        let config = Mapping::from_iter([
+            ("path".into(), "demo.duckdb".into()),
+            ("attach".into(), attach),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(DuckDB, config), None);
+
+        assert_eq!(
+            adapter.table_format_for_database("iceberg_demo"),
+            TableFormat::Iceberg
+        );
+        assert_eq!(
+            adapter.table_format_for_database("demo"),
             TableFormat::Default
         );
     }
