@@ -1,51 +1,54 @@
 //! Registry-backed JSON deserialization for telemetry records.
 
-use std::{
-    borrow::Cow,
-    collections::BTreeMap,
-    error::Error,
-    io::{self, ErrorKind},
-    time::SystemTime,
-};
+use std::{collections::BTreeMap, time::SystemTime};
 
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::{
-    LogRecordInfo, SeverityNumber, SpanEndInfo, SpanLinkInfo, SpanStartInfo, SpanStatus,
-    StatusCode, TelemetryAttributes, TelemetryEventRecType, TelemetryRecord,
+    IndexedTelemetryDeserializeError, LogRecordInfo, PartialLogRecordInfo, PartialSpanEndInfo,
+    PartialSpanStartInfo, PartialTelemetryRecord, SeverityNumber, SpanEndInfo, SpanLinkInfo,
+    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, TelemetryDeserializeError,
+    TelemetryEventRecType, TelemetryRecord,
     serialize::{
+        deserialize::TelemetryDeserializeError as DeserializeError,
         envelope::{
             deserialize_optional_span_id, deserialize_span_id, deserialize_timestamp,
             deserialize_trace_id,
         },
-        traits::JsonRegistryLookup,
+        traits::{JsonRegistryLookup, TelemetryAttributeDeserializeError},
     },
 };
 
-type BoxError = Box<dyn Error>;
-
-pub fn deserialize_from_json_str<R>(input: &str, registry: &R) -> Result<TelemetryRecord, BoxError>
+pub fn deserialize_from_json_str<R>(
+    input: &str,
+    registry: &R,
+) -> Result<TelemetryRecord, TelemetryDeserializeError>
 where
     R: JsonRegistryLookup,
 {
-    let record: TelemetryRecordJson<'_> = serde_json::from_str(input).map_err(invalid_data)?;
+    let record: TelemetryRecordJson =
+        serde_json::from_str(input).map_err(DeserializeError::invalid_envelope)?;
     record.into_telemetry_record(registry)
 }
 
 pub fn deserialize_from_json_value<R>(
     value: JsonValue,
     registry: &R,
-) -> Result<TelemetryRecord, BoxError>
+) -> Result<TelemetryRecord, TelemetryDeserializeError>
 where
     R: JsonRegistryLookup,
 {
-    let input = serde_json::to_string(&value).map_err(invalid_data)?;
-    deserialize_from_json_str(&input, registry)
+    let record: TelemetryRecordJson =
+        serde_json::from_value(value).map_err(DeserializeError::invalid_envelope)?;
+    record.into_telemetry_record(registry)
 }
 
-pub fn deserialize_json_lines<R>(input: &str, registry: &R) -> (Vec<TelemetryRecord>, Vec<BoxError>)
+pub fn deserialize_json_lines<R>(
+    input: &str,
+    registry: &R,
+) -> (Vec<TelemetryRecord>, Vec<IndexedTelemetryDeserializeError>)
 where
     R: JsonRegistryLookup,
 {
@@ -55,10 +58,7 @@ where
     for (idx, line) in input.lines().enumerate() {
         match deserialize_from_json_str(line, registry) {
             Ok(record) => records.push(record),
-            Err(err) => errors.push(invalid_data(format!(
-                "failed to deserialize JSON line {}: {err}",
-                idx + 1
-            ))),
+            Err(err) => errors.push(IndexedTelemetryDeserializeError::new(idx + 1, err)),
         }
     }
 
@@ -67,14 +67,17 @@ where
 
 #[derive(Deserialize)]
 #[serde(tag = "record_type")]
-enum TelemetryRecordJson<'a> {
-    SpanStart(#[serde(borrow)] SpanStartJson<'a>),
-    SpanEnd(#[serde(borrow)] SpanEndJson<'a>),
-    LogRecord(#[serde(borrow)] LogRecordJson<'a>),
+enum TelemetryRecordJson {
+    SpanStart(SpanStartJson),
+    SpanEnd(SpanEndJson),
+    LogRecord(LogRecordJson),
 }
 
-impl TelemetryRecordJson<'_> {
-    fn into_telemetry_record<R>(self, registry: &R) -> Result<TelemetryRecord, BoxError>
+impl TelemetryRecordJson {
+    fn into_telemetry_record<R>(
+        self,
+        registry: &R,
+    ) -> Result<TelemetryRecord, TelemetryDeserializeError>
     where
         R: JsonRegistryLookup,
     {
@@ -87,58 +90,89 @@ impl TelemetryRecordJson<'_> {
 }
 
 #[derive(Deserialize)]
-struct SpanStartJson<'a> {
+struct SpanStartJson {
     #[serde(deserialize_with = "deserialize_trace_id")]
     trace_id: u128,
     #[serde(deserialize_with = "deserialize_span_id")]
     span_id: u64,
-    #[serde(borrow)]
-    span_name: Cow<'a, str>,
+    span_name: String,
     #[serde(default, deserialize_with = "deserialize_optional_span_id")]
     parent_span_id: Option<u64>,
     links: Option<Vec<SpanLinkJson>>,
     #[serde(deserialize_with = "deserialize_timestamp")]
     start_time_unix_nano: SystemTime,
     severity_number: SeverityNumber,
-    #[serde(borrow)]
-    severity_text: Cow<'a, str>,
-    #[serde(borrow)]
-    event_type: Cow<'a, str>,
+    severity_text: String,
+    event_type: String,
     attributes: JsonValue,
 }
 
-impl SpanStartJson<'_> {
-    fn into_telemetry_record<R>(self, registry: &R) -> Result<TelemetryRecord, BoxError>
+impl SpanStartJson {
+    fn into_telemetry_record<R>(
+        self,
+        registry: &R,
+    ) -> Result<TelemetryRecord, TelemetryDeserializeError>
     where
         R: JsonRegistryLookup,
     {
+        let SpanStartJson {
+            trace_id,
+            span_id,
+            span_name,
+            parent_span_id,
+            links,
+            start_time_unix_nano,
+            severity_number,
+            severity_text,
+            event_type,
+            attributes,
+        } = self;
+
+        let deserialized_attributes = match deserialize_attributes(
+            registry,
+            event_type.as_ref(),
+            &attributes,
+            TelemetryEventRecType::Span,
+        ) {
+            Ok(attributes) => attributes,
+            Err(err) => {
+                let record = PartialTelemetryRecord::SpanStart(PartialSpanStartInfo {
+                    trace_id,
+                    span_id,
+                    span_name,
+                    parent_span_id,
+                    links: links.map(span_links_from_json),
+                    start_time_unix_nano,
+                    severity_number,
+                    severity_text,
+                    event_type,
+                    attributes,
+                });
+                return Err(TelemetryDeserializeError::from_attribute_error(record, err));
+            }
+        };
+
         Ok(TelemetryRecord::SpanStart(SpanStartInfo {
-            trace_id: self.trace_id,
-            span_id: self.span_id,
-            span_name: self.span_name.into_owned(),
-            parent_span_id: self.parent_span_id,
-            links: self.links.map(span_links_from_json),
-            start_time_unix_nano: self.start_time_unix_nano,
-            severity_number: self.severity_number,
-            severity_text: self.severity_text.into_owned(),
-            attributes: deserialize_attributes(
-                registry,
-                self.event_type.as_ref(),
-                self.attributes,
-                TelemetryEventRecType::Span,
-            )?,
+            trace_id,
+            span_id,
+            span_name,
+            parent_span_id,
+            links: links.map(span_links_from_json),
+            start_time_unix_nano,
+            severity_number,
+            severity_text,
+            attributes: deserialized_attributes,
         }))
     }
 }
 
 #[derive(Deserialize)]
-struct SpanEndJson<'a> {
+struct SpanEndJson {
     #[serde(deserialize_with = "deserialize_trace_id")]
     trace_id: u128,
     #[serde(deserialize_with = "deserialize_span_id")]
     span_id: u64,
-    #[serde(borrow)]
-    span_name: Cow<'a, str>,
+    span_name: String,
     #[serde(default, deserialize_with = "deserialize_optional_span_id")]
     parent_span_id: Option<u64>,
     links: Option<Vec<SpanLinkJson>>,
@@ -147,97 +181,163 @@ struct SpanEndJson<'a> {
     #[serde(deserialize_with = "deserialize_timestamp")]
     end_time_unix_nano: SystemTime,
     severity_number: SeverityNumber,
-    #[serde(borrow)]
-    severity_text: Cow<'a, str>,
-    #[serde(borrow)]
-    status: Option<SpanStatusJson<'a>>,
-    #[serde(borrow)]
-    event_type: Cow<'a, str>,
+    severity_text: String,
+    status: Option<SpanStatusJson>,
+    event_type: String,
     attributes: JsonValue,
 }
 
-impl SpanEndJson<'_> {
-    fn into_telemetry_record<R>(self, registry: &R) -> Result<TelemetryRecord, BoxError>
+impl SpanEndJson {
+    fn into_telemetry_record<R>(
+        self,
+        registry: &R,
+    ) -> Result<TelemetryRecord, TelemetryDeserializeError>
     where
         R: JsonRegistryLookup,
     {
+        let SpanEndJson {
+            trace_id,
+            span_id,
+            span_name,
+            parent_span_id,
+            links,
+            start_time_unix_nano,
+            end_time_unix_nano,
+            severity_number,
+            severity_text,
+            status,
+            event_type,
+            attributes,
+        } = self;
+
+        let deserialized_attributes = match deserialize_attributes(
+            registry,
+            event_type.as_ref(),
+            &attributes,
+            TelemetryEventRecType::Span,
+        ) {
+            Ok(attributes) => attributes,
+            Err(err) => {
+                let record = PartialTelemetryRecord::SpanEnd(PartialSpanEndInfo {
+                    trace_id,
+                    span_id,
+                    span_name,
+                    parent_span_id,
+                    links: links.map(span_links_from_json),
+                    start_time_unix_nano,
+                    end_time_unix_nano,
+                    severity_number,
+                    severity_text,
+                    status: status.map(Into::into),
+                    event_type,
+                    attributes,
+                });
+                return Err(TelemetryDeserializeError::from_attribute_error(record, err));
+            }
+        };
+
         Ok(TelemetryRecord::SpanEnd(SpanEndInfo {
-            trace_id: self.trace_id,
-            span_id: self.span_id,
-            span_name: self.span_name.into_owned(),
-            parent_span_id: self.parent_span_id,
-            links: self.links.map(span_links_from_json),
-            start_time_unix_nano: self.start_time_unix_nano,
-            end_time_unix_nano: self.end_time_unix_nano,
-            severity_number: self.severity_number,
-            severity_text: self.severity_text.into_owned(),
-            status: self.status.map(Into::into),
-            attributes: deserialize_attributes(
-                registry,
-                self.event_type.as_ref(),
-                self.attributes,
-                TelemetryEventRecType::Span,
-            )?,
+            trace_id,
+            span_id,
+            span_name,
+            parent_span_id,
+            links: links.map(span_links_from_json),
+            start_time_unix_nano,
+            end_time_unix_nano,
+            severity_number,
+            severity_text,
+            status: status.map(Into::into),
+            attributes: deserialized_attributes,
         }))
     }
 }
 
 #[derive(Deserialize)]
-struct LogRecordJson<'a> {
+struct LogRecordJson {
     #[serde(deserialize_with = "deserialize_trace_id")]
     trace_id: u128,
     #[serde(default, deserialize_with = "deserialize_optional_span_id")]
     span_id: Option<u64>,
-    #[serde(borrow)]
-    span_name: Option<Cow<'a, str>>,
+    span_name: Option<String>,
     event_id: Uuid,
     #[serde(deserialize_with = "deserialize_timestamp")]
     time_unix_nano: SystemTime,
     severity_number: SeverityNumber,
-    #[serde(borrow)]
-    severity_text: Cow<'a, str>,
-    #[serde(borrow)]
-    body: Cow<'a, str>,
-    #[serde(borrow)]
-    event_type: Cow<'a, str>,
+    severity_text: String,
+    body: String,
+    event_type: String,
     attributes: JsonValue,
 }
 
-impl LogRecordJson<'_> {
-    fn into_telemetry_record<R>(self, registry: &R) -> Result<TelemetryRecord, BoxError>
+impl LogRecordJson {
+    fn into_telemetry_record<R>(
+        self,
+        registry: &R,
+    ) -> Result<TelemetryRecord, TelemetryDeserializeError>
     where
         R: JsonRegistryLookup,
     {
+        let LogRecordJson {
+            trace_id,
+            span_id,
+            span_name,
+            event_id,
+            time_unix_nano,
+            severity_number,
+            severity_text,
+            body,
+            event_type,
+            attributes,
+        } = self;
+
+        let deserialized_attributes = match deserialize_attributes(
+            registry,
+            event_type.as_ref(),
+            &attributes,
+            TelemetryEventRecType::Log,
+        ) {
+            Ok(attributes) => attributes,
+            Err(err) => {
+                let record = PartialTelemetryRecord::LogRecord(PartialLogRecordInfo {
+                    trace_id,
+                    span_id,
+                    span_name,
+                    event_id,
+                    time_unix_nano,
+                    severity_number,
+                    severity_text,
+                    body,
+                    event_type,
+                    attributes,
+                });
+                return Err(TelemetryDeserializeError::from_attribute_error(record, err));
+            }
+        };
+
         Ok(TelemetryRecord::LogRecord(LogRecordInfo {
-            trace_id: self.trace_id,
-            span_id: self.span_id,
-            span_name: self.span_name.map(Cow::into_owned),
-            event_id: self.event_id,
-            time_unix_nano: self.time_unix_nano,
-            severity_number: self.severity_number,
-            severity_text: self.severity_text.into_owned(),
-            body: self.body.into_owned(),
-            attributes: deserialize_attributes(
-                registry,
-                self.event_type.as_ref(),
-                self.attributes,
-                TelemetryEventRecType::Log,
-            )?,
+            trace_id,
+            span_id,
+            span_name,
+            event_id,
+            time_unix_nano,
+            severity_number,
+            severity_text,
+            body,
+            attributes: deserialized_attributes,
         }))
     }
 }
 
 #[derive(Deserialize)]
-struct SpanStatusJson<'a> {
-    #[serde(borrow)]
-    message: Option<Cow<'a, str>>,
+struct SpanStatusJson {
+    message: Option<String>,
     code: StatusCode,
 }
 
-impl From<SpanStatusJson<'_>> for SpanStatus {
-    fn from(status: SpanStatusJson<'_>) -> Self {
+impl From<SpanStatusJson> for SpanStatus {
+    fn from(status: SpanStatusJson) -> Self {
         Self {
-            message: status.message.map(Cow::into_owned),
+            message: status.message,
             code: status.code,
         }
     }
@@ -266,26 +366,18 @@ fn span_links_from_json(links: Vec<SpanLinkJson>) -> Vec<SpanLinkInfo> {
 fn deserialize_attributes<R>(
     registry: &R,
     event_type: &str,
-    attributes: JsonValue,
+    attributes: &JsonValue,
     expected_category: TelemetryEventRecType,
-) -> Result<TelemetryAttributes, BoxError>
+) -> Result<TelemetryAttributes, TelemetryAttributeDeserializeError>
 where
     R: JsonRegistryLookup,
 {
-    let event = registry
-        .deserialize_json_attributes(event_type, attributes)
-        .map_err(invalid_data)?;
-    let actual_category = event.record_category();
-
-    if actual_category != expected_category {
-        return Err(invalid_data(format!(
-            "event type \"{event_type}\" has category {actual_category:?}, expected {expected_category:?}"
-        )));
-    }
+    let event = registry.deserialize_json_attributes(event_type, attributes)?;
+    debug_assert_eq!(
+        event.record_category(),
+        expected_category,
+        "event type \"{event_type}\" deserialized to the wrong record category"
+    );
 
     Ok(TelemetryAttributes::new(event))
-}
-
-fn invalid_data(error: impl ToString) -> BoxError {
-    Box::new(io::Error::new(ErrorKind::InvalidData, error.to_string()))
 }

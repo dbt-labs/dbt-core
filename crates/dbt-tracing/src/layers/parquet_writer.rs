@@ -452,7 +452,13 @@ mod tests {
 
         let mut records = Vec::new();
         for batch in arrow_reader {
-            records.extend(deserialize_from_arrow(&batch.unwrap(), &registry).unwrap());
+            let (mut batch_records, errors) =
+                deserialize_from_arrow(&batch.unwrap(), &registry).unwrap();
+            assert!(
+                errors.is_empty(),
+                "unexpected deserialize errors: {errors:?}"
+            );
+            records.append(&mut batch_records);
         }
 
         records

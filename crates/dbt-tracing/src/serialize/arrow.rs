@@ -1,8 +1,10 @@
 //! Arrow serialization support for telemetry records using serde_arrow.
 
 use crate::{
-    LogRecordInfo, SeverityNumber, SpanEndInfo, SpanLinkInfo, SpanStartInfo, SpanStatus,
-    StatusCode, TelemetryAttributes, TelemetryOutputFlags, TelemetryRecord, TelemetryRecordType,
+    IndexedTelemetryDeserializeError, LogRecordInfo, PartialLogRecordInfo, PartialSpanEndInfo,
+    PartialSpanStartInfo, PartialTelemetryRecord, SeverityNumber, SpanEndInfo, SpanLinkInfo,
+    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, TelemetryDeserializeError,
+    TelemetryOutputFlags, TelemetryRecord, TelemetryRecordType,
     serialize::{
         envelope::to_nanos,
         traits::{ArrowAttributesSerialize, ArrowRegistryLookup},
@@ -17,6 +19,7 @@ use arrow::{
 };
 use arrow_schema::extension::Json as JsonExtensionType;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 // no serde_arrow schema tracing; we build schema manually
 use std::{borrow::Cow, sync::Arc};
 use std::{str::FromStr, time::SystemTime};
@@ -173,27 +176,50 @@ impl<'a> TryFrom<&'a TelemetryRecord>
 fn deserialize_record_from_arrow<R>(
     arrow: ArrowTelemetryRecord<'_, R::ArrowAttributes<'_>>,
     registry: &R,
-) -> Result<TelemetryRecord, String>
+) -> Result<TelemetryRecord, TelemetryDeserializeError>
 where
     R: ArrowRegistryLookup,
 {
-    let trace_id =
-        u128::from_str_radix(&arrow.trace_id, 16).map_err(|e| format!("Invalid trace_id: {e}"))?;
+    let ArrowTelemetryRecord {
+        record_type,
+        trace_id,
+        span_id,
+        event_id,
+        span_name,
+        parent_span_id,
+        links,
+        start_time_unix_nano,
+        end_time_unix_nano,
+        time_unix_nano,
+        severity_number,
+        severity_text,
+        body,
+        status_code,
+        status_message,
+        event_type,
+        attributes,
+    } = arrow;
 
-    let attributes = TelemetryAttributes::new(
-        registry.deserialize_arrow_attributes(arrow.event_type.as_ref(), &arrow.attributes)?,
-    );
+    let trace_id = u128::from_str_radix(&trace_id, 16).map_err(|e| {
+        TelemetryDeserializeError::invalid_envelope(format!("Invalid trace_id: {e}"))
+    })?;
+    let event_type = event_type.into_owned();
 
-    let links = if let Some(arrow_links) = arrow.links {
+    let links = if let Some(arrow_links) = links {
         let mut span_links = Vec::with_capacity(arrow_links.len());
         for link in arrow_links {
-            let trace_id = u128::from_str_radix(&link.trace_id, 16)
-                .map_err(|e| format!("Invalid trace_id in SpanLink: {e}"))?;
+            let trace_id = u128::from_str_radix(&link.trace_id, 16).map_err(|e| {
+                TelemetryDeserializeError::invalid_envelope(format!(
+                    "Invalid trace_id in SpanLink: {e}"
+                ))
+            })?;
             span_links.push(SpanLinkInfo {
                 trace_id,
                 span_id: link.span_id,
                 attributes: serde_json::from_str(&link.json_payload).map_err(|e| {
-                    format!("Failed to deserialize SpanLink attributes from JSON: {e}")
+                    TelemetryDeserializeError::invalid_envelope(format!(
+                        "Failed to deserialize SpanLink attributes from JSON: {e}"
+                    ))
                 })?,
             });
         }
@@ -202,94 +228,207 @@ where
         None
     };
 
-    match arrow.record_type {
+    match record_type {
         TelemetryRecordType::SpanStart => {
-            let span_id = arrow
-                .span_id
-                .ok_or("Missing span_id for SpanStart record")?;
-            let span_name = arrow
-                .span_name
-                .ok_or("Missing span_name for SpanStart record")?
+            let span_id = span_id.ok_or_else(|| {
+                TelemetryDeserializeError::invalid_envelope("Missing span_id for SpanStart record")
+            })?;
+            let span_name = span_name
+                .ok_or_else(|| {
+                    TelemetryDeserializeError::invalid_envelope(
+                        "Missing span_name for SpanStart record",
+                    )
+                })?
                 .into_owned();
-            let start_time_unix_nano = arrow
-                .start_time_unix_nano
-                .ok_or("Missing start_time_unix_nano for SpanStart record")?;
-            let severity_text = arrow.severity_text.into_owned();
+            let start_time_unix_nano = start_time_unix_nano.ok_or_else(|| {
+                TelemetryDeserializeError::invalid_envelope(
+                    "Missing start_time_unix_nano for SpanStart record",
+                )
+            })?;
+            let severity_text = severity_text.into_owned();
+
+            let severity_number = SeverityNumber::try_from(severity_number).map_err(|_| {
+                TelemetryDeserializeError::invalid_envelope("Invalid severity_number")
+            })?;
+            let start_time_unix_nano = nanos_to_system_time(start_time_unix_nano);
+
+            let deserialized_attributes =
+                match registry.deserialize_arrow_attributes(&event_type, &attributes) {
+                    Ok(attributes) => TelemetryAttributes::new(attributes),
+                    Err(err) => {
+                        let record = PartialTelemetryRecord::SpanStart(PartialSpanStartInfo {
+                            trace_id,
+                            span_id,
+                            span_name,
+                            parent_span_id,
+                            links,
+                            start_time_unix_nano,
+                            severity_number,
+                            severity_text,
+                            event_type,
+                            attributes: arrow_attributes_json(&attributes)?,
+                        });
+                        return Err(TelemetryDeserializeError::from_attribute_error(record, err));
+                    }
+                };
 
             Ok(TelemetryRecord::SpanStart(SpanStartInfo {
                 trace_id,
                 span_id,
-                parent_span_id: arrow.parent_span_id,
-                links,
                 span_name,
-                start_time_unix_nano: nanos_to_system_time(start_time_unix_nano),
-                attributes,
-                severity_number: SeverityNumber::try_from(arrow.severity_number)
-                    .map_err(|_| "Invalid severity_number")?,
+                parent_span_id,
+                links,
+                start_time_unix_nano,
+                severity_number,
                 severity_text,
+                attributes: deserialized_attributes,
             }))
         }
         TelemetryRecordType::SpanEnd => {
-            let span_id = arrow.span_id.ok_or("Missing span_id for SpanEnd record")?;
-            let span_name = arrow
-                .span_name
-                .ok_or("Missing span_name for SpanEnd record")?
+            let span_id = span_id.ok_or_else(|| {
+                TelemetryDeserializeError::invalid_envelope("Missing span_id for SpanEnd record")
+            })?;
+            let span_name = span_name
+                .ok_or_else(|| {
+                    TelemetryDeserializeError::invalid_envelope(
+                        "Missing span_name for SpanEnd record",
+                    )
+                })?
                 .into_owned();
-            let start_time_unix_nano = arrow
-                .start_time_unix_nano
-                .ok_or("Missing start_time_unix_nano for SpanEnd record")?;
-            let end_time_unix_nano = arrow
-                .end_time_unix_nano
-                .ok_or("Missing end_time_unix_nano for SpanEnd record")?;
-            let severity_text = arrow.severity_text.into_owned();
+            let start_time_unix_nano = start_time_unix_nano.ok_or_else(|| {
+                TelemetryDeserializeError::invalid_envelope(
+                    "Missing start_time_unix_nano for SpanEnd record",
+                )
+            })?;
+            let end_time_unix_nano = end_time_unix_nano.ok_or_else(|| {
+                TelemetryDeserializeError::invalid_envelope(
+                    "Missing end_time_unix_nano for SpanEnd record",
+                )
+            })?;
+            let severity_text = severity_text.into_owned();
 
-            let status = if arrow.status_code.is_some() || arrow.status_message.is_some() {
+            let status = if status_code.is_some() || status_message.is_some() {
                 Some(SpanStatus {
-                    code: StatusCode::from_repr(arrow.status_code.unwrap_or(0) as u8)
+                    code: StatusCode::from_repr(status_code.unwrap_or(0) as u8)
                         .unwrap_or(StatusCode::Unset),
-                    message: arrow.status_message.map(Cow::into_owned),
+                    message: status_message.map(Cow::into_owned),
                 })
             } else {
                 None
             };
+            let severity_number = SeverityNumber::try_from(severity_number).map_err(|_| {
+                TelemetryDeserializeError::invalid_envelope("Invalid severity_number")
+            })?;
+            let start_time_unix_nano = nanos_to_system_time(start_time_unix_nano);
+            let end_time_unix_nano = nanos_to_system_time(end_time_unix_nano);
+
+            let deserialized_attributes =
+                match registry.deserialize_arrow_attributes(&event_type, &attributes) {
+                    Ok(attributes) => TelemetryAttributes::new(attributes),
+                    Err(err) => {
+                        let record = PartialTelemetryRecord::SpanEnd(PartialSpanEndInfo {
+                            trace_id,
+                            span_id,
+                            span_name,
+                            parent_span_id,
+                            links,
+                            start_time_unix_nano,
+                            end_time_unix_nano,
+                            status,
+                            severity_number,
+                            severity_text,
+                            event_type,
+                            attributes: arrow_attributes_json(&attributes)?,
+                        });
+                        return Err(TelemetryDeserializeError::from_attribute_error(record, err));
+                    }
+                };
 
             Ok(TelemetryRecord::SpanEnd(SpanEndInfo {
                 trace_id,
                 span_id,
-                parent_span_id: arrow.parent_span_id,
-                links,
                 span_name,
-                start_time_unix_nano: nanos_to_system_time(start_time_unix_nano),
-                end_time_unix_nano: nanos_to_system_time(end_time_unix_nano),
-                attributes,
+                parent_span_id,
+                links,
+                start_time_unix_nano,
+                end_time_unix_nano,
                 status,
-                severity_number: SeverityNumber::try_from(arrow.severity_number)
-                    .map_err(|_| "Invalid severity_number")?,
+                severity_number,
                 severity_text,
+                attributes: deserialized_attributes,
             }))
         }
         TelemetryRecordType::LogRecord => {
-            let time_unix_nano = arrow
-                .time_unix_nano
-                .ok_or("Missing time_unix_nano for LogRecord")?;
-            let body = arrow.body.ok_or("Missing body for LogRecord")?.into_owned();
-            let severity_text = arrow.severity_text.into_owned();
+            let time_unix_nano = time_unix_nano.ok_or_else(|| {
+                TelemetryDeserializeError::invalid_envelope("Missing time_unix_nano for LogRecord")
+            })?;
+            let body = body
+                .ok_or_else(|| {
+                    TelemetryDeserializeError::invalid_envelope("Missing body for LogRecord")
+                })?
+                .into_owned();
+            let severity_text = severity_text.into_owned();
+
+            let event_id = uuid::Uuid::from_str(
+                event_id
+                    .ok_or_else(|| TelemetryDeserializeError::invalid_envelope("Missing event_id"))?
+                    .as_ref(),
+            )
+            .map_err(|e| {
+                TelemetryDeserializeError::invalid_envelope(format!(
+                    "Failed to deserialize `event_id`: {e}"
+                ))
+            })?;
+            let span_name = span_name.map(|name| name.into_owned());
+            let severity_number = SeverityNumber::try_from(severity_number).map_err(|_| {
+                TelemetryDeserializeError::invalid_envelope("Invalid severity_number")
+            })?;
+            let time_unix_nano = nanos_to_system_time(time_unix_nano);
+
+            let deserialized_attributes =
+                match registry.deserialize_arrow_attributes(&event_type, &attributes) {
+                    Ok(attributes) => TelemetryAttributes::new(attributes),
+                    Err(err) => {
+                        let record = PartialTelemetryRecord::LogRecord(PartialLogRecordInfo {
+                            time_unix_nano,
+                            trace_id,
+                            span_id,
+                            event_id,
+                            span_name,
+                            severity_number,
+                            severity_text,
+                            body,
+                            event_type,
+                            attributes: arrow_attributes_json(&attributes)?,
+                        });
+                        return Err(TelemetryDeserializeError::from_attribute_error(record, err));
+                    }
+                };
 
             Ok(TelemetryRecord::LogRecord(LogRecordInfo {
-                time_unix_nano: nanos_to_system_time(time_unix_nano),
+                time_unix_nano,
                 trace_id,
-                span_id: arrow.span_id,
-                event_id: uuid::Uuid::from_str(arrow.event_id.ok_or("Missing event_id")?.as_ref())
-                    .map_err(|e| format!("Failed to deserialize `event_id` from JSON: {e}"))?,
-                span_name: arrow.span_name.map(|name| name.into_owned()),
-                severity_number: SeverityNumber::try_from(arrow.severity_number)
-                    .map_err(|_| "Invalid severity_number")?,
+                span_id,
+                event_id,
+                span_name,
+                severity_number,
                 severity_text,
                 body,
-                attributes,
+                attributes: deserialized_attributes,
             }))
         }
     }
+}
+
+fn arrow_attributes_json<A>(attributes: &A) -> Result<JsonValue, TelemetryDeserializeError>
+where
+    A: Serialize,
+{
+    serde_json::to_value(attributes).map_err(|e| {
+        TelemetryDeserializeError::invalid_envelope(format!(
+            "Failed to convert Arrow attributes to JSON: {e}"
+        ))
+    })
 }
 
 fn large_utf8_field(name: &str, nullable: bool) -> Field {
@@ -514,8 +653,7 @@ pub fn serialize_to_arrow(
 /// Deserializes telemetry records from an Arrow RecordBatch.
 ///
 /// Converts an Arrow RecordBatch (typically read from a Parquet file) back into
-/// telemetry records. This function validates the data during deserialization
-/// and will return errors for malformed or missing required fields.
+/// telemetry records.
 ///
 /// # Arguments
 ///
@@ -524,17 +662,26 @@ pub fn serialize_to_arrow(
 ///
 /// # Returns
 ///
-/// Returns a vector of telemetry records, or an error if deserialization fails
-/// due to invalid data format or missing required fields.
+/// Returns successfully deserialized telemetry records and per-row errors with
+/// one-based Arrow row indexes.
 ///
 /// # Errors
 ///
-/// This function will return an error if:
-/// - The RecordBatch format is incompatible
-/// - Required fields are missing (e.g., span_id for span records)
-/// - Field values are invalid (e.g., malformed trace_id hex strings)
-/// - Enum values are out of range (e.g., invalid severity numbers)
-/// - Unknown event types are encountered - means that the registry is missing an entry
+/// This function returns an outer error when the RecordBatch cannot be decoded
+/// as telemetry records, including incompatible schemas, schema normalization
+/// failures, or Arrow/serde decoding failures.
+///
+/// # Per-row errors
+///
+/// The second tuple element contains row-level errors for records that could be
+/// projected from the batch but could not become typed telemetry records. Each
+/// error includes the one-based Arrow row index:
+/// - Required envelope fields are missing, such as span IDs, timestamps, event
+///   IDs, or log bodies.
+/// - Envelope field values are invalid, such as malformed trace IDs, span link
+///   payloads, UUIDs, or severity numbers.
+/// - The event type is unknown to the supplied registry.
+/// - The event type is known but its attributes are malformed.
 ///
 /// # Examples
 ///
@@ -543,12 +690,12 @@ pub fn serialize_to_arrow(
 /// use arrow::record_batch::RecordBatch;
 ///
 /// let batch: RecordBatch = /* read from file */;
-/// let records = deserialize_from_arrow(&batch, MyRegistry).expect("Failed to deserialize");
+/// let (records, errors) = deserialize_from_arrow(&batch, MyRegistry).expect("Failed to deserialize");
 /// ```
 pub fn deserialize_from_arrow<R>(
     batch: &RecordBatch,
     registry: &R,
-) -> Result<Vec<TelemetryRecord>, Box<dyn std::error::Error>>
+) -> Result<(Vec<TelemetryRecord>, Vec<IndexedTelemetryDeserializeError>), Box<dyn std::error::Error>>
 where
     R: ArrowRegistryLookup,
 {
@@ -559,15 +706,17 @@ where
         serde_arrow::from_record_batch(&temp_batch)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-    arrow_records
-        .into_iter()
-        .map(|record| {
-            deserialize_record_from_arrow(record, registry).map_err(|e| {
-                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-                    as Box<dyn std::error::Error>
-            })
-        })
-        .collect()
+    let mut records = Vec::with_capacity(arrow_records.len());
+    let mut errors = Vec::new();
+
+    for (idx, record) in arrow_records.into_iter().enumerate() {
+        match deserialize_record_from_arrow(record, registry) {
+            Ok(record) => records.push(record),
+            Err(err) => errors.push(IndexedTelemetryDeserializeError::new(idx + 1, err)),
+        }
+    }
+
+    Ok((records, errors))
 }
 
 /// Normalizes incoming `RecordBatch` to make it compatible with the
@@ -922,7 +1071,7 @@ fn cast_array(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AnyTelemetryEvent, TelemetryEventRecType};
+    use crate::{AnyTelemetryEvent, LogRecordInfo, TelemetryAttributes, TelemetryEventRecType};
     use arrow::datatypes::Fields;
     use serde::{Deserialize, Serialize};
     use std::{any::Any, time::SystemTime};
@@ -1000,15 +1149,83 @@ mod tests {
             &self,
             event_type: &str,
             attributes: &Self::ArrowAttributes<'_>,
-        ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+        ) -> Result<
+            Box<dyn AnyTelemetryEvent>,
+            crate::serialize::traits::TelemetryAttributeDeserializeError,
+        > {
             if event_type != TEST_EVENT_TYPE {
-                return Err(format!("unexpected event type {event_type}"));
+                return Err(
+                    crate::serialize::traits::TelemetryAttributeDeserializeError::unknown_event_type(
+                        event_type,
+                    ),
+                );
+            }
+            if attributes.value == "malformed" {
+                return Err(
+                    crate::serialize::traits::TelemetryAttributeDeserializeError::malformed(
+                        "bad mock value",
+                    ),
+                );
             }
 
             Ok(Box::new(MockEvent {
                 value: attributes.value.clone().into_owned(),
             }))
         }
+    }
+
+    fn mock_arrow_record(
+        event_type: &'static str,
+        value: &'static str,
+        event_id: Option<uuid::Uuid>,
+    ) -> ArrowTelemetryRecord<'static, MockArrowAttributes<'static>> {
+        ArrowTelemetryRecord {
+            record_type: TelemetryRecordType::LogRecord,
+            trace_id: format!("{:032x}", 42),
+            span_id: Some(7),
+            event_id: event_id.map(|id| Cow::Owned(id.to_string())),
+            span_name: Some(Cow::Borrowed("mock span")),
+            parent_span_id: None,
+            links: None,
+            start_time_unix_nano: None,
+            end_time_unix_nano: None,
+            time_unix_nano: Some(12345),
+            severity_number: SeverityNumber::Info as i32,
+            severity_text: Cow::Borrowed("INFO"),
+            body: Some(Cow::Borrowed("mock body")),
+            status_code: None,
+            status_message: None,
+            event_type: Cow::Borrowed(event_type),
+            attributes: MockArrowAttributes {
+                value: Cow::Borrowed(value),
+            },
+        }
+    }
+
+    fn batch_from_arrow_records(
+        records: Vec<ArrowTelemetryRecord<'static, MockArrowAttributes<'static>>>,
+    ) -> RecordBatch {
+        let schemas = TelemetryArrowSchemas::new::<MockRegistry>();
+        serde_arrow::to_record_batch(schemas.serialisable_schema(), &records).unwrap()
+    }
+
+    fn batch_without_column(batch: &RecordBatch, column_name: &str) -> RecordBatch {
+        let remove_index = batch.schema().index_of(column_name).unwrap();
+        let fields = batch
+            .schema()
+            .fields()
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, field)| (idx != remove_index).then_some(field.clone()))
+            .collect::<Vec<_>>();
+        let columns = batch
+            .columns()
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, column)| (idx != remove_index).then_some(column.clone()))
+            .collect::<Vec<_>>();
+
+        RecordBatch::try_new(Schema::new(fields).into(), columns).unwrap()
     }
 
     #[test]
@@ -1029,10 +1246,94 @@ mod tests {
 
         let schemas = TelemetryArrowSchemas::new::<MockRegistry>();
         let batch = serialize_to_arrow(std::slice::from_ref(&record), &schemas).unwrap();
-        let deserialized = deserialize_from_arrow(&batch, &MockRegistry).unwrap();
+        let (deserialized, errors) = deserialize_from_arrow(&batch, &MockRegistry).unwrap();
 
+        assert!(
+            errors.is_empty(),
+            "unexpected deserialize errors: {errors:?}"
+        );
         assert_eq!(deserialized, vec![record]);
         assert_eq!(batch.num_rows(), 1);
         assert!(batch.schema().field_with_name("attributes").is_ok());
+    }
+
+    #[test]
+    fn test_arrow_deserialize_mixed_success_and_malformed_rows() {
+        let batch = batch_from_arrow_records(vec![
+            mock_arrow_record(TEST_EVENT_TYPE, "valid", Some(uuid::Uuid::from_u128(1))),
+            mock_arrow_record(TEST_EVENT_TYPE, "malformed", Some(uuid::Uuid::from_u128(2))),
+        ]);
+
+        let (records, errors) = deserialize_from_arrow(&batch, &MockRegistry).unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].attributes().event_type(), TEST_EVENT_TYPE);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].index(), 2);
+        let TelemetryDeserializeError::MalformedEvent { record, message } = errors[0].error()
+        else {
+            panic!("expected malformed event error");
+        };
+        let PartialTelemetryRecord::LogRecord(record) = record.as_ref() else {
+            panic!("expected log partial record");
+        };
+        assert_eq!(record.event_type, TEST_EVENT_TYPE);
+        assert_eq!(record.attributes["value"], "malformed");
+        assert!(message.contains("bad mock value"));
+    }
+
+    #[test]
+    fn test_arrow_unknown_event_type_preserves_partial_attributes() {
+        let unknown_event_type = "v1.test.events.fusion.Unknown";
+        let batch = batch_from_arrow_records(vec![mock_arrow_record(
+            unknown_event_type,
+            "unknown value",
+            Some(uuid::Uuid::from_u128(1)),
+        )]);
+
+        let (records, errors) = deserialize_from_arrow(&batch, &MockRegistry).unwrap();
+
+        assert!(records.is_empty());
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].index(), 1);
+        let TelemetryDeserializeError::UnknownEventType { record } = errors[0].error() else {
+            panic!("expected unknown event type error");
+        };
+        let PartialTelemetryRecord::LogRecord(record) = record.as_ref() else {
+            panic!("expected log partial record");
+        };
+        assert_eq!(record.event_type, unknown_event_type);
+        assert_eq!(record.attributes["value"], "unknown value");
+    }
+
+    #[test]
+    fn test_arrow_missing_required_row_envelope_field_is_invalid_envelope() {
+        let batch =
+            batch_from_arrow_records(vec![mock_arrow_record(TEST_EVENT_TYPE, "valid", None)]);
+
+        let (records, errors) = deserialize_from_arrow(&batch, &MockRegistry).unwrap();
+
+        assert!(records.is_empty());
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].index(), 1);
+        assert!(matches!(
+            errors[0].error(),
+            TelemetryDeserializeError::InvalidEnvelope { message }
+                if message.contains("Missing event_id")
+        ));
+    }
+
+    #[test]
+    fn test_arrow_schema_incompatibility_returns_outer_error() {
+        let batch = batch_from_arrow_records(vec![mock_arrow_record(
+            TEST_EVENT_TYPE,
+            "valid",
+            Some(uuid::Uuid::from_u128(1)),
+        )]);
+        let batch = batch_without_column(&batch, "event_type");
+
+        let err = deserialize_from_arrow(&batch, &MockRegistry).unwrap_err();
+
+        assert!(err.to_string().contains("missing columns: event_type"));
     }
 }

@@ -7,7 +7,9 @@ use crate::{
         RootSpanTraceContext, TelemetryDataLayer, TelemetryDataLayerConfig,
         UnstructuredLogAttributesInput, UnstructuredSpanAttributesInput,
     },
-    serialize::traits::{ArrowAttributesSerialize, ArrowRegistryLookup},
+    serialize::traits::{
+        ArrowAttributesSerialize, ArrowRegistryLookup, TelemetryAttributeDeserializeError,
+    },
     shared_writer::SharedWriter,
 };
 use arrow::datatypes::{DataType, Field, Fields};
@@ -130,11 +132,15 @@ impl ArrowRegistryLookup for MockTelemetryEventRegistry {
         &self,
         event_type: &str,
         attributes: &Self::ArrowAttributes<'_>,
-    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError> {
         match event_type {
-            MockUnknown::EVENT_TYPE => MockUnknown::from_arrow_record(attributes),
-            MockDynLogEvent::EVENT_TYPE => MockDynLogEvent::from_arrow_record(attributes),
-            _ => Err(format!("Unknown mock event type \"{event_type}\"")),
+            MockUnknown::EVENT_TYPE => MockUnknown::from_arrow_record(attributes)
+                .map_err(TelemetryAttributeDeserializeError::malformed),
+            MockDynLogEvent::EVENT_TYPE => MockDynLogEvent::from_arrow_record(attributes)
+                .map_err(TelemetryAttributeDeserializeError::malformed),
+            _ => Err(TelemetryAttributeDeserializeError::unknown_event_type(
+                event_type,
+            )),
         }
     }
 }

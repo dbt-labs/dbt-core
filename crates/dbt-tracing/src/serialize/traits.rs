@@ -12,9 +12,42 @@ impl<T> ArrowAttributesSerialize for T where T: Serialize {}
 
 erased_serde::serialize_trait_object!(ArrowAttributesSerialize);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TelemetryAttributeDeserializeError {
+    UnknownEventType { event_type: String },
+    Malformed { message: String },
+}
+
+impl TelemetryAttributeDeserializeError {
+    pub fn unknown_event_type(event_type: impl Into<String>) -> Self {
+        Self::UnknownEventType {
+            event_type: event_type.into(),
+        }
+    }
+
+    pub fn malformed(message: impl Into<String>) -> Self {
+        Self::Malformed {
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for TelemetryAttributeDeserializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownEventType { event_type } => {
+                write!(f, "unknown event type \"{event_type}\"")
+            }
+            Self::Malformed { message } => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for TelemetryAttributeDeserializeError {}
+
 /// Registry lookup boundary for typed Arrow event deserialization.
 pub trait ArrowRegistryLookup {
-    type ArrowAttributes<'a>: Deserialize<'a>;
+    type ArrowAttributes<'a>: Deserialize<'a> + Serialize;
 
     /// Returns the Arrow struct fields for `Self::ArrowAttributes`.
     ///
@@ -36,7 +69,7 @@ pub trait ArrowRegistryLookup {
         &self,
         event_type: &str,
         attributes: &Self::ArrowAttributes<'_>,
-    ) -> Result<Box<dyn AnyTelemetryEvent>, String>;
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError>;
 }
 
 /// Registry lookup boundary for typed JSON event deserialization.
@@ -44,6 +77,6 @@ pub trait JsonRegistryLookup {
     fn deserialize_json_attributes(
         &self,
         event_type: &str,
-        attributes: serde_json::Value,
-    ) -> Result<Box<dyn AnyTelemetryEvent>, String>;
+        attributes: &serde_json::Value,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError>;
 }

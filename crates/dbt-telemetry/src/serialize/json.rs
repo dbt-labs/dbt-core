@@ -1,5 +1,5 @@
 use dbt_tracing::{
-    TelemetryOutputFlags, TelemetryRecord,
+    IndexedTelemetryDeserializeError, TelemetryOutputFlags, TelemetryRecord,
     serialize::json::{deserialize_from_json_value, deserialize_json_lines},
 };
 use serde_json::{Value as JsonValue, json};
@@ -167,7 +167,7 @@ fn serialize_record_value(record: &TelemetryRecord) -> JsonValue {
         .unwrap_or_else(|err| panic!("failed to serialize {:?}: {err}", record.attributes()))
 }
 
-fn assert_no_deserialize_errors(errors: &[Box<dyn std::error::Error>]) {
+fn assert_no_deserialize_errors(errors: &[IndexedTelemetryDeserializeError]) {
     assert!(
         errors.is_empty(),
         "expected all JSON lines to deserialize, got errors:\n{}",

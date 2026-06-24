@@ -122,8 +122,12 @@ fn test_tracing_parquet_filtering() {
     let registry = MockTelemetryEventRegistry;
     for batch_result in reader {
         let batch = batch_result.unwrap();
-        let records = deserialize_from_arrow(&batch, &registry).unwrap();
-        all_records.extend(records);
+        let (mut records, errors) = deserialize_from_arrow(&batch, &registry).unwrap();
+        assert!(
+            errors.is_empty(),
+            "unexpected deserialize errors: {errors:?}"
+        );
+        all_records.append(&mut records);
     }
 
     // Verify filtering worked correctly - should have 3 records (1 SpanStart, 1 SpanEnd with Process attrs, 1 LogRecord with Log attrs)

@@ -404,15 +404,26 @@ Arrow support lives in `src/serialize/arrow.rs`. Use
 `TelemetryArrowSchemas::new::<Registry>()`, `serialize_to_arrow`, and
 `deserialize_from_arrow` with a caller-provided `ArrowRegistryLookup`
 implementation. The registry owns the concrete Arrow attribute type and the
-mapping from event type names to deserializers.
+mapping from event type names to deserializers. `deserialize_from_arrow` returns
+`Result<(Vec<TelemetryRecord>, Vec<IndexedTelemetryDeserializeError>), _>`:
+schema and batch normalization failures remain outer errors, while row-level
+envelope, unknown-event-type, and malformed-event failures are returned
+alongside any successful records. Each row error includes a one-based Arrow row
+index.
 
 JSON deserialization support lives in `src/serialize/json.rs`. Use
 `deserialize_from_json_str`, `deserialize_from_json_value`, or
 `deserialize_json_lines` with a caller-provided `JsonRegistryLookup`
 implementation. Serde parses the stable record envelope fields, while the
 registry maps each flattened `event_type` plus nested `attributes` payload back
-to a boxed `AnyTelemetryEvent`. The deserializer validates that span records
-use span attributes and log records use log attributes.
+to a boxed `AnyTelemetryEvent`. The registry is expected to return attributes
+that match the record category implied by the JSON envelope. Mismatches indicate
+an incompatible registry or event schema and are checked with debug assertions.
+`deserialize_json_lines` returns
+`(Vec<TelemetryRecord>, Vec<IndexedTelemetryDeserializeError>)`,
+allowing valid lines to be consumed even when other lines have invalid
+envelopes, unknown event types, or malformed attributes. Each line error
+includes a one-based JSONL line index.
 
 OTLP support lives in `src/serialize/otlp.rs`. JSON envelope support lives in
 `src/serialize/envelope.rs`.

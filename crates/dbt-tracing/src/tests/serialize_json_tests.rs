@@ -5,12 +5,13 @@ use serde_json::{Value as JsonValue, json};
 use uuid::Uuid;
 
 use crate::{
-    AnyTelemetryEvent, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanLinkInfo, SpanStartInfo,
-    SpanStatus, StatusCode, TelemetryAttributes, TelemetryEventRecType, TelemetryOutputFlags,
-    TelemetryRecord, TelemetryRecordRef,
+    AnyTelemetryEvent, LogRecordInfo, PartialTelemetryRecord, SeverityNumber, SpanEndInfo,
+    SpanLinkInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
+    TelemetryDeserializeError, TelemetryEventRecType, TelemetryOutputFlags, TelemetryRecord,
+    TelemetryRecordRef,
     serialize::{
         json::{deserialize_from_json_str, deserialize_from_json_value, deserialize_json_lines},
-        traits::JsonRegistryLookup,
+        traits::{JsonRegistryLookup, TelemetryAttributeDeserializeError},
     },
 };
 
@@ -125,16 +126,26 @@ impl JsonRegistryLookup for MockJsonRegistry {
     fn deserialize_json_attributes(
         &self,
         event_type: &str,
-        attributes: serde_json::Value,
-    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+        attributes: &serde_json::Value,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError> {
         match event_type {
-            MOCK_SPAN_EVENT_TYPE => serde_json::from_value::<MockJsonSpanEvent>(attributes)
+            MOCK_SPAN_EVENT_TYPE => MockJsonSpanEvent::deserialize(attributes)
                 .map(|event| Box::new(event) as Box<dyn AnyTelemetryEvent>)
-                .map_err(|err| format!("failed to deserialize span event: {err}")),
-            MOCK_LOG_EVENT_TYPE => serde_json::from_value::<MockJsonLogEvent>(attributes)
+                .map_err(|err| {
+                    TelemetryAttributeDeserializeError::malformed(format!(
+                        "failed to deserialize span event: {err}"
+                    ))
+                }),
+            MOCK_LOG_EVENT_TYPE => MockJsonLogEvent::deserialize(attributes)
                 .map(|event| Box::new(event) as Box<dyn AnyTelemetryEvent>)
-                .map_err(|err| format!("failed to deserialize log event: {err}")),
-            _ => Err(format!("unknown mock event type \"{event_type}\"")),
+                .map_err(|err| {
+                    TelemetryAttributeDeserializeError::malformed(format!(
+                        "failed to deserialize log event: {err}"
+                    ))
+                }),
+            _ => Err(TelemetryAttributeDeserializeError::unknown_event_type(
+                event_type,
+            )),
         }
     }
 }
@@ -162,11 +173,19 @@ fn telemetry_record_ref_json_roundtrips_for_span_start_span_end_and_log_record()
 #[test]
 fn unknown_event_type_fails() {
     let mut value = span_start_json_value();
-    value["event_type"] = json!("v1.public.events.fusion.test.Unknown");
+    let unknown_event_type = "v1.public.events.fusion.test.Unknown";
+    value["event_type"] = json!(unknown_event_type);
 
     let err = deserialize_from_json_value(value, &MockJsonRegistry).unwrap_err();
 
-    assert!(err.to_string().contains("unknown mock event type"));
+    let TelemetryDeserializeError::UnknownEventType { record } = err else {
+        panic!("expected unknown event type error");
+    };
+    let PartialTelemetryRecord::SpanStart(record) = record.as_ref() else {
+        panic!("expected span start partial record");
+    };
+    assert_eq!(record.event_type, unknown_event_type);
+    assert_eq!(record.attributes["name"], json!("compile"));
 }
 
 #[test]
@@ -176,10 +195,36 @@ fn missing_attributes_fails() {
 
     let err = deserialize_from_json_value(value, &MockJsonRegistry).unwrap_err();
 
-    assert!(err.to_string().contains("missing field `attributes`"));
+    assert!(matches!(
+        err,
+        TelemetryDeserializeError::InvalidEnvelope { ref message }
+            if message.contains("missing field `attributes`")
+    ));
 }
 
 #[test]
+fn known_malformed_event_fails_with_partial_record() {
+    let mut value = span_start_json_value();
+    value["attributes"] = json!({
+        "name": "compile",
+    });
+
+    let err = deserialize_from_json_value(value, &MockJsonRegistry).unwrap_err();
+
+    let TelemetryDeserializeError::MalformedEvent { record, message } = err else {
+        panic!("expected malformed event error");
+    };
+    let PartialTelemetryRecord::SpanStart(record) = record.as_ref() else {
+        panic!("expected span start partial record");
+    };
+    assert_eq!(record.event_type, MOCK_SPAN_EVENT_TYPE);
+    assert_eq!(record.attributes["name"], json!("compile"));
+    assert!(message.contains("failed to deserialize span event"));
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "wrong record category")]
 fn span_record_with_log_attributes_fails_category_validation() {
     let mut value = span_start_json_value();
     value["event_type"] = json!(MOCK_LOG_EVENT_TYPE);
@@ -188,12 +233,12 @@ fn span_record_with_log_attributes_fails_category_validation() {
         "code": 500,
     });
 
-    let err = deserialize_from_json_value(value, &MockJsonRegistry).unwrap_err();
-
-    assert!(err.to_string().contains("expected Span"));
+    let _ = deserialize_from_json_value(value, &MockJsonRegistry);
 }
 
 #[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "wrong record category")]
 fn log_record_with_span_attributes_fails_category_validation() {
     let mut value = log_record_json_value();
     value["event_type"] = json!(MOCK_SPAN_EVENT_TYPE);
@@ -202,9 +247,7 @@ fn log_record_with_span_attributes_fails_category_validation() {
         "count": 2,
     });
 
-    let err = deserialize_from_json_value(value, &MockJsonRegistry).unwrap_err();
-
-    assert!(err.to_string().contains("expected Log"));
+    let _ = deserialize_from_json_value(value, &MockJsonRegistry);
 }
 
 #[test]
@@ -212,12 +255,20 @@ fn invalid_trace_id_or_span_id_fails() {
     let mut invalid_trace_id = span_start_json_value();
     invalid_trace_id["trace_id"] = json!("not-hex");
     let err = deserialize_from_json_value(invalid_trace_id, &MockJsonRegistry).unwrap_err();
-    assert!(err.to_string().contains("invalid trace_id"));
+    assert!(matches!(
+        err,
+        TelemetryDeserializeError::InvalidEnvelope { ref message }
+            if message.contains("invalid trace_id")
+    ));
 
     let mut invalid_span_id = span_start_json_value();
     invalid_span_id["span_id"] = json!("not-hex");
     let err = deserialize_from_json_value(invalid_span_id, &MockJsonRegistry).unwrap_err();
-    assert!(err.to_string().contains("invalid span_id"));
+    assert!(matches!(
+        err,
+        TelemetryDeserializeError::InvalidEnvelope { ref message }
+            if message.contains("invalid span_id")
+    ));
 }
 
 #[test]
@@ -237,9 +288,12 @@ fn deserialize_json_lines_collects_invalid_line_errors() {
         vec![TelemetryRecord::SpanStart(span_start_record())]
     );
     assert_eq!(errors.len(), 1);
-    let err = errors[0].to_string();
-    assert!(err.contains("line 2"));
-    assert!(err.contains("invalid span_id"));
+    assert_eq!(errors[0].index(), 2);
+    assert!(matches!(
+        errors[0].error(),
+        TelemetryDeserializeError::InvalidEnvelope { message }
+            if message.contains("invalid span_id")
+    ));
 }
 
 fn deserialize_record_ref(record: TelemetryRecordRef<'_>) -> TelemetryRecord {

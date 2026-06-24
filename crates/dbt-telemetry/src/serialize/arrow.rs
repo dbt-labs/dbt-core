@@ -393,8 +393,12 @@ mod tests {
         ];
 
         for (name, variant) in variations {
-            let deserialized = deserialize_from_arrow(&variant, registry)
+            let (deserialized, errors) = deserialize_from_arrow(&variant, registry)
                 .unwrap_or_else(|e| panic!("expected success for {name}: {e}"));
+            assert!(
+                errors.is_empty(),
+                "unexpected deserialize errors for {name}: {errors:?}"
+            );
             assert_eq!(deserialized, records, "variation {name} mismatch");
         }
 
@@ -416,8 +420,12 @@ mod tests {
 
         let schemas = TelemetryArrowSchemas::new::<TelemetryEventTypeRegistry>();
         let batch = serialize_to_arrow(&original_records, &schemas).unwrap();
-        let mut deserialized =
+        let (mut deserialized, errors) =
             deserialize_from_arrow(&batch, TelemetryEventTypeRegistry::public()).unwrap();
+        assert!(
+            errors.is_empty(),
+            "unexpected deserialize errors: {errors:?}"
+        );
 
         // Use PartialEq to compare entire records
         for (original, deserialized) in original_records.iter().zip(deserialized.iter()) {
@@ -455,11 +463,15 @@ mod tests {
 
         deserialized.clear();
         for batch_result in parquet_reader {
-            let records = deserialize_from_arrow(
+            let (records, errors) = deserialize_from_arrow(
                 &batch_result.unwrap(),
                 TelemetryEventTypeRegistry::public(),
             )
             .unwrap();
+            assert!(
+                errors.is_empty(),
+                "unexpected deserialize errors: {errors:?}"
+            );
             deserialized.extend(records);
         }
 

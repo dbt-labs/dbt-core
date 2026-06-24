@@ -55,6 +55,10 @@ pub use schemas::{
     LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanLinkInfo, SpanStartInfo,
     SpanStatus, StatusCode, TelemetryRecord, TelemetryRecordRef, TelemetryRecordType,
 };
+pub use serialize::deserialize::{
+    IndexedTelemetryDeserializeError, PartialLogRecordInfo, PartialSpanEndInfo,
+    PartialSpanStartInfo, PartialTelemetryRecord, TelemetryDeserializeError,
+};
 
 #[cfg(test)]
 mod tests;

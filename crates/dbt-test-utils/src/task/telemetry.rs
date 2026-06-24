@@ -12,7 +12,7 @@ use dbt_common::{
     err, stdfs,
 };
 use dbt_test_primitives::is_update_golden_files_mode;
-use dbt_tracing::TelemetryRecord;
+use dbt_tracing::{IndexedTelemetryDeserializeError, TelemetryRecord};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use sha2::{Digest, Sha256};
 
@@ -28,8 +28,12 @@ use crate::task::{
 use super::{ProjectEnv, Task, TestEnv, TestError, TestResult, task_seq::CommandFn};
 
 /// Deserializes telemetry parquet record batches into telemetry records for snapshot comparison.
-pub type TelemetryArrowDeserializer =
-    fn(&RecordBatch) -> Result<Vec<TelemetryRecord>, Box<dyn std::error::Error>>;
+pub type TelemetryArrowDeserializer = fn(
+    &RecordBatch,
+) -> Result<
+    (Vec<TelemetryRecord>, Vec<IndexedTelemetryDeserializeError>),
+    Box<dyn std::error::Error>,
+>;
 
 /// Native JSONL telemetry file name requested from the dbt CLI during snapshot tests.
 const OTEL_JSONL_FILE_NAME: &str = "otel.jsonl";
@@ -314,12 +318,24 @@ fn read_parquet_to_records(
                 format!("failed to read parquet batch: {err}"),
             )
         })?;
-        let mut batch_records = deserializer(&batch).map_err(|err| {
+        let (mut batch_records, errors) = deserializer(&batch).map_err(|err| {
             FsError::new(
                 ErrorCode::ParquetError,
                 format!("failed to deserialize telemetry records: {err}"),
             )
         })?;
+        if !errors.is_empty() {
+            let message = errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(FsError::new(
+                ErrorCode::ParquetError,
+                format!("failed to deserialize telemetry rows: {message}"),
+            )
+            .into());
+        }
         records.append(&mut batch_records);
     }
 

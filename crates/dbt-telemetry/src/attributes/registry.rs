@@ -3,7 +3,9 @@
 use arrow_schema::{DataType, Field, Fields, extension::Json as JsonExtensionType};
 use dbt_tracing::{
     StaticName,
-    serialize::traits::{ArrowRegistryLookup, JsonRegistryLookup},
+    serialize::traits::{
+        ArrowRegistryLookup, JsonRegistryLookup, TelemetryAttributeDeserializeError,
+    },
 };
 use serde::de::DeserializeOwned;
 use std::{collections::HashMap, sync::LazyLock};
@@ -25,23 +27,29 @@ use crate::{
 /// Helper function that converts trait deserializer method to one compatible with the registry.
 fn arrow_deserialize_for_type<T>(
     attrs: &T::ArrowRecord<'_>,
-) -> Result<Box<dyn AnyTelemetryEvent>, String>
+) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError>
 where
     T: AnyTelemetryEvent + ArrowSerializableTelemetryEvent,
 {
-    T::from_arrow_record(attrs).map(|t| Box::new(t) as Box<dyn AnyTelemetryEvent>)
+    T::from_arrow_record(attrs)
+        .map(|t| Box::new(t) as Box<dyn AnyTelemetryEvent>)
+        .map_err(TelemetryAttributeDeserializeError::malformed)
 }
 
 /// Helper function that deserializes JSON attributes to a concrete telemetry event.
 fn json_deserialize_for_type<T>(
-    attrs: serde_json::Value,
-) -> Result<Box<dyn AnyTelemetryEvent>, String>
+    attrs: &serde_json::Value,
+) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError>
 where
     T: AnyTelemetryEvent + DeserializeOwned,
 {
-    serde_json::from_value::<T>(attrs)
+    T::deserialize(attrs)
         .map(|t| Box::new(t) as Box<dyn AnyTelemetryEvent>)
-        .map_err(|err| format!("Failed to deserialize JSON attributes: {err}"))
+        .map_err(|err| {
+            TelemetryAttributeDeserializeError::malformed(format!(
+                "Failed to deserialize JSON attributes: {err}"
+            ))
+        })
 }
 
 /// Helper function to create a faker for a given type.
@@ -143,8 +151,13 @@ macro_rules! faker_for_type_with_oneofs {
 }
 
 pub type ArrowDeserializerFn =
-    for<'a> fn(&DbtTelemetryArrowAttributes<'a>) -> Result<Box<dyn AnyTelemetryEvent>, String>;
-pub type JsonDeserializerFn = fn(serde_json::Value) -> Result<Box<dyn AnyTelemetryEvent>, String>;
+    for<'a> fn(
+        &DbtTelemetryArrowAttributes<'a>,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError>;
+pub type JsonDeserializerFn =
+    fn(
+        &serde_json::Value,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError>;
 #[cfg(any(test, feature = "test-utils"))]
 pub type FakerFn = fn(&str) -> Vec<Box<dyn AnyTelemetryEvent>>;
 
@@ -542,10 +555,10 @@ impl ArrowRegistryLookup for TelemetryEventTypeRegistry {
         &self,
         event_type: &str,
         attributes: &Self::ArrowAttributes<'_>,
-    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError> {
         let deserializer = self
             .get_arrow_deserializer(event_type)
-            .ok_or_else(|| format!("Unknown event type\"{event_type}\""))?;
+            .ok_or_else(|| TelemetryAttributeDeserializeError::unknown_event_type(event_type))?;
         deserializer(attributes)
     }
 }
@@ -554,11 +567,11 @@ impl JsonRegistryLookup for TelemetryEventTypeRegistry {
     fn deserialize_json_attributes(
         &self,
         event_type: &str,
-        attributes: serde_json::Value,
-    ) -> Result<Box<dyn AnyTelemetryEvent>, String> {
+        attributes: &serde_json::Value,
+    ) -> Result<Box<dyn AnyTelemetryEvent>, TelemetryAttributeDeserializeError> {
         let deserializer = self
             .get_json_deserializer(event_type)
-            .ok_or_else(|| format!("Unknown event type\"{event_type}\""))?;
+            .ok_or_else(|| TelemetryAttributeDeserializeError::unknown_event_type(event_type))?;
         deserializer(attributes)
     }
 }
