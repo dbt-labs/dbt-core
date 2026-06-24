@@ -104,11 +104,30 @@ fn configured_inline_udf_names(node: &dyn InternalDbtNodeAttributes) -> Vec<Stri
     }
 }
 
+struct ConfiguredFunctionRef<'a> {
+    raw: &'a str,
+    package_name: Option<&'a str>,
+    function_name: &'a str,
+}
+
 fn resolve_configured_function(
     configured_name: &str,
     node: &dyn InternalDbtNodeAttributes,
     resolver_state: &ResolverState,
 ) -> FsResult<Arc<DbtFunction>> {
+    let reference = parse_configured_function_ref(configured_name, node)?;
+
+    if let Some(package_name) = reference.package_name {
+        return require_function_in_package(&reference, node, resolver_state, package_name);
+    }
+
+    resolve_unqualified_function(&reference, node, resolver_state)
+}
+
+fn parse_configured_function_ref<'a>(
+    configured_name: &'a str,
+    node: &dyn InternalDbtNodeAttributes,
+) -> FsResult<ConfiguredFunctionRef<'a>> {
     let configured_name = configured_name.trim();
     if configured_name.is_empty() {
         return err!(
@@ -133,46 +152,72 @@ fn resolve_configured_function(
         );
     }
 
-    if let Some(package_name) = package_name {
-        return resolver_state
-            .nodes
-            .functions
-            .values()
-            .find(|function| {
-                function.__common_attr__.package_name == package_name
-                    && function.__common_attr__.name == function_name
-            })
-            .cloned()
-            .ok_or_else(|| {
-                fs_err!(
-                    ErrorCode::InvalidConfig,
-                    "Cannot inline configured Trino UDF '{}' on '{}' because no dbt function resource named '{}' exists in package '{}'",
-                    configured_name,
-                    node.unique_id(),
-                    function_name,
-                    package_name
-                )
-            });
-    }
+    Ok(ConfiguredFunctionRef {
+        raw: configured_name,
+        package_name,
+        function_name,
+    })
+}
 
-    if let Some(function) = resolver_state
-        .nodes
-        .functions
-        .values()
-        .find(|function| {
-            function.__common_attr__.package_name == node.package_name()
-                && function.__common_attr__.name == function_name
-        })
-        .cloned()
+fn require_function_in_package(
+    reference: &ConfiguredFunctionRef<'_>,
+    node: &dyn InternalDbtNodeAttributes,
+    resolver_state: &ResolverState,
+    package_name: &str,
+) -> FsResult<Arc<DbtFunction>> {
+    find_function_in_package(resolver_state, package_name, reference.function_name).ok_or_else(|| {
+        fs_err!(
+            ErrorCode::InvalidConfig,
+            "Cannot inline configured Trino UDF '{}' on '{}' because no dbt function resource named '{}' exists in package '{}'",
+            reference.raw,
+            node.unique_id(),
+            reference.function_name,
+            package_name
+        )
+    })
+}
+
+fn resolve_unqualified_function(
+    reference: &ConfiguredFunctionRef<'_>,
+    node: &dyn InternalDbtNodeAttributes,
+    resolver_state: &ResolverState,
+) -> FsResult<Arc<DbtFunction>> {
+    let package_name = node.package_name();
+    if let Some(function) =
+        find_function_in_package(resolver_state, &package_name, reference.function_name)
     {
         return Ok(function);
     }
 
+    require_unique_function_match(reference, node, resolver_state)
+}
+
+fn find_function_in_package(
+    resolver_state: &ResolverState,
+    package_name: &str,
+    function_name: &str,
+) -> Option<Arc<DbtFunction>> {
+    resolver_state
+        .nodes
+        .functions
+        .values()
+        .find(|function| {
+            function.__common_attr__.package_name == package_name
+                && function.__common_attr__.name == function_name
+        })
+        .cloned()
+}
+
+fn require_unique_function_match(
+    reference: &ConfiguredFunctionRef<'_>,
+    node: &dyn InternalDbtNodeAttributes,
+    resolver_state: &ResolverState,
+) -> FsResult<Arc<DbtFunction>> {
     let matches = resolver_state
         .nodes
         .functions
         .values()
-        .filter(|function| function.__common_attr__.name == function_name)
+        .filter(|function| function.__common_attr__.name == reference.function_name)
         .cloned()
         .collect::<Vec<_>>();
 
@@ -181,16 +226,16 @@ fn resolve_configured_function(
         [] => err!(
             ErrorCode::InvalidConfig,
             "Cannot inline configured Trino UDF '{}' on '{}' because no dbt function resource named '{}' exists",
-            configured_name,
+            reference.raw,
             node.unique_id(),
-            function_name
+            reference.function_name
         ),
         _ => err!(
             ErrorCode::InvalidConfig,
             "Cannot inline configured Trino UDF '{}' on '{}' because the name is ambiguous; use 'package.{}'",
-            configured_name,
+            reference.raw,
             node.unique_id(),
-            function_name
+            reference.function_name
         ),
     }
 }
@@ -412,38 +457,53 @@ fn insert_inline_declarations(
 
 fn first_sql_token_offset(sql: &str, mut offset: usize) -> usize {
     let bytes = sql.as_bytes();
-    loop {
-        while bytes
-            .get(offset)
-            .is_some_and(|byte| byte.is_ascii_whitespace())
-        {
-            offset += 1;
-        }
+    offset = skip_whitespace(bytes, offset);
 
-        if bytes
-            .get(offset..)
-            .is_some_and(|rest| rest.starts_with(b"--"))
-        {
-            offset += 2;
-            while bytes.get(offset).is_some_and(|byte| *byte != b'\n') {
-                offset += 1;
-            }
-            continue;
-        }
-
-        if bytes
-            .get(offset..)
-            .is_some_and(|rest| rest.starts_with(b"/*"))
-        {
-            let Some(end) = sql[offset + 2..].find("*/") else {
-                return offset;
-            };
-            offset += 2 + end + 2;
-            continue;
-        }
-
-        return offset;
+    while let Some(comment_end) = sql_comment_end(sql, offset) {
+        offset = skip_whitespace(bytes, comment_end);
     }
+
+    offset
+}
+
+fn skip_whitespace(bytes: &[u8], mut offset: usize) -> usize {
+    while bytes
+        .get(offset)
+        .is_some_and(|byte| byte.is_ascii_whitespace())
+    {
+        offset += 1;
+    }
+    offset
+}
+
+fn sql_comment_end(sql: &str, offset: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    if bytes
+        .get(offset..)
+        .is_some_and(|rest| rest.starts_with(b"--"))
+    {
+        return Some(line_comment_end(bytes, offset + 2));
+    }
+
+    if bytes
+        .get(offset..)
+        .is_some_and(|rest| rest.starts_with(b"/*"))
+    {
+        return block_comment_end(sql, offset);
+    }
+
+    None
+}
+
+fn line_comment_end(bytes: &[u8], mut offset: usize) -> usize {
+    while bytes.get(offset).is_some_and(|byte| *byte != b'\n') {
+        offset += 1;
+    }
+    offset
+}
+
+fn block_comment_end(sql: &str, offset: usize) -> Option<usize> {
+    sql[offset + 2..].find("*/").map(|end| offset + 2 + end + 2)
 }
 
 fn starts_with_keyword(sql: &str, keyword: &str) -> bool {
