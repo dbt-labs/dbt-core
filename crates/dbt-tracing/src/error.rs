@@ -7,6 +7,7 @@ pub enum TracingError {
     Io(String),
     AlreadyInitialized,
     SetGlobalSubscriber,
+    InvalidFilterDirective(String),
     ThreadJoin(String),
     ChannelClosed(String),
     Shutdown(String),
@@ -28,12 +29,17 @@ impl TracingError {
     pub fn shutdown(message: impl Into<String>) -> Self {
         Self::Shutdown(message.into())
     }
+
+    pub fn invalid_filter_directive(message: impl Into<String>) -> Self {
+        Self::InvalidFilterDirective(message.into())
+    }
 }
 
 impl fmt::Display for TracingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TracingError::Io(message)
+            | TracingError::InvalidFilterDirective(message)
             | TracingError::ThreadJoin(message)
             | TracingError::ChannelClosed(message)
             | TracingError::Shutdown(message) => write!(f, "{message}"),

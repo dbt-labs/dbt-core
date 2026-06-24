@@ -570,7 +570,9 @@ mod tests {
                 std::iter::empty(),
                 std::iter::once(Box::new(parquet_layer) as ConsumerLayer),
             ),
-        );
+            &[],
+        )
+        .expect("test tracing filter directives must be valid");
 
         tracing::subscriber::with_default(subscriber, || {
             // Create nested spans

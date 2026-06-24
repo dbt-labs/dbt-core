@@ -2,6 +2,7 @@ mod data_provider_tests;
 mod emit_tests;
 mod filter_tests;
 mod infra_tests;
+mod init_tests;
 mod layers_jsonl_tests;
 mod layers_otlp_tests;
 mod layers_parquet_tests;

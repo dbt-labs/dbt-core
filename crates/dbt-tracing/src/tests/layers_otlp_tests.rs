@@ -154,7 +154,9 @@ fn test_otlp_layer_exports_only_marked_records() {
             std::iter::empty(),
             std::iter::once(Box::new(otlp_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     // Emit events under the thread-local subscriber
     tracing::subscriber::with_default(subscriber, || {
@@ -261,7 +263,9 @@ fn test_otlp_configured_log_preprocessor_hook() {
             std::iter::empty(),
             std::iter::once(Box::new(otlp_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         emit_info_event(
@@ -316,7 +320,9 @@ fn test_otlp_export_with_links() {
             std::iter::empty(),
             std::iter::once(Box::new(otlp_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let span1 = create_root_info_span(MockDynSpanEvent {
@@ -412,7 +418,9 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
             std::iter::empty(),
             std::iter::once(Box::new(otlp_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let root_span = create_root_info_span(MockRootSpanEvent {

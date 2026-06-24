@@ -1,3 +1,4 @@
+use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
 use crate::{
     constants::DBT_TARGET_DIR_NAME,
     io_args::FsCommand,
@@ -20,7 +21,6 @@ use dbt_telemetry::{
     SourceFreshnessDetail, SourceFreshnessOutcome, UserLogMessage, node_processed,
     update_dbt_core_event_code_for_node_processed_end,
 };
-use dbt_tracing::init::create_tracing_subcriber_with_layer;
 use dbt_tracing::test_support::mocks::TestWriter;
 use dbt_tracing::test_support::mocks::{MockDynSpanEvent, test_data_layer};
 use dbt_tracing::{SeverityNumber, TelemetryOutputFlags};

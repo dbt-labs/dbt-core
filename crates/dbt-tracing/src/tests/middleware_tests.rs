@@ -68,7 +68,8 @@ fn middleware_modifies_drops_and_updates_metrics() {
     );
     data_layer.with_sequential_ids();
 
-    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
+    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer, &[])
+        .expect("test tracing filter directives must be valid");
 
     let recorded_metric = tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -265,7 +266,8 @@ fn middleware_invocations_do_not_block_across_threads() {
     );
     data_layer.with_sequential_ids();
 
-    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
+    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer, &[])
+        .expect("test tracing filter directives must be valid");
     let disptcher = Dispatch::new(subscriber);
 
     tracing::dispatcher::with_default(&disptcher, || {

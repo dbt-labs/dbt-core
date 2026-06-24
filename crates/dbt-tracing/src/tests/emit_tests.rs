@@ -30,7 +30,9 @@ fn test_create_span() {
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     // Create different test attributes for each call
     let mut root_attrs: TelemetryAttributes = MockUnknown {
@@ -210,7 +212,9 @@ fn test_emit_level_functions() {
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     let mut error_location = Location::caller();
     let mut warn_location = Location::caller();

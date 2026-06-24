@@ -94,7 +94,8 @@ fn filtered_middle_span_reparents_grandchild() {
     );
     data_layer.with_sequential_ids();
 
-    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
+    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer, &[])
+        .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -186,7 +187,8 @@ fn level_filter_respects_span_and_log_levels() {
     );
     data_layer.with_sequential_ids();
 
-    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
+    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer, &[])
+        .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -300,7 +302,8 @@ fn filter_combines_with_consumer_predicates() {
     );
     data_layer.with_sequential_ids();
 
-    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
+    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer, &[])
+        .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {

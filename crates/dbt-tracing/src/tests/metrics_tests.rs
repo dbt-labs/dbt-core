@@ -31,7 +31,9 @@ fn metrics_are_scoped_to_root_span() {
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let first_root = create_root_info_span(MockDynSpanEvent {

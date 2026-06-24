@@ -56,7 +56,9 @@ fn pretty_layer_applies_filter_and_formatting() {
             ]
             .into_iter(),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let span = create_root_info_span(MockDynSpanEvent {

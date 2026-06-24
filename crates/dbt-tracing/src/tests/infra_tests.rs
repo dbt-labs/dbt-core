@@ -33,7 +33,9 @@ fn test_emit_event_and_apply_context() {
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     let mut test_attrs: TelemetryAttributes = MockDynLogEvent {
         code: 42,
@@ -129,7 +131,9 @@ fn test_tracing_with_custom_layer() {
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info_span!("test_root_span").in_scope(|| {
@@ -330,7 +334,9 @@ fn test_tracing_log_record_poisoning() {
             std::iter::empty(),
             std::iter::once(Box::new(SharedLayer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     let subscriber = Arc::new(subscriber);
 
@@ -395,7 +401,9 @@ fn test_parent_span_id_captured_on_root_span() {
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let root_span = create_root_info_span(MockRootSpanEvent {

@@ -5,9 +5,9 @@ use super::super::{
     metrics::get_metric,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
 };
+use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
 use dbt_telemetry::LogMessage;
 use dbt_tracing::TelemetryOutputFlags;
-use dbt_tracing::init::create_tracing_subcriber_with_layer;
 use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 #[test]

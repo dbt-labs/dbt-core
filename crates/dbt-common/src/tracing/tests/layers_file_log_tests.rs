@@ -1,3 +1,4 @@
+use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
 use crate::{
     io_args::EvalArgs,
     tracing::{
@@ -8,7 +9,6 @@ use crate::{
 };
 use dbt_telemetry::LogMessage;
 use dbt_tracing::SeverityNumber;
-use dbt_tracing::init::create_tracing_subcriber_with_layer;
 use dbt_tracing::test_support::mocks::test_data_layer;
 use rand::random;
 use std::fs;

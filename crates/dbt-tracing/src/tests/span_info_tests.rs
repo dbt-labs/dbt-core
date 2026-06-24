@@ -108,7 +108,9 @@ fn test_record_span_attrs_and_status() {
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let root_span = create_root_info_span(TestStatusEvent::new("root"));

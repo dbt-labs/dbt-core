@@ -72,7 +72,9 @@ fn data_provider_isolates_roots_and_shares_within_tree() {
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         // First root span tree: root1 -> child1 -> grandchild1
@@ -223,7 +225,9 @@ fn data_provider_with_root_and_with_mut() {
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -290,7 +294,9 @@ fn data_provider_init_replaces_existing() {
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -344,7 +350,9 @@ fn data_provider_init_ancestor_data_on_matching_span() {
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -425,7 +433,9 @@ fn data_provider_with_ancestor_ext_finds_closest() {
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -499,7 +509,9 @@ fn data_provider_with_ancestor_ext_mut_modifies_closest() {
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -570,7 +582,9 @@ fn data_provider_with_ancestor_attrs_accesses_closest_attrs() {
             std::iter::empty::<MiddlewareLayer>(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {
@@ -634,7 +648,9 @@ fn data_provider_ancestor_apis_return_none_when_not_found() {
             std::iter::empty::<MiddlewareLayer>(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let _root_guard = create_root_info_span(MockDynSpanEvent {

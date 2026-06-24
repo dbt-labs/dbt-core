@@ -1,3 +1,4 @@
+use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
 use crate::tracing::{
     dbt_emit::emit_warn_log_message,
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
@@ -9,7 +10,6 @@ use crate::tracing::{
     },
 };
 use dbt_tracing::emit::create_root_info_span;
-use dbt_tracing::init::create_tracing_subcriber_with_layer;
 use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 use crate::ErrorCode;

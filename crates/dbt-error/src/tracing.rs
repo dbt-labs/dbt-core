@@ -6,9 +6,9 @@ use crate::{ErrorCode, FsError};
 impl From<TracingError> for FsError {
     fn from(error: TracingError) -> Self {
         let code = match error {
-            TracingError::AlreadyInitialized | TracingError::SetGlobalSubscriber => {
-                ErrorCode::Unexpected
-            }
+            TracingError::AlreadyInitialized
+            | TracingError::SetGlobalSubscriber
+            | TracingError::InvalidFilterDirective(_) => ErrorCode::Unexpected,
             TracingError::Io(_)
             | TracingError::ThreadJoin(_)
             | TracingError::ChannelClosed(_)

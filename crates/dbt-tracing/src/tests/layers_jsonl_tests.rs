@@ -42,7 +42,9 @@ fn jsonl_log_body_for_mock_log(preprocessor_enabled: bool) -> String {
             std::iter::empty(),
             std::iter::once(jsonl_layer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         emit_info_event(
@@ -110,7 +112,9 @@ fn test_tracing_jsonl() {
             std::iter::empty(),
             std::iter::once(jsonl_layer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info_span!("test_root_span").in_scope(|| {
@@ -287,7 +291,9 @@ fn test_jsonl_dynamic_output_flags_filtering() {
             std::iter::empty(),
             std::iter::once(jsonl_layer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let exportable_span = create_root_info_span(MockDynSpanEvent {
@@ -380,7 +386,9 @@ fn test_jsonl_basic_follows_from() {
             std::iter::empty(),
             std::iter::once(jsonl_layer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let span1 = tracing::span!(Level::INFO, "span_1");
@@ -459,7 +467,9 @@ fn test_jsonl_multiple_follows_from() {
             std::iter::empty(),
             std::iter::once(jsonl_layer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let span1 = tracing::span!(Level::INFO, "span_1");
@@ -519,7 +529,9 @@ fn test_jsonl_missing_followed_span() {
             std::iter::empty(),
             std::iter::once(jsonl_layer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     tracing::subscriber::with_default(subscriber, || {
         let span1 = tracing::span!(Level::INFO, "span_1");

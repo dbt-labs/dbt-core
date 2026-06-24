@@ -4,6 +4,7 @@ use tracing::{Subscriber, level_filters::LevelFilter, span};
 
 use tracing_subscriber::{
     EnvFilter, Layer, Registry,
+    filter::Directive,
     layer::{Context, Layered, SubscriberExt},
     registry::{LookupSpan, SpanRef},
 };
@@ -44,6 +45,19 @@ where
 }
 
 pub type BaseSubscriber = Layered<EnvFilter, Registry>;
+
+fn parse_filter_directives(filter_directives: &[&str]) -> TracingResult<Vec<Directive>> {
+    filter_directives
+        .iter()
+        .map(|directive| {
+            directive.parse().map_err(|error| {
+                TracingError::invalid_filter_directive(format!(
+                    "Invalid tracing filter directive `{directive}`: {error}"
+                ))
+            })
+        })
+        .collect()
+}
 
 /// The handle returned by the telemetry initialization function.
 ///
@@ -115,13 +129,15 @@ pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync +
     max_log_verbosity: LevelFilter,
     process_attributes: TelemetryAttributes,
     data_layer: D,
+    filter_directives: &[&str],
 ) -> TracingResult<span::Span> {
     // Check if tracing is already initialized
     if PROCESS_SPAN.get().is_some() {
         return Err(TracingError::AlreadyInitialized);
     }
 
-    let subscriber = create_tracing_subcriber_with_layer(max_log_verbosity, data_layer);
+    let subscriber =
+        create_tracing_subcriber_with_layer(max_log_verbosity, data_layer, filter_directives)?;
 
     tracing::subscriber::set_global_default(subscriber)
         .map_err(|_| TracingError::SetGlobalSubscriber)?;
@@ -143,44 +159,36 @@ pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync +
 pub fn create_tracing_subcriber_with_layer<D: Layer<BaseSubscriber> + Send + Sync + 'static>(
     max_log_verbosity: LevelFilter,
     data_layer: D,
-) -> impl Subscriber + Send + Sync + 'static {
+    filter_directives: &[&str],
+) -> TracingResult<impl Subscriber + Send + Sync + 'static> {
     // Set-up global filters first.
     //
-    // IMPORTANT! This is not the user provided output log level!
-    // At tracing subscriber level we use either DEBUG or TRACE, but not lower
-    // than that. This way only developer spans/events with trace level can
-    // be fully filtered out, but otherwise everything goes into our
-    // tracing pipeline. User preferences are applied on a per-consumer layer
-    // level. This way we can have different output on stdout, log file, telemetry,
-    // and other consumers.
+    // This max level is the broadest subscriber-level cap for the telemetry
+    // pipeline. Consumer layers may still apply narrower filters for their own
+    // sinks, allowing different output on stdout, files, telemetry exports, and
+    // other consumers.
     //
-    // In addition to that, in debug builds we allow RUST_LOG to control the global level filter
-    let base_telemetry_level = if max_log_verbosity > LevelFilter::DEBUG {
-        LevelFilter::TRACE
-    } else {
-        LevelFilter::DEBUG
-    };
+    // In debug builds we also allow RUST_LOG to control the global level filter.
+    // Otherwise, generic subscriber setup uses exactly the caller-provided max
+    // level and directive list.
 
     #[cfg(debug_assertions)]
     let base_telemetry_filter = EnvFilter::builder()
-        .with_default_directive(base_telemetry_level.into())
+        .with_default_directive(max_log_verbosity.into())
         .from_env_lossy();
 
     // For prod builds it is almost the same except RUST_LOG is not used
     #[cfg(not(debug_assertions))]
-    let base_telemetry_filter = EnvFilter::builder().parse_lossy(base_telemetry_level.to_string());
+    let base_telemetry_filter = EnvFilter::builder().parse_lossy(max_log_verbosity.to_string());
 
-    // Turn off logging for some common libraries that are too verbose
-    let base_telemetry_filter = base_telemetry_filter
-        .add_directive("hyper=off".parse().expect("Must be ok"))
-        .add_directive("h2=off".parse().expect("Must be ok"))
-        .add_directive("reqwest=off".parse().expect("Must be ok"))
-        .add_directive("ureq=off".parse().expect("Must be ok"))
-        // Shut off OTLP exporter's own logging
-        .add_directive("opentelemetry=off".parse().expect("Must be ok"));
+    let base_telemetry_filter = parse_filter_directives(filter_directives)?
+        .into_iter()
+        .fold(base_telemetry_filter, |filter, directive| {
+            filter.add_directive(directive)
+        });
 
     // Compose the registry with global filter and data layer
-    Registry::default()
+    Ok(Registry::default()
         .with(base_telemetry_filter)
-        .with(data_layer)
+        .with(data_layer))
 }

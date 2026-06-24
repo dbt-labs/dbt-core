@@ -39,7 +39,9 @@ fn test_tracing_parquet_filtering() {
             std::iter::empty(),
             std::iter::once(parquet_layer),
         ),
-    );
+        &[],
+    )
+    .expect("test tracing filter directives must be valid");
 
     // Pre-create attrs to compare them later
     let mut test_log_attrs: TelemetryAttributes = MockDynLogEvent {
