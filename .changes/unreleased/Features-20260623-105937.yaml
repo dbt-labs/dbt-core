@@ -1,0 +1,7 @@
+kind: Features
+body: Add opt-in Trino inline UDF compilation from dbt function resources
+time: 2026-06-23T10:59:37-03:00
+custom:
+    author: ""
+    issue: ""
+    project: dbt-core

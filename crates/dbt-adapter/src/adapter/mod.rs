@@ -190,7 +190,11 @@ impl Adapter {
         status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {
-        let backend = backend_of(adapter_type);
+        let backend = if adapter_type == AdapterType::Trino {
+            dbt_xdbc::Backend::DuckDB
+        } else {
+            backend_of(adapter_type)
+        };
 
         let warning_printer = Box::new(DefaultAuthWarningPrinter::new(status_reporter))
             as Box<dyn AuthWarningPrinter>;

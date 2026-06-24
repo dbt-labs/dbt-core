@@ -294,10 +294,9 @@ impl AdapterImpl {
                         }
                         ClickHouse => Box::new(ClickHouseMetadataAdapter::new(engine))
                             as Box<dyn MetadataAdapter>,
-                        Exasol => return None,
+                        Exasol | Trino => return None,
                         Starburst => todo!("Starburst"),
                         Athena => todo!("Athena"),
-                        Trino => todo!("Trino"),
                         Datafusion => todo!("Datafusion"),
                         Dremio => todo!("Dremio"),
                         Oracle => todo!("Oracle"),
@@ -4678,7 +4677,11 @@ impl AdapterImpl {
         type_ops: Arc<dyn TypeOps>,
         stmt_splitter: Arc<dyn StmtSplitter>,
     ) -> Self {
-        let backend = crate::adapter::adapter_factory::backend_of(adapter_type);
+        let backend = if adapter_type == Trino {
+            dbt_xdbc::Backend::DuckDB
+        } else {
+            crate::adapter::adapter_factory::backend_of(adapter_type)
+        };
         let auth: Arc<dyn dbt_auth::Auth> =
             dbt_auth::auth_for_backend(Box::new(dbt_auth::NoopAuthWarningPrinter), backend).into();
         let engine: Arc<dyn AdapterEngine> = Arc::new(XdbcEngine::new_mock(

@@ -57,6 +57,7 @@ pub async fn resolve_functions(
     runtime_config: Arc<DbtRuntimeConfig>,
     node_resolver: &mut NodeResolver,
     token: &CancellationToken,
+    render_unqualified_function_calls: bool,
 ) -> FsResult<(
     HashMap<String, Arc<DbtFunction>>,
     HashMap<String, (String, MacroSpans)>,
@@ -96,6 +97,7 @@ pub async fn resolve_functions(
                 .as_ref()
                 .unwrap_or(&vec![])
                 .clone(),
+            render_unqualified_function_calls,
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),

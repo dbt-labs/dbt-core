@@ -367,6 +367,8 @@ pub struct ProjectModelConfig {
     pub python_version: Option<String>,
     #[serde(rename = "+imports")]
     pub imports: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+inline_udfs")]
+    pub inline_udfs: Option<StringOrArrayOfStrings>,
     /// Snowflake Python model config: secrets to pass to stored procedure
     #[serde(rename = "+secrets")]
     pub secrets: Option<BTreeMap<String, YmlValue>>,
@@ -591,6 +593,7 @@ pub struct ModelConfig {
     pub python_version: Option<String>,
     pub docs: Option<DocsConfig>,
     pub imports: Option<StringOrArrayOfStrings>,
+    pub inline_udfs: Option<StringOrArrayOfStrings>,
     pub secrets: Option<BTreeMap<String, YmlValue>>,
     pub external_access_integrations: Option<StringOrArrayOfStrings>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -692,6 +695,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             packages: config.packages,
             python_version: config.python_version,
             imports: config.imports,
+            inline_udfs: config.inline_udfs,
             secrets: config.secrets,
             external_access_integrations: config.external_access_integrations,
             use_anonymous_sproc: config.use_anonymous_sproc,
@@ -864,6 +868,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             packages: config.packages,
             python_version: config.python_version,
             imports: config.imports,
+            inline_udfs: config.inline_udfs,
             secrets: config.secrets,
             external_access_integrations: config.external_access_integrations,
             use_anonymous_sproc: config.use_anonymous_sproc,
@@ -1045,6 +1050,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
             packages,
             python_version,
             imports,
+            inline_udfs,
             secrets,
             external_access_integrations,
             use_anonymous_sproc,
@@ -1103,6 +1109,8 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
         let grants = default_to_grants(grants, &parent.grants);
         #[allow(unused, clippy::let_unit_value)]
         let packages = default_packages(packages, &parent.packages);
+        #[allow(unused, clippy::let_unit_value)]
+        let inline_udfs = default_packages(inline_udfs, &parent.inline_udfs);
 
         // Handle Omissible fields for hierarchical overrides
         handle_omissible_override(schema, &parent.schema);
@@ -1275,6 +1283,7 @@ impl ModelConfig {
         ); // Custom comparison for grants
         let packages_eq = packages_and_imports_eq(&self.packages, &other.packages); // Custom comparison for packages
         let imports_eq = packages_and_imports_eq(&self.imports, &other.imports); // Custom comparison for imports (same function as packages)
+        let inline_udfs_eq = packages_and_imports_eq(&self.inline_udfs, &other.inline_udfs);
         let python_version_eq = self.python_version == other.python_version;
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
         // This is a project level config that can differ between environments,
@@ -1328,6 +1337,7 @@ impl ModelConfig {
             && grants_eq_result
             && packages_eq
             && imports_eq
+            && inline_udfs_eq
             && python_version_eq
             && docs_eq_result
             // && event_time_eq
@@ -1494,6 +1504,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.imports),
                             format!("{:?}", &other.imports),
+                        )),
+                    ),
+                    (
+                        "inline_udfs",
+                        inline_udfs_eq,
+                        Some((
+                            format!("{:?}", &self.inline_udfs),
+                            format!("{:?}", &other.inline_udfs),
                         )),
                     ),
                     (

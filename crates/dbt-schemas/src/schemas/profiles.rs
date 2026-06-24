@@ -322,6 +322,10 @@ impl DbConfig {
         }
     }
 
+    pub fn trino_inline_udfs_enabled(&self) -> bool {
+        matches!(self, DbConfig::Trino(config) if config.inline_udfs.unwrap_or(false))
+    }
+
     pub fn get_execution_timezone(&self) -> Option<String> {
         match self {
             DbConfig::Snowflake(config) => config.execution_timezone.clone(),
@@ -854,6 +858,8 @@ pub struct TrinoDbConfig {
     pub password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inline_udfs: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]

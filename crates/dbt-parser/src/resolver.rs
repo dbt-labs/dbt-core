@@ -921,6 +921,7 @@ pub async fn resolve_inner(
         runtime_config.clone(),
         &mut node_resolver,
         token,
+        dbt_state.dbt_profile.db_config.trino_inline_udfs_enabled(),
     )
     .await?;
     nodes.functions.extend(functions);

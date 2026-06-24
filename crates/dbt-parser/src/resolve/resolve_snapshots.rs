@@ -283,6 +283,7 @@ pub async fn resolve_snapshots(
                 .as_ref()
                 .unwrap_or(&vec![])
                 .clone(),
+            render_unqualified_function_calls: false,
         }),
         jinja_env: jinja_env.clone(),
         runtime_config: runtime_config.clone(),
