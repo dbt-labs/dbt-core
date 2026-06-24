@@ -19,6 +19,7 @@ pub use adapter_engine::Options;
 pub mod query_comment;
 pub mod retry;
 
+pub mod duckdb_attach;
 mod xdbc;
 pub use xdbc::XdbcEngine;
 

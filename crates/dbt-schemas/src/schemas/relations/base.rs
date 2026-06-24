@@ -2,6 +2,7 @@
 use crate::dbt_types::RelationType;
 use crate::filter::RunFilter;
 use crate::schemas::common::ResolvedQuoting;
+pub use crate::schemas::dbt_catalogs_v2::TableFormat;
 
 use chrono::format::SecondsFormat;
 use dbt_adapter_core::{AdapterType, quote_char};
@@ -36,27 +37,6 @@ impl RelationPattern {
             database,
             schema_pattern,
             table_pattern,
-        }
-    }
-}
-
-/// The format of the table
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TableFormat {
-    /// The default table format
-    Default,
-    /// The iceberg table format
-    Iceberg,
-    /// The DuckLake table format (MotherDuck ACID cloud storage)
-    DuckLake,
-}
-
-impl TableFormat {
-    pub fn as_str(&self, _adapter_type: AdapterType) -> &'static str {
-        match self {
-            TableFormat::Default => "default",
-            TableFormat::Iceberg => "iceberg",
-            TableFormat::DuckLake => "ducklake",
         }
     }
 }

@@ -159,6 +159,8 @@ const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
     FieldSpec::boolean("support_stage_create"),
     FieldSpec::boolean("purge_requested"),
     FieldSpec::boolean("encode_entire_prefix"),
+    FieldSpec::boolean("read_only")
+        .doc("Attach the catalog read-only. Horizon/Unity attach read-only on released DuckDB; read-write requires DuckDB 1.5.4 (see #10950)."),
 ];
 
 const UNITY_DATABRICKS_FIELDS: &[FieldSpec] = &[
@@ -186,9 +188,14 @@ const DUCKLAKE_DUCKDB_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("data_path").non_empty(),
     FieldSpec::string("attach_as").non_empty(),
     FieldSpec::string("metadata_schema").non_empty(),
+    FieldSpec::string("metadata_catalog").non_empty(),
+    FieldSpec::u32_plain("data_inlining_row_limit")
+        .doc("Inline row groups smaller than this many rows into the metadata catalog."),
     FieldSpec::boolean("create_if_not_exists"),
     FieldSpec::boolean("read_only"),
     FieldSpec::boolean("encrypted"),
+    FieldSpec::boolean("automatic_migration"),
+    FieldSpec::boolean("override_data_path"),
 ];
 
 const LOCAL_FILESYSTEM_DUCKDB_FIELDS: &[FieldSpec] = &[
@@ -228,17 +235,18 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         type_name: "horizon",
         table_format: "iceberg",
-        description: "Snowflake-managed Iceberg catalog (Horizon). Supports config.snowflake and/or config.databricks.",
+        description: "Snowflake-managed Iceberg catalog (Horizon). Supports snowflake (native), databricks, and/or duckdb (read-only attach) connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
+            PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
         type_name: "glue",
         table_format: "iceberg",
-        description: "AWS Glue catalog. Supports config.snowflake and/or config.duckdb.",
+        description: "AWS Glue catalog. Supports snowflake and/or duckdb connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
@@ -248,7 +256,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         type_name: "iceberg_rest",
         table_format: "iceberg",
-        description: "Iceberg REST catalog. Supports config.snowflake and/or config.duckdb.",
+        description: "Iceberg REST catalog. Supports snowflake and/or duckdb connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
@@ -258,11 +266,12 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         type_name: "unity",
         table_format: "iceberg",
-        description: "Databricks Unity catalog. Supports config.snowflake and/or config.databricks.",
+        description: "Databricks Unity catalog. Supports snowflake, databricks, and/or duckdb (read-only attach) connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", UNITY_DATABRICKS_FIELDS),
+            PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -603,14 +612,22 @@ impl V2CatalogType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum V2TableFormat {
+// FIXME: TableFormat currently mirrors the two user-facing YAML values (default|iceberg).
+// It should become a richer internal representation resolved from (catalog_type, table_format)
+// at parse time — e.g. type=ducklake → DuckLake, type=hive_metastore → Delta,
+// type=iceberg_rest → Iceberg, etc. That would let downstream code branch on a single
+// enum without ad-hoc catalog_type string checks (see CatalogRelation Jinja egress).
+// Doing this right requires extending CatalogTypeSchema with a canonical internal TableFormat
+// per type, then resolving in CatalogSpecV2View::from_mapping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TableFormat {
     Default,
     Iceberg,
 }
 
-impl V2TableFormat {
-    fn parse(raw: &str, span: &yml::Span) -> FsResult<Self> {
+impl TableFormat {
+    fn parse_from_yaml(raw: &str, span: &yml::Span) -> FsResult<Self> {
         if raw.eq_ignore_ascii_case("default") {
             Ok(Self::Default)
         } else if raw.eq_ignore_ascii_case("iceberg") {
@@ -630,6 +647,10 @@ impl V2TableFormat {
             Self::Default => "default",
             Self::Iceberg => "iceberg",
         }
+    }
+
+    pub fn is_iceberg(&self) -> bool {
+        matches!(self, Self::Iceberg)
     }
 }
 
@@ -680,7 +701,7 @@ pub struct CatalogSpecV2View<'a> {
     repr: &'a yml::Mapping,
     pub name: &'a str,
     pub catalog_type: V2CatalogType,
-    pub table_format: V2TableFormat,
+    pub table_format: TableFormat,
     config: &'a yml::Mapping,
 }
 
@@ -699,7 +720,7 @@ impl<'a> CatalogSpecV2View<'a> {
         let table_format_span =
             field_span(map, "table_format").ok_or_else(|| key_err("table_format", Some(span)))?;
         let catalog_type = V2CatalogType::parse(raw_type, type_span)?;
-        let table_format = V2TableFormat::parse(raw_table_format, table_format_span)?;
+        let table_format = TableFormat::parse_from_yaml(raw_table_format, table_format_span)?;
         let config_map = get_map(map, "config")?.ok_or_else(|| key_err("config", Some(span)))?;
 
         Ok(Self {
@@ -719,6 +740,158 @@ impl<'a> CatalogSpecV2View<'a> {
         self.config
             .get(yml::Value::from(platform))
             .and_then(|v| v.as_mapping())
+    }
+
+    // ===== Post-hoc semantic validators =====
+    // Called from CatalogRegistry::validate_semantic after structural validation passes.
+
+    fn validate_duckdb_semantics(&self, duckdb: &yml::Mapping, type_name: &str) -> FsResult<()> {
+        let has_endpoint = get_str(duckdb, "endpoint")?;
+        let has_endpoint_type = get_str(duckdb, "endpoint_type")?;
+
+        match (has_endpoint, has_endpoint_type) {
+            (None, None) => {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => self.field_span("type").cloned(),
+                    "Catalog '{}' {}/duckdb config requires 'endpoint' or 'endpoint_type'",
+                    self.name, type_name
+                );
+            }
+            (Some(ep), Some(_)) if !ep.is_empty_or_whitespace() => {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                    "Catalog '{}' {}/duckdb 'endpoint' and 'endpoint_type' are mutually exclusive",
+                    self.name, type_name
+                );
+            }
+            (Some(ep), _) if ep.is_empty_or_whitespace() => {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => field_span(duckdb, "endpoint").cloned(),
+                    "Catalog '{}' {}/duckdb 'endpoint' must be non-empty",
+                    self.name, type_name
+                );
+            }
+            (_, Some(et)) => {
+                let val = et.trim();
+                if !matches_enum_ci(val, DUCKDB_ENDPOINT_TYPES) {
+                    return err!(
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                        "Catalog '{}' {}/duckdb 'endpoint_type' must be 'GLUE' or 'S3_TABLES'",
+                        self.name, type_name
+                    );
+                }
+                if val.eq_ignore_ascii_case("S3_TABLES") {
+                    let Some(warehouse) = get_str(duckdb, "warehouse")? else {
+                        return err!(
+                            code => ErrorCode::InvalidConfig,
+                            hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                            "Catalog '{}' {}/duckdb endpoint_type='S3_TABLES' requires 'warehouse'",
+                            self.name, type_name
+                        );
+                    };
+                    if warehouse.is_empty_or_whitespace() {
+                        return err!(
+                            code => ErrorCode::InvalidConfig,
+                            hacky_yml_loc => field_span(duckdb, "warehouse").cloned(),
+                            "Catalog '{}' {}/duckdb 'warehouse' must be non-empty",
+                            self.name, type_name
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if let Some(_auth_type) = get_str(duckdb, "authorization_type")? {
+            if has_endpoint_type.is_some() {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => field_span(duckdb, "authorization_type").cloned(),
+                    "Catalog '{}' {}/duckdb 'authorization_type' cannot be combined with 'endpoint_type'",
+                    self.name, type_name
+                );
+            }
+        }
+
+        // write path requires duckdb 1.5.4 (https://github.com/duckdb/duckdb_iceberg/issues/1017, https://github.com/dbt-labs/fs/issues/10950)
+        if let Some(false) = try_get_bool(duckdb, "read_only")? {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "read_only").cloned(),
+                "Catalog '{}' {}/duckdb is read-only on released duckdb; writes require duckdb 1.5.4. Remove 'read_only' or set it to true.",
+                self.name, type_name
+            );
+        }
+
+        Ok(())
+    }
+
+    // FIXME: validation is currently organized per-platform (validate_duckdb_semantics etc.)
+    // but some constraints are catalog-type × platform cross products. As these accumulate,
+    // consider a validation schema that can express per-(catalog-type, platform) rules
+    // without one-off functions. For now, catalog-type-specific validators like this one
+    // compose the shared platform validator as a quick unblock.
+    fn validate_horizon_duckdb_semantics(&self, duckdb: &yml::Mapping) -> FsResult<()> {
+        // Horizon attached via DuckDB needs the Snowflake warehouse name.
+        if get_str(duckdb, "warehouse")?.is_none() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => self.field_span("type").cloned(),
+                "Catalog '{}' horizon/duckdb config requires 'warehouse'",
+                self.name
+            );
+        }
+        Ok(())
+    }
+
+    fn validate_unity_semantics(&self, databricks: &yml::Mapping) -> FsResult<()> {
+        let file_format_str = get_str(databricks, "file_format")?
+            .expect("structural validation ensures file_format is present");
+        let file_format_span = field_span(databricks, "file_format").cloned();
+        let file_format = V2FileFormat::parse(file_format_str, file_format_span.clone())?;
+        let use_uniform =
+            UniformMode::from_bool(try_get_bool(databricks, "use_uniform")?.unwrap_or(false));
+
+        match (file_format, use_uniform) {
+            (V2FileFormat::Delta, UniformMode::Enabled)
+            | (V2FileFormat::Parquet, UniformMode::Disabled) => Ok(()),
+            (V2FileFormat::Delta, UniformMode::Disabled) => err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => file_format_span,
+                "Catalog '{}' unity/databricks use_uniform: false (or unset) requires file_format: parquet",
+                self.name
+            ),
+            (V2FileFormat::Parquet, UniformMode::Enabled) => err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => file_format_span,
+                "Catalog '{}' unity/databricks use_uniform: true requires file_format: delta",
+                self.name
+            ),
+            (V2FileFormat::Hudi, _) => err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => file_format_span,
+                "Catalog '{}' unity/databricks file_format 'hudi' is not valid for unity (use delta or parquet)",
+                self.name
+            ),
+        }
+    }
+
+    fn validate_biglake_semantics(&self, bigquery: &yml::Mapping) -> FsResult<()> {
+        let external_volume = get_str(bigquery, "external_volume")?
+            .expect("structural validation ensures external_volume is present");
+        if !external_volume.starts_with("gs://") {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(bigquery, "external_volume").cloned(),
+                "Catalog '{}' biglake_metastore/bigquery 'external_volume' must be a GCS path starting with gs://",
+                self.name
+            );
+        }
+        Ok(())
     }
 }
 
@@ -863,26 +1036,34 @@ impl CatalogRegistry {
         match catalog.catalog_type {
             V2CatalogType::Glue => {
                 if let Some(duckdb) = catalog.config_block("duckdb") {
-                    Self::validate_duckdb_semantics(duckdb, catalog, "glue")?;
+                    catalog.validate_duckdb_semantics(duckdb, "glue")?;
                 }
             }
             V2CatalogType::IcebergRest => {
                 if let Some(duckdb) = catalog.config_block("duckdb") {
-                    Self::validate_duckdb_semantics(duckdb, catalog, "iceberg_rest")?;
+                    catalog.validate_duckdb_semantics(duckdb, "iceberg_rest")?;
+                }
+            }
+            V2CatalogType::Horizon => {
+                if let Some(duckdb) = catalog.config_block("duckdb") {
+                    catalog.validate_duckdb_semantics(duckdb, "horizon")?;
+                    catalog.validate_horizon_duckdb_semantics(duckdb)?;
                 }
             }
             V2CatalogType::Unity => {
                 if let Some(databricks) = catalog.config_block("databricks") {
-                    Self::validate_unity_semantics(databricks, catalog)?;
+                    catalog.validate_unity_semantics(databricks)?;
+                }
+                if let Some(duckdb) = catalog.config_block("duckdb") {
+                    catalog.validate_duckdb_semantics(duckdb, "unity")?;
                 }
             }
             V2CatalogType::BiglakeMetastore => {
                 if let Some(bigquery) = catalog.config_block("bigquery") {
-                    Self::validate_biglake_semantics(bigquery, catalog)?;
+                    catalog.validate_biglake_semantics(bigquery)?;
                 }
             }
-            V2CatalogType::Horizon
-            | V2CatalogType::HiveMetastore
+            V2CatalogType::HiveMetastore
             | V2CatalogType::DuckLake
             | V2CatalogType::LocalFilesystem => {}
         }
@@ -1121,137 +1302,6 @@ impl CatalogRegistry {
                     }
                 }
             }
-        }
-        Ok(())
-    }
-
-    fn validate_duckdb_semantics(
-        duckdb: &yml::Mapping,
-        catalog: &CatalogSpecV2View<'_>,
-        type_name: &str,
-    ) -> FsResult<()> {
-        let has_endpoint = get_str(duckdb, "endpoint")?;
-        let has_endpoint_type = get_str(duckdb, "endpoint_type")?;
-
-        match (has_endpoint, has_endpoint_type) {
-            (None, None) => {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => catalog.field_span("type").cloned(),
-                    "Catalog '{}' {}/duckdb config requires 'endpoint' or 'endpoint_type'",
-                    catalog.name, type_name
-                );
-            }
-            (Some(ep), Some(_)) if !ep.is_empty_or_whitespace() => {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
-                    "Catalog '{}' {}/duckdb 'endpoint' and 'endpoint_type' are mutually exclusive",
-                    catalog.name, type_name
-                );
-            }
-            (Some(ep), _) if ep.is_empty_or_whitespace() => {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => field_span(duckdb, "endpoint").cloned(),
-                    "Catalog '{}' {}/duckdb 'endpoint' must be non-empty",
-                    catalog.name, type_name
-                );
-            }
-            (_, Some(et)) => {
-                let val = et.trim();
-                if !matches_enum_ci(val, DUCKDB_ENDPOINT_TYPES) {
-                    return err!(
-                        code => ErrorCode::InvalidConfig,
-                        hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
-                        "Catalog '{}' {}/duckdb 'endpoint_type' must be 'GLUE' or 'S3_TABLES'",
-                        catalog.name, type_name
-                    );
-                }
-                if val.eq_ignore_ascii_case("S3_TABLES") {
-                    let Some(warehouse) = get_str(duckdb, "warehouse")? else {
-                        return err!(
-                            code => ErrorCode::InvalidConfig,
-                            hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
-                            "Catalog '{}' {}/duckdb endpoint_type='S3_TABLES' requires 'warehouse'",
-                            catalog.name, type_name
-                        );
-                    };
-                    if warehouse.is_empty_or_whitespace() {
-                        return err!(
-                            code => ErrorCode::InvalidConfig,
-                            hacky_yml_loc => field_span(duckdb, "warehouse").cloned(),
-                            "Catalog '{}' {}/duckdb 'warehouse' must be non-empty",
-                            catalog.name, type_name
-                        );
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        if let Some(_auth_type) = get_str(duckdb, "authorization_type")? {
-            if has_endpoint_type.is_some() {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => field_span(duckdb, "authorization_type").cloned(),
-                    "Catalog '{}' {}/duckdb 'authorization_type' cannot be combined with 'endpoint_type'",
-                    catalog.name, type_name
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    fn validate_unity_semantics(
-        databricks: &yml::Mapping,
-        catalog: &CatalogSpecV2View<'_>,
-    ) -> FsResult<()> {
-        let file_format_str = get_str(databricks, "file_format")?
-            .expect("structural validation ensures file_format is present");
-        let file_format_span = field_span(databricks, "file_format").cloned();
-        let file_format = V2FileFormat::parse(file_format_str, file_format_span.clone())?;
-        let use_uniform =
-            UniformMode::from_bool(try_get_bool(databricks, "use_uniform")?.unwrap_or(false));
-
-        match (file_format, use_uniform) {
-            (V2FileFormat::Delta, UniformMode::Enabled)
-            | (V2FileFormat::Parquet, UniformMode::Disabled) => Ok(()),
-            (V2FileFormat::Delta, UniformMode::Disabled) => err!(
-                code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => file_format_span,
-                "Catalog '{}' unity/databricks use_uniform: false (or unset) requires file_format: parquet",
-                catalog.name
-            ),
-            (V2FileFormat::Parquet, UniformMode::Enabled) => err!(
-                code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => file_format_span,
-                "Catalog '{}' unity/databricks use_uniform: true requires file_format: delta",
-                catalog.name
-            ),
-            (V2FileFormat::Hudi, _) => err!(
-                code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => file_format_span,
-                "Catalog '{}' unity/databricks file_format 'hudi' is not valid for unity (use delta or parquet)",
-                catalog.name
-            ),
-        }
-    }
-
-    fn validate_biglake_semantics(
-        bigquery: &yml::Mapping,
-        catalog: &CatalogSpecV2View<'_>,
-    ) -> FsResult<()> {
-        let external_volume = get_str(bigquery, "external_volume")?
-            .expect("structural validation ensures external_volume is present");
-        if !external_volume.starts_with("gs://") {
-            return err!(
-                code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => field_span(bigquery, "external_volume").cloned(),
-                "Catalog '{}' biglake_metastore/bigquery 'external_volume' must be a GCS path starting with gs://",
-                catalog.name
-            );
         }
         Ok(())
     }
@@ -1865,26 +1915,6 @@ catalogs:
         );
     }
 
-    #[test]
-    fn unity_duckdb_v2_rejected() {
-        let yaml = r#"
-catalogs:
-  - name: unity_duck
-    type: unity
-    table_format: iceberg
-    config:
-      duckdb:
-        endpoint: "https://example.com"
-"#;
-        let res = parse_and_validate(yaml);
-        let msg = format!("{res:?}");
-        assert!(res.is_err(), "expected error but got Ok");
-        assert!(
-            msg.contains("does not support duckdb on the unity"),
-            "unexpected error: {msg}"
-        );
-    }
-
     // -----------------------------------------------------------------------
     // DuckDB config: endpoint_type
     // -----------------------------------------------------------------------
@@ -2240,9 +2270,13 @@ catalogs:
         data_path: "data/"
         attach_as: "lake"
         metadata_schema: "my_schema"
+        metadata_catalog: "lake_db"
+        data_inlining_row_limit: 100
         create_if_not_exists: true
         read_only: false
         encrypted: false
+        automatic_migration: true
+        override_data_path: true
 "#;
         parse_and_validate(yaml).expect("ducklake full config should validate");
     }
@@ -2543,5 +2577,92 @@ catalogs:
             msg.contains("Unknown key 'file_format'"),
             "unexpected error: {msg}"
         );
+    }
+
+    #[test]
+    fn horizon_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "horizon_wh"
+        endpoint: "https://horizon.example.com/catalog"
+        secret: "horizon_secret"
+        default_schema: "demo"
+"#;
+        parse_and_validate(yaml).expect("read-only horizon + duckdb should validate");
+    }
+
+    #[test]
+    fn unity_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: unity_demo
+    type: unity
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "unity_wh"
+        endpoint: "https://dbc.example.com/api/2.1/unity-catalog/iceberg"
+"#;
+        parse_and_validate(yaml).expect("read-only unity + duckdb should validate");
+    }
+
+    #[test]
+    fn horizon_duckdb_requires_warehouse() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://horizon.example.com/catalog"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("'warehouse'"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn horizon_duckdb_forbids_writes() {
+        let yaml = r#"
+catalogs:
+  - name: horizon_demo
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "horizon_wh"
+        endpoint: "https://horizon.example.com/catalog"
+        read_only: false
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("read-only"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn unity_duckdb_forbids_writes() {
+        let yaml = r#"
+catalogs:
+  - name: unity_demo
+    type: unity
+    table_format: iceberg
+    config:
+      duckdb:
+        warehouse: "unity_wh"
+        endpoint: "https://dbc.example.com/api/2.1/unity-catalog/iceberg"
+        read_only: false
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("read-only"), "unexpected error: {msg}");
     }
 }

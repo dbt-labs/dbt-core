@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use dbt_adapter::catalog_relation::CatalogRelation;
 use dbt_adapter_core::AdapterType;
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::relations::base::TableFormat;
 use minijinja::Value;
 
 use crate::macro_test_harness::MacroTestHarness;
@@ -137,7 +138,11 @@ mod databricks {
 
         let relation = Value::from_object(CatalogRelation {
             catalog_type: catalog_type.to_string(),
-            table_format: table_format.to_string(),
+            table_format: if table_format.eq_ignore_ascii_case("iceberg") {
+                TableFormat::Iceberg
+            } else {
+                TableFormat::Default
+            },
             file_format: file_format.map(str::to_string),
             ..CatalogRelation::default_catalog_relation_databricks()
         });

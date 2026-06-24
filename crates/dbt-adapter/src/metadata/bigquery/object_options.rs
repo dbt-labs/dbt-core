@@ -179,10 +179,10 @@ pub(crate) fn get_table_options_value(
             );
         }
 
-        if catalog_relation.table_format == "iceberg" {
+        if catalog_relation.table_format.is_iceberg() {
             opts.insert(
                 "table_format".to_string(),
-                Value::from(format!("'{}'", catalog_relation.table_format)),
+                Value::from(format!("'{}'", catalog_relation.table_format.as_str())),
             );
             let file_format = catalog_relation.file_format.ok_or_else(|| {
                 AdapterError::new(

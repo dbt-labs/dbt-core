@@ -22,6 +22,7 @@ use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
 use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::duckdb::DuckDBMetadataAdapter;
+use crate::metadata::duckdb::{classify_attach_entry, duckdb_table_format_for_database};
 use crate::metadata::fabric::FabricMetadataAdapter;
 use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
@@ -61,13 +62,12 @@ use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
-use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, Policy, TableFormat};
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, Policy};
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::bigquery::*;
@@ -455,13 +455,13 @@ impl AdapterImpl {
         None
     }
 
-    /// Returns the table format for `database` (e.g. `DuckLake` for DuckLake-backed databases).
+    /// Returns the table format string for `database` (e.g. `"ducklake"`, `"iceberg"`, `"default"`).
     ///
     /// Mirrors the Python reference implementation in dbt-duckdb:
     /// https://github.com/duckdb/dbt-duckdb/blob/main/dbt/adapters/duckdb/credentials.py
-    pub fn table_format_for_database(&self, database: &str) -> TableFormat {
+    pub fn table_format_for_database(&self, database: &str) -> &'static str {
         if self.adapter_type() != DuckDB {
-            return TableFormat::Default;
+            return "default";
         }
 
         let path_config = self.get_db_config("path");
@@ -476,67 +476,28 @@ impl AdapterImpl {
             .unwrap_or(false)
             || path_info.is_ducklake;
         if primary_is_ducklake && primary_database.eq_ignore_ascii_case(database) {
-            return TableFormat::DuckLake;
+            return "ducklake";
         }
 
         // Check v2 catalogs first: if this database matches an attached catalog,
         // return the appropriate table format so that macros can skip CASCADE / ALTER TABLE RENAME.
-        if load_catalogs::fetch_use_catalogs_v2() {
-            if let Some(catalogs) = load_catalogs::fetch_catalogs() {
-                if let Ok(view) = catalogs.view_v2() {
-                    for catalog in &view.catalogs {
-                        if let Some(duckdb_block) = catalog.config_block("duckdb") {
-                            let alias = duckdb_block
-                                .get(dbt_yaml::Value::from("attach_as"))
-                                .and_then(|v| v.as_str())
-                                .unwrap_or(catalog.name);
-                            let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
-                            if alias.eq_ignore_ascii_case(database) {
-                                return match catalog.catalog_type {
-                                    V2CatalogType::DuckLake => TableFormat::DuckLake,
-                                    _ => TableFormat::Iceberg,
-                                };
-                            }
-                        }
-                    }
-                }
-            }
+        if let Some(fmt) = duckdb_table_format_for_database(database) {
+            return fmt;
         }
 
-        // Legacy path: check profile-level attach: entries
+        // Legacy path: check profile-level attach: entries. Each entry resolves
+        // independently to an (alias, format_str) or is skipped.
         let Some(attach_val) = self.get_db_config_value("attach") else {
-            return TableFormat::Default;
+            return "default";
         };
         let YmlValue::Sequence(seq, _) = attach_val else {
-            return TableFormat::Default;
+            return "default";
         };
-        for item in seq {
-            let YmlValue::Mapping(map, _) = item else {
-                continue;
-            };
-            let Some(path) = map.get("path").and_then(|v| v.as_str()) else {
-                continue;
-            };
-            let attach_info = DuckDBPathInfo::parse_path(Some(path));
-            let explicit_ducklake = map
-                .get("is_ducklake")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            if !explicit_ducklake && !attach_info.is_ducklake {
-                continue;
-            }
-
-            let attachment_db = map
-                .get("alias")
-                .and_then(|v| v.as_str())
-                .map(ToOwned::to_owned)
-                .unwrap_or_else(|| attach_info.database.to_owned());
-            if attachment_db.eq_ignore_ascii_case(database) {
-                return TableFormat::DuckLake;
-            }
-        }
-
-        TableFormat::Default
+        seq.iter()
+            .filter_map(classify_attach_entry)
+            .find(|(alias, _)| alias.eq_ignore_ascii_case(database))
+            .map(|(_, fmt)| fmt)
+            .unwrap_or("default")
     }
 
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1749
@@ -3850,7 +3811,7 @@ impl AdapterImpl {
                     load_catalogs::fetch_catalogs(),
                 )?;
                 // We only have to update tblproperties if using a UniForm Iceberg table
-                if catalog_relation.table_format == "iceberg" {
+                if catalog_relation.table_format.is_iceberg() {
                     if self
                         .compare_dbr_version(state, conn, 14, 3, token)?
                         .as_i64()
@@ -3927,7 +3888,7 @@ impl AdapterImpl {
                     load_catalogs::fetch_catalogs(),
                 )?;
 
-                if catalog_relation.table_format != "iceberg" {
+                if !catalog_relation.table_format.is_iceberg() {
                     return Ok(false);
                 }
 
@@ -5171,28 +5132,16 @@ mod tests {
     fn test_table_format_primary_motherduck_ducklake() {
         let adapter = AdapterImpl::new(engine(DuckDB), None);
 
-        assert_eq!(
-            adapter.table_format_for_database("my_db"),
-            TableFormat::DuckLake
-        );
-        assert_eq!(
-            adapter.table_format_for_database("other"),
-            TableFormat::Default
-        );
+        assert_eq!(adapter.table_format_for_database("my_db"), "ducklake");
+        assert_eq!(adapter.table_format_for_database("other"), "default");
     }
 
     #[test]
     fn test_table_format_unaliased_motherduck_attachment() {
         let adapter = AdapterImpl::new(engine(DuckDB), None);
 
-        assert_eq!(
-            adapter.table_format_for_database("some_db"),
-            TableFormat::DuckLake
-        );
-        assert_eq!(
-            adapter.table_format_for_database("main"),
-            TableFormat::Default
-        );
+        assert_eq!(adapter.table_format_for_database("some_db"), "ducklake");
+        assert_eq!(adapter.table_format_for_database("main"), "default");
     }
 
     #[test]
@@ -5227,6 +5176,29 @@ mod tests {
         assert_eq!(ds.use_database("dev", "n").unwrap(), None);
         assert_eq!(ds.use_database("DEV", "n").unwrap(), None);
         assert_eq!(ds.use_database("", "n").unwrap(), None);
+    }
+
+    #[test]
+    fn test_table_format_profile_level_iceberg_attachment() {
+        let attach = YmlValue::Sequence(
+            vec![YmlValue::Mapping(
+                Mapping::from_iter([
+                    ("path".into(), "demo".into()),
+                    ("alias".into(), "iceberg_demo".into()),
+                    ("type".into(), "iceberg".into()),
+                ]),
+                Default::default(),
+            )],
+            Default::default(),
+        );
+        let config = Mapping::from_iter([
+            ("path".into(), "demo.duckdb".into()),
+            ("attach".into(), attach),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(DuckDB, config), None);
+
+        assert_eq!(adapter.table_format_for_database("iceberg_demo"), "iceberg");
+        assert_eq!(adapter.table_format_for_database("demo"), "default");
     }
 
     // Checks that get_persist_doc_columns generates an explicit empty comment update only when the existing

@@ -27,7 +27,7 @@ mod sqlserver;
 mod test_options;
 
 pub use config::AdapterConfig;
-pub use duckdb::init::{generate_duckdb_init_sql, is_motherduck_path, motherduck_database_name};
+pub use duckdb::init::{generate_duckdb_init_sql, is_motherduck_path};
 
 /// The result of configuring an auth backend.
 ///

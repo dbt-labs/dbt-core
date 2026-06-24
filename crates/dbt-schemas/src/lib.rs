@@ -18,8 +18,9 @@ pub mod schemas {
     pub use dbt_catalogs::{
         AdapterPropsView, CatalogSpecView, CatalogType, DatabricksUnityPropsView, DbtCatalogsView,
         FileFormat, SerializationPolicy, SnowflakeBuiltInPropsView, SnowflakeRestPropsView,
-        TableFormat, TargetFileSize, WriteIntegrationView, validate_catalogs,
+        TargetFileSize, WriteIntegrationView, validate_catalogs,
     };
+    pub use dbt_catalogs_v2::TableFormat;
     pub mod macros;
     pub mod packages;
     mod prev_state;

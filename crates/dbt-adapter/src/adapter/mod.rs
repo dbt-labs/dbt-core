@@ -34,7 +34,7 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryPartitionConfig, GrantAccessToTarget};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, TableFormat};
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
 use dbt_xdbc::QueryCtx;
 use indexmap::IndexMap;
@@ -254,6 +254,9 @@ impl Adapter {
     /// def commit(self) -> None
     /// ```
     pub fn commit(&self) -> Result<Value, minijinja::Error> {
+        // No-op: Fusion connections are shared across nodes, so we never mutate
+        // their transaction state from this Jinja hook. DuckDB autocommits each
+        // statement; macros that need statement isolation use `auto_begin=False`.
         Ok(Value::from(true))
     }
 
@@ -1364,8 +1367,25 @@ impl Adapter {
                             temp_relation.schema_as_resolved_str().unwrap_or_default();
                         let has_schema =
                             !resolved_catalog.is_empty() || !resolved_schema.is_empty();
+                        // Schema-wide listing is only unreliable for external
+                        // Iceberg REST catalogs (their information_schema coverage
+                        // is incomplete), so skip warming the cache only when the
+                        // *target* catalog is one of them. For a regular DuckDB
+                        // catalog we still warm once per schema — otherwise every
+                        // per-relation existence check falls back to a query over
+                        // the unqualified `information_schema.tables`, which unions
+                        // every attached database and fans out across all remote
+                        // catalogs on each call.
+                        let skip_schema_listing = match adapter.adapter_type() {
+                            AdapterType::DuckDB => {
+                                duckdb::is_duckdb_v2_external_iceberg_catalog_database(
+                                    &resolved_catalog,
+                                )
+                            }
+                            _ => false,
+                        };
 
-                        if has_schema {
+                        if has_schema && !skip_schema_listing {
                             let mut conn = adapter
                                 .borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                             let db_schema = CatalogAndSchema::from(temp_relation.as_ref());
@@ -2492,8 +2512,8 @@ impl Adapter {
         }
     }
 
-    /// Extract the database name from a Jinja relation Value and look up its table format.
-    fn table_format(&self, relation_val: &Value) -> Option<TableFormat> {
+    /// Extract the database name from a Jinja relation Value and look up its table format string.
+    fn table_format(&self, relation_val: &Value) -> Option<&'static str> {
         let database = relation_val.get_attr("database").ok().and_then(|v| {
             if v.is_undefined() || v.is_none() {
                 None
@@ -3765,10 +3785,7 @@ impl Adapter {
                 let iter = ArgsIter::new(name, &["relation"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 iter.finish()?;
-                let format_str = self
-                    .table_format(relation_val)
-                    .map(|f| f.as_str(self.adapter_type()))
-                    .unwrap_or("default");
+                let format_str = self.table_format(relation_val).unwrap_or("default");
                 Ok(Value::from(format_str))
             }
             "is_ducklake" => {
@@ -3778,7 +3795,7 @@ impl Adapter {
                 let relation_val = iter.next_arg::<&Value>()?;
                 iter.finish()?;
                 Ok(Value::from(
-                    self.table_format(relation_val) == Some(TableFormat::DuckLake),
+                    self.table_format(relation_val) == Some("ducklake"),
                 ))
             }
             // DEPRECATED: in favor of "has_feature"
