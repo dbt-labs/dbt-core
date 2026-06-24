@@ -81,6 +81,3 @@ tempfile = { workspace = true }
 name = "dbt_adapter"
 path = "src/lib.rs"
 doctest = false
-
-[features]
-odbc = ["dbt-xdbc/odbc"]

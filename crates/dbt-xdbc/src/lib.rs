@@ -49,11 +49,6 @@ pub use query_ctx::QueryCtx;
 
 pub mod semaphore;
 
-#[cfg(feature = "odbc")]
-pub(crate) mod odbc;
-#[cfg(feature = "odbc")]
-pub(crate) mod odbc_api;
-
 pub(crate) mod builder;
 pub(crate) mod checksums;
 pub mod driver_manager;

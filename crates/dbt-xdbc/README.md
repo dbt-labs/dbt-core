@@ -3,37 +3,13 @@
 [![crates.io](https://img.shields.io/crates/v/adbc_snowflake.svg)](https://crates.io/crates/adbc_snowflake)
 [![docs.rs](https://docs.rs/adbc_snowflake/badge.svg)](https://docs.rs/c)
 
-# Rust wrapper for ADBC and ODBC drivers
+# Rust wrapper for ADBC drivers
 
 All [ADBC (Arrow Database Connectivity)](https://arrow.apache.org/adbc/) drivers
 (shared libraries) are loaded dynamically.
 
 Drivers are automatically downloaded from the dbt CDN when dbt needs to connect to a
 data warehouse.
-
-[ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity) drivers are
-also loaded dynamically, but should be installed on the system.
-
-Run this to download and install the ODBC drivers (for Redshift and Databricks).
-
-```
-./scripts/install_odbc_drivers.sh
-```
-
-To compile with ODBC support on non-Windows platforms, you need to install the
-[unixODBC](http://www.unixodbc.org/) library.
-
-```
-sudo apt-get install unixodbc-dev  # Ubuntu
-brew install unixodbc  # macOS
-```
-
-Enable the `"odbc"` feature to compile with ODBC support (enabled by default
-only on Windows).
-
-```
-cargo build --bin dbt --features odbc
-```
 
 ## Snowflake example
 
@@ -126,7 +102,7 @@ link to the local driver from the `lib/` folder at the root of the `fs` repo.
 ```bash
 export DISABLE_CDN_DRIVER_CACHE=true
 ```
-When the non-CDN driver is found, 
+When the non-CDN driver is found,
 you should see a message like this when you run `fs` or tests that trigger the
 loading of ADBC drivers:
 
@@ -143,10 +119,10 @@ The driver is being looked for in two locations (assuming you keep all the repos
 * First, as `~/code/arrow-adbc/go/adbc/pkg/adbc_driver_bigquery`
 * Second, *only if the above folder does not exist*, as `~/code/fs/lib/adbc_driver_bigquery`
 
-Since the 2nd option is pre-empted by the first, it is only useful for people who do not do driver development 
+Since the 2nd option is pre-empted by the first, it is only useful for people who do not do driver development
 (do not have `~/code/arrow-adbc`) but need to try some pre-built non-CDN driver.
 
-Also, when the 1st option is in force, we automatically attempt to rebuild the drivers. 
+Also, when the 1st option is in force, we automatically attempt to rebuild the drivers.
 To disable that, set
 ```bash
 export DISABLE_AUTO_DRIVER_REBUILD=true
@@ -170,7 +146,7 @@ repository and bump the driver version in `fs`.
 
 ### DuckDB specifics
 
-Working on the DuckDB driver is different from others, since it is bundled with DuckDB itself. 
+Working on the DuckDB driver is different from others, since it is bundled with DuckDB itself.
 
 For reference, the build process in CI is governed by `~/code/fs/.github/workflows/build-duckdb-driver.yml`
 and  `~/code/fs/scripts/build_cmake_duckdb_macos.sh` (and its siblings for Windows and Linux).
@@ -187,7 +163,7 @@ ln -s arrow-adbc adbc
 ```
 (replace `0.18.0+dbt99.1.0` as desired, this is the label of the driver being built)
 
-When successful, this should build the driver as 
+When successful, this should build the driver as
 `~/code/adbc_build/duckdb/adbc_driver_duckdb-0.18.0+dbt99.1.0-x86_64-apple-darwin.dylib`.
 
 To load this driver when fs runs,

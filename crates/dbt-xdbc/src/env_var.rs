@@ -56,7 +56,7 @@ mod tests {
     #[test]
     fn env_var_bool_accepts_missing_true_and_false_values() {
         let _guard = ENV_LOCK.lock().unwrap();
-        let name = "DBT_XDBC_TEST_BOOL_VALUES";
+        let name = "DBT_ADBC_TEST_BOOL_VALUES";
 
         remove_test_var(name);
         assert!(!env_var_bool(name).unwrap().unwrap_or(false));
@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn env_var_bool_rejects_unknown_values() {
         let _guard = ENV_LOCK.lock().unwrap();
-        let name = "DBT_XDBC_TEST_BOOL_INVALID";
+        let name = "DBT_ADBC_TEST_BOOL_INVALID";
 
         set_test_var(name, "maybe");
         let error = env_var_bool(name).unwrap_err();

@@ -263,7 +263,7 @@ pub fn format_driver_path(name: &str, triplet: DriverTriplet) -> Result<PathBuf,
         .ok_or(InstallError::DetermineCacheDir)
 }
 
-/// XDBC users can call this function to pre-install the driver for the given backend.
+/// ADBC users can call this function to pre-install the driver for the given backend.
 ///
 /// Instead of relying on the automatic installation at connection creation time.
 pub fn pre_install_driver(http_agent: &ureq::Agent, backend: Backend) -> Result<(), InstallError> {
@@ -316,11 +316,7 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
         Backend::DuckDBExtended => ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::ClickHouse => ("clickhouse", CLICKHOUSE_DRIVER_VERSION),
-        Backend::Athena
-        | Backend::Exasol
-        | Backend::DatabricksODBC
-        | Backend::RedshiftODBC
-        | Backend::Generic { .. } => {
+        Backend::Athena | Backend::Exasol | Backend::Generic { .. } => {
             unreachable!("driver_parameters() called with backend={:?}", backend)
         }
     }
@@ -746,8 +742,6 @@ mod tests {
         for backend in [
             Backend::Athena,
             Backend::Exasol,
-            Backend::DatabricksODBC,
-            Backend::RedshiftODBC,
             Backend::Generic {
                 library_name: "adbc_driver_sqlite",
                 entrypoint: Some(b"SqliteDriverInit"),

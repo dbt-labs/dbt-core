@@ -14,10 +14,8 @@ use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::Schema;
 
 use crate::Backend;
-#[cfg(feature = "odbc")]
-use crate::odbc::ManagedOdbcStatement;
 
-/// XDBC Statement.
+/// ADBC Statement.
 ///
 /// dyn-compatible trait inspired by the adbc_core::{Statement, Optionable} traits.
 pub trait Statement: Send {
@@ -238,88 +236,5 @@ impl Statement for AdbcStatement {
 
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         std::write!(f, "AdbcStatement")
-    }
-}
-
-/// ODBC Statement.
-#[cfg(feature = "odbc")]
-#[allow(dead_code)]
-pub(crate) struct OdbcStatement(pub(crate) Backend, pub(crate) ManagedOdbcStatement);
-
-#[cfg(feature = "odbc")]
-impl Statement for OdbcStatement {
-    fn bind(&mut self, _batch: RecordBatch) -> Result<()> {
-        todo!("OdbcStatement::bind")
-    }
-
-    fn bind_stream<'a>(
-        &'a mut self,
-        _reader: Box<dyn RecordBatchReader + Send + 'a>,
-    ) -> Result<()> {
-        todo!("OdbcStatement::bind_stream")
-    }
-
-    fn execute<'a>(&'a mut self) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        self.1.execute()?;
-        let reader = self.1.batch_reader()?;
-        Ok(Box::new(reader))
-    }
-
-    fn execute_update(&mut self) -> Result<Option<i64>> {
-        todo!("OdbcStatement::execute_update")
-    }
-
-    fn execute_schema(&mut self) -> Result<Schema> {
-        todo!("OdbcStatement::execute_schema")
-    }
-
-    fn execute_partitions(&mut self) -> Result<PartitionedResult> {
-        todo!("OdbcStatement::execute_partitions")
-    }
-
-    fn get_parameter_schema(&self) -> Result<Schema> {
-        todo!("OdbcStatement::get_parameter_schema")
-    }
-
-    fn prepare(&mut self) -> Result<()> {
-        self.1.prepare()
-    }
-
-    fn set_sql_query(&mut self, sql: &str) -> Result<()> {
-        self.1.set_sql_query(sql)
-    }
-
-    fn set_substrait_plan(&mut self, _plan: &[u8]) -> Result<()> {
-        unimplemented!("OdbcStatement::set_substrait_plan")
-    }
-
-    fn cancel(&mut self) -> Result<()> {
-        self.1.cancel()
-    }
-
-    // adbc_core::Optionable<Option = OptionStatement> functions -----------------------------
-
-    fn set_option(&mut self, _key: OptionStatement, _value: OptionValue) -> Result<()> {
-        std::unimplemented!("OdbcStatement::set_option")
-    }
-
-    fn get_option_string(&self, _key: OptionStatement) -> Result<String> {
-        std::unimplemented!("OdbcStatement::get_option_string")
-    }
-
-    fn get_option_bytes(&self, _key: OptionStatement) -> Result<Vec<u8>> {
-        std::unimplemented!("OdbcStatement::get_option_bytes")
-    }
-
-    fn get_option_int(&self, _key: OptionStatement) -> Result<i64> {
-        std::unimplemented!("OdbcStatement::set_option")
-    }
-
-    fn get_option_double(&self, _key: OptionStatement) -> Result<f64> {
-        std::unimplemented!("OdbcStatement::get_option_double")
-    }
-
-    fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        std::write!(f, "OdbcStatement")
     }
 }

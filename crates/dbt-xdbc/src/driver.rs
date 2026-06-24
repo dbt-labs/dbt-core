@@ -4,8 +4,6 @@
 
 use crate::Database;
 use crate::database::AdbcDatabase;
-#[cfg(feature = "odbc")]
-use crate::database::OdbcDatabase;
 use crate::driver_manager::ManagedDriver as ManagedAdbcDriver;
 use crate::install::{self, DriverTriplet, build_http_agent};
 use crate::semaphore::Semaphore;
@@ -84,10 +82,6 @@ pub enum Backend {
     ClickHouse,
     /// Exasol driver implementation (ADBC).
     Exasol,
-    /// Databricks driver implementation (ODBC).
-    DatabricksODBC,
-    /// Redshift driver implementation (ODBC).
-    RedshiftODBC,
     /// Generic ADBC driver implementation.
     ///
     /// This variant is fully dynamic and experimental. Features might not work reliably and fail
@@ -114,8 +108,6 @@ impl fmt::Display for Backend {
             Backend::Redshift => write!(f, "Redshift"),
             Backend::DuckDB | Backend::DuckDBExtended => write!(f, "DuckDB"),
             Backend::Fdcs => write!(f, "Fdcs"),
-            Backend::DatabricksODBC => write!(f, "Databricks"),
-            Backend::RedshiftODBC => write!(f, "Redshift"),
             Backend::Salesforce => write!(f, "Salesforce"),
             Backend::Spark => write!(f, "Spark"),
             Backend::SQLServer => write!(f, "SQL Server"),
@@ -140,7 +132,6 @@ impl Backend {
             Backend::DuckDB | Backend::DuckDBExtended => Some("duckdb"),
             Backend::Fdcs => Some("adbc_driver_fdcs"),
             Backend::SQLServer => Some("adbc_driver_mssql"),
-            Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
             Backend::Athena => Some("adbc_driver_athena"),
             Backend::ClickHouse => Some("adbc_clickhouse"),
             Backend::Exasol => Some("adbc_driver_exasol"),
@@ -160,44 +151,11 @@ impl Backend {
             _ => None,
         }
     }
-
-    pub(crate) fn ffi_protocol(&self) -> FFIProtocol {
-        match self {
-            Backend::Snowflake
-            | Backend::BigQuery
-            | Backend::Postgres
-            | Backend::Databricks
-            | Backend::Redshift
-            | Backend::Salesforce
-            | Backend::Spark
-            | Backend::DuckDB
-            | Backend::DuckDBExtended
-            | Backend::Fdcs
-            | Backend::SQLServer
-            | Backend::Athena
-            | Backend::ClickHouse
-            | Backend::Exasol
-            | Backend::Generic { .. } => FFIProtocol::Adbc,
-            Backend::DatabricksODBC | Backend::RedshiftODBC => FFIProtocol::Odbc,
-        }
-    }
 }
 
-/// Private enum used to determine the FFI protocol to use for a given backend.
+/// ADBC Driver.
 ///
-/// The Rust interface is the same for all backends and follows ADBC conventions,
-/// but the FFI protocol might be ADBC (direct) or ODBC (with translation).
-#[derive(PartialEq)]
-pub(crate) enum FFIProtocol {
-    /// Arrow Database Connectivity Protocol
-    Adbc,
-    /// Open Database Connectivity Protocol
-    Odbc,
-}
-
-/// XDBC Driver.
-///
-/// A [`Driver`] is a wrapper around a loaded ADBC/ODBC driver. With a driver, you can create
+/// A [`Driver`] is a wrapper around a loaded ADBC driver. With a driver, you can create
 /// new [`Database`] instances that, in turn, can create new [`Connection`] instances.
 pub trait Driver {
     fn new_database(&mut self) -> Result<Box<dyn Database>>;
@@ -445,15 +403,6 @@ impl AdbcDriver {
                     load_strategy
                 }
             }
-            // ODBC backends cannot be loaded as ADBC drivers, no matter the strategy.
-            (_, DatabricksODBC | RedshiftODBC) => {
-                return Err(Error::with_message_and_status(
-                    format!(
-                        "Can not load ADBC driver for {backend:?} because ODBC should be used instead."
-                    ),
-                    Status::InvalidArguments,
-                ));
-            }
             // CDN strategy for non-CDN drivers: just fall back to the system strategy.
             (CdnCache | SystemThenCdnCache | Remote, Athena | Exasol) => System(None),
             // Generic drivers can only be loaded from a file, so fallback to the System strategy.
@@ -472,7 +421,6 @@ impl AdbcDriver {
             ) => load_strategy,
         };
 
-        debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
         match final_strategy {
             CdnCache => Self::try_load_driver_through_cdn_cache(backend, adbc_version),
             System(library_name) => {
@@ -625,47 +573,6 @@ impl Driver for AdbcDriver {
     }
 }
 
-#[cfg(feature = "odbc")]
-pub(crate) struct OdbcDriver(Backend);
-
-#[cfg(feature = "odbc")]
-impl OdbcDriver {
-    pub(crate) fn try_load_dynamic(backend: Backend) -> Result<Self> {
-        match backend.ffi_protocol() {
-            FFIProtocol::Adbc => Err(Error::with_message_and_status(
-                format!("The {backend:?} backend uses ADBC instead of ODBC"),
-                Status::InvalidArguments,
-            )),
-            FFIProtocol::Odbc => {
-                // NOTE: this function might come in handy if we start loading the ODBC driver
-                // *manager* library dynamically as well as the drivers. This is not at all an
-                // issue for ADBC because we statically link the ADBC driver manager library.
-                //
-                // We can't statically link the unixODBC driver manager library because it's
-                // GPL-licensed.
-                let driver = Self(backend);
-                Ok(driver)
-            }
-        }
-    }
-}
-
-#[cfg(feature = "odbc")]
-impl Driver for OdbcDriver {
-    fn new_database(&mut self) -> Result<Box<dyn Database>> {
-        let database = OdbcDatabase::try_new(self.0)?;
-        Ok(Box::new(database))
-    }
-
-    fn new_database_with_opts(
-        &mut self,
-        opts: Vec<(OptionDatabase, OptionValue)>,
-    ) -> Result<Box<dyn Database>> {
-        let database = OdbcDatabase::try_new_with_opts(self.0, opts)?;
-        Ok(Box::new(database))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -693,16 +600,7 @@ mod tests {
             Backend::ClickHouse.adbc_library_name(),
             Some("adbc_clickhouse")
         );
-        assert_eq!(Backend::DatabricksODBC.adbc_library_name(), None);
         assert_eq!(generic.adbc_library_name(), Some("adbc_driver_sqlite"));
-        assert!(matches!(
-            Backend::Snowflake.ffi_protocol(),
-            FFIProtocol::Adbc
-        ));
-        assert!(matches!(
-            Backend::RedshiftODBC.ffi_protocol(),
-            FFIProtocol::Odbc
-        ));
     }
 
     #[test]
@@ -852,14 +750,6 @@ mod tests {
                 LoadStrategy::Remote,
             )?;
         }
-        Ok(())
-    }
-
-    #[cfg(feature = "odbc")]
-    #[test_with::env(ODBC_DATABRICKS_TESTS)]
-    #[test]
-    fn dynamic_odbc() -> Result<()> {
-        let _ = OdbcDriver::try_load_dynamic(Backend::DatabricksODBC)?;
         Ok(())
     }
 }

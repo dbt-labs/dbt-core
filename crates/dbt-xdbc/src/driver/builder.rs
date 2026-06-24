@@ -4,10 +4,8 @@
 
 use std::sync::Arc;
 
-#[cfg(feature = "odbc")]
-use super::OdbcDriver;
-use super::{AdbcDriver, FFIProtocol, LoadStrategy};
-use crate::{Backend, Driver, semaphore::Semaphore};
+use super::LoadStrategy;
+use crate::{Backend, Driver, driver::AdbcDriver, semaphore::Semaphore};
 #[allow(unused_imports)]
 use adbc_core::{
     error::{Error, Result, Status},
@@ -60,34 +58,14 @@ impl Builder {
 
     /// Try to load the [`Driver`] using the values provided to this builder.
     pub fn try_load(&self) -> Result<Box<dyn Driver>> {
-        match self.backend.ffi_protocol() {
-            FFIProtocol::Adbc => {
-                let adbc_driver = AdbcDriver::try_load_dynamic(
-                    self.backend,
-                    self.adbc_version.unwrap_or_default(),
-                    self.semaphore.clone(),
-                    self.load_strategy.clone(),
-                )?;
-                let driver = Box::new(adbc_driver);
-                Ok(driver)
-            }
-            FFIProtocol::Odbc => {
-                #[cfg(feature = "odbc")]
-                {
-                    let odbc_driver = OdbcDriver::try_load_dynamic(self.backend)?;
-                    let driver = Box::new(odbc_driver);
-                    Ok(driver)
-                }
-                #[cfg(not(feature = "odbc"))]
-                {
-                    let error = Error::with_message_and_status(
-                        "ODBC driver support is not enabled",
-                        Status::NotImplemented,
-                    );
-                    Err(error)
-                }
-            }
-        }
+        let adbc_driver = AdbcDriver::try_load_dynamic(
+            self.backend,
+            self.adbc_version.unwrap_or_default(),
+            self.semaphore.clone(),
+            self.load_strategy.clone(),
+        )?;
+        let driver = Box::new(adbc_driver);
+        Ok(driver)
     }
 }
 

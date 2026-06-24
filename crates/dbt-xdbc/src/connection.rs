@@ -15,21 +15,15 @@ use adbc_core::{
 };
 use arrow_array::RecordBatchReader;
 use arrow_schema::Schema;
-#[cfg(feature = "odbc")]
-use odbc_sys::CompletionType;
 
-#[cfg(feature = "odbc")]
-use crate::odbc::ManagedOdbcConnection;
 use crate::semaphore::Semaphore;
 use crate::statement::AdbcStatement;
-#[cfg(feature = "odbc")]
-use crate::statement::OdbcStatement;
 use crate::{Backend, Statement};
 
 mod builder;
 pub use builder::*;
 
-/// XDBC Connection.
+/// ADBC Connection.
 ///
 /// Connections provide methods for query execution, managing prepared
 /// statements, using transactions, and so on.
@@ -517,41 +511,6 @@ impl Connection for AdbcConnection {
 
     fn get_option_double(&self, key: OptionConnection) -> Result<f64> {
         self.1.get_option_double(key)
-    }
-
-    fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
-    }
-}
-
-/// ODBC Connection.
-///
-/// A [`Connection`] is a single, logical connection to a database. Connections are
-/// created by a [`Database`] instance and are used to execute SQL queries and
-/// manage transactions.
-#[allow(dead_code)]
-#[cfg(feature = "odbc")]
-#[derive(Debug)]
-pub(crate) struct OdbcConnection(pub(crate) Backend, pub(crate) Arc<ManagedOdbcConnection>);
-
-#[cfg(feature = "odbc")]
-impl Connection for OdbcConnection {
-    fn new_statement(&mut self) -> Result<Box<dyn Statement>> {
-        let managed_odbc_stmt = ManagedOdbcConnection::new_statement(self.1.clone())?;
-        let odbc_stmt = OdbcStatement(self.0, managed_odbc_stmt);
-        Ok(Box::new(odbc_stmt))
-    }
-
-    fn cancel(&mut self) -> Result<()> {
-        self.1.cancel()
-    }
-
-    fn commit(&mut self) -> Result<()> {
-        self.1.end_transaction(CompletionType::Commit)
-    }
-
-    fn rollback(&mut self) -> Result<()> {
-        self.1.end_transaction(CompletionType::Rollback)
     }
 
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
