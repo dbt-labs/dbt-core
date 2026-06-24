@@ -419,11 +419,10 @@ pub async fn resolve_data_tests(
             // Generic test: unique_id uses the full (non-truncated) name + metadata hash.
             compute_generic_test_unique_id(package_name, test_asset)
         } else {
-            // Singular test: hash just the test name.
-            const HASH_LENGTH: usize = 10;
-            let hash_hex = format!("{:x}", md5::compute(test_name.as_str()));
-            let test_hash = &hash_hex[hash_hex.len() - HASH_LENGTH..];
-            format!("test.{package_name}.{test_name}.{test_hash}")
+            // Singular test: no hash suffix — dbt-core's SingularTestParser inherits
+            // generate_unique_id(name) from SimpleSQLParser without a hash argument:
+            // https://github.com/dbt-labs/dbt-core/blob/29d57865de9aca6372f516dfa52e4b9754b22fe0/core/dbt/parser/base.py#L251
+            format!("test.{package_name}.{test_name}")
         };
 
         jinja_type_checking_event_listener_factory

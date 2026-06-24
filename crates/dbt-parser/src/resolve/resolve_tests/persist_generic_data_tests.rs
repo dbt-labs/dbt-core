@@ -182,12 +182,13 @@ fn persist_inner(
     // Generate unique_id hash from UNCLEANED kwargs to match mantle's behavior.
     // Use the original (non-truncated) name for the hash input, since dbt-core/Mantle
     // compute the hash from the full name, not the truncated form.
+    let restored_kwargs = restore_jinja_placeholders(&kwargs, &jinja_set_vars);
     let fqn_name_for_hash = test_name_truncations.get(&full_name).unwrap_or(&full_name);
     let test_hash = generate_test_unique_id_hash(
         fqn_name_for_hash,
         &test_macro_name,
         namespace.as_ref(),
-        &kwargs,
+        &restored_kwargs,
     );
     let unique_id = format!("{}.{}", full_name, test_hash);
 
@@ -260,7 +261,7 @@ fn persist_inner(
     // Convert full kwargs to dbt_yaml::Value for storage in the manifest.
     // Excludes "config" and "_config_raw" which are FS-internal config representations,
     // not macro arguments (mirrors dbt-core which pops config keys before storing kwargs).
-    let test_metadata_kwargs: BTreeMap<String, dbt_yaml::Value> = kwargs
+    let test_metadata_kwargs: BTreeMap<String, dbt_yaml::Value> = restored_kwargs
         .into_iter()
         .filter(|(k, _)| k.as_str() != "config" && k.as_str() != "_config_raw")
         .filter_map(|(k, v)| {
@@ -706,6 +707,44 @@ fn process_kwarg(key: &str, value: &Value) -> (Value, Vec<(String, String)>) {
     }
 }
 
+/// Reverses `process_kwarg` placeholder substitution so hash/manifest values match
+/// dbt-core, which operates on the raw unrendered Jinja string, not `dbt_custom_arg_*`.
+fn restore_jinja_placeholders(
+    kwargs: &BTreeMap<String, Value>,
+    jinja_set_vars: &BTreeMap<String, String>,
+) -> BTreeMap<String, Value> {
+    kwargs
+        .iter()
+        .map(|(k, v)| {
+            let restored = restore_value(v, jinja_set_vars);
+            (k.clone(), restored)
+        })
+        .collect()
+}
+
+fn restore_value(value: &Value, jinja_set_vars: &BTreeMap<String, String>) -> Value {
+    match value {
+        Value::String(s) => {
+            if let Some(original) = jinja_set_vars.get(s) {
+                Value::String(original.clone())
+            } else {
+                value.clone()
+            }
+        }
+        Value::Array(arr) => Value::Array(
+            arr.iter()
+                .map(|v| restore_value(v, jinja_set_vars))
+                .collect(),
+        ),
+        Value::Object(obj) => Value::Object(
+            obj.iter()
+                .map(|(k, v)| (k.clone(), restore_value(v, jinja_set_vars)))
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
 /// Determines if a string value needs to be wrapped in a Jinja set block
 fn needs_jinja_set_block(value: &str) -> bool {
     // Check for multi-line content
@@ -936,17 +975,7 @@ fn generate_test_name(
             continue;
         }
 
-        // Check if this arg references a Jinja set variable
-        let actual_value = if let Value::String(s) = arg_val {
-            if let Some(original_value) = jinja_set_vars.get(s) {
-                // Use the original value from the set variable instead of the variable name
-                Value::String(original_value.clone())
-            } else {
-                arg_val.clone()
-            }
-        } else {
-            arg_val.clone()
-        };
+        let actual_value = restore_value(arg_val, jinja_set_vars);
 
         // Match dbt-core's `str(value)` semantics for leaf primitives: Python renders
         // `True`/`False`/`None`, not the JSON forms `true`/`false`/`null`. This affects
