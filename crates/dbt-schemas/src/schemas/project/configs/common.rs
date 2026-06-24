@@ -454,6 +454,13 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default)]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // Exasol
+    // Key names match the Python dbt-exasol adapter so existing projects
+    // migrate without config changes.
+    pub partition_by_config: Option<StringOrArrayOfStrings>,
+    pub distribute_by_config: Option<StringOrArrayOfStrings>,
+    pub primary_key_config: Option<StringOrArrayOfStrings>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -590,6 +597,11 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
             // Salesforce
             primary_key,
             category,
+
+            // Exasol
+            partition_by_config,
+            distribute_by_config,
+            primary_key_config,
         } = self;
 
         default_to!(
@@ -694,6 +706,10 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
                 // Salesforce
                 primary_key,
                 category,
+                // Exasol
+                partition_by_config,
+                distribute_by_config,
+                primary_key_config,
             ]
         );
     }
@@ -1657,6 +1673,10 @@ pub const WAREHOUSE_SPECIFIC_CONFIG_KEYS: &[&str] = &[
     // Salesforce
     "primary_key",
     "category",
+    // Exasol
+    "partition_by_config",
+    "distribute_by_config",
+    "primary_key_config",
 ];
 
 /// Compare two `unrendered_config` values, treating absent/`null`/empty as equivalent and
@@ -2123,6 +2143,9 @@ mod tests {
             indexes: Default::default(),
             primary_key: Default::default(),
             category: Some(DataLakeObjectCategory::Other),
+            partition_by_config: Some(StringOrArrayOfStrings::String("p".to_string())),
+            distribute_by_config: Some(StringOrArrayOfStrings::String("d".to_string())),
+            primary_key_config: Some(StringOrArrayOfStrings::String("id".to_string())),
         };
 
         let value = dbt_yaml::to_value(&cfg).expect("serialize warehouse config");
