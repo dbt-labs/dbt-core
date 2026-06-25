@@ -23,6 +23,7 @@ use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::QueryCtx;
 use dbt_common::adapter::dialect_of;
 use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
@@ -48,7 +49,6 @@ use dbt_state::request_builder::{
     ExecutionOutcomeInput, sql_execution_record_from_submit_request,
     values_execution_record_from_submit_request,
 };
-use dbt_xdbc::QueryCtx;
 
 use crate::run_cache::run_cache_request::{
     SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
@@ -3950,7 +3950,7 @@ mod tests {
             _instruction: &'a dbt_scheduler::instructions::Instruction,
             _rendered_sql: &'a str,
             _unique_id: Option<&'a str>,
-            _connection: &'a mut Option<Box<dyn dbt_xdbc::Connection>>,
+            _connection: &'a mut Option<Box<dyn dbt_adbc::Connection>>,
         ) -> Pin<Box<dyn Future<Output = FsResult<(Vec<RecordBatch>, SchemaRef)>> + Send + 'a>>
         {
             Box::pin(async { Ok((Vec::new(), Arc::new(Schema::empty()))) })

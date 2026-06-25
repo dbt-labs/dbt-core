@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use arrow::array::{Array as _, StringArray};
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, TableFormat};
-use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
 use crate::adapter::adapter_impl::AdapterImpl;

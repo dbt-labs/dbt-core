@@ -17,6 +17,7 @@ async-trait = { workspace = true }
 dbt-adapter = { workspace = true }
 dbt-adapter-core = { workspace = true }
 dbt-adapter-sql = { workspace = true }
+dbt-adbc = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-dag = { workspace = true }
@@ -30,7 +31,6 @@ dbt-schemas = { workspace = true }
 dbt-state = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-tracing = { workspace = true }
-dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
 
 arrow = { workspace = true }

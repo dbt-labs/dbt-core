@@ -3,7 +3,7 @@ use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
 use crate::config::AdapterConfig;
 use crate::connection::{ConnectionGuard, borrow_tlocal_connection};
 use crate::engine::{
-    AdapterEngine, Options as ExecuteOptions, XdbcEngine, execute_query_with_retry,
+    AdapterEngine, AdbcEngine, Options as ExecuteOptions, execute_query_with_retry,
 };
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
@@ -50,6 +50,9 @@ use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
 use dashmap::DashMap;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::bigquery::*;
+use dbt_adbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
@@ -70,9 +73,6 @@ use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, Policy};
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
-use dbt_xdbc::bigquery::*;
-use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
-use dbt_xdbc::{Connection, QueryCtx};
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
@@ -4688,7 +4688,7 @@ impl AdapterImpl {
         let backend = crate::adapter::adapter_factory::backend_of(adapter_type);
         let auth: Arc<dyn dbt_auth::Auth> =
             dbt_auth::auth_for_backend(Box::new(dbt_auth::NoopAuthWarningPrinter), backend).into();
-        let engine: Arc<dyn AdapterEngine> = Arc::new(XdbcEngine::new_mock(
+        let engine: Arc<dyn AdapterEngine> = Arc::new(AdbcEngine::new_mock(
             adapter_type,
             auth,
             AdapterConfig::default(),
@@ -4991,7 +4991,7 @@ mod tests {
     use crate::cache::RelationCache;
     use crate::column::Column;
     use crate::config::AdapterConfig;
-    use crate::engine::XdbcEngine;
+    use crate::engine::AdbcEngine;
 
     use crate::engine::query_comment::QueryCommentConfig;
     use crate::sql_types::DefaultTypeOps;
@@ -5047,7 +5047,7 @@ mod tests {
             Snowflake => SNOWFLAKE_RESOLVED_QUOTING,
             _ => DEFAULT_RESOLVED_QUOTING,
         };
-        Arc::new(XdbcEngine::new(
+        Arc::new(AdbcEngine::new(
             adapter_type,
             auth.into(),
             AdapterConfig::new(config),

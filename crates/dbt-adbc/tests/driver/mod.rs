@@ -14,7 +14,7 @@ mod tests {
     };
     use arrow_array::Array as _;
     use arrow_array::{cast::AsArray, types::*};
-    use dbt_xdbc::{
+    use dbt_adbc::{
         Backend, Connection, Database, Driver, Statement, athena, bigquery, connection,
         database::{self, LogLevel},
         driver, salesforce, snowflake,
@@ -181,7 +181,7 @@ mod tests {
 
     fn duckdb_per_user_file_path(prefix: &str) -> std::path::PathBuf {
         let base_dir = dirs::cache_dir()
-            .map(|path| path.join("com.getdbt").join("dbt-xdbc-tests"))
+            .map(|path| path.join("com.getdbt").join("dbt-adbc-tests"))
             .unwrap_or_else(env::temp_dir);
         let file_name = format!("{prefix}.duckdb");
 
@@ -344,7 +344,7 @@ mod tests {
         use std::fs;
 
         // Create a deterministic per-user file path
-        let db_path = duckdb_per_user_file_path("dbt_xdbc_test_persistence");
+        let db_path = duckdb_per_user_file_path("dbt_adbc_test_persistence");
         let db_path_str = db_path.to_string_lossy().to_string();
 
         // Clean up any existing file
@@ -657,13 +657,13 @@ mod tests {
     /// allowing a second connection to open the same file for writing.
     ///
     /// This test exists because the LSP holds a DuckDB database handle in a cache
-    /// (DatabaseMap in XdbcEngine) and connections in thread-local storage, which
+    /// (DatabaseMap in AdbcEngine) and connections in thread-local storage, which
     /// keeps the file locked and prevents CLI commands from accessing the database.
     #[test]
     fn duckdb_file_lock_released_after_drop() -> Result<()> {
         use std::fs;
 
-        let db_path = duckdb_per_user_file_path("dbt_xdbc_test_lock");
+        let db_path = duckdb_per_user_file_path("dbt_adbc_test_lock");
         let db_path_str = db_path.to_string_lossy().to_string();
 
         // Clean up any existing file
@@ -726,7 +726,7 @@ mod tests {
             return Ok(());
         }
 
-        let db_path = duckdb_per_user_file_path("dbt_xdbc_test_cross_process_lock");
+        let db_path = duckdb_per_user_file_path("dbt_adbc_test_cross_process_lock");
         let db_path_str = db_path.to_string_lossy().to_string();
 
         // Clean up any existing file
@@ -804,7 +804,7 @@ mod tests {
             return Ok(());
         }
 
-        let db_path = duckdb_per_user_file_path("dbt_xdbc_test_conn_holds_lock");
+        let db_path = duckdb_per_user_file_path("dbt_adbc_test_conn_holds_lock");
         let db_path_str = db_path.to_string_lossy().to_string();
         let _ = fs::remove_file(&db_path);
         let _ = fs::remove_file(format!("{}.wal", db_path_str));

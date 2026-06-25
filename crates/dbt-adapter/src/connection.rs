@@ -9,11 +9,11 @@ use std::task::{Poll, Waker};
 use std::time::Instant;
 
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::{Connection, ConnectionFactory};
 use dbt_common::AdapterResult;
 use dbt_common::cancellation::Cancellable;
 use dbt_telemetry::{AdapterConnectionClose, ConnectionLimitWait};
 use dbt_tracing::emit::{create_debug_span, emit_trace_event, is_trace_enabled};
-use dbt_xdbc::{Connection, ConnectionFactory};
 use minijinja::State;
 
 use crossbeam_skiplist::SkipMap;

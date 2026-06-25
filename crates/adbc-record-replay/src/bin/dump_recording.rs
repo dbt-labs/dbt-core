@@ -12,7 +12,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
 
-    match xdbc_record_replay::debug_recording_file(std::io::stdout(), &PathBuf::from(&path)) {
+    match adbc_record_replay::debug_recording_file(std::io::stdout(), &PathBuf::from(&path)) {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("{}", e);

@@ -2,8 +2,8 @@ mod key_format;
 
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, AuthWarningPrinter};
 use database::Builder as DatabaseBuilder;
-use dbt_xdbc::database::LogLevel;
-use dbt_xdbc::{Backend, database, snowflake};
+use dbt_adbc::database::LogLevel;
+use dbt_adbc::{Backend, database, snowflake};
 
 use std::fs;
 

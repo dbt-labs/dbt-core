@@ -1,5 +1,5 @@
 use arrow_schema::Schema;
-use dbt_xdbc::*;
+use dbt_adbc::*;
 
 pub struct NoopConnection;
 

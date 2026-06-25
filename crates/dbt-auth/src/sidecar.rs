@@ -1,5 +1,5 @@
 use crate::{Auth, AuthError, AuthOutcome, config::AdapterConfig};
-use dbt_xdbc::{Backend, database};
+use dbt_adbc::{Backend, database};
 
 /// DuckDB authentication (no-op - local file database)
 pub struct DuckDBAuth;

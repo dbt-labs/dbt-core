@@ -13,8 +13,10 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+adbc-record-replay = { workspace = true }
 dbt-adapter-core = { workspace = true }
 dbt-adapter-sql = { workspace = true }
+dbt-adbc = { workspace = true }
 dbt-agate = { workspace = true }
 dbt-auth = { workspace = true }
 dbt-cloud-config = { workspace = true }
@@ -27,9 +29,7 @@ dbt-schemas = { workspace = true }
 dbt-sql-utils = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-tracing = { workspace = true }
-dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
-xdbc-record-replay = { workspace = true }
 
 arrow = { workspace = true }
 arrow-array = { workspace = true }

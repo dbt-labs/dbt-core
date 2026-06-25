@@ -6,6 +6,8 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::semaphore::Semaphore;
+use dbt_adbc::*;
 use dbt_agate::hashers::IdentityBuildHasher;
 use dbt_auth::{AdapterConfig, Auth};
 use dbt_common::AdapterResult;
@@ -15,8 +17,6 @@ use dbt_common::tracing::emit::emit_trace_event;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use dbt_telemetry::AdapterConnectionOpen;
-use dbt_xdbc::semaphore::Semaphore;
-use dbt_xdbc::*;
 use minijinja::State;
 use parking_lot::RwLock;
 use serde::Deserialize;
@@ -37,7 +37,7 @@ pub struct DatabaseMap {
     inner: HashMap<database::Fingerprint, Box<dyn Database>, IdentityBuildHasher>,
 }
 
-/// Operational mode for [`XdbcEngine`].
+/// Operational mode for [`AdbcEngine`].
 ///
 /// Controls how the engine creates connections and executes queries.
 #[derive(Debug)]
@@ -55,7 +55,7 @@ impl EngineMode {
     }
 }
 
-pub struct XdbcEngine {
+pub struct AdbcEngine {
     adapter_type: AdapterType,
     /// Auth configurator
     auth: Arc<dyn Auth>,
@@ -85,7 +85,7 @@ pub struct XdbcEngine {
     threads: Option<usize>,
 }
 
-impl XdbcEngine {
+impl AdbcEngine {
     #[allow(clippy::too_many_arguments)]
     fn build(
         adapter_type: AdapterType,
@@ -341,7 +341,7 @@ impl XdbcEngine {
     }
 }
 
-impl AdapterEngine for XdbcEngine {
+impl AdapterEngine for AdbcEngine {
     #[inline]
     fn adapter_type(&self) -> AdapterType {
         self.adapter_type

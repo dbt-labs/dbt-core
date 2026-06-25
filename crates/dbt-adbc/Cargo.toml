@@ -1,5 +1,5 @@
 [package]
-name = "dbt-xdbc"
+name = "dbt-adbc"
 description = "Wrapper to ADBC (Arrow Database Connectivity)"
 version.workspace = true
 homepage.workspace = true
@@ -17,7 +17,7 @@ workspace = true
 
 [features]
 default = []
-xdbc-fuzzying = []
+adbc-fuzzying = []
 repl = ["dialoguer", "clap", "dbt-pretty-table"]
 
 [dependencies]
@@ -55,11 +55,11 @@ zstd-safe = { workspace = true }
 test-with = { version = "0.14.7", default-features = false }
 
 [[bin]]
-name = "xdbc-sync"
-path = "src/bin/xdbc_sync.rs"
+name = "adbc-sync"
+path = "src/bin/adbc_sync.rs"
 
 [[bin]]
-name = "dbt-xdbc-repl"
+name = "dbt-adbc-repl"
 path = "src/bin/repl.rs"
 required-features = ["repl"]
 

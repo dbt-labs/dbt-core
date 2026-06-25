@@ -10,8 +10,8 @@
 use std::fmt::Debug;
 
 use arrow::record_batch::RecordBatch;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
 use crate::errors::AdapterResult;

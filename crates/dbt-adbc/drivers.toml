@@ -1,6 +1,6 @@
 # Backend drivers hosted on the CDN.
 # Each entry is "<backend>-<version>".
-# Used by `cargo run --bin xdbc-sync` to generate src/checksums.rs.
+# Used by `cargo run --bin adbc-sync` to generate src/checksums.rs.
 
 drivers = [
   "bigquery-0.21.0.dev+dbt0.21.8",

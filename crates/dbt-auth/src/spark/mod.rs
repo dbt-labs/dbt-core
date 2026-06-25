@@ -1,5 +1,5 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
-use dbt_xdbc::{Backend, database, spark};
+use dbt_adbc::{Backend, database, spark};
 pub use dbt_yaml::Value as YmlValue;
 
 use std::collections::HashMap;

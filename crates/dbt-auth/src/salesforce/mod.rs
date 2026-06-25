@@ -5,8 +5,8 @@ use crate::{
 };
 use database::Builder as DatabaseBuilder;
 
-use dbt_xdbc::salesforce::auth_type;
-use dbt_xdbc::{Backend, database, salesforce};
+use dbt_adbc::salesforce::auth_type;
+use dbt_adbc::{Backend, database, salesforce};
 
 pub struct SalesforceAuth;
 

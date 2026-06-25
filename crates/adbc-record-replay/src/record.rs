@@ -2,7 +2,7 @@ use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcS
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_schema::{ArrowError, Schema};
-use dbt_xdbc::{Connection, Statement};
+use dbt_adbc::{Connection, Statement};
 use std::fmt;
 use std::fs::create_dir_all;
 use std::path::PathBuf;

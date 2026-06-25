@@ -10,6 +10,7 @@ use arrow_array::*;
 use arrow_schema::{Field, Schema};
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
 use dbt_common::cancellation::Cancellable;
@@ -21,7 +22,6 @@ use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::State;
 use once_cell::sync::Lazy;

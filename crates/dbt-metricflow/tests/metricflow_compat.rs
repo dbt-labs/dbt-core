@@ -19,8 +19,8 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use arrow_array::RecordBatch;
+use dbt_adbc::{Backend, Connection, Database, database, driver};
 use dbt_metricflow::{Dialect, InMemoryMetricStore, compile, parse_query_spec};
-use dbt_xdbc::{Backend, Connection, Database, database, driver};
 use serde_json::json;
 
 // ═══════════════════════════════════════════════════════════════════════════

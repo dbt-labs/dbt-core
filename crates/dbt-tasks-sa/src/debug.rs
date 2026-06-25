@@ -1,6 +1,7 @@
 use std::process::Command;
 use std::sync::Arc;
 
+use dbt_adbc::QueryCtx;
 use dbt_agate::MappedSequence;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, LocalExecutionBackendKind};
@@ -10,7 +11,6 @@ use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_compilation::core::DbtLoadedProject;
 use dbt_schemas::schemas::profiles::{DbConfig, Execute};
 use dbt_telemetry::ProgressMessage;
-use dbt_xdbc::QueryCtx;
 
 // Action labels for debug command progress messages (without padding - formatter handles padding)
 const ACTION_DEBUGGING: &str = "Debugging";

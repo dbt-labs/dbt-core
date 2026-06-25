@@ -4,17 +4,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use adbc_record_replay::{RecordConnection, RecordingContext, ReplayConnection};
 use arrow_array::RecordBatch;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::{Backend, Connection, QueryCtx};
 use dbt_auth::AdapterConfig;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_trace_event;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_telemetry::AdapterConnectionOpen;
-use dbt_xdbc::{Backend, Connection, QueryCtx};
 use minijinja::State;
-use xdbc_record_replay::{RecordConnection, RecordingContext, ReplayConnection};
 
 use crate::cache::RelationCache;
 use crate::engine::query_comment::QueryCommentConfig;
@@ -37,7 +37,7 @@ enum Mode {
 pub struct RecordReplayEngine {
     inner: Arc<dyn AdapterEngine>,
     recordings_path: PathBuf,
-    config: xdbc_record_replay::SharedConfig,
+    config: adbc_record_replay::SharedConfig,
     query_comment: Option<QueryCommentConfig>,
     mode: Mode,
     generation: u64,
@@ -46,13 +46,13 @@ pub struct RecordReplayEngine {
 impl RecordReplayEngine {
     pub fn record(inner: Arc<dyn AdapterEngine>, recordings_path: PathBuf) -> Self {
         let generation = next_generation();
-        if xdbc_record_replay::reset_counters(&recordings_path) {
+        if adbc_record_replay::reset_counters(&recordings_path) {
             crate::connection::drain_recycling_pool();
         }
         Self {
             inner,
             recordings_path,
-            config: Arc::new(xdbc_record_replay::Config {
+            config: Arc::new(adbc_record_replay::Config {
                 sql_normalizer: Box::new(DbtSqlNormalizer),
             }),
             query_comment: None,
@@ -67,13 +67,13 @@ impl RecordReplayEngine {
         query_comment: Option<QueryCommentConfig>,
     ) -> Self {
         let generation = next_generation();
-        if xdbc_record_replay::reset_counters(&recordings_path) {
+        if adbc_record_replay::reset_counters(&recordings_path) {
             crate::connection::drain_recycling_pool();
         }
         Self {
             inner,
             recordings_path,
-            config: Arc::new(xdbc_record_replay::Config {
+            config: Arc::new(adbc_record_replay::Config {
                 sql_normalizer: Box::new(DbtSqlNormalizer),
             }),
             query_comment,
@@ -224,7 +224,7 @@ impl AdapterEngine for RecordReplayEngine {
 
 struct DbtSqlNormalizer;
 
-impl xdbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
+impl adbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
     fn normalize(&self, sql: &str) -> String {
         use crate::sql::normalize::normalize_dbt_tmp_name;
         let normalized = normalize_dbt_tmp_name(sql);

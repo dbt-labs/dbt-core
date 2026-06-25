@@ -1,6 +1,6 @@
 //! DuckDB v2-catalog `ATTACH` statement composition.
 //!
-//! Extracted from the generic `XdbcEngine` (`engine/xdbc.rs`) so this
+//! Extracted from the generic `AdbcEngine` (`engine/adbc.rs`) so this
 //! DuckDB-specific logic is not hardcoded in the cross-adapter engine.
 //!
 //! FIXME: as the number of catalog types and attach options grows, audit whether

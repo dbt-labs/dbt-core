@@ -440,7 +440,7 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
                         Err(FsError::exit_with_status(1))
                     }
                     SystemCommand::InstallDrivers => {
-                        dbt_xdbc::pre_install_all_drivers().map_err(|install_err| {
+                        dbt_adbc::pre_install_all_drivers().map_err(|install_err| {
                             emit_error_log_message(
                                 ErrorCode::Generic,
                                 format!("Failed to install drivers: {}", install_err).as_str(),

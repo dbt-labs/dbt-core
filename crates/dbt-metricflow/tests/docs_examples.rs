@@ -2,8 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use arrow_array::{Decimal128Array, Float64Array, Int32Array, Int64Array, RecordBatch};
+use dbt_adbc::{Backend, Connection, Database, database, driver};
 use dbt_metricflow::{Dialect, InMemoryMetricStore, compile, parse_query_spec};
-use dbt_xdbc::{Backend, Connection, Database, database, driver};
 
 struct DuckDb {
     #[allow(dead_code)]

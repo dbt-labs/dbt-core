@@ -14,13 +14,13 @@ use arrow_array::*;
 use arrow_schema::*;
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adbc::*;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::*;
-use dbt_xdbc::*;
 use indexmap::IndexMap;
 use minijinja::State;
 

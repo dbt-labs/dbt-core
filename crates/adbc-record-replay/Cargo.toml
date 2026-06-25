@@ -1,6 +1,6 @@
 [package]
-name = "xdbc-record-replay"
-description = "Record and replay implementations of xdbc Connection/Statement traits for testing"
+name = "adbc-record-replay"
+description = "Record and replay implementations of adbc Connection/Statement traits for testing"
 version.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -25,8 +25,8 @@ arrow = { workspace = true }
 arrow-schema = { workspace = true }
 base64 = { workspace = true }
 dashmap = { workspace = true }
+dbt-adbc = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
-dbt-xdbc = { workspace = true }
 once_cell = { workspace = true }
 parquet = { workspace = true }
 regex = { workspace = true }

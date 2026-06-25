@@ -1,6 +1,6 @@
 //! Pure-Rust parquet-backed incremental parse cache.
 //!
-//! Replaces `duckdb_incremental.rs` with zero runtime dependencies on DuckDB / xdbc.
+//! Replaces `duckdb_incremental.rs` with zero runtime dependencies on DuckDB / adbc.
 //!
 //! # Layout
 //!

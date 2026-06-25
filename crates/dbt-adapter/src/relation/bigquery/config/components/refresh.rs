@@ -5,8 +5,8 @@ use crate::relation::config_v2::{
 
 use arrow_schema::Schema;
 use chrono::{DateTime, TimeDelta, Utc, format::SecondsFormat};
+use dbt_adbc::duration::parse_duration;
 use dbt_schemas::schemas::{DbtModel, InternalDbtNodeAttributes};
-use dbt_xdbc::duration::parse_duration;
 use minijinja::value::{Value, ValueMap};
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use serde::Serialize;

@@ -335,7 +335,7 @@ impl InnerAdbcDatabase {
         let () = self.will_open_connection(&mut db_opts, &mut conn_opts)?; // MUST not lock!
 
         let new_conn = |managed_database: &ManagedAdbcDatabase| -> Result<AdbcConnection> {
-            #[cfg(feature = "xdbc-fuzzying")]
+            #[cfg(feature = "adbc-fuzzying")]
             {
                 use rand::Rng as _;
                 let mut rng = rand::rng();

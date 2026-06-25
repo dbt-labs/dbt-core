@@ -15,6 +15,7 @@ use dbt_adapter::{
     engine::{SidecarClient, SidecarEngine, query_comment::QueryCommentConfig},
     sql_types::TypeOpsFactory,
 };
+use dbt_adbc::Backend;
 use dbt_common::{
     cancellation::CancellationToken,
     io_args::{FsCommand, ReplayMode},
@@ -49,7 +50,6 @@ use dbt_schemas::{
         PatternedDanglingSources, ResolverState, ResourcePathKind,
     },
 };
-use dbt_xdbc::Backend;
 
 pub struct DbtLoadedProject {
     config: CompilationConfig,

@@ -5,7 +5,7 @@ mod tests {
         options::AdbcVersion,
     };
     use arrow_array::{cast::AsArray, types::Decimal128Type};
-    use dbt_xdbc::{Backend, connection, database, driver};
+    use dbt_adbc::{Backend, connection, database, driver};
 
     /// Execute a statement through the "flock" driver against Snowflake.
     ///

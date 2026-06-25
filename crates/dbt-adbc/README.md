@@ -20,7 +20,7 @@ for [Snowflake](https://www.snowflake.com).
 ```rust,no_run
 use adbc_core::options::AdbcVersion;
 use adbc_core::{Connection, Statement};
-use dbt_xdbc::{connection, database, driver, Backend};
+use dbt_adbc::{connection, database, driver, Backend};
 use arrow_array::{cast::AsArray, types::Decimal128Type};
 
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -107,7 +107,7 @@ you should see a message like this when you run `fs` or tests that trigger the
 loading of ADBC drivers:
 
 ```
-$ cargo test -p dbt-xdbc -- --nocapture
+$ cargo test -p dbt-adbc -- --nocapture
 ...
 WARNING: BigQuery ADBC driver is being loaded from /Users/felipe/code/fs/lib in debug mode.
 ...
@@ -182,7 +182,7 @@ We expose a basic REPL that is tightly coupled with the drivers in order to exec
 To invoke this REPL (for Databricks):
 
 ```bash
-$ cargo xdbc --profile databricks
+$ cargo adbc --profile databricks
 ```
 
 You'll need a `adbc_config.toml` file somewhere with all your profiles. An example is provided in `adbc_conf.toml.example`.

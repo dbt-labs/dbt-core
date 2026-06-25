@@ -1,6 +1,6 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
-use dbt_xdbc::{Backend, athena, database};
+use dbt_adbc::{Backend, athena, database};
 
 const DEFAULT_CATALOG: &str = "awsdatacatalog";
 const DEFAULT_WORK_GROUP: &str = "primary";

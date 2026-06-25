@@ -5,6 +5,7 @@ use arrow::array::RecordBatch;
 use arrow_schema::{Schema, SchemaRef};
 use datafusion_expr::LogicalPlan;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::Connection;
 use dbt_common::hashing::code_hash;
 use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
 use dbt_common::{ErrorCode, FsError, FsResult, create_debug_span, err, fs_err};
@@ -13,7 +14,6 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_scheduler::instructions::Instruction;
 use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
 use dbt_tasks_core::AdhocRunner;
-use dbt_xdbc::Connection;
 
 /// Runs queries remotely against the warehouse via an adapter connection.
 pub struct RemoteAdhocRunner {

@@ -3,7 +3,7 @@ use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchReader};
 use arrow::record_batch::RecordBatchIterator;
 use arrow_schema::Schema;
-use dbt_xdbc::{Connection, Statement};
+use dbt_adbc::{Connection, Statement};
 use std::fmt;
 use std::path::{Path, PathBuf};
 

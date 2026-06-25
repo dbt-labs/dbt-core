@@ -3,7 +3,7 @@
 
 use std::io;
 
-use dbt_xdbc::{Backend, database};
+use dbt_adbc::{Backend, database};
 
 mod config;
 

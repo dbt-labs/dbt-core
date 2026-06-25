@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::Backend;
 use dbt_auth::AdapterConfig;
 use dbt_auth::Auth;
 use dbt_auth::{NoopAuthWarningPrinter, auth_for_backend};
@@ -15,13 +16,12 @@ use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_xdbc::Backend;
 use minijinja::Value;
 
 use crate::Adapter;
 use crate::AdapterEngine;
 use crate::cache::RelationCache;
-use crate::engine::XdbcEngine;
+use crate::engine::AdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::relation::do_create_relation;
 use crate::sql_types::TypeOpsFactory;
@@ -109,7 +109,7 @@ impl DefaultAdapterFactory {
         let query_comment =
             QueryCommentConfig::from_query_comment(query_comment, adapter_type, true, cloud_config);
 
-        let engine = Arc::new(XdbcEngine::new(
+        let engine = Arc::new(AdbcEngine::new(
             adapter_type,
             auth,
             adapter_config,

@@ -1,7 +1,7 @@
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
-use crate::engine::XdbcEngine;
+use crate::engine::AdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::errors::into_fs_error;
 use crate::metadata::*;
@@ -21,6 +21,7 @@ use crate::{AdapterResponse, AdapterResult};
 
 use crate::auth::DefaultAuthWarningPrinter;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::QueryCtx;
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
@@ -36,7 +37,6 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
-use dbt_xdbc::QueryCtx;
 use indexmap::IndexMap;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::constants::TARGET_UNIQUE_ID;
@@ -210,7 +210,7 @@ impl Adapter {
         // No cloud config needed — bridge adapter is used for internal operations, not user-facing queries.
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false, None);
 
-        let engine = XdbcEngine::new(
+        let engine = AdbcEngine::new(
             adapter_type,
             auth,
             adapter_config,

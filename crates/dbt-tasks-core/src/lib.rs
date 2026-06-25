@@ -111,7 +111,7 @@ pub trait AdhocRunner: Send + Sync {
         instruction: &'a dbt_scheduler::instructions::Instruction,
         rendered_sql: &'a str,
         unique_id: Option<&'a str>,
-        connection: &'a mut Option<Box<dyn dbt_xdbc::Connection>>,
+        connection: &'a mut Option<Box<dyn dbt_adbc::Connection>>,
     ) -> Pin<
         Box<
             dyn Future<Output = FsResult<(Vec<arrow::array::RecordBatch>, arrow_schema::SchemaRef)>>

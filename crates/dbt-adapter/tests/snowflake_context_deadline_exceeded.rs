@@ -31,7 +31,7 @@ use std::net::TcpListener;
 use std::thread;
 
 use adbc_core::options::AdbcVersion;
-use dbt_xdbc::{
+use dbt_adbc::{
     Backend, Database, connection,
     database::{self, LogLevel},
     driver, snowflake,

@@ -1,5 +1,5 @@
 use adbc_core::options::{OptionDatabase, OptionValue};
-use dbt_xdbc::database;
+use dbt_adbc::database;
 
 pub(crate) fn option_str_value(option_value: &OptionValue) -> &str {
     match option_value {

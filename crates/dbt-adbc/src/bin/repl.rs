@@ -16,7 +16,7 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let result = dbt_xdbc::repl::run_repl(&args.config, &args.profile).await;
+    let result = dbt_adbc::repl::run_repl(&args.config, &args.profile).await;
     let code = if let Err(err) = result {
         std::eprintln!("{}", err);
         1

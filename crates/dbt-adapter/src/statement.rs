@@ -8,8 +8,8 @@ use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchReader};
 use arrow_schema::Schema;
 use crossbeam_skiplist::SkipMap;
-use dbt_xdbc::Statement;
-use dbt_xdbc::semaphore::AcquireAllSemaphore;
+use dbt_adbc::Statement;
+use dbt_adbc::semaphore::AcquireAllSemaphore;
 
 /// Name of the [Statement] option that carries the dbt node unique ID.
 pub const DBT_NODE_ID: &str = "dbt.node_id";

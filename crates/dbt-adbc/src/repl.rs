@@ -401,7 +401,7 @@ pub async fn run_repl(config_path: &Path, profile_name: &str) -> Result<()> {
     let mut history = BasicHistory::new().max_entries(8).no_duplicates(true);
     let theme = ColorfulTheme::default();
 
-    println!("Welcome to dbt-xdbc REPL!");
+    println!("Welcome to dbt-adbc REPL!");
     println!(
         "Loaded profile '{profile_name}' from {} ({backend}, driver: {})",
         config_path.display(),
@@ -410,7 +410,7 @@ pub async fn run_repl(config_path: &Path, profile_name: &str) -> Result<()> {
     println!("Type :help for available commands");
     println!("Type :quit to exit");
 
-    let prompt = format!("dbt-xdbc | {backend}>");
+    let prompt = format!("dbt-adbc | {backend}>");
 
     loop {
         let input: String = Input::with_theme(&theme)
@@ -459,7 +459,7 @@ pub async fn run_repl(config_path: &Path, profile_name: &str) -> Result<()> {
                     "  :get-schema, :gs <a.b.c>       - Show the Arrow schema of the table identified by <catalog.schema.table>"
                 );
                 println!(
-                    "  :reload, :r                    - Reload the xdbc driver from the config file"
+                    "  :reload, :r                    - Reload the adbc driver from the config file"
                 );
                 println!("  :quit, :q                      - Exit the REPL");
             }

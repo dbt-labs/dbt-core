@@ -1,7 +1,7 @@
 //! Authentication for the FDCS backend.
 //!
 //! FDCS is reached through the `quack_adbc` ADBC driver, which is configured
-//! entirely via named database options (see [`dbt_xdbc::fdcs`]). This module
+//! entirely via named database options (see [`dbt_adbc::fdcs`]). This module
 //! translates a profile mapping into those options.
 //!
 //! Following the crate invariants, profile values are kept borrowed until the
@@ -11,7 +11,7 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 
-use dbt_xdbc::{Backend, database, fdcs};
+use dbt_adbc::{Backend, database, fdcs};
 
 /// Distinct authentication contracts supported by FDCS.
 #[derive(Debug)]

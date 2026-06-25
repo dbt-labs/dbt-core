@@ -7,12 +7,12 @@ use tokio::task;
 
 use crate::redshift::token_service::{TokenEndpoint, create_token_service_client};
 use adbc_core::constants::ADBC_OPTION_USERNAME;
-use dbt_xdbc::redshift::{
+use dbt_adbc::redshift::{
     AUTH_IDC_CLIENT_DISPLAY_NAME, AUTH_IDC_REGION, AUTH_IDP_LISTEN_PORT, AUTH_IDP_RESPONSE_TIMEOUT,
     AUTH_ISSUER_URL, AUTH_PROVIDER, AUTH_PROVIDER_BROWSER_IDC, AUTH_PROVIDER_IDP_TOKEN, AUTH_TOKEN,
     AUTH_TOKEN_TYPE,
 };
-use dbt_xdbc::{
+use dbt_adbc::{
     Backend, database,
     redshift::{
         AWS_ACCESS_KEY_ID, AWS_PROFILE, AWS_REGION, AWS_SECRET_ACCESS_KEY, CLUSTER_IDENTIFIER,
@@ -209,7 +209,7 @@ impl Auth for RedshiftAuth {
 mod tests_adbc {
     use super::*;
     use crate::test_options::{other_option_value, uri_value};
-    use dbt_xdbc::redshift::cluster_type::{REDSHIFT, SERVERLESS};
+    use dbt_adbc::redshift::cluster_type::{REDSHIFT, SERVERLESS};
     use dbt_yaml::Mapping;
 
     fn iam_base_config() -> Mapping {

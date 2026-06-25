@@ -10,6 +10,7 @@ use arrow_schema::Schema;
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
@@ -20,7 +21,6 @@ use dbt_schemas::schemas::{
     profiles::DuckDBPathInfo,
     relations::base::{BaseRelation, RelationPattern},
 };
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::State;
 use std::collections::btree_map::Entry;

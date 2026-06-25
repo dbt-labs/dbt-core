@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 
-use dbt_xdbc::{
+use dbt_adbc::{
     Backend,
     database::{self, Builder as DatabaseBuilder},
 };

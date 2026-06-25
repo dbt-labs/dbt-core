@@ -57,8 +57,8 @@ members = [
   "crates/dbt-jinja-utils",
   "crates/dbt-main",
   "crates/dbt-sa-cli",
-  "crates/dbt-xdbc",
-  "crates/xdbc-record-replay",
+  "crates/dbt-adbc",
+  "crates/adbc-record-replay",
   "crates/dbt-deps",
   "crates/vortex-client",
   "crates/vortex-events",
@@ -342,12 +342,12 @@ arrow-select = { version = "=56.0.0" }
 parquet = { version = "=56.0.0" }
 serde_arrow = { version = "0.13.6", features = ["arrow-56"] }
 
-# xdbc
+# adbc
 adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.22.0", rev = "d2808cf465feb6efc54ee862cb63104803535adb" } # @ apache-arrow-adbc-22-rust
 adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_driver_manager", version = "0.22.0", rev = "d2808cf465feb6efc54ee862cb63104803535adb" } # @ apache-arrow-adbc-22-rust
 adbc-ffi = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_ffi", version = "0.22.0", rev = "d2808cf465feb6efc54ee862cb63104803535adb" } # @ apache-arrow-adbc-22-rust
-dbt-xdbc = { path = "crates/dbt-xdbc" }
-xdbc-record-replay = { path = "crates/xdbc-record-replay" }
+adbc-record-replay = { path = "crates/adbc-record-replay" }
+dbt-adbc = { path = "crates/dbt-adbc" }
 
 # antlr for frontend
 dbt-antlr4 = { version = "1.3.6", features = [

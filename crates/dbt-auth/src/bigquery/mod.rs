@@ -1,7 +1,7 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
-use dbt_xdbc::bigquery::auth_type;
-use dbt_xdbc::{Backend, bigquery, database};
+use dbt_adbc::bigquery::auth_type;
+use dbt_adbc::{Backend, bigquery, database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

@@ -3,7 +3,7 @@ use database::Builder as DatabaseBuilder;
 use dbt_yaml::Value;
 use std::borrow::Cow;
 
-use dbt_xdbc::{Backend, database, databricks};
+use dbt_adbc::{Backend, database, databricks};
 
 /// User agent name provided to dbx for Fusion.
 ///

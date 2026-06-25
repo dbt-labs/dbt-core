@@ -2,9 +2,9 @@ use std::fmt::Write;
 use std::path::Path;
 
 use adbc_core::error::{Error as AdbcError, Status};
-use dbt_xdbc::driver::Builder as DriverBuilder;
-use dbt_xdbc::driver::LoadStrategy;
-use dbt_xdbc::{Backend, Connection, Database, database};
+use dbt_adbc::driver::Builder as DriverBuilder;
+use dbt_adbc::driver::LoadStrategy;
+use dbt_adbc::{Backend, Connection, Database, database};
 use std::sync::{Arc, Mutex};
 
 use crate::IndexError;

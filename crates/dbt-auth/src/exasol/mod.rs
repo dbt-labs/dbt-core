@@ -1,6 +1,6 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
-use dbt_xdbc::{Backend, database};
+use dbt_adbc::{Backend, database};
 use std::borrow::Cow;
 
 const DEFAULT_HOST: &str = "localhost";
