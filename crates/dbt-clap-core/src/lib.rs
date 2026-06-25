@@ -73,6 +73,8 @@ pub mod help_headings {
     pub const ADVANCED: &str = "Advanced";
 }
 const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
+const RESOURCE_TYPES_ENV: &str = "DBT_RESOURCE_TYPES";
+const EXCLUDE_RESOURCE_TYPES_ENV: &str = "DBT_EXCLUDE_RESOURCE_TYPES";
 const USER_SETTINGS_YML: &str = ".dbt/user_settings.yml";
 
 // defined in pretty string, but copied here to avoid cycle...
@@ -563,11 +565,23 @@ pub struct CompileArgs {
     pub inline: Option<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["resource-types"],
+        env = RESOURCE_TYPES_ENV
+    )]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["exclude-resource-types"],
+        env = EXCLUDE_RESOURCE_TYPES_ENV
+    )]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
@@ -728,11 +742,23 @@ pub struct ShowArgs {
     pub inline: Option<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["resource-types"],
+        env = RESOURCE_TYPES_ENV
+    )]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["exclude-resource-types"],
+        env = EXCLUDE_RESOURCE_TYPES_ENV
+    )]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
@@ -916,11 +942,23 @@ pub struct BuildArgs {
     pub common_args: CommonArgs,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["resource-types"],
+        env = RESOURCE_TYPES_ENV
+    )]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["exclude-resource-types"],
+        env = EXCLUDE_RESOURCE_TYPES_ENV
+    )]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Enable optimizations (testaggregation, testreuse)
@@ -1032,11 +1070,23 @@ pub struct ListArgs {
     pub output_keys: Vec<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["resource-types"],
+        env = RESOURCE_TYPES_ENV
+    )]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(
+        long,
+        num_args(1..),
+        value_delimiter = ' ',
+        aliases = ["exclude-resource-types"],
+        env = EXCLUDE_RESOURCE_TYPES_ENV
+    )]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 }
 
@@ -2679,6 +2729,18 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
 mod tests {
     use super::*;
 
+    struct NoExtensionCommandParser;
+
+    impl ExtensionCommandParser for NoExtensionCommandParser {
+        fn has_subcommand(&self, _name: &str) -> bool {
+            false
+        }
+    }
+
+    fn test_parser() -> CliParser {
+        CliParser::new("dbt", "test", Box::new(NoExtensionCommandParser))
+    }
+
     fn get_manage_state_with_env(
         common_args: &CommonArgs,
         project_dir: &Path,
@@ -2690,6 +2752,55 @@ mod tests {
             env_value.map(OsString::from),
             user_settings_path,
         )
+    }
+
+    #[test]
+    fn build_resource_type_help_shows_env_vars() {
+        let err = test_parser()
+            .try_parse_from(["dbt", "build", "--help"])
+            .unwrap_err();
+        let help = err.to_string();
+
+        assert!(help.contains("[env: DBT_RESOURCE_TYPES=]"), "{help}");
+        assert!(
+            help.contains("[env: DBT_EXCLUDE_RESOURCE_TYPES=]"),
+            "{help}"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn build_resource_type_filters_read_env_vars() {
+        static RESOURCE_TYPES_ENV_LOCK: std::sync::Mutex<()> =
+            std::sync::Mutex::new(());
+
+        let _guard = RESOURCE_TYPES_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        unsafe {
+            env::set_var(RESOURCE_TYPES_ENV, "model seed");
+            env::set_var(EXCLUDE_RESOURCE_TYPES_ENV, "test");
+        }
+
+        let cli = test_parser().try_parse_from(["dbt", "build"]).unwrap();
+
+        unsafe {
+            env::remove_var(RESOURCE_TYPES_ENV);
+            env::remove_var(EXCLUDE_RESOURCE_TYPES_ENV);
+        }
+
+        let Command::Core(CoreCommand::Build(build_args)) = &cli.command else {
+            panic!("expected build command");
+        };
+
+        assert_eq!(
+            build_args.resource_type,
+            Some(vec![ClapResourceType::Model, ClapResourceType::Seed])
+        );
+        assert_eq!(
+            build_args.exclude_resource_type,
+            Some(vec![ClapResourceType::Test])
+        );
     }
 
     #[test]

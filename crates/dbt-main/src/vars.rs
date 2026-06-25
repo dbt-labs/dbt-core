@@ -19,6 +19,7 @@ const ALIASABLE_ENV_VARS: &[&str] = &[
     "DBT_DISABLE_VERSION_CHECK",
     "DBT_EVENT_TIME_END",
     "DBT_EVENT_TIME_START",
+    "DBT_EXCLUDE_RESOURCE_TYPES",
     "DBT_EXPORT_SAVED_QUERIES",
     "DBT_EXPORT_TO_OTLP",
     "DBT_FAIL_FAST",
@@ -56,6 +57,7 @@ const ALIASABLE_ENV_VARS: &[&str] = &[
     "DBT_PROFILES_DIR",
     "DBT_PROJECT_DIR",
     "DBT_QUIET",
+    "DBT_RESOURCE_TYPES",
     "DBT_SAMPLE",
     "DBT_SEND_ANONYMOUS_USAGE_STATS",
     "DBT_SHOW_ALL_DEPRECATIONS",
@@ -89,7 +91,6 @@ const KNOWN_UNUSED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_DEFER_TO_STATE",
     "DBT_ENGINE_DOWNLOAD_DIR",
     "DBT_ENGINE_EMPTY",
-    "DBT_ENGINE_EXCLUDE_RESOURCE_TYPES",
     "DBT_ENGINE_FAVOR_STATE_MODE",
     "DBT_ENGINE_HOST",
     "DBT_ENGINE_INCLUDE_SAVED_QUERY",
@@ -99,7 +100,6 @@ const KNOWN_UNUSED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_PP_FILE_DIFF_TEST",
     "DBT_ENGINE_PP_TEST",
     "DBT_ENGINE_RECORDED_FILE_PATH",
-    "DBT_ENGINE_RESOURCE_TYPES",
     "DBT_ENGINE_SHOW_RESOURCE_REPORT",
     "DBT_ENGINE_SQLPARSE",
     "DBT_ENGINE_TEST_STATE_MODIFIED",
@@ -421,6 +421,57 @@ mod tests {
         unsafe {
             #[allow(clippy::disallowed_methods)]
             std::env::remove_var("DBT_ENGINE_FAIL_FAST");
+        }
+    }
+
+    #[test]
+    fn resource_type_engine_env_vars_are_supported_aliases() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_RESOURCE_TYPES");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_RESOURCE_TYPES");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_EXCLUDE_RESOURCE_TYPES");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_EXCLUDE_RESOURCE_TYPES");
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("DBT_ENGINE_RESOURCE_TYPES", "model seed");
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("DBT_ENGINE_EXCLUDE_RESOURCE_TYPES", "test");
+        }
+
+        apply_engine_env_var_aliases();
+        let unused = warn_unused_engine_env_vars();
+
+        assert_eq!(
+            std::env::var("DBT_RESOURCE_TYPES").ok(),
+            Some("model seed".to_string())
+        );
+        assert_eq!(
+            std::env::var("DBT_EXCLUDE_RESOURCE_TYPES").ok(),
+            Some("test".to_string())
+        );
+        assert!(
+            !unused.contains(&"DBT_ENGINE_RESOURCE_TYPES".to_string()),
+            "should not report DBT_ENGINE_RESOURCE_TYPES as unused"
+        );
+        assert!(
+            !unused.contains(&"DBT_ENGINE_EXCLUDE_RESOURCE_TYPES".to_string()),
+            "should not report DBT_ENGINE_EXCLUDE_RESOURCE_TYPES as unused"
+        );
+
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_RESOURCE_TYPES");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_RESOURCE_TYPES");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_EXCLUDE_RESOURCE_TYPES");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_EXCLUDE_RESOURCE_TYPES");
         }
     }
 }

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Show DBT_RESOURCE_TYPES and DBT_EXCLUDE_RESOURCE_TYPES in CLI help for resource type filters
+time: 2026-06-25T18:51:34Z
+custom:
+    author: AMBRA7592
+    issue: "15341"
+    project: dbt-core
