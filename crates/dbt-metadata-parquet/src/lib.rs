@@ -7,6 +7,7 @@ pub mod epoch_io;
 pub mod invocations;
 pub mod parse_alive;
 pub mod parse_columns;
+pub mod parse_nodes;
 pub mod parse_test_metadata;
 pub mod runtime_freshness;
 pub mod runtime_results;

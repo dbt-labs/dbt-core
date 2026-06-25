@@ -503,9 +503,11 @@ impl<'a> CompilationPhasesExecutor<'a> {
             if err.exit_status().is_some() {
                 // Preserve manifest artifact semantics for commands that short-circuit at parse
                 // after load/resolve but before execute_all_phases reaches the late write path.
-                if self.arg.write_json && self.arg.command != FsCommand::Parse {
-                    // Write run_results.json with error status for nodes that had
-                    // resolution errors so that `dbt retry` can pick them up.
+                if (self.arg.write_json || self.arg.write_metadata)
+                    && self.arg.command != FsCommand::Parse
+                {
+                    // Write run_results with error status for nodes that had
+                    // resolution errors so that `dbt retry` and `dbt agent` can pick them up.
                     let now = SystemTime::now();
                     let error_stats = Stats {
                         stats: resolved_state
@@ -524,7 +526,15 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
                     };
-                    write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
+                    if self.arg.write_json {
+                        write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
+                    }
+                    if self.arg.write_metadata {
+                        crate::utils::write_runtime_results_parquet(
+                            &error_stats,
+                            self.arg.as_ref(),
+                        );
+                    }
 
                     let dbt_manifest = self.memoized_manifest(invocation_id, resolved_state);
                     write_artifact_to_file(
