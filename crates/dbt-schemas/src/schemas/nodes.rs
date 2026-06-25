@@ -1620,6 +1620,42 @@ fn meta_eq_with_unrendered(
     indexmap_yml_value_equal(left, right)
 }
 
+/// Unrendered-aware comparison for a single string-valued config key (e.g. `alias`,
+/// `target_schema`, `target_database`).
+///
+/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
+/// config rather than the rendered values, so an environment-aware Jinja config in
+/// `dbt_project.yml` (e.g. `+target_schema: "{{ 'prod_snap' if target.name == 'prod' else 'dev_snap' }}"`)
+/// that renders to a different string per target is not treated as a modification. This is the
+/// string-config sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
+///
+/// Semantics: `same = (key configured && unrendered_same) || rendered_same`.
+///   1. If `key` is configured (present in `unrendered_config`) on at least one side and the
+///      configured (unrendered) values are equal, the values are the same.
+///   2. Otherwise fall back to the rendered comparison (`left == right`).
+///
+/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: each key is a
+/// single key, so an absent-on-both unrendered value must fall back to the rendered comparison
+/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
+/// manifest that does not populate the key in `unrendered_config`) would be masked.
+///
+/// This is strictly more lenient than the rendered equality alone (it can only turn a rendered
+/// "different" into "same"), preserving backward compatibility.
+fn string_config_eq_with_unrendered(
+    left: &Option<String>,
+    right: &Option<String>,
+    key: &str,
+    left_unrendered_config: &BTreeMap<String, YmlValue>,
+    right_unrendered_config: &BTreeMap<String, YmlValue>,
+) -> bool {
+    let left_v = left_unrendered_config.get(key);
+    let right_v = right_unrendered_config.get(key);
+    if (left_v.is_some() || right_v.is_some()) && unrendered_value_eq(left_v, right_v) {
+        return true;
+    }
+    left == right
+}
+
 /// Compare DocsConfig considering None vs Some(default) as equal
 fn docs_config_equal(
     left: &Option<crate::schemas::common::DocsConfig>,
@@ -2533,7 +2569,13 @@ impl InternalDbtNode for DbtSnapshot {
             let other_config = &other_snapshot.deprecated_config;
 
             // Snapshot-specific Configuration
-            let alias_eq = self_config.alias == other_config.alias;
+            let alias_eq = string_config_eq_with_unrendered(
+                &self_config.alias,
+                &other_config.alias,
+                "alias",
+                &self.__base_attr__.unrendered_config,
+                &other_snapshot.__base_attr__.unrendered_config,
+            );
             let materialized_eq = self_config.materialized == other_config.materialized;
             let strategy_eq = self_config.strategy == other_config.strategy;
             let unique_key_eq = self_config.unique_key == other_config.unique_key;
@@ -2566,8 +2608,20 @@ impl InternalDbtNode for DbtSnapshot {
             };
 
             let hard_deletes_eq = self_config.hard_deletes == other_config.hard_deletes;
-            let target_database_eq = self_config.target_database == other_config.target_database;
-            let target_schema_eq = self_config.target_schema == other_config.target_schema;
+            let target_database_eq = string_config_eq_with_unrendered(
+                &self_config.target_database,
+                &other_config.target_database,
+                "target_database",
+                &self.__base_attr__.unrendered_config,
+                &other_snapshot.__base_attr__.unrendered_config,
+            );
+            let target_schema_eq = string_config_eq_with_unrendered(
+                &self_config.target_schema,
+                &other_config.target_schema,
+                "target_schema",
+                &self.__base_attr__.unrendered_config,
+                &other_snapshot.__base_attr__.unrendered_config,
+            );
 
             // General Configuration
             let enabled_eq = self_config.enabled == other_config.enabled;
