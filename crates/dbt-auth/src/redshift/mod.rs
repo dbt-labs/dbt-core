@@ -48,7 +48,10 @@ impl Auth for RedshiftAuth {
         // Shared required configs and encoding
         let host = config.require_string("host")?;
         let port = config.require_string("port")?;
-        let dbname = config.require_string("database")?;
+        let dbname = config
+            .get_string("database")
+            .or_else(|| config.get_string("dbname"))
+            .ok_or_else(|| AuthError::config("missing required field 'database' (or 'dbname')"))?;
         let host = utf8_percent_encode(&host, SET).to_string();
         let port = utf8_percent_encode(&port, SET).to_string();
         let dbname = utf8_percent_encode(&dbname, SET).to_string();
@@ -369,6 +372,22 @@ mod tests_adbc {
         config.remove("user");
         config.insert("iam_profile".into(), "sandbox-admin".into());
         assert_error_contains(config, "user");
+    }
+
+    #[test]
+    fn test_database_accepts_dbname_alias() {
+        let config = Mapping::from_iter([
+            ("method".into(), "database".into()),
+            ("host".into(), "cluster-host".into()),
+            ("port".into(), "5439".into()),
+            ("dbname".into(), "dev".into()),
+            ("user".into(), "admin".into()),
+            ("password".into(), "secretpass".into()),
+        ]);
+        assert!(
+            configure(config).is_ok(),
+            "auth should succeed when profile uses 'dbname' instead of 'database'"
+        );
     }
 
     #[test]
