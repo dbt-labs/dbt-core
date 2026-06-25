@@ -414,3 +414,13 @@ fn test_get_relation_dispatch_spark_absent_database() {
         "unexpected error: {err}"
     );
 }
+
+#[test]
+fn test_databricks_get_incremental_strategy_macro_accepts_delete_insert() {
+    dispatch_test(
+        &make_mock_adapter(AdapterType::Databricks),
+        "get_incremental_strategy_macro",
+        &[dict(&[]), Value::from("delete+insert")],
+    )
+    .unwrap();
+}
