@@ -2581,8 +2581,13 @@ impl InternalDbtNode for DbtSnapshot {
             let unique_key_eq = self_config.unique_key == other_config.unique_key;
             let check_cols_eq = self_config.check_cols == other_config.check_cols;
             let updated_at_eq = self_config.updated_at == other_config.updated_at;
-            let dbt_valid_to_current_eq =
-                self_config.dbt_valid_to_current == other_config.dbt_valid_to_current;
+            let dbt_valid_to_current_eq = string_config_eq_with_unrendered(
+                &self_config.dbt_valid_to_current,
+                &other_config.dbt_valid_to_current,
+                "dbt_valid_to_current",
+                &self.__base_attr__.unrendered_config,
+                &other_snapshot.__base_attr__.unrendered_config,
+            );
 
             let snapshot_meta_column_names_eq = {
                 use crate::schemas::project::configs::snapshot_config::SnapshotMetaColumnNames;
