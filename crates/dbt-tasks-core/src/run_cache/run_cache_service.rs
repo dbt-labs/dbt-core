@@ -1802,8 +1802,10 @@ fn freshness_rule_to_seconds(rule: &ModelFreshnessRules) -> Option<i64> {
 
 /// Per-node override for the dbt State service's `tolerate_nondeterminism`
 /// wire flag. The aligned `state.evaluate_volatile_sql` config takes
-/// precedence. The legacy `meta["run_cache_tolerate_nondeterminism"]` form is
-/// retained as a fallback for compatibility.
+/// precedence and maps inversely: evaluating volatile SQL means the service
+/// should not tolerate nondeterminism for reuse. The legacy
+/// `meta["run_cache_tolerate_nondeterminism"]` form is retained as a fallback
+/// for compatibility.
 fn resolve_tolerate_nondeterminism(
     node: &dyn InternalDbtNodeAttributes,
     service_default: bool,
@@ -1811,7 +1813,7 @@ fn resolve_tolerate_nondeterminism(
     if let Some(evaluate_volatile_sql) =
         model_state_for_node(node).and_then(|state| state.evaluate_volatile_sql)
     {
-        return evaluate_volatile_sql;
+        return !evaluate_volatile_sql;
     }
 
     const KEY: &str = "run_cache_tolerate_nondeterminism";
@@ -3584,11 +3586,11 @@ mod tests {
     }
 
     #[test]
-    fn state_evaluate_volatile_sql_overrides_legacy_meta() {
+    fn state_evaluate_volatile_sql_true_disables_tolerating_nondeterminism() {
         let mut model = model_with_state(ModelState {
             lag_tolerance: None,
             require_fresh_data_from: None,
-            evaluate_volatile_sql: Some(false),
+            evaluate_volatile_sql: Some(true),
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
         });
