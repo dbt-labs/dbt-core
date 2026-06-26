@@ -246,36 +246,48 @@ pub fn apply_delta_direct(
         .alive_mtime
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_micros() as u64);
-    if current_us == stored_us {
+    let alive_changed = current_us != stored_us;
+
+    // Compile-phase artifacts (CLL, compile/nodes, compile/columns) can be written
+    // without a reparse — e.g. `--static-analysis strict` on a non-clean target.
+    // Check for new compile epochs even when alive_mtime is unchanged.
+    let has_new_compile_epochs = !alive_changed && has_unseen_epochs(metadata_dir, state);
+
+    if !alive_changed && !has_new_compile_epochs {
         return Ok(0);
     }
-    state.alive_mtime = current_us.map(|us| UNIX_EPOCH + Duration::from_micros(us));
+    if alive_changed {
+        state.alive_mtime = current_us.map(|us| UNIX_EPOCH + Duration::from_micros(us));
+    }
 
     let mut writer = IndexWriter::new(index_dir)?;
     let now = writer.now().to_string();
     let mut total = 0;
 
     let alive_ids = load_alive_ids(metadata_dir);
-    let compile_map = load_compile_nodes_map(metadata_dir, state, false)?;
-    total += write_parse_nodes(
-        &mut writer,
-        metadata_dir,
-        state,
-        &now,
-        false,
-        &compile_map,
-        alive_ids.as_ref(),
-    )?;
-    total += write_parse_columns(
-        &mut writer,
-        metadata_dir,
-        state,
-        &now,
-        false,
-        alive_ids.as_ref(),
-    )?;
-    total += write_parse_project(&mut writer, metadata_dir, &now)?;
-    total += write_parse_generation(&mut writer, metadata_dir, &now)?;
+
+    if alive_changed {
+        let compile_map = load_compile_nodes_map(metadata_dir, state, false)?;
+        total += write_parse_nodes(
+            &mut writer,
+            metadata_dir,
+            state,
+            &now,
+            false,
+            &compile_map,
+            alive_ids.as_ref(),
+        )?;
+        total += write_parse_columns(
+            &mut writer,
+            metadata_dir,
+            state,
+            &now,
+            false,
+            alive_ids.as_ref(),
+        )?;
+        total += write_parse_project(&mut writer, metadata_dir, &now)?;
+        total += write_parse_generation(&mut writer, metadata_dir, &now)?;
+    }
     total += write_compile_columns(
         &mut writer,
         metadata_dir,
@@ -300,15 +312,41 @@ pub fn apply_delta_direct(
         false,
         alive_ids.as_ref(),
     )?;
-    total += write_run_invocations(&mut writer, metadata_dir, state, &now, false)?;
-    total += write_run_results(&mut writer, metadata_dir, state, &now, false)?;
-    total += write_column_stats(&mut writer, index_dir, &now)?;
-    total += write_seed_catalog_stats(&mut writer, index_dir, metadata_dir, &now)?;
-    total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, false)?;
-    total += write_run_freshness(&mut writer, metadata_dir, state, &now, false)?;
+    if alive_changed {
+        total += write_run_invocations(&mut writer, metadata_dir, state, &now, false)?;
+        total += write_run_results(&mut writer, metadata_dir, state, &now, false)?;
+        total += write_column_stats(&mut writer, index_dir, &now)?;
+        total += write_seed_catalog_stats(&mut writer, index_dir, metadata_dir, &now)?;
+        total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, false)?;
+        total += write_run_freshness(&mut writer, metadata_dir, state, &now, false)?;
+    }
     writer.finish_for_ingest()?;
 
     Ok(total)
+}
+
+/// Returns true if any compile-phase subdirectory has epochs beyond what was last ingested.
+fn has_unseen_epochs(metadata_dir: &Path, state: &IngestState) -> bool {
+    const COMPILE_SUBDIRS: &[&str] = &[
+        COMPILE_NODES_SUBDIR,
+        COMPILE_COLUMNS_SUBDIR,
+        COMPILE_CLL_SUBDIR,
+        CATALOG_COLUMNS_SUBDIR,
+    ];
+    for &subdir in COMPILE_SUBDIRS {
+        let dir = metadata_dir.join(subdir);
+        if !dir.exists() {
+            continue;
+        }
+        let epochs = epoch_layers::existing_epochs(&dir);
+        let curr_max = epochs.iter().map(|(n, _)| *n).max();
+        let last = state.last_epoch_for(subdir);
+        match curr_max {
+            Some(max) if last == u32::MAX || max > last || max < last => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------

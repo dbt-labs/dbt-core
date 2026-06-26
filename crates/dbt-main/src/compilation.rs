@@ -98,7 +98,8 @@ use tracing::Instrument;
 use vortex_events::{adapter_info_event, resource_counts_event};
 
 use dbt_schemas::schemas::{
-    OnManifestLoadFailure, StateArtifacts, legacy_catalog::DbtCatalog, manifest::build_manifest,
+    InternalDbtNode, OnManifestLoadFailure, StateArtifacts, legacy_catalog::DbtCatalog,
+    manifest::build_manifest,
 };
 
 use dbt_compilation::config::CompilationConfig;
@@ -990,11 +991,35 @@ impl DbtProjectCompilation {
             }))
         );
         if use_lazy_filter && !has_inline {
-            if let Some(mut compilation) = try_lazy_load_fast_path(&mut maybe_prev) {
-                tracing::debug!("Partial parse: partial-load fast path — no file changes");
-                compilation.partial_load_filter_applied = true;
-                let jinja_env = compilation.create_jinja_env(arg, token.clone())?;
-                return Ok((compilation, jinja_env, None));
+            // Skip the fast path when the --static-analysis level has changed since the
+            // previous compilation. The fast path reuses nodes whose `base().static_analysis`
+            // was stamped by the prior run; if the CLI arg changed (e.g. baseline→strict),
+            // those stale values would prevent schema hydration from correctly upgrading SA,
+            // causing the analyze phase (and lineage computation) to be skipped.
+            let sa_changed = arg.static_analysis.is_some_and(|requested| {
+                maybe_prev
+                    .as_ref()
+                    .and_then(|prev| {
+                        prev.resolved_state
+                            .nodes
+                            .models
+                            .values()
+                            .next()
+                            .map(|m| *m.base().static_analysis.as_ref() != requested)
+                    })
+                    .unwrap_or(false)
+            });
+            if !sa_changed {
+                if let Some(mut compilation) = try_lazy_load_fast_path(&mut maybe_prev) {
+                    tracing::debug!("Partial parse: partial-load fast path — no file changes");
+                    compilation.partial_load_filter_applied = true;
+                    let jinja_env = compilation.create_jinja_env(arg, token.clone())?;
+                    return Ok((compilation, jinja_env, None));
+                }
+            } else {
+                tracing::debug!(
+                    "Partial parse: skipping fast path — static_analysis level changed"
+                );
             }
         }
 
@@ -1017,7 +1042,40 @@ impl DbtProjectCompilation {
 
         match result {
             Err(e) if e.code == ErrorCode::NoFilesChanged => {
+                // When the static_analysis level has changed, we cannot reuse the previous
+                // compilation because nodes carry stale SA assignments that would prevent
+                // the analyze phase from running at the correct level.
+                let sa_changed_on_prev = arg.static_analysis.is_some_and(|requested| {
+                    maybe_prev
+                        .as_ref()
+                        .and_then(|prev| {
+                            prev.resolved_state
+                                .nodes
+                                .models
+                                .values()
+                                .next()
+                                .map(|m| *m.base().static_analysis.as_ref() != requested)
+                        })
+                        .unwrap_or(false)
+                });
                 if let Some(prev) = maybe_prev {
+                    if sa_changed_on_prev {
+                        tracing::debug!(
+                            "Partial parse: no files changed but static_analysis level changed, performing full parse"
+                        );
+                        return DbtProjectCompilation::initialize(
+                            feature_stack,
+                            arg,
+                            cli,
+                            config,
+                            event_emitter,
+                            jinja_type_checking_event_listener_factory,
+                            None,
+                            token,
+                            version_check_handle,
+                        )
+                        .await;
+                    }
                     tracing::debug!(
                         "Partial parse: no files changed, reusing previous compilation"
                     );
