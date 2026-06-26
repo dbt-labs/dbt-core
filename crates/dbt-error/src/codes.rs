@@ -123,6 +123,9 @@ pub enum ErrorCode {
     DeprecatedModel = 1085,
     DeprecatedReference = 1072,
     UpcomingReferenceDeprecation = 1073,
+    /// A jinja warn() call that was upgraded to an error via --warn-error-options.
+    /// The warn message is stored in FsError::context.
+    JinjaWarnUpgradedToError = 1074,
     SnapshotTimestampMismatch = 1075,
     PackageRedirectDeprecation = 1076,
     DepsUnpinned = 1077,

@@ -98,6 +98,20 @@ fn execute_materialization_macro(
                     run_path.display(),
                 );
                 Box::new(dbt_common::FsError::new(e.code, message))
+            } else if e.code == ErrorCode::JinjaWarnUpgradedToError {
+                // warn() upgraded to error via warn-error-options: format like dbt-core.
+                // emit_warn_log_from_fs_error already reported this to stderr.
+                let indented_body = e
+                    .context
+                    .lines()
+                    .map(|line| format!("  {line}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let message = format!(
+                    "Compilation Error in {resource_type} {node_alias} ({})\n{indented_body}",
+                    run_path.display(),
+                );
+                Box::new(dbt_common::FsError::new(e.code, message))
             } else {
                 // For non-database errors (macro syntax errors, config errors, etc.)
                 // keep the verbose format which helps debug the macro call chain.

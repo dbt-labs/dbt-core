@@ -152,6 +152,18 @@ impl FsError {
         }
     }
 
+    pub fn new_no_backtrace(code: ErrorCode, context: impl Into<String>) -> Self {
+        FsError {
+            code,
+            location: None,
+            context: context.into(),
+            cause: None,
+            backtrace: Backtrace::disabled(),
+            jinja_frames: vec![],
+            next: None,
+        }
+    }
+
     pub fn new_with_forced_backtrace(code: ErrorCode, context: impl Into<String>) -> Self {
         FsError {
             code,
@@ -225,6 +237,12 @@ impl FsError {
 
     pub fn from_jinja_err(err: minijinja::Error, context: impl Display) -> Self {
         if err.kind() == minijinja::ErrorKind::ExitWithStatus {
+            if let Some(detail) = err.detail().filter(|d| !d.is_empty()) {
+                return FsError::new_no_backtrace(
+                    ErrorCode::JinjaWarnUpgradedToError,
+                    detail.to_string(),
+                );
+            }
             return *FsError::exit_with_status(1);
         }
 
