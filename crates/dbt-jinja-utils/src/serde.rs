@@ -618,6 +618,11 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
         return false;
     }
     let body = &input[2..input.len() - 2];
+    // `}}}` ends with `}}` but its body ends with `}`, which the pairwise scan
+    // below misses. Fall through so the template renderer handles it correctly.
+    if body.ends_with('}') {
+        return false;
+    }
     let bytes = body.as_bytes();
     for i in 0..bytes.len().saturating_sub(1) {
         if matches!(
@@ -637,7 +642,6 @@ mod tests {
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {
-        // Plain single expressions.
         assert!(check_single_expression_without_whitepsace_control(
             "{{ config(enabled=true) }}"
         ));
@@ -647,11 +651,6 @@ mod tests {
         assert!(check_single_expression_without_whitepsace_control(
             "{{ [1, 2, 3] }}"
         ));
-
-        // Expressions whose body contains a dict/set literal: the outer
-        // `{{ ... }}` is still a single expression and must be routed through
-        // the typed path so the literal survives as a mapping/set rather than
-        // being coerced to its Display form.
         assert!(check_single_expression_without_whitepsace_control(
             "{{ {'a': 1} }}"
         ));
@@ -665,27 +664,31 @@ mod tests {
             "{{ {1, 2, 3} }}"
         ));
 
-        // Whitespace control must stay excluded.
         assert!(!check_single_expression_without_whitepsace_control(
             "{{- config(enabled=true) -}}"
         ));
-
-        // Multiple sibling expressions must stay on the string path.
         assert!(!check_single_expression_without_whitepsace_control(
             "{{ a }}{{ b }}"
         ));
-
-        // Statement + expression must stay on the string path.
         assert!(!check_single_expression_without_whitepsace_control(
             "{% set x = 1 %}{{ x }}"
         ));
-
-        // Surrounding literal text must stay on the string path.
         assert!(!check_single_expression_without_whitepsace_control(
             "prefix {{ foo }}"
         ));
         assert!(!check_single_expression_without_whitepsace_control(
             "{{ foo }} suffix"
+        ));
+
+        // `}}}` body ends with `}`, missed by pairwise scan — must fall through to template renderer.
+        assert!(!check_single_expression_without_whitepsace_control(
+            "{{ foo }}}"
+        ));
+        assert!(!check_single_expression_without_whitepsace_control(
+            "{{ 'hello' }}}"
+        ));
+        assert!(!check_single_expression_without_whitepsace_control(
+            "{{ foo }}}}"
         ));
     }
 
