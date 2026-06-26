@@ -57,6 +57,7 @@ pub enum CoreCommand {
     /// Authenticate with dbt platform
     Login(LoginArgs),
     /// Generate shell completion scripts
+    #[clap(hide = true)]
     Completions(CompletionsArgs),
 }
 
