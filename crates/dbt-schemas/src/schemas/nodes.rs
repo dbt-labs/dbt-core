@@ -20,7 +20,7 @@ use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serializ
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    grants_eq_with_unrendered, meta_eq, tags_eq, tags_eq_vec, unrendered_value_eq,
+    grants_eq_with_unrendered, tags_eq, tags_eq_vec, unrendered_value_eq,
 };
 use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config_with_unrendered};
 use crate::schemas::relations::default_dbt_quoting_for;
@@ -1620,6 +1620,40 @@ fn meta_eq_with_unrendered(
     indexmap_yml_value_equal(left, right)
 }
 
+/// Unrendered-aware `tags` comparison.
+///
+/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
+/// config rather than the rendered values, so an environment-aware Jinja `tags` config in
+/// `dbt_project.yml` (e.g. `+tags: "{{ 'prod_tag' if target.name == 'prod' else 'dev_tag' }}"`)
+/// that renders to a different tag set per target is not treated as a modification. This is the
+/// `tags` sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
+///
+/// Semantics: `same = (tags configured && unrendered_same) || rendered_same`.
+///   1. If `tags` is configured (present in `unrendered_config`) on at least one side and the
+///      configured (unrendered) values are equal, the tags are the same.
+///   2. Otherwise fall back to the rendered comparison ([`tags_eq`], which uses set semantics).
+///
+/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `tags` is a
+/// single key, so an absent-on-both unrendered `tags` must fall back to the rendered comparison
+/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
+/// manifest that does not populate `unrendered_config.tags`) would be masked.
+///
+/// This is strictly more lenient than [`tags_eq`] alone (it can only turn a rendered "different"
+/// into "same"), preserving backward compatibility.
+fn tags_eq_with_unrendered(
+    left: &Option<StringOrArrayOfStrings>,
+    right: &Option<StringOrArrayOfStrings>,
+    left_unrendered_config: &BTreeMap<String, YmlValue>,
+    right_unrendered_config: &BTreeMap<String, YmlValue>,
+) -> bool {
+    let left_tags = left_unrendered_config.get("tags");
+    let right_tags = right_unrendered_config.get("tags");
+    if (left_tags.is_some() || right_tags.is_some()) && unrendered_value_eq(left_tags, right_tags) {
+        return true;
+    }
+    tags_eq(left, right)
+}
+
 /// Unrendered-aware comparison for a single string-valued config key (e.g. `alias`,
 /// `target_schema`, `target_database`).
 ///
@@ -1925,8 +1959,18 @@ impl InternalDbtNode for DbtTest {
             // so we do not do that comparison
             let enabled_eq = self.deprecated_config.enabled == other.deprecated_config.enabled;
             let alias_eq = self.deprecated_config.alias == other.deprecated_config.alias;
-            let tags_eq = tags_eq(&self.deprecated_config.tags, &other.deprecated_config.tags);
-            let meta_eq = meta_eq(&self.deprecated_config.meta, &other.deprecated_config.meta);
+            let tags_eq = tags_eq_with_unrendered(
+                &self.deprecated_config.tags,
+                &other.deprecated_config.tags,
+                &self.__base_attr__.unrendered_config,
+                &other.__base_attr__.unrendered_config,
+            );
+            let meta_eq = meta_eq_with_unrendered(
+                &self.deprecated_config.meta,
+                &other.deprecated_config.meta,
+                &self.__base_attr__.unrendered_config,
+                &other.__base_attr__.unrendered_config,
+            );
             let group_eq = self.deprecated_config.group == other.deprecated_config.group;
             let quoting_eq = quoting_equal(
                 &self.deprecated_config.quoting,
