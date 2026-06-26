@@ -597,20 +597,23 @@ impl AdapterImpl {
         options: Option<HashMap<String, String>>,
         token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        let splitter = engine.splitter();
         let adapter_type = self.adapter_type();
-        // BigQuery and DuckDB support multi-statement execution.
-        // BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
-        // DuckDB: temp tables are connection-scoped; batching CREATE TEMP + DML in one
-        // execute() call avoids the need for cross-call connection caching.
-        let statements = if adapter_type == Bigquery || adapter_type == DuckDB {
-            if engine.splitter().is_empty(sql, adapter_type) {
-                vec![]
-            } else {
-                vec![sql.to_owned()]
-            }
-        } else {
-            engine.split_and_filter_statements(sql)
+        let all_stmts = match adapter_type {
+            // BigQuery and DuckDB support multi-statement execution.
+            //
+            // BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
+            //
+            // DuckDB: temp tables are connection-scoped; batching CREATE TEMP + DML in one
+            // execute() call avoids the need for cross-call connection caching.
+            Bigquery | DuckDB => vec![sql.to_string()],
+            _ => splitter.split(sql, adapter_type),
         };
+        // Filter out empty and comment-only statements.
+        let statements = all_stmts
+            .into_iter()
+            .filter(|stmt| !splitter.is_empty(stmt, adapter_type))
+            .collect::<Vec<_>>();
         if statements.is_empty() {
             return Ok((AdapterResponse::default(), AgateTable::default()));
         }

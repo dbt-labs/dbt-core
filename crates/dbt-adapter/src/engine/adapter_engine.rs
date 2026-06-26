@@ -191,16 +191,6 @@ pub trait AdapterEngine: Send + Sync {
         self.execute_with_options(state, ctx, conn, sql, Options::new(), true, token)
     }
 
-    /// Split SQL statements using the provided dialect.
-    fn split_and_filter_statements(&self, sql: &str) -> Vec<String> {
-        let adapter_type = self.adapter_type();
-        self.splitter()
-            .split(sql, adapter_type)
-            .into_iter()
-            .filter(|statement| !self.splitter().is_empty(statement, adapter_type))
-            .collect()
-    }
-
     /// Get the configured database name.
     fn get_configured_database_name(&self) -> Option<Cow<'_, str>> {
         self.config("database")
