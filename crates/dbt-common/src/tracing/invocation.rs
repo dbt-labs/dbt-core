@@ -53,7 +53,7 @@ fn create_invocation_eval_args(eval_arg: &EvalArgs) -> InvocationEvalArgs {
         write_json: Some(eval_arg.write_json),
         write_catalog: Some(eval_arg.write_catalog),
         // `run_cache_service` holds the resolved dbt State management flag
-        // (--manage-state / DBT_ENGINE_MANAGE_STATE / flags.manage_state).
+        // (--manage-state / DBT_MANAGE_STATE / flags.manage_state).
         manage_state: Some(eval_arg.run_cache_service),
     }
 }

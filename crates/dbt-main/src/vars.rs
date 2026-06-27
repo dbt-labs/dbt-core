@@ -37,6 +37,7 @@ const ALIASABLE_ENV_VARS: &[&str] = &[
     "DBT_LOG_LEVEL_FILE",
     "DBT_LOG_PATH",
     "DBT_MACRO_DEBUGGING",
+    "DBT_MANAGE_STATE",
     "DBT_MAXIMUM_SEED_SIZE_MIB",
     "DBT_NO_FAIL_FAST",
     "DBT_NO_FAVOR_STATE",
@@ -117,7 +118,6 @@ const USED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_BETA_PARSING",
     "DBT_ENGINE_EXPERIMENTAL_LIST_UDFS",
     "DBT_ENGINE_EXPERIMENTAL_SNAPSHOT_COLUMNS",
-    "DBT_ENGINE_MANAGE_STATE",
     "DBT_ENGINE_NO_WARN_SEMANTIC_MANIFEST_VALIDATION",
     "DBT_ENGINE_RECORDER_FILE_PATH",
     "DBT_ENGINE_RECORDER_MODE",
@@ -363,6 +363,31 @@ mod tests {
             std::env::remove_var("DBT_QUIET");
             #[allow(clippy::disallowed_methods)]
             std::env::remove_var("DBT_ENGINE_QUIET");
+        }
+    }
+
+    #[test]
+    fn apply_engine_env_var_aliases_supports_manage_state() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_MANAGE_STATE");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_MANAGE_STATE");
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("DBT_ENGINE_MANAGE_STATE", "true");
+        }
+
+        apply_engine_env_var_aliases();
+
+        let result = std::env::var("DBT_MANAGE_STATE");
+        assert_eq!(result.ok(), Some("true".to_string()));
+
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_MANAGE_STATE");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_MANAGE_STATE");
         }
     }
 
