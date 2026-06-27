@@ -4,7 +4,8 @@ use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_platform_auth::Credential;
 use dbt_schemas::schemas::UserSettings;
 
-const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
+const MANAGE_STATE_ENV: &str = "DBT_MANAGE_STATE";
+const LEGACY_ENGINE_MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
 
 // ── State config detection ────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ pub enum StateConfigSource {
 impl StateConfigSource {
     fn inline_description(self) -> &'static str {
         match self {
-            Self::EnvVar => "set via `DBT_ENGINE_MANAGE_STATE`",
+            Self::EnvVar => "set via `DBT_MANAGE_STATE`",
             Self::DbtProjectYml => "set in `./dbt_project.yml`",
             Self::UserSettingsYml => "set in `~/.dbt/user_settings.yml`",
         }
@@ -30,6 +31,7 @@ impl StateConfigSource {
 /// Returns the first matching source (env > project > user settings), or `None`.
 pub fn check_state_configured() -> Option<StateConfigSource> {
     if std::env::var(MANAGE_STATE_ENV)
+        .or_else(|_| std::env::var(LEGACY_ENGINE_MANAGE_STATE_ENV))
         .map(|v| v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
     {
@@ -142,7 +144,7 @@ async fn prompt_to_set_state() -> FsResult<()> {
         println!(
             "If you want to enable dbt State in the future, you can add the following to \
             ~/.dbt/user_settings.yml\n  flags:\n    manage_state: true\n\
-            Or set the environment variable: DBT_ENGINE_MANAGE_STATE=true"
+            Or set the environment variable: DBT_MANAGE_STATE=true"
         );
     }
 

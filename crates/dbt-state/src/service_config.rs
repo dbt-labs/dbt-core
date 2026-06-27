@@ -13,7 +13,8 @@ pub const DEFAULT_DEFER_LOG_LEVEL: &str = "off";
 pub const DEFAULT_LOG_FILE_LIMIT: i64 = 20;
 pub const DEFAULT_LOG_PREFIX: &str = "responses_";
 pub const DEFAULT_METADATA_CACHE_TTL_SECONDS: i64 = 0;
-const STATE_MANAGE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
+const STATE_MANAGE_ENV: &str = "DBT_MANAGE_STATE";
+const LEGACY_STATE_MANAGE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
 const STATE_OAUTH_CLIENT_ID_ENV: &str = "DBT_ENGINE_STATE_OAUTH_CLIENT_ID";
 const STATE_OAUTH_CLIENT_SECRET_ENV: &str = "DBT_ENV_SECRET_STATE_OAUTH_CLIENT_SECRET";
 
@@ -80,9 +81,8 @@ impl RunCacheServiceConfig {
     where
         F: FnMut(&str) -> Option<String>,
     {
-        get_env(STATE_MANAGE_ENV)
-            .filter(|value| !value.trim().is_empty())
-            .map(|value| parse_bool(STATE_MANAGE_ENV, &value).unwrap_or(true))
+        manage_state_value(&mut get_env)
+            .map(|(name, value)| parse_bool(name, &value).unwrap_or(true))
             .unwrap_or(false)
     }
 
@@ -90,8 +90,8 @@ impl RunCacheServiceConfig {
     where
         F: FnMut(&str) -> Option<String>,
     {
-        match get_env(STATE_MANAGE_ENV).filter(|value| !value.trim().is_empty()) {
-            Some(value) => parse_bool(STATE_MANAGE_ENV, &value)
+        match manage_state_value(&mut get_env) {
+            Some((name, value)) => parse_bool(name, &value)
                 .map(|enabled| !enabled)
                 .unwrap_or(false),
             None => config_value(&mut get_env, "ENABLED")
@@ -108,9 +108,9 @@ impl RunCacheServiceConfig {
     where
         F: FnMut(&str) -> Option<String>,
     {
-        let enabled = match get_env(STATE_MANAGE_ENV).filter(|value| !value.trim().is_empty()) {
-            Some(value) => {
-                let manage_state_enabled = parse_bool(STATE_MANAGE_ENV, &value)?;
+        let enabled = match manage_state_value(&mut get_env) {
+            Some((name, value)) => {
+                let manage_state_enabled = parse_bool(name, &value)?;
                 if manage_state_enabled {
                     config_enabled(&mut get_env)?.unwrap_or(true)
                 } else {
@@ -321,6 +321,20 @@ where
         .transpose()
 }
 
+fn manage_state_value<F>(get_env: &mut F) -> Option<(&'static str, String)>
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    get_env(STATE_MANAGE_ENV)
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| (STATE_MANAGE_ENV, value))
+        .or_else(|| {
+            get_env(LEGACY_STATE_MANAGE_ENV)
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| (LEGACY_STATE_MANAGE_ENV, value))
+        })
+}
+
 fn state_config_value<F>(
     get_env: &mut F,
     state_name: &'static str,
@@ -468,13 +482,13 @@ mod tests {
 
     #[test]
     fn manage_state_can_be_disabled_from_config() {
-        let config = config_from_pairs(&[("DBT_ENGINE_MANAGE_STATE", "false")]).unwrap();
+        let config = config_from_pairs(&[("DBT_MANAGE_STATE", "false")]).unwrap();
 
         assert!(!config.enabled);
         assert!(!RunCacheServiceConfig::disabled().enabled);
         assert!(
             !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
-                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "false".to_string())
+                (name == "DBT_MANAGE_STATE").then(|| "false".to_string())
             })
         );
         assert!(
@@ -501,7 +515,7 @@ mod tests {
     fn explicit_enabled_env_requests_service_without_api_url() {
         assert!(
             RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
-                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "true".to_string())
+                (name == "DBT_MANAGE_STATE").then(|| "true".to_string())
             })
         );
         assert!(
@@ -512,7 +526,7 @@ mod tests {
 
         assert!(
             RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
-                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "not-a-bool".to_string())
+                (name == "DBT_MANAGE_STATE").then(|| "not-a-bool".to_string())
             })
         );
         assert!(
@@ -546,18 +560,18 @@ mod tests {
 
     #[test]
     fn dbt_state_manage_env_controls_enabled() {
-        let config = config_from_pairs(&[("DBT_ENGINE_MANAGE_STATE", "false")]).unwrap();
+        let config = config_from_pairs(&[("DBT_MANAGE_STATE", "false")]).unwrap();
 
         assert!(!config.enabled);
         assert!(
             !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
-                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "false".to_string())
+                (name == "DBT_MANAGE_STATE").then(|| "false".to_string())
             })
         );
 
         assert!(
             RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
-                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "true".to_string())
+                (name == "DBT_MANAGE_STATE").then(|| "true".to_string())
             })
         );
     }
@@ -565,7 +579,7 @@ mod tests {
     #[test]
     fn dbt_state_manage_env_controls_enabled_without_service_config() {
         let config = config_from_pairs(&[
-            ("DBT_ENGINE_MANAGE_STATE", "false"),
+            ("DBT_MANAGE_STATE", "false"),
             ("RUN_CACHE_API_URL", "localhost:50051"),
         ])
         .unwrap();
@@ -576,7 +590,7 @@ mod tests {
     #[test]
     fn legacy_enabled_false_can_disable_managed_state() {
         let config = config_from_pairs(&[
-            ("DBT_ENGINE_MANAGE_STATE", "true"),
+            ("DBT_MANAGE_STATE", "true"),
             ("RUN_CACHE_ENABLED", "false"),
         ])
         .unwrap();
@@ -587,7 +601,7 @@ mod tests {
     #[test]
     fn manage_state_false_overrides_legacy_enabled_true() {
         let config = config_from_pairs(&[
-            ("DBT_ENGINE_MANAGE_STATE", "false"),
+            ("DBT_MANAGE_STATE", "false"),
             ("RUN_CACHE_ENABLED", "true"),
         ])
         .unwrap();
@@ -597,9 +611,21 @@ mod tests {
 
     #[test]
     fn invalid_manage_state_env_reports_manage_state_name() {
-        let err = config_from_pairs(&[("DBT_ENGINE_MANAGE_STATE", "invalid")]).unwrap_err();
+        let err = config_from_pairs(&[("DBT_MANAGE_STATE", "invalid")]).unwrap_err();
 
-        assert!(err.to_string().contains("DBT_ENGINE_MANAGE_STATE"));
+        assert!(err.to_string().contains("DBT_MANAGE_STATE"));
+    }
+
+    #[test]
+    fn legacy_engine_manage_state_env_is_still_accepted() {
+        let config = config_from_pairs(&[("DBT_ENGINE_MANAGE_STATE", "false")]).unwrap();
+
+        assert!(!config.enabled);
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_MANAGE_STATE").then(|| "false".to_string())
+            })
+        );
     }
 
     #[test]
