@@ -1025,7 +1025,7 @@ fn collect_childrens_parents(
     // A node is its own descendant, so the selected nodes are themselves leaf
     // candidates: when a selected node has no children it produces no descendant
     // edges in `desc` and would otherwise be dropped entirely (see #15280).
-    let leaf_nodes: Vec<String> = desc
+    let leaf_nodes: BTreeSet<String> = desc
         .keys()
         .chain(desc.values().flatten())
         .chain(selected_nodes)
@@ -1039,8 +1039,8 @@ fn collect_childrens_parents(
     // because `upstream` only returns edges, which omit a leaf that has no
     // ancestors (e.g. an isolated node).
     for leaf in leaf_nodes {
-        selected.insert(leaf.clone());
         add_nodes(upstream(deps, &leaf, u32::MAX), &mut selected);
+        selected.insert(leaf);
     }
     selected
 }
