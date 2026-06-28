@@ -46,12 +46,14 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         revision: str,
         warn_unpinned: bool = True,
         subdirectory: Optional[str] = None,
+        remove_git_dir: bool = True,
     ) -> None:
         super().__init__(git, git_unrendered, subdirectory)
         self.revision = revision
         self.warn_unpinned = warn_unpinned
         self.subdirectory = subdirectory
         self._checkout_name = md5sum(self.name)
+        self.remove_git_dir = remove_git_dir
 
     def to_dict(self) -> Dict[str, str]:
         git_scrubbed = scrub_secrets(self.git_unrendered, env_secrets())
@@ -92,6 +94,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
                 revision=self.revision,
                 dirname=self._checkout_name,
                 subdirectory=self.subdirectory,
+                remove_git_dir=self.remove_git_dir,
             )
         except ExecutableError as exc:
             if exc.cmd and exc.cmd[0] == "git":
