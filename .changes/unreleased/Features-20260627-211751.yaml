@@ -1,0 +1,7 @@
+kind: Features
+body: Add cortex_agent materialization for Snowflake Cortex Agents
+time: 2026-06-27T21:17:51-04:00
+custom:
+    author: poojacrahen
+    issue: ""
+    project: dbt-core
