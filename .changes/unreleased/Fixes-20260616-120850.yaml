@@ -1,7 +1,0 @@
-kind: Fixes
-body: Map Spark EXTERNAL/MANAGED relation types to table so DROP renders a valid `drop table` instead of an invalid `drop external`. Spark 4 reports managed Hive tables as EXTERNAL (TRANSLATED_TO_EXTERNAL), which broke --full-refresh over Thrift
-time: 2026-06-16T12:08:50.650843+05:30
-custom:
-    author: debrin-og
-    issue: ""
-    project: dbt-fusion

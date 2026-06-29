@@ -1,7 +1,0 @@
-kind: Fixes
-body: "dbt docs serve now emits a clear error when target/index is missing instead of silently exiting with code 1"
-time: 2026-06-16T14:46:59.893354-07:00
-custom:
-    author: eddowh
-    issue: ""
-    project: dbt-fusion

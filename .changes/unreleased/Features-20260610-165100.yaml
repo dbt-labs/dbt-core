@@ -1,7 +1,0 @@
-kind: Features
-body: 'Honor per-node `+compute` config on unit_test nodes, allowing a unit_test to override the global `--compute` flag (e.g. `+compute: sidecar` under global `--compute remote`).'
-time: 2026-06-10T16:51:00.971837-04:00
-custom:
-    author: mach-kernel
-    issue: "10967"
-    project: dbt-fusion

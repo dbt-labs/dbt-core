@@ -1,7 +1,0 @@
-kind: Fixes
-body: '--write-index no longer produces catalog.json (was unintended side effect of #10750; pass --write-index --write-catalog to restore). --write-metadata alone no longer queries the warehouse. Catalog data is now fetched at most once per invocation and shared across all consumers.'
-time: 2026-06-04T20:05:33.87157-07:00
-custom:
-    author: eddowh
-    issue: ""
-    project: dbt-fusion

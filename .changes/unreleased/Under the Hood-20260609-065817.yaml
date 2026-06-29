@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Removed DataFusion-backed task execution
-time: 2026-06-09T06:58:17.955387-07:00
-custom:
-    author: ""
-    issue: ""
-    project: dbt-fusion

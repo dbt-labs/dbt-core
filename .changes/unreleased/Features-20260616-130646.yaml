@@ -1,7 +1,0 @@
-kind: Features
-body: Expose has_dbt_state on GET /api/v1/capabilities
-time: 2026-06-16T13:06:46.591395-04:00
-custom:
-  author: jcserv
-  issue: ""
-  project: dbt-fusion
