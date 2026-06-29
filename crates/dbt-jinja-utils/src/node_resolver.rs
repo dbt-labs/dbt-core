@@ -184,6 +184,18 @@ impl NodeResolver {
             return;
         }
 
+        // Prevent duplicate unique_ids: cross-project publication nodes can be registered
+        // via from_dbt_nodes() and again during wave resolution, causing the same unique_id
+        // to appear twice and triggering "ambiguous ref" panics at compile time.
+        // Only skip when the same unique_id with the same status already exists — a disabled
+        // and an enabled entry for the same name are both needed for correct ref resolution.
+        if entries
+            .iter()
+            .any(|(id, _, s, _)| id == unique_id && *s == status)
+        {
+            return;
+        }
+
         entries.push((unique_id.to_string(), relation.clone(), status, None));
     }
 
@@ -1463,5 +1475,68 @@ mod tests {
 
         let io = make_io();
         check_for_model_deprecations(&io, &nodes);
+    }
+
+    // Regression test for https://github.com/dbt-labs/fs/issues/11382:
+    // push_or_replace_entry with override_existing=false must not insert a duplicate
+    // when the same unique_id is already present. Cross-project publication nodes were
+    // registered via from_dbt_nodes() and again during wave resolution, causing the same
+    // unique_id to appear twice and triggering "Found ambiguous ref" panics.
+    #[test]
+    fn test_push_or_replace_entry_no_duplicate_when_override_false() {
+        let mut entries: Vec<RefRecord> = Vec::new();
+        let relation = MinijinjaValue::UNDEFINED;
+        let unique_id = "model.cross_proj.pub_model";
+
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Enabled,
+            false,
+        );
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Enabled,
+            false,
+        );
+
+        assert_eq!(
+            entries.len(),
+            1,
+            "duplicate unique_id must not be inserted when override_existing=false"
+        );
+    }
+
+    // Regression test: a disabled and an enabled entry for the same model name but same
+    // unique_id must both be retained so ref resolution can correctly find the enabled one.
+    #[test]
+    fn test_push_or_replace_entry_allows_different_status_for_same_unique_id() {
+        let mut entries: Vec<RefRecord> = Vec::new();
+        let relation = MinijinjaValue::UNDEFINED;
+        let unique_id = "model.test.my_model_2";
+
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Disabled,
+            false,
+        );
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Enabled,
+            false,
+        );
+
+        assert_eq!(
+            entries.len(),
+            2,
+            "disabled and enabled entries for the same unique_id must both be kept"
+        );
     }
 }
