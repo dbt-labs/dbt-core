@@ -2904,6 +2904,7 @@
     "FreshnessPeriod": {
       "type": "string",
       "enum": [
+        "second",
         "minute",
         "hour",
         "day"
