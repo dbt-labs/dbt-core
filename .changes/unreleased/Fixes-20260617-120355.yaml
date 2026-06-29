@@ -1,7 +1,0 @@
-kind: Fixes
-body: state:modified no longer flags environment-aware warehouse-specific configs (e.g. copy_grants) set as Jinja in dbt_project.yml.
-time: 2026-06-17T12:03:55.230191459-07:00
-custom:
-    author: lottaquestiions
-    issue: "15263"
-    project: dbt-core

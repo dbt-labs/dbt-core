@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Reuse the Bigquery grammar and binder for BigqueryUntyped column lineage, removing the duplicate parser, lexer, and grammar."
-time: 2026-06-03T19:59:59.194223-07:00
-custom:
-    author: maxmalkin
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Features
-body: Signing in from the extension now uses the dbt login command.
-time: 2026-06-03T09:23:07.9876+01:00
-custom:
-    author: ""
-    issue: ""
-    project: dbt-extension

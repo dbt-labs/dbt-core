@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Yaml: fix quoted string values parsed as numbers'
-time: 2026-06-22T23:07:18.178746554-04:00
-custom:
-    author: sadboy
-    issue: "15325"
-    project: fusion

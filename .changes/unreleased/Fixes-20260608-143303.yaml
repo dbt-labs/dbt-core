@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Fix field-level manifest conformance gaps for metrics and semantic_models: metric label falls back to name at resolve time (matching dbt-core); semantic model entity description defaults to empty string and entity config defaults to {meta: {}} when unset. Fields where Fusion emits richer values than dbt-core (tags, meta, unrendered_config) are left as-is — these are improvements, not bugs.'
-time: 2026-06-08T14:33:03.645923-06:00
-custom:
-    author: aiguofer
-    issue: "10896"
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix BigQuery get_relation crash during replay when the INFORMATION_SCHEMA.SCHEMATA location query returns an empty (zero-column) batch; get_dataset_location now returns no location instead of erroring.
-time: 2026-06-15T16:11:47.041365-07:00
-custom:
-    author: ""
-    issue: ""
-    project: dbt-fusion

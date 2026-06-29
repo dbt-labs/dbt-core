@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Group CommonArgs flags into labeled help sections (Project, Selection, Execution, Logging, Artifacts, Event Time) and add a Sample heading to the node-selection commands so per-subcommand `--help` shows a focused summary
-time: 2026-06-11T11:31:47.650552-04:00
-custom:
-    author: dataders
-    issue: ""
-    project: dbt-fusion

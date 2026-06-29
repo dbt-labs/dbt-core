@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: grain_declared falls back to primary_key inferred during parse when no compile data is present
-time: 2026-05-27T14:17:46.935809092-07:00
-custom:
-    author: wolfram
-    issue: ""
-    project: dbt-index

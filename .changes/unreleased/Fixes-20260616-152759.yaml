@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Fix manifest emission of null for adapter-specific config fields (sources: external_location, formatter, sync, schema_origin; models: compute, sync, and other adapter extras) — these are now omitted when unset, matching dbt-core behavior'
-time: 2026-06-16T15:27:59.21593-06:00
-custom:
-    author: aiguofer
-    issue: "10658"
-    project: dbt-fusion

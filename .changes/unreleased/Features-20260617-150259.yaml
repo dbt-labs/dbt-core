@@ -1,7 +1,0 @@
-kind: Features
-body: support the latest duckdb version 1.5.4
-time: 2026-06-17T15:02:59.759557-04:00
-custom:
-    author: dataders
-    issue: "15279"
-    project: dbt-core

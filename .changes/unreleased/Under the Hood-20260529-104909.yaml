@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Match Fusion manifest serialization for exposures with Core for manifest parity
-time: 2026-05-29T10:49:09.206078707-07:00
-custom:
-    author: ajhlee-dbt
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Report dbt State-reused data tests as reused in dbt test output
-time: 2026-06-09T15:55:27.748295-05:00
-custom:
-    author: kczimm
-    issue: "10910"
-    project: dbt-fusion
