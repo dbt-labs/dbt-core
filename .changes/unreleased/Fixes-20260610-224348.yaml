@@ -1,0 +1,7 @@
+kind: Fixes
+body: Accept dotted snapshot block names (e.g. `{% snapshot snp.sql %}`) by stopping at the first dot, matching dbt-core behavior
+time: 2026-06-10T22:43:48.329536-05:00
+custom:
+    author: j-clemons
+    issue: ""
+    project: dbt-fusion

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix dbt State support for custom materializations
+time: 2026-06-16T15:31:32.341176-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: dbt-fusion

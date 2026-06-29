@@ -1,0 +1,7 @@
+kind: Fixes
+body: Snapshot nodes now correctly serialize config.materialized as snapshot instead of table in the manifest
+time: 2026-06-10T11:46:12.000248-06:00
+custom:
+    author: aiguofer
+    issue: "10376"
+    project: dbt-fusion

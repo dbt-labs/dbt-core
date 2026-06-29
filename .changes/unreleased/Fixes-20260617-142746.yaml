@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix cached dbt State warning tests
+time: 2026-06-17T14:27:46.869467-05:00
+custom:
+    author: kczimm
+    issue: "10911"
+    project: fusion

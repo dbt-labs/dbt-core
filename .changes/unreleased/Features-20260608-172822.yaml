@@ -1,0 +1,7 @@
+kind: Features
+body: Setup catalogs.yml to provide json schemas.
+time: 2026-06-08T17:28:22.615542-07:00
+custom:
+    author: versusfacit
+    issue: ""
+    project: dbt-fusion

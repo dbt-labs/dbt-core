@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add anonymous IDs to dbt Wizard error telemetry.
+time: 2026-06-15T23:58:27.313433-04:00
+custom:
+    author: arjitj2
+    issue: ""
+    project: internal

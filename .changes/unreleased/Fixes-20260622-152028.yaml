@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix state:modified to no longer flag seeds whose column_types config is set as environment-aware Jinja in dbt_project.yml.
+time: 2026-06-22T15:20:28.359159627-07:00
+custom:
+    author: lottaquestions
+    issue: "15286"
+    project: dbt-core

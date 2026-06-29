@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Emit a Vortex Login event on dbt login with success/failure, login type, user cookie, project ID, and platform identity fields from the JWT.
+time: 2026-06-05T10:41:30.778475-06:00
+custom:
+    author: kendru
+    issue: ""
+    project: dbt-fusion

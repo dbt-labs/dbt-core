@@ -1,0 +1,7 @@
+kind: Features
+body: Make the maximum seed size hashed for state:modified comparison configurable via --maximum-seed-size-mib, the DBT_MAXIMUM_SEED_SIZE_MIB (or DBT_ENGINE_MAXIMUM_SEED_SIZE_MIB) env var, and dbt_project.yml flags (default 1 MiB; 0 disables the limit). Seed contents are now hashed incrementally with line-ending normalization, plus a Windows legacy-checksum fallback for state comparison.
+time: 2026-06-03T01:48:18.470456+05:30
+custom:
+    author: "ajnovice"
+    issue: ""
+    project: dbt-fusion

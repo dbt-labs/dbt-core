@@ -1,0 +1,7 @@
+kind: Fixes
+body: (fix redshift) always quote materialized view path
+time: 2026-06-03T12:24:33.516694996-07:00
+custom:
+    author: xuliangs
+    issue: "1095"
+    project: dbt-fusion

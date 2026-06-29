@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Added snowflake config in UDF configs
+time: 2026-05-28T10:41:35.4496+05:30
+custom:
+    author: sriramr98
+    issue: ""
+    project: dbt-fusion

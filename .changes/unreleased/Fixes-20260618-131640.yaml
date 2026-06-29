@@ -1,0 +1,7 @@
+kind: Fixes
+body: ref() version pins now preserve original type (int/float/string) in manifest refs
+time: 2026-06-18T13:16:40.551342-06:00
+custom:
+    author: aiguofer
+    issue: "10541"
+    project: fusion

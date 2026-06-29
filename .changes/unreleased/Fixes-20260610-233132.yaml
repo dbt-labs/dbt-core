@@ -1,0 +1,7 @@
+kind: Fixes
+body: Support comma-separated expression lists in Jinja `do` blocks (e.g. `{%- do a.append(x), b.append(y) -%}`)
+time: 2026-06-10T23:31:32.712076-05:00
+custom:
+    author: j-clemons
+    issue: ""
+    project: dbt-fusion

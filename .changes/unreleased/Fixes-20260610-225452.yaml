@@ -1,0 +1,7 @@
+kind: Fixes
+body: fix standardize_grants_dict crash when show_grants returns 0 rows (Redshift, Snowflake, Databricks)
+time: 2026-06-10T22:54:52.13483-07:00
+custom:
+    author: vgapeyev
+    issue: ""
+    project: dbt-fusion

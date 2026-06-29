@@ -1,0 +1,7 @@
+kind: Fixes
+body: Add support for databricks configs view_update_via_alter, incremental_apply_config_changes, and use_safer_relation_operations
+time: 2026-06-16T12:46:59.03321777-07:00
+custom:
+    author: ajhlee-dbt
+    issue: ""
+    project: dbt-fusion

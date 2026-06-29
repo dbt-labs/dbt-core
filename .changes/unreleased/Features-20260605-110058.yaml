@@ -1,0 +1,7 @@
+kind: Features
+body: Support catalog federation between Snowflake Horizon and Unity Catalog
+time: 2026-06-05T11:00:58.046146-04:00
+custom:
+    author: ajhlee-dbt
+    issue: ""
+    project: dbt-fusion

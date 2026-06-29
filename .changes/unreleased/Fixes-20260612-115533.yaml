@@ -1,0 +1,7 @@
+kind: Fixes
+body: Give each microbatch batch its own statement-result registry so concurrent_batches=true models no longer fail with "The 'statement' result named '<name>' has already been loaded into a variable"
+time: 2026-06-12T11:55:33.884861-04:00
+custom:
+    author: dataders
+    issue: "15245"
+    project: dbt-fusion

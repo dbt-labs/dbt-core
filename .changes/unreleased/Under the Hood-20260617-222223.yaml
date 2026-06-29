@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: 'dbt-ci: `pypi publish --download-base-url <url> --target <triple>...` builds the download-at-install sdist (downloads the release wheels, hashes the live bytes, assembles the sdist) and publishes it (filetype=sdist) to PyPI'
+time: 2026-06-17T22:22:23.469798+05:30
+custom:
+    author: tauhid621
+    issue: ""
+    project: internal

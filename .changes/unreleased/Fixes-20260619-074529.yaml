@@ -1,0 +1,7 @@
+kind: Fixes
+body: Allow tests attached to disabled models to preserve manifest metadata without failing on legacy generic test argument syntax.
+time: 2026-06-19T07:45:29.395849-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: fusion

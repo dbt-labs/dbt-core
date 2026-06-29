@@ -1,0 +1,8 @@
+kind: Fixes
+body: Fix wizard subagents hanging indefinitely due to deadlocked event forwarding,
+  unbounded wait_agent retries, and DuckDB checkpoint race
+time: 2026-06-16T18:13:15.097663438-07:00
+custom:
+  author: jasonlin45
+  issue: ""
+  project: dbt-fusion

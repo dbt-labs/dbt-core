@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Errors and logs now report phase accurate paths for exposures, macros, hooks, and metrics
+time: 2026-06-12T03:53:45.55327-05:00
+custom:
+    author: HannanNaeem
+    issue: ""
+    project: dbt-fusion

@@ -1,0 +1,7 @@
+kind: Features
+body: 'For versioned models, automatically create a view at the unsuffixed model name (e.g. `dim_customers`) pointing to the latest version (e.g. `dim_customers_v2`). Enabled by default; disable per-model with `latest_version_pointer: {enabled: false}` or globally with the project flag `latest_version_pointer_enabled_by_default: false`. Customize the pointer alias via the `latest_version_pointer.alias` config or by overriding the `generate_latest_version_pointer_alias` macro.'
+time: 2026-05-25T17:00:10.499836+05:30
+custom:
+    author: aahel
+    issue: "10475"
+    project: dbt-fusion

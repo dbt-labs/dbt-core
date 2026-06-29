@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Fix subtraction underflow panic in partial-parse when operations have invalid spans after JSON deserialization
+time: 2026-06-18T08:30:59.924979372-07:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

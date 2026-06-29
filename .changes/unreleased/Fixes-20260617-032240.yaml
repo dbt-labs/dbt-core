@@ -1,0 +1,7 @@
+kind: Fixes
+body: '(dbt-adapter): all ambiguous to_rfc3339 calls are mapped to microsecond precision for Bigquery. Unblocks bigquery microbatch use cases.'
+time: 2026-06-17T03:22:40.108757-07:00
+custom:
+    author: versusfacit
+    issue: "15242"
+    project: fusion

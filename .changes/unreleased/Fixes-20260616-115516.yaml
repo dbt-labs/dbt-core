@@ -1,0 +1,7 @@
+kind: Fixes
+body: Ensure that persisted_docs configs for seeds are deserialized to the manifest.
+time: 2026-06-16T11:55:16.56355538-07:00
+custom:
+    author: lottaquestions
+    issue: "15264"
+    project: dbt-fusion

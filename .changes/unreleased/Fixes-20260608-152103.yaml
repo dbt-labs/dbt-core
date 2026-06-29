@@ -1,0 +1,7 @@
+kind: Fixes
+body: Discover source() calls inside conditional branches that evaluate to false during the parse render.
+time: 2026-06-08T15:21:03.229043-04:00
+custom:
+    author: mach-kernel
+    issue: "1660"
+    project: dbt-fusion

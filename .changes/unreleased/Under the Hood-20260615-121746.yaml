@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Allows the source application used in analytics to be specified when creating an interactive `AuthChain` or an `OAuthInteractiveResolver` directly.
+time: 2026-06-15T12:17:46.835316-06:00
+custom:
+    author: kendru
+    issue: ""
+    project: internal

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Prevent `dbt system uninstall` from removing a binary owned by Homebrew, pip, or winget; surface the package manager's uninstall command instead
+time: 2026-06-16T15:16:47.987472+05:30
+custom:
+    author: tauhid621
+    issue: ""
+    project: dbt-fusion

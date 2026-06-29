@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add registry-backed JSON deserialization support for dbt-tracing telemetry records.
+time: 2026-06-17T07:26:53.511520646-07:00
+custom:
+    author: mishamsk
+    issue: ""
+    project: fusion
