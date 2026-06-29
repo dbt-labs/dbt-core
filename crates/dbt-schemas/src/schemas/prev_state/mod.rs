@@ -2,7 +2,7 @@ use super::{RunResultsArtifact, manifest::DbtManifest, sources::FreshnessResults
 use crate::schemas::DbtSource;
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 use crate::schemas::manifest::nodes_from_dbt_manifest;
-use crate::schemas::project::configs::common::log_state_mod_diff;
+use crate::schemas::project::configs::common::{log_state_mod_diff, unrendered_value_eq};
 use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{
     InternalDbtNode, Nodes, nodes::DbtModel, nodes::DbtTest,
@@ -561,104 +561,43 @@ impl StateArtifacts {
             return true;
         };
 
-        // Mantle semantics for `state:modified` configs are based on configured/unrendered config,
-        // not rendered config. Compare key config knobs from `unrendered_config` when present.
-        if current_node.resource_type() == NodeType::Model
-            && previous_node.resource_type() == NodeType::Model
-        {
-            use dbt_yaml::Value as YmlValue;
-
-            let current_uc = &current_node.base().unrendered_config;
-            let previous_uc = &previous_node.base().unrendered_config;
-
-            fn is_effectively_empty(v: &YmlValue) -> bool {
-                match v {
-                    YmlValue::Null(_) => true,
-                    YmlValue::Sequence(seq, _) => seq.is_empty(),
-                    YmlValue::Mapping(map, _) => map.is_empty(),
-                    _ => false,
-                }
-            }
-
-            fn canonicalize_str(s: &str) -> &str {
-                s.strip_suffix("\r\n")
-                    .or_else(|| s.strip_suffix('\n'))
-                    .unwrap_or(s)
-            }
-
-            fn uc_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) -> bool {
-                match (a, b) {
-                    (None, None) => true,
-                    (None, Some(v)) | (Some(v), None) => is_effectively_empty(v),
-                    (Some(YmlValue::String(sa, _)), Some(YmlValue::String(sb, _))) => {
-                        canonicalize_str(sa) == canonicalize_str(sb)
-                    }
-                    (Some(va), Some(vb)) => va == vb,
-                }
-            }
-
-            fn get_any<'a>(
-                m: &'a std::collections::BTreeMap<String, YmlValue>,
-                keys: &[&str],
-            ) -> Option<&'a YmlValue> {
-                keys.iter().find_map(|k| m.get(*k))
-            }
-
-            // Key groups: dbt-core has historically used both dash and underscore variants for hooks.
+        let rt = current_node.resource_type(); // also the type of previous_node
+        if matches!(rt, NodeType::Model | NodeType::Source) {
+            // Approach A — wholesale unrendered comparison (models and sources).
             //
-            // NOTE: `tags` is intentionally excluded here. In dbt-core/Mantle, tags carry
-            // `CompareBehavior::Exclude` and are explicitly skipped in the `same_contents`
-            // comparison. Including tags would cause false positives when the state manifest
-            // (Mantle-produced) stores only model-level tags while Fusion stores project-level
-            // inherited tags — a provenance difference, not a semantic one.
-            let checks: [(&'static str, &[&str]); 4] = [
-                ("grants", &["grants"]),
-                ("pre_hook", &["pre-hook", "pre_hook"]),
-                ("post_hook", &["post-hook", "post_hook"]),
-                ("persist_docs", &["persist_docs"]),
-            ];
-
-            // Only use `unrendered_config` comparisons when *both* current and previous state
-            // manifests contain at least one of these keys.
+            // For these node types, `unrendered_config` is populated with every authored key, so
+            // comparing the raw Jinja strings is an authoritative authoring-intent check: identical
+            // strings across targets means the author changed nothing, even if the rendered values
+            // differ per target (e.g. `"{{ 'table' if target.name == 'prod' else 'view' }}"`).
             //
-            // Rationale: Mantle-produced state manifests may omit `unrendered_config` entirely
-            // (or not include particular keys), in which case dbt-core effectively falls back to
-            // rendered config comparisons. If we treat "key present only on one side" as a diff,
-            // we'll incorrectly mark nodes modified even when rendered config matches.
-            let any_present = checks.iter().any(|(_, keys)| {
-                keys.iter()
-                    .any(|k| current_uc.contains_key(*k) && previous_uc.contains_key(*k))
-            });
-
-            if any_present {
-                let mut any_diff = false;
-                for (name, keys) in checks {
-                    let a = get_any(current_uc, keys);
-                    let b = get_any(previous_uc, keys);
-                    // Only compare a key when it is present on *both* sides.
-                    // If one manifest omits a key (e.g. Mantle records post-hook in
-                    // unrendered_config but Fusion does not, or vice-versa), skip it here:
-                    // the rendered-config fallback (`has_same_config`) will catch any genuine
-                    // change in that field.
-                    if a.is_none() || b.is_none() {
-                        continue;
-                    }
-                    let eq = uc_eq(a, b);
-                    if !eq {
-                        any_diff = true;
-                        log_state_mod_diff(
-                            &current_node.common().unique_id,
-                            "model_config",
-                            [(name, eq, Some((format!("{:?}", a), format!("{:?}", b))))],
-                        );
-                    }
-                }
-                return any_diff;
+            // Stage 1: if every key in `unrendered_config` is equal (apart from the per-type
+            // excluded keys; see `excluded_unrendered_config_keys`), the node is not
+            // config-modified — return early without touching rendered values.
+            if wholesale_unrendered_configs_eq(
+                rt,
+                &previous_node.base().unrendered_config,
+                &current_node.base().unrendered_config,
+                &current_node.common().unique_id,
+            ) {
+                return false;
             }
+            // Stage 2: if Stage 1 finds a difference, fall through to `has_same_config` (rendered
+            // comparison). This preserves backward-compatibility when the state manifest was
+            // produced by Mantle or an older Fusion with a sparse `unrendered_config`: Stage 1
+            // would see keys only on the current side and report a spurious diff; Stage 2 resolves
+            // it via rendered values, matching the pre-existing behavior.
+            return !current_node.has_same_config(previous_node, adapter_type);
         }
 
-        let same_config = current_node.has_same_config(previous_node, adapter_type);
-        !same_config
+        // Approach B — surgical per-key unrendered comparisons (all other node kinds).
+        //
+        // For seeds, snapshots, data tests, and other node types, `unrendered_config` may be
+        // incomplete, so the wholesale shortcut above is unsound. Instead, each node type's
+        // `has_same_config` implementation contains targeted unrendered comparisons for the
+        // specific keys where env-aware Jinja is known to appear (e.g. `grants`,
+        // warehouse-specific config). A new false positive for those types requires a new
+        // per-key fix; the wholesale approach cannot yet be applied to them.
+        !current_node.has_same_config(previous_node, adapter_type)
     }
 
     fn check_relation_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
@@ -873,6 +812,118 @@ impl StateArtifacts {
 
         !same_body
     }
+}
+
+/// Do previous and current `unrendered_config`s have the same authoring intent?
+///
+/// Roughly, the configs must have the same pre-rendering Jinja contents, but certain variations
+/// are considered insignificant: key spelling (`pre_hook`/`pre-hook`; see [`canonicalize_hook_keys`])
+/// and whitespace/emptiness (see [`unrendered_value_eq`]). Keys returned by
+/// [`excluded_unrendered_config_keys`] for this node type are skipped entirely.
+///
+/// This mirrors dbt-core's `BaseConfig.same_contents`, which treats a node as config-modified iff
+/// any config key present on either side differs — EXCEPT keys whose config-class field is marked
+/// `CompareBehavior.Exclude`. (Engine: dbt-common
+/// <https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/contracts/config/base.py> —
+/// `same_contents` iterates declared `Include` fields *plus* every extra key via
+/// `chain(unrendered, other)`, with `CompareBehavior` defaulting to `Include`.) The per-type
+/// exclusion sets, and why each key is excluded, live in [`excluded_unrendered_config_keys`].
+fn wholesale_unrendered_configs_eq(
+    node_type: NodeType,
+    previous_uc: &std::collections::BTreeMap<String, dbt_yaml::Value>,
+    current_uc: &std::collections::BTreeMap<String, dbt_yaml::Value>,
+    unique_id: &str,
+) -> bool {
+    let excluded = excluded_unrendered_config_keys(node_type);
+
+    let previous = canonicalize_hook_keys(previous_uc);
+    let current = canonicalize_hook_keys(current_uc);
+
+    let all_keys: std::collections::BTreeSet<&str> = previous
+        .keys()
+        .chain(current.keys())
+        .map(String::as_str)
+        .collect();
+
+    let mut all_eq = true;
+    for key in all_keys {
+        if excluded.contains(&key) {
+            continue;
+        }
+        let a = previous.get(key);
+        let b = current.get(key);
+        if !unrendered_value_eq(a, b) {
+            all_eq = false;
+            log_state_mod_diff(
+                unique_id,
+                "unrendered_config",
+                [(
+                    "value",
+                    false,
+                    Some((format!("{key}: {:?}", a), format!("{key}: {:?}", b))),
+                )],
+            );
+        }
+    }
+    all_eq
+}
+
+/// Config keys that must NOT count as a config modification in the wholesale comparison, per node
+/// type. This is the per-type counterpart of dbt-core's `CompareBehavior.Exclude` metadata.
+///
+/// A key is excluded for one of two reasons:
+/// - *Parity-exclude*: dbt-core does not treat the key as a config modification at all, and checks
+///   it nowhere else — so neither do we.
+/// - *Ownership-exclude*: the key IS a modification, but in Fusion's decomposition it is owned by a
+///   sibling sub-check (relation identity → `check_relation_modified`, mirroring dbt-core's separate
+///   `same_database_representation`). Excluding it here only avoids double-counting; the correctness
+///   claim is that the *union* of `is_modified`'s sub-checks equals dbt-core's comparison.
+fn excluded_unrendered_config_keys(node_type: NodeType) -> &'static [&'static str] {
+    match node_type {
+        // Models, seeds, snapshots, and data tests: their config classes all derive from dbt-core's
+        // `NodeAndTestConfig`, whose `CompareBehavior.Exclude` fields are exactly these five
+        // (core/dbt/artifacts/resources/v1/config.py @ v1.10.0; `ModelConfig`/`SeedConfig`/
+        // `SnapshotConfig`/`TestConfig` add no further `Exclude` fields).
+        NodeType::Model | NodeType::Seed | NodeType::Snapshot | NodeType::Test => {
+            &[
+                "tags", "group", // parity-excludes
+                "schema", "database",
+                "alias", // ownership-excludes, counted in `check_relation_modified`
+            ]
+        }
+        // Sources: dbt-core's `SourceConfig` marks nothing `Exclude`, but what counts as a source
+        // change is defined by `SourceDefinition.same_contents`
+        // (core/dbt/contracts/graph/nodes.py @ v1.10.0), which deliberately ignores tags
+        // ("metadata/tags changes are not changes") and compares relation identity separately via
+        // `same_database_representation`.
+        NodeType::Source => {
+            &[
+                "tags", // parity-exclude
+                "schema", "database",
+                "alias", // ownership-excludes, counted in `check_relation_modified`
+            ]
+        }
+        // Other node types do not yet take the wholesale path (see `check_configs_modified`); exclude
+        // nothing rather than guess.
+        _ => &[],
+    }
+}
+
+/// Normalise hook key aliases so `pre_hook` and `pre-hook` compare as equal;
+/// they have been long-term aliases in dbt.
+fn canonicalize_hook_keys(
+    map: &std::collections::BTreeMap<String, dbt_yaml::Value>,
+) -> std::collections::BTreeMap<String, dbt_yaml::Value> {
+    map.iter()
+        .map(|(k, v)| {
+            let k = match k.as_str() {
+                "pre_hook" => "pre-hook".to_string(),
+                "post_hook" => "post-hook".to_string(),
+                _ => k.clone(),
+            };
+            (k, v.clone())
+        })
+        .collect()
 }
 
 #[cfg(test)]

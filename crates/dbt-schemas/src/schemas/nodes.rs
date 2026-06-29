@@ -2481,21 +2481,21 @@ impl InternalDbtNode for DbtSource {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
+            // Sources have no SQL body. Config is owned by `check_configs_modified` and relation
+            // identity by `check_relation_modified`; calling `has_same_config` here would
+            // double-count both. This check is therefore restricted to fields without a dedicated
+            // owner: table identifier (last segment of `relation_name`), fqn, and loader.
             let same_relation_name_result = same_relation_name(
                 &self.__base_attr__.relation_name,
                 &other_source.__base_attr__.relation_name,
             );
             let same_fqn_result = self.__common_attr__.fqn == other_source.__common_attr__.fqn;
-            let same_config_result = self.has_same_config(other, adapter_type);
             let same_loader_result =
                 self.__source_attr__.loader == other_source.__source_attr__.loader;
 
-            let result = same_relation_name_result
-                && same_fqn_result
-                && same_config_result
-                && same_loader_result;
+            let result = same_relation_name_result && same_fqn_result && same_loader_result;
 
             if !result {
                 log_state_mod_diff(
@@ -2511,7 +2511,6 @@ impl InternalDbtNode for DbtSource {
                                 format!("{:?}", &other_source.__common_attr__.fqn),
                             )),
                         ),
-                        ("same_config", same_config_result, None),
                         (
                             "same_loader",
                             same_loader_result,
