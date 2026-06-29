@@ -1,7 +1,0 @@
-kind: Fixes
-body: LSP fix code lens when static analysis off
-time: 2026-06-09T15:18:44.341108-05:00
-custom:
-    author: j-clemons
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Log when commands auto-install dependencies without an existing package-lock.yml.
-time: 2026-06-16T15:44:59.412545687-07:00
-custom:
-    author: ""
-    issue: ""
-    project: dbt-fusion

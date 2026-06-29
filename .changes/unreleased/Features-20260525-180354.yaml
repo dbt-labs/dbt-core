@@ -1,7 +1,0 @@
-kind: Features
-body: 'Redshift: use SHOW GRANTS ON TABLE for grants when datasharing is enabled'
-time: 2026-05-25T18:03:54.539506+05:30
-custom:
-    author: ragesh-g
-    issue: "9026"
-    project: dbt-fusion

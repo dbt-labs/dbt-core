@@ -1,7 +1,0 @@
-kind: Fixes
-body: Per-version access field on versioned models is now respected
-time: 2026-06-18T13:16:39.121831-06:00
-custom:
-    author: aiguofer
-    issue: "10068"
-    project: fusion

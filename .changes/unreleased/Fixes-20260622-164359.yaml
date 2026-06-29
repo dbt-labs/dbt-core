@@ -1,7 +1,0 @@
-kind: Fixes
-body: Report CV10 quoted literal style violations with their own rule identity instead of CV11 casting style.
-time: 2026-06-22T16:43:59.344950804-07:00
-custom:
-    author: ""
-    issue: "15328"
-    project: dbt-core

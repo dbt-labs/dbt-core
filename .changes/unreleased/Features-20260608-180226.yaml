@@ -1,7 +1,0 @@
-kind: Features
-body: Added support for Javascript UDFs in Snowflake and BigQuery
-time: 2026-06-08T18:02:26.481096+05:30
-custom:
-    author: sriramr98
-    issue: ""
-    project: dbt-fusion

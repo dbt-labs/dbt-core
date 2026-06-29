@@ -1,7 +1,0 @@
-kind: Fixes
-body: Support incremental materializations on the Spark adapter (append strategy)
-time: 2026-06-09T21:05:36.661174+05:30
-custom:
-    author: "debrin-og"
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Databricks: under catalogs v2, use CREATE OR REPLACE TABLE for managed Iceberg tables (table_format: iceberg) regardless of file_format, instead of plain CREATE TABLE'
-time: 2026-06-09T18:28:24.746366+03:00
-custom:
-    author: tomighita versusfacit
-    issue: "10647"
-    project: dbt-fusion

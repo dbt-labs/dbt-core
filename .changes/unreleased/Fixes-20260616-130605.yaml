@@ -1,7 +1,0 @@
-kind: Fixes
-body: preserve legacy seed checksum compatibility
-time: 2026-06-16T13:06:05.709605-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Test nodes on disabled models are now emitted into manifest.disabled instead of being silently dropped
-time: 2026-06-11T21:04:09.735318-06:00
-custom:
-    author: aiguofer
-    issue: "10083"
-    project: dbt-fusion

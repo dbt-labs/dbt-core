@@ -1,7 +1,0 @@
-kind: Fixes
-body: state:modified no longer flags environment-aware grants configs set as Jinja in dbt_project.yml (e.g. grants driven by target.name). The unrendered grants config is compared instead of the target-rendered values. Affects seeds in particular.
-time: 2026-06-18T13:55:44.592529513-07:00
-custom:
-    author: lottaquestions
-    issue: "15302"
-    project: dbt-core

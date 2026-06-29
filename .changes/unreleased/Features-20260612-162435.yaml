@@ -1,7 +1,0 @@
-kind: Features
-body: Support the `reservation` config for BigQuery, allowing query jobs to be routed to a specific BigQuery reservation at the profile, project (`+reservation`), or model (`{{ config(reservation=...) }}`) level.
-time: 2026-06-12T16:24:35.05794+05:30
-custom:
-    author: aahel
-    issue: "1228"
-    project: dbt-fusion
