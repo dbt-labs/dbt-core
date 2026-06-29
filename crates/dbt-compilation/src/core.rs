@@ -511,7 +511,7 @@ impl DbtLoadedProject {
             self.adapter_type(),
             dbt_state.dbt_profile.db_config.clone(),
             root_project_quoting,
-            build_macro_units(&macros.macros),
+            build_macro_units(&macros.macros, &io.in_dir),
             dbt_state.vars.clone(),
             dbt_state.cli_vars.clone(),
             {

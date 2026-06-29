@@ -50,7 +50,6 @@ use dbt_adapter::relation::{RelationObject, create_relation};
 use dbt_adapter::sql_types::DefaultTypeOps;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
-use dbt_common::io_args::IoArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
 use dbt_jinja_utils::{JinjaEnvBuilder, MacroUnitsWrapper};
@@ -197,23 +196,18 @@ pub fn assert_executed_contains(mock: &MockJinjaObject, substring: &str) {
 /// Resolve and load all internal macros for an adapter type.
 fn load_all_macros_for(adapter_type: AdapterType) -> MacroUnitsWrapper {
     let synthetic_root = Path::new("/tmp/synthetic");
-    let io = IoArgs {
-        in_dir: synthetic_root.to_path_buf(),
-        ..Default::default()
-    };
-
     let packages = construct_internal_packages(adapter_type, synthetic_root)
         .expect("construct_internal_packages");
 
     let mut all_macros = BTreeMap::new();
     for pkg in &packages {
         let macro_files: Vec<&DbtAsset> = pkg.macro_files.iter().collect();
-        let resolved = resolve_macros(&io, &macro_files, pkg.embedded_file_contents.as_ref())
+        let resolved = resolve_macros(&macro_files, pkg.embedded_file_contents.as_ref())
             .expect("resolve_macros");
         all_macros.extend(resolved);
     }
 
-    MacroUnitsWrapper::new(build_macro_units(&all_macros))
+    MacroUnitsWrapper::new(build_macro_units(&all_macros, synthetic_root))
 }
 
 // ---------------------------------------------------------------------------

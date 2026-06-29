@@ -269,6 +269,23 @@ pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
     packages
 }
 
+/// Returns the list of internal macro package names (from `name:` in dbt_project.yml) for a given adapter type.
+/// `dbt-adapters` uses `name: dbt`; all others replace `-` with `_`.
+pub fn internal_macro_package_names(adapter_type: AdapterType) -> Vec<String> {
+    let mut names: Vec<String> = internal_package_names(adapter_type)
+        .into_iter()
+        .map(|dir| {
+            if dir == "dbt-adapters" {
+                "dbt".to_string()
+            } else {
+                dir.replace('-', "_")
+            }
+        })
+        .collect();
+    names.push("dbt_compare_macros".to_string());
+    names
+}
+
 /// Check if a file path is under macros/ or tests/ directories
 pub fn is_under_macros_or_tests(path: &Path) -> bool {
     if let Some(first_component) = path.components().next() {

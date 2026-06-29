@@ -3933,14 +3933,21 @@ impl InternalDbtNode for DbtMacro {
         NodeType::Macro
     }
     /// Overridden because the default reads `self.common()`, which panics for
-    /// `DbtMacro` (a flat struct with no `CommonAttributes`). Returns the
-    /// already-project-root-relative `original_file_path` field directly.
+    /// `DbtMacro` (a flat struct with no `CommonAttributes`). Uses `absolute_path`
+    /// when available (parse path); falls back to `original_file_path` for
+    /// macros loaded from manifest where `absolute_path` is not set (serde-skipped).
     fn get_node_definition_path(
         &self,
-        _in_dir: &Path,
+        in_dir: &Path,
         _out_dir: &Path,
     ) -> std::borrow::Cow<'_, Path> {
-        self.original_file_path.as_path().into()
+        if self.has_absolute_path() {
+            pathdiff::diff_paths(&self.absolute_path, in_dir)
+                .map(std::borrow::Cow::Owned)
+                .unwrap_or_else(|| self.original_file_path.as_path().into())
+        } else {
+            self.original_file_path.as_path().into()
+        }
     }
     /// Overridden so direct callers don't hit the default's `self.common()`,
     /// which panics for `DbtMacro`. Macros have no compiled/run artifact, so
@@ -3949,9 +3956,13 @@ impl InternalDbtNode for DbtMacro {
         &self,
         _path_kind: NodePathKind,
         in_dir: &Path,
-        out_dir: &Path,
+        _out_dir: &Path,
     ) -> PathBuf {
-        self.get_node_definition_path(in_dir, out_dir).into_owned()
+        if self.has_absolute_path() {
+            self.absolute_path.clone()
+        } else {
+            in_dir.join(&self.original_file_path)
+        }
     }
     fn as_any(&self) -> &dyn Any {
         self

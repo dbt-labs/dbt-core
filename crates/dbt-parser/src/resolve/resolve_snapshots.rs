@@ -42,7 +42,8 @@ use dbt_schemas::schemas::project::SnapshotConfig;
 use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::{
-    CommonAttributes, DbtSnapshot, DbtSnapshotAttr, IntrospectionKind, NodeBaseAttributes,
+    CommonAttributes, DbtSnapshot, DbtSnapshotAttr, InternalDbtNode, IntrospectionKind,
+    NodeBaseAttributes, NodePathKind,
 };
 use dbt_schemas::state::{
     DbtAsset, DbtPackage, DbtRuntimeConfig, GenericTestAsset, ModelStatus, NodeResolverTracker,
@@ -142,13 +143,22 @@ pub async fn resolve_snapshots(
             }
             stdfs::write(snapshot_path, macro_call)?;
 
-            // Track original path for checksum recalculation
-            snapshot_original_paths
-                .insert(target_path.clone(), macro_node.original_file_path.clone());
+            // Track original path for checksum recalculation.
+            snapshot_original_paths.insert(
+                target_path.clone(),
+                macro_node.get_node_path_abs(
+                    NodePathKind::Definition,
+                    &arg.io.in_dir,
+                    &arg.io.out_dir,
+                ),
+            );
 
+            let original_path = macro_node
+                .get_node_definition_path(&arg.io.in_dir, &arg.io.out_dir)
+                .into_owned();
             snapshot_files.push(DbtAsset {
                 path: target_path.clone(),
-                original_path: macro_node.original_file_path.clone(),
+                original_path,
                 package_name: package_name.clone(),
                 base_path: arg.io.out_dir.clone(),
             });

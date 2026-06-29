@@ -769,6 +769,7 @@ impl From<ManifestMacro> for DbtMacro {
             package_name: macro_.package_name,
             path: macro_.path,
             original_file_path: macro_.original_file_path,
+            absolute_path: PathBuf::default(),
             span: None,
             unique_id: macro_.unique_id,
             macro_sql: macro_.macro_sql,

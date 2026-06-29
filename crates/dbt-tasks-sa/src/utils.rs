@@ -18,6 +18,7 @@ use dbt_common::unexpected_err;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, stdfs};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_loader::internal_macro_package_names;
 use dbt_schema_store::{CanonicalFqn, SchemaStoreTrait};
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
@@ -661,15 +662,12 @@ pub fn typecheck_macros(
     >,
     arg: &RunTasksArgs,
 ) -> FsResult<()> {
-    // Internal-package macros (dbt_internal_packages/...) are embedded in the binary and
-    // never present on disk in Embedded mode. Skip them — they're stable and pre-tested.
-    let is_internal = |m: &&DbtMacro| {
-        m.original_file_path
-            .components()
-            .next()
-            .and_then(|c| c.as_os_str().to_str())
-            .is_some_and(|s| s == "dbt_internal_packages")
-    };
+    // Internal-package macros are embedded in the binary and never present on disk in Embedded
+    // mode. Skip them — they're stable and pre-tested. After the manifest parity fix,
+    // original_file_path is package-relative and no longer starts with "dbt_internal_packages",
+    // so we identify internal macros by package_name instead.
+    let internal_pkgs = internal_macro_package_names(resolver_state.adapter_type);
+    let is_internal = |m: &&DbtMacro| internal_pkgs.contains(&m.package_name);
 
     let all_files = {
         let mut seen = BTreeSet::new();
@@ -677,8 +675,12 @@ pub fn typecheck_macros(
             .macros
             .macros
             .values()
-            .filter(|m| !is_internal(m) && seen.insert(m.original_file_path.clone()))
-            .map(|m| DbtPath::from_path(&m.original_file_path))
+            .filter(|m| !is_internal(m))
+            .filter_map(|m| {
+                let path =
+                    m.get_node_path_abs(NodePathKind::Definition, &arg.io.in_dir, &arg.io.out_dir);
+                seen.insert(path.clone()).then(|| DbtPath::from_path(path))
+            })
             .collect::<Vec<_>>()
     };
 
@@ -691,7 +693,11 @@ pub fn typecheck_macros(
             continue;
         }
         let relative_file_path = m.original_file_path.clone();
-        let absolute_file_path = DbtPath::from_path(arg.io.in_dir.join(relative_file_path.clone()));
+        let absolute_file_path = DbtPath::from_path(m.get_node_path_abs(
+            NodePathKind::Definition,
+            &arg.io.in_dir,
+            &arg.io.out_dir,
+        ));
         let content = if let Some(content) = content_cache.get(&absolute_file_path) {
             content.clone()
         } else {
