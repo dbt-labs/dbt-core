@@ -5,11 +5,15 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 3
     rebase-strategy: "disabled"
   - package-ecosystem: "pip"
     directory: "/core"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 3
     rebase-strategy: "disabled"
 
   # docker dependencies
@@ -17,11 +21,15 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 3
     rebase-strategy: "disabled"
   - package-ecosystem: "docker"
     directory: "/docker"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 3
     rebase-strategy: "disabled"
 
   # github dependencies
@@ -29,4 +37,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 3
     rebase-strategy: "disabled"
