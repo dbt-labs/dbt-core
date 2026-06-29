@@ -683,7 +683,8 @@ pub async fn resolve_data_tests(
             .is_some_and(|id| disabled_models.contains_key(id));
 
         // match core behavior: store tests for disabled models in nodes (not disabled_nodes) with enabled = false
-        if parent_is_disabled {
+        // but only when the test itself is not also explicitly disabled
+        if parent_is_disabled && status != ModelStatus::Disabled {
             dbt_test.__base_attr__.enabled = false;
             dbt_test.deprecated_config.enabled = Some(false);
             nodes.insert(unique_id, Arc::new(dbt_test));
