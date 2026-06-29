@@ -378,16 +378,55 @@ pub async fn resolve_snapshots(
                 snapshot_config.tags.clone().map(|tags| tags.into()),
             )?;
 
-            let fqn = get_node_fqn(
-                &package_name,
-                dbt_asset.path.clone(),
-                vec![snapshot_name.to_string()],
-                package
-                    .dbt_project
-                    .snapshot_paths
-                    .as_ref()
-                    .unwrap_or(&vec![]),
-            );
+            // dbt-core builds snapshot fqns differently for the two definition
+            // styles, so mirror both to keep `state:modified` comparisons against
+            // a dbt-core-produced manifest from seeing a spurious fqn difference:
+            //
+            //   * Block-style (`{% snapshot %}` in a .sql file):
+            //     `SnapshotParser.get_fqn` keeps the original filename stem ->
+            //     `[pkg, ..dirs, file_stem, block_name]`.
+            //   * YAML-defined: the generic `get_fqn_prefix` drops the filename
+            //     entirely -> `[pkg, ..dirs, snapshot_name]`.
+            //
+            // For block-style we must consult the original file path, since fs
+            // rewrites the stub file to `{snapshot_name}.sql` and the source
+            // filename stem can differ from the block name. For YAML-defined
+            // snapshots the rewritten stub path (`dbt_asset.path`) already encodes
+            // the correct directory structure under the snapshots dir and carries
+            // no source filename to leak, so use it as-is.
+            let snapshot_paths = package
+                .dbt_project
+                .snapshot_paths
+                .as_ref()
+                .unwrap_or(&default_snapshots_path);
+            let is_yaml_defined = dbt_asset
+                .original_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| {
+                    ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml")
+                });
+            let fqn = if is_yaml_defined {
+                get_node_fqn(
+                    &package_name,
+                    dbt_asset.path.clone(),
+                    vec![snapshot_name.to_string()],
+                    snapshot_paths,
+                )
+            } else {
+                let original_file_stem =
+                    strip_resource_paths_from_ref_path(&dbt_asset.original_path, snapshot_paths)
+                        .file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .unwrap_or(snapshot_name)
+                        .to_string();
+                get_node_fqn(
+                    &package_name,
+                    dbt_asset.original_path.clone(),
+                    vec![original_file_stem, snapshot_name.to_string()],
+                    snapshot_paths,
+                )
+            };
 
             let static_analysis = snapshot_config.static_analysis.clone();
             check_node_static_analysis(
