@@ -1,5 +1,5 @@
 import typing
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import jinja2
 
@@ -277,52 +277,59 @@ def construct_static_kwarg_value(kwarg) -> str:
         return str(kwarg)
 
 
+def _reconstruct_call(n: Any) -> str:
+    func = _reconstruct_node(n.node)
+    parts: List[str] = [_reconstruct_node(a) for a in n.args]
+    parts += [f"{kw.key}={_reconstruct_node(kw.value)}" for kw in n.kwargs]
+    if n.dyn_args is not None:
+        parts.append(f"*{_reconstruct_node(n.dyn_args)}")
+    if n.dyn_kwargs is not None:
+        parts.append(f"**{_reconstruct_node(n.dyn_kwargs)}")
+    return f"{func}({', '.join(parts)})"
+
+
+def _reconstruct_tuple(n: Any) -> str:
+    items = [_reconstruct_node(i) for i in n.items]
+    return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
+
+
+def _reconstruct_dict(n: Any) -> str:
+    pairs = [f"{_reconstruct_node(p.key)}: {_reconstruct_node(p.value)}" for p in n.items]
+    return "{" + ", ".join(pairs) + "}"
+
+
+def _reconstruct_compare(n: Any) -> str:
+    expr = _reconstruct_node(n.expr)
+    ops = " ".join(
+        f"{_COMPARE_OPS.get(op.op, op.op)} {_reconstruct_node(op.expr)}" for op in n.ops
+    )
+    return f"{expr} {ops}"
+
+
+# Dispatch table keyed by exact node type. All keys are concrete leaf classes in
+# the jinja2 AST, so an exact `type(node)` lookup is sufficient.
+_NODE_HANDLERS: Dict[type, Callable[[Any], str]] = {
+    jinja2.nodes.Const: lambda n: repr(n.value),
+    jinja2.nodes.Name: lambda n: n.name,
+    jinja2.nodes.Call: _reconstruct_call,
+    jinja2.nodes.List: lambda n: f"[{', '.join(_reconstruct_node(i) for i in n.items)}]",
+    jinja2.nodes.Tuple: _reconstruct_tuple,
+    jinja2.nodes.Dict: _reconstruct_dict,
+    jinja2.nodes.Getattr: lambda n: f"{_reconstruct_node(n.node)}.{n.attr}",
+    jinja2.nodes.Getitem: lambda n: f"{_reconstruct_node(n.node)}[{_reconstruct_node(n.arg)}]",
+    jinja2.nodes.Concat: lambda n: " ~ ".join(_reconstruct_node(c) for c in n.nodes),
+    jinja2.nodes.Compare: _reconstruct_compare,
+    jinja2.nodes.Not: lambda n: f"not {_reconstruct_node(n.node)}",
+    jinja2.nodes.Neg: lambda n: f"-{_reconstruct_node(n.node)}",
+    jinja2.nodes.And: lambda n: f"{_reconstruct_node(n.left)} and {_reconstruct_node(n.right)}",
+    jinja2.nodes.Or: lambda n: f"{_reconstruct_node(n.left)} or {_reconstruct_node(n.right)}",
+}
+
+
 def _reconstruct_node(node) -> str:
     """Reconstruct a Jinja2 AST node back to a source-like expression string."""
-    # jinja2 nodes define their fields dynamically; mypy stubs don't include them.
-    # `n` is typed Any so attribute access below bypasses the missing-attr errors
-    # while `node` is still used for isinstance checks.
-    n: Any = node
-    if isinstance(node, jinja2.nodes.Const):
-        return repr(n.value)
-    if isinstance(node, jinja2.nodes.Name):
-        return n.name
-    if isinstance(node, jinja2.nodes.Call):
-        func = _reconstruct_node(n.node)
-        parts: List[str] = [_reconstruct_node(a) for a in n.args]
-        parts += [f"{kw.key}={_reconstruct_node(kw.value)}" for kw in n.kwargs]
-        if n.dyn_args is not None:
-            parts.append(f"*{_reconstruct_node(n.dyn_args)}")
-        if n.dyn_kwargs is not None:
-            parts.append(f"**{_reconstruct_node(n.dyn_kwargs)}")
-        return f"{func}({', '.join(parts)})"
-    if isinstance(node, jinja2.nodes.List):
-        return f"[{', '.join(_reconstruct_node(i) for i in n.items)}]"
-    if isinstance(node, jinja2.nodes.Tuple):
-        items = [_reconstruct_node(i) for i in n.items]
-        return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
-    if isinstance(node, jinja2.nodes.Dict):
-        pairs = [f"{_reconstruct_node(p.key)}: {_reconstruct_node(p.value)}" for p in n.items]
-        return "{" + ", ".join(pairs) + "}"
-    if isinstance(node, jinja2.nodes.Getattr):
-        return f"{_reconstruct_node(n.node)}.{n.attr}"
-    if isinstance(node, jinja2.nodes.Getitem):
-        return f"{_reconstruct_node(n.node)}[{_reconstruct_node(n.arg)}]"
-    if isinstance(node, jinja2.nodes.Concat):
-        return " ~ ".join(_reconstruct_node(child) for child in n.nodes)
-    if isinstance(node, jinja2.nodes.Compare):
-        expr = _reconstruct_node(n.expr)
-        ops = " ".join(
-            f"{_COMPARE_OPS.get(op.op, op.op)} {_reconstruct_node(op.expr)}" for op in n.ops
-        )
-        return f"{expr} {ops}"
-    if isinstance(node, jinja2.nodes.Not):
-        return f"not {_reconstruct_node(n.node)}"
-    if isinstance(node, jinja2.nodes.Neg):
-        return f"-{_reconstruct_node(n.node)}"
-    if isinstance(node, jinja2.nodes.And):
-        return f"{_reconstruct_node(n.left)} and {_reconstruct_node(n.right)}"
-    if isinstance(node, jinja2.nodes.Or):
-        return f"{_reconstruct_node(n.left)} or {_reconstruct_node(n.right)}"
+    handler = _NODE_HANDLERS.get(type(node))
+    if handler is not None:
+        return handler(node)
     # Fallback for any unhandled node type — preserves existing behaviour
     return str(node)
