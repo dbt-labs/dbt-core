@@ -1,4 +1,5 @@
 import json
+import os
 from hashlib import sha1
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -31,7 +32,7 @@ from dbt.events.types import (
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 from dbt_common.clients import system
 from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Formatting
+from dbt_common.events.types import Formatting, Note
 
 
 class dbtPackageDumper(yaml.Dumper):
@@ -272,10 +273,34 @@ class DepsTask(BaseTask):
             self.project.packages.packages
         )
 
-        with open(lock_filepath, "w") as lock_obj:
-            yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
-
-        fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
+        # Write the lock file atomically: serialize to a temporary file in the
+        # same directory, then os.replace() it into place. This guarantees that
+        # a write that fails part-way through (for example, a full disk) can
+        # never truncate or corrupt an existing package-lock.yml.
+        lock_tmp_filepath = f"{lock_filepath}.tmp"
+        try:
+            with open(lock_tmp_filepath, "w") as lock_obj:
+                yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
+            os.replace(lock_tmp_filepath, lock_filepath)
+            fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
+        except OSError as exc:
+            # The lock file is an optimization, not a requirement: dbt deps can
+            # still install from an existing package-lock.yml when one is
+            # present. A read-only project directory or read-only mounted volume
+            # raises PermissionError (EACCES) or a bare OSError (EROFS) here, so
+            # we treat the failure as non-fatal, surface the reason at INFO via
+            # Note (visible by default, and not escalated to a hard error under
+            # --warn-error the way a WarnLevel event would be), and proceed.
+            try:
+                os.remove(lock_tmp_filepath)
+            except OSError:
+                pass
+            fire_event(
+                Note(
+                    msg=f"Could not write package lock file {lock_filepath}: {exc}. "
+                    "Proceeding without updating the lock file."
+                )
+            )
 
     def run(self) -> None:
         move_to_nearest_project_dir(self.args.project_dir)
