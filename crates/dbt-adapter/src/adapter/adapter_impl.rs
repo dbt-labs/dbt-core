@@ -36,7 +36,7 @@ use crate::relation::RelationObject;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
 use crate::relation::databricks::config::DatabricksRelationMetadata;
 use crate::render_constraint::render_column_constraint;
-use crate::response::{AdapterResponse, ResultObject};
+use crate::response::AdapterResponse;
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
@@ -44,7 +44,7 @@ use crate::value::*;
 use crate::{AdapterResult, load_catalogs, python};
 
 use adbc_core::options::OptionValue;
-use arrow::array::{BooleanArray, RecordBatch, StringArray, TimestampMillisecondArray};
+use arrow::array::{BooleanArray, RecordBatch, StringArray};
 use arrow_array::{Array as _, ArrayRef, Decimal128Array};
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
@@ -3053,41 +3053,6 @@ impl AdapterImpl {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
-    }
-
-    /// Given a list of sources (BaseRelations), calculate the metadata-based freshness in batch.
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1390
-    pub fn calculate_freshness_from_metadata_batch(
-        &self,
-        state: &State,
-        sources: Vec<Value>,
-    ) -> AdapterResult<Value> {
-        let kwargs = args!(
-            information_schema => Value::from("INFORMATION_SCHEMA"),
-            relations => Value::from_object(sources),
-        );
-
-        let result: Value = execute_macro(state, kwargs, "get_relation_last_modified")?;
-        let result = result.downcast_object::<ResultObject>().unwrap();
-
-        let table = result.table.as_ref().expect("AgateTable exists");
-        let record_batch = table.original_record_batch();
-
-        let identifier_column_values = record_batch.column_values::<StringArray>("IDENTIFIER")?;
-        let schema_column_values = record_batch.column_values::<StringArray>("SCHEMA")?;
-        let last_modified_column_values =
-            record_batch.column_values::<TimestampMillisecondArray>("LAST_MODIFIED")?;
-
-        let mut result = BTreeMap::new();
-        for i in 0..record_batch.num_rows() {
-            let identifier = identifier_column_values.value(i).to_lowercase();
-            let schema = schema_column_values.value(i).to_lowercase();
-            let last_modified = last_modified_column_values.value(i);
-            result.insert((identifier, schema), last_modified);
-        }
-        let result = Value::from_serialize(result);
-
-        Ok(result)
     }
 
     /// Convert an Arrow [Schema] to a [Vec] of [Column]s.
