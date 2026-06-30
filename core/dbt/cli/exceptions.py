@@ -21,8 +21,6 @@ class CliException(ClickException):
     The exit_code attribute is used by click to determine which exit code to produce
     after an invocation."""
 
-    exit_code: int  # shadows ClickException's class variable to allow instance assignment
-
     def __init__(self, exit_code: ExitCodes) -> None:
         self.exit_code = exit_code.value  # type: ignore[misc]
 
