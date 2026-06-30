@@ -349,6 +349,7 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .macros
             .macros
             .iter()
+            .filter(|(id, _)| id.starts_with("macro."))
             .map(|(id, macro_)| (id.clone(), macro_.clone().into()))
             .collect(),
         functions: resolver_state

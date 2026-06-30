@@ -324,6 +324,9 @@ impl TypecheckingEventListener for DagExtractListener {
         _def_path: &Path,
         def_unique_id: &str,
     ) {
+        if def_unique_id == self.unique_id {
+            return;
+        }
         self.depends_on
             .borrow_mut()
             .push((self.unique_id.clone(), def_unique_id.to_string()));
