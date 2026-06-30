@@ -344,8 +344,16 @@ impl AdapterImpl {
                 let warehouse = self.get_db_config("warehouse").ok_or_else(|| {
                     unexpected_fs_err!("'warehouse' not found in Snowflake DB config")
                 })?;
+                // dbt Core restores the warehouse to the value reported by
+                // `select current_warehouse()`, which Snowflake returns in its
+                // canonical upper-cased (unquoted-identifier) form. The configured
+                // value may be authored in any case, so upper-case it here to match
+                // Core's restore SQL and avoid spurious record/replay mismatches.
+                // Warehouse names are case-insensitive in Snowflake, and the name is
+                // always an unquoted identifier (quotes are never applied), so this is
+                // safe and idempotent.
                 let ctx = QueryCtx::default().with_node_id(node_id);
-                let sql = format!("use warehouse {warehouse}");
+                let sql = format!("use warehouse {}", warehouse.to_ascii_uppercase());
                 self.exec_stmt(&ctx, conn, &sql, false, token)?;
             }
             _ => debug_assert!(
