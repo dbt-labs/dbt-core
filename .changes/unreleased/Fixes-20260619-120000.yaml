@@ -1,0 +1,11 @@
+kind: Fixes
+body: >-
+  Only emit the "see test failures table" log message for `store_failures` tests
+  that actually ran and stored failing rows (fail or warn severity). When a test
+  errors (e.g. a SQL or database compilation error) the failures table is never
+  created, so the message is now suppressed to avoid pointing users at a missing
+  relation.
+time: 2026-06-19T12:00:00.0000000Z
+custom:
+    Author: claygeo
+    Issue: "11350"

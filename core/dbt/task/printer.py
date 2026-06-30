@@ -125,7 +125,17 @@ def print_run_result_error(
             fire_event(Formatting(""))
             fire_event(SQLCompiledPath(path=result.node.compiled_path, node_info=node_info))
 
-        if getattr(result.node, "should_store_failures", None):
+        # Only point users to the test failures table when the test actually ran
+        # and stored its failing rows. Tests that Fail or Warn both execute the
+        # query and write the failures table (store_failures is independent of
+        # severity), so the message is useful in both cases. When the status is
+        # Error, the SQL compilation or DB execution failed before the table could
+        # be created, so directing users there would produce a confusing "table
+        # not found" error. Suppress the message only in that (Error) case.
+        if (
+            getattr(result.node, "should_store_failures", None)
+            and result.status != NodeStatus.Error
+        ):
             fire_event(Formatting(""))
             fire_event(
                 CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
