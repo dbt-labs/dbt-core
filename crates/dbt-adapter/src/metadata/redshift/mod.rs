@@ -218,7 +218,8 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
     is_nullable,
     remarks,
     EXISTS(SELECT 1 FROM SVV_EXTERNAL_TABLES
-           WHERE schemaname = '{schema}'
+           WHERE redshift_database_name = '{catalog}'
+           AND schemaname = '{schema}'
            AND tablename = '{identifier}') AS is_external
 FROM SVV_ALL_COLUMNS
 WHERE database_name = '{catalog}'
