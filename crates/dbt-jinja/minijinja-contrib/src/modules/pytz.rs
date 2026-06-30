@@ -175,6 +175,43 @@ impl minijinja::value::Object for PytzTimezone {
 
                 Ok(Value::from_object(result))
             }
+            "normalize" => {
+                // Get the datetime argument
+                let dt_val = args.first().ok_or_else(|| {
+                    Error::new(
+                        ErrorKind::MissingArgument,
+                        "normalize() requires a datetime argument",
+                    )
+                })?;
+
+                // Get the PyDateTime object
+                let dt = dt_val
+                    .downcast_object_ref::<crate::modules::py_datetime::datetime::PyDateTime>()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidArgument,
+                            "normalize() expects a datetime object",
+                        )
+                    })?;
+
+                // pytz.normalize() requires an aware datetime (it corrects the
+                // timezone information after arithmetic); a naive datetime has
+                // no tzinfo to normalize.
+                use crate::modules::py_datetime::datetime::DateTimeState;
+                if let DateTimeState::Naive(_) = &dt.state {
+                    return Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        "normalize() requires an aware datetime (tzinfo must be set)",
+                    ));
+                }
+
+                // Represent the same instant in this timezone with the correct
+                // offset. chrono always tracks offsets correctly, so converting
+                // the instant into `self.tz` yields the normalized value.
+                let result = dt.astimezone(self.as_ref())?;
+
+                Ok(Value::from_object(result))
+            }
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,
                 format!("Timezone object has no method named '{method}'"),
@@ -262,5 +299,34 @@ mod tests {
         // Should be aware with Pacific timezone
         assert!(result.tzinfo.is_some());
         assert_eq!(result.tzinfo.as_ref().unwrap().tz, chrono_tz::US::Pacific);
+    }
+
+    #[test]
+    fn test_normalize_converts_instant_to_timezone() {
+        // normalize() represents the same instant in this timezone with the
+        // correct offset; it delegates to PyDateTime::astimezone(self).
+        let utc_dt = chrono_tz::UTC
+            .with_ymd_and_hms(2023, 6, 15, 16, 30, 0)
+            .single()
+            .unwrap();
+        let aware = PyDateTime {
+            state: DateTimeState::Aware(utc_dt),
+            tzinfo: Some(PytzTimezone::new(chrono_tz::UTC)),
+        };
+
+        let eastern = PytzTimezone::new(chrono_tz::US::Eastern);
+        let result = aware.astimezone(&eastern).unwrap();
+
+        match &result.state {
+            DateTimeState::Aware(dt) => {
+                // 16:30 UTC -> 12:30 EDT (UTC-4 in June)
+                assert_eq!(dt.hour(), 12);
+                assert_eq!(dt.minute(), 30);
+                // The underlying instant is preserved.
+                assert_eq!(dt.with_timezone(&chrono_tz::UTC), utc_dt);
+            }
+            other => panic!("expected aware datetime, got {other:?}"),
+        }
+        assert_eq!(result.tzinfo.as_ref().unwrap().tz, chrono_tz::US::Eastern);
     }
 }
