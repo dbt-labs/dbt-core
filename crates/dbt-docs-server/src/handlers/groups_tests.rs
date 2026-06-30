@@ -65,6 +65,8 @@ fn make_state(backend: GroupDetailMockBackend) -> Arc<AppState> {
     Arc::new(AppState {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
+        project_loaded: false,
+        generation: None,
         providers,
         do_not_track: false,
         send_anonymous_usage_stats: true,
@@ -582,6 +584,8 @@ fn make_list_state(backend: GroupListMockBackend) -> Arc<AppState> {
     Arc::new(AppState {
         has_dbt_state: false,
         index_dir: PathBuf::from("/tmp"),
+        project_loaded: false,
+        generation: None,
         providers,
         do_not_track: false,
         send_anonymous_usage_stats: true,
