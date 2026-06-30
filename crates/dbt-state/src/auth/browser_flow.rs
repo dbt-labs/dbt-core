@@ -202,7 +202,9 @@ async fn write_response(
 
 pub const LOOPBACK_PORT: u16 = 29525;
 pub const INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(300);
+pub const TOKEN_HTTP_TIMEOUT: Duration = Duration::from_secs(15);
 pub const ORGS_SCOPE: &str = "runcache:scope:orgs";
+const TOKEN_HTTP_MAX_RETRIES: usize = 2;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct TokenResponse {
@@ -270,6 +272,69 @@ impl BrowserFlow {
     }
 }
 
+pub(crate) async fn send_token_form(
+    http: &reqwest::Client,
+    token_url: &str,
+    form: &[(&str, &str)],
+) -> Result<TokenResponse, RunCacheServiceError> {
+    send_token_request(http.post(token_url), form).await
+}
+
+pub(crate) async fn send_token_request(
+    request: reqwest::RequestBuilder,
+    form: &[(&str, &str)],
+) -> Result<TokenResponse, RunCacheServiceError> {
+    let mut retries_left = TOKEN_HTTP_MAX_RETRIES;
+    let mut request = request;
+    loop {
+        let retry_request = (retries_left > 0).then(|| request.try_clone()).flatten();
+        match send_token_form_once(request, form).await {
+            Err(err) if retries_left > 0 && is_retryable_token_error(&err) => {
+                retries_left -= 1;
+                let Some(next_request) = retry_request else {
+                    return Err(RunCacheServiceError::Auth(
+                        "OAuth token request could not be retried".to_string(),
+                    ));
+                };
+                request = next_request;
+            }
+            result => return result,
+        }
+    }
+}
+
+async fn send_token_form_once(
+    request: reqwest::RequestBuilder,
+    form: &[(&str, &str)],
+) -> Result<TokenResponse, RunCacheServiceError> {
+    let response = request
+        .form(form)
+        .send()
+        .await
+        .map_err(RunCacheServiceError::from)?
+        .error_for_status()
+        .map_err(RunCacheServiceError::from)?;
+    let body = response.text().await.map_err(RunCacheServiceError::from)?;
+    serde_json::from_str::<TokenResponse>(&body)
+        .map_err(|err| RunCacheServiceError::Auth(format!("invalid OAuth token response: {err}")))
+}
+
+fn is_retryable_token_error(err: &RunCacheServiceError) -> bool {
+    let RunCacheServiceError::AuthRequest(err) = err else {
+        return false;
+    };
+    if err.is_timeout() || err.is_connect() {
+        return true;
+    }
+    err.status()
+        .map(|status| {
+            status == reqwest::StatusCode::REQUEST_TIMEOUT
+                || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                || status.is_server_error()
+        })
+        .unwrap_or(false)
+}
+
 #[async_trait]
 impl InteractiveFlow for BrowserFlow {
     async fn run(&self) -> Result<TokenResponse, RunCacheServiceError> {
@@ -311,19 +376,7 @@ impl InteractiveFlow for BrowserFlow {
             ("code_verifier", pkce.verifier.as_str()),
         ];
 
-        let response = self
-            .http
-            .post(&self.token_url)
-            .form(&form)
-            .send()
-            .await
-            .map_err(RunCacheServiceError::from)?
-            .error_for_status()
-            .map_err(RunCacheServiceError::from)?;
-        let body = response.text().await.map_err(RunCacheServiceError::from)?;
-        serde_json::from_str::<TokenResponse>(&body).map_err(|err| {
-            RunCacheServiceError::Auth(format!("invalid OAuth token response: {err}"))
-        })
+        send_token_form(&self.http, &self.token_url, &form).await
     }
 }
 

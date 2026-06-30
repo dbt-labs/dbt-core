@@ -7,7 +7,8 @@ use tokio::sync::Mutex;
 use dbt_platform_auth::{AuthChain, AuthChainBuilder, AuthError, Credential, OAUTH_CLIENT_ID};
 
 use crate::auth::browser_flow::{
-    BrowserFlow, INTERACTIVE_TIMEOUT, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE, TokenResponse,
+    BrowserFlow, INTERACTIVE_TIMEOUT, InteractiveFlow, LOOPBACK_PORT, ORGS_SCOPE,
+    TOKEN_HTTP_TIMEOUT, TokenResponse, send_token_form, send_token_request,
 };
 use crate::auth::scope::{Scope, determine_org_id, jwt_claims};
 use crate::auth::token_store::{StoredToken, TokenStore};
@@ -59,8 +60,8 @@ impl std::fmt::Debug for OAuthTokenSource {
 impl OAuthTokenSource {
     pub fn new(config: &RunCacheServiceConfig) -> Result<Self, RunCacheServiceError> {
         let http = reqwest::Client::builder()
-            .connect_timeout(config.timeout)
-            .timeout(config.timeout)
+            .connect_timeout(TOKEN_HTTP_TIMEOUT)
+            .timeout(TOKEN_HTTP_TIMEOUT)
             .build()?;
 
         let store = TokenStore::discover().ok_or_else(|| {
@@ -105,8 +106,8 @@ impl OAuthTokenSource {
         auth_chain: AuthChain,
     ) -> Result<Self, RunCacheServiceError> {
         let http = reqwest::Client::builder()
-            .connect_timeout(config.timeout)
-            .timeout(config.timeout)
+            .connect_timeout(TOKEN_HTTP_TIMEOUT)
+            .timeout(TOKEN_HTTP_TIMEOUT)
             .build()?;
         Ok(Self {
             http,
@@ -241,50 +242,38 @@ impl OAuthTokenSource {
             .client_secret
             .as_deref()
             .ok_or_else(|| RunCacheServiceError::Auth("missing client secret".to_string()))?;
-        let response = self
+        let request = self
             .http
             .post(&self.token_url)
-            .basic_auth(&self.client_id, Some(client_secret))
-            .form(&[("grant_type", "client_credentials"), ("scope", ORGS_SCOPE)])
-            .send()
-            .await
-            .map_err(RunCacheServiceError::from)?
-            .error_for_status()
-            .map_err(RunCacheServiceError::from)?;
-        let body = response.text().await.map_err(RunCacheServiceError::from)?;
-        serde_json::from_str(&body).map_err(|err| {
-            RunCacheServiceError::Auth(format!("invalid OAuth token response: {err}"))
-        })
+            .basic_auth(&self.client_id, Some(client_secret));
+        let form = [("grant_type", "client_credentials"), ("scope", ORGS_SCOPE)];
+        send_token_request(request, &form).await
     }
 
     async fn fetch_platform_token_exchange(
         &self,
         credential: &Credential,
     ) -> Result<TokenResponse, RunCacheServiceError> {
-        let response = self
-            .http
-            .post(&self.token_url)
-            .form(&[
-                (
-                    "grant_type",
-                    "urn:ietf:params:oauth:grant-type:token-exchange",
-                ),
-                ("subject_token_type", "dbt"),
-                ("subject_token", credential.token()),
-                ("dbt_hostname", credential.account_host()),
-                ("client_id", self.client_id.as_str()),
-            ])
-            .send()
+        let form = [
+            (
+                "grant_type",
+                "urn:ietf:params:oauth:grant-type:token-exchange",
+            ),
+            ("subject_token_type", "dbt"),
+            ("subject_token", credential.token()),
+            ("dbt_hostname", credential.account_host()),
+            ("client_id", self.client_id.as_str()),
+        ];
+        send_token_form(&self.http, &self.token_url, &form)
             .await
-            .map_err(RunCacheServiceError::from)?
-            .error_for_status()
-            .map_err(RunCacheServiceError::from)?;
-        let body = response.text().await.map_err(RunCacheServiceError::from)?;
-        serde_json::from_str(&body).map_err(|err| {
-            RunCacheServiceError::Auth(format!(
-                "Unable to exchange dbt platform token for a dbt State authentication token: {err}"
-            ))
-        })
+            .map_err(|err| {
+                if let RunCacheServiceError::Auth(message) = err {
+                    return RunCacheServiceError::Auth(format!(
+                        "Unable to exchange dbt platform token for a dbt State authentication token: {message}"
+                    ));
+                }
+                err
+            })
     }
 
     async fn fetch_refresh(
@@ -299,19 +288,7 @@ impl OAuthTokenSource {
         if let Some(secret) = self.client_secret.as_deref() {
             form.push(("client_secret", secret));
         }
-        let response = self
-            .http
-            .post(&self.token_url)
-            .form(&form)
-            .send()
-            .await
-            .map_err(RunCacheServiceError::from)?
-            .error_for_status()
-            .map_err(RunCacheServiceError::from)?;
-        let body = response.text().await.map_err(RunCacheServiceError::from)?;
-        let token_resp: TokenResponse = serde_json::from_str(&body).map_err(|err| {
-            RunCacheServiceError::Auth(format!("invalid OAuth token response: {err}"))
-        })?;
+        let token_resp = send_token_form(&self.http, &self.token_url, &form).await?;
         let cached = self.process_response(token_resp)?;
         let stored = (&cached).into_stored(&self.token_type_or_default());
         if let Err(err) = self.store.save(&stored).await {
@@ -592,6 +569,54 @@ mod tests {
             .to_str()
             .unwrap();
         assert!(auth_header.starts_with("Basic "));
+    }
+
+    #[tokio::test]
+    async fn token_endpoint_retries_transient_failures() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+
+        let dir = TempDir::new().unwrap();
+        let config = config_with(&server.uri(), Some("secret-x"), Some("dev"));
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let err = source.token().await.unwrap_err();
+        assert!(matches!(err, RunCacheServiceError::AuthRequest(_)));
+        assert_eq!(server.received_requests().await.unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn token_endpoint_does_not_retry_auth_failures() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+
+        let dir = TempDir::new().unwrap();
+        let config = config_with(&server.uri(), Some("secret-x"), Some("dev"));
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let err = source.token().await.unwrap_err();
+        assert!(matches!(err, RunCacheServiceError::AuthRequest(_)));
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
     }
 
     #[tokio::test]
