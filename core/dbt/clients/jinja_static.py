@@ -328,8 +328,6 @@ _NODE_HANDLERS: Dict[type, Callable[[Any], str]] = {
 
 def _reconstruct_node(node) -> str:
     """Reconstruct a Jinja2 AST node back to a source-like expression string."""
-    handler = _NODE_HANDLERS.get(type(node))
-    if handler is not None:
-        return handler(node)
-    # Fallback for any unhandled node type — preserves existing behaviour
-    return str(node)
+    # `str` is the fallback for any unhandled node type — preserves existing behaviour.
+    handler = _NODE_HANDLERS.get(type(node), str)
+    return handler(node)
