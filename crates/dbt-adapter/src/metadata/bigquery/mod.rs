@@ -697,7 +697,9 @@ impl BigqueryMetadataAdapter {
                              _task: FreshnessTask,
                              res: AdapterResult<FreshnessTaskResult>|
               -> Result<(), Cancellable<AdapterError>> {
-            apply_freshness_task_result(acc, res?)?;
+            if let Ok(task_result) = res {
+                apply_freshness_task_result(acc, task_result)?;
+            }
             Ok(())
         };
 
