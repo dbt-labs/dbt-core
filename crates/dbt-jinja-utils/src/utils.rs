@@ -488,32 +488,35 @@ pub fn find_macro_template(
 /// Serialize a node once for use as the `node` argument to component-name macros.
 pub fn serialize_node_for_component_name(node: &dyn InternalDbtNode) -> YmlValue {
     let mut serialized = node.serialize_keep_none();
-    // Strip resource-type prefix from path so node.path inside macros like
-    // generate_schema_name matches dbt-core convention ("staging/model.sql"
-    // not "models/staging/model.sql"). build_flat_graph does the same for
-    // graph.nodes.
-    let prefix = match node.resource_type() {
+    strip_resource_prefix_from_serialized_path(node.resource_type(), &mut serialized);
+    serialized
+}
+
+/// Strip resource-type prefix from path so node.path inside macros like
+/// generate_schema_name matches dbt-core convention ("staging/model.sql"
+/// not "models/staging/model.sql"). build_flat_graph does the same for
+/// graph.nodes.
+fn strip_resource_prefix_from_serialized_path(resource_type: NodeType, serialized: &mut YmlValue) {
+    let prefix = match resource_type {
         NodeType::Model => "models",
         NodeType::Snapshot => "snapshots",
         NodeType::Seed => "seeds",
         NodeType::Analysis => "analyses",
-        _ => "",
+        _ => return,
     };
-    if !prefix.is_empty() {
-        if let YmlValue::Mapping(ref mut map, _) = serialized {
-            let path_key = YmlValue::string("path".to_string());
-            if let Some(path_value) = map.get(&path_key) {
-                if let Some(path_str) = path_value.as_str() {
-                    let stripped = Path::new(path_str)
-                        .strip_prefix(prefix)
-                        .map(|p| p.to_string_lossy().into_owned())
-                        .unwrap_or_else(|_| path_str.to_string());
-                    map.insert(path_key, YmlValue::string(stripped));
-                }
-            }
-        }
-    }
-    serialized
+
+    let YmlValue::Mapping(map, _) = serialized else {
+        return;
+    };
+    let path_key = YmlValue::string("path".to_string());
+    let Some(path_str) = map.get(&path_key).and_then(|v| v.as_str()) else {
+        return;
+    };
+    let stripped = Path::new(path_str)
+        .strip_prefix(prefix)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path_str.to_string());
+    map.insert(path_key, YmlValue::string(stripped));
 }
 
 /// Generate a component name using an already serialized node argument.
