@@ -1,0 +1,6 @@
+kind: Fixes
+body: Reconstruct unrendered config kwarg values as readable expressions instead of raw AST repr
+time: 2026-05-14T20:00:00.000000000Z
+custom:
+    Author: MichelleArk
+    Issue: "15336"
