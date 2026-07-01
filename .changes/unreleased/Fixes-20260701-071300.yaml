@@ -1,0 +1,8 @@
+kind: Fixes
+body: Stop emitting spurious deprecation warnings for `state` model configs (`pre_clone`,
+  `lag_tolerance`, `require_fresh_data_from`, etc.) by adding the `ModelState` schema
+  to the bundled jsonschemas
+time: 2026-07-01T07:13:00.000000-00:00
+custom:
+    Author: tauhid621
+    Issue: "13016"
