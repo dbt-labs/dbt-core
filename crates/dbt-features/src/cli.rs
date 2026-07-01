@@ -126,44 +126,64 @@ impl SystemMgmtArgs {
 pub enum OSSExtensionCommand {
     /// dbt Core 2.x system subcommand
     System(SystemMgmtArgs),
-    /// Manage Fivetran AI catalog contextsets
-    Contextset(ContextsetArgs),
+    /// Manage dbt context metadata
+    Context(ContextArgs),
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-pub struct ContextsetArgs {
+pub struct ContextArgs {
     #[command(subcommand)]
-    pub command: ContextsetCommand,
+    pub command: ContextCommand,
     #[clap(flatten)]
     pub common_args: CommonArgs,
 }
 
 #[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
-pub enum ContextsetCommand {
-    /// Set the full definition of a Fivetran AI catalog contextset
-    Set(ContextsetSetArgs),
-    /// Fetch a Fivetran AI catalog contextset
-    Get(ContextsetGetArgs),
-    /// Delete a Fivetran AI catalog contextset
-    Delete(ContextsetDeleteArgs),
+pub enum ContextCommand {
+    /// Initialize dbt context metadata
+    Init,
+    /// Manage named context collections
+    Collection(ContextCollectionArgs),
+    /// Sync dbt context metadata
+    Sync,
+}
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct ContextCollectionArgs {
+    #[command(subcommand)]
+    pub command: ContextCollectionCommand,
+}
+
+#[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum ContextCollectionCommand {
+    /// Create or replace the full definition of a context collection
+    Create(ContextCollectionSetArgs),
+    /// Set the full definition of a context collection
+    Set(ContextCollectionSetArgs),
+    /// Fetch a context collection
+    Get(ContextCollectionGetArgs),
+    /// List context collections
+    List(ContextCollectionListArgs),
+    /// Delete a context collection
+    Delete(ContextCollectionDeleteArgs),
 }
 
 #[derive(clap::Args, Clone, Serialize, Deserialize)]
-pub struct ContextsetClientArgs {
+pub struct ContextCollectionClientArgs {
     /// Base URL for the Fivetran AI MCP service
     #[arg(long, env = "DBT_FIVETRAN_MCP_URL")]
     pub url: String,
     /// Bearer token for the Fivetran AI MCP service
     #[arg(long, env = "DBT_FIVETRAN_MCP_TOKEN")]
     pub token: String,
-    /// Fivetran group id that owns the contextset
+    /// Fivetran group id that owns the collection
     #[arg(long, env = "DBT_FIVETRAN_GROUP_ID")]
     pub group_id: String,
 }
 
-impl fmt::Debug for ContextsetClientArgs {
+impl fmt::Debug for ContextCollectionClientArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ContextsetClientArgs")
+        f.debug_struct("ContextCollectionClientArgs")
             .field("url", &self.url)
             .field("token", &"<redacted>")
             .field("group_id", &self.group_id)
@@ -172,8 +192,8 @@ impl fmt::Debug for ContextsetClientArgs {
 }
 
 #[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
-pub struct ContextsetSetArgs {
-    /// Contextset name
+pub struct ContextCollectionSetArgs {
+    /// Collection name
     pub name: String,
     /// Fully-qualified schema to allow. Repeat for multiple schemas.
     #[arg(long = "schema-fqn")]
@@ -182,26 +202,32 @@ pub struct ContextsetSetArgs {
     #[arg(long = "table-fqn")]
     pub table_fqns: Vec<String>,
     #[clap(flatten)]
-    pub client: ContextsetClientArgs,
+    pub client: ContextCollectionClientArgs,
 }
 
 #[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
-pub struct ContextsetGetArgs {
-    /// Contextset name
+pub struct ContextCollectionGetArgs {
+    /// Collection name
     pub name: String,
     #[clap(flatten)]
-    pub client: ContextsetClientArgs,
+    pub client: ContextCollectionClientArgs,
 }
 
 #[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
-pub struct ContextsetDeleteArgs {
-    /// Contextset name
-    pub name: String,
+pub struct ContextCollectionListArgs {
     #[clap(flatten)]
-    pub client: ContextsetClientArgs,
+    pub client: ContextCollectionClientArgs,
 }
 
-impl ContextsetArgs {
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
+pub struct ContextCollectionDeleteArgs {
+    /// Collection name
+    pub name: String,
+    #[clap(flatten)]
+    pub client: ContextCollectionClientArgs,
+}
+
+impl ContextArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::Deps;
@@ -213,7 +239,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
     fn name(&self) -> &'static str {
         match self {
             OSSExtensionCommand::System(_) => "system",
-            OSSExtensionCommand::Contextset(_) => "contextset",
+            OSSExtensionCommand::Context(_) => "context",
         }
     }
 
@@ -237,7 +263,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
 
     fn is_project_command(&self) -> bool {
         use OSSExtensionCommand::*;
-        !matches!(self, System(_) | Contextset(_))
+        !matches!(self, System(_) | Context(_))
     }
 
     fn to_eval_args(&self, common_args: &CommonArgs, system_arg: SystemArgs) -> FsResult<EvalArgs> {
@@ -253,7 +279,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
         let from_main = system_arg.from_main;
         let mut arg = match self {
             System(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
-            Contextset(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Context(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
         };
         arg.from_main = from_main;
 
@@ -264,7 +290,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
         use OSSExtensionCommand::*;
         match self {
             System(args) => args.common_args.clone(),
-            Contextset(args) => args.common_args.clone(),
+            Context(args) => args.common_args.clone(),
         }
     }
 
@@ -272,14 +298,14 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
         use OSSExtensionCommand::*;
         match self {
             System(_) => unreachable!("System command does not need a phase"),
-            Contextset(_) => unreachable!("Contextset command does not need a phase"),
+            Context(_) => unreachable!("Context command does not need a phase"),
         }
     }
 
     fn as_command(&self) -> FsCommand {
         match self {
             OSSExtensionCommand::System(_) => FsCommand::System,
-            OSSExtensionCommand::Contextset(_) => FsCommand::Extension("contextset"),
+            OSSExtensionCommand::Context(_) => FsCommand::Extension("context"),
         }
     }
 
@@ -325,59 +351,92 @@ impl ExtensionCommandParser for OSSExtensionCommandParser {
 }
 
 #[derive(Serialize)]
-struct ContextsetPayload<'a> {
+struct ContextCollectionPayload<'a> {
     schema_fqns: &'a [String],
     table_fqns: &'a [String],
 }
 
-async fn execute_contextset_command(command: &ContextsetCommand) -> FsResult<()> {
+async fn execute_context_command(command: &ContextCommand) -> FsResult<()> {
     match command {
-        ContextsetCommand::Set(args) => {
-            if args.schema_fqns.is_empty() && args.table_fqns.is_empty() {
-                return Err(fs_err!(
-                    ErrorCode::Generic,
-                    "`dbt contextset set` requires at least one --schema-fqn or --table-fqn"
-                ));
-            }
+        ContextCommand::Init => {
+            emit_stdout_line("Initialized dbt context. No local files were changed.")
+        }
+        ContextCommand::Collection(args) => {
+            execute_context_collection_command(&args.command).await?
+        }
+        ContextCommand::Sync => emit_stdout_line("Context sync complete."),
+    }
 
-            let payload = ContextsetPayload {
-                schema_fqns: &args.schema_fqns,
-                table_fqns: &args.table_fqns,
-            };
-            let body = send_contextset_request(
-                reqwest::Method::PUT,
+    Ok(())
+}
+
+async fn execute_context_collection_command(command: &ContextCollectionCommand) -> FsResult<()> {
+    match command {
+        ContextCollectionCommand::Create(args) | ContextCollectionCommand::Set(args) => {
+            put_context_collection(args).await?;
+        }
+        ContextCollectionCommand::Get(args) => {
+            let body = send_context_collection_request(
+                reqwest::Method::GET,
                 &args.client,
-                &args.name,
-                Some(&payload),
+                Some(&args.name),
+                None,
             )
             .await?;
-            emit_response_body(body, "Contextset saved.");
+            emit_response_body(body, "Collection found.");
         }
-        ContextsetCommand::Get(args) => {
+        ContextCollectionCommand::List(args) => {
             let body =
-                send_contextset_request(reqwest::Method::GET, &args.client, &args.name, None)
+                send_context_collection_request(reqwest::Method::GET, &args.client, None, None)
                     .await?;
-            emit_response_body(body, "Contextset found.");
+            emit_response_body(body, "[]");
         }
-        ContextsetCommand::Delete(args) => {
-            let body =
-                send_contextset_request(reqwest::Method::DELETE, &args.client, &args.name, None)
-                    .await?;
-            emit_response_body(body, "Contextset deleted.");
+        ContextCollectionCommand::Delete(args) => {
+            let body = send_context_collection_request(
+                reqwest::Method::DELETE,
+                &args.client,
+                Some(&args.name),
+                None,
+            )
+            .await?;
+            emit_response_body(body, "Collection deleted.");
         }
     }
 
     Ok(())
 }
 
-async fn send_contextset_request(
+async fn put_context_collection(args: &ContextCollectionSetArgs) -> FsResult<()> {
+    if args.schema_fqns.is_empty() && args.table_fqns.is_empty() {
+        return Err(fs_err!(
+            ErrorCode::Generic,
+            "`dbt context collection create` requires at least one --schema-fqn or --table-fqn"
+        ));
+    }
+
+    let payload = ContextCollectionPayload {
+        schema_fqns: &args.schema_fqns,
+        table_fqns: &args.table_fqns,
+    };
+    let body = send_context_collection_request(
+        reqwest::Method::PUT,
+        &args.client,
+        Some(&args.name),
+        Some(&payload),
+    )
+    .await?;
+    emit_response_body(body, "Collection saved.");
+    Ok(())
+}
+
+async fn send_context_collection_request(
     method: reqwest::Method,
-    client_args: &ContextsetClientArgs,
-    name: &str,
-    payload: Option<&ContextsetPayload<'_>>,
+    client_args: &ContextCollectionClientArgs,
+    name: Option<&str>,
+    payload: Option<&ContextCollectionPayload<'_>>,
 ) -> FsResult<String> {
     let client = reqwest::Client::new();
-    let url = contextset_url(&client_args.url, name, &client_args.group_id)?;
+    let url = context_collection_url(&client_args.url, name, &client_args.group_id)?;
     let mut request = client
         .request(method, url)
         .bearer_auth(&client_args.token)
@@ -390,7 +449,7 @@ async fn send_contextset_request(
     let response = request.send().await.map_err(|err| {
         fs_err!(
             ErrorCode::Generic,
-            "Failed to call Fivetran AI MCP contextset endpoint: {}",
+            "Failed to call Fivetran AI MCP collection endpoint: {}",
             err
         )
     })?;
@@ -399,7 +458,7 @@ async fn send_contextset_request(
     let body = response.text().await.map_err(|err| {
         fs_err!(
             ErrorCode::Generic,
-            "Failed to read Fivetran AI MCP contextset response: {}",
+            "Failed to read Fivetran AI MCP collection response: {}",
             err
         )
     })?;
@@ -407,7 +466,7 @@ async fn send_contextset_request(
     if !status.is_success() {
         return Err(fs_err!(
             ErrorCode::Generic,
-            "Fivetran AI MCP contextset endpoint returned HTTP {}: {}",
+            "Fivetran AI MCP collection endpoint returned HTTP {}: {}",
             status.as_u16(),
             body
         ));
@@ -416,20 +475,26 @@ async fn send_contextset_request(
     Ok(body)
 }
 
-fn contextset_url(base_url: &str, name: &str, group_id: &str) -> FsResult<reqwest::Url> {
+fn context_collection_url(
+    base_url: &str,
+    name: Option<&str>,
+    group_id: &str,
+) -> FsResult<reqwest::Url> {
     let mut url = reqwest::Url::parse(base_url)
         .map_err(|err| fs_err!(ErrorCode::Generic, "Invalid Fivetran AI MCP URL: {}", err))?;
 
-    url.path_segments_mut()
-        .map_err(|_| {
-            fs_err!(
-                ErrorCode::Generic,
-                "Invalid Fivetran AI MCP URL: cannot append endpoint path"
-            )
-        })?
-        .pop_if_empty()
-        .push("contextsets")
-        .push(name);
+    let mut segments = url.path_segments_mut().map_err(|_| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Invalid Fivetran AI MCP URL: cannot append endpoint path"
+        )
+    })?;
+    segments.pop_if_empty().push("contextsets");
+    if let Some(name) = name {
+        segments.push(name);
+    }
+    drop(segments);
+
     url.query_pairs_mut().append_pair("group_id", group_id);
     Ok(url)
 }
@@ -661,8 +726,8 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
                 // handled the System command, signal to exit with success
                 Err(FsError::exit_with_status(0))
             }
-            Some(Contextset(args)) => {
-                if let Err(err) = execute_contextset_command(&args.command).await {
+            Some(Context(args)) => {
+                if let Err(err) = execute_context_command(&args.command).await {
                     emit_error_log_from_fs_error(
                         err.as_ref(),
                         eval_arg.io.status_reporter.as_ref(),
@@ -817,13 +882,14 @@ mod tests {
     }
 
     #[test]
-    fn contextset_set_is_parseable() {
+    fn context_collection_create_is_parseable() {
         let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
         let cli = parser
             .try_parse_from([
                 "dbt",
-                "contextset",
-                "set",
+                "context",
+                "collection",
+                "create",
                 "customer_support",
                 "--url",
                 "http://localhost:30820",
@@ -841,12 +907,14 @@ mod tests {
         let oss_ext_cmd = cli.extension_command::<OSSExtensionCommand>().unwrap();
         assert!(matches!(
             oss_ext_cmd,
-            OSSExtensionCommand::Contextset(ContextsetArgs {
-                command: ContextsetCommand::Set(ContextsetSetArgs {
-                    name,
-                    schema_fqns,
-                    table_fqns,
-                    ..
+            OSSExtensionCommand::Context(ContextArgs {
+                command: ContextCommand::Collection(ContextCollectionArgs {
+                    command: ContextCollectionCommand::Create(ContextCollectionSetArgs {
+                        name,
+                        schema_fqns,
+                        table_fqns,
+                        ..
+                    }),
                 }),
                 ..
             }) if name == "customer_support"
@@ -856,12 +924,50 @@ mod tests {
     }
 
     #[test]
-    fn contextset_is_not_a_project_command() {
+    fn context_collection_set_alias_is_parseable() {
         let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
         let cli = parser
             .try_parse_from([
                 "dbt",
-                "contextset",
+                "context",
+                "collection",
+                "set",
+                "customer_support",
+                "--url",
+                "http://localhost:30820",
+                "--token",
+                "pat_test",
+                "--group-id",
+                "group_id",
+                "--schema-fqn",
+                "WAREHOUSE.ZENDESK",
+            ])
+            .unwrap();
+
+        let oss_ext_cmd = cli.extension_command::<OSSExtensionCommand>().unwrap();
+        assert!(matches!(
+            oss_ext_cmd,
+            OSSExtensionCommand::Context(ContextArgs {
+                command: ContextCommand::Collection(ContextCollectionArgs {
+                    command: ContextCollectionCommand::Set(ContextCollectionSetArgs {
+                        name,
+                        schema_fqns,
+                        ..
+                    }),
+                }),
+                ..
+            }) if name == "customer_support" && schema_fqns == &vec!["WAREHOUSE.ZENDESK".to_string()]
+        ));
+    }
+
+    #[test]
+    fn context_is_not_a_project_command() {
+        let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
+        let cli = parser
+            .try_parse_from([
+                "dbt",
+                "context",
+                "collection",
                 "get",
                 "customer_support",
                 "--url",
@@ -879,8 +985,63 @@ mod tests {
     }
 
     #[test]
-    fn contextset_client_args_debug_redacts_token() {
-        let args = ContextsetClientArgs {
+    fn context_init_and_sync_are_parseable() {
+        let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
+
+        let init_cli = parser.try_parse_from(["dbt", "context", "init"]).unwrap();
+        let init_cmd = init_cli.extension_command::<OSSExtensionCommand>().unwrap();
+        assert!(matches!(
+            init_cmd,
+            OSSExtensionCommand::Context(ContextArgs {
+                command: ContextCommand::Init,
+                ..
+            })
+        ));
+
+        let sync_cli = parser.try_parse_from(["dbt", "context", "sync"]).unwrap();
+        let sync_cmd = sync_cli.extension_command::<OSSExtensionCommand>().unwrap();
+        assert!(matches!(
+            sync_cmd,
+            OSSExtensionCommand::Context(ContextArgs {
+                command: ContextCommand::Sync,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn context_collection_list_is_parseable() {
+        let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
+        let cli = parser
+            .try_parse_from([
+                "dbt",
+                "context",
+                "collection",
+                "list",
+                "--url",
+                "http://localhost:30820",
+                "--token",
+                "pat_test",
+                "--group-id",
+                "group_id",
+            ])
+            .unwrap();
+
+        let oss_ext_cmd = cli.extension_command::<OSSExtensionCommand>().unwrap();
+        assert!(matches!(
+            oss_ext_cmd,
+            OSSExtensionCommand::Context(ContextArgs {
+                command: ContextCommand::Collection(ContextCollectionArgs {
+                    command: ContextCollectionCommand::List(_),
+                }),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn context_collection_client_args_debug_redacts_token() {
+        let args = ContextCollectionClientArgs {
             url: "http://localhost:30820".to_string(),
             token: "pat_test".to_string(),
             group_id: "group_id".to_string(),
@@ -893,10 +1054,10 @@ mod tests {
     }
 
     #[test]
-    fn contextset_url_appends_encoded_path_and_query() {
-        let url = contextset_url(
+    fn context_collection_url_appends_encoded_path_and_query() {
+        let url = context_collection_url(
             "http://localhost:30820/",
-            "customer support",
+            Some("customer support"),
             "sandbox group",
         )
         .unwrap();
@@ -904,6 +1065,16 @@ mod tests {
         assert_eq!(
             url.as_str(),
             "http://localhost:30820/contextsets/customer%20support?group_id=sandbox+group"
+        );
+    }
+
+    #[test]
+    fn context_collection_url_without_name_builds_list_endpoint() {
+        let url = context_collection_url("http://localhost:30820/", None, "sandbox group").unwrap();
+
+        assert_eq!(
+            url.as_str(),
+            "http://localhost:30820/contextsets?group_id=sandbox+group"
         );
     }
 }
