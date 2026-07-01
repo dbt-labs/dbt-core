@@ -5,4 +5,4 @@ body: Stop emitting spurious deprecation warnings for `state` model configs (`pr
 time: 2026-07-01T07:13:00.000000-00:00
 custom:
     Author: tauhid621
-    Issue: "15313"
+    Issue: "13016"
