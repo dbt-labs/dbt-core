@@ -196,7 +196,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             package_name: package_name.to_owned(),
             path: PathBuf::from(""),
             name_span: dbt_common::Span::default(),
-            original_file_path: PathBuf::from(""),
+            original_file_path: display_path.to_path_buf(),
             patch_path: None,
             unique_id: format!("{package_name}.{model_name}"),
             fqn,
