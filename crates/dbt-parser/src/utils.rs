@@ -8,7 +8,10 @@ use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
-use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
+use dbt_jinja_utils::utils::{
+    generate_component_name, generate_component_name_with_serialized_node, generate_relation_name,
+    serialize_node_for_component_name,
+};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting, normalize_quoting};
 use dbt_schemas::schemas::project::{ResolvableConfig, ResolvedConfig};
@@ -392,19 +395,22 @@ fn generate_database_and_schema(
     adapter_type: AdapterType,
 ) -> FsResult<(String, String, ResolvedQuoting)> {
     let (default_database, default_schema) = (node.database(), node.schema());
+    let serialized_node = (!node.skip_generate_database_name_macro()
+        || !node.skip_generate_schema_name_macro())
+    .then(|| serialize_node_for_component_name(node));
 
     // Generate database name
     let database = if node.skip_generate_database_name_macro() {
         components.database.clone().unwrap_or(default_database)
     } else {
-        generate_component_name(
+        generate_component_name_with_serialized_node(
             env,
             "database",
             root_project_name,
             current_project_name,
             base_ctx,
             components.database.clone(),
-            Some(node),
+            serialized_node.as_ref(),
         )
         .unwrap_or_else(|_| default_database.to_owned())
     };
@@ -413,14 +419,14 @@ fn generate_database_and_schema(
     let schema = if node.skip_generate_schema_name_macro() {
         components.schema.clone().unwrap_or(default_schema)
     } else {
-        generate_component_name(
+        generate_component_name_with_serialized_node(
             env,
             "schema",
             root_project_name,
             current_project_name,
             base_ctx,
             components.schema.clone(),
-            Some(node),
+            serialized_node.as_ref(),
         )
         .unwrap_or_else(|_| default_schema.to_owned())
     };

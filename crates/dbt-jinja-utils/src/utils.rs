@@ -485,15 +485,49 @@ pub fn find_macro_template(
     ))
 }
 
-/// Generate a component name using the specified macro
-pub fn generate_component_name(
+/// Serialize a node once for use as the `node` argument to component-name macros.
+pub fn serialize_node_for_component_name(node: &dyn InternalDbtNode) -> YmlValue {
+    let mut serialized = node.serialize_keep_none();
+    strip_resource_prefix_from_serialized_path(node.resource_type(), &mut serialized);
+    serialized
+}
+
+/// Strip resource-type prefix from path so node.path inside macros like
+/// generate_schema_name matches dbt-core convention ("staging/model.sql"
+/// not "models/staging/model.sql"). build_flat_graph does the same for
+/// graph.nodes.
+fn strip_resource_prefix_from_serialized_path(resource_type: NodeType, serialized: &mut YmlValue) {
+    let prefix = match resource_type {
+        NodeType::Model => "models",
+        NodeType::Snapshot => "snapshots",
+        NodeType::Seed => "seeds",
+        NodeType::Analysis => "analyses",
+        _ => return,
+    };
+
+    let YmlValue::Mapping(map, _) = serialized else {
+        return;
+    };
+    let path_key = YmlValue::string("path".to_string());
+    let Some(path_str) = map.get(&path_key).and_then(|v| v.as_str()) else {
+        return;
+    };
+    let stripped = Path::new(path_str)
+        .strip_prefix(prefix)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path_str.to_string());
+    map.insert(path_key, YmlValue::string(stripped));
+}
+
+/// Generate a component name using an already serialized node argument.
+pub fn generate_component_name_with_serialized_node(
     env: &JinjaEnv,
     component: &str,
     root_project_name: &str,
     current_project_name: &str,
     base_ctx: &BTreeMap<String, Value>,
     custom_name: Option<String>,
-    node: Option<&dyn InternalDbtNode>,
+    serialized_node: Option<&YmlValue>,
 ) -> FsResult<String> {
     let macro_name = format!("generate_{component}_name");
     // find the macro template - this is now cached for performance
@@ -510,34 +544,8 @@ pub fn generate_component_name(
     let mut args = custom_name
         .map(|name| vec![Value::from(name)])
         .unwrap_or_else(|| vec![Value::from(())]); // If no custom name, pass in none so the macro reads from the target context
-    if let Some(node) = node {
-        let mut serialized = node.serialize_keep_none();
-        // Strip resource-type prefix from path so node.path inside macros like
-        // generate_schema_name matches dbt-core convention ("staging/model.sql"
-        // not "models/staging/model.sql"). build_flat_graph does the same for
-        // graph.nodes.
-        let prefix = match node.resource_type() {
-            NodeType::Model => "models",
-            NodeType::Snapshot => "snapshots",
-            NodeType::Seed => "seeds",
-            NodeType::Analysis => "analyses",
-            _ => "",
-        };
-        if !prefix.is_empty() {
-            if let YmlValue::Mapping(ref mut map, _) = serialized {
-                let path_key = YmlValue::string("path".to_string());
-                if let Some(path_value) = map.get(&path_key) {
-                    if let Some(path_str) = path_value.as_str() {
-                        let stripped = Path::new(path_str)
-                            .strip_prefix(prefix)
-                            .map(|p| p.to_string_lossy().into_owned())
-                            .unwrap_or_else(|_| path_str.to_string());
-                        map.insert(path_key, YmlValue::string(stripped));
-                    }
-                }
-            }
-        }
-        args.push(Value::from_serialize(serialized));
+    if let Some(serialized_node) = serialized_node {
+        args.push(Value::from_serialize(serialized_node));
     }
 
     // Call the macro
@@ -555,6 +563,28 @@ pub fn generate_component_name(
         })?;
     // Return the result
     Ok(result)
+}
+
+/// Generate a component name using the specified macro.
+pub fn generate_component_name(
+    env: &JinjaEnv,
+    component: &str,
+    root_project_name: &str,
+    current_project_name: &str,
+    base_ctx: &BTreeMap<String, Value>,
+    custom_name: Option<String>,
+    node: Option<&dyn InternalDbtNode>,
+) -> FsResult<String> {
+    let serialized_node = node.map(serialize_node_for_component_name);
+    generate_component_name_with_serialized_node(
+        env,
+        component,
+        root_project_name,
+        current_project_name,
+        base_ctx,
+        custom_name,
+        serialized_node.as_ref(),
+    )
 }
 
 /// Clear template cache (primarily for testing purposes)
@@ -728,13 +758,84 @@ pub(crate) fn get_status_reporter<'a>(env: &'a Environment) -> Option<&'a Arc<dy
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
     use std::rc::Rc;
 
+    use dbt_schemas::schemas::common::DbtMaterialization;
+    use dbt_schemas::schemas::project::DataTestConfig;
+    use dbt_schemas::schemas::{
+        AdapterAttr, CommonAttributes, DbtTest, DbtTestAttr, NodeBaseAttributes,
+    };
     use minijinja::{Environment, context, listener::RenderingEventListener};
 
+    use crate::jinja_environment::JinjaEnv;
     use crate::listener::DefaultRenderingEventListener;
 
-    use super::raw_source_spans_to_macro_span_vec;
+    use super::{
+        generate_component_name, generate_component_name_with_serialized_node,
+        raw_source_spans_to_macro_span_vec, serialize_node_for_component_name,
+    };
+
+    #[test]
+    fn generate_component_name_accepts_pre_serialized_node() {
+        let mut env = Environment::new();
+        env.add_template(
+            "pkg.generate_schema_name",
+            "{% macro generate_schema_name(custom_schema_name=none, node=none) -%}{{ custom_schema_name }}__{{ node.name }}__{{ node.resource_type }}{%- endmacro %}",
+        )
+        .unwrap();
+        let jinja_env = JinjaEnv::new(env);
+        let base_ctx = BTreeMap::new();
+        let node = DbtTest {
+            __common_attr__: CommonAttributes {
+                unique_id: "test.pkg.my_test".to_string(),
+                name: "my_test".to_string(),
+                package_name: "pkg".to_string(),
+                fqn: vec!["pkg".to_string(), "my_test".to_string()],
+                ..Default::default()
+            },
+            __base_attr__: NodeBaseAttributes {
+                database: "db".to_string(),
+                schema: "schema".to_string(),
+                alias: "my_test".to_string(),
+                materialized: DbtMaterialization::Test,
+                enabled: true,
+                ..Default::default()
+            },
+            __test_attr__: DbtTestAttr::default(),
+            __adapter_attr__: AdapterAttr::default(),
+            defined_at: None,
+            manifest_original_file_path: PathBuf::new(),
+            deprecated_config: DataTestConfig::default(),
+            __other__: BTreeMap::new(),
+        };
+
+        let expected = generate_component_name(
+            &jinja_env,
+            "schema",
+            "pkg",
+            "pkg",
+            &base_ctx,
+            Some("custom".to_string()),
+            Some(&node),
+        )
+        .unwrap();
+        let serialized_node = serialize_node_for_component_name(&node);
+        let actual = generate_component_name_with_serialized_node(
+            &jinja_env,
+            "schema",
+            "pkg",
+            "pkg",
+            &base_ctx,
+            Some("custom".to_string()),
+            Some(&serialized_node),
+        )
+        .unwrap();
+
+        assert_eq!(actual, expected);
+        assert_eq!(actual, "custom__my_test__test");
+    }
 
     #[test]
     fn raw_source_spans_track_rendered_loop_lines() {
