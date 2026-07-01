@@ -271,6 +271,8 @@ fn persist_inner(
         })
         .collect();
 
+    let raw_code_config = raw_code_config_from_test_details(&config, &kwargs)?;
+
     Ok(GenericTestAsset {
         dbt_asset,
         resource_name: test_config.resource_name.clone(),
@@ -285,6 +287,7 @@ fn persist_inner(
         test_metadata_combination_of_columns: combination_of_columns,
         test_metadata_model,
         test_metadata_kwargs,
+        raw_code_config,
         original_name,
         unique_id_hash: Some(test_hash),
         column_tags: column_tags.to_vec(),
@@ -791,6 +794,50 @@ fn merge_yaml_values(lhs: dbt_yaml::Value, rhs: dbt_yaml::Value) -> (bool, dbt_y
     }
 }
 
+fn raw_code_config_from_test_details(
+    config: &Option<DataTestConfig>,
+    kwargs: &BTreeMap<String, Value>,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+    let (_, merged) = merged_test_config(config, kwargs)?;
+    match merged {
+        dbt_yaml::Value::Mapping(map, _) => Ok(map
+            .into_iter()
+            .filter_map(|(k, v)| k.as_str().map(|s| (s.to_string(), v)))
+            .collect()),
+        _ => Ok(BTreeMap::new()),
+    }
+}
+
+fn merged_test_config(
+    config: &Option<DataTestConfig>,
+    kwargs: &BTreeMap<String, Value>,
+) -> FsResult<(bool, dbt_yaml::Value)> {
+    let passed_in_cfg = if let Some(cfg) = config {
+        let cfg_val = dbt_yaml::to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
+        dbt_schemas::schemas::serialization_utils::serialize_with_mode(
+            &cfg_val,
+            dbt_schemas::schemas::serialization_utils::SerializationMode::OmitNone,
+        )
+    } else {
+        dbt_yaml::Value::Mapping(dbt_yaml::Mapping::new(), Span::default())
+    };
+
+    let embedded_cfg = match kwargs.get("config") {
+        Some(Value::Object(obj)) => {
+            serde_json::from_value(Value::Object(obj.clone())).map_err(|e| {
+                fs_err!(
+                    ErrorCode::DbtYamlValidationError,
+                    "Failed to convert embedded config: {}",
+                    e
+                )
+            })?
+        }
+        _ => dbt_yaml::Value::Mapping(dbt_yaml::Mapping::new(), Span::default()),
+    };
+
+    Ok(merge_yaml_values(passed_in_cfg, embedded_cfg))
+}
+
 static CLEAN_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[^0-9a-zA-Z_]+").expect("valid regex"));
 
@@ -1115,34 +1162,6 @@ fn generate_test_macro(
     }
 
     // ── serialize & emit the config block ────────────────
-    let passed_in_cfg = if let Some(cfg) = config {
-        // Strongly-typed config provided
-        let cfg_val = dbt_yaml::to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
-        // Strip null fields so they don't become undefined in Jinja
-        dbt_schemas::schemas::serialization_utils::serialize_with_mode(
-            &cfg_val,
-            dbt_schemas::schemas::serialization_utils::SerializationMode::OmitNone,
-        )
-    } else {
-        dbt_yaml::Value::Mapping(dbt_yaml::Mapping::new(), Span::default())
-    };
-
-    let embedded_cfg = match kwargs.get("config") {
-        Some(Value::Object(obj)) => {
-            // Convert embedded serde_json::Value into dbt_yaml::Value
-            let cfg_json = Value::Object(obj.clone());
-            let cfg_yaml: dbt_yaml::Value = serde_json::from_value(cfg_json).map_err(|e| {
-                fs_err!(
-                    ErrorCode::DbtYamlValidationError,
-                    "Failed to convert embedded config: {}",
-                    e
-                )
-            })?;
-            cfg_yaml
-        }
-        _ => dbt_yaml::Value::Mapping(dbt_yaml::Mapping::new(), Span::default()),
-    };
-
     // Compute the config block emit ahead of the macro call so we can place it
     // *after* the macro call below (matching dbt-Core). dbt's `config()` is
     // resolution-order sensitive — multiple calls merge with last-call-wins —
@@ -1159,7 +1178,7 @@ fn generate_test_macro(
     // `"dbt_custom_arg_config_severity"`), and a strict downstream config
     // deserializer (e.g. the `severity` enum) would reject them as
     // `unknown variant` (production conformance bucket dbt1501).
-    let (non_empty, cfg_json) = merge_yaml_values(passed_in_cfg, embedded_cfg);
+    let (non_empty, cfg_json) = merged_test_config(config, kwargs)?;
     let config_emit = if non_empty {
         let cfg_serde: Value = serde_json::to_value(&cfg_json).map_err(|e| {
             fs_err!(
@@ -1182,63 +1201,6 @@ fn generate_test_macro(
         format!("test_{test_macro_name}")
     };
 
-    /// Helper function to recursively format a JSON value for Jinja macro calls
-    fn format_value_for_jinja(value: &Value, jinja_set_vars: &BTreeMap<String, String>) -> String {
-        match value {
-            Value::String(s) => {
-                // Strings shaped like a single bare call to one of dbt-Core's renderable
-                // functions (`env_var(...)`, `ref(...)`, `var(...)`, `source(...)`, `doc(...)`)
-                // are emitted unquoted so Jinja evaluates them when the generated test SQL is
-                // rendered. Core does the same in `add_rendered_test_kwargs` (clients/jinja.py)
-                // by re-wrapping such values in `{{ }}` before native rendering. Without this,
-                // Fusion would forward the literal string into `config()` and a strict enum
-                // deserializer (e.g. `severity`) would reject it as `unknown variant `var('...')``
-                // (production conformance bucket dbt1501). The end-of-string anchor in
-                // `LOOKS_LIKE_FUNC` keeps us aligned with Core: shapes like `var('x') ~ 'y'`
-                // are not matched here, mirroring Core's rejection of those expressions.
-                //
-                // `get_where_subquery(` is Fusion-internal: emitted by `get_test_details` to
-                // wrap the `model` test arg, and must always pass through unquoted.
-                if s.starts_with("get_where_subquery(")
-                    || LOOKS_LIKE_FUNC.is_match(s)
-                    || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
-                {
-                    s.to_string()
-                } else if s.starts_with("{{") && s.ends_with("}}") {
-                    // Strip Jinja delimiters: {{ expr }} → expr (used directly inside macro args)
-                    s[2..s.len() - 2].trim().to_string()
-                } else {
-                    let escaped = s
-                        .replace('\\', "\\\\") // Escape backslashes
-                        .replace('"', "\\\""); // Escape double quotes
-                    format!("\"{escaped}\"")
-                }
-            }
-            Value::Array(arr) => {
-                let formatted_elements: Vec<String> = arr
-                    .iter()
-                    .map(|elem| format_value_for_jinja(elem, jinja_set_vars))
-                    .collect();
-                format!("[{}]", formatted_elements.join(","))
-            }
-            Value::Object(obj) => {
-                // Deterministic ordering for stable SQL/tests
-                let mut keys: Vec<&String> = obj.keys().collect();
-                keys.sort();
-                let formatted_pairs: Vec<String> = keys
-                    .iter()
-                    .map(|k| {
-                        let formatted_val = format_value_for_jinja(&obj[*k], jinja_set_vars);
-                        format!("\"{k}\":{formatted_val}")
-                    })
-                    .collect();
-                format!("{{{}}}", formatted_pairs.join(","))
-            }
-            // For non-string primitives, use json_to_jinja_literal to properly convert null->none, etc.
-            _ => json_to_jinja_literal(value),
-        }
-    }
-
     // Format all kwargs, handling ref calls specially
     // Exclude an embedded 'config' kwarg as it is emitted via config(...) below
     // Exclude reserved 'name' kwarg (used to name the test node, not passed to the macro).
@@ -1259,6 +1221,53 @@ fn generate_test_macro(
         sql.push_str(&format!("{{{{ config({config_str}) }}}}"));
     }
     Ok(sql)
+}
+
+/// Helper function to recursively format a JSON value for Jinja macro calls.
+pub(crate) fn format_value_for_jinja(
+    value: &Value,
+    jinja_set_vars: &BTreeMap<String, String>,
+) -> String {
+    match value {
+        Value::String(s) => {
+            // Strings shaped like a single bare call to one of dbt-Core's renderable
+            // functions (`env_var(...)`, `ref(...)`, `var(...)`, `source(...)`, `doc(...)`)
+            // are emitted unquoted so Jinja evaluates them when the generated test SQL is
+            // rendered. Core does the same in `add_rendered_test_kwargs` (clients/jinja.py)
+            // by re-wrapping such values in `{{ }}` before native rendering.
+            if s.starts_with("get_where_subquery(")
+                || LOOKS_LIKE_FUNC.is_match(s)
+                || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
+            {
+                s.to_string()
+            } else if s.starts_with("{{") && s.ends_with("}}") {
+                s[2..s.len() - 2].trim().to_string()
+            } else {
+                let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+                format!("\"{escaped}\"")
+            }
+        }
+        Value::Array(arr) => {
+            let formatted_elements: Vec<String> = arr
+                .iter()
+                .map(|elem| format_value_for_jinja(elem, jinja_set_vars))
+                .collect();
+            format!("[{}]", formatted_elements.join(","))
+        }
+        Value::Object(obj) => {
+            let mut keys: Vec<&String> = obj.keys().collect();
+            keys.sort();
+            let formatted_pairs: Vec<String> = keys
+                .iter()
+                .map(|k| {
+                    let formatted_val = format_value_for_jinja(&obj[*k], jinja_set_vars);
+                    format!("\"{k}\":{formatted_val}")
+                })
+                .collect();
+            format!("{{{}}}", formatted_pairs.join(","))
+        }
+        _ => json_to_jinja_literal(value),
+    }
 }
 
 fn json_to_jinja_literal(v: &Value) -> String {

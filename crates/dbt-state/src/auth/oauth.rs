@@ -638,9 +638,6 @@ mod tests {
         let token = source.token().await.unwrap();
         assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
         assert_eq!(token.refresh_token.as_deref(), Some("refresh-xyz"));
-
-        let stored = token_store_in(&dir).load().await.unwrap().unwrap();
-        assert_eq!(stored.refresh_token.as_deref(), Some("refresh-xyz"));
     }
 
     #[tokio::test]

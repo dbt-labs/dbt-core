@@ -143,6 +143,8 @@ pub struct GenericTestAsset {
     /// Full kwargs map for test_metadata, including all user-provided macro arguments.
     /// Excludes dbt config keys ("config", "_config_raw"). Empty for singular tests.
     pub test_metadata_kwargs: BTreeMap<String, dbt_yaml::Value>,
+    /// YAML-supplied config keys to append to generic test raw_code.
+    pub raw_code_config: BTreeMap<String, dbt_yaml::Value>,
     /// The original (untruncated) test name, if truncation occurred.
     /// When test names exceed 63 characters, dbt truncates to `<first 30 chars>_<md5 hash>`.
     /// This field stores the original name for selector matching purposes.

@@ -8,7 +8,9 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
-use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
+use crate::resolve::resolve_tests::persist_generic_data_tests::{
+    format_node_unique_id, format_value_for_jinja,
+};
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, validate_compute,
 };
@@ -214,6 +216,7 @@ fn file_key_name_from_asset(asset: &GenericTestAsset) -> Option<String> {
 pub fn build_data_test_raw_code(
     test_metadata: Option<TestMetadata>,
     alias: Option<String>,
+    raw_code_config: Option<&BTreeMap<String, YmlValue>>,
 ) -> Option<String> {
     if let Some(test_metadata) = test_metadata {
         let mut test_macro_name = format!("test_{}", test_metadata.name);
@@ -221,19 +224,13 @@ pub fn build_data_test_raw_code(
             test_macro_name = format!("{}.{}", namespace, test_macro_name);
         }
 
-        // Match dbt-core's generic_test_builders.py:construct_config — only emit a
-        // `{{ config(...) }}` postfix when there's at least one explicit config key
-        // (e.g. alias when the name was truncated, or a user-supplied alias).
-        // TODO: also emit other user-supplied CONFIG_ARGS (severity, where, limit,
-        // tags, enabled, warn_if, error_if, fail_calc, store_failures,
-        // store_failures_as, sql_header, meta, database, schema). Requires threading
-        // the parent resource's MinimalPropertiesEntry.schema_value (columns -> tests
-        // -> config) into resolve_data_tests so we can distinguish YAML-supplied keys
-        // from project-level defaults. See TODO at the unrendered_config build site.
-        let config_str = match alias {
-            Some(alias) => format!("{{{{ config(alias=\"{alias}\") }}}}"),
-            None => String::new(),
-        };
+        let mut config = raw_code_config.cloned().unwrap_or_default();
+        if let Some(alias) = alias {
+            config
+                .entry("alias".to_string())
+                .or_insert_with(|| YmlValue::string(alias));
+        }
+        let config_str = build_data_test_raw_code_config(&config);
 
         return Some(format!(
             "{{{{ {test_macro_name}(**_dbt_generic_test_kwargs) }}}}{config_str}"
@@ -241,6 +238,55 @@ pub fn build_data_test_raw_code(
     }
 
     None
+}
+
+fn build_data_test_raw_code_config(config: &BTreeMap<String, YmlValue>) -> String {
+    const RAW_CODE_CONFIG_ARGS: &[&str] = &[
+        "severity",
+        "tags",
+        "enabled",
+        "where",
+        "limit",
+        "warn_if",
+        "error_if",
+        "fail_calc",
+        "store_failures",
+        "store_failures_as",
+        "sql_header",
+        "meta",
+        "database",
+        "schema",
+        "alias",
+    ];
+
+    let args = RAW_CODE_CONFIG_ARGS
+        .iter()
+        .filter_map(|key| {
+            let value = config.get(*key)?;
+            let mut value: serde_json::Value = serde_json::to_value(value).ok()?;
+            if value.as_array().is_some_and(Vec::is_empty)
+                || value.as_object().is_some_and(serde_json::Map::is_empty)
+            {
+                return None;
+            }
+            if *key == "severity"
+                && let serde_json::Value::String(severity) = &mut value
+                && !(severity.contains("{{") && severity.contains("}}"))
+            {
+                severity.make_ascii_lowercase();
+            }
+            Some(format!(
+                "{key}={}",
+                format_value_for_jinja(&value, &BTreeMap::new())
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    if args.is_empty() {
+        String::new()
+    } else {
+        format!("{{{{ config({}) }}}}", args.join(", "))
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -678,7 +724,13 @@ pub async fn resolve_data_tests(
         dbt_test.__common_attr__.raw_code = if is_singular_data_test {
             get_original_file_contents(&arg.io.in_dir, &manifest_original_file_path)
         } else {
-            build_data_test_raw_code(inferred_test_metadata, components.alias.clone())
+            build_data_test_raw_code(
+                inferred_test_metadata,
+                components.alias.clone(),
+                test_path_to_test_asset
+                    .get(&dbt_asset.path)
+                    .map(|asset| &asset.raw_code_config),
+            )
         };
 
         let parent_is_disabled = dbt_test
@@ -760,6 +812,7 @@ mod tests {
             test_metadata_combination_of_columns: None,
             test_metadata_model: None,
             test_metadata_kwargs: BTreeMap::new(),
+            raw_code_config: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
             version: None,
@@ -774,6 +827,45 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .unwrap(),
             "id"
+        );
+    }
+
+    #[test]
+    fn test_raw_code_config_preserves_jinja_severity_expression() {
+        let mut config = BTreeMap::new();
+        config.insert(
+            "severity".to_string(),
+            YmlValue::string("{{ env_var('DBT_SEVERITY') }}".to_string()),
+        );
+
+        assert_eq!(
+            build_data_test_raw_code_config(&config),
+            "{{ config(severity=env_var('DBT_SEVERITY')) }}"
+        );
+    }
+
+    #[test]
+    fn test_raw_code_config_normalizes_literal_severity() {
+        let mut config = BTreeMap::new();
+        config.insert("severity".to_string(), YmlValue::string("WARN".to_string()));
+
+        assert_eq!(
+            build_data_test_raw_code_config(&config),
+            "{{ config(severity=\"warn\") }}"
+        );
+    }
+
+    #[test]
+    fn test_raw_code_config_normalizes_non_enum_literal_severity() {
+        let mut config = BTreeMap::new();
+        config.insert(
+            "severity".to_string(),
+            YmlValue::string("CUSTOM".to_string()),
+        );
+
+        assert_eq!(
+            build_data_test_raw_code_config(&config),
+            "{{ config(severity=\"custom\") }}"
         );
     }
 
@@ -812,6 +904,7 @@ mod tests {
             test_metadata_combination_of_columns: None,
             test_metadata_model: Some("ref('my_model')".to_string()),
             test_metadata_kwargs: BTreeMap::new(),
+            raw_code_config: BTreeMap::new(),
             original_name: Some(full_name.to_string()),
             unique_id_hash: None,
             version: None,
@@ -852,6 +945,7 @@ mod tests {
             test_metadata_combination_of_columns: Some(vec!["a".to_string(), "b".to_string()]),
             test_metadata_model: None,
             test_metadata_kwargs: BTreeMap::new(),
+            raw_code_config: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
             version: None,
