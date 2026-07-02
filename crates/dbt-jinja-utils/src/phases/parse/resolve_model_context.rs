@@ -596,13 +596,20 @@ impl Debug for ParseMetricReference {
     }
 }
 
-/// A stub value returned by `config.get()` during parsing.
+/// Permissive parse-time stub returned ONLY for `config.get('meta')`.
 ///
-/// We haven't populated `config` yet, so this stub value could be any type;
-/// therefore any method could be called on it. This prevents a crash during parse.
+/// Absorbs further `.get`/attr access (so dbt-autofix's
+/// `config.get('meta').custom_key` migration pattern doesn't crash at parse)
+/// and renders as the empty string. Fusion does static-analysis compile of
+/// materialization bodies that dbt-core only renders at run-time via
+/// `RuntimeConfigObject`, so we need a parse-time fallback here that
+/// dbt-core doesn't — see
+/// `~/git/dbt-autofix/manual_fixes/custom_configuration.md` for the
+/// recommended migration path that depends on this behavior.
 ///
-/// TODO: This is not a complete fix. If someone is using the config value in a
-/// type-specific way, there could still be issues.
+/// All other `config.get(name)` calls return `""` (matching dbt-core's
+/// `ParseConfigObject.get` at `core/dbt/context/providers.py:554`) and do
+/// not need this stub.
 #[derive(Debug)]
 struct ParseConfigValue;
 
@@ -626,7 +633,7 @@ impl Object for ParseConfigValue {
     }
 }
 
-/// A struct that represents a parse config object to be used during parsing
+/// A struct that represents a parse config object to be used during parsing.
 #[derive(Debug)]
 pub struct ParseConfig<T: ResolvableConfig<T> + 'static> {
     /// A pointer to a vector of sql resources to be collected during parsing
@@ -773,18 +780,39 @@ impl<T: ResolvableConfig<T>> Object for ParseConfig<T> {
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         match name {
-            // At compile time, this will return the value of the config variable if it exists.
-            // During parse, config isn't populated yet.  If the caller supplied a default
-            // value we return it so that downstream code that requires a concrete type
-            // (e.g. adapter.get_relation(identifier=...)) receives a usable value.
-            // Without a default we fall back to the ParseConfigValue stub.
+            // `config.get(name)` at parse time:
+            //   - name == "meta": returns a permissive chainable stub
+            //     (ParseConfigValue) so dbt-autofix's
+            //     `config.get('meta').custom_key` migration pattern
+            //     (~/git/dbt-autofix/manual_fixes/custom_configuration.md)
+            //     doesn't crash. Fusion does static-analysis compile of
+            //     materialization bodies that dbt-core only renders at
+            //     run-time with `RuntimeConfigObject`, so we need a
+            //     parse-time fallback here that dbt-core doesn't.
+            //   - any other name with a meaningful caller default: returns
+            //     the default verbatim. Fusion extension above Python,
+            //     never breaks parity-correct templates.
+            //   - any other name with no default: returns "". Matches
+            //     dbt-core's `ParseConfigObject.get` exactly
+            //     (core/dbt/context/providers.py:554:
+            //     `def get(self, name, default=None, validator=None):
+            //          return ""`).
+            //
+            // The compile-phase equivalent is
+            // `CompileConfig.call_method("get")` in
+            // fs/sa/crates/dbt-jinja-utils/src/phases/compile/compile_config.rs,
+            // which does real lookup against the finalized config.
             "get" => {
                 let mut args = ArgParser::new(args, None);
-                let _: String = args.get("name")?;
-                if let Some(default) = args.get_optional::<MinijinjaValue>("default") {
-                    Ok(default)
-                } else {
-                    Ok(MinijinjaValue::from_object(ParseConfigValue))
+                let name: String = args.get("name")?;
+                let default = args.get_optional::<MinijinjaValue>("default");
+
+                if name == "meta" {
+                    return Ok(MinijinjaValue::from_object(ParseConfigValue));
+                }
+                match default {
+                    Some(d) if !d.is_undefined() && !d.is_none() => Ok(d),
+                    _ => Ok(MinijinjaValue::from("")),
                 }
             }
             // At compile time, this just returns an empty string
@@ -964,19 +992,96 @@ mod test {
         assert_eq!(value.as_str().unwrap(), "tbl");
     }
 
-    /// Verify that config.get('key') without a default still returns a
-    /// ParseConfigValue stub (preserving backward compatibility).
+    /// Verify that `config.get(name)` without a default returns an empty
+    /// string-typed value (matching dbt-core's `ParseConfigObject.get` at
+    /// providers.py:554). Renders as `""` and passes `Value::as_str()` so
+    /// downstream consumers like `adapter.get_relation(database=...)` don't
+    /// crash.
     #[test]
-    fn test_config_get_without_default_returns_stub() {
+    fn test_config_get_without_default_returns_empty_string() {
         let mut env = minijinja::Environment::new();
 
         let config = make_test_parse_config();
         env.add_global("config", MinijinjaValue::from_object(config));
 
-        // Without a default, should render as empty string (ParseConfigValue::render)
         let template = env.template_from_str("{{ config.get('alias') }}").unwrap();
         let result = template.render(minijinja::context!(), &[]).unwrap();
-
         assert_eq!(result, "");
+
+        let value = env
+            .compile_expression("config.get('alias')")
+            .unwrap()
+            .eval(minijinja::context!(), &[])
+            .unwrap();
+        assert!(
+            value.as_str().is_some(),
+            "config.get without a default must be a string-typed Value, got: {:?}",
+            value,
+        );
+        assert_eq!(value.as_str().unwrap(), "");
+    }
+
+    /// `config.get('alias')` after `{{ config(alias='renamed') }}` deposit
+    /// returns `""` at parse — deposited values are NOT surfaced through
+    /// parse-time `config.get`. Matches dbt-core's `ParseConfigObject.get`
+    /// (providers.py:554), which ignores kwargs deposited via
+    /// `ContextConfig.add_config_call` and unconditionally returns `""`.
+    /// Deposited values become accessible at compile time via
+    /// `CompileConfig.call_method("get")` (the Fusion equivalent of
+    /// `RuntimeConfigObject.get`).
+    #[test]
+    fn test_parse_config_get_non_meta_returns_empty_string_matching_python() {
+        let mut env = minijinja::Environment::new();
+        let config = make_test_parse_config();
+        env.add_global("config", MinijinjaValue::from_object(config));
+
+        let template = env
+            .template_from_str("{% set _ = config(alias='renamed') %}|{{ config.get('alias') }}|")
+            .unwrap();
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(result, "||");
+    }
+
+    /// `config.get('not_set', 'fallback')` returns the default verbatim.
+    /// Fusion-specific extension above Python's
+    /// `ParseConfigObject.get` (which always returns `""`) — strictly more
+    /// useful and never breaks parity-correct templates.
+    #[test]
+    fn test_parse_config_get_non_meta_with_default_returns_default() {
+        let mut env = minijinja::Environment::new();
+        let config = make_test_parse_config();
+        env.add_global("config", MinijinjaValue::from_object(config));
+
+        let template = env
+            .template_from_str("{{ config.get('not_set', 'fallback') }}")
+            .unwrap();
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(result, "fallback");
+    }
+
+    /// `config.get('meta').get('any_key')` chains through a permissive stub
+    /// at parse — supports dbt-autofix's `config.get('meta').custom_key`
+    /// migration pattern
+    /// (~/git/dbt-autofix/manual_fixes/custom_configuration.md). The stub
+    /// absorbs further `.get`/attr access and renders as `""`.
+    #[test]
+    fn test_parse_config_get_meta_returns_chainable_permissive_stub() {
+        let mut env = minijinja::Environment::new();
+        let config = make_test_parse_config();
+        env.add_global("config", MinijinjaValue::from_object(config));
+
+        let template = env
+            .template_from_str("|{{ config.get('meta').get('any_key') }}|")
+            .unwrap();
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(result, "||");
+
+        // Attribute access also absorbed (the autofix doc's
+        // `config.get('meta').cold_storage_date_type` shape).
+        let template2 = env
+            .template_from_str("|{{ config.get('meta').cold_storage_date_type }}|")
+            .unwrap();
+        let result2 = template2.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(result2, "||");
     }
 }

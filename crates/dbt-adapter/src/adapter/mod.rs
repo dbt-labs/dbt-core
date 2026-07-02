@@ -3574,22 +3574,30 @@ impl Adapter {
                 // identifier: str
                 // needs_information: bool = False
                 let iter = ArgsIter::new(name, &["database", "schema", "identifier"], args);
-
-                let database = match iter.next_arg::<Option<&str>>()? {
-                    Some(database) => database,
-                    None => match self.adapter_type() {
-                        AdapterType::Databricks => DEFAULT_DATABRICKS_DATABASE,
-                        AdapterType::Spark => DEFAULT_SPARK_DATABASE,
-                        _ => {
-                            return Err(minijinja::Error::new(
-                                minijinja::ErrorKind::InvalidArgument,
-                                "argument 'database' to get_relation() is required",
-                            ));
-                        }
-                    },
-                };
-                let schema = iter.next_arg::<&str>()?;
-                let identifier = iter.next_arg::<&str>()?;
+                // dbt-core's `BaseAdapter.get_relation`
+                // (~/git/dbt-adapters/dbt-adapters/src/dbt/adapters/base/impl.py:1084)
+                // declares its args as `str` but does no runtime validation — a
+                // Python `None` (e.g. from `RuntimeConfigObject.get('database')` for
+                // an unset key at compile) flows through `list_relations` and
+                // `_make_match` without raising and simply returns `None`. Verified
+                // against real dbt-core (dbt-duckdb): `get_relation(database=none,
+                // schema='main', identifier='foo')` returns `None`, it does not
+                // error. Match that tolerance by extracting each arg as
+                // `Option<&str>` (the minijinja `ArgType` impl maps `None`/`Undefined`
+                // to `Ok(None)`; non-string values still error) and defaulting to
+                // `""`, preserving the prefetch-recording path at `pub fn
+                // get_relation` (mod.rs:1166) which needs usable string args.
+                // Adapters that carry no catalog (Databricks, Spark) substitute
+                // their default catalog for an absent `database` instead.
+                let database =
+                    iter.next_arg::<Option<&str>>()?
+                        .unwrap_or_else(|| match self.adapter_type() {
+                            AdapterType::Databricks => DEFAULT_DATABRICKS_DATABASE,
+                            AdapterType::Spark => DEFAULT_SPARK_DATABASE,
+                            _ => "",
+                        });
+                let schema = iter.next_arg::<Option<&str>>()?.unwrap_or("");
+                let identifier = iter.next_arg::<Option<&str>>()?.unwrap_or("");
                 let needs_information = iter
                     .next_kwarg::<Option<bool>>("needs_information")?
                     .unwrap_or(false);

@@ -375,8 +375,9 @@ fn test_parse_mode_accepts_mistyped_args_list_relations_without_caching() {
 fn test_get_relation_dispatch_spark_absent_database() {
     // Exercises the full `"get_relation"` arm of `call_method_impl` (arg parsing + per-adapter
     // database resolution + handoff to `get_relation`) for the absent-database (`none`) case,
-    // covering every branch of the inline resolution. Spark relations carry no catalog, so the
-    // database argument is `none`.
+    // covering every branch of the inline resolution. An absent database is tolerated for every
+    // adapter, matching dbt-core: `adapter.get_relation(database=none, ...)` returns a relation
+    // rather than raising (verified against dbt-core / dbt-duckdb, which returns `None`).
     let args = [
         Value::from(()), // database: none
         Value::from("my_schema"),
@@ -401,16 +402,13 @@ fn test_get_relation_dispatch_spark_absent_database() {
     .unwrap();
     assert!(!result.is_none() && !result.is_undefined());
 
-    // Every other adapter requires a database -> an absent value is an explicit error.
-    let err = dispatch_test(
+    // Every other adapter tolerates an absent database (defaults to `""`) rather than erroring,
+    // matching dbt-core's duck-typed `get_relation`.
+    let result = dispatch_test(
         &make_mock_adapter(AdapterType::DuckDB),
         "get_relation",
         &args,
     )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("argument 'database' to get_relation() is required"),
-        "unexpected error: {err}"
-    );
+    .unwrap();
+    assert!(!result.is_none() && !result.is_undefined());
 }
