@@ -62,6 +62,7 @@ pub mod schemas {
     }
     pub mod manifest {
         mod bigquery_partition;
+        mod defer_relation;
         mod group;
         #[allow(clippy::module_inception)]
         mod manifest;
@@ -83,6 +84,10 @@ pub mod schemas {
             BigqueryPartitionConfig, BigqueryPartitionConfigInner, GrantAccessToTarget, Range,
             RangeConfig, TimeConfig,
         };
+        pub use defer_relation::{
+            DeferRelation, defer_relation_for_model, defer_relation_for_seed,
+            defer_relation_for_snapshot,
+        };
         pub use group::ManifestGroup;
         pub use manifest::{
             BaseMetadata, DbtManifest, DbtNode, ManifestMetadata, build_manifest,
@@ -90,8 +95,9 @@ pub mod schemas {
         };
         pub use manifest_nodes::{
             ManifestDataTest, ManifestExposure, ManifestFunction, ManifestMacro, ManifestMetric,
-            ManifestModel, ManifestSavedQuery, ManifestSeed, ManifestSemanticModel,
-            ManifestSnapshot, ManifestSource, ManifestUnitTest,
+            ManifestModel, ManifestModelConfig, ManifestSavedQuery, ManifestSeed,
+            ManifestSeedConfig, ManifestSemanticModel, ManifestSnapshot, ManifestSnapshotConfig,
+            ManifestSource, ManifestUnitTest,
         };
         pub use metric::DbtMetric;
         pub use operation::DbtOperation;

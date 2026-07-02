@@ -17,6 +17,9 @@ use dbt_common::{
     tracing::emit::{emit_debug_event, emit_info_event},
     warn_error_options::{WarnErrorDecision, WarnErrorOptions},
 };
+use dbt_schemas::schemas::manifest::{
+    defer_relation_for_model, defer_relation_for_seed, defer_relation_for_snapshot,
+};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use dbt_telemetry::UserLogMessage;
 use minijinja::{
@@ -1270,57 +1273,25 @@ impl Object for Exceptions {
     }
 }
 
-/// `defer_relation` shape emitted for each deferrable graph node so Jinja
-/// expressions like `node.defer_relation.relation_name` (which dbt-core
-/// supports out of the box) work in fusion. Mirrors the dbt-core manifest
-/// representation. (#1366)
-#[derive(Serialize)]
-struct DeferRelation<'a> {
-    database: Option<&'a str>,
-    schema: &'a str,
-    alias: &'a str,
-    relation_name: Option<&'a str>,
-    resource_type: &'static str,
-    name: &'a str,
-    unique_id: &'a str,
-}
-
-impl<'a> DeferRelation<'a> {
-    fn from_node(node: &'a dyn InternalDbtNode, resource_type: &'static str) -> Self {
-        let common = node.common();
-        let base = node.base();
-        Self {
-            database: if base.database.is_empty() {
-                None
-            } else {
-                Some(base.database.as_str())
-            },
-            schema: base.schema.as_str(),
-            alias: base.alias.as_str(),
-            relation_name: base.relation_name.as_deref(),
-            resource_type,
-            name: common.name.as_str(),
-            unique_id: common.unique_id.as_str(),
-        }
-    }
-}
-
 /// Insert `defer_relation` into a serialized graph node's mapping. When
-/// `defer_nodes` has a matching entry the value is the deferred relation
-/// dict; otherwise it's null. The key is always present so users can do
-/// `node.defer_relation is not none` without hitting "undefined value".
-fn inject_defer_relation<F>(
+/// `defer_nodes` has a matching entry the value is the dbt-core-shaped
+/// `DeferRelation` dict; otherwise it's null. The key is always present so
+/// users can write `node.defer_relation is not none` without hitting an
+/// "undefined value" error. (#1366)
+///
+/// `to_value` is a closure that builds a serializable `DeferRelation` from
+/// the deferred node, allowing this helper to be reused across the three
+/// deferrable resource types without making the helper itself generic.
+fn inject_defer_relation<L>(
     map: &mut dbt_yaml::Mapping,
     unique_id: &str,
     defer_nodes: Option<&Nodes>,
-    resource_type: &'static str,
-    lookup: F,
+    to_value: L,
 ) where
-    F: Fn(&Nodes, &str) -> Option<Arc<dyn InternalDbtNode>>,
+    L: FnOnce(&Nodes, &str) -> Option<YmlValue>,
 {
     let defer_value = defer_nodes
-        .and_then(|dn| lookup(dn, unique_id))
-        .and_then(|d| dbt_yaml::to_value(DeferRelation::from_node(d.as_ref(), resource_type)).ok())
+        .and_then(|dn| to_value(dn, unique_id))
         .unwrap_or_else(YmlValue::null);
     map.insert(YmlValue::string("defer_relation".to_string()), defer_value);
 }
@@ -1356,10 +1327,10 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
-                inject_defer_relation(map, unique_id, defer_nodes, "model", |dn, uid| {
+                inject_defer_relation(map, unique_id, defer_nodes, |dn, uid| {
                     dn.models
                         .get(uid)
-                        .map(|m| Arc::clone(m) as Arc<dyn InternalDbtNode>)
+                        .and_then(|m| dbt_yaml::to_value(defer_relation_for_model(m.as_ref())).ok())
                 });
             }
             (unique_id.clone(), Value::from_serialize(serialized))
@@ -1377,10 +1348,10 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
-                inject_defer_relation(map, unique_id, defer_nodes, "snapshot", |dn, uid| {
-                    dn.snapshots
-                        .get(uid)
-                        .map(|s| Arc::clone(s) as Arc<dyn InternalDbtNode>)
+                inject_defer_relation(map, unique_id, defer_nodes, |dn, uid| {
+                    dn.snapshots.get(uid).and_then(|s| {
+                        dbt_yaml::to_value(defer_relation_for_snapshot(s.as_ref())).ok()
+                    })
                 });
             }
             (unique_id.clone(), Value::from_serialize(serialized))
@@ -1434,10 +1405,10 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
-                inject_defer_relation(map, unique_id, defer_nodes, "seed", |dn, uid| {
+                inject_defer_relation(map, unique_id, defer_nodes, |dn, uid| {
                     dn.seeds
                         .get(uid)
-                        .map(|s| Arc::clone(s) as Arc<dyn InternalDbtNode>)
+                        .and_then(|s| dbt_yaml::to_value(defer_relation_for_seed(s.as_ref())).ok())
                 });
             }
             (unique_id.clone(), Value::from_serialize(serialized))
@@ -1907,7 +1878,8 @@ mod tests {
         let graph_val = Value::from_object(graph);
         let nodes_val = graph_val.get_attr("nodes").unwrap();
 
-        // model.pkg.foo: defer_relation populated from defer_nodes
+        // model.pkg.foo: defer_relation populated from defer_nodes.
+        // Wire shape mirrors dbt-core's `DeferRelation` dataclass (#1366).
         let foo = nodes_val.get_attr("model.pkg.foo").unwrap();
         let foo_defer = foo.get_attr("defer_relation").unwrap();
         assert!(
@@ -1915,17 +1887,36 @@ mod tests {
             "model.pkg.foo defer_relation must not be null when present in defer_nodes"
         );
         assert_eq!(
+            foo_defer.get_attr("database").unwrap().to_string(),
+            "prod_db"
+        );
+        assert_eq!(
             foo_defer.get_attr("schema").unwrap().to_string(),
             "prod",
             "defer_relation.schema should reflect the deferred (prior) schema"
+        );
+        assert_eq!(foo_defer.get_attr("alias").unwrap().to_string(), "foo");
+        assert_eq!(
+            foo_defer.get_attr("relation_name").unwrap().to_string(),
+            "\"prod_db\".\"prod\".\"foo\"",
         );
         assert_eq!(
             foo_defer.get_attr("resource_type").unwrap().to_string(),
             "model",
         );
-        assert_eq!(
-            foo_defer.get_attr("relation_name").unwrap().to_string(),
-            "\"prod_db\".\"prod\".\"foo\"",
+        assert_eq!(foo_defer.get_attr("name").unwrap().to_string(), "foo");
+        // dbt-core emits description as a non-optional string (default "").
+        assert_eq!(foo_defer.get_attr("description").unwrap().to_string(), "");
+        // compiled_code is None for models that didn't round-trip through compile state.
+        assert!(foo_defer.get_attr("compiled_code").unwrap().is_none());
+        // config is populated even when the source config is mostly defaults.
+        assert!(!foo_defer.get_attr("config").unwrap().is_none());
+        // unique_id was emitted in #9865 but is NOT in dbt-core's DeferRelation
+        // — ensure the corrected shape no longer carries it.
+        assert!(
+            foo_defer.get_attr("unique_id").is_err()
+                || foo_defer.get_attr("unique_id").unwrap().is_undefined(),
+            "defer_relation must not include `unique_id` (not in dbt-core's wire shape)"
         );
 
         // model.pkg.bar: not in defer_nodes, key must still exist as null
