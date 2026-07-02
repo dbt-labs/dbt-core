@@ -72,7 +72,8 @@ pub mod help_headings {
     pub const SAMPLE: &str = "Sample";
     pub const ADVANCED: &str = "Advanced";
 }
-const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
+const MANAGE_STATE_ENV: &str = "DBT_MANAGE_STATE";
+const LEGACY_ENGINE_MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
 const USER_SETTINGS_YML: &str = ".dbt/user_settings.yml";
 
 // defined in pretty string, but copied here to avoid cycle...
@@ -2189,7 +2190,8 @@ impl CommonArgs {
     pub fn get_manage_state(&self, project_dir: &Path) -> bool {
         self.get_manage_state_with(
             project_dir,
-            env::var_os(MANAGE_STATE_ENV),
+            env::var_os(MANAGE_STATE_ENV)
+                .or_else(|| env::var_os(LEGACY_ENGINE_MANAGE_STATE_ENV)),
             user_settings_path(),
         )
     }

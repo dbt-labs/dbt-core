@@ -1,0 +1,7 @@
+kind: Fixes
+body: Show `DBT_MANAGE_STATE` for the `--manage-state` CLI help environment variable while continuing to accept `DBT_ENGINE_MANAGE_STATE` as an alias.
+time: 2026-06-27T21:45:00+02:00
+custom:
+    author: AMBRA7592
+    issue: "15343"
+    project: dbt-fusion
