@@ -1021,19 +1021,26 @@ fn collect_childrens_parents(
         let descendants = downstream(deps, node, u32::MAX);
         desc.extend(descendants);
     }
-    // 2. find leaf nodes (nodes with no children) and get all their ancestors
-    let leaf_nodes: Vec<String> = desc
+    // 2. find leaf nodes (nodes with no children) and get all their ancestors.
+    // A node is its own descendant, so the selected nodes are themselves leaf
+    // candidates: when a selected node has no children it produces no descendant
+    // edges in `desc` and would otherwise be dropped entirely (see #15280).
+    let leaf_nodes: BTreeSet<String> = desc
         .keys()
         .chain(desc.values().flatten())
+        .chain(selected_nodes)
         .filter(|node| {
             // A node is a leaf if it has no outgoing dependencies in the descendant graph
             !desc.contains_key(*node) || desc.get(*node).is_none_or(|children| children.is_empty())
         })
         .cloned()
         .collect();
-    // Get upstream of all leaf nodes
+    // Get each leaf plus all of its ancestors. The leaf is inserted explicitly
+    // because `upstream` only returns edges, which omit a leaf that has no
+    // ancestors (e.g. an isolated node).
     for leaf in leaf_nodes {
         add_nodes(upstream(deps, &leaf, u32::MAX), &mut selected);
+        selected.insert(leaf);
     }
     selected
 }
@@ -1550,6 +1557,55 @@ mod tests {
         let select = create_select_expression("@b");
         let result = schedule_test_graph(&graph, &select);
         assert_eq!(result, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_schedule_graph_at_operator_on_leaf() {
+        // Regression test for https://github.com/dbt-labs/dbt-core/issues/15280
+        // `@` on a leaf node (one with no children) should return the node plus
+        // its ancestors. A node is its own descendant, so for a leaf the
+        // descendant set is just the node itself.
+        let builder = TestGraphBuilder::new()
+            .add_edge("a", "b")
+            .add_edge("b", "c");
+        let graph = builder.build_graph();
+
+        // `c` is the leaf of the chain a -> b -> c.
+        let select = create_select_expression("@c");
+        let result = schedule_test_graph(&graph, &select);
+        assert_eq!(result, vec!["a", "b", "c"]);
+
+        // A leaf with a single ancestor.
+        let builder = TestGraphBuilder::new().add_edge("a", "b");
+        let graph = builder.build_graph();
+        let select = create_select_expression("@b");
+        let result = schedule_test_graph(&graph, &select);
+        assert_eq!(result, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn test_collect_childrens_parents_leaf_and_isolated() {
+        // `deps` maps each node to its parents (upstream dependencies).
+        // Chain a -> b -> c.
+        let deps = BTreeMap::from([
+            ("a".to_string(), BTreeSet::new()),
+            ("b".to_string(), BTreeSet::from(["a".to_string()])),
+            ("c".to_string(), BTreeSet::from(["b".to_string()])),
+        ]);
+
+        // `@c` on the leaf `c` -> the leaf plus all of its ancestors.
+        let selected = BTreeSet::from(["c".to_string()]);
+        let result = collect_childrens_parents(&deps, &selected);
+        assert_eq!(
+            result,
+            BTreeSet::from(["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+
+        // An isolated node (leaf with no ancestors) -> just itself.
+        let deps = BTreeMap::from([("a".to_string(), BTreeSet::new())]);
+        let selected = BTreeSet::from(["a".to_string()]);
+        let result = collect_childrens_parents(&deps, &selected);
+        assert_eq!(result, BTreeSet::from(["a".to_string()]));
     }
 
     #[test]
