@@ -8,6 +8,7 @@ pub const NON_EXPERIMENTAL_ADAPTERS: &[AdapterType] = &[
     AdapterType::Redshift,
     AdapterType::DuckDB,
     AdapterType::Salesforce,
+    AdapterType::ClickHouse,
 ];
 
 pub const STATIC_ANALYSIS_SUPPORTED_ADAPTERS: &[AdapterType] = &[
