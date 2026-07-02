@@ -20,6 +20,7 @@ on:
   pull_request:
     types:
       - labeled
+      - closed
 
 permissions:
   contents: write
@@ -31,9 +32,14 @@ jobs:
     runs-on: ${{ vars.UBUNTU_LATEST }}
     # Only react to merged PRs for security reasons.
     # See https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target.
+    # Handle both flows: labeling an already-merged PR, and merging a PR that
+    # already carries a backport label.
     if: >
       github.event.pull_request.merged
-      && contains(github.event.label.name, 'backport')
+      && (
+        (github.event.action == 'labeled' && contains(github.event.label.name, 'backport'))
+        || (github.event.action == 'closed' && contains(join(github.event.pull_request.labels.*.name, ' '), 'backport'))
+      )
     steps:
       - uses: tibdex/backport@9565281eda0731b1d20c4025c43339fb0a23812e # tibdex/backport@v2.0.4
         with:
