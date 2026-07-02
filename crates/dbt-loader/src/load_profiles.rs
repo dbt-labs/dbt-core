@@ -1,4 +1,4 @@
-use dbt_adapter::enforce_adapter_gating;
+use dbt_adapter::{enforce_adapter_gating, experimental_adapters_allowed};
 use dbt_common::tracing::dbt_emit::{emit_info_progress_message, emit_warn_log_message};
 use dbt_telemetry::ProgressMessage;
 
@@ -96,7 +96,11 @@ pub fn load_profiles(
         )
     })?;
 
-    enforce_adapter_gating(db_config.adapter_type(), arg.io.status_reporter.as_ref())?;
+    {
+        let allow_experimental_adapters =
+            experimental_adapters_allowed(arg.io.status_reporter.as_ref());
+        enforce_adapter_gating(db_config.adapter_type(), allow_experimental_adapters)?;
+    }
 
     if db_config.has_removed_execute_field() {
         emit_warn_log_message(
@@ -154,10 +158,30 @@ fn get_profile_with_span(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use dbt_common::io_args::IoArgs;
     use dbt_common::warn_error_options::WarnErrorOptions;
     use dbt_jinja_utils::register_base_functions;
     use dbt_profile::ProfileEnvironment;
+
+    #[test]
+    fn enforce_adapter_gating_rejects_unsupported_adapter() {
+        let err = enforce_adapter_gating(dbt_adapter_core::AdapterType::Trino, false).unwrap_err();
+        let msg = err.message();
+        assert!(
+            msg.contains("not yet supported by dbt Fusion"),
+            "expected gating message, got: {msg}"
+        );
+        assert!(
+            msg.contains("Supported adapters:"),
+            "expected supported list, got: {msg}"
+        );
+        assert!(
+            msg.contains("DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true"),
+            "expected env-var hint, got: {msg}"
+        );
+    }
 
     #[test]
     fn loader_registers_tojson_function_on_profile_env() {

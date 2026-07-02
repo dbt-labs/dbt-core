@@ -74,7 +74,7 @@ pub use response::AdapterResponse;
 /// IMPORTANT: don't change this function to add a new adapter!!! Change the
 /// [NON_EXPERIMENTAL_ADAPTERS](dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS)
 /// instead.
-fn experimental_adapters_allowed(
+pub fn experimental_adapters_allowed(
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) -> bool {
     use dbt_common::tracing::dbt_emit::emit_warn_log_message;
@@ -95,7 +95,7 @@ fn experimental_adapters_allowed(
 
 pub fn enforce_adapter_gating(
     adapter_type: AdapterType,
-    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+    allow_experimental_adapters: bool,
 ) -> AdapterResult<()> {
     use dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS;
     use dbt_common::{AdapterError, AdapterErrorKind};
@@ -104,7 +104,7 @@ pub fn enforce_adapter_gating(
         return Ok(());
     }
 
-    if experimental_adapters_allowed(status_reporter) {
+    if allow_experimental_adapters {
         return Ok(());
     }
 
