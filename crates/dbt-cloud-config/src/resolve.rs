@@ -26,22 +26,25 @@ fn resolve_cloud_config_with_env_reader(
     project_dbt_cloud: Option<&ProjectDbtCloudConfig>,
     env_reader: impl Fn(&str) -> Option<String>,
 ) -> Option<ResolvedCloudConfig> {
-    // Find the active project from dbt_cloud.yml by matching project_id from
-    // dbt_project.yml, or falling back to context.active_project.
+    // Find the active project from dbt_cloud.yml by matching the project_id
+    // declared locally in dbt_project.yml. A project receives dbt platform
+    // behavior only when it is explicitly linked: there is intentionally no
+    // fallback to the global context.active_project, so a bare login session
+    // does not leak its credentials into unlinked projects.
     let active_project = dbt_cloud_yml.and_then(|config| {
         let lookup_id = project_dbt_cloud
             .and_then(|p| p.project_id.as_ref())
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| config.context.active_project.clone());
+            .map(|v| v.to_string())?;
         config.get_project_by_id(&lookup_id)
     });
 
     // Resolve project_id first — needed for credential mixing guard.
+    // Sources: DBT_CLOUD_PROJECT_ID env var, then the local dbt_project.yml
+    // link only (no global active_project fallback).
     let project_id = env_reader("DBT_CLOUD_PROJECT_ID").or_else(|| {
         project_dbt_cloud
             .and_then(|p| p.project_id.as_ref())
             .map(|v| v.to_string())
-            .or_else(|| active_project.map(|p| p.project_id.clone()))
     });
 
     // Credential mixing guard: if env var overrides project_id to a different
@@ -96,7 +99,16 @@ fn resolve_cloud_config_with_env_reader(
         project_dbt_cloud
             .and_then(|p| p.defer_env_id.as_ref())
             .map(|v| v.to_string())
-            .or_else(|| dbt_cloud_yml.and_then(|c| c.context.defer_env_id.clone()))
+            // Inherit context.defer-env-id only when credentials were also
+            // granted (project_id_matches), so a mixed-ID env override that
+            // suppresses credentials also suppresses this fallback.
+            .or_else(|| {
+                if project_id_matches {
+                    dbt_cloud_yml.and_then(|c| c.context.defer_env_id.clone())
+                } else {
+                    None
+                }
+            })
     });
 
     let job_id = env_reader("DBT_CLOUD_JOB_ID");
@@ -223,7 +235,13 @@ mod tests {
     #[test]
     fn cloud_yml_provides_full_credentials() {
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
-        let r = resolve_cloud_config_with_env_reader(Some(&yml), None, env(&[])).unwrap();
+
+        // Unlinked: a bare session with no local project link yields no config.
+        assert!(resolve_cloud_config_with_env_reader(Some(&yml), None, env(&[])).is_none());
+
+        // Linked: the local dbt_project.yml link selects the session project.
+        let pc = project_cloud(Some("456"), None, None);
+        let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
         assert_eq!(r.project_id.as_deref(), Some("456"));
         let creds = r.credentials.unwrap();
         assert_eq!(creds.host, "cloud.getdbt.com");
@@ -242,10 +260,14 @@ mod tests {
 
     #[test]
     fn env_overrides_cloud_yml_host() {
+        // A linked project (local dbt-cloud.project-id) lets the env host
+        // override the session host while the token still comes from the
+        // matching session project.
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+        let pc = project_cloud(Some("456"), None, None);
         let r = resolve_cloud_config_with_env_reader(
             Some(&yml),
-            None,
+            Some(&pc),
             env(&[
                 ("DBT_CLOUD_PROJECT_ID", "456"),
                 ("DBT_CLOUD_ACCOUNT_HOST", "emea.dbt.com"),
@@ -297,9 +319,10 @@ mod tests {
     #[test]
     fn empty_env_var_does_not_override() {
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+        let pc = project_cloud(Some("456"), None, None); // linked
         let r = resolve_cloud_config_with_env_reader(
             Some(&yml),
-            None,
+            Some(&pc),
             env(&[("DBT_CLOUD_PROJECT_ID", "")]),
         )
         .unwrap();
@@ -325,8 +348,46 @@ mod tests {
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
         assert_eq!(r.defer_env_id.as_deref(), Some("proj-defer"));
 
-        // dbt_cloud.yml context is last fallback
-        let r = resolve_cloud_config_with_env_reader(Some(&yml), None, env(&[])).unwrap();
+        // dbt_cloud.yml context is the last fallback, but ONLY for a linked
+        // project (one whose local project_id matches a session project).
+        let linked = project_cloud(Some("456"), None, None);
+        let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&linked), env(&[])).unwrap();
+        assert_eq!(r.defer_env_id.as_deref(), Some("context-defer"));
+
+        // For an UNLINKED project the context.defer-env-id does not apply, and
+        // with nothing else present the resolver returns no config at all.
+        assert!(resolve_cloud_config_with_env_reader(Some(&yml), None, env(&[])).is_none());
+    }
+
+    #[test]
+    fn login_session_only_returns_none() {
+        // A bare login session (dbt_cloud.yml) with no local link and no env
+        // config must not leak platform config into an unlinked project.
+        let yml = cloud_yml("672", "cloud.getdbt.com", "secret");
+        assert!(resolve_cloud_config_with_env_reader(Some(&yml), None, env(&[])).is_none());
+    }
+
+    #[test]
+    fn login_session_with_context_defer_env_id_returns_none() {
+        // Even when the session carries context.defer-env-id, an unlinked
+        // project gets nothing — proving the third fallback is gated on linkage.
+        let mut yml = cloud_yml("672", "cloud.getdbt.com", "secret");
+        yml.context.defer_env_id = Some("context-defer".to_string());
+        assert!(resolve_cloud_config_with_env_reader(Some(&yml), None, env(&[])).is_none());
+    }
+
+    #[test]
+    fn linked_project_gets_creds_and_inherits_context_defer_env_id() {
+        // A linked project resolves credentials from the matching session
+        // project AND inherits context.defer-env-id when it has none locally.
+        let mut yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+        yml.context.defer_env_id = Some("context-defer".to_string());
+        let pc = project_cloud(Some("456"), None, None);
+        let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
+        assert_eq!(r.project_id.as_deref(), Some("456"));
+        let creds = r.credentials.unwrap();
+        assert_eq!(creds.token, "secret");
+        assert_eq!(creds.account_id, "111");
         assert_eq!(r.defer_env_id.as_deref(), Some("context-defer"));
     }
 
@@ -334,9 +395,10 @@ mod tests {
     fn account_identifier_is_separate_from_account_id() {
         // account_identifier is a separate field, not a fallback for account_id
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+        let pc = project_cloud(Some("456"), None, None); // linked
         let r = resolve_cloud_config_with_env_reader(
             Some(&yml),
-            None,
+            Some(&pc),
             env(&[("DBT_CLOUD_ACCOUNT_IDENTIFIER", "my-org")]),
         )
         .unwrap();
