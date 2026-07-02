@@ -1,0 +1,9 @@
+kind: Fixes
+body: 'Recognize Databricks adapter config keys (`query_tags`, `zorder`, `options`,
+  `unique_tmp_table_suffix`, `skip_optimize`) in jsonschema validation so they no
+  longer raise spurious `CustomKeyInConfigDeprecation` warnings (dbt-databricks#1540,
+  dbt-databricks#1302)'
+time: 2026-06-23T12:00:00.000000-05:00
+custom:
+    Author: sd-db
+    Issue: "N/A"
