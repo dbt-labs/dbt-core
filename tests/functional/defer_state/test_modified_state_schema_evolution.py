@@ -38,3 +38,13 @@ class TestModifiedStateSchemaEvolution:
 
         # No false positives when no project changes are made
         assert len(results) == 0
+
+
+class TestSchemaEvolutionCompareMoreUnrenderedValues(TestModifiedStateSchemaEvolution):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "state_modified_compare_more_unrendered_values": True,
+            }
+        }
