@@ -1,6 +1,6 @@
 # **what?**
 # Label a PR with a `community` label when a PR is opened by a user outside core/adapters
-# Label an issue with a `triage` label when an issue is opened by a user outside core/adapters
+# Label an issue with a `status:triage` label when an issue is opened by a user outside core/adapters
 
 # **why?**
 # To streamline triage and ensure that community contributions are recognized and prioritized
@@ -51,17 +51,17 @@ jobs:
         IT_TEAM_MEMBERSHIP: ${{ secrets.IT_TEAM_MEMBERSHIP }}
 
   label_community_issue:
-    # If this issue already has the triage label, no need to relabel it
+    # If this issue already has the status:triage label, no need to relabel it
     # If this issue is opened, determine if it needs to be labeled
     if: |
       (
         github.event_name == 'issues'
-        && !contains(github.event.issue.labels.*.name, 'triage')
+        && !contains(github.event.issue.labels.*.name, 'status:triage')
         && github.event.issue.user.type != 'Bot'
       )
     uses: dbt-labs/actions/.github/workflows/label-community.yml@main
     with:
         github_team: 'core-group'
-        label: 'triage'
+        label: 'status:triage'
     secrets:
         IT_TEAM_MEMBERSHIP: ${{ secrets.IT_TEAM_MEMBERSHIP }}

@@ -1,7 +1,7 @@
 name: 🛠️ Implementation
 description: This is an implementation ticket intended for use by the maintainers of dbt-core
 title: "[<project>] <title>"
-labels: ["user docs"]
+labels: ["type:docs"]
 body:
   - type: markdown
     attributes:
