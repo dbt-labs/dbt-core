@@ -3,7 +3,7 @@
 
 use std::io;
 
-use dbt_xdbc::{Backend, database};
+use dbt_adbc::{Backend, database};
 
 mod config;
 
@@ -14,6 +14,7 @@ mod clickhouse;
 mod databricks;
 mod duckdb;
 mod exasol;
+mod fdcs;
 #[cfg(test)]
 mod flock;
 mod postgres;
@@ -26,7 +27,7 @@ mod sqlserver;
 mod test_options;
 
 pub use config::AdapterConfig;
-pub use duckdb::init::{generate_duckdb_init_sql, is_motherduck_path, motherduck_database_name};
+pub use duckdb::init::{generate_duckdb_init_sql, is_motherduck_path};
 
 /// The result of configuring an auth backend.
 ///
@@ -36,6 +37,16 @@ pub use duckdb::init::{generate_duckdb_init_sql, is_motherduck_path, motherduck_
 pub struct AuthOutcome {
     pub builder: database::Builder,
     pub warnings: Vec<String>,
+}
+
+pub trait AuthWarningPrinter: Send + Sync {
+    fn warn(&self, msg: &str);
+}
+
+pub struct NoopAuthWarningPrinter;
+
+impl AuthWarningPrinter for NoopAuthWarningPrinter {
+    fn warn(&self, _msg: &str) {}
 }
 
 /// Authorization trait.
@@ -65,16 +76,20 @@ macro_rules! auth_configure_pipeline {
 }
 
 /// Factory function to create an Auth instance based on the backend type.
-pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
+pub fn auth_for_backend(
+    warning_printer: Box<dyn AuthWarningPrinter>,
+    backend: Backend,
+) -> Box<dyn Auth> {
     match backend {
-        Backend::Snowflake => Box::new(snowflake::SnowflakeAuth {}),
+        Backend::Snowflake => Box::new(snowflake::SnowflakeAuth { warning_printer }),
         Backend::Postgres => Box::new(postgres::PostgresAuth {}),
         Backend::BigQuery => Box::new(bigquery::BigqueryAuth {}),
-        Backend::Databricks | Backend::DatabricksODBC => Box::new(databricks::DatabricksAuth {}),
-        Backend::Redshift | Backend::RedshiftODBC => Box::new(redshift::RedshiftAuth {}),
+        Backend::Databricks => Box::new(databricks::DatabricksAuth {}),
+        Backend::Redshift => Box::new(redshift::RedshiftAuth {}),
         Backend::Salesforce => Box::new(salesforce::SalesforceAuth {}),
         Backend::Spark => Box::new(spark::SparkAuth {}),
         Backend::DuckDB | Backend::DuckDBExtended => Box::new(duckdb::DuckDbAuth::new(backend)),
+        Backend::Fdcs => Box::new(fdcs::FdcsAuth {}),
         Backend::SQLServer => Box::new(sqlserver::SQLServerAuth {}),
         Backend::ClickHouse => Box::new(clickhouse::ClickHouseAuth {}),
         Backend::Athena => Box::new(athena::AthenaAuth {}),

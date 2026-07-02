@@ -17,7 +17,7 @@ pub struct Process {
     #[prost(string, tag = "6")]
     pub host_arch: ::prost::alloc::string::String,
 }
-impl crate::StaticName for Process {
+impl ::dbt_tracing::StaticName for Process {
     const FULL_NAME: &'static str = "v1.public.events.fusion.process.Process";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.process.Process";
 }

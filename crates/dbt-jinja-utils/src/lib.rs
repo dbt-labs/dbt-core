@@ -29,6 +29,7 @@ pub mod flags;
 
 /// Module for the different phases of the dbt jinja environment
 pub mod phases;
+pub use phases::parse::init::{DefaultJinjaFactory, JinjaFactory};
 
 /// Module for the Invocation Args
 pub mod invocation_args;

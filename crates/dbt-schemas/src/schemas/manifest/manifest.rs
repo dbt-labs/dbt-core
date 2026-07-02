@@ -349,6 +349,7 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .macros
             .macros
             .iter()
+            .filter(|(id, _)| id.starts_with("macro."))
             .map(|(id, macro_)| (id.clone(), macro_.clone().into()))
             .collect(),
         functions: resolver_state
@@ -1185,6 +1186,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .clone()
                                 .map(|tags| tags.into())
                                 .unwrap_or_default(),
+                            classifiers: Default::default(),
                             meta: test.config.meta.clone().unwrap_or_default(),
                         },
                         __base_attr__: NodeBaseAttributes {
@@ -1276,6 +1278,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .clone()
                                 .map(|tags| tags.into())
                                 .unwrap_or_default(),
+                            classifiers: Default::default(),
                             meta: snapshot.config.meta.clone().unwrap_or_default(),
                         },
                         __base_attr__: NodeBaseAttributes {
@@ -1357,6 +1360,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .clone()
                                 .map(|tags| tags.into())
                                 .unwrap_or_default(),
+                            classifiers: Default::default(),
                             meta: seed.config.meta.clone().unwrap_or_default(),
                         },
                         __base_attr__: NodeBaseAttributes {
@@ -1445,6 +1449,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             checksum: recalculated_checksum,
                             language: analysis.__base_attr__.language,
                             tags,
+                            classifiers: Default::default(),
                             meta,
                         },
                         __base_attr__: NodeBaseAttributes {
@@ -1509,6 +1514,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         .clone()
                         .map(|tags| tags.into())
                         .unwrap_or_default(),
+                    classifiers: Default::default(),
                     meta: source.config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
@@ -1579,6 +1585,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     language: None,
                     raw_code: None,
                     tags: vec![],
+                    classifiers: Default::default(),
                     meta: IndexMap::new(),
                 },
                 __base_attr__: NodeBaseAttributes {
@@ -1639,6 +1646,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         .clone()
                         .map(|tags| tags.into())
                         .unwrap_or_default(),
+                    classifiers: Default::default(),
                     meta: unit_test.config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
@@ -1713,6 +1721,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         .clone()
                         .map(|tags| tags.into())
                         .unwrap_or_default(),
+                    classifiers: Default::default(),
                     meta: saved_query.config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
@@ -1770,6 +1779,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     language: None,
                     raw_code: None,
                     tags: vec![],
+                    classifiers: Default::default(),
                     meta: IndexMap::new(),
                 },
                 __base_attr__: NodeBaseAttributes {
@@ -1879,6 +1889,12 @@ pub fn manifest_model_to_dbt_model(
             checksum: recalculated_checksum,
             language: model.__base_attr__.language,
             tags: model.config.tags.clone().map(Vec::from).unwrap_or_default(),
+            classifiers: model
+                .config
+                .classifiers
+                .clone()
+                .map(|c| c.into())
+                .unwrap_or_default(),
             meta: model.config.meta.clone().unwrap_or_default(),
         },
         __base_attr__: NodeBaseAttributes {
@@ -1978,6 +1994,7 @@ pub fn manifest_function_to_dbt_function(
                 .clone()
                 .map(|tags| tags.into())
                 .unwrap_or_default(),
+            classifiers: Default::default(),
             meta: function.config.meta.clone().unwrap_or_default(),
         },
         __base_attr__: NodeBaseAttributes {

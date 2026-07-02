@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use arrow::array::{Array as _, StringArray};
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, TableFormat};
-use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
 use crate::adapter::adapter_impl::AdapterImpl;
@@ -65,6 +65,9 @@ pub fn get_relation(
             spark_get_relation(adapter, state, ctx, conn, schema, identifier, token)
         }
         AdapterType::DuckDB => duckdb_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
+        AdapterType::Fdcs => duckdb_get_relation(
             adapter, state, ctx, conn, database, schema, identifier, token,
         ),
         AdapterType::Fabric => fabric_get_relation(
@@ -286,6 +289,51 @@ fn bigquery_get_relation(
     Ok(Some(relation))
 }
 
+// Parses non-JSON `DESCRIBE TABLE EXTENDED` output, shared by Spark and older
+// Databricks runtimes without `AS JSON`. Output layout (col_name/data_type):
+// column defs, empty separator row, then metadata key-value pairs. Some catalogs
+// (e.g. hive_metastore) omit 'Type'/'Provider', so we default gracefully.
+fn parse_describe_table_extended(
+    adapter_type: AdapterType,
+    batch: &arrow::record_batch::RecordBatch,
+) -> AdapterResult<(RelationType, bool, BTreeMap<String, String>)> {
+    let col_names = batch.column_values::<StringArray>("col_name")?;
+    let data_types = batch.column_values::<StringArray>("data_type")?;
+
+    let mut metadata_map = BTreeMap::new();
+    let mut type_str = None;
+    let mut provider_str = None;
+    let mut in_metadata_section = false;
+
+    for i in 0..batch.num_rows() {
+        let key = col_names.value(i).trim();
+        let value = data_types.value(i).trim();
+
+        if key.is_empty() {
+            in_metadata_section = true;
+            continue;
+        }
+        if !in_metadata_section || key.starts_with('#') {
+            continue;
+        }
+
+        metadata_map.insert(key.to_string(), value.to_string());
+        match key {
+            "Type" => type_str = Some(value.to_string()),
+            "Provider" => provider_str = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    let relation_type = match type_str.as_deref() {
+        Some(t) => RelationType::from_adapter_type(adapter_type, t),
+        None => RelationType::Table,
+    };
+    let is_delta = provider_str.as_deref() == Some("delta");
+
+    Ok((relation_type, is_delta, metadata_map))
+}
+
 fn spark_get_relation(
     adapter: &AdapterImpl,
     state: &State,
@@ -318,12 +366,13 @@ fn spark_get_relation(
     {
         return Ok(None);
     }
-    let _batch = batch?;
+    let batch = batch?;
+    if batch.num_rows() == 0 {
+        return Ok(None);
+    }
 
-    let is_delta = false;
-    let relation_type = RelationType::Table;
-    // TODO(serramatutu): populate table metadata.
-    let json_metadata = BTreeMap::new();
+    let (relation_type, is_delta, metadata) =
+        parse_describe_table_extended(AdapterType::Spark, &batch)?;
 
     Ok(Some(Box::new(
         Relation::new(
@@ -332,9 +381,9 @@ fn spark_get_relation(
             schema.to_string(),
             identifier.to_string(),
         )
-        .with_relation_type(relation_type)
+        .with_relation_type(Some(relation_type))
         .with_quoting(adapter.quoting())
-        .with_metadata(json_metadata)
+        .with_metadata(Some(metadata))
         .with_is_delta(is_delta),
     )))
 }
@@ -425,48 +474,9 @@ fn databricks_get_relation(
     }
 
     let (relation_type, is_delta, metadata) = if as_json_unsupported {
-        // Parse the non-JSON DESCRIBE TABLE EXTENDED output.
-        // The result has col_name/data_type/comment columns. Column definitions come
-        // first, followed by an empty separator row, then metadata key-value pairs.
-        // Some databases (e.g. hive_metastore) may be missing 'Type' and 'Provider'
-        // rows, so we default gracefully.
-        let col_names = batch.column_values::<StringArray>("col_name")?;
-        let data_types = batch.column_values::<StringArray>("data_type")?;
-
-        let mut metadata_map = BTreeMap::new();
-        let mut type_str = None;
-        let mut provider_str = None;
-        let mut in_metadata_section = false;
-
-        for i in 0..batch.num_rows() {
-            let key = col_names.value(i).trim();
-            let value = data_types.value(i).trim();
-
-            if key.is_empty() {
-                in_metadata_section = true;
-                continue;
-            }
-            if !in_metadata_section || key.starts_with('#') {
-                continue;
-            }
-
-            metadata_map.insert(key.to_string(), value.to_string());
-            match key {
-                "Type" => type_str = Some(value.to_string()),
-                "Provider" => provider_str = Some(value.to_string()),
-                _ => {}
-            }
-        }
-
-        // The non-JSON Type field returns raw Databricks types (MANAGED, EXTERNAL,
-        // FOREIGN, VIEW, etc.) — use from_adapter_type for proper mapping.
-        let relation_type = Some(match type_str.as_deref() {
-            Some(t) => RelationType::from_adapter_type(adapter.adapter_type(), t),
-            None => RelationType::Table,
-        });
-        let is_delta = provider_str.as_deref() == Some("delta");
-
-        (relation_type, is_delta, Some(metadata_map))
+        let (relation_type, is_delta, metadata_map) =
+            parse_describe_table_extended(adapter.adapter_type(), &batch)?;
+        (Some(relation_type), is_delta, Some(metadata_map))
     } else {
         debug_assert_eq!(batch.num_rows(), 1);
         let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
@@ -762,15 +772,56 @@ fn duckdb_get_relation(
         identifier.to_lowercase()
     };
 
+    if !schema.is_empty()
+        && !identifier.is_empty()
+        && crate::metadata::duckdb::is_duckdb_v2_external_iceberg_catalog_database(database)
+    {
+        // DuckDB's information_schema can omit or misreport Iceberg REST
+        // attached-catalog tables. A targeted DESCRIBE is the narrow fallback:
+        // it reuses the normal relation construction after proving the table
+        // exists, without enabling broad schema listing for these catalogs.
+        let quote = |id: &str| dbt_adapter_sql::ident::quote_identifier(id, AdapterType::DuckDB);
+        let relation_name = format!(
+            "{}.{}.{}",
+            quote(database),
+            quote(&query_schema),
+            quote(&query_identifier),
+        );
+        let sql = format!("DESCRIBE {relation_name}");
+        let result = adapter
+            .engine()
+            .execute(Some(state), conn, ctx, &sql, token);
+
+        match result {
+            Ok(_) => {
+                let relation = do_create_relation(
+                    adapter.adapter_type(),
+                    database.to_string(),
+                    schema.to_string(),
+                    Some(identifier.to_string()),
+                    Some(RelationType::Table),
+                    adapter.quoting(),
+                )?;
+                return Ok(Some(relation));
+            }
+            Err(err) if crate::metadata::duckdb::is_missing_relation_error(&err) => {
+                return Ok(None);
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
     // Query INFORMATION_SCHEMA.TABLES for relation metadata
     // DuckDB's table_type values: BASE TABLE, VIEW, LOCAL TEMPORARY
     let sql = format!(
         r#"
             SELECT table_type as type
             FROM information_schema.tables
-            WHERE table_schema = '{query_schema}'
-              AND table_name = '{query_identifier}'
+            WHERE table_schema = '{}'
+              AND table_name = '{}'
         "#,
+        dbt_adapter_sql::ident::escape_string_literal(&query_schema, AdapterType::DuckDB),
+        dbt_adapter_sql::ident::escape_string_literal(&query_identifier, AdapterType::DuckDB),
     );
 
     let batch = adapter
@@ -928,4 +979,66 @@ fn clickhouse_get_relation(
         adapter.quoting(),
     )?;
     Ok(Some(relation))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::array::StringArray;
+    use arrow::datatypes::{DataType, Field, Schema};
+    use arrow::record_batch::RecordBatch;
+
+    fn describe_batch(rows: &[(&str, &str)]) -> RecordBatch {
+        let schema = Schema::new(vec![
+            Field::new("col_name", DataType::Utf8, false),
+            Field::new("data_type", DataType::Utf8, false),
+        ]);
+        let col_names: Vec<&str> = rows.iter().map(|(k, _)| *k).collect();
+        let data_types: Vec<&str> = rows.iter().map(|(_, v)| *v).collect();
+        RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(col_names)),
+                Arc::new(StringArray::from(data_types)),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn spark_describe_classifies_view() {
+        let batch = describe_batch(&[
+            ("id", "int"),
+            ("", ""),
+            ("# Detailed Table Information", ""),
+            ("Catalog", "spark_catalog"),
+            ("Type", "VIEW"),
+        ]);
+        let (relation_type, is_delta, _) =
+            parse_describe_table_extended(AdapterType::Spark, &batch).unwrap();
+        assert_eq!(relation_type, RelationType::View);
+        assert!(!is_delta);
+    }
+
+    #[test]
+    fn spark_describe_classifies_managed_table() {
+        let batch = describe_batch(&[
+            ("id", "int"),
+            ("", ""),
+            ("Type", "MANAGED"),
+            ("Provider", "delta"),
+        ]);
+        let (relation_type, is_delta, _) =
+            parse_describe_table_extended(AdapterType::Spark, &batch).unwrap();
+        assert_eq!(relation_type, RelationType::Table);
+        assert!(is_delta);
+    }
+
+    #[test]
+    fn spark_describe_defaults_to_table_when_type_missing() {
+        let batch = describe_batch(&[("id", "int"), ("", ""), ("Catalog", "spark_catalog")]);
+        let (relation_type, _, _) =
+            parse_describe_table_extended(AdapterType::Spark, &batch).unwrap();
+        assert_eq!(relation_type, RelationType::Table);
+    }
 }

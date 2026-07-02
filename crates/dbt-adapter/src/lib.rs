@@ -2,6 +2,11 @@
 
 #![allow(clippy::let_and_return)]
 
+use std::sync::Arc;
+
+use dbt_common::ErrorCode;
+use dbt_common::io_utils::StatusReporter;
+
 mod macro_exec;
 mod value;
 
@@ -35,9 +40,7 @@ pub mod stmt_splitter;
 pub mod time_machine;
 
 // Re-export types and modules that were moved to dbt_auth
-pub mod auth {
-    pub use dbt_auth::Auth;
-}
+pub mod auth;
 pub mod config {
     pub use dbt_auth::AdapterConfig;
 }
@@ -67,3 +70,57 @@ pub use macro_exec::{
     execute_macro_wrapper_with_package,
 };
 pub use response::AdapterResponse;
+
+/// IMPORTANT: don't change this function to add a new adapter!!! Change the
+/// [NON_EXPERIMENTAL_ADAPTERS](dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS)
+/// instead.
+fn experimental_adapters_allowed(
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) -> bool {
+    use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+
+    match dbt_env::env_var_bool("DBT_ALLOW_EXPERIMENTAL_ADAPTERS") {
+        Ok(None) => {
+            // Allow experimental adapters in debug builds by default,
+            // but deny on release builds...
+            cfg!(debug_assertions)
+        }
+        Ok(Some(allow)) => allow, // ...unless explicitly allowed.
+        Err(msg) => {
+            emit_warn_log_message(ErrorCode::InvalidConfig, msg, status_reporter);
+            false // disable when variable value is malformed
+        }
+    }
+}
+
+pub fn enforce_adapter_gating(
+    adapter_type: AdapterType,
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) -> AdapterResult<()> {
+    use dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS;
+    use dbt_common::{AdapterError, AdapterErrorKind};
+
+    if NON_EXPERIMENTAL_ADAPTERS.contains(&adapter_type) {
+        return Ok(());
+    }
+
+    if experimental_adapters_allowed(status_reporter) {
+        return Ok(());
+    }
+
+    let mut message = format!(
+        "The '{}' adapter is not yet supported by dbt Fusion. \
+Supported adapters: ",
+        adapter_type
+    );
+    let mut supported = NON_EXPERIMENTAL_ADAPTERS.iter();
+    message.push_str(supported.next().unwrap().as_ref());
+    for adapter in supported {
+        message.push_str(", ");
+        message.push_str(adapter.as_ref());
+    }
+    message.push_str(". To use an experimental adapter, set the environment variable DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true. \
+Note that experimental adapters may be unstable and are not yet recommended for production use.");
+
+    Err(AdapterError::new(AdapterErrorKind::Configuration, message))
+}

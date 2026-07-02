@@ -5,9 +5,6 @@ pub mod macros;
 pub mod proto;
 pub mod schemas;
 pub mod serialize;
-mod static_name;
-
-pub use static_name::StaticName;
 
 pub use attributes::*;
 pub use schemas::*;

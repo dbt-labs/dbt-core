@@ -232,6 +232,7 @@ pub mod cache_key;
 pub mod filters;
 pub mod functions;
 /// Source-side Jinja layout analysis.
+pub mod layout;
 pub mod listener;
 
 /// Dispatch object for Jinja templates
@@ -256,6 +257,7 @@ pub use self::defaults::{default_auto_escape_callback, escape_formatter};
 pub use self::environment::Environment;
 pub use self::error::{Error, ErrorKind};
 pub use self::expression::Expression;
+pub use self::layout::{JinjaLayoutEvent, JinjaLayoutEventKind, JinjaLayoutEvents};
 pub use self::output::{MacroSpans, Output};
 pub use self::output_tracker::{OutputTracker, OutputTrackerLocation};
 pub use self::template::Template;

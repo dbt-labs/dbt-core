@@ -7,7 +7,10 @@ use std::time::Instant;
 use crate::materialize::{NodeHookPhase, NodeHookStyle, execute_node_hooks, model_hook_style};
 use crate::runnable::function::execute_function_remote;
 use crate::runnable::snapshot::execute_snapshot_remote;
-use crate::runnable::test::execute_test_remote;
+use crate::runnable::test::{
+    TestExecutionStatus, TestReportedResult, execute_test_remote, record_cached_test_span,
+    record_test_metric, status_with_warn_error_overrides,
+};
 use dbt_adapter::time_machine::{SaoStatus, global_recorder, global_replayer};
 use dbt_adapter_core::AdapterType;
 use dbt_common::constants::RUNNING;
@@ -15,11 +18,13 @@ use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::status_reporter::report_completed;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_message};
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
+use dbt_common::warn_error_options::WarnErrorOptions;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::utils::add_task_context;
+use dbt_schemas::schemas::common::Severity;
 use dbt_schemas::schemas::manifest::saved_query::DbtSavedQuery;
 use dbt_schemas::schemas::{
-    DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
+    DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, InternalDbtNode,
     InternalDbtNodeAttributes, NodePathKind, Nodes,
 };
 use dbt_tasks_core::context::TaskRunnerCtx;
@@ -32,6 +37,10 @@ use tokio::task::JoinSet;
 use tracing::Instrument;
 use vortex_events::run_model_event;
 
+use crate::materialize::{
+    materialize_latest_version_pointer, should_create_latest_version_pointer,
+};
+use crate::runnable::cache::cache_materialization_return_value;
 use crate::runnable::model::{
     execute_microbatch_batch, execute_model_remote, prepare_microbatch_batches,
     try_get_microbatch_model,
@@ -48,7 +57,6 @@ use dbt_tasks_core::run_cache::run_cache_service::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunExecutionPath {
-    Local,
     Remote,
     SideCar,
 }
@@ -97,14 +105,16 @@ impl Task for RunTask {
             let mut result_receiver = { self.result_receiver.lock().take() };
             let task_result = receive_task_result(&unique_id, &mut result_receiver)?;
             let start_time = chrono::Utc::now();
-            // Status lines (RUNNING + report_completed) cite the definition path so the
-            // user sees where they wrote the code, not the run-phase artifact under target/.
-            // Error messages, which are emitted with their own phase-accurate locations
-            // attached during inner execution, are unaffected by this choice.
+            // Status lines keep source path for Models for readability
+            let display_path_kind = if self.node.resource_type() == NodeType::Model {
+                NodePathKind::Definition
+            } else {
+                NodePathKind::Executable
+            };
             let display_path = self
                 .node
                 .get_node_path(
-                    NodePathKind::Definition,
+                    display_path_kind,
                     ctx.inner.arg.io.in_dir.as_path(),
                     ctx.inner.arg.io.out_dir.as_path(),
                 )
@@ -186,51 +196,29 @@ impl Task for RunTask {
                             cached_test_failures,
                             self.node.as_any().downcast_ref::<DbtTest>(),
                         ) {
-                            let failures_usize = (*failures).max(0) as usize;
                             let severity =
                                 test.deprecated_config.severity.clone().unwrap_or_default();
-                            // Mirror the non-cached test path: bump the
-                            // matching invocation counter so the dbt
-                            // command's returncode reflects test failures /
-                            // warnings. Without this, cached failing tests
-                            // still report exit 0 even though their status
-                            // is correct.
-                            let (test_status, metric_key) = if failures_usize == 0 {
-                                (NodeStatus::TestPassed, None)
-                            } else {
-                                match severity {
-                                    dbt_schemas::schemas::common::Severity::Warn => (
-                                        NodeStatus::TestWarned,
-                                        Some(
-                                            dbt_common::tracing::dbt_metrics::InvocationMetricKey::TotalWarnings,
-                                        ),
-                                    ),
-                                    dbt_schemas::schemas::common::Severity::Error => (
-                                        NodeStatus::Errored,
-                                        Some(
-                                            dbt_common::tracing::dbt_metrics::InvocationMetricKey::TotalErrors,
-                                        ),
-                                    ),
-                                }
-                            };
-                            if let Some(key) = metric_key {
-                                dbt_common::tracing::metrics::increment_metric(
-                                    dbt_common::tracing::dbt_metrics::FusionMetricKey::InvocationMetric(key),
-                                    1,
-                                );
-                            }
+                            let cached_status = cached_data_test_status(
+                                status,
+                                *failures,
+                                severity,
+                                &ctx.inner.arg.warn_error_options,
+                            );
+                            let reported_result = cached_status.reported_result();
+                            record_test_metric(reported_result.status);
+                            record_cached_test_span(test, &reported_result);
                             ctx.inner.run_stats.insert(
                                 unique_id.clone(),
                                 Stat::new(
                                     unique_id.clone(),
                                     start_time.into(),
-                                    Some(failures_usize),
-                                    test_status.clone(),
+                                    Some(cached_status.failures),
+                                    cached_status.stat_status.clone(),
                                     Some("NO-OP - cached test result".to_string()),
                                     ctx.thread_id,
                                 ),
                             );
-                            test_status
+                            cached_status.final_status
                         } else {
                             record_cache_skip(&unique_id, status, source);
                             status.clone()
@@ -308,6 +296,11 @@ impl Task for RunTask {
                                     ctx,
                                     &task_result,
                                 )?;
+                                // An empty event window yields no batches, so the target
+                                // relation is never materialized on a first run. Mirror
+                                // dbt-core's `if not relations` guard: only create the
+                                // pointer view when at least one batch executed.
+                                let had_batches = !batch_groups.is_empty();
                                 for group in batch_groups {
                                     let batch_span = tracing::Span::current();
                                     let mut batch_tasks = group
@@ -330,6 +323,51 @@ impl Task for RunTask {
                                         res.map_err(Into::into).flatten()??;
                                     }
                                 }
+
+                                // After all microbatch batches succeed, create the latest
+                                // version pointer view if applicable. Skip when no batches
+                                // executed (empty event window) — the source relation may
+                                // not exist yet, so pointing at it would fail.
+                                if had_batches
+                                    && let Some(model) =
+                                        self.node.as_any().downcast_ref::<DbtModel>()
+                                    && should_create_latest_version_pointer(
+                                        model,
+                                        ctx.runtime_config(),
+                                    )
+                                {
+                                    let mut base_context = ctx.inner.base_context.clone();
+                                    add_task_context(
+                                        &mut base_context,
+                                        model.common(),
+                                        &ctx.thread_id,
+                                    );
+                                    let model_clone = model.clone();
+                                    let ctx_clone = ctx.clone();
+                                    TaskOp::BlockingWithConnection {
+                                        f: Box::new(move || {
+                                            let relations_map = materialize_latest_version_pointer(
+                                                &model_clone,
+                                                ctx_clone.adapter_type(),
+                                                ctx_clone.runtime_config(),
+                                                &ctx_clone.inner.materialization_resolver,
+                                                ctx_clone.env.clone(),
+                                                &base_context,
+                                                &ctx_clone.inner.arg.io,
+                                            )?;
+                                            let _ = cache_materialization_return_value(
+                                                ctx_clone.env,
+                                                &relations_map,
+                                            );
+                                            Ok::<(), Box<dbt_common::FsError>>(())
+                                        }),
+                                        adapter_type,
+                                        max_threads,
+                                    }
+                                    .run()
+                                    .await??;
+                                }
+
                                 Ok(NodeStatus::Succeeded)
                             // Node is Saved Query
                             } else if let Some(saved_query) =
@@ -410,12 +448,6 @@ impl Task for RunTask {
                 RunExecutionPath::SideCar => {
                     self.task_hooks
                         .run_alt_compute_sidecar(ctx, Arc::clone(&self.node), task_result.clone())
-                        .await
-                }
-                // Out of Scope for Connection Backpressure (or splitting)
-                RunExecutionPath::Local => {
-                    self.task_hooks
-                        .run_alt_compute_local(ctx, Arc::clone(&self.node), task_result.clone())
                         .await
                 }
             };
@@ -699,6 +731,7 @@ fn execute_hook_node_blocking(
             &ctx.inner.arg.io,
             sql,
             model_hook_style(ctx.adapter_type(), &model.__base_attr__.materialized),
+            NodePathKind::Compiled,
             phase,
         ),
         RunCacheReuseHookNode::Snapshot(snapshot) => execute_node_hooks(
@@ -711,6 +744,7 @@ fn execute_hook_node_blocking(
             &ctx.inner.arg.io,
             sql,
             NodeHookStyle::SplitTransaction,
+            NodePathKind::Executable,
             phase,
         ),
         RunCacheReuseHookNode::Seed(seed) => execute_node_hooks(
@@ -723,6 +757,7 @@ fn execute_hook_node_blocking(
             &ctx.inner.arg.io,
             None,
             NodeHookStyle::SplitTransaction,
+            NodePathKind::Compiled,
             phase,
         ),
     }
@@ -796,6 +831,58 @@ async fn run_cache_after_success_action(
 
 fn elapsed_millis(started_at: Instant) -> i64 {
     i64::try_from(started_at.elapsed().as_millis()).unwrap_or(i64::MAX)
+}
+
+struct CachedDataTestStatus {
+    failures: usize,
+    status: TestExecutionStatus,
+    stat_status: NodeStatus,
+    final_status: NodeStatus,
+}
+
+impl CachedDataTestStatus {
+    fn reported_result(&self) -> TestReportedResult {
+        TestReportedResult {
+            failures: self.failures,
+            status: self.status,
+            diff: None,
+        }
+    }
+}
+
+/// Converts a cached data test result into the statuses and metrics needed for reuse reporting.
+///
+/// Cached passing tests keep the run-cache reuse status as the task's final status while recording
+/// a passing test stat. Cached failures use the data test severity to report warn/error stats and
+/// increment the matching invocation metric so command status matches a normally executed test.
+fn cached_data_test_status(
+    reused_status: &NodeStatus,
+    failures: i64,
+    severity: Severity,
+    warn_error_options: &WarnErrorOptions,
+) -> CachedDataTestStatus {
+    let failures = failures.max(0) as usize;
+    let status = if failures == 0 {
+        TestExecutionStatus::Passed
+    } else {
+        match severity {
+            Severity::Warn => TestExecutionStatus::Warned,
+            Severity::Error => TestExecutionStatus::Failed,
+        }
+    };
+    let status = status_with_warn_error_overrides(status, warn_error_options);
+    let stat_status = status.node_status();
+
+    CachedDataTestStatus {
+        failures,
+        status,
+        stat_status: stat_status.clone(),
+        final_status: if stat_status == NodeStatus::TestPassed {
+            reused_status.clone()
+        } else {
+            stat_status
+        },
+    }
 }
 
 /// Receives the task result from the channel, consuming the receiver.
@@ -884,8 +971,13 @@ fn emit_run_usage_stats(
                     (None, false, false, None, None)
                 }
             }
-            RunExecutionPath::Local => (None, false, false, None, None),
         };
+
+    // `catalog_type` is not stored on the model — only `catalog_name` is. The type
+    // lives on the catalog's active write integration in catalogs.yml, so resolve
+    // it the same way the adapter does (catalog_name -> active_write_integration ->
+    // write_integration.catalog_type). See dbt-adapter's CatalogRelation builders.
+    let catalog_type = resolve_catalog_type(catalog_name.as_deref());
 
     run_model_event(
         ctx.inner.arg.io.invocation_id.to_string(),
@@ -896,7 +988,51 @@ fn emit_run_usage_stats(
         has_group,
         table_format,
         catalog_name,
+        catalog_type,
     );
+}
+
+/// Resolve a model's `catalog_name` to the `catalog_type` declared in catalogs.yml.
+///
+/// Mirrors how the adapter resolves catalog metadata at materialization time
+/// (`CatalogRelation::build_with_catalogs` and friends). The returned string is the
+/// catalog-type enum's stable form (`*::as_str`), which is the aggregatable value we
+/// want in telemetry.
+///
+/// Two schemas are supported:
+/// - **v1**: `catalog_type` lives on the catalog's active write integration —
+///   find the catalog by name, follow its `active_write_integration`, and read that
+///   integration's `catalog_type`.
+/// - **v2**: each catalog declares its `type` directly (no write integrations) —
+///   find the catalog by name and read its `catalog_type`.
+///
+/// Returns `None` when the model has no `catalog_name`, catalogs.yml is absent, or the
+/// catalog/integration cannot be found.
+fn resolve_catalog_type(catalog_name: Option<&str>) -> Option<String> {
+    let catalog_name = catalog_name?;
+    let catalogs = dbt_adapter::load_catalogs::fetch_catalogs()?;
+    // v2 catalogs.yml declares `type` directly on each catalog (no write
+    // integrations); v1 nests `catalog_type` under the active write integration.
+    if dbt_adapter::load_catalogs::fetch_use_catalogs_v2() {
+        let view = catalogs.view_v2().ok()?;
+        let catalog = view
+            .catalogs
+            .iter()
+            .find(|catalog| catalog.name == catalog_name)?;
+        return Some(catalog.catalog_type.as_str().to_string());
+    }
+    let view = catalogs.view().ok()?;
+    let catalog = view
+        .catalogs
+        .iter()
+        .find(|catalog| catalog.catalog_name.0 == catalog_name)?;
+    let active_integration = catalog.active_write_integration.0;
+    let write_integration = catalog
+        .write_integrations
+        .0
+        .iter()
+        .find(|write_integration| write_integration.integration_name == active_integration)?;
+    Some(write_integration.catalog_type.as_str().to_string())
 }
 
 fn node_runs_with_cache(node: &dyn InternalDbtNodeAttributes) -> bool {
@@ -996,6 +1132,8 @@ pub fn runnable_remote_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_common::tracing::dbt_metrics::InvocationMetricKey;
+    use dbt_common::warn_error_options::WarnErrorOptionValue;
     use dbt_schemas::schemas::common::Hooks;
     use dbt_schemas::schemas::properties::ModelState;
     use dbt_yaml::Verbatim;
@@ -1020,6 +1158,110 @@ mod tests {
     #[test]
     fn elapsed_millis_saturates_for_large_durations() {
         assert!(elapsed_millis(Instant::now()) >= 0);
+    }
+
+    #[test]
+    fn cached_passing_data_test_keeps_reused_final_status() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(
+            &reused_status,
+            0,
+            Severity::Error,
+            &WarnErrorOptions::default(),
+        );
+
+        assert_eq!(status.failures, 0);
+        assert_eq!(status.status, TestExecutionStatus::Passed);
+        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(status.final_status, reused_status);
+        assert_eq!(status.status.metric_key(), None);
+    }
+
+    #[test]
+    fn cached_failing_error_data_test_keeps_error_final_status() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(
+            &reused_status,
+            2,
+            Severity::Error,
+            &WarnErrorOptions::default(),
+        );
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.status, TestExecutionStatus::Failed);
+        assert_eq!(status.stat_status, NodeStatus::Errored);
+        assert_eq!(status.final_status, NodeStatus::Errored);
+        assert_eq!(
+            status.status.metric_key(),
+            Some(InvocationMetricKey::TotalErrors)
+        );
+    }
+
+    #[test]
+    fn cached_failing_warn_data_test_keeps_warn_final_status() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(
+            &reused_status,
+            2,
+            Severity::Warn,
+            &WarnErrorOptions::default(),
+        );
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.status, TestExecutionStatus::Warned);
+        assert_eq!(status.stat_status, NodeStatus::TestWarned);
+        assert_eq!(status.final_status, NodeStatus::TestWarned);
+        assert_eq!(
+            status.status.metric_key(),
+            Some(InvocationMetricKey::TotalWarnings)
+        );
+    }
+
+    #[test]
+    fn cached_failing_warn_data_test_honors_warn_error_upgrade() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+        let warn_error_options = WarnErrorOptions {
+            error: vec![WarnErrorOptionValue::all()],
+            ..Default::default()
+        };
+
+        let status =
+            cached_data_test_status(&reused_status, 2, Severity::Warn, &warn_error_options);
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.status, TestExecutionStatus::Failed);
+        assert_eq!(status.stat_status, NodeStatus::Errored);
+        assert_eq!(status.final_status, NodeStatus::Errored);
+        assert_eq!(
+            status.status.metric_key(),
+            Some(InvocationMetricKey::TotalErrors)
+        );
+    }
+
+    #[test]
+    fn cached_failing_warn_data_test_honors_warn_error_silence() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+        let warn_error_options = WarnErrorOptions {
+            silence: vec![WarnErrorOptionValue::all()],
+            ..Default::default()
+        };
+
+        let status =
+            cached_data_test_status(&reused_status, 2, Severity::Warn, &warn_error_options);
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.status, TestExecutionStatus::Passed);
+        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(status.final_status, reused_status);
+        assert_eq!(status.status.metric_key(), None);
     }
 
     #[test]

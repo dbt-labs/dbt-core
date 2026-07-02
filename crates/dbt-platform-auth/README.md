@@ -34,9 +34,9 @@ The default chain tries resolvers in this order without any user interaction:
 3. **`CloudYamlResolver`** — `./dbt_cloud.yml`, then `~/.dbt/dbt_cloud.yml`
 
 ```rust
-use dbt_platform_auth::AuthChain;
+use dbt_platform_auth::AuthChainBuilder;
 
-let chain = AuthChain::default();
+let chain = AuthChainBuilder::default().build();
 let credential = chain.resolve().await?;
 
 println!("host:  {}", credential.account_host());
@@ -45,14 +45,12 @@ println!("token: {}", credential.token());
 
 ### Interactive chain
 
-For contexts that can prompt the user (e.g. a `login` command), use the interactive chain. It runs the same non-interactive resolvers first, then falls back to `OAuthInteractiveResolver` — a browser-based OAuth authorization code flow — if all passive sources fail.
-
-> **Note:** `OAuthInteractiveResolver` is not yet implemented and will return `NotAuthenticated` until the browser flow lands.
+For contexts that can prompt the user (e.g. a `login` command), call `.interactive()` on the builder to append `OAuthInteractiveResolver` as a final fallback — a browser-based OAuth authorization code flow that runs only if all passive sources fail.
 
 ```rust
-use dbt_platform_auth::AuthChain;
+use dbt_platform_auth::AuthChainBuilder;
 
-let chain = AuthChain::interactive();
+let chain = AuthChainBuilder::default().interactive().build();
 let credential = chain.resolve().await?;
 ```
 
@@ -148,9 +146,9 @@ let credential = chain.resolve().await?;
 The chain continues past `InaccessibleSource` and `Malformed` errors rather than aborting. If credentials are never found, the first non-`NotAuthenticated` error is returned so the caller can surface the most actionable diagnosis.
 
 ```rust
-use dbt_platform_auth::{AuthChain, AuthError};
+use dbt_platform_auth::{AuthChainBuilder, AuthError};
 
-match AuthChain::default().resolve().await {
+match AuthChainBuilder::default().build().resolve().await {
     Ok(cred) => { /* use cred */ }
     Err(AuthError::NotAuthenticated) => eprintln!("no credentials found"),
     Err(AuthError::AuthenticationExpired) => eprintln!("credentials have expired — run `dbt login` to re-authenticate"),

@@ -21,6 +21,7 @@ use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
 use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_jinja_utils::{
+    JinjaFactory,
     invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
     listener::JinjaTypeCheckingEventListenerFactory,
@@ -61,8 +62,8 @@ use dbt_metadata::file_registry::CompleteStateWithKind;
 use dbt_schemas::{
     filter::RunFilter,
     schemas::{
-        CommonAttributes, Nodes, ResolvedCloudConfig, common::ResolvedQuoting,
-        manifest::DbtManifestV12, profiles::Execute, project::DbtProject,
+        Nodes, ResolvedCloudConfig, common::ResolvedQuoting, manifest::DbtManifestV12,
+        profiles::Execute, project::DbtProject,
         semantic_layer::semantic_manifest::SemanticManifest,
     },
     state::{CacheState, DbtPackage, DbtState, Macros, ModelStatus, ResolverState},
@@ -97,7 +98,8 @@ use tracing::Instrument;
 use vortex_events::{adapter_info_event, resource_counts_event};
 
 use dbt_schemas::schemas::{
-    OnManifestLoadFailure, StateArtifacts, legacy_catalog::DbtCatalog, manifest::build_manifest,
+    InternalDbtNode, OnManifestLoadFailure, StateArtifacts, legacy_catalog::DbtCatalog,
+    manifest::build_manifest,
 };
 
 use dbt_compilation::config::CompilationConfig;
@@ -198,6 +200,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             Some(feature_stack.tracing.config_provider.as_ref()),
             &self.token,
             feature_stack.loader.hooks.clone(),
+            feature_stack.jinja.factory.clone(),
         )
         .await?;
         self.token.check_cancellation()?;
@@ -305,10 +308,10 @@ impl<'a> CompilationPhasesExecutor<'a> {
     }
 
     /// Emit Vortex resource_counts if instrumentation is enabled
-    fn resource_counts_event(&self, resolved_state: &ResolverState) {
+    fn resource_counts_event(&self, resolved_state: &ResolverState, catalog_count: i32) {
         if self.arg.send_anonymous_usage_stats {
             let invocation_args = InvocationArgs::from_eval_args(self.arg.as_ref());
-            resource_counts_event(invocation_args, resolved_state);
+            resource_counts_event(invocation_args, resolved_state, catalog_count);
         }
     }
 
@@ -325,6 +328,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
         &self,
         type_ops_factory: Arc<dyn TypeOpsFactory>,
         adapter_factory: Arc<dyn AdapterFactory>,
+        jinja_factory: Arc<dyn JinjaFactory>,
     ) {
         let config = CompilationConfig {
             use_build_cache_for_scheduling: true,
@@ -347,6 +351,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             self.cli.as_ref(),
             type_ops_factory,
             adapter_factory,
+            jinja_factory,
         ) {
             (PrevCompilationResult::Incremental(_), _) => {
                 emit_info_log_message(
@@ -426,6 +431,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 self.run_verify_partial_parse(
                     feature_stack.adapter.type_ops_factory.clone(),
                     feature_stack.adapter.adapter_factory.clone(),
+                    feature_stack.jinja.factory.clone(),
                 );
             }
         }
@@ -455,6 +461,8 @@ impl<'a> CompilationPhasesExecutor<'a> {
 
             let empty_targets = HashSet::new();
             let empty_grain_infos = HashMap::new();
+            let empty_node_classifiers = HashMap::new();
+            let empty_column_classifiers = HashMap::new();
             write_metadata_parquet(
                 &self.arg,
                 manifest,
@@ -463,6 +471,8 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 None,
                 &empty_targets,
                 &empty_grain_infos,
+                &empty_node_classifiers,
+                &empty_column_classifiers,
             );
 
             let index_dir = self.arg.index_dir();
@@ -494,9 +504,11 @@ impl<'a> CompilationPhasesExecutor<'a> {
             if err.exit_status().is_some() {
                 // Preserve manifest artifact semantics for commands that short-circuit at parse
                 // after load/resolve but before execute_all_phases reaches the late write path.
-                if self.arg.write_json && self.arg.command != FsCommand::Parse {
-                    // Write run_results.json with error status for nodes that had
-                    // resolution errors so that `dbt retry` can pick them up.
+                if (self.arg.write_json || self.arg.write_metadata)
+                    && self.arg.command != FsCommand::Parse
+                {
+                    // Write run_results with error status for nodes that had
+                    // resolution errors so that `dbt retry` and `dbt agent` can pick them up.
                     let now = SystemTime::now();
                     let error_stats = Stats {
                         stats: resolved_state
@@ -515,7 +527,15 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
                     };
-                    write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
+                    if self.arg.write_json {
+                        write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
+                    }
+                    if self.arg.write_metadata {
+                        crate::utils::write_runtime_results_parquet(
+                            &error_stats,
+                            self.arg.as_ref(),
+                        );
+                    }
 
                     let dbt_manifest = self.memoized_manifest(invocation_id, resolved_state);
                     write_artifact_to_file(
@@ -658,10 +678,6 @@ impl DbtProjectCompilationCacheState {
             .map(|x| x.into_inner())
     }
 
-    pub fn get_compiled_sql_path(&self, io: &IoArgs, common: &CommonAttributes) -> PathBuf {
-        self.compiled_sql_cache.get_compiled_sql_path(io, common)
-    }
-
     pub fn data_store(&self) -> Arc<DataStore> {
         self.data_store.clone()
     }
@@ -676,10 +692,6 @@ impl CompilationCache for DbtProjectCompilationCacheState {
         self.schema_store
             .get_schema_by_unique_id(unique_id)
             .map(|x| x.into_inner())
-    }
-
-    fn get_compiled_sql_path(&self, io: &IoArgs, common: &CommonAttributes) -> PathBuf {
-        self.compiled_sql_cache.get_compiled_sql_path(io, common)
     }
 
     fn schema_store(&self) -> Arc<SchemaStore> {
@@ -936,6 +948,7 @@ impl DbtProjectCompilation {
                 cli,
                 Arc::clone(&feature_stack.adapter.type_ops_factory),
                 Arc::clone(&feature_stack.adapter.adapter_factory),
+                Arc::clone(&feature_stack.jinja.factory),
             ) {
                 (PrevCompilationResult::Incremental(prev), lazy) => (Some(prev), lazy),
                 (PrevCompilationResult::FullParse, _) => {
@@ -978,11 +991,35 @@ impl DbtProjectCompilation {
             }))
         );
         if use_lazy_filter && !has_inline {
-            if let Some(mut compilation) = try_lazy_load_fast_path(&mut maybe_prev) {
-                tracing::debug!("Partial parse: partial-load fast path — no file changes");
-                compilation.partial_load_filter_applied = true;
-                let jinja_env = compilation.create_jinja_env(arg, token.clone())?;
-                return Ok((compilation, jinja_env, None));
+            // Skip the fast path when the --static-analysis level has changed since the
+            // previous compilation. The fast path reuses nodes whose `base().static_analysis`
+            // was stamped by the prior run; if the CLI arg changed (e.g. baseline→strict),
+            // those stale values would prevent schema hydration from correctly upgrading SA,
+            // causing the analyze phase (and lineage computation) to be skipped.
+            let sa_changed = arg.static_analysis.is_some_and(|requested| {
+                maybe_prev
+                    .as_ref()
+                    .and_then(|prev| {
+                        prev.resolved_state
+                            .nodes
+                            .models
+                            .values()
+                            .next()
+                            .map(|m| *m.base().static_analysis.as_ref() != requested)
+                    })
+                    .unwrap_or(false)
+            });
+            if !sa_changed {
+                if let Some(mut compilation) = try_lazy_load_fast_path(&mut maybe_prev) {
+                    tracing::debug!("Partial parse: partial-load fast path — no file changes");
+                    compilation.partial_load_filter_applied = true;
+                    let jinja_env = compilation.create_jinja_env(arg, token.clone())?;
+                    return Ok((compilation, jinja_env, None));
+                }
+            } else {
+                tracing::debug!(
+                    "Partial parse: skipping fast path — static_analysis level changed"
+                );
             }
         }
 
@@ -1005,7 +1042,40 @@ impl DbtProjectCompilation {
 
         match result {
             Err(e) if e.code == ErrorCode::NoFilesChanged => {
+                // When the static_analysis level has changed, we cannot reuse the previous
+                // compilation because nodes carry stale SA assignments that would prevent
+                // the analyze phase from running at the correct level.
+                let sa_changed_on_prev = arg.static_analysis.is_some_and(|requested| {
+                    maybe_prev
+                        .as_ref()
+                        .and_then(|prev| {
+                            prev.resolved_state
+                                .nodes
+                                .models
+                                .values()
+                                .next()
+                                .map(|m| *m.base().static_analysis.as_ref() != requested)
+                        })
+                        .unwrap_or(false)
+                });
                 if let Some(prev) = maybe_prev {
+                    if sa_changed_on_prev {
+                        tracing::debug!(
+                            "Partial parse: no files changed but static_analysis level changed, performing full parse"
+                        );
+                        return DbtProjectCompilation::initialize(
+                            feature_stack,
+                            arg,
+                            cli,
+                            config,
+                            event_emitter,
+                            jinja_type_checking_event_listener_factory,
+                            None,
+                            token,
+                            version_check_handle,
+                        )
+                        .await;
+                    }
                     tracing::debug!(
                         "Partial parse: no files changed, reusing previous compilation"
                     );
@@ -1198,7 +1268,20 @@ impl DbtProjectCompilation {
         let semantic_manifest = SemanticManifest::from(&resolved_state.nodes);
         token.check_cancellation()?;
 
-        executor.resource_counts_event(&resolved_state);
+        // Catalogs are parsed into DbtState (catalogs.yml), not ResolverState, so
+        // count them here from the loaded project where DbtState is in scope, and
+        // pass the count through to the telemetry event. Both v1 and v2
+        // catalogs.yml store their entries under the top-level `catalogs` key.
+        let catalog_count = {
+            let dbt_state = loaded_project.dbt_state();
+            dbt_state
+                .catalogs
+                .as_ref()
+                .and_then(|catalogs| catalogs.catalogs_seq().ok())
+                .map(|seq| seq.len() as i32)
+                .unwrap_or(0)
+        };
+        executor.resource_counts_event(&resolved_state, catalog_count);
         token.check_cancellation()?;
 
         let metricflow_server_client =
@@ -1647,6 +1730,24 @@ impl DbtProjectCompilation {
         )?;
         token.check_cancellation()?;
 
+        if adapter.engine().has_query_cache() {
+            let reverse_deps =
+                // This is only true for the LSP currently.
+                // The reason why is because the LSP
+                // needs to have context of the entire project
+                // even when it schedules a select few nodes.
+                // This effectively gives context of the entire project.
+                if self.loaded_project().config().use_resolver_state_deps {
+                    self.resolved_state().create_reverse_deps()
+                } else {
+                    reverse(&schedule.deps)
+                };
+            adapter
+                .engine()
+                .set_query_cache_reverse_deps(reverse_deps)?;
+        }
+        token.check_cancellation()?;
+
         // FEATURES: render
         // Configure jinja env early (no node_resolver clone yet).
         // build_compiler_env is called AFTER Phase 2 defer to avoid Arc refcount issues.
@@ -1759,12 +1860,6 @@ impl DbtProjectCompilation {
         }
 
         let base_context = build_base_context(&resolved_state, &jinja_env);
-        if adapter.engine().has_query_cache() {
-            let reverse_deps = reverse(&schedule.deps);
-            adapter
-                .engine()
-                .set_query_cache_reverse_deps(reverse_deps)?;
-        }
         token.check_cancellation()?;
 
         render_all_model_constraint_refs_in_place(&mut resolved_state, &jinja_env, &base_context)?;
@@ -1961,6 +2056,18 @@ impl DbtProjectCompilation {
                     .await?
             }
         };
+
+        // Shut down the adapter-level sidecar client so its dbt-db-runner
+        // subprocess releases the DuckDB advisory lock before the next
+        // invocation starts. In the in-process test model the tokio runtime is
+        // shared across sequential TaskSeq steps, so without an explicit
+        // shutdown the background reader tasks keep Arc<RunnerManager> alive
+        // (preventing Drop from firing) and the runner holds the DB lock
+        // indefinitely. The task-runner sidecar is shut down separately in
+        // did_collect_all_run_task_results via ext.local_engine.shutdown().
+        if let Some(client) = &sidecar_client {
+            let _ = client.shutdown();
+        }
 
         token.check_cancellation()?;
 

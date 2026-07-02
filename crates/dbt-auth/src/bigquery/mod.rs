@@ -1,7 +1,7 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
-use dbt_xdbc::bigquery::auth_type;
-use dbt_xdbc::{Backend, bigquery, database};
+use dbt_adbc::bigquery::auth_type;
+use dbt_adbc::{Backend, bigquery, database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -40,9 +40,13 @@ enum BigqueryAuthIR<'a> {
     },
     /// OAuth secrets flow using a temporary access token directly.
     OauthSecretsTemporary { access_token: &'a str },
-    /// Workload Identity Federation authentication.
-    #[allow(dead_code)]
-    Wif,
+    /// Workload Identity Federation via an external OAuth identity provider.
+    ExternalOauthWif {
+        workload_pool_provider_path: &'a str,
+        service_account_impersonation_url: Option<&'a str>,
+        request_url: &'a str,
+        request_data: &'a str,
+    },
 }
 
 impl<'a> BigqueryAuthIR<'a> {
@@ -87,14 +91,38 @@ impl<'a> BigqueryAuthIR<'a> {
                     .with_named_option(bigquery::AUTH_TYPE, auth_type::TEMPORARY_ACCESS_TOKEN)?;
                 builder.with_named_option(bigquery::AUTH_ACCESS_TOKEN, access_token)?;
             }
-            Self::Wif => {
-                unimplemented!();
+            Self::ExternalOauthWif {
+                workload_pool_provider_path,
+                service_account_impersonation_url,
+                request_url,
+                request_data,
+            } => {
+                builder.with_named_option(bigquery::AUTH_TYPE, auth_type::EXTERNAL_ACCOUNT)?;
+                builder.with_named_option(
+                    bigquery::AUTH_EXTERNAL_ACCOUNT_AUDIENCE,
+                    workload_pool_provider_path,
+                )?;
+                builder
+                    .with_named_option(bigquery::AUTH_EXTERNAL_ACCOUNT_REQUEST_URL, request_url)?;
+                builder.with_named_option(
+                    bigquery::AUTH_EXTERNAL_ACCOUNT_REQUEST_DATA,
+                    request_data,
+                )?;
+                if let Some(impersonation_url) = service_account_impersonation_url {
+                    builder.with_named_option(
+                        bigquery::AUTH_EXTERNAL_ACCOUNT_IMPERSONATION_URL,
+                        impersonation_url,
+                    )?;
+                }
             }
         }
 
         Ok(builder)
     }
 }
+
+/// Identity provider `type`s accepted in `token_endpoint` for `external-oauth-wif`.
+const SUPPORTED_TOKEN_ENDPOINT_TYPES: &[&str] = &["entra"];
 
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<BigqueryAuthIR<'a>, AuthError> {
     let method = config
@@ -132,7 +160,55 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<BigqueryAuthIR<'a>, AuthE
                 ))
             }
         }
-        "wif" => unimplemented!(),
+        "external-oauth-wif" => {
+            let workload_pool_provider_path = config
+                .get_str("workload_pool_provider_path")
+                .ok_or_else(|| {
+                    AuthError::config(
+                        "Missing required field 'workload_pool_provider_path' for method 'external-oauth-wif'",
+                    )
+                })?;
+            let service_account_impersonation_url =
+                config.get_str("service_account_impersonation_url");
+            let token_endpoint = config.require("token_endpoint")?;
+
+            let token_endpoint_map = token_endpoint
+                .as_mapping()
+                .ok_or_else(|| AuthError::config("'token_endpoint' must be a YAML mapping"))?;
+
+            let token_endpoint_type = token_endpoint_map
+                .get("type")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    AuthError::config("Missing required key in token_endpoint: 'type'")
+                })?;
+            if !SUPPORTED_TOKEN_ENDPOINT_TYPES.contains(&token_endpoint_type) {
+                return Err(AuthError::config(format!(
+                    "Unsupported identity provider type: {token_endpoint_type}. Supported types: {}",
+                    SUPPORTED_TOKEN_ENDPOINT_TYPES.join(", ")
+                )));
+            }
+
+            let request_url = token_endpoint_map
+                .get("request_url")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    AuthError::config("Missing required key in token_endpoint: 'request_url'")
+                })?;
+            let request_data = token_endpoint_map
+                .get("request_data")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    AuthError::config("Missing required key in token_endpoint: 'request_data'")
+                })?;
+
+            Ok(BigqueryAuthIR::ExternalOauthWif {
+                workload_pool_provider_path,
+                service_account_impersonation_url,
+                request_url,
+                request_data,
+            })
+        }
         unknown_method => Err(AuthError::config(format!(
             "Unknown or unimplemented authentication method '{unknown_method}' for BigQuery"
         ))),
@@ -705,5 +781,155 @@ token_uri: https://oauth2.googleapis.com/token
             err.msg(),
             "Don't specify 'database' when 'project' is specified"
         );
+    }
+
+    const WIF_PROVIDER: &str = "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/prov";
+
+    #[test]
+    fn test_builder_from_auth_config_external_oauth_wif() {
+        let yaml_doc = r#"
+method: external-oauth-wif
+database: my_db
+schema: my_schema
+workload_pool_provider_path: //iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/prov
+token_endpoint:
+    type: entra
+    request_url: https://login.microsoftonline.com/tenant/oauth2/v2.0/token
+    request_data: "grant_type=client_credentials&client_id=abc&client_secret=secret&scope=https://example/.default"
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let builder = try_configure(config).unwrap();
+
+        assert_eq!(
+            other_option_value(&builder, bigquery::AUTH_TYPE).unwrap(),
+            auth_type::EXTERNAL_ACCOUNT
+        );
+        assert_eq!(
+            other_option_value(&builder, bigquery::AUTH_EXTERNAL_ACCOUNT_AUDIENCE).unwrap(),
+            WIF_PROVIDER
+        );
+        assert_eq!(
+            other_option_value(&builder, bigquery::AUTH_EXTERNAL_ACCOUNT_REQUEST_URL).unwrap(),
+            "https://login.microsoftonline.com/tenant/oauth2/v2.0/token"
+        );
+        assert_eq!(
+            other_option_value(&builder, bigquery::AUTH_EXTERNAL_ACCOUNT_REQUEST_DATA).unwrap(),
+            "grant_type=client_credentials&client_id=abc&client_secret=secret&scope=https://example/.default"
+        );
+        assert!(other_option_value(&builder, bigquery::AUTH_CREDENTIALS).is_none());
+        assert!(
+            other_option_value(&builder, bigquery::AUTH_EXTERNAL_ACCOUNT_IMPERSONATION_URL)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_builder_from_auth_config_external_oauth_wif_impersonation() {
+        let yaml_doc = r#"
+method: external-oauth-wif
+database: my_db
+schema: my_schema
+workload_pool_provider_path: //iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/prov
+service_account_impersonation_url: https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/sa@p.iam.gserviceaccount.com:generateAccessToken
+token_endpoint:
+    type: entra
+    request_url: https://login.microsoftonline.com/tenant/oauth2/v2.0/token
+    request_data: "grant_type=client_credentials"
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let builder = try_configure(config).unwrap();
+        assert_eq!(
+            other_option_value(&builder, bigquery::AUTH_EXTERNAL_ACCOUNT_IMPERSONATION_URL)
+                .unwrap(),
+            "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/sa@p.iam.gserviceaccount.com:generateAccessToken"
+        );
+    }
+
+    #[test]
+    fn test_external_oauth_wif_missing_type_errors() {
+        let yaml_doc = r#"
+method: external-oauth-wif
+database: my_db
+schema: my_schema
+workload_pool_provider_path: //iam.googleapis.com/x
+token_endpoint:
+    request_url: https://idp/token
+    request_data: "grant_type=client_credentials"
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(err.msg(), "Missing required key in token_endpoint: 'type'");
+    }
+
+    #[test]
+    fn test_external_oauth_wif_unsupported_type_errors() {
+        let yaml_doc = r#"
+method: external-oauth-wif
+database: my_db
+schema: my_schema
+workload_pool_provider_path: //iam.googleapis.com/x
+token_endpoint:
+    type: github
+    request_url: https://idp/token
+    request_data: "grant_type=client_credentials"
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(err.msg(), "Unsupported identity provider type: github");
+        assert_contains!(err.msg(), "entra");
+    }
+
+    #[test]
+    fn test_external_oauth_wif_missing_request_url_errors() {
+        let yaml_doc = r#"
+method: external-oauth-wif
+database: my_db
+schema: my_schema
+workload_pool_provider_path: //iam.googleapis.com/x
+token_endpoint:
+    type: entra
+    request_data: "grant_type=client_credentials"
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(
+            err.msg(),
+            "Missing required key in token_endpoint: 'request_url'"
+        );
+    }
+
+    #[test]
+    fn test_external_oauth_wif_missing_request_data_errors() {
+        let yaml_doc = r#"
+method: external-oauth-wif
+database: my_db
+schema: my_schema
+workload_pool_provider_path: //iam.googleapis.com/x
+token_endpoint:
+    type: entra
+    request_url: https://idp/token
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(
+            err.msg(),
+            "Missing required key in token_endpoint: 'request_data'"
+        );
+    }
+
+    #[test]
+    fn test_external_oauth_wif_missing_provider_path_errors() {
+        let yaml_doc = r#"
+method: external-oauth-wif
+database: my_db
+schema: my_schema
+token_endpoint:
+    type: entra
+    request_url: https://idp/token
+    request_data: "grant_type=client_credentials"
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(err.msg(), "workload_pool_provider_path");
     }
 }

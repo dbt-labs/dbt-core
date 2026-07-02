@@ -19,7 +19,7 @@ use dbt_schemas::schemas::{
 };
 use indexmap::IndexMap;
 use minijinja::{
-    AutoEscape, dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
+    AutoEscape, Environment, dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
     value::Value as MinijinjaValue,
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
@@ -30,8 +30,77 @@ use crate::{
     functions::ConfiguredVar,
     invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
+    listener::{DefaultJinjaTypeCheckEventListenerFactory, JinjaTypeCheckingEventListenerFactory},
     phases::utils::build_target_context_map,
 };
+
+/// Factory for the Jinja services used during an invocation.
+///
+/// Encapsulates how the parse/render environment and its per-invocation
+/// type-checking listener factory are created, so callers depend on this trait
+/// rather than on concrete construction. The default implementation builds the
+/// environment exactly like [`initialize_parse_jinja_environment`]; implementors
+/// may override [`register_extra_functions`](JinjaFactory::register_extra_functions)
+/// to add functions once the environment is built.
+pub trait JinjaFactory: Send + Sync {
+    /// Build the parse-phase Jinja environment, then register any extra functions.
+    #[allow(clippy::too_many_arguments)]
+    fn create_parse_jinja_environment(
+        &self,
+        project_name: &str,
+        profile: &str,
+        target: &str,
+        adapter_type: AdapterType,
+        db_config: DbConfig,
+        package_quoting: DbtQuoting,
+        macro_units: BTreeMap<String, Vec<MacroUnit>>,
+        vars: BTreeMap<String, IndexMap<String, DbtVars>>,
+        cli_vars: BTreeMap<String, dbt_yaml::Value>,
+        flags: BTreeMap<String, MinijinjaValue>,
+        run_started_at: DateTime<Tz>,
+        invocation_args: &InvocationArgs,
+        all_package_names: BTreeSet<String>,
+        io_args: IoArgs,
+        catalogs: Option<Arc<DbtCatalogs>>,
+    ) -> FsResult<JinjaEnv> {
+        let mut env = initialize_parse_jinja_environment(
+            project_name,
+            profile,
+            target,
+            adapter_type,
+            db_config,
+            package_quoting,
+            macro_units,
+            vars,
+            cli_vars,
+            flags,
+            run_started_at,
+            invocation_args,
+            all_package_names,
+            io_args,
+            catalogs,
+        )?;
+        self.register_extra_functions(&mut env.env);
+        Ok(env)
+    }
+
+    /// Register additional functions into a freshly-built environment.
+    /// Defaults to a no-op.
+    fn register_extra_functions(&self, _env: &mut Environment) {}
+
+    /// Create the per-invocation type-checking event listener factory.
+    fn create_type_checking_listener_factory(
+        &self,
+    ) -> Arc<dyn JinjaTypeCheckingEventListenerFactory> {
+        Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default())
+    }
+}
+
+/// Default [`JinjaFactory`].
+#[derive(Debug, Default)]
+pub struct DefaultJinjaFactory;
+
+impl JinjaFactory for DefaultJinjaFactory {}
 
 /// Initialize a Jinja environment for the parse phase.
 #[allow(clippy::too_many_arguments)]
@@ -73,6 +142,7 @@ pub fn initialize_parse_jinja_environment(
         adapter_config_mapping,
         package_quoting,
         type_formatter,
+        io_args.status_reporter.clone(),
         catalogs,
     ));
 

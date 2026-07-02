@@ -1,6 +1,11 @@
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use itertools::{EitherOrBoth, Itertools};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
+};
 
 use crate::{
     microbatch::BatchContext,
@@ -17,6 +22,9 @@ use arrow::{
     util::pretty::{pretty_format_batches, print_batches},
 };
 use chrono::DateTime;
+use dbt_adapter::Adapter;
+use dbt_adapter::adapter::NodeOverride;
+use dbt_adapter::connection::drop_thread_local_connection;
 use dbt_adapter::relation::{RelationObject, do_create_relation};
 use dbt_adapter_core::AdapterType;
 use dbt_agate::{AgateTable, MappedSequence, Tuple};
@@ -24,7 +32,9 @@ use dbt_common::{
     ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, io_args::IoArgs,
     path::get_target_write_path, unexpected_fs_err,
 };
-use dbt_jinja_utils::{jinja_environment::JinjaEnv, phases::run::build_run_node_context};
+use dbt_jinja_utils::{
+    jinja_environment::JinjaEnv, listener::JinjaTraceListener, phases::run::build_run_node_context,
+};
 use dbt_schemas::{
     materialization_resolver::MaterializationResolver,
     schemas::{
@@ -35,7 +45,11 @@ use dbt_schemas::{
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
 use dbt_tasks_core::test_aggregation::GenericTestRelationships;
+use dbt_telemetry::ExecutionPhase;
+use dbt_yaml::Verbatim;
 use minijinja::Value;
+use minijinja::listener::RenderingEventListener;
+use tracing::debug;
 
 /// Macro to handle NULL values in Arrow arrays
 macro_rules! null_or {
@@ -64,35 +78,147 @@ fn execute_materialization_macro(
     resource_type: &str,
     unique_id: &str,
     node_alias: &str,
-    display_path: &str,
-    compiled_path: PathBuf,
+    run_path: PathBuf,
 ) -> FsResult<Value> {
     let macro_string = format!("{macro_name}()");
     let expr = jinja_env.compile_expression(&macro_string)?;
-    expr.eval(context, &[]).map_err(|e| {
-        if e.code.is_database_error() {
-            // Format like dbt-core: show model name and path first, then the raw
-            // database error message indented.
-            let indented_body = e
-                .context
-                .lines()
-                .map(|line| format!("  {line}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            let message = format!(
-                "Database Error in {resource_type} {node_alias} ({display_path})\n{indented_body}",
-            );
-            Box::new(dbt_common::FsError::new(e.code, message))
+    with_jinja_trace(&run_path, unique_id, |listeners| {
+        expr.eval(context, listeners).map_err(|e| {
+            if e.code.is_database_error() {
+                // Format like dbt-core: show model name and path first, then the raw
+                // database error message indented.
+                let indented_body = e
+                    .context
+                    .lines()
+                    .map(|line| format!("  {line}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let message = format!(
+                    "Database Error in {resource_type} {node_alias} ({})\n{indented_body}",
+                    run_path.display(),
+                );
+                Box::new(dbt_common::FsError::new(e.code, message))
+            } else if e.code == ErrorCode::JinjaWarnUpgradedToError {
+                // warn() upgraded to error via warn-error-options: format like dbt-core.
+                // emit_warn_log_from_fs_error already reported this to stderr.
+                let indented_body = e
+                    .context
+                    .lines()
+                    .map(|line| format!("  {line}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let message = format!(
+                    "Compilation Error in {resource_type} {node_alias} ({})\n{indented_body}",
+                    run_path.display(),
+                );
+                Box::new(dbt_common::FsError::new(e.code, message))
+            } else {
+                // For non-database errors (macro syntax errors, config errors, etc.)
+                // keep the verbose format which helps debug the macro call chain.
+                let message = format!(
+                    "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
+                    e.context
+                );
+                let err = e.with_location(run_path.clone());
+                Box::new(err.with_context(message))
+            }
+        })
+    })
+}
+
+fn apply_node_overrides(
+    adapter: &Adapter,
+    adapter_type: AdapterType,
+    custom_warehouse: Option<String>,
+    target_database: &str,
+    unique_id: &str,
+) -> FsResult<Vec<NodeOverride>> {
+    let mut node_overrides = Vec::new();
+    if let Some(warehouse) = custom_warehouse
+        && let Some(node_override) = adapter.use_warehouse(Some(warehouse), unique_id)?
+    {
+        node_overrides.push(node_override);
+    }
+    if adapter_type == AdapterType::Redshift
+        && let Some(node_override) = adapter.use_database(target_database, unique_id)?
+    {
+        node_overrides.push(node_override);
+    }
+    Ok(node_overrides)
+}
+
+/// Reset the per-node connection overrides (`USE` database / `use warehouse`) after a
+/// materialization. If a reset fails the connection is stuck in the wrong scope, so drop it
+/// (do NOT recycle) so no other node inherits it, then fail this node loudly with a clear
+/// error; the run continues on other nodes.
+///
+/// TODO: redundant once the recycling pool is segregated by config fingerprint.
+fn reset_node_overrides(
+    adapter: &Adapter,
+    unique_id: &str,
+    targets: &[NodeOverride],
+) -> FsResult<()> {
+    for target in targets.iter().copied() {
+        let result = match target {
+            NodeOverride::Database => adapter.reset_database(unique_id).map_err(|e| {
+                fs_err!(
+                    ErrorCode::ExecutionError,
+                    "Failed to reset database context (RESET USE) for node '{unique_id}': {e}"
+                )
+            }),
+            NodeOverride::Warehouse => adapter.restore_warehouse(unique_id).map_err(|e| {
+                fs_err!(
+                    ErrorCode::ExecutionError,
+                    "Failed to restore warehouse for node '{unique_id}': {e}"
+                )
+            }),
+        };
+
+        if let Err(err) = result {
+            // A failed reset leaves the connection in the wrong scope: drop it
+            // so no other node inherits it.
+            drop_thread_local_connection();
+            return Err(err);
+        }
+    }
+    Ok(())
+}
+
+fn with_jinja_trace<F, T>(compiled_path: &Path, unique_id: &str, f: F) -> FsResult<T>
+where
+    F: FnOnce(&[Rc<dyn RenderingEventListener>]) -> FsResult<T>,
+{
+    let trace_listener =
+        if dbt_adapter::time_machine::is_replaying() || dbt_adapter::time_machine::is_recording() {
+            Some(Rc::new(JinjaTraceListener::new()))
         } else {
-            // For non-database errors (macro syntax errors, config errors, etc.)
-            // keep the verbose format which helps debug the macro call chain.
-            let message = format!(
-                "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
-                e.context
-            );
-            Box::new(e.with_location(compiled_path).with_context(message))
+            None
+        };
+    let listeners: Vec<Rc<dyn RenderingEventListener>> = trace_listener
+        .iter()
+        .map(|l| l.clone() as Rc<dyn RenderingEventListener>)
+        .collect();
+
+    f(&listeners).inspect_err(|_| {
+        if let Some(ref listener) = trace_listener {
+            dump_jinja_trace(listener, compiled_path, unique_id);
         }
     })
+}
+
+fn dump_jinja_trace(listener: &JinjaTraceListener, compiled_path: &Path, unique_id: &str) {
+    if listener.is_empty() {
+        return;
+    }
+    let trace = listener.format_trace();
+    let sanitized = unique_id.replace(['/', '\\', '.'], "_");
+    let filename = format!("jinja_trace_{sanitized}.txt");
+    if let Some(dir) = compiled_path.parent() {
+        let path = dir.join(&filename);
+        if std::fs::write(&path, &trace).is_ok() {
+            eprintln!("Jinja trace dump written to: {}", path.display());
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +296,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
     io_args: &IoArgs,
     sql: Option<&str>,
     style: NodeHookStyle,
+    error_path_kind: NodePathKind,
     phase: NodeHookPhase,
 ) -> FsResult<()> {
     let mut context = build_run_node_context(
@@ -179,6 +306,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -205,7 +333,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
         );
         Box::new(
             e.with_location(node.get_node_path_abs(
-                NodePathKind::Compiled,
+                error_path_kind,
                 &io_args.in_dir,
                 &io_args.out_dir,
             ))
@@ -339,6 +467,7 @@ pub fn materialize_clone<S: serde::Serialize>(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -377,26 +506,20 @@ pub fn materialize_clone<S: serde::Serialize>(
     let adapter = jinja_env
         .get_base_adapter()
         .ok_or_else(|| unexpected_fs_err!("No adapter found for model {}", &unique_id))?;
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &node.common().package_name,
-        &node.common().path,
-        &node.common().original_file_path,
-    );
     let node_alias = node.base().alias.clone();
-    let original_file_path = node
-        .common()
-        .original_file_path
-        .to_string_lossy()
-        .to_string();
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = node
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
 
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &node.base().database,
+        &unique_id,
+    )?;
+
     let res = execute_materialization_macro(
         jinja_env,
         &macro_name,
@@ -404,12 +527,10 @@ pub fn materialize_clone<S: serde::Serialize>(
         "clone",
         &unique_id,
         &node_alias,
-        &original_file_path,
-        compiled_path,
+        run_path,
     );
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     res
 }
 #[allow(clippy::too_many_arguments)]
@@ -423,14 +544,6 @@ pub fn materialize_seed(
     agate_table: AgateTable,
     io_args: &IoArgs,
 ) -> FsResult<Value> {
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &seed.__common_attr__.package_name,
-        &seed.__common_attr__.path,
-        &seed.__common_attr__.original_file_path,
-    );
-
     let macro_name = materialization_resolver.find_materialization_macro_by_name("seed")?;
 
     let mut context = build_run_node_context(
@@ -440,9 +553,14 @@ pub fn materialize_seed(
         Some(agate_table),
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
+
+    let run_path = seed
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
 
     execute_materialization_macro(
         jinja_env,
@@ -451,8 +569,7 @@ pub fn materialize_seed(
         "seed",
         &seed.__common_attr__.unique_id,
         &seed.__base_attr__.alias,
-        &seed.__common_attr__.original_file_path.to_string_lossy(),
-        compiled_path,
+        run_path,
     )
 }
 
@@ -476,6 +593,7 @@ pub fn materialize_model(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         sql_header,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -486,21 +604,12 @@ pub fn materialize_model(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &model.__common_attr__.package_name,
-        &model.__common_attr__.path,
-        &model.__common_attr__.original_file_path,
-    );
-
     let unique_id = model.__common_attr__.unique_id.clone();
     let node_alias = model.__base_attr__.alias.clone();
-    // For runtime errors, surface the run path so users can inspect the SQL that was executed.
-    let run_display_path = model
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = model
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
-        .display()
-        .to_string();
+        .into_owned();
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -515,12 +624,13 @@ pub fn materialize_model(
         None
     };
 
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &model.__base_attr__.database,
+        &unique_id,
+    )?;
 
     let result = execute_materialization_macro(
         jinja_env,
@@ -529,14 +639,258 @@ pub fn materialize_model(
         "model",
         &unique_id,
         &node_alias,
-        &run_display_path,
-        compiled_path,
+        run_path,
     );
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     result
+}
+
+/// Checks whether the latest version pointer should be created for this model.
+///
+/// Returns `true` when:
+/// - The model is versioned (`version` is set)
+/// - It is the latest version (`version == latest_version`)
+/// - `latest_version_pointer.enabled` is explicitly `true`, OR `enabled` is `None` and
+///   the project flag `latest_version_pointer_enabled_by_default` is `true`
+pub fn should_create_latest_version_pointer(
+    model: &DbtModel,
+    runtime_config: &DbtRuntimeConfig,
+) -> bool {
+    let version = match &model.__model_attr__.version {
+        Some(v) => v,
+        None => return false,
+    };
+    let latest_version = match &model.__model_attr__.latest_version {
+        Some(v) => v,
+        None => return false,
+    };
+    if version.to_string() != latest_version.to_string() {
+        return false;
+    }
+    model
+        .deprecated_config
+        .latest_version_pointer
+        .as_ref()
+        .and_then(|p| p.enabled)
+        .unwrap_or(
+            runtime_config
+                .inner
+                .latest_version_pointer_enabled_by_default,
+        )
+}
+
+/// Determines the pointer view identifier by calling
+/// `generate_latest_version_pointer_alias(custom_alias_name, model)`.
+///
+/// The default macro (shipped in dbt-adapters) returns `custom_alias_name`
+/// if set, otherwise the unsuffixed model name. Users can override this macro
+/// in their project to customize pointer naming globally.
+fn latest_version_pointer_identifier(
+    model: &DbtModel,
+    jinja_env: &JinjaEnv,
+    context: &mut BTreeMap<String, Value>,
+) -> FsResult<String> {
+    let custom_alias = model
+        .deprecated_config
+        .latest_version_pointer
+        .as_ref()
+        .and_then(|p| p.alias.as_ref())
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty());
+
+    let alias_arg = custom_alias
+        .as_deref()
+        .map(Value::from)
+        .unwrap_or_else(|| Value::from(()));
+    context.insert("__lvp_custom_alias__".to_string(), alias_arg);
+
+    let macro_template = "{{ generate_latest_version_pointer_alias(__lvp_custom_alias__, model) }}";
+    let render_result = jinja_env.render_str(macro_template, &mut *context, &[]);
+    context.remove("__lvp_custom_alias__");
+
+    let rendered = render_result.map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to render `generate_latest_version_pointer_alias` macro for model '{}': {}. \
+             Check your project's macro override for syntax errors.",
+            model.__common_attr__.unique_id,
+            e
+        )
+    })?;
+
+    let trimmed = rendered.trim();
+    if trimmed.is_empty() {
+        return Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "`generate_latest_version_pointer_alias` returned an empty string for model '{}'. \
+             The macro must return a non-empty identifier.",
+            model.__common_attr__.unique_id,
+        ));
+    }
+    Ok(trimmed.to_string())
+}
+
+/// After the latest version of a versioned model materializes, create a view
+/// at the unsuffixed name (or custom alias) pointing to the latest version.
+///
+/// This mirrors dbt-core's `_materialize_latest_version_view` behavior: it
+/// creates a synthetic context for the view materialization macro, pointing
+/// the `this` relation at the pointer identifier with SQL = `SELECT * FROM <latest>`.
+///
+/// The pointer identifier is resolved via `generate_latest_version_pointer_alias`
+/// macro if defined, otherwise falls back to `config.alias` or the unsuffixed name.
+#[allow(clippy::too_many_arguments)]
+pub fn materialize_latest_version_pointer(
+    model: &DbtModel,
+    adapter_type: AdapterType,
+    runtime_config: &DbtRuntimeConfig,
+    materialization_resolver: &Arc<MaterializationResolver>,
+    jinja_env: Arc<JinjaEnv>,
+    base_context: &BTreeMap<String, Value>,
+    io_args: &IoArgs,
+) -> FsResult<Value> {
+    // Build a context from the original model first so macros can access `model`
+    let mut resolve_context = build_run_node_context(
+        model,
+        &model.deprecated_config,
+        adapter_type,
+        None,
+        base_context,
+        io_args,
+        ExecutionPhase::Run,
+        None,
+        runtime_config.dependencies.keys().cloned().collect(),
+    );
+
+    let pointer_identifier =
+        latest_version_pointer_identifier(model, &jinja_env, &mut resolve_context)?;
+    let model_alias = &model.__base_attr__.alias;
+
+    // Build the source relation (the versioned model's actual relation in the warehouse).
+    // This is pure in-memory construction (no warehouse round-trip).
+    let source_relation = do_create_relation(
+        adapter_type,
+        model.__base_attr__.database.clone(),
+        model.__base_attr__.schema.clone(),
+        Some(model_alias.clone()),
+        None,
+        model.__base_attr__.quoting,
+    )
+    .map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to create source relation for latest version pointer: {}",
+            e
+        )
+    })?;
+
+    // Collision check: compare source (latest version) and pointer as the warehouse
+    // would resolve them, not as raw strings. `identifier_as_resolved_str` applies the
+    // adapter's quoting/casing policy, so an unquoted alias like `DIM_CUSTOMERS` and a
+    // pointer name `dim_customers` are correctly detected as the same relation on
+    // case-insensitive adapters (e.g. Snowflake).
+    let pointer_relation = do_create_relation(
+        adapter_type,
+        model.__base_attr__.database.clone(),
+        model.__base_attr__.schema.clone(),
+        Some(pointer_identifier.clone()),
+        None,
+        model.__base_attr__.quoting,
+    )
+    .map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to create pointer relation for latest version pointer: {}",
+            e
+        )
+    })?;
+    let source_identifier = source_relation.identifier_as_resolved_str().map_err(|e| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to resolve source identifier: {}",
+            e
+        )
+    })?;
+    let pointer_resolved_identifier =
+        pointer_relation.identifier_as_resolved_str().map_err(|e| {
+            fs_err!(
+                ErrorCode::Generic,
+                "Failed to resolve pointer identifier: {}",
+                e
+            )
+        })?;
+    if source_identifier == pointer_resolved_identifier {
+        return Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "Cannot create latest version pointer: the latest version of '{}' \
+             is already aliased to '{}'. Set `latest_version_pointer: {{enabled: false}}` \
+             or remove the conflicting alias.",
+            model.__common_attr__.name,
+            pointer_identifier,
+        ));
+    }
+
+    let source_relation_str = source_relation.render_self_as_str();
+
+    let pointer_sql = format!("SELECT * FROM {source_relation_str}");
+
+    // Build a synthetic model with the pointer's alias and view materialization.
+    // Clone the model and override:
+    //   - alias → pointer identifier
+    //   - materialization → "view"
+    //   - hooks cleared (pre/post hooks should not run for the pointer)
+    //   - persist_docs cleared (avoid duplicating doc persistence)
+    let mut pointer_model = model.clone();
+    pointer_model.__base_attr__.alias = pointer_identifier.clone();
+    pointer_model.__base_attr__.materialized = DbtMaterialization::View;
+    pointer_model.deprecated_config.materialized = Some(DbtMaterialization::View);
+    pointer_model.deprecated_config.pre_hook = Verbatim::from(None);
+    pointer_model.deprecated_config.post_hook = Verbatim::from(None);
+    pointer_model.deprecated_config.persist_docs = None;
+
+    debug!(
+        "Creating latest version pointer view '{}' -> '{}' for model '{}'",
+        pointer_identifier, model_alias, model.__common_attr__.unique_id
+    );
+
+    let mut context = build_run_node_context(
+        &pointer_model,
+        &pointer_model.deprecated_config,
+        adapter_type,
+        None,
+        base_context,
+        io_args,
+        ExecutionPhase::Run,
+        None,
+        runtime_config.dependencies.keys().cloned().collect(),
+    );
+
+    let macro_name = materialization_resolver.find_materialization_macro_by_name("view")?;
+    context.insert("sql".to_string(), Value::from(pointer_sql.as_str()));
+    context.insert(
+        "compiled_code".to_string(),
+        Value::from(pointer_sql.as_str()),
+    );
+
+    let unique_id = format!(
+        "{}__latest_version_pointer",
+        model.__common_attr__.unique_id
+    );
+
+    let run_path = model
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
+
+    execute_materialization_macro(
+        jinja_env,
+        &macro_name,
+        &mut context,
+        "model",
+        &unique_id,
+        &pointer_identifier,
+        run_path,
+    )
 }
 
 /// Executes a single batch of a microbatch model.
@@ -549,6 +903,7 @@ pub fn materialize_microbatch_model(
     materialization_resolver: &Arc<MaterializationResolver>,
     jinja_env: Arc<JinjaEnv>,
     batch_ctx: &BatchContext,
+    adapter_type: AdapterType,
     mut run_node_context: BTreeMap<String, Value>,
     event_time_mapping: Arc<BTreeMap<String, String>>,
     io_args: &IoArgs,
@@ -556,6 +911,7 @@ pub fn materialize_microbatch_model(
     // Microbatch base context is shared
     extend_microbatch_node_context(
         batch_ctx,
+        adapter_type,
         model,
         node_resolver,
         runtime_config,
@@ -580,14 +936,6 @@ pub fn materialize_microbatch_model(
     let macro_name = materialization_resolver
         .find_materialization_macro_by_name(&DbtMaterialization::Incremental.to_string())?;
 
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &model.__common_attr__.package_name,
-        &model.__common_attr__.path,
-        &model.__common_attr__.original_file_path,
-    );
-
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         fs_err!(
             ErrorCode::Generic,
@@ -603,19 +951,19 @@ pub fn materialize_microbatch_model(
     };
 
     let node_alias = model.__base_attr__.alias.clone();
-    // For runtime errors, surface the run path so users can inspect the SQL that was executed.
-    let run_display_path = model
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = model
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
-        .display()
-        .to_string();
+        .into_owned();
     let unique_id = model.__common_attr__.unique_id.clone();
 
-    // Execute the materialization macro
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &model.__base_attr__.database,
+        &unique_id,
+    )?;
 
     let result = execute_materialization_macro(
         jinja_env,
@@ -624,13 +972,10 @@ pub fn materialize_microbatch_model(
         "model",
         &unique_id,
         &node_alias,
-        &run_display_path,
-        compiled_path,
+        run_path,
     );
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     result
 }
 
@@ -657,6 +1002,7 @@ pub fn materialize_snapshot(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -666,17 +1012,12 @@ pub fn materialize_snapshot(
 
     let macro_name = materialization_resolver.find_materialization_macro_by_name("snapshot")?;
 
-    // Always nested to avoid EISDIR when multiple snapshots share a file (dbt-core#12693).
-    let compiled_path =
-        snapshot.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
-
     let unique_id = snapshot.__common_attr__.unique_id.clone();
     let node_alias = snapshot.__base_attr__.alias.clone();
-    let original_file_path = snapshot
-        .__common_attr__
-        .original_file_path
-        .to_string_lossy()
-        .to_string();
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
+    let run_path = snapshot
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -691,12 +1032,13 @@ pub fn materialize_snapshot(
         None
     };
 
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter.use_warehouse(Some(warehouse), &unique_id)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &snapshot.__base_attr__.database,
+        &unique_id,
+    )?;
 
     let result = execute_materialization_macro(
         jinja_env,
@@ -705,13 +1047,10 @@ pub fn materialize_snapshot(
         "snapshot",
         &unique_id,
         &node_alias,
-        &original_file_path,
-        compiled_path,
+        run_path,
     );
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
     result
 }
 
@@ -732,6 +1071,7 @@ pub fn materialize_unit_test(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         resolver_state
             .runtime_config
@@ -759,17 +1099,29 @@ pub fn materialize_unit_test(
     )
     .with_file_name(format!("{}.sql", unit_test.__common_attr__.name));
 
-    let _ = jinja_env
-        .render_str(&format!("{{{{ {macro_name}() }}}}"), &mut context, &[])
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::JinjaError,
-                "Error materializing unit test {}: {}",
-                unit_test.__common_attr__.unique_id,
-                e
-            )
-            .with_location(compiled_path)
-        })?;
+    let _ = with_jinja_trace(
+        &compiled_path,
+        &unit_test.__common_attr__.unique_id,
+        |listeners| {
+            jinja_env
+                .render_str(
+                    &format!("{{{{ {macro_name}() }}}}"),
+                    &mut context,
+                    listeners,
+                )
+                .map_err(|e| {
+                    Box::new(
+                        fs_err!(
+                            ErrorCode::JinjaError,
+                            "Error materializing unit test {}: {}",
+                            unit_test.__common_attr__.unique_id,
+                            e
+                        )
+                        .with_location(compiled_path.clone()),
+                    )
+                })
+        },
+    )?;
 
     let expr = jinja_env.compile_expression("load_result('main').table")?;
     let table = expr
@@ -806,6 +1158,7 @@ pub fn materialize_unit_test_fast_pass(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -827,17 +1180,25 @@ pub fn materialize_unit_test_fast_pass(
     )
     .with_file_name(format!("{}.sql", unit_test.__common_attr__.name));
 
-    let _render_str = jinja_env
-        .render_str(materialization, &mut context, &[])
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::JinjaError,
-                "Error materializing unit test {}: {}",
-                unit_test.__common_attr__.unique_id,
-                e
-            )
-            .with_location(compiled_path)
-        })?;
+    let _render_str = with_jinja_trace(
+        &compiled_path,
+        &unit_test.__common_attr__.unique_id,
+        |listeners| {
+            jinja_env
+                .render_str(materialization, &mut context, listeners)
+                .map_err(|e| {
+                    Box::new(
+                        fs_err!(
+                            ErrorCode::JinjaError,
+                            "Error materializing unit test {}: {}",
+                            unit_test.__common_attr__.unique_id,
+                            e
+                        )
+                        .with_location(compiled_path.clone()),
+                    )
+                })
+        },
+    )?;
 
     let expr = jinja_env.compile_expression("load_result('main').table")?;
     let table = expr
@@ -1005,6 +1366,7 @@ pub fn materialize_test(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         packages,
     );
@@ -1049,42 +1411,44 @@ pub fn materialize_test(
         .display()
         .to_string();
 
-    // Apply custom warehouse if configured (e.g., snowflake_warehouse in test config)
-    // Only call use_warehouse when there's a custom warehouse to set
-    let override_warehouse = if let Some(warehouse) = custom_warehouse {
-        adapter
-            .use_warehouse(Some(warehouse), &unique_id)
-            .map_err(|e| *e)?
-    } else {
-        false
-    };
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        custom_warehouse,
+        &test.__base_attr__.database,
+        &unique_id,
+    )?;
 
-    let render_result = jinja_env
-        .render_str(&format!("{{{{ {macro_name}() }}}}"), &mut context, &[])
-        .map_err(|e| {
-            if e.code.is_database_error() {
-                let indented_body = e
-                    .context
-                    .lines()
-                    .map(|line| format!("  {line}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let message = format!("{unique_id} ({run_display_path})\n{indented_body}",);
-                Box::new(dbt_common::FsError::new(e.code, message))
-            } else {
-                Box::new(
-                    dbt_common::FsError::new(
-                        ErrorCode::JinjaError,
-                        format!("Error running test {unique_id}: {e}"),
+    let render_result = with_jinja_trace(&compiled_path, &unique_id, |listeners| {
+        jinja_env
+            .render_str(
+                &format!("{{{{ {macro_name}() }}}}"),
+                &mut context,
+                listeners,
+            )
+            .map_err(|e| {
+                if e.code.is_database_error() {
+                    let indented_body = e
+                        .context
+                        .lines()
+                        .map(|line| format!("  {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let message = format!("{unique_id} ({run_display_path})\n{indented_body}",);
+                    Box::new(dbt_common::FsError::new(e.code, message))
+                } else {
+                    Box::new(
+                        dbt_common::FsError::new(
+                            ErrorCode::JinjaError,
+                            format!("Error running test {unique_id}: {e}"),
+                        )
+                        .with_location(compiled_path.clone()),
                     )
-                    .with_location(compiled_path),
-                )
-            }
-        });
+                }
+            })
+    });
 
-    if override_warehouse {
-        let _ = adapter.restore_warehouse(&unique_id);
-    }
+    reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
 
     // If render_result is an error but the test is configured with severity warn, return a warning result
     if render_result.is_err() && matches!(test.deprecated_config.severity, Some(Severity::Warn)) {
@@ -1313,6 +1677,7 @@ pub fn materialize_function(
         None,
         base_context,
         io_args,
+        ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
     );
@@ -1323,21 +1688,14 @@ pub fn materialize_function(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &function.__common_attr__.package_name,
-        &function.__common_attr__.path,
-        &function.__common_attr__.original_file_path,
-    );
+    let compiled_path =
+        function.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
 
     let unique_id = function.__common_attr__.unique_id.clone();
     let node_alias = function.__base_attr__.alias.clone();
-    let original_file_path = function
-        .__common_attr__
-        .original_file_path
-        .to_string_lossy()
-        .to_string();
+    let run_path = function
+        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+        .into_owned();
 
     let _adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -1353,8 +1711,7 @@ pub fn materialize_function(
         "function",
         &unique_id,
         &node_alias,
-        &original_file_path,
-        compiled_path.clone(),
+        run_path,
     );
 
     // Write compiled SQL to file

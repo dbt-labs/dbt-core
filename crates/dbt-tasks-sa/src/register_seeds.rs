@@ -45,12 +45,11 @@ pub fn resolve_seed_path(in_dir: &Path, seed: &DbtSeed) -> PathBuf {
 
 /// Synchronously register a CSV seed.
 /// Intended to run inside `spawn_blocking_traced`.
-/// The seed's schema is always registered in the schema cache.
-/// The seed's data is written to the data store iff `persist_seed_data` is `true`.
+/// The seed's schema is registered in the schema cache and its data is written
+/// to the data store.
 fn register_seed_csv(
     seed: Arc<DbtSeed>,
     ctx: Arc<SeedRegistrationCtx>,
-    persist_seed_data: bool,
     type_ops: Arc<dyn TypeOps>,
 ) -> FsResult<RegisteredSeed> {
     let relation = create_relation_from_node(ctx.adapter_type, seed.as_ref(), None)?;
@@ -96,10 +95,8 @@ fn register_seed_csv(
         dialect_adapted_schema(&target_schema, logical_fields.as_ref(), type_ops.as_ref())?;
     ctx.schema_cache
         .register_schema(&canonical_fqn, None, schema.clone(), true)?;
-    if persist_seed_data {
-        ctx.data_store
-            .persist_data(&canonical_fqn, target_schema, result.batches)?;
-    }
+    ctx.data_store
+        .persist_data(&canonical_fqn, target_schema, result.batches)?;
 
     Ok(RegisteredSeed {
         canonical_fqn,
@@ -113,7 +110,6 @@ fn register_seed_csv(
 fn register_seed_json(
     seed: Arc<DbtSeed>,
     ctx: Arc<SeedRegistrationCtx>,
-    persist_seed_data: bool,
     type_ops: Arc<dyn TypeOps>,
 ) -> FsResult<RegisteredSeed> {
     let relation = create_relation_from_node(ctx.adapter_type, seed.as_ref(), None)?;
@@ -122,7 +118,7 @@ fn register_seed_json(
     let infer_column_name_strategy =
         infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, ctx.adapter_type);
 
-    let (source_schema, maybe_batches) = read_json_seed(&seed_path, persist_seed_data)?;
+    let (source_schema, maybe_batches) = read_json_seed(&seed_path, true)?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
         Some(parse_provided_types(provided_types, type_ops.as_ref())?)
     } else {
@@ -135,10 +131,6 @@ fn register_seed_json(
         .register_schema(&canonical_fqn, None, schema.clone(), true)?;
 
     if let Some(batches) = maybe_batches {
-        debug_assert!(
-            persist_seed_data,
-            "read_json_seed returns batches only when load_batches is true (persist_seed_data)"
-        );
         ctx.data_store
             .persist_data(&canonical_fqn, target_schema, batches)?;
     }
@@ -155,7 +147,6 @@ fn register_seed_json(
 async fn register_seed_parquet_async(
     seed: Arc<DbtSeed>,
     ctx: Arc<SeedRegistrationCtx>,
-    persist_seed_data: bool,
     type_ops: Arc<dyn TypeOps>,
 ) -> FsResult<RegisteredSeed> {
     let relation = create_relation_from_node(ctx.adapter_type, seed.as_ref(), None)?;
@@ -164,8 +155,7 @@ async fn register_seed_parquet_async(
     let infer_column_name_strategy =
         infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, ctx.adapter_type);
 
-    let (source_schema, maybe_batches) =
-        read_parquet_seed_view(&seed_path, persist_seed_data).await?;
+    let (source_schema, maybe_batches) = read_parquet_seed_view(&seed_path, true).await?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
         Some(parse_provided_types(provided_types, type_ops.as_ref())?)
     } else {
@@ -178,10 +168,6 @@ async fn register_seed_parquet_async(
         .register_schema(&canonical_fqn, None, schema.clone(), true)?;
 
     if let Some(batches) = maybe_batches {
-        debug_assert!(
-            persist_seed_data,
-            "read_parquet_seed_view returns batches only when load_batches is true (persist_seed_data)"
-        );
         let cfqn = canonical_fqn.clone();
         let ts = target_schema.clone();
         let dsc = Arc::clone(&ctx);
@@ -204,8 +190,6 @@ async fn register_seed_parquet_async(
 ///
 /// Errors are logged immediately but do not abort the run. Failed seeds will
 /// be detected during the render phase when the schema store check fails.
-///
-/// `persist_seed_data` boolean controls seed's data persistence.
 #[allow(clippy::too_many_arguments)]
 pub async fn pre_register_seeds(
     sorted_nodes: &[&String],
@@ -214,7 +198,6 @@ pub async fn pre_register_seeds(
     schema_cache: Arc<dyn SchemaStoreTrait>,
     data_store: Arc<dyn DataStoreTrait>,
     type_ops: Arc<dyn TypeOps>,
-    persist_seed_data: bool,
     in_dir: &Path,
 ) -> Vec<RegisteredSeed> {
     let ctx = Arc::new(SeedRegistrationCtx {
@@ -254,22 +237,19 @@ pub async fn pre_register_seeds(
             None => {
                 let type_ops = Arc::clone(&type_ops);
                 handles.push(spawn_blocking_traced(move || {
-                    register_seed_csv(seed, ctx, persist_seed_data, type_ops)
+                    register_seed_csv(seed, ctx, type_ops)
                 }))
             }
             Some(TableFormat::Json) => {
                 let type_ops = Arc::clone(&type_ops);
                 handles.push(spawn_blocking_traced(move || {
-                    register_seed_json(seed, ctx, persist_seed_data, type_ops)
+                    register_seed_json(seed, ctx, type_ops)
                 }))
             }
             Some(TableFormat::Parquet) => {
                 let type_ops = Arc::clone(&type_ops);
                 handles.push(spawn_traced(register_seed_parquet_async(
-                    seed,
-                    ctx,
-                    persist_seed_data,
-                    type_ops,
+                    seed, ctx, type_ops,
                 )))
             }
             Some(TableFormat::Csv) => {

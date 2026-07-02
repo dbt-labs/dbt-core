@@ -1,5 +1,5 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
-use dbt_xdbc::{Backend, database, spark};
+use dbt_adbc::{Backend, database, spark};
 pub use dbt_yaml::Value as YmlValue;
 
 use std::collections::HashMap;
@@ -32,6 +32,16 @@ enum LivyAuthType {
 }
 
 #[derive(Debug)]
+enum SparkConnectAuthType<'a> {
+    // Auth is handled at the network/platform layer (mTLS, VPN, service mesh, cloud IAM).
+    // No application-level credentials are presented to Spark Connect.
+    // FIXME: generalize to arbitrary HTTP/2 headers if there is demand.
+    Ambient,
+    Token { token: &'a str },
+    TokenWithUser { username: &'a str, token: &'a str },
+}
+
+#[derive(Debug)]
 enum SparkAuthIR<'a> {
     Thrift {
         host: &'a str,
@@ -50,8 +60,7 @@ enum SparkAuthIR<'a> {
     Connect {
         host: &'a str,
         port: Option<u64>,
-        auth_username: &'a str,
-        auth_token: &'a str,
+        auth: SparkConnectAuthType<'a>,
         session_params: HashMap<&'a str, String>,
     },
 }
@@ -136,8 +145,7 @@ impl<'a> SparkAuthIR<'a> {
             SparkAuthIR::Connect {
                 host,
                 port,
-                auth_username,
-                auth_token,
+                auth,
                 session_params,
             } => {
                 builder.with_named_option(spark::TRANSPORT_API, spark::transport_api::CONNECT)?;
@@ -147,13 +155,20 @@ impl<'a> SparkAuthIR<'a> {
                     builder.with_named_option(spark::PORT, port.to_string())?;
                 }
 
-                if auth_token.is_empty() {
-                    builder.with_named_option(spark::AUTH_TYPE, spark::auth_type::NONE)?;
-                } else {
-                    builder.with_named_option(spark::AUTH_TYPE, spark::auth_type::TOKEN)?;
-                    builder.with_named_option(spark::PASSWORD, auth_token)?;
-                };
-                builder.with_named_option(spark::USERNAME, auth_username)?;
+                match auth {
+                    SparkConnectAuthType::Ambient => {
+                        builder.with_named_option(spark::AUTH_TYPE, spark::auth_type::NONE)?;
+                    }
+                    SparkConnectAuthType::Token { token } => {
+                        builder.with_named_option(spark::AUTH_TYPE, spark::auth_type::TOKEN)?;
+                        builder.with_named_option(spark::PASSWORD, token)?;
+                    }
+                    SparkConnectAuthType::TokenWithUser { username, token } => {
+                        builder.with_named_option(spark::AUTH_TYPE, spark::auth_type::TOKEN)?;
+                        builder.with_named_option(spark::PASSWORD, token)?;
+                        builder.with_named_option(spark::USERNAME, username)?;
+                    }
+                }
 
                 apply_session_params(&session_params, &mut builder)?;
             }
@@ -307,20 +322,23 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthErro
             host,
             port,
             session_params,
-            auth_username: config
-                .get_str("user")
-                .ok_or_else(|| AuthError::config("'user' is required for Spark Connect"))?,
-            auth_token: {
-                match auth {
-                    None | Some("NONE") | Some("PLAIN") => Ok(""),
-                    Some("TOKEN") => config
+            auth: match auth {
+                None | Some("NONE") | Some("PLAIN") => Ok(SparkConnectAuthType::Ambient),
+                Some("TOKEN") => {
+                    let token = config
                         .get_str("password")
                         .or_else(|| config.get_str("token"))
                         .ok_or_else(|| {
                             AuthError::config("'token' or 'password' required when auth is 'TOKEN'")
-                        }),
-                    Some(_) => Err(AuthError::config("invalid 'auth' for Spark Connect")),
+                        })?;
+                    match config.get_str("user") {
+                        Some(username) => {
+                            Ok(SparkConnectAuthType::TokenWithUser { username, token })
+                        }
+                        None => Ok(SparkConnectAuthType::Token { token }),
+                    }
                 }
+                Some(_) => Err(AuthError::config("invalid 'auth' for Spark Connect")),
             }?,
         },
         _ => return Err(AuthError::config("unsupported Spark method")),
@@ -472,25 +490,56 @@ mod tests {
     }
 
     #[test]
-    fn connect_auth_ok() {
-        let cases = [
-            ("NONE", spark::auth_type::NONE, [].as_slice()),
-            (
-                "TOKEN",
-                spark::auth_type::TOKEN,
-                [("password", spark::PASSWORD, "mypass")].as_slice(),
-            ),
-        ];
+    fn connect_auth_ok_regression() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "spark-connect".into()),
+            ("auth".into(), "NONE".into()),
+            ("user".into(), "myuser".into()),
+        ]);
+        let builder = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure")
+            .builder;
+        assert_eq!(
+            other_option_value(&builder, spark::AUTH_TYPE),
+            Some(spark::auth_type::NONE)
+        );
 
-        for (auth, option, extra_keys) in cases {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "spark-connect".into()),
+            ("auth".into(), "TOKEN".into()),
+            ("password".into(), "mypass".into()),
+            ("user".into(), "myuser".into()),
+        ]);
+        let builder = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure")
+            .builder;
+        assert_eq!(
+            other_option_value(&builder, spark::AUTH_TYPE),
+            Some(spark::auth_type::TOKEN)
+        );
+        assert_eq!(
+            other_option_value(&builder, spark::PASSWORD),
+            Some("mypass")
+        );
+        assert_eq!(
+            other_option_value(&builder, spark::USERNAME),
+            Some("myuser")
+        );
+    }
+
+    #[test]
+    fn connect_ambient_auth() {
+        for auth_val in [None, Some("NONE"), Some("PLAIN")] {
             let mut config = Mapping::from_iter([
                 ("host".into(), "myhost".into()),
                 ("method".into(), "spark-connect".into()),
-                ("auth".into(), auth.into()),
-                ("user".into(), "myuser".into()),
             ]);
-            for (key, _, value) in extra_keys {
-                config.insert((*key).into(), (*value).into());
+            if let Some(a) = auth_val {
+                config.insert("auth".into(), a.into());
             }
 
             let builder = SparkAuth {}
@@ -498,15 +547,119 @@ mod tests {
                 .expect("configure")
                 .builder;
 
-            assert_eq!(other_option_value(&builder, spark::AUTH_TYPE), Some(option));
             assert_eq!(
-                other_option_value(&builder, spark::USERNAME),
-                Some("myuser")
+                other_option_value(&builder, spark::AUTH_TYPE),
+                Some(spark::auth_type::NONE)
             );
-            for (_, driver_key, value) in extra_keys {
-                assert_eq!(other_option_value(&builder, driver_key), Some(*value));
-            }
+            assert_eq!(other_option_value(&builder, spark::USERNAME), None);
+            assert_eq!(other_option_value(&builder, spark::PASSWORD), None);
         }
+    }
+
+    #[test]
+    fn connect_token_auth_no_user() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "spark-connect".into()),
+            ("auth".into(), "TOKEN".into()),
+            ("password".into(), "mypass".into()),
+        ]);
+
+        let builder = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure")
+            .builder;
+
+        assert_eq!(
+            other_option_value(&builder, spark::AUTH_TYPE),
+            Some(spark::auth_type::TOKEN)
+        );
+        assert_eq!(
+            other_option_value(&builder, spark::PASSWORD),
+            Some("mypass")
+        );
+        assert_eq!(other_option_value(&builder, spark::USERNAME), None);
+    }
+
+    #[test]
+    fn connect_token_auth_with_user() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "spark-connect".into()),
+            ("auth".into(), "TOKEN".into()),
+            ("password".into(), "mypass".into()),
+            ("user".into(), "myuser".into()),
+        ]);
+
+        let builder = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure")
+            .builder;
+
+        assert_eq!(
+            other_option_value(&builder, spark::AUTH_TYPE),
+            Some(spark::auth_type::TOKEN)
+        );
+        assert_eq!(
+            other_option_value(&builder, spark::PASSWORD),
+            Some("mypass")
+        );
+        assert_eq!(
+            other_option_value(&builder, spark::USERNAME),
+            Some("myuser")
+        );
+    }
+
+    #[test]
+    fn connect_token_auth_fallback_to_token_field() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "spark-connect".into()),
+            ("auth".into(), "TOKEN".into()),
+            ("token".into(), "mytoken".into()),
+        ]);
+
+        let builder = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure")
+            .builder;
+
+        assert_eq!(
+            other_option_value(&builder, spark::AUTH_TYPE),
+            Some(spark::auth_type::TOKEN)
+        );
+        assert_eq!(
+            other_option_value(&builder, spark::PASSWORD),
+            Some("mytoken")
+        );
+    }
+
+    #[test]
+    fn connect_token_auth_missing_token_err() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "spark-connect".into()),
+            ("auth".into(), "TOKEN".into()),
+        ]);
+
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert!(err.msg().contains("'token' or 'password' required"));
+    }
+
+    #[test]
+    fn connect_invalid_auth_err() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "spark-connect".into()),
+            ("auth".into(), "KERBEROS".into()),
+        ]);
+
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert_eq!(err.msg(), "invalid 'auth' for Spark Connect");
     }
 
     #[test]

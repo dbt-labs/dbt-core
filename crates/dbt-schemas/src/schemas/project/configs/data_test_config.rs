@@ -157,6 +157,8 @@ pub struct ProjectDataTestConfig {
         deserialize_with = "u64_or_string_u64"
     )]
     pub job_execution_timeout_seconds: Option<u64>,
+    #[serde(rename = "+reservation")]
+    pub reservation: Option<String>,
     #[serde(rename = "+labels")]
     pub labels: Option<IndexMap<String, String>>,
     #[serde(
@@ -422,6 +424,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                reservation: config.reservation,
                 labels: config.labels,
                 labels_from_meta: config.labels_from_meta,
                 kms_key_name: config.kms_key_name,
@@ -466,6 +469,9 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
                 schedule: config.schedule,
+                incremental_apply_config_changes: None,
+                use_safer_relation_operations: None,
+                view_update_via_alter: None,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -542,6 +548,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             job_execution_timeout_seconds: config
                 .__warehouse_specific_config__
                 .job_execution_timeout_seconds,
+            reservation: config.__warehouse_specific_config__.reservation,
             labels: config.__warehouse_specific_config__.labels,
             labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
             kms_key_name: config.__warehouse_specific_config__.kms_key_name,

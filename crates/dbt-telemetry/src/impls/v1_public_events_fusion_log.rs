@@ -1,10 +1,8 @@
-use crate::proto::v1::public::events::fusion::{
-    compat::SeverityNumber,
-    log::{
-        LogMessage, ProgressMessage, ShowDataOutput, ShowDataOutputFormat, ShowResult,
-        ShowResultOutputFormat, UserLogMessage,
-    },
+use crate::proto::v1::public::events::fusion::log::{
+    LogMessage, ProgressMessage, ShowDataOutput, ShowDataOutputFormat, ShowResult,
+    ShowResultOutputFormat, UserLogMessage,
 };
+use dbt_tracing::SeverityNumber;
 
 impl LogMessage {
     /// Create a new LogMessage with the original severity level, error code, and code name.

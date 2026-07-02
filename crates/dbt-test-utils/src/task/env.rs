@@ -2,8 +2,9 @@ use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 use dbt_common::tracing::layer::{ConsumerLayer, MiddlewareLayer};
-use dbt_common::tracing::{BaseSubscriber, reload::TelemetryReloadHandle};
+use dbt_common::tracing::reload::TelemetryReloadHandle;
 use dbt_common::{FsResult, stdfs};
+use dbt_tracing::init::BaseSubscriber;
 use tempfile::TempDir;
 
 use crate::task::utils::strip_leading_relative;

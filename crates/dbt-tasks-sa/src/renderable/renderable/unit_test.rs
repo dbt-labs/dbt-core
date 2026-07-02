@@ -22,7 +22,7 @@ use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::static_analysis::is_static_analysis_off_or_baseline;
 use dbt_common::stats::NodeStatus;
 use dbt_common::stdfs;
-use dbt_common::{ErrorCode, FsResult, err, fs_err};
+use dbt_common::{ErrorCode, FsResult, MacroSpansOnly, err, fs_err};
 use dbt_jinja_utils::phases::compile::DependencyValidationConfig;
 use dbt_jinja_utils::phases::run::build_run_node_context;
 use dbt_jinja_utils::utils::add_task_context;
@@ -38,7 +38,7 @@ use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{DbtUnitTest, InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
-use dbt_telemetry::NodeType;
+use dbt_telemetry::{ExecutionPhase as TelemetryExecutionPhase, NodeType};
 
 use crate::renderable::unit_test_typing::{BigqueryTyping, SnowflakeTyping};
 use dbt_tasks_core::task::TaskResult;
@@ -415,6 +415,7 @@ fn populate_schema_from_empty_relation(
         None,
         &ctx.inner.base_context,
         &ctx.inner.arg.io,
+        TelemetryExecutionPhase::Render,
         None,
         ctx.runtime_config().dependencies.keys().cloned().collect(),
     );
@@ -1017,20 +1018,6 @@ fn render_unit_test(
         .unwrap_or_else(|| Arc::new(DefaultTypeOps::new(adapter_type)) as Arc<dyn TypeOps>);
     let type_ops = type_ops_arc.as_ref();
 
-    // Build compile context first so we can use it for rendering given_fqn
-    let (mut compile_context, config_map) = ctx.build_compile_node_context(
-        node,
-        &base_context,
-        DependencyValidationConfig::new_for_node(node)
-            .validate()
-            .allow_dependencies(given_relation_ids.iter()),
-    );
-
-    // Apply overrides to the compile context
-    if let Some(overrides) = &node.__unit_test_attr__.overrides {
-        apply_unit_test_overrides(&mut compile_context, overrides, ctx);
-    }
-
     let model_unique_id = get_unique_id(
         &node.__unit_test_attr__.model,
         &node.__common_attr__.package_name,
@@ -1040,6 +1027,47 @@ fn render_unit_test(
             .map(|v| v.to_string()),
         "model",
     );
+
+    // The tested model's SQL is rendered as part of the unit test, so any dbt
+    // UDFs it calls via `{{ function('name') }}` must be allowed by dependency
+    // validation. Those functions are dependencies of the *model*, not of the
+    // unit test, and (unlike refs/sources) cannot be mocked, so they are never
+    // present in the unit test's own `depends_on` or in `given_relation_ids`.
+    // Carry them over from the tested model to avoid a spurious dbt1501 error
+    // (dbt-core #15246).
+    let tested_model_function_deps: Vec<String> = {
+        let resolver_state = ctx.resolver_state();
+        resolver_state
+            .nodes
+            .get_node(&model_unique_id)
+            .map(|model| {
+                model
+                    .base()
+                    .depends_on
+                    .nodes
+                    .iter()
+                    .filter(|dep| resolver_state.nodes.functions.contains_key(*dep))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    // Build compile context first so we can use it for rendering given_fqn
+    let (mut compile_context, config_map) = ctx.build_compile_node_context(
+        node,
+        &base_context,
+        DependencyValidationConfig::new_for_node(node)
+            .validate()
+            .allow_dependencies(given_relation_ids.iter())
+            .allow_dependencies(tested_model_function_deps),
+    );
+
+    // Apply overrides to the compile context
+    if let Some(overrides) = &node.__unit_test_attr__.overrides {
+        apply_unit_test_overrides(&mut compile_context, overrides, ctx);
+    }
+
     let resolver_state = ctx.resolver_state();
 
     // Build subqueries from pre-discovered relations (Discover phase) + their schemas (now cached from Fetch phase).
@@ -1424,8 +1452,8 @@ WITH
                 node.__common_attr__.name.clone(),
             ],
             sql: rendered_sql,
-            macro_spans,
             original_path: relative_path_unit_test,
+            spans: Box::new(MacroSpansOnly { macro_spans }),
         },
         config_map,
     ))
@@ -1694,9 +1722,23 @@ fn create_values(
                 );
             }
             // todo: this is a hack to handle null values in a more robust way, but maybe we should only allows this if the column is nullable?
-            // if the value is null or a string "null", we push a null value
+            // Emit a null if the value is:
+            // - `NULL` (actually null)
+            // - "null" (string)
+            // - ""     (empty string, but only if *not* string typed)
+            let is_string_typed = matches!(
+                ref_type,
+                DataType::Utf8
+                    | DataType::Utf8View
+                    | DataType::LargeUtf8
+                    | DataType::Binary
+                    | DataType::LargeBinary
+            );
             if row_value.is_null()
                 || row_value.is_string() && (row_value.as_str().unwrap()).to_lowercase() == "null"
+                || row_value.is_string()
+                    && row_value.as_str().unwrap().is_empty()
+                    && !is_string_typed
             {
                 enriched_row.push(YmlValue::null());
             } else {

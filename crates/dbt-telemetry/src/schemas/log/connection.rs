@@ -1,13 +1,14 @@
 pub use crate::proto::v1::public::events::fusion::query::{
     AdapterConnectionClose, AdapterConnectionOpen,
 };
-use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
-    TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
+    TelemetryOutputFlags,
 };
 use prost::Name;
 
-impl ProtoTelemetryEvent for AdapterConnectionOpen {
+impl StaticTelemetryEvent for AdapterConnectionOpen {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -24,6 +25,7 @@ impl ProtoTelemetryEvent for AdapterConnectionOpen {
 }
 
 impl ArrowSerializableTelemetryEvent for AdapterConnectionOpen {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)
@@ -55,7 +57,7 @@ impl ArrowSerializableTelemetryEvent for AdapterConnectionOpen {
     }
 }
 
-impl ProtoTelemetryEvent for AdapterConnectionClose {
+impl StaticTelemetryEvent for AdapterConnectionClose {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -69,6 +71,7 @@ impl ProtoTelemetryEvent for AdapterConnectionClose {
 }
 
 impl ArrowSerializableTelemetryEvent for AdapterConnectionClose {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

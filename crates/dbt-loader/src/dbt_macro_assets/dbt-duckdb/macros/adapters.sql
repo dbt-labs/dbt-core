@@ -59,6 +59,10 @@
 
 
 {% macro duckdb__create_table_as(temporary, relation, compiled_code, language='sql') -%}
+  {# DIVERGENCE: adapter.build_catalog_relation is Fusion-only (see issue #10659).
+     Under dbt-core (1.x) there is no catalog routing, so treat the target as a
+     plain create-as-select target (stage-create-capable, non-iceberg). #}
+  {%- set write_strategy = adapter.build_catalog_relation(config.model).duckdb_write_strategy if dbt_version.startswith('2.') else 'create_as_select' -%}
   {%- if language == 'sql' -%}
     {% set contract_config = config.get('contract') %}
     {% if contract_config.enforced %}
@@ -68,6 +72,33 @@
 
     {{ sql_header if sql_header is not none }}
 
+    {%- if not temporary and write_strategy == 'direct_create' %}
+      {% if contract_config.enforced %}
+        {#-- DuckDB doesnt support constraints on temp tables --#}
+        create table
+          {{ relation.include(database=True, schema=True) }}
+        {{ get_table_columns_and_constraints() }} ;
+        insert into {{ relation }} {{ get_column_names() }} (
+          {{ get_select_subquery(compiled_code) }}
+        );
+      {% else %}
+        {%- set columns = get_column_schema_from_query(compiled_code, sql_header) -%}
+        create table
+          {{ relation.include(database=True, schema=True) }}
+        (
+          {% for col in columns -%}
+            {{ col.quoted }} {{ col.dtype }}{{ "," if not loop.last }}
+          {% endfor -%}
+        );
+        insert into {{ relation }} (
+          {% for col in columns -%}
+            {{ col.quoted }}{{ "," if not loop.last }}
+          {% endfor -%}
+        ) (
+          {{ compiled_code }}
+        );
+      {% endif %}
+    {%- else %}
     create {% if temporary: -%}temporary{%- endif %} table
       {{ relation.include(database=(not temporary), schema=(not temporary)) }}
   {% if contract_config.enforced and not temporary %}
@@ -81,7 +112,11 @@
       {{ compiled_code }}
     );
   {% endif %}
+    {% endif %}
   {%- elif language == 'python' -%}
+    {% if not temporary and write_strategy != 'create_as_select' %}
+      {% do exceptions.raise_compiler_error("DuckDB Python models cannot materialize to an Iceberg catalog that requires create-then-insert writes. Use a SQL model.") %}
+    {% endif %}
     {{ py_write_table(temporary=temporary, relation=relation, compiled_code=compiled_code) }}
   {%- else -%}
       {% do exceptions.raise_compiler_error("duckdb__create_table_as macro didn't get supported language, it got %s" % language) %}
@@ -121,7 +156,22 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__get_columns_in_relation(relation) -%}
-  {% call statement('get_columns_in_relation', fetch_result=True) %}
+  {# DIVERGENCE: adapter.table_format is Fusion-only (see issue #10659). Under dbt-core
+     (1.x) fmt is none, so we use the standard information_schema.columns query. #}
+  {% set fmt = adapter.table_format(relation) if dbt_version.startswith('2.') else none %}
+  {% if fmt == 'iceberg' %}
+    {# information_schema.columns returns incorrect metadata for Iceberg REST catalog tables. #}
+    {% set get_columns_sql %}
+      select
+          column_name,
+          column_type                as data_type,
+          null::integer              as character_maximum_length,
+          null::integer              as numeric_precision,
+          null::integer              as numeric_scale
+      from (describe {{ relation }})
+    {% endset %}
+  {% else %}
+    {% set get_columns_sql %}
       select
           column_name,
           data_type,
@@ -139,6 +189,10 @@ def materialize(df, con):
       {% endif %}
       order by ordinal_position
 
+    {% endset %}
+  {% endif %}
+  {% call statement('get_columns_in_relation', fetch_result=True) %}
+    {{ get_columns_sql }}
   {% endcall %}
   {% set table = load_result('get_columns_in_relation').table %}
   {{ return(sql_convert_columns_in_relation(table)) }}
@@ -177,19 +231,15 @@ def materialize(df, con):
 
 {% macro duckdb__rename_relation(from_relation, to_relation) -%}
   {# DIVERGENCE: adapter.table_format is Fusion-only (see issue #10659). Under dbt-core
-     (1.x) treat as non-iceberg and use the plain ALTER TABLE RENAME path. #}
+     (1.x) fmt is none, so auto_begin stays on and we just ALTER RENAME. #}
   {% set fmt = adapter.table_format(from_relation) if dbt_version.startswith('2.') else none %}
   {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
-  {% call statement('rename_relation') -%}
-    {% if fmt == 'iceberg' %}
-      {# DuckDB Iceberg REST does not support ALTER TABLE RENAME.
-         Use DROP + CREATE AS SELECT instead. #}
-      drop table if exists {{ to_relation }};
-      create table {{ to_relation }} as select * from {{ from_relation }};
-      drop table if exists {{ from_relation }}
-    {% else %}
-      alter {{ to_relation.type }} {{ from_relation }} rename to {{ target_name }}
-    {% endif %}
+  {# Iceberg REST: ALTER...RENAME must not share a transaction with the prior CTAS.
+     DuckDB autocommits each statement, so for iceberg we run the rename standalone
+     (auto_begin=False) rather than committing the connection — which in Fusion is a
+     resource shared across nodes and must not be mutated mid-DAG. #}
+  {% call statement('rename_relation', auto_begin=(fmt != 'iceberg')) -%}
+    alter {{ to_relation.type }} {{ from_relation }} rename to {{ target_name }}
   {%- endcall %}
 {% endmacro %}
 

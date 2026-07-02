@@ -1,3 +1,4 @@
+use dbt_adapter::enforce_adapter_gating;
 use dbt_common::tracing::dbt_emit::{emit_info_progress_message, emit_warn_log_message};
 use dbt_telemetry::ProgressMessage;
 
@@ -23,8 +24,6 @@ use dbt_schemas::state::DbtProfile;
 use dirs::home_dir;
 
 use crate::args::LoadArgs;
-
-const ALLOW_EXPERIMENTAL_ADAPTERS_ENV: &str = "DBT_ALLOW_EXPERIMENTAL_ADAPTERS";
 
 pub fn load_profiles(
     arg: &LoadArgs,
@@ -97,17 +96,7 @@ pub fn load_profiles(
         )
     })?;
 
-    let adapter = db_config.adapter_type();
-    if !experimental_adapters_allowed()
-        && !dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS.contains(&adapter)
-    {
-        return Err(fs_err!(
-            ErrorCode::InvalidConfig,
-            "The '{}' adapter is not yet supported by dbt Fusion. \
-             Supported adapters: snowflake, bigquery, databricks, redshift",
-            adapter
-        ));
-    }
+    enforce_adapter_gating(db_config.adapter_type(), arg.io.status_reporter.as_ref())?;
 
     if db_config.has_removed_execute_field() {
         emit_warn_log_message(
@@ -142,14 +131,6 @@ fn profile_defer_to_target(credentials: &dbt_yaml::Mapping) -> Option<String> {
     match credentials.get("defer_to_target") {
         Some(dbt_yaml::Value::String(target, _)) if !target.is_empty() => Some(target.clone()),
         _ => None,
-    }
-}
-
-fn experimental_adapters_allowed() -> bool {
-    if cfg!(debug_assertions) && std::env::var_os(ALLOW_EXPERIMENTAL_ADAPTERS_ENV).is_none() {
-        true
-    } else {
-        !dbt_env::env_var_is_disabled(ALLOW_EXPERIMENTAL_ADAPTERS_ENV)
     }
 }
 

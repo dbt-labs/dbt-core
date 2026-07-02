@@ -114,7 +114,6 @@ impl MicrobatchBuilder {
 
     /// Parse a begin date string into a DateTime.
     fn parse_begin_date(begin_str: &str) -> FsResult<DateTime<Utc>> {
-        // Try parsing as date first (YYYY-MM-DD)
         if let Ok(date) = NaiveDate::parse_from_str(begin_str, "%Y-%m-%d") {
             let datetime = date.and_hms_opt(0, 0, 0).ok_or_else(|| {
                 fs_err!(
@@ -126,17 +125,22 @@ impl MicrobatchBuilder {
             return Ok(DateTime::<Utc>::from_naive_utc_and_offset(datetime, Utc));
         }
 
-        // Try parsing with time (YYYY-MM-DD HH:MM:SS)
-        if let Ok(datetime) = chrono::NaiveDateTime::parse_from_str(begin_str, "%Y-%m-%d %H:%M:%S")
-        {
-            return Ok(DateTime::<Utc>::from_naive_utc_and_offset(datetime, Utc));
-        }
-
-        Err(fs_err!(
-            ErrorCode::InvalidConfig,
-            "Unable to parse begin date '{}'. Expected format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-            begin_str
-        ))
+        [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S%.f",
+            "%Y-%m-%dT%H:%M:%S%.f",
+        ]
+        .iter()
+        .find_map(|fmt| chrono::NaiveDateTime::parse_from_str(begin_str, fmt).ok())
+        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+        .ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Unable to parse begin date '{}'. Expected format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
+                begin_str
+            )
+        })
     }
 
     /// Calculate the start time for batch processing.
@@ -480,12 +484,72 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), make_datetime(2024, 1, 15, 0));
 
-        // Date with time
+        // Date with time (space separator)
         let result = MicrobatchBuilder::parse_begin_date("2024-01-15 14:30:00");
         assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 15)
+                .unwrap()
+                .and_hms_opt(14, 30, 0)
+                .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+                .unwrap()
+        );
 
-        // Invalid format
+        // ISO 8601 with T separator
+        let result = MicrobatchBuilder::parse_begin_date("2024-01-15T14:30:00");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 15)
+                .unwrap()
+                .and_hms_opt(14, 30, 0)
+                .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+                .unwrap()
+        );
+
+        // Space separator with fractional seconds (Python str(datetime) output)
+        let result = MicrobatchBuilder::parse_begin_date("2023-06-01 09:31:47.317452");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            NaiveDate::from_ymd_opt(2023, 6, 1)
+                .unwrap()
+                .and_hms_micro_opt(9, 31, 47, 317452)
+                .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+                .unwrap()
+        );
+
+        // ISO 8601 with T separator and fractional seconds (isoformat() output)
+        let result = MicrobatchBuilder::parse_begin_date("2023-06-01T09:31:47.317452");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            NaiveDate::from_ymd_opt(2023, 6, 1)
+                .unwrap()
+                .and_hms_micro_opt(9, 31, 47, 317452)
+                .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+                .unwrap()
+        );
+
+        // Fractional seconds with fewer digits
+        let result = MicrobatchBuilder::parse_begin_date("2024-01-15T14:30:00.123");
+        assert!(result.is_ok());
+
+        // Invalid: wrong date order
         let result = MicrobatchBuilder::parse_begin_date("01-15-2024");
+        assert!(result.is_err());
+
+        // Invalid: completely bogus
+        let result = MicrobatchBuilder::parse_begin_date("not-a-date");
+        assert!(result.is_err());
+
+        // Invalid: empty string
+        let result = MicrobatchBuilder::parse_begin_date("");
+        assert!(result.is_err());
+
+        // Invalid: date with timezone offset (we parse as naive/UTC, not arbitrary zones)
+        let result = MicrobatchBuilder::parse_begin_date("2024-01-15T14:30:00+05:00");
         assert!(result.is_err());
     }
 }

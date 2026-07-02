@@ -401,6 +401,7 @@ mod tests {
                 DEFAULT_DBT_QUOTING,
                 Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
                 None,
+                None,
             ));
             env.add_global("adapter", adapter.as_value());
             let empty_blocks = BTreeMap::new();
@@ -1101,6 +1102,35 @@ mod tests {
             .collect();
 
         assert_eq!(doc_names, vec!["cloud_plan_tier".to_string()]);
+    }
+
+    #[test]
+    fn test_snapshot_with_sql_suffix() {
+        let sql = r#"
+        {% snapshot stg_crm_client_role.sql %}
+        SELECT 1
+        {% endsnapshot %}
+        "#;
+
+        let resources = parse_macro_statements(sql, Path::new("test.sql"), &["snapshot"]).unwrap();
+        let snapshot_names: Vec<String> = resources
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Snapshot(name, _, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // parse_macro_statements returns the macro name with the "snapshot_" prefix;
+        // the prefix is stripped later in resolve_snapshots. The important thing
+        // here is that the ".sql" suffix is absent, matching dbt-core behavior.
+        assert_eq!(
+            snapshot_names,
+            vec!["snapshot_stg_crm_client_role".to_string()]
+        );
     }
 
     #[test]

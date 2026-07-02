@@ -36,7 +36,7 @@ enum PypiCmd {
     /// Pack pre-built binaries into per-platform wheels.
     Pack(PackArgs),
 
-    /// Publish wheels from `--dist`.
+    /// Publish wheels from `--dist`, or build and publish the sdist with `--download-base-url`.
     Publish(PypiPublishArgs),
 }
 

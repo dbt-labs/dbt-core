@@ -18,6 +18,7 @@ members = [
   "crates/dbt-cloud-api",
   "crates/dbt-cloud-config",
   "crates/dbt-df-providers",
+  "crates/dbt-classification-types",
   "crates/dbt-features",
   "crates/dbt-tasks-core",
   "crates/dbt-tasks-sa",
@@ -41,10 +42,11 @@ members = [
   "crates/dbt-metadata",
   "crates/dbt-metadata-parquet",
   "crates/dbt-profile",
-  "crates/dbt-run-cache",
+  "crates/dbt-state",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
   "crates/dbt-telemetry",
+  "crates/dbt-tracing",
   "crates/dbt-selector-parser",
   "crates/dbt-scheduler",
   "crates/dbt-proc-macros",
@@ -55,8 +57,8 @@ members = [
   "crates/dbt-jinja-utils",
   "crates/dbt-main",
   "crates/dbt-sa-cli",
-  "crates/dbt-xdbc",
-  "crates/xdbc-record-replay",
+  "crates/dbt-adbc",
+  "crates/adbc-record-replay",
   "crates/dbt-deps",
   "crates/vortex-client",
   "crates/vortex-events",
@@ -69,7 +71,6 @@ members = [
   "crates/dbt-sql-keywords",
 
   "crates/dbt-sql/dbt-lexer-bigquery",
-  "crates/dbt-sql/dbt-lexer-bigqueryuntyped",
   "crates/dbt-sql/dbt-lexer-databricks",
   "crates/dbt-sql/dbt-lexer-duckdb",
   "crates/dbt-sql/dbt-lexer-redshift",
@@ -81,6 +82,11 @@ members = [
   "crates/dbt-login",
   "crates/dbt-platform-auth",
 ]
+exclude = [
+  "wizard/wizard-app/src-tauri",
+  "wizard/dbt-codex",
+  "wizard/wizard-ui",
+]
 
 resolver = "2"
 
@@ -90,9 +96,9 @@ description = "Fusion: A fast dbt engine, SQL compiler, local development framew
 edition = "2024"
 homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
-license = "Elastic-2.0"
+license = "Apache-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.3"
 
 [patch.crates-io]
 
@@ -213,6 +219,7 @@ dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
 dbt-base = { path = "crates/dbt-base" }
 dbt-clap-core = { path = "crates/dbt-clap-core" }
+dbt-classification-types = { path = "crates/dbt-classification-types" }
 dbt-cloud-api = { path = "crates/dbt-cloud-api" }
 dbt-cloud-config = { path = "crates/dbt-cloud-config" }
 dbt-common = { path = "crates/dbt-common" }
@@ -247,8 +254,8 @@ dbt-platform-auth = { path = "crates/dbt-platform-auth" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
-dbt-run-cache = { path = "crates/dbt-run-cache" }
 dbt-scheduler = { path = "crates/dbt-scheduler" }
+dbt-state = { path = "crates/dbt-state" }
 
 dbt-metadata = { path = "crates/dbt-metadata" }
 dbt-metadata-parquet = { path = "crates/dbt-metadata-parquet" }
@@ -261,6 +268,7 @@ dbt-telemetry = { path = "crates/dbt-telemetry" }
 dbt-test-containers = { path = "crates/dbt-test-containers" }
 dbt-test-primitives = { path = "crates/dbt-test-primitives" }
 dbt-test-utils = { path = "crates/dbt-test-utils" }
+dbt-tracing = { path = "crates/dbt-tracing" }
 dbt-tui-progress = { path = "crates/dbt-tui-progress" }
 proto-rust = { path = "crates/proto-rust" }
 proto-rust-macros = { path = "crates/proto-rust-macros" }
@@ -268,7 +276,6 @@ vortex-client = { path = "crates/vortex-client" }
 vortex-events = { path = "crates/vortex-events" }
 
 dbt-lexer-bigquery = { path = "crates/dbt-sql/dbt-lexer-bigquery" }
-dbt-lexer-bigqueryuntyped = { path = "crates/dbt-sql/dbt-lexer-bigqueryuntyped" }
 dbt-lexer-databricks = { path = "crates/dbt-sql/dbt-lexer-databricks" }
 dbt-lexer-duckdb = { path = "crates/dbt-sql/dbt-lexer-duckdb" }
 dbt-lexer-redshift = { path = "crates/dbt-sql/dbt-lexer-redshift" }
@@ -297,11 +304,13 @@ minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
 snowflake-api = { path = "crates/snowflake-rs/snowflake-api" }
 
 # serde
-dbt-yaml = { version = "0.9.5", features = [
+dbt-yaml = { version = "0.9.6", features = [
   "filename",
+  "yaml_11",
   "schemars",
   "flatten_dunder",
 ] }
+erased-serde = "0.4.9"
 serde = { version = "1.0.147", default-features = false, features = ["derive"] }
 serde_derive = "1.0.215"
 serde_json = "1.0.133"
@@ -333,12 +342,12 @@ arrow-select = { version = "=56.0.0" }
 parquet = { version = "=56.0.0" }
 serde_arrow = { version = "0.13.6", features = ["arrow-56"] }
 
-# xdbc
+# adbc
 adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.22.0", rev = "d2808cf465feb6efc54ee862cb63104803535adb" } # @ apache-arrow-adbc-22-rust
 adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_driver_manager", version = "0.22.0", rev = "d2808cf465feb6efc54ee862cb63104803535adb" } # @ apache-arrow-adbc-22-rust
 adbc-ffi = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_ffi", version = "0.22.0", rev = "d2808cf465feb6efc54ee862cb63104803535adb" } # @ apache-arrow-adbc-22-rust
-dbt-xdbc = { path = "crates/dbt-xdbc" }
-xdbc-record-replay = { path = "crates/xdbc-record-replay" }
+adbc-record-replay = { path = "crates/adbc-record-replay" }
+dbt-adbc = { path = "crates/dbt-adbc" }
 
 # antlr for frontend
 dbt-antlr4 = { version = "1.3.6", features = [
@@ -636,7 +645,7 @@ tower-http = { version = "0.6", features = ["trace"] }
 open = "5"
 
 # When updating these lints mind that some crates may not inherit form workspace
-# Use only "warn" in this section if you want to deny a lint. CI run will turn these 
+# Use only "warn" in this section if you want to deny a lint. CI run will turn these
 # into deny, and we don't want to disallow local compilation of "dirty" code.
 
 [workspace.lints.clippy]

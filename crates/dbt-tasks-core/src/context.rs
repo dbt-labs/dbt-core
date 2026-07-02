@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::run_cache::run_cache_service::HeuristicClock;
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
 use dbt_adapter::relation::create_relation_from_node;
@@ -12,20 +13,21 @@ use dbt_common::FsResult;
 use dbt_common::collections::{DashMap, SccHashMap};
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_dag::schedule::Schedule;
+use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::compile::{
     DependencyValidationConfig, build_compile_node_context_inner,
 };
-use dbt_run_cache::metadata_cache::RunCacheMetadataCache;
-use dbt_run_cache::service_client::SharedRunCacheServiceClient;
-use dbt_run_cache::service_config::RunCacheServiceConfig;
-use dbt_run_cache::view_traversal::ViewDefinitionTraverser;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::UpdatesOn;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes, Nodes};
 use dbt_schemas::state::{DbtProfile, DbtRuntimeConfig, NodeResolverTracker, ResolverState};
+use dbt_state::metadata_cache::RunCacheMetadataCache;
+use dbt_state::service_client::SharedRunCacheServiceClient;
+use dbt_state::service_config::RunCacheServiceConfig;
+use dbt_state::view_traversal::ViewDefinitionTraverser;
 use minijinja::Value;
 
 use crate::RunTasksArgs;
@@ -46,6 +48,10 @@ pub struct RunCacheCtx {
     pub run_cache_service_config: Option<RunCacheServiceConfig>,
     pub run_cache_service_client: Option<SharedRunCacheServiceClient>,
     pub view_traverser: Option<Arc<ViewDefinitionTraverser>>,
+    /// Run-start warehouse clock, set once in `run_cache_service_before_run`.
+    /// When present, `confirm_run_cache_service_execution` uses it to stamp
+    /// freshly-executed tables without an additional warehouse round-trip.
+    pub heuristic_clock: std::sync::OnceLock<HeuristicClock>,
 }
 
 /// Information about a rendered node, used for unit test hash computation.
@@ -76,6 +82,7 @@ pub struct TaskRunnerCtxInner {
     pub materialization_resolver: Arc<MaterializationResolver>,
     pub root_project_name: String,
     pub adapter_type: AdapterType,
+    pub sources_extractor: Arc<dyn SourcesExtractor>,
     pub dbt_profile: Arc<DbtProfile>,
     pub runtime_config: Arc<DbtRuntimeConfig>,
     pub generic_test_relationships: GenericTestRelationships,
@@ -104,6 +111,7 @@ impl TaskRunnerCtxInner {
         generic_test_relationships: GenericTestRelationships,
         span_manager: Arc<SpanManager<FsResult<NodeStatus>, SkipReason>>,
         execute: dbt_schemas::schemas::profiles::Execute,
+        sources_extractor: Arc<dyn SourcesExtractor>,
         run_cache_ctx: RunCacheCtx,
     ) -> Self {
         let runnable_set = schedule
@@ -144,6 +152,7 @@ impl TaskRunnerCtxInner {
             materialization_resolver: Arc::new(materialization_resolver),
             root_project_name: resolver_state.root_project_name.clone(),
             adapter_type: resolver_state.adapter_type,
+            sources_extractor,
             dbt_profile: Arc::new(resolver_state.dbt_profile.clone()),
             runtime_config: resolver_state.runtime_config.clone(),
             generic_test_relationships,

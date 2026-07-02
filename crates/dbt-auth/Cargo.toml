@@ -13,7 +13,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-dbt-xdbc = { workspace = true }
+dbt-adbc = { workspace = true }
 dbt-yaml = { workspace = true }
 
 adbc-core = { workspace = true }
@@ -42,6 +42,3 @@ test-with = { version = "0.14.7", default-features = false }
 name = "dbt_auth"
 path = "src/lib.rs"
 doctest = false
-
-[features]
-odbc = ["dbt-xdbc/odbc"]

@@ -9,6 +9,7 @@ use crate::compiler::ast::{self, Comment, MacroKind, Spanned};
 use crate::compiler::lexer::{Tokenizer, WhitespaceConfig};
 use crate::compiler::tokens::{Span, Token};
 use crate::error::{Error, ErrorKind};
+use crate::layout::JinjaLayoutEventKind;
 use crate::listener::TokenizerEventListener;
 use crate::syntax::SyntaxConfig;
 use crate::value::Value;
@@ -632,6 +633,9 @@ impl<'a> Parser<'a> {
                         },
                         self.stream.expand_span(span),
                     ));
+                    // Allow postfix attribute/item access on the filter result,
+                    // e.g. `rows|first.col` is valid Jinja2 and means `(rows|first).col`.
+                    expr = ok!(self.parse_postfix(expr, span));
                 }
                 Some((Token::Ident("is"), _)) => {
                     ok!(self.stream.next());
@@ -944,11 +948,11 @@ impl<'a> Parser<'a> {
                 ast::Stmt::ForLoop(Spanned::new(node, self.stream.expand_span(span)))
             }
             "if" => {
-                let node = ok!(self.parse_if_cond(span));
+                let node = ok!(self.parse_if_cond(span, JinjaLayoutEventKind::BlockStart));
                 ast::Stmt::IfCond(Spanned::new(node, self.stream.expand_span(span)))
             }
             "with" => ast::Stmt::WithBlock(respan!(ok!(self.parse_with_block()))),
-            "set" => match ok!(self.parse_set()) {
+            "set" => match ok!(self.parse_set(span)) {
                 SetParseResult::Set(rv) => ast::Stmt::Set(respan!(rv)),
                 SetParseResult::SetBlock(rv) => ast::Stmt::SetBlock(respan!(rv)),
             },
@@ -1141,24 +1145,25 @@ impl<'a> Parser<'a> {
         skip_token!(self, Token::Colon);
 
         expect_token!(self, Token::BlockEnd, "end of block");
-        let _ = start_open_span;
+        let start_tag_span = self.stream.expand_span(start_open_span);
         let body = ok!(self.subparse(
             &|tok| matches!(tok, Token::Ident("endfor" | "else")),
             Some(("for", &["endfor", "else"])),
         ));
         let next_open_span = self.stream.last_span();
-        let (else_body, end_open_span) = match ok!(self.stream.next()) {
+        let (else_body, else_tag_span, end_open_span) = match ok!(self.stream.next()) {
             Some((Token::Ident("else"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
+                let else_tag_span = self.stream.expand_span(next_open_span);
                 let else_body = ok!(self.subparse(
                     &|tok| matches!(tok, Token::Ident("endfor")),
                     Some(("for", &["endfor"])),
                 ));
                 let end_open_span = self.stream.last_span();
                 expect_token!(self, Token::Ident("endfor"), "endfor");
-                (else_body, end_open_span)
+                (else_body, Some(else_tag_span), end_open_span)
             }
-            Some((Token::Ident("endfor"), _)) => (Vec::new(), next_open_span),
+            Some((Token::Ident("endfor"), _)) => (Vec::new(), None, next_open_span),
             Some((token, span)) => {
                 syntax_error!(
                     "unexpected end of for-loop: expected endfor or else, got {}",
@@ -1172,7 +1177,7 @@ impl<'a> Parser<'a> {
             }
         };
         expect_token!(self, Token::BlockEnd, "end of block");
-        let _ = end_open_span;
+        let end_tag_span = self.stream.expand_span(end_open_span);
         self.in_loop = old_in_loop;
         Ok(ast::ForLoop {
             target,
@@ -1181,21 +1186,30 @@ impl<'a> Parser<'a> {
             recursive,
             body,
             else_body,
+            start_tag_span,
+            else_tag_span,
+            end_tag_span,
         })
     }
 
-    fn parse_if_cond(&mut self, _start_open_span: Span) -> Result<ast::IfCond<'a>, Error> {
+    fn parse_if_cond(
+        &mut self,
+        start_open_span: Span,
+        start_tag_kind: JinjaLayoutEventKind,
+    ) -> Result<ast::IfCond<'a>, Error> {
         let expr = ok!(self.parse_expr_noif());
         skip_token!(self, Token::Colon);
         expect_token!(self, Token::BlockEnd, "end of block");
+        let start_tag_span = self.stream.expand_span(start_open_span);
         let true_body = ok!(self.subparse(
             &|tok| matches!(tok, Token::Ident("endif" | "else" | "elif")),
             Some(("if", &["elif", "else", "endif"])),
         ));
         let next_open_span = self.stream.last_span();
-        let false_body = match ok!(self.stream.next()) {
+        let (false_body, else_tag_span, end_tag_span) = match ok!(self.stream.next()) {
             Some((Token::Ident("else"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
+                let else_tag_span = self.stream.expand_span(next_open_span);
                 let rv = ok!(self.subparse(
                     &|tok| matches!(tok, Token::Ident("endif")),
                     Some(("if", &["endif"])),
@@ -1203,19 +1217,26 @@ impl<'a> Parser<'a> {
                 let end_open_span = self.stream.last_span();
                 expect_token!(self, Token::Ident("endif"), "endif");
                 expect_token!(self, Token::BlockEnd, "end of block");
-                let _ = end_open_span;
-                rv
+                let end_tag_span = self.stream.expand_span(end_open_span);
+                (rv, Some(else_tag_span), end_tag_span)
             }
             Some((Token::Ident("elif"), span)) => {
-                let nested = ok!(self.parse_if_cond(next_open_span));
-                vec![ast::Stmt::IfCond(Spanned::new(
-                    nested,
-                    self.stream.expand_span(span),
-                ))]
+                let nested =
+                    ok!(self.parse_if_cond(next_open_span, JinjaLayoutEventKind::BlockMid));
+                let end_tag_span = nested.end_tag_span;
+                (
+                    vec![ast::Stmt::IfCond(Spanned::new(
+                        nested,
+                        self.stream.expand_span(span),
+                    ))],
+                    None,
+                    end_tag_span,
+                )
             }
             Some((Token::Ident("endif"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
-                Vec::new()
+                let end_tag_span = self.stream.expand_span(next_open_span);
+                (Vec::new(), None, end_tag_span)
             }
             Some((token, span)) => {
                 syntax_error!(
@@ -1234,6 +1255,10 @@ impl<'a> Parser<'a> {
             expr,
             true_body,
             false_body,
+            start_tag_kind,
+            start_tag_span,
+            else_tag_span,
+            end_tag_span,
         })
     }
 
@@ -1266,7 +1291,7 @@ impl<'a> Parser<'a> {
     }
 
     // both the left hand side and right hand side can be a list
-    fn parse_set(&mut self) -> Result<SetParseResult<'a>, Error> {
+    fn parse_set(&mut self, start_tag_span: Span) -> Result<SetParseResult<'a>, Error> {
         let in_paren = skip_token!(self, Token::ParenOpen);
         let mut targets = Vec::new();
 
@@ -1296,11 +1321,14 @@ impl<'a> Parser<'a> {
                 &|tok| matches!(tok, Token::Ident("endset")),
                 Some(("set", &["endset"])),
             ));
+            let end_tag_span = self.stream.last_span();
             ok!(self.stream.next());
             Ok(SetParseResult::SetBlock(ast::SetBlock {
                 target: targets.into_iter().next().unwrap(),
                 filter,
                 body,
+                start_tag_span,
+                end_tag_span,
             }))
         } else {
             expect_token!(self, Token::Assign, "assignment operator");
@@ -1508,6 +1536,10 @@ impl<'a> Parser<'a> {
                 }
             }
             args.push(ok!(self.parse_assign_name(false)));
+            if skip_token!(self, Token::Colon) {
+                // consume and discard dbt-style type annotation (e.g. `arg: str`)
+                expect_token!(self, Token::Ident(name) => name, "identifier");
+            }
             if skip_token!(self, Token::Assign) {
                 defaults.push(ok!(self.parse_expr()));
             } else if !defaults.is_empty() {
@@ -1755,8 +1787,22 @@ impl<'a> Parser<'a> {
     #[cfg(feature = "macros")]
     fn parse_snapshot(&mut self) -> Result<ast::Macro<'a>, Error> {
         let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
-        // Assuming self has access to an arena or string interner
         let macro_name = self.intern_string(&format!("snapshot_{name}"));
+        // dbt-core's regex extractor stops at the first non-identifier character and
+        // silently ignores everything else in the block tag, so `{% snapshot snp.sql %}`
+        // and `{% snapshot snp() %}` both become name "snp". Drain all trailing tokens
+        // using the same aggressive approach as `parse_doc` — see that function for the
+        // full rationale. We stop *before* BlockEnd here (rather than consuming it like
+        // `parse_doc` does) because `parse_snapshot_or_call_block_body` expects to
+        // consume BlockEnd itself.
+        loop {
+            match ok!(self.stream.current()) {
+                Some((&Token::BlockEnd, _)) | None => break,
+                Some(_) => {
+                    ok!(self.stream.next());
+                }
+            }
+        }
         self.parse_snapshot_or_call_block_body(Some(macro_name), span)
     }
 
@@ -1786,12 +1832,13 @@ impl<'a> Parser<'a> {
             None => return Err(unexpected_eof("identifier")),
         };
 
-        // Skip everything until BlockEnd, advancing on Token Errors
-        // This is specifically because doc macros can have random
-        // tokens, characters, spaces, etc. in the names
-        // (i.e. {% doc package.doc_name %%% $$$$ hehehe %} is valid)
-        // TODO(alex): One day deprecate this nonsense as it really a parsing bug in dbt
-        // that is unreported (but let's bug for bug repro fs for now)
+        // Skip everything until BlockEnd, advancing on Token Errors.
+        // This is specifically because doc macros can have random tokens, characters,
+        // spaces, etc. in the names (e.g. `{% doc package.doc_name %%% $$$$ hehehe %}`
+        // is valid in dbt-core). TODO(alex): One day deprecate this — it is really a
+        // parsing bug in dbt that is unreported (but let's bug-for-bug repro for now).
+        // See also: `parse_snapshot`, which uses the same aggressive drain pattern.
+        // Unlike here, that drain stops *before* consuming BlockEnd.
         loop {
             match self.stream.next() {
                 Ok(Some((Token::BlockEnd, _))) => break,
@@ -1845,7 +1892,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_do(&mut self) -> Result<ast::Do<'a>, Error> {
-        let expr = ok!(self.parse_expr());
+        let expr = ok!(self.parse_expr_or_implied_tuple());
         Ok(ast::Do { expr })
     }
 

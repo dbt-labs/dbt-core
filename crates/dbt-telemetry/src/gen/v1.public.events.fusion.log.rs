@@ -20,7 +20,7 @@ pub struct CompiledCode {
     #[prost(string, tag = "4")]
     pub node_name: ::prost::alloc::string::String,
 }
-impl crate::StaticName for CompiledCode {
+impl ::dbt_tracing::StaticName for CompiledCode {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.CompiledCode";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.CompiledCode";
 }
@@ -42,7 +42,7 @@ pub struct CompiledCodeInline {
     #[prost(string, tag = "1")]
     pub sql: ::prost::alloc::string::String,
 }
-impl crate::StaticName for CompiledCodeInline {
+impl ::dbt_tracing::StaticName for CompiledCodeInline {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.CompiledCodeInline";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.CompiledCodeInline";
 }
@@ -76,7 +76,7 @@ pub struct ListItemOutput {
     #[prost(string, optional, tag = "3")]
     pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
 }
-impl crate::StaticName for ListItemOutput {
+impl ::dbt_tracing::StaticName for ListItemOutput {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.ListItemOutput";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ListItemOutput";
 }
@@ -144,6 +144,12 @@ pub struct LogMessage {
     pub dbt_core_event_code: ::core::option::Option<::prost::alloc::string::String>,
     /// Original severity before user up/down-grade configuration applied.
     #[prost(enumeration = "super::compat::SeverityNumber", tag = "3")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "::fake::Fake::fake::<super::compat::SeverityNumber>(&::fake::Faker) as i32"
+        )
+    )]
     pub original_severity_number: i32,
     #[prost(string, tag = "4")]
     pub original_severity_text: ::prost::alloc::string::String,
@@ -186,7 +192,7 @@ pub struct LogMessage {
     #[prost(uint32, optional, tag = "15")]
     pub expanded_column: ::core::option::Option<u32>,
 }
-impl crate::StaticName for LogMessage {
+impl ::dbt_tracing::StaticName for LogMessage {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.LogMessage";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.LogMessage";
 }
@@ -222,6 +228,12 @@ pub struct UserLogMessage {
     pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Execution phase (if known) during which this log was emitted.
     #[prost(enumeration = "super::phase::ExecutionPhase", optional, tag = "4")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "Some(::fake::Fake::fake::<super::phase::ExecutionPhase>(&::fake::Faker) as i32)"
+        )
+    )]
     pub phase: ::core::option::Option<i32>,
     /// Package name (project or dependency) from which this log was emitted.
     #[prost(string, optional, tag = "5")]
@@ -237,7 +249,7 @@ pub struct UserLogMessage {
     #[prost(string, optional, tag = "8")]
     pub relative_path: ::core::option::Option<::prost::alloc::string::String>,
 }
-impl crate::StaticName for UserLogMessage {
+impl ::dbt_tracing::StaticName for UserLogMessage {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.UserLogMessage";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.UserLogMessage";
 }
@@ -291,7 +303,7 @@ pub struct ProgressMessage {
     )]
     pub phase: ::core::option::Option<i32>,
 }
-impl crate::StaticName for ProgressMessage {
+impl ::dbt_tracing::StaticName for ProgressMessage {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.ProgressMessage";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ProgressMessage";
 }
@@ -326,7 +338,7 @@ pub struct StateModifiedDiff {
     #[prost(string, optional, tag = "5")]
     pub other_value: ::core::option::Option<::prost::alloc::string::String>,
 }
-impl crate::StaticName for StateModifiedDiff {
+impl ::dbt_tracing::StaticName for StateModifiedDiff {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.StateModifiedDiff";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.StateModifiedDiff";
 }
@@ -373,7 +385,7 @@ pub struct ShowDataOutput {
     #[prost(string, tag = "7")]
     pub dbt_core_event_code: ::prost::alloc::string::String,
 }
-impl crate::StaticName for ShowDataOutput {
+impl ::dbt_tracing::StaticName for ShowDataOutput {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.ShowDataOutput";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ShowDataOutput";
 }
@@ -461,7 +473,7 @@ pub struct ShowResult {
     #[prost(string, optional, tag = "5")]
     pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
 }
-impl crate::StaticName for ShowResult {
+impl ::dbt_tracing::StaticName for ShowResult {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.ShowResult";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ShowResult";
 }

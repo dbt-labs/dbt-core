@@ -34,7 +34,7 @@ expression: schema
       "type": "string"
     },
     "__minijinja_current_path": {
-      "description": "`{{ __minijinja_current_path }}` — compiled-SQL path relative to the out_dir. Key string matches `minijinja::constants::CURRENT_PATH`.",
+      "description": "`{{ __minijinja_current_path }}` — node path selected from the execution phase and expressed relative to the out_dir when applicable. Key string matches `minijinja::constants::CURRENT_PATH`.",
       "type": "string"
     },
     "__minijinja_current_span": {

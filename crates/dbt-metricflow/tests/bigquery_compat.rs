@@ -21,10 +21,10 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use arrow_array::RecordBatch;
-use dbt_auth::{AdapterConfig, auth_for_backend};
+use dbt_adbc::{Backend, LoadStrategy, connection, driver};
+use dbt_auth::{AdapterConfig, NoopAuthWarningPrinter, auth_for_backend};
 use dbt_metricflow::Dialect;
 use dbt_profile::ProfileEnvironment;
-use dbt_xdbc::{Backend, LoadStrategy, connection, driver};
 
 const PROFILE: &str = "fusion_tests";
 const TARGET: &str = "bigquery";
@@ -45,9 +45,9 @@ fn tome_path() -> PathBuf {
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct BigQueryConn {
-    _drv: Box<dyn dbt_xdbc::Driver>,
-    _database: Box<dyn dbt_xdbc::Database>,
-    conn: Box<dyn dbt_xdbc::Connection>,
+    _drv: Box<dyn dbt_adbc::Driver>,
+    _database: Box<dyn dbt_adbc::Database>,
+    conn: Box<dyn dbt_adbc::Connection>,
     dataset: Option<String>,
 }
 
@@ -81,7 +81,7 @@ impl BigQueryConn {
 
         let backend = Backend::BigQuery;
         let adapter_config = AdapterConfig::new(resolved.credentials);
-        let auth = auth_for_backend(backend);
+        let auth = auth_for_backend(Box::new(NoopAuthWarningPrinter), backend);
         let db_builder = auth
             .configure(&adapter_config)
             .expect("auth configuration failed")

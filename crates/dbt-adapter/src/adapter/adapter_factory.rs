@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::Backend;
 use dbt_auth::AdapterConfig;
 use dbt_auth::Auth;
-use dbt_auth::auth_for_backend;
+use dbt_auth::{NoopAuthWarningPrinter, auth_for_backend};
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
@@ -15,13 +16,12 @@ use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_xdbc::Backend;
 use minijinja::Value;
 
 use crate::Adapter;
 use crate::AdapterEngine;
 use crate::cache::RelationCache;
-use crate::engine::XdbcEngine;
+use crate::engine::AdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::relation::do_create_relation;
 use crate::sql_types::TypeOpsFactory;
@@ -38,7 +38,8 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Redshift => Backend::Redshift,
         AdapterType::Salesforce => Backend::Salesforce,
         AdapterType::Spark => Backend::Spark,
-        AdapterType::DuckDB => Backend::DuckDBExtended,
+        AdapterType::DuckDB => Backend::DuckDB,
+        AdapterType::Fdcs => Backend::Fdcs,
         AdapterType::Fabric => Backend::SQLServer,
         AdapterType::ClickHouse => Backend::ClickHouse,
         AdapterType::Exasol => Backend::Exasol,
@@ -99,7 +100,8 @@ impl DefaultAdapterFactory {
         threads: Option<usize>,
     ) -> FsResult<Arc<dyn AdapterEngine>> {
         let backend = backend_of(adapter_type);
-        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
+        let auth: Arc<dyn Auth> =
+            auth_for_backend(Box::new(NoopAuthWarningPrinter), backend).into();
         let stmt_splitter = self.stmt_splitter();
         let type_ops = type_ops_factory.create(adapter_type);
         let relation_cache = Arc::new(RelationCache::default());
@@ -107,7 +109,7 @@ impl DefaultAdapterFactory {
         let query_comment =
             QueryCommentConfig::from_query_comment(query_comment, adapter_type, true, cloud_config);
 
-        let engine = Arc::new(XdbcEngine::new(
+        let engine = Arc::new(AdbcEngine::new(
             adapter_type,
             auth,
             adapter_config,

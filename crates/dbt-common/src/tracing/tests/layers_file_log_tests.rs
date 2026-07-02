@@ -1,14 +1,15 @@
+use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
 use crate::{
     io_args::EvalArgs,
     tracing::{
         emit::{create_root_info_span, emit_info_event},
-        init::create_tracing_subcriber_with_layer,
         invocation::create_invocation_attributes,
         layers::file_log_layer::build_file_log_layer_with_background_writer,
-        tests::mocks::test_data_layer,
     },
 };
-use dbt_telemetry::{LogMessage, SeverityNumber};
+use dbt_telemetry::LogMessage;
+use dbt_tracing::SeverityNumber;
+use dbt_tracing::test_support::mocks::test_data_layer;
 use rand::random;
 use std::fs;
 use tracing::level_filters::LevelFilter;

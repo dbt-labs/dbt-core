@@ -57,6 +57,21 @@ use self::commands::{CommandParser, ExtensionCommandParser};
 
 pub const DEFAULT_LIMIT: &str = "10";
 pub const DEFAULT_FORMAT: DisplayFormat = DisplayFormat::Table;
+
+/// `--help` heading labels used to group flags into sections.
+///
+/// Defined here as constants so a heading is named in exactly one place and
+/// can be reused by both the core CLI and the extension CLI (`dbt-clap`).
+pub mod help_headings {
+    pub const PROJECT: &str = "Project";
+    pub const SELECTION: &str = "Selection";
+    pub const EXECUTION: &str = "Execution";
+    pub const LOGGING: &str = "Logging";
+    pub const ARTIFACTS: &str = "Artifacts";
+    pub const EVENT_TIME: &str = "Microbatch Event Time";
+    pub const SAMPLE: &str = "Sample";
+    pub const ADVANCED: &str = "Advanced";
+}
 const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
 const USER_SETTINGS_YML: &str = ".dbt/user_settings.yml";
 
@@ -84,7 +99,7 @@ const CLI_HELP_TEMPLATE: &str = "\
 {subcommands}{after-help}";
 
 pub trait CliParserFactory: Send + Sync {
-    fn create(&self, command_name: &'static str) -> CliParser;
+    fn create(&self, command_name: &'static str, version: &'static str) -> CliParser;
 }
 
 /// An equivalent of [clap::Parser] that produces a [Cli] instead of parsing into itself.
@@ -94,17 +109,20 @@ pub trait CliParserFactory: Send + Sync {
 /// that can carry dependencies instead of a static method.
 pub struct CliParser {
     command_name: &'static str,
+    version: &'static str,
     command_parser: CommandParser,
 }
 
 impl CliParser {
     pub fn new(
         command_name: &'static str,
+        version: &'static str,
         extension_command_parser: Box<dyn ExtensionCommandParser>,
     ) -> Self {
         let command_parser = CommandParser::new(extension_command_parser);
         Self {
             command_name,
+            version,
             command_parser,
         }
     }
@@ -147,7 +165,7 @@ impl CliParser {
 
         // -- Augment metadata
         app.author("dbt Labs <info@getdbt.com>")
-            .version(env!("CARGO_PKG_VERSION"))
+            .version(self.version)
             .long_about(None)
             .about(ABOUT)
             .after_help(&**AFTER_HELP)
@@ -276,29 +294,30 @@ got {:?}, expected an instance of {}",
         }
     }
 
+    pub fn is_project_command(&self) -> bool {
+        use CoreCommand::*;
+        match &self.command {
+            Command::Core(Man(_) | Init(_) | Docs(_) | Login(_) | Completions(_)) => {
+                // These commands do not require a project directory
+                false
+            }
+            Command::Core(_) => {
+                // Assume all the other core commands require a project directory.
+                true
+            }
+            Command::Extension(ext_cmd) => ext_cmd.is_project_command(),
+        }
+    }
+
     pub fn to_eval_args(&self, system_arg: SystemArgs) -> FsResult<EvalArgs> {
         use CoreCommand::*;
         let common_args = self.common_args();
         // Determine the input and output directories based on the command.
-        // Some commands operate without project context, while others must be run in a project directory.
         let (in_dir, out_dir) = {
-            match &self.command {
-                Command::Core(System(_))
-                | Command::Core(Man(_))
-                | Command::Core(Init(_))
-                | Command::Core(Docs(_))
-                | Command::Core(Login(_))
-                | Command::Core(Completions(_)) => {
-                    // These commands do not require a project directory
-                    (PathBuf::from("."), PathBuf::from("."))
-                }
-                Command::Extension(_) => {
-                    // Extension commands determine their own project requirements.
-                    // Avoid resolving project dir here, which can fail for commands
-                    // that intentionally run outside project context.
-                    (PathBuf::from("."), PathBuf::from("."))
-                }
-                _ => in_out_dir(&common_args)?,
+            if self.is_project_command() {
+                in_out_dir(&common_args)?
+            } else {
+                (PathBuf::from("."), PathBuf::from("."))
             }
         };
 
@@ -321,7 +340,6 @@ got {:?}, expected an instance of {}",
                 Clone(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Clean(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Source(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
-                System(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Show(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Man(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Debug(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
@@ -382,7 +400,6 @@ got {:?}, expected an instance of {}",
                     .phase
                     .clone()
                     .unwrap_or(Phases::Freshness),
-                System(_args) => unreachable!("System command does not need a phase"),
                 Show(args) => args.common_args.phase.clone().unwrap_or(Phases::Show),
                 Man(_args) => unreachable!("Man command does not need a phase"),
                 Debug(args) => args.common_args.phase.clone().unwrap_or(Phases::Debug),
@@ -420,36 +437,6 @@ got {:?}, expected an instance of {}",
             Command::Extension(ext_cmd) => ext_cmd.extend_cli_options(&mut options),
         }
         options
-    }
-
-    pub fn with_sample(&self) -> Option<String> {
-        use CoreCommand::*;
-        match &self.command {
-            Command::Core(core_cmd) => match core_cmd {
-                Run(RunArgs { with_sample, .. }) => with_sample.clone(),
-                Test(TestArgs { with_sample, .. }) => with_sample.clone(),
-                Build(BuildArgs { with_sample, .. }) => with_sample.clone(),
-                Compile(CompileArgs { with_sample, .. }) => with_sample.clone(),
-                Show(ShowArgs { with_sample, .. }) => with_sample.clone(),
-                _ => None,
-            },
-            Command::Extension(ext_cmd) => ext_cmd.with_sample(),
-        }
-    }
-
-    pub fn sampled(&self) -> Vec<String> {
-        use CoreCommand::*;
-        match &self.command {
-            Command::Core(core_cmd) => match core_cmd {
-                Run(RunArgs { sampled, .. }) => sampled.clone(),
-                Test(TestArgs { sampled, .. }) => sampled.clone(),
-                Build(BuildArgs { sampled, .. }) => sampled.clone(),
-                Compile(CompileArgs { sampled, .. }) => sampled.clone(),
-                Show(ShowArgs { sampled, .. }) => sampled.clone(),
-                _ => vec![],
-            },
-            Command::Extension(ext_cmd) => ext_cmd.sampled(),
-        }
     }
 
     pub fn sample_select(&self) -> Option<Vec<String>> {
@@ -600,10 +587,15 @@ pub struct CompileArgs {
     pub full_refresh: bool,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -767,10 +759,15 @@ pub struct ShowArgs {
     pub unchecked: bool,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -882,10 +879,15 @@ pub struct TestArgs {
     pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -959,10 +961,15 @@ pub struct BuildArgs {
     pub sample: Option<String>,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -1091,10 +1098,15 @@ pub struct RunArgs {
     pub sample: Option<String>,
 
     /// Use the samples as given in this YAML/JSON file.
-    #[arg(long, value_name = "default|FILE", alias = "with-sample")]
+    #[arg(
+        long,
+        value_name = "default|FILE",
+        alias = "with-sample",
+        help_heading = help_headings::SAMPLE
+    )]
     pub with_sample: Option<String>,
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
-    #[arg(long, num_args(1..), value_delimiter = ' ')]
+    #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 }
 
@@ -1379,63 +1391,117 @@ impl RetryArgs {
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CommonArgs {
     /// The target to execute
-    #[arg(global = true, short = 't', long, env = "DBT_TARGET")]
+    #[arg(
+        global = true,
+        short = 't',
+        long,
+        env = "DBT_TARGET",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub target: Option<String>,
 
     /// The directory to load the dbt project from
-    #[arg(global = true, long, env = "DBT_PROJECT_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PROJECT_DIR",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub project_dir: Option<PathBuf>,
 
     /// The profile to use
-    #[arg(global = true, long, env = "DBT_PROFILE")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PROFILE",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub profile: Option<String>,
 
     /// The directory to load the profiles from
-    #[arg(global = true, long, env = "DBT_PROFILES_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PROFILES_DIR",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub profiles_dir: Option<PathBuf>,
 
     /// The directory to install packages
-    #[arg(global = true, long, env = "DBT_PACKAGES_INSTALL_PATH")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_PACKAGES_INSTALL_PATH",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub packages_install_path: Option<PathBuf>,
 
     /// The output directory for all produced assets
-    #[arg(global = true, long, env = "DBT_TARGET_PATH")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_TARGET_PATH",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
     pub target_path: Option<PathBuf>,
 
     /// Supply var bindings in yml format e.g. '{key: value}' or as separate key: value pairs
     // has no ENV_VAR
-    #[arg(global = true, long,value_parser = check_key_value_cli_arg, )]
+    #[arg(global = true, long, value_parser = check_key_value_cli_arg, help_heading = help_headings::PROJECT, hide_short_help = true)]
     pub vars: Option<BTreeMap<String, YValue>>,
 
     /// Select nodes to run
     // has no ENV_VAR
-    #[arg(global = true, long, short = 's', value_parser = check_selector, num_args(1..), value_delimiter = ' ', group = "selector_or_select")]
+    #[arg(global = true, long, short = 's', value_parser = check_selector, num_args(1..), value_delimiter = ' ', group = "selector_or_select", help_heading = help_headings::SELECTION, hide_short_help = true)]
     // This is a deprecated legacy alias for '--select'. It is not visible in the help and should be removed (eventually).
     #[clap(alias("models"), short_alias('m'))]
     pub select: Option<Vec<String>>,
 
     /// Select nodes to exclude
     // has no ENV_VAR
-    #[arg(global = true, long, value_parser = check_selector, num_args(1..), value_delimiter = ' ')]
+    #[arg(global = true, long, value_parser = check_selector, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SELECTION, hide_short_help = true)]
     pub exclude: Option<Vec<String>>,
 
     /// The name of the yml defined selector to use
-    #[arg(global = true, long, group = "selector_or_select")]
+    #[arg(
+        global = true,
+        long,
+        group = "selector_or_select",
+        help_heading = help_headings::SELECTION,
+        hide_short_help = true
+    )]
     pub selector: Option<String>,
 
     /// Choose which tests to select adjacent to resources: eager (most inclusive), cautious (most exclusive), buildable (inbetween) or empty.
-    #[arg(global = true, long, env = "DBT_INDIRECT_SELECTION")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_INDIRECT_SELECTION",
+        help_heading = help_headings::SELECTION,
+        hide_short_help = true
+    )]
     pub indirect_selection: Option<IndirectSelection>,
 
     /// Suppress all non-error logging to stdout. Does not affect {{ print() }} macro calls.
-    #[arg(global = true, long, env = "DBT_QUIET", short = 'q', default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, env = "DBT_QUIET", short = 'q', default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub quiet: bool,
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
     pub no_quiet: bool,
 
     /// The number of threads to use [Run with --threads 0 to use max_cpu [default: max_cpu]]
     // has no ENV_VAR
-    #[arg(global = true, long)]
+    #[arg(
+        global = true,
+        long,
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub threads: Option<usize>,
 
     /// Force sequential task execution and sequential parser rendering. Does
@@ -1450,16 +1516,30 @@ pub struct CommonArgs {
         long = "compute",
         value_enum,
         env = "DBT_COMPUTE",
-        default_value = "remote"
+        default_value = "remote",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
     )]
     pub compute: ComputeArg,
 
     /// Host address
-    #[arg(long, default_value = "127.0.0.1", value_name = "HOST")]
+    #[arg(
+        long,
+        default_value = "127.0.0.1",
+        value_name = "HOST",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub host: String,
 
     /// Port number
-    #[arg(long, default_value_t = 8000, value_name = "PORT")]
+    #[arg(
+        long,
+        default_value_t = 8000,
+        value_name = "PORT",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub port: u16,
 
     /// Warn on error
@@ -1480,7 +1560,7 @@ pub struct CommonArgs {
     pub show_all_deprecations: bool,
 
     /// Display debug logging during dbt execution. Useful for debugging and making bug reports.
-    #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new(), help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub debug: bool,
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new(), hide = true)]
     pub no_debug: bool,
@@ -1488,41 +1568,61 @@ pub struct CommonArgs {
     /// Introspect flag
     #[arg(global = true, long,  default_value = "false", action = ArgAction::SetTrue,  env = "DBT_INTROSPECT", value_parser = BoolishValueParser::new(),hide = true)]
     pub introspect: bool,
+
+    /// Seed classifier propagation with column tags pulled from the Snowflake
+    /// warehouse before the Analyze phase, and write the propagated labels
+    /// back as column tags on materialized downstream tables/views after Run.
+    /// Only valid for the Snowflake adapter, and requires --write-index.
+    #[arg(global = true, long = "classify-with-warehouse-tags", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub classify_with_warehouse_tags: bool,
+
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(),hide = true)]
     pub no_introspect: bool,
 
     /// Write JSON artifacts to disk [env: DBT_WRITE_JSON=]. Use --no-write-json to suppress writing JSON artifacts.
-    #[arg(global = true, long,  default_value_t=true,  action = ArgAction::SetTrue, env = "DBT_WRITE_JSON", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_WRITE_JSON", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_json: bool,
     #[arg(global = true,long,action = ArgAction::SetTrue,  default_value_t=false, value_parser = BoolishValueParser::new(),hide = true)]
     pub no_write_json: bool,
 
     /// Write a catalog.json file to the target directory
-    #[arg(global = true, long, default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_WRITE_CATALOG", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_CATALOG", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_catalog: bool,
 
     /// Enable full metadata output: incremental parse cache, epoch parquet state, and no JSON
     /// artifacts. Implies --partial-parse --no-write-json.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_metadata: bool,
 
     /// Write parquet index to target/index/. Implies --write-metadata so that epoch parquet
     /// is produced, then converts metadata → index parquet via the snapshot writer.
-    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_index: bool,
 
     /// Directory for metadata parquet output (default: <target>/metadata/)
-    #[arg(global = true, long, env = "DBT_METADATA_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_METADATA_DIR",
+        help_heading = help_headings::ARTIFACTS,
+        hide_short_help = true
+    )]
     pub metadata_dir: Option<PathBuf>,
 
     /// Directory for index parquet output (default: <target>/index/)
-    #[arg(global = true, long, env = "DBT_INDEX_DIR")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_INDEX_DIR",
+        help_heading = help_headings::ARTIFACTS,
+        hide_short_help = true
+    )]
     pub index_dir: Option<PathBuf>,
 
     /// Compute and write column-level lineage into compile/cll parquet.
     /// Requires --write-metadata and --static-analysis strict. Omitting this flag
     /// skips the expensive CLL graph build, keeping --write-metadata fast.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_lineage: bool,
 
     // Support for query cache
@@ -1556,7 +1656,7 @@ pub struct CommonArgs {
     pub skip_write_msgpack_if_exist: bool,
 
     // If set, resolve unselected nodes by deferring to the manifest within the --state directory.
-    #[arg(global = true, long = "defer", action = ArgAction::SetTrue, env = "DBT_DEFER", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "defer", action = ArgAction::SetTrue, env = "DBT_DEFER", value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub defer: bool,
     #[arg(global = true, long= "no-defer", default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
     pub no_defer: bool,
@@ -1566,7 +1666,13 @@ pub struct CommonArgs {
     pub defer_state: Option<PathBuf>,
 
     /// Unless overridden, use this state directory for both state comparison and deferral.
-    #[arg(global = true, long, env = "DBT_STATE")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_STATE",
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
+    )]
     pub state: Option<PathBuf>,
 
     // Stop execution on first failure.
@@ -1590,12 +1696,24 @@ pub struct CommonArgs {
     // logging
     //
     /// Set 'log-path' for the current run, overriding 'DBT_LOG_PATH'.
-    #[arg(global = true, long, env = "DBT_LOG_PATH")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_PATH",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_path: Option<PathBuf>,
 
     /// Set 'otel-file-name' for the current run, overriding 'DBT_OTEL_FILE_NAME'.
     /// If set, OTEL telemetry will be written to `$log_path/otel-file-name`.
-    #[arg(global = true, long = "otel-file-name", env = "DBT_OTEL_FILE_NAME")]
+    #[arg(
+        global = true,
+        long = "otel-file-name",
+        env = "DBT_OTEL_FILE_NAME",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub otel_file_name: Option<String>,
 
     /// Set 'otel-parquet-file-name' for the current run, overriding 'DBT_OTEL_PARQUET_FILE_NAME'.
@@ -1603,7 +1721,9 @@ pub struct CommonArgs {
     #[arg(
         global = true,
         long = "otel-parquet-file-name",
-        env = "DBT_OTEL_PARQUET_FILE_NAME"
+        env = "DBT_OTEL_PARQUET_FILE_NAME",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
     )]
     pub otel_parquet_file_name: Option<String>,
 
@@ -1612,18 +1732,38 @@ pub struct CommonArgs {
     pub log_file_max_bytes: u64,
 
     /// Set logging format; use --log-format-file to override.
-    #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Default,)]
+    #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Default, help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub log_format: LogFormat,
 
     /// Set log file format, overriding the default and --log-format setting.
-    #[arg(global = true, long, env = "DBT_LOG_FORMAT_FILE")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_FORMAT_FILE",
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_format_file: Option<LogFormat>,
 
     /// Set minimum severity for console/log file; use --log-level-file to set log file severity separately.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL", ignore_case = true)]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_LEVEL",
+        ignore_case = true,
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_level: Option<LogLevel>,
     /// Set minimum log file severity, overriding the default and --log-level setting.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE", ignore_case = true)]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_LOG_LEVEL_FILE",
+        ignore_case = true,
+        help_heading = help_headings::LOGGING,
+        hide_short_help = true
+    )]
     pub log_level_file: Option<LogLevel>,
 
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_MACRO_DEBUGGING", value_parser = BoolishValueParser::new(),hide = true)]
@@ -1653,7 +1793,7 @@ pub struct CommonArgs {
     /// Select only nodes whose source files have changed since the last --partial-parse run,
     /// plus all their downstream dependents. Implies --partial-parse.
     /// Use with --partial-load for full speed: --partial-load --dirty
-    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_DIRTY", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_DIRTY", value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub dirty: bool,
 
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_VERIFY_PARTIAL_PARSE", value_parser = BoolishValueParser::new(), hide = true)]
@@ -1683,9 +1823,9 @@ pub struct CommonArgs {
     pub record_timing_info: Option<PathBuf>,
 
     // Send anonymous usage stats to dbt Labs.
-    #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_SEND_ANONYMOUS_USAGE_STATS", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_SEND_ANONYMOUS_USAGE_STATS", value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub send_anonymous_usage_stats: bool,
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub no_send_anonymous_usage_stats: bool,
 
     // Use the static parser.
@@ -1721,7 +1861,7 @@ pub struct CommonArgs {
     #[arg(global = true, long , default_value_t=true,  action = ArgAction::SetTrue, env = "DBT_VERSION_CHECK", value_parser = BoolishValueParser::new(), hide=true)]
     pub version_check: bool,
     /// Disable online version check for dbt-fusion updates
-    #[arg(global = true, long = "no-version-check", default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_DISABLE_VERSION_CHECK", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "no-version-check", default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_DISABLE_VERSION_CHECK", value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub no_version_check: bool,
 
     // If set, run models in a project while building only the schemas
@@ -1738,16 +1878,26 @@ pub struct CommonArgs {
         default_value_t = false,
         action = ArgAction::SetTrue,
         env = "DBT_STORE_FAILURES",
-        value_parser = BoolishValueParser::new()
+        value_parser = BoolishValueParser::new(),
+        help_heading = help_headings::EXECUTION,
+        hide_short_help = true
     )]
     pub store_failures: bool,
+
+    /// Maximum size (MiB) for seed files whose contents are hashed.
+    /// Larger seeds fall back to a path-based checksum. Set to 0 to
+    /// disable the limit (always hash contents). Defaults to 1 MiB when unset.
+    #[arg(global = true, long, env = "DBT_MAXIMUM_SEED_SIZE_MIB")]
+    pub maximum_seed_size_mib: Option<u64>,
 
     // --------------------------------------------------------------------------------------------
     // fs specific public options
     #[clap(
     long,
     num_args(0..),
-    help = "Show produced artifacts [default: 'progress']\n"
+    help = "Show produced artifacts [default: 'progress']\n",
+    help_heading = help_headings::ADVANCED,
+    hide_short_help = true
 )]
     pub show: Vec<ShowOptions>,
 
@@ -1767,7 +1917,7 @@ pub struct CommonArgs {
     pub task_cache_url: String,
 
     /// Enable service-backed dbt State without legacy task-cache coordination
-    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, env = MANAGE_STATE_ENV, value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, env = MANAGE_STATE_ENV, value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub manage_state: bool,
     /// Disable service-backed dbt State
     #[arg(global = true, long = "no-manage-state", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
@@ -1858,11 +2008,11 @@ pub struct CommonArgs {
     pub skip_unreferenced_table_check: bool,
 
     /// Override the invocation ID with a UUID string or integer.
-    #[arg(global = true, env = "DBT_INVOCATION_ID", long, value_parser = parse_invocation_id)]
+    #[arg(global = true, env = "DBT_INVOCATION_ID", long, value_parser = parse_invocation_id, help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub invocation_id: Option<Uuid>,
 
     /// Set the parent span ID for trace correlation (16-character hex or u64).
-    #[arg(global = true, env = "DBT_PARENT_SPAN_ID", long, value_parser = parse_parent_span_id)]
+    #[arg(global = true, env = "DBT_PARENT_SPAN_ID", long, value_parser = parse_parent_span_id, help_heading = help_headings::LOGGING, hide_short_help = true)]
     pub parent_span_id: Option<u64>,
 
     /// Skip installation of private dependencies (useful for build conformance testing)
@@ -1870,11 +2020,23 @@ pub struct CommonArgs {
     pub skip_private_deps: bool,
 
     /// If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).
-    #[arg(global = true, long, env = "DBT_EVENT_TIME_END")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_EVENT_TIME_END",
+        help_heading = help_headings::EVENT_TIME,
+        hide_short_help = true
+    )]
     pub event_time_end: Option<String>,
 
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
-    #[arg(global = true, long, env = "DBT_EVENT_TIME_START")]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_EVENT_TIME_START",
+        help_heading = help_headings::EVENT_TIME,
+        hide_short_help = true
+    )]
     pub event_time_start: Option<String>,
 
     /// How to load internal (embedded) dbt packages: embedded (default), forcewrite, readfromdisk
@@ -1888,7 +2050,7 @@ pub struct CommonArgs {
     pub internal_package_mode: InternalPackageMode,
 
     /// When installing packages from Package Hub, use v2-compatible downloads if available
-    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = false, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub use_v2_compatible_package_downloads: bool,
 
     /// If set, the maximum number of bytes that the ANTLR parser is allowed to
@@ -1992,6 +2154,8 @@ struct FlagsFile {
 #[derive(Debug, Default, Deserialize)]
 struct FlagsBlock {
     manage_state: Option<bool>,
+    maximum_seed_size_mib: Option<u64>,
+    send_anonymous_usage_stats: Option<bool>,
 }
 
 fn manage_state_from_yaml(path: &Path) -> Option<bool> {
@@ -1999,6 +2163,21 @@ fn manage_state_from_yaml(path: &Path) -> Option<bool> {
     let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
     file.flags.and_then(|flags| flags.manage_state)
 }
+
+fn maximum_seed_size_mib_from_yaml(path: &Path) -> Option<u64> {
+    let content = stdfs::read_to_string(path).ok()?;
+    let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
+    file.flags.and_then(|flags| flags.maximum_seed_size_mib)
+}
+
+fn send_anonymous_usage_stats_from_yaml(path: &Path) -> Option<bool> {
+    let content = stdfs::read_to_string(path).ok()?;
+    let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
+    file.flags
+        .and_then(|flags| flags.send_anonymous_usage_stats)
+}
+
+const DEFAULT_MAXIMUM_SEED_SIZE_MIB: u64 = 1;
 
 fn user_settings_path() -> Option<PathBuf> {
     env::var_os("HOME")
@@ -2013,6 +2192,12 @@ impl CommonArgs {
             env::var_os(MANAGE_STATE_ENV),
             user_settings_path(),
         )
+    }
+
+    fn resolve_maximum_seed_size_mib(&self, project_dir: &Path) -> u64 {
+        self.maximum_seed_size_mib
+            .or_else(|| maximum_seed_size_mib_from_yaml(&project_dir.join(DBT_PROJECT_YML)))
+            .unwrap_or(DEFAULT_MAXIMUM_SEED_SIZE_MIB)
     }
 
     fn get_manage_state_with(
@@ -2124,7 +2309,6 @@ impl CommonArgs {
                 export_to_otlp: self.export_to_otlp,
                 show_all_deprecations: self.show_all_deprecations,
                 show_timings: arg.io.show_timings,
-                beta_use_query_cache: self.beta_use_query_cache,
                 use_parquet_schema_store: self.use_parquet_schema_store,
                 verify_parquet_schema_store: self.verify_parquet_schema_store,
                 host: self.host.clone(),
@@ -2215,9 +2399,10 @@ impl CommonArgs {
             } else {
                 self.write_json
             },
-            write_catalog: self.write_catalog || self.write_index,
+            write_catalog: self.write_catalog,
             write_metadata: self.write_metadata || self.write_index,
             write_index: self.write_index,
+            classify_with_warehouse_tags: self.classify_with_warehouse_tags,
             index_dir: self.index_dir.clone(),
             metadata_dir: self.metadata_dir.clone(),
             fail_fast: self.fail_fast,
@@ -2249,6 +2434,7 @@ impl CommonArgs {
             skip_creating_generic_tests: false,
             write_lineage: self.write_lineage,
             force_enable_linter: false,
+            maximum_seed_size_mib: self.resolve_maximum_seed_size_mib(in_dir),
         }
     }
 
@@ -2258,6 +2444,25 @@ impl CommonArgs {
         } else {
             self.send_anonymous_usage_stats
         }
+    }
+
+    /// Resolve send_anonymous_usage_stats with precedence:
+    /// `--no-send-anonymous-usage-stats` > DBT_SEND_ANONYMOUS_USAGE_STATS env > project yaml flags > true
+    ///
+    /// Note: the clap flag has `default_value_t = true`, so an explicit
+    /// `--send-anonymous-usage-stats=true` is indistinguishable from the default and will
+    /// NOT override a YAML `false`. Only the explicit opt-out (`--no-`) and the env var are
+    /// detectable here.
+    pub fn get_send_anonymous_usage_stats_for_project(&self, project_dir: &Path) -> bool {
+        if self.no_send_anonymous_usage_stats {
+            return false;
+        }
+        if let Some(value) = env::var_os("DBT_SEND_ANONYMOUS_USAGE_STATS") {
+            return BoolishValueParser::new()
+                .parse_ref(&clap::Command::new("dbt-fusion"), None, value.as_ref())
+                .unwrap_or(true);
+        }
+        send_anonymous_usage_stats_from_yaml(&project_dir.join(DBT_PROJECT_YML)).unwrap_or(true)
     }
 
     pub fn get_introspect(&self) -> bool {
@@ -2275,55 +2480,6 @@ impl CommonArgs {
         options
     }
 }
-
-/// Maintain the system: update and uninstall
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-pub struct SystemMgmtArgs {
-    #[command(subcommand)]
-    pub command: SystemCommand,
-    // Flattened Common args
-    #[clap(flatten)]
-    pub common_args: CommonArgs,
-}
-
-impl SystemMgmtArgs {
-    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
-        let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.phase = Phases::Deps;
-        eval_args
-    }
-}
-
-/// Manage system status
-#[derive(clap::Parser, Debug, Clone, Serialize, Deserialize)]
-#[command()]
-pub enum SystemCommand {
-    /// Update dbt in place to the latest version
-    Update(SystemUpdateArgs),
-    /// Uninstall dbt from the system
-    Uninstall(SystemUninstallArgs),
-    /// Preinstall all supported database drivers into the local cache
-    InstallDrivers,
-}
-
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-pub struct SystemUpdateArgs {
-    /// Update dbt to this version (e.g. 1.2.3) [default: latest version]
-    #[arg(global = true, long)]
-    pub version: Option<String>,
-
-    /// Package to update (e.g. dbt) [default: dbt]
-    #[arg(long)]
-    pub package: Option<String>,
-
-    /// Self-update in place even when dbt was installed by a package manager.
-    /// This overwrites the package-manager-owned binary.
-    #[arg(long)]
-    pub force: bool,
-}
-
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-pub struct SystemUninstallArgs {}
 
 /// Generate shell completion scripts
 #[derive(Parser, Debug, Clone)]
@@ -2412,7 +2568,6 @@ impl InitArgs {
                 show_all_deprecations: self.common_args.show_all_deprecations,
                 show_timings: arg.from_main,
                 export_to_otlp: self.common_args.export_to_otlp,
-                beta_use_query_cache: self.common_args.beta_use_query_cache,
                 use_parquet_schema_store: self.common_args.use_parquet_schema_store,
                 verify_parquet_schema_store: self.common_args.verify_parquet_schema_store,
                 host: self.common_args.host.clone(),
@@ -2465,7 +2620,6 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: true,
-            beta_use_query_cache: common_args.beta_use_query_cache,
             use_parquet_schema_store: common_args.use_parquet_schema_store,
             verify_parquet_schema_store: common_args.verify_parquet_schema_store,
             host: common_args.host,
@@ -2508,7 +2662,6 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: false,
-            beta_use_query_cache: common_args.beta_use_query_cache,
             use_parquet_schema_store: common_args.use_parquet_schema_store,
             verify_parquet_schema_store: common_args.verify_parquet_schema_store,
             host: common_args.host,
@@ -2640,5 +2793,186 @@ mod tests {
             Some("false"),
             None
         ));
+    }
+
+    fn core_cli(command: CoreCommand) -> Cli {
+        Cli {
+            command: Command::Core(command),
+            common_args: CommonArgs::default(),
+        }
+    }
+
+    #[test]
+    fn non_project_core_commands_do_not_require_a_project() {
+        use CoreCommand::*;
+        let non_project = [
+            Init(InitArgs::default()),
+            Man(ManArgs::default()),
+            Docs(DocsArgs::default()),
+            Login(LoginArgs::default()),
+            Completions(CompletionsArgs {
+                shell: Shell::Bash,
+                common_args: CommonArgs::default(),
+            }),
+        ];
+        for command in non_project {
+            let name = command.name();
+            assert!(
+                !core_cli(command).is_project_command(),
+                "expected `{name}` to not be a project command"
+            );
+        }
+    }
+
+    #[test]
+    fn project_core_commands_require_a_project() {
+        use CoreCommand::*;
+        // A representative sample of the core commands that fall under the
+        // `Command::Core(_)` catch-all and therefore require a project.
+        let project = [
+            Deps(DepsArgs::default()),
+            Parse(ParseArgs::default()),
+            List(ListArgs::default()),
+            Ls(ListArgs::default()),
+            Compile(CompileArgs::default()),
+            Run(RunArgs::default()),
+            RunOperation(RunOperationArgs::default()),
+            Test(TestArgs::default()),
+            Seed(SeedArgs::default()),
+            Snapshot(SnapshotArgs::default()),
+            Show(ShowArgs::default()),
+            Build(BuildArgs::default()),
+            Clean(CleanArgs::default()),
+            Clone(CloneArgs::default()),
+            Debug(DebugArgs::default()),
+            Retry(RetryArgs::default()),
+        ];
+        for command in project {
+            let name = command.name();
+            assert!(
+                core_cli(command).is_project_command(),
+                "expected `{name}` to be a project command"
+            );
+        }
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_missing_file_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        assert!(send_anonymous_usage_stats_from_yaml(&path).is_none());
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_opt_out_returns_false() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "flags:\n  send_anonymous_usage_stats: false\n").unwrap();
+        assert_eq!(send_anonymous_usage_stats_from_yaml(&path), Some(false));
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_opt_in_returns_true() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "flags:\n  send_anonymous_usage_stats: true\n").unwrap();
+        assert_eq!(send_anonymous_usage_stats_from_yaml(&path), Some(true));
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_malformed_yaml_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "flags: ][[\n").unwrap();
+        assert!(send_anonymous_usage_stats_from_yaml(&path).is_none());
+    }
+
+    #[test]
+    fn send_anonymous_usage_stats_no_flags_key_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dbt_project.yml");
+        std::fs::write(&path, "name: my_project\nversion: 1.0.0\n").unwrap();
+        assert!(send_anonymous_usage_stats_from_yaml(&path).is_none());
+    }
+
+    /// Serializes tests that mutate `DBT_SEND_ANONYMOUS_USAGE_STATS`, since env vars are
+    /// process-global and Rust runs tests in parallel within a binary.
+    static SEND_STATS_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn write_yaml_with_stats(dir: &Path, value: bool) -> PathBuf {
+        let path = dir.join("dbt_project.yml");
+        std::fs::write(
+            &path,
+            format!("flags:\n  send_anonymous_usage_stats: {value}\n"),
+        )
+        .unwrap();
+        path
+    }
+
+    #[test]
+    fn get_send_anonymous_usage_stats_for_project_opt_out_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        // yaml says true, but the explicit `--no-` opt-out wins.
+        write_yaml_with_stats(dir.path(), true);
+        let args = CommonArgs {
+            no_send_anonymous_usage_stats: true,
+            ..Default::default()
+        };
+        assert!(!args.get_send_anonymous_usage_stats_for_project(dir.path()));
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn get_send_anonymous_usage_stats_for_project_env_false_overrides_yaml_true() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        write_yaml_with_stats(dir.path(), true);
+        let args = CommonArgs::default();
+        unsafe { env::set_var("DBT_SEND_ANONYMOUS_USAGE_STATS", "false") };
+        let result = args.get_send_anonymous_usage_stats_for_project(dir.path());
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        assert!(!result);
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn get_send_anonymous_usage_stats_for_project_env_true_overrides_yaml_false() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        write_yaml_with_stats(dir.path(), false);
+        let args = CommonArgs::default();
+        unsafe { env::set_var("DBT_SEND_ANONYMOUS_USAGE_STATS", "true") };
+        let result = args.get_send_anonymous_usage_stats_for_project(dir.path());
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        assert!(result);
+    }
+
+    #[test]
+    fn get_send_anonymous_usage_stats_for_project_yaml_only_fallback() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // Ensure no ambient env var leaks in.
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        let dir = tempfile::tempdir().unwrap();
+        write_yaml_with_stats(dir.path(), false);
+        let args = CommonArgs::default();
+        assert!(!args.get_send_anonymous_usage_stats_for_project(dir.path()));
+    }
+
+    #[test]
+    fn get_send_anonymous_usage_stats_for_project_defaults_true() {
+        let _guard = SEND_STATS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        unsafe { env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS") };
+        // No yaml file, no env, no opt-out → default true.
+        let dir = tempfile::tempdir().unwrap();
+        let args = CommonArgs::default();
+        assert!(args.get_send_anonymous_usage_stats_for_project(dir.path()));
     }
 }

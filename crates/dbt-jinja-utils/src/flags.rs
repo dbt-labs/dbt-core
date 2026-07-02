@@ -4,12 +4,12 @@ use std::{collections::BTreeMap, rc::Rc};
 
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
+    arg_utils::ArgParser,
     listener::RenderingEventListener,
     value::{Object, ObjectRepr, Value},
 };
 
 use crate::invocation_args::InvocationArgs;
-use crate::utils::get_method;
 
 /// Minijinja Value representing the dbt flags collection
 #[derive(Debug, Clone)]
@@ -23,12 +23,7 @@ impl Object for Flags {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        if let Some(s) = key.as_str()
-            && self.flags.contains_key(s)
-        {
-            return Some(self.flags[s].clone());
-        }
-        None
+        key.as_str().and_then(|s| self.lookup(s))
     }
 
     fn call_method(
@@ -39,7 +34,17 @@ impl Object for Flags {
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
-            "get" => get_method(args, &self.flags),
+            "get" => {
+                let mut args = ArgParser::new(args, None);
+                let key: String = args.get("name")?;
+                let default = args
+                    .get_optional::<Value>("default")
+                    .unwrap_or_else(|| Value::from(""));
+                Ok(self
+                    .lookup(&key)
+                    .filter(|v| !v.is_none())
+                    .unwrap_or(default))
+            }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod,
                 format!("Unknown method on flags: {name}"),
@@ -49,6 +54,24 @@ impl Object for Flags {
 }
 
 impl Flags {
+    /// Look up a flag by name, case-insensitively.
+    ///
+    /// dbt Core normalizes flag names when resolving them, so a project flag
+    /// authored as `list_relations_per_page` is reachable whether a macro reads
+    /// it lower-case or upper-case. We match that by trying the key verbatim
+    /// first (the common, cheap path) and falling back to a case-insensitive
+    /// scan. Keys are stored as authored, so consumers that read the flag map
+    /// directly (e.g. behavior-flag overrides) keep seeing the original names.
+    fn lookup(&self, key: &str) -> Option<Value> {
+        if let Some(value) = self.flags.get(key) {
+            return Some(value.clone());
+        }
+        self.flags
+            .iter()
+            .find(|(candidate, _)| candidate.eq_ignore_ascii_case(key))
+            .map(|(_, value)| value.clone())
+    }
+
     /// Create a new flags object with default values filled in.
     pub fn new() -> Flags {
         let mut flags = Flags {
@@ -308,5 +331,56 @@ impl Flags {
 impl Default for Flags {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_project_flags_preserves_authored_keys() {
+        let project_flags = BTreeMap::from([
+            ("use_catalogs_v2".to_string(), Value::from(true)),
+            ("Mixed_Case".to_string(), Value::from("v")),
+        ]);
+        let flags = Flags::from_project_flags(project_flags);
+
+        // Keys are stored exactly as authored. Consumers that read the flag map
+        // directly (e.g. behavior-flag overrides, which match lower-case names)
+        // rely on this — normalizing the stored keys would break them.
+        assert_eq!(flags.flags.get("use_catalogs_v2"), Some(&Value::from(true)));
+        assert_eq!(flags.flags.get("Mixed_Case"), Some(&Value::from("v")));
+    }
+
+    #[test]
+    fn lookup_is_case_insensitive_but_prefers_exact_match() {
+        let flags = Flags::from_project_flags(BTreeMap::from([(
+            "list_relations_page_limit".to_string(),
+            Value::from(10),
+        )]));
+
+        // A project flag resolves regardless of the casing a macro reads it with.
+        assert_eq!(
+            flags.lookup("list_relations_page_limit"),
+            Some(Value::from(10))
+        );
+        assert_eq!(
+            flags.lookup("LIST_RELATIONS_PAGE_LIMIT"),
+            Some(Value::from(10))
+        );
+        assert_eq!(flags.lookup("missing"), None);
+    }
+
+    #[test]
+    fn lookup_prefers_exact_match_over_case_insensitive() {
+        // When both casings are present (e.g. a default stored UPPERCASE plus a
+        // project flag authored lower-case), an exact match wins.
+        let flags = Flags::from_project_flags(BTreeMap::from([(
+            "full_refresh".to_string(),
+            Value::from(true),
+        )]));
+        assert_eq!(flags.lookup("full_refresh"), Some(Value::from(true)));
+        assert_eq!(flags.lookup("FULL_REFRESH"), Some(Value::from(false)));
     }
 }

@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 dbt-adapter = { workspace = true }
 dbt-adapter-core = { workspace = true }
+dbt-adbc = { workspace = true }
 dbt-clap-core = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
@@ -29,7 +30,6 @@ dbt-parser = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }
-dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
 
 arrow-schema = { workspace = true }

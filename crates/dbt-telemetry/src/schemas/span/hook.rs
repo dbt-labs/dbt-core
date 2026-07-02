@@ -1,17 +1,14 @@
-use crate::{
-    ExecutionPhase, SpanStatus, TelemetryOutputFlags,
-    attributes::{
-        ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent,
-        TelemetryContext, TelemetryEventRecType,
-    },
-    serialize::arrow::ArrowAttributes,
+use crate::{ExecutionPhase, attributes::DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent, TelemetryContext,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use serde_with::skip_serializing_none;
 
 pub use crate::proto::v1::public::events::fusion::hook::{HookOutcome, HookProcessed, HookType};
 
-impl ProtoTelemetryEvent for HookProcessed {
+impl StaticTelemetryEvent for HookProcessed {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -67,6 +64,7 @@ struct HookProcessedJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for HookProcessed {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         use std::borrow::Cow;
 

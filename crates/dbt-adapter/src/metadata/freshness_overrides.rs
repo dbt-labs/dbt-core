@@ -11,9 +11,9 @@ use arrow_array::{
     Array, TimestampMicrosecondArray, TimestampMillisecondArray, TimestampNanosecondArray,
     TimestampSecondArray,
 };
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_xdbc::{Connection, QueryCtx};
 
 use crate::adapter::adapter_impl::AdapterImpl;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};

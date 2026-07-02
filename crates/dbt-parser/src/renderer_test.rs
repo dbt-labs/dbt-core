@@ -93,6 +93,7 @@ mod tests {
             static_analysis: Some(dbt_common::io_args::StaticAnalysisKind::Strict),
             store_failures: false,
             skip_creating_generic_tests: false,
+            maximum_seed_size_mib: 1,
         };
 
         // Create base context with minimal required values
@@ -196,6 +197,143 @@ mod tests {
         assert_eq!(
             seq_schema, par_schema,
             "Sequential and parallel should produce the same schema"
+        );
+    }
+
+    /// Regression test for dbt-fusion #1660: a `source()` inside a Jinja
+    /// branch that evaluates to false during the `execute=false` parse render
+    /// must still be discovered (via static AST analysis) so that its schema
+    /// is fetched into `sourced_remote` and the model can compile.
+    #[tokio::test]
+    async fn test_source_in_false_branch_is_statically_discovered() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let base_path = temp_dir.path().to_path_buf();
+        let models_dir = base_path.join("models");
+        std::fs::create_dir_all(&models_dir).unwrap();
+
+        // `conditional_only` sits inside `{% if execute %}`, which is false
+        // during the parse render, so render-driven collection never sees it.
+        let sql = "select 1 as id\n\
+            from {{ source('my_source', 'always_used') }}\n\
+            {% if execute %}\n\
+            where id in (select id from {{ source('my_source', 'conditional_only') }})\n\
+            {% endif %}\n";
+        let sql_file = models_dir.join("conditional_source_model.sql");
+        std::fs::write(&sql_file, sql).unwrap();
+
+        let path = PathBuf::from("models/conditional_source_model.sql");
+        let test_asset = DbtAsset {
+            base_path: base_path.clone(),
+            original_path: path.clone(),
+            path: path.clone(),
+            package_name: "test_package".to_string(),
+        };
+
+        let cfg = ModelConfig {
+            enabled: Some(true),
+            quoting: Some(DbtQuoting::default()),
+            ..Default::default()
+        };
+        let root_config = DbtProjectConfig::<ModelConfig> {
+            config: cfg,
+            children: IndexMap::new(),
+        };
+
+        let env = Environment::new();
+        let jinja_env = Arc::new(JinjaEnv::new(env));
+
+        let args = ResolveArgs {
+            io: IoArgs {
+                in_dir: base_path.clone(),
+                out_dir: base_path.clone(),
+                ..Default::default()
+            },
+            num_threads: Some(1),
+            no_parallel: true,
+            command: FsCommand::Test,
+            vars: BTreeMap::new(),
+            from_main: false,
+            selector: None,
+            select: None,
+            indirect_selection: None,
+            exclude: None,
+            replay: None,
+            sample_config: RunFilter::default(),
+            sample_renaming: BTreeMap::new(),
+            static_analysis: Some(dbt_common::io_args::StaticAnalysisKind::Strict),
+            store_failures: false,
+            skip_creating_generic_tests: false,
+            maximum_seed_size_mib: 1,
+        };
+
+        let mut base_ctx = BTreeMap::new();
+        base_ctx.insert(
+            "project_name".to_string(),
+            minijinja::Value::from("test_package"),
+        );
+
+        let render_ctx = RenderCtx {
+            inner: Arc::new(RenderCtxInner {
+                args: args.clone(),
+                base_ctx,
+                root_project_name: "test_package".to_string(),
+                package_name: "test_package".to_string(),
+                adapter_type: AdapterType::Postgres,
+                database: "test_db".to_string(),
+                schema: "default_schema".to_string(),
+                config_resolver: ProjectConfigResolver::for_root(root_config),
+                resource_paths: vec!["models".to_string()],
+                package_quoting: DbtQuoting {
+                    database: Some(true),
+                    schema: Some(true),
+                    identifier: Some(true),
+                    snowflake_ignore_case: Some(false),
+                },
+            }),
+            jinja_env: jinja_env.clone(),
+            runtime_config: Arc::new(DbtRuntimeConfig::default()),
+        };
+
+        use dbt_common::cancellation::CancellationToken;
+        let token = CancellationToken::never_cancels();
+
+        let mut node_properties = BTreeMap::new();
+        let results = render_unresolved_sql_files::<ModelConfig, ModelProperties>(
+            &render_ctx,
+            &[test_asset],
+            &mut node_properties,
+            &token,
+            Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 1, "Should have one result");
+        let info = &results[0].sql_file_info;
+
+        let live_sources: Vec<(String, String)> = info
+            .sources
+            .iter()
+            .map(|(name, table, _)| (name.clone(), table.clone()))
+            .collect();
+        let static_sources: Vec<(String, String)> = info
+            .static_sources
+            .iter()
+            .map(|(name, table, _)| (name.clone(), table.clone()))
+            .collect();
+
+        assert!(
+            live_sources.contains(&("my_source".to_string(), "always_used".to_string())),
+            "expected the unconditional source in live sources, got {live_sources:?}"
+        );
+        assert!(
+            static_sources.contains(&("my_source".to_string(), "conditional_only".to_string())),
+            "expected the dead-branch source in static_sources (dbt-fusion #1660), \
+             got {static_sources:?}"
+        );
+        assert!(
+            !live_sources.contains(&("my_source".to_string(), "conditional_only".to_string())),
+            "dead-branch source must NOT appear in live sources, got {live_sources:?}"
         );
     }
 

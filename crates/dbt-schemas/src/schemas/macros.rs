@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use dbt_yaml::Value;
 use minijinja::{
@@ -10,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 use super::common::DocsConfig;
+use super::nodes::{InternalDbtNode, NodePathKind};
 
 /// Macro argument as defined in v12 manifest schema
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -28,7 +32,14 @@ pub struct DbtMacro {
     pub name: String,
     pub package_name: String,
     pub path: PathBuf,
+    /// Package-root-relative path from the manifest (e.g. `macros/my_macro.sql`).
+    /// Present for all macros including those loaded from a serialized manifest.
     pub original_file_path: PathBuf,
+    /// Absolute on-disk path, set during parse. Empty for macros loaded from a
+    /// serialized manifest without going through parse-state restoration.
+    /// Use `has_absolute_path()` to check before accessing.
+    #[serde(skip, default)]
+    pub absolute_path: PathBuf,
     #[serde(skip_serializing, default)]
     pub span: Option<Span>,
     pub unique_id: String,
@@ -49,6 +60,12 @@ pub struct DbtMacro {
     pub __other__: BTreeMap<String, Value>,
 }
 
+impl DbtMacro {
+    pub fn has_absolute_path(&self) -> bool {
+        !self.absolute_path.as_os_str().is_empty()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct MacroDependsOn {
@@ -67,16 +84,22 @@ pub struct DbtDocsMacro {
     pub block_contents: String,
 }
 
-pub fn build_macro_units(nodes: &BTreeMap<String, DbtMacro>) -> BTreeMap<String, Vec<MacroUnit>> {
+pub fn build_macro_units(
+    nodes: &BTreeMap<String, DbtMacro>,
+    project_root: &Path,
+) -> BTreeMap<String, Vec<MacroUnit>> {
     let mut macros = BTreeMap::new();
     for (_, inner_macro) in nodes.iter() {
+        let display_path = inner_macro
+            .get_node_path(NodePathKind::Definition, project_root, project_root)
+            .into_owned();
         macros
             .entry(inner_macro.package_name.clone())
             .or_insert(vec![])
             .push(MacroUnit {
                 info: MacroInfo {
                     name: inner_macro.name.clone(),
-                    path: inner_macro.original_file_path.clone(),
+                    path: display_path,
                     span: inner_macro.span.expect("span is required"),
                     funcsign: inner_macro.funcsign.clone(),
                     args: inner_macro.args.clone(),

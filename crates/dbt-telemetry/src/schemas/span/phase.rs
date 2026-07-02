@@ -1,17 +1,14 @@
-use crate::{
-    SpanStatus, StatusCode, TelemetryOutputFlags,
-    attributes::{
-        ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent,
-        TelemetryContext, TelemetryEventRecType,
-    },
-    serialize::arrow::ArrowAttributes,
+use crate::{attributes::DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent, StatusCode,
+    TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 
 pub use crate::proto::v1::public::events::fusion::phase::{ExecutionPhase, PhaseExecuted};
 use serde_with::skip_serializing_none;
 
-impl ProtoTelemetryEvent for PhaseExecuted {
+impl StaticTelemetryEvent for PhaseExecuted {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -78,6 +75,7 @@ struct PhaseExecutedJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for PhaseExecuted {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(&PhaseExecutedJsonPayload {

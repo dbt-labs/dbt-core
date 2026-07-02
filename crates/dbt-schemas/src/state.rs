@@ -92,6 +92,10 @@ impl DbtAsset {
         self.path.extension().and_then(|ext| ext.to_str()) == Some("py")
     }
 
+    pub fn is_javascript(&self) -> bool {
+        self.path.extension().and_then(|ext| ext.to_str()) == Some("js")
+    }
+
     /// Assumes all paths used are canonicalized
     pub fn to_display_path(&self, project_root: &Path) -> PathBuf {
         let absolute_path = self.base_path.join(&self.path);
@@ -139,6 +143,8 @@ pub struct GenericTestAsset {
     /// Full kwargs map for test_metadata, including all user-provided macro arguments.
     /// Excludes dbt config keys ("config", "_config_raw"). Empty for singular tests.
     pub test_metadata_kwargs: BTreeMap<String, dbt_yaml::Value>,
+    /// YAML-supplied config keys to append to generic test raw_code.
+    pub raw_code_config: BTreeMap<String, dbt_yaml::Value>,
     /// The original (untruncated) test name, if truncation occurred.
     /// When test names exceed 63 characters, dbt truncates to `<first 30 chars>_<md5 hash>`.
     /// This field stores the original name for selector matching purposes.
@@ -826,6 +832,10 @@ impl Default for InvocationArgs {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DbtRuntimeConfigInner {
     // Profile configuration
@@ -879,6 +889,12 @@ pub struct DbtRuntimeConfigInner {
 
     // Runtime info
     pub invoked_at: DateTime<Utc>,
+
+    // Project flags
+    /// When true, `latest_version_pointer` is enabled by default for all versioned models
+    /// (can be overridden per-model with `latest_version_pointer: {enabled: false}`)
+    #[serde(default = "default_true")]
+    pub latest_version_pointer_enabled_by_default: bool,
 }
 
 impl DbtRuntimeConfig {
@@ -975,6 +991,13 @@ impl DbtRuntimeConfig {
             restrict_access: package.dbt_project.restrict_access,
             invoked_at: Utc::now(),
             args: InvocationArgs::default(),
+            latest_version_pointer_enabled_by_default: package
+                .dbt_project
+                .flags
+                .as_ref()
+                .and_then(|flags| flags.get("latest_version_pointer_enabled_by_default"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
         };
 
         // TODO(anna): Look into whether this should also be Index map

@@ -1,14 +1,14 @@
-use crate::{
-    TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;
 
 pub use crate::proto::v1::public::events::fusion::log::{CompiledCode, CompiledCodeInline};
 
-impl ProtoTelemetryEvent for CompiledCode {
+impl StaticTelemetryEvent for CompiledCode {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -20,9 +20,7 @@ impl ProtoTelemetryEvent for CompiledCode {
         true
     }
 
-    fn clone_without_sensitive_data(
-        &self,
-    ) -> Option<Box<dyn crate::attributes::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Self {
             sql: "[REDACTED]".to_string(),
             ..self.clone()
@@ -31,6 +29,7 @@ impl ProtoTelemetryEvent for CompiledCode {
 }
 
 impl ArrowSerializableTelemetryEvent for CompiledCode {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             unique_id: Some(Cow::Borrowed(self.unique_id.as_str())),
@@ -73,7 +72,7 @@ impl ArrowSerializableTelemetryEvent for CompiledCode {
     }
 }
 
-impl ProtoTelemetryEvent for CompiledCodeInline {
+impl StaticTelemetryEvent for CompiledCodeInline {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -85,9 +84,7 @@ impl ProtoTelemetryEvent for CompiledCodeInline {
         true
     }
 
-    fn clone_without_sensitive_data(
-        &self,
-    ) -> Option<Box<dyn crate::attributes::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Self {
             sql: "[REDACTED]".to_string(),
         }))
@@ -95,6 +92,7 @@ impl ProtoTelemetryEvent for CompiledCodeInline {
 }
 
 impl ArrowSerializableTelemetryEvent for CompiledCodeInline {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             content: Some(Cow::Borrowed(self.sql.as_str())),

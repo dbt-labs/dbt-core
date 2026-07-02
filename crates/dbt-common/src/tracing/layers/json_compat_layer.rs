@@ -5,18 +5,24 @@ use dbt_error::ErrorCode;
 use dbt_telemetry::{
     ArtifactType, ArtifactWritten, CompiledCode, CompiledCodeInline, DepsAddPackage,
     DepsPackageInstalled, ExecutionPhase, HookProcessed, HookType, Invocation, ListItemOutput,
-    LogMessage, LogRecordInfo, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed,
-    NodeSkipReason, NodeType, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput,
-    ShowResult, SpanEndInfo, SpanStartInfo, StatusCode, TelemetryOutputFlags, TestOutcome,
-    UserLogMessage, get_freshness_detail, get_test_outcome, has_node_warning,
+    LogMessage, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
+    ProgressMessage, QueryExecuted, ShowDataOutput, ShowResult, TestOutcome, UserLogMessage,
+    get_freshness_detail, get_test_outcome, has_node_warning,
 };
 
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
 
-use super::super::{
+use dbt_tracing::{
+    LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, StatusCode, TelemetryOutputFlags,
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
+    layer::{ConsumerLayer, TelemetryConsumer},
+    shared_writer::SharedWriter,
+    shutdown::TelemetryShutdownItem,
+};
+
+use super::super::{
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     event_classifiers::is_exit_with_status_log,
     formatters::{
@@ -33,9 +39,6 @@ use super::super::{
         progress::format_progress_message,
         query_log::format_query_log,
     },
-    layer::{ConsumerLayer, TelemetryConsumer},
-    shared_writer::SharedWriter,
-    shutdown::TelemetryShutdownItem,
 };
 
 use crate::io_args::FsCommand;

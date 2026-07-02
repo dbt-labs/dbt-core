@@ -27,7 +27,8 @@ pub fn is_update_statement(sql: &str, adapter_type: AdapterType) -> bool {
         | AdapterType::Trino
         | AdapterType::Datafusion
         | AdapterType::Dremio
-        | AdapterType::Oracle => false,
+        | AdapterType::Oracle
+        | AdapterType::Fdcs => false,
     }
 }
 

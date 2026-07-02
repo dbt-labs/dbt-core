@@ -245,7 +245,12 @@ fn make_state(backend: SearchMockBackend) -> Arc<AppState> {
         backend: Arc::new(backend),
         ..Providers::default()
     };
-    Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers))
+    Arc::new(AppState::new(
+        std::path::PathBuf::from("/tmp"),
+        providers,
+        false,
+        true,
+    ))
 }
 
 async fn response_body(response: Response) -> serde_json::Value {
@@ -1442,7 +1447,12 @@ fn make_ranking_state() -> (Arc<AppState>, Arc<InMemoryDuckDbBackend>) {
         backend: backend.clone() as Arc<dyn Backend>,
         ..Providers::default()
     };
-    let state = Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers));
+    let state = Arc::new(AppState::new(
+        std::path::PathBuf::from("/tmp"),
+        providers,
+        false,
+        true,
+    ));
     (state, backend)
 }
 
@@ -1656,7 +1666,12 @@ async fn search_multi_token_ranking_field_priority() {
         backend: backend.clone() as Arc<dyn Backend>,
         ..Providers::default()
     };
-    let state = Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers));
+    let state = Arc::new(AppState::new(
+        std::path::PathBuf::from("/tmp"),
+        providers,
+        false,
+        true,
+    ));
 
     let params = SearchQueryParams {
         q: Some("customer orders".into()),

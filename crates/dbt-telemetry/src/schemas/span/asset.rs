@@ -1,15 +1,15 @@
 use crate::proto::v1::public::events::fusion::phase::ExecutionPhase;
-use crate::{
-    DbtTelemetryContext, TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
+use crate::{DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryContext, TelemetryEventRecType,
+    TelemetryOutputFlags,
 };
 use prost::Name;
 use serde_with::skip_serializing_none;
 
 pub use crate::proto::v1::public::events::fusion::asset::AssetParsed;
 
-impl ProtoTelemetryEvent for AssetParsed {
+impl StaticTelemetryEvent for AssetParsed {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -21,7 +21,7 @@ impl ProtoTelemetryEvent for AssetParsed {
         false
     }
 
-    fn with_context(&mut self, context: &crate::TelemetryContext) {
+    fn with_context(&mut self, context: &TelemetryContext) {
         let Some(context) = context.downcast_ref::<DbtTelemetryContext>() else {
             return;
         };
@@ -49,6 +49,7 @@ struct AssetParsedJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for AssetParsed {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             phase: Some(self.phase()),

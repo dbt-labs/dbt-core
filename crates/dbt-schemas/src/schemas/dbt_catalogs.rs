@@ -60,6 +60,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::OnceLock;
 
+use super::dbt_catalogs_v2::TableFormat;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
@@ -211,12 +212,6 @@ const CATALOG_TYPES: [(&str, CatalogType); 7] = [
 
 const CATALOG_TYPE_OPTS: &str =
     "built_in|snowflake|rest|iceberg_rest|unity|hive_metastore|biglake_metastore";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TableFormat {
-    Default, // dbx hive_metastore
-    Iceberg,
-}
 
 impl TableFormat {
     fn parse(raw: &str) -> FsResult<Self> {

@@ -393,6 +393,22 @@ fn test_mutable_vec_in_set_stmt() {
 }
 
 #[test]
+fn test_do_multi_expr_tuple() {
+    // {% do expr1, expr2, ... %} is valid Jinja2: each call is evaluated as
+    // part of a tuple expression. All side effects must apply.
+    let mut env = Environment::new();
+    env.add_filter("join", |values: Vec<String>, sep: String| values.join(&sep));
+    let rv = minijinja::render!(
+        in env,
+        r#"{% set a = [] %}
+           {% set b = [] %}
+           {%- do a.append('x'), b.append('y') -%}
+           {{ a[0] }},{{ b[0] }}"#,
+    );
+    assert_snapshot!(rv, @"x,y");
+}
+
+#[test]
 fn test_mutable_map() {
     #[cfg(feature = "preserve_order")]
     type ValueMap = indexmap::IndexMap<Value, Value>;

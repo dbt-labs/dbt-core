@@ -2,7 +2,9 @@
 use crate::dbt_types::RelationType;
 use crate::filter::RunFilter;
 use crate::schemas::common::ResolvedQuoting;
+pub use crate::schemas::dbt_catalogs_v2::TableFormat;
 
+use chrono::format::SecondsFormat;
 use dbt_adapter_core::{AdapterType, quote_char};
 use dbt_common::FsResult;
 use dbt_common::constants::DBT_CTE_PREFIX;
@@ -35,27 +37,6 @@ impl RelationPattern {
             database,
             schema_pattern,
             table_pattern,
-        }
-    }
-}
-
-/// The format of the table
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TableFormat {
-    /// The default table format
-    Default,
-    /// The iceberg table format
-    Iceberg,
-    /// The DuckLake table format (MotherDuck ACID cloud storage)
-    DuckLake,
-}
-
-impl TableFormat {
-    pub fn as_str(&self, _adapter_type: AdapterType) -> &'static str {
-        match self {
-            TableFormat::Default => "default",
-            TableFormat::Iceberg => "iceberg",
-            TableFormat::DuckLake => "ducklake",
         }
     }
 }
@@ -536,8 +517,13 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         // Render with explicit UTC offset so non-UTC sessions (e.g. Snowflake
         // with a session TIMEZONE other than UTC) interpret the literal as UTC,
         // matching the microbatch DELETE predicate which also uses `to_rfc3339`.
-        let start = start.map(|t| t.to_rfc3339());
-        let end = end.map(|t| t.to_rfc3339());
+        let (start, end) = match self.adapter_type() {
+            AdapterType::Bigquery => (
+                start.map(|t| t.to_rfc3339_opts(SecondsFormat::Micros, true)),
+                end.map(|t| t.to_rfc3339_opts(SecondsFormat::Micros, true)),
+            ),
+            _ => (start.map(|t| t.to_rfc3339()), end.map(|t| t.to_rfc3339())),
+        };
 
         // render the filter conditions
         let (start, end) = match self.adapter_type() {
@@ -559,6 +545,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             | AdapterType::Salesforce
             | AdapterType::Spark
             | AdapterType::DuckDB
+            | AdapterType::Fdcs
             | AdapterType::Fabric => (
                 start.map(|start| format!("{event_time} >= '{start}'")),
                 end.map(|end| format!("{event_time} < '{end}'")),

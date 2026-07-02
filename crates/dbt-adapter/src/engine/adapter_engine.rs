@@ -7,6 +7,8 @@ use arrow::compute::concat_batches;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_adapter_sql::statements::is_update_statement;
+use dbt_adbc::bigquery::QUERY_LABELS;
+use dbt_adbc::{Backend, Connection, QueryCtx, Statement};
 use dbt_auth::AdapterConfig;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
@@ -17,8 +19,6 @@ use dbt_common::tracing::span_info::{
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, Cancellable, create_debug_span};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_telemetry::{QueryExecuted, QueryOutcome};
-use dbt_xdbc::bigquery::QUERY_LABELS;
-use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
 use indexmap::IndexMap;
 use minijinja::State;
 use tracy_client::span;
@@ -191,16 +191,6 @@ pub trait AdapterEngine: Send + Sync {
         self.execute_with_options(state, ctx, conn, sql, Options::new(), true, token)
     }
 
-    /// Split SQL statements using the provided dialect.
-    fn split_and_filter_statements(&self, sql: &str) -> Vec<String> {
-        let adapter_type = self.adapter_type();
-        self.splitter()
-            .split(sql, adapter_type)
-            .into_iter()
-            .filter(|statement| !self.splitter().is_empty(statement, adapter_type))
-            .collect()
-    }
-
     /// Get the configured database name.
     fn get_configured_database_name(&self) -> Option<Cow<'_, str>> {
         self.config("database")
@@ -210,7 +200,7 @@ pub trait AdapterEngine: Send + Sync {
 /// Default ADBC-based execute_with_options implementation.
 ///
 /// Used by engines whose connections implement the full ADBC protocol
-/// (XdbcEngine in Live, Record, and Replay modes).
+/// (AdbcEngine in Live, Record, and Replay modes).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn adbc_execute_with_options(
     engine: &(impl AdapterEngine + ?Sized),
@@ -265,7 +255,7 @@ pub(crate) fn adbc_execute_with_options(
         (Arc<Schema>, Vec<RecordBatch>),
         Cancellable<adbc_core::error::Error>,
     > {
-        use dbt_xdbc::statement::Statement as _;
+        use dbt_adbc::statement::Statement as _;
 
         let mut stmt = if engine.has_query_cache() {
             let stmt = conn.new_statement()?;

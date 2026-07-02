@@ -15,7 +15,7 @@ pub struct ArtifactWritten {
     )]
     pub artifact_type: i32,
 }
-impl crate::StaticName for ArtifactWritten {
+impl ::dbt_tracing::StaticName for ArtifactWritten {
     const FULL_NAME: &'static str = "v1.public.events.fusion.artifact.ArtifactWritten";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.artifact.ArtifactWritten";
 }

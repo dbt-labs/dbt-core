@@ -1,5 +1,6 @@
 use std::{collections::HashSet, path::PathBuf};
 
+use dbt_common::CompiledSpans;
 use dbt_common::{
     FsResult, MacroSpan,
     constants::DBT_COMPILED_DIR_NAME,
@@ -7,9 +8,21 @@ use dbt_common::{
     path::{get_snapshot_compiled_path, get_target_write_path},
     stdfs,
 };
+use dbt_frontend_common::span::ReclassifySpan;
 use dbt_schemas::schemas::CommonAttributes;
-
 use dbt_tasks_core::CompiledSqlCache;
+use serde::{Deserialize, Serialize};
+
+/// On-disk shape of the `*.macro_spans.json` sidecar. Stores the macro spans
+/// alongside the reclassify offset records so a cache hit can restore both
+/// without re-rendering. `reclassify_spans` is `#[serde(default)]` purely as
+/// cheap insurance against a partial write.
+#[derive(Serialize, Deserialize)]
+struct CachedSpans {
+    macro_spans: Vec<MacroSpan>,
+    #[serde(default)]
+    reclassify_spans: Vec<ReclassifySpan>,
+}
 
 #[derive(Default)]
 pub struct CompiledSqlCacheImpl {
@@ -45,7 +58,7 @@ impl CompiledSqlCache for CompiledSqlCacheImpl {
         &self,
         io: &IoArgs,
         common: &CommonAttributes,
-    ) -> Option<(String, Vec<MacroSpan>)> {
+    ) -> Option<(String, Vec<MacroSpan>, Vec<ReclassifySpan>)> {
         {
             let valid_nodes = self.valid_nodes.read();
             if !valid_nodes.contains(&common.unique_id) {
@@ -63,10 +76,14 @@ impl CompiledSqlCache for CompiledSqlCacheImpl {
         let Ok(macro_spans_json) = std::fs::read_to_string(absolute_macro_span_path) else {
             return None;
         };
-        let Ok(macro_spans) = serde_json::from_str(&macro_spans_json) else {
+        let Ok(CachedSpans {
+            macro_spans,
+            reclassify_spans,
+        }) = serde_json::from_str(&macro_spans_json)
+        else {
             return None;
         };
-        Some((rendered_sql_maybe_with_cte, macro_spans))
+        Some((rendered_sql_maybe_with_cte, macro_spans, reclassify_spans))
     }
 
     fn set_compiled_sql(
@@ -74,7 +91,7 @@ impl CompiledSqlCache for CompiledSqlCacheImpl {
         io: &IoArgs,
         common: &CommonAttributes,
         rendered_sql_maybe_with_cte: &str,
-        macro_spans: &[MacroSpan],
+        spans: &dyn CompiledSpans,
     ) -> FsResult<()> {
         {
             let mut valid_nodes = self.valid_nodes.write();
@@ -84,11 +101,16 @@ impl CompiledSqlCache for CompiledSqlCacheImpl {
         let absolute_compiled_path = self.get_compiled_sql_path(io, common);
         let absolute_macro_span_path = absolute_compiled_path.with_extension("macro_spans.json");
 
+        let cached_spans = CachedSpans {
+            macro_spans: spans.macro_spans().to_vec(),
+            reclassify_spans: spans.reclassify_spans().unwrap_or_default().to_vec(),
+        };
+
         stdfs::create_dir_all(absolute_compiled_path.parent().unwrap())?;
         stdfs::write(&absolute_compiled_path, rendered_sql_maybe_with_cte)?;
         stdfs::write(
             absolute_macro_span_path,
-            serde_json::to_string_pretty(&macro_spans).unwrap(),
+            serde_json::to_string_pretty(&cached_spans).unwrap(),
         )?;
         Ok(())
     }

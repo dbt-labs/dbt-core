@@ -3,17 +3,14 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
-use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::io_args::IoArgs;
-use dbt_common::path::get_target_write_path;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 
 use dbt_adapter::load_store::ResultStore;
@@ -22,6 +19,7 @@ use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::schemas::NodePathKind;
 use dbt_schemas::schemas::telemetry::NodeType;
+use dbt_telemetry::ExecutionPhase;
 use minijinja::State;
 use minijinja::listener::RenderingEventListener;
 use minijinja::machinery::Span;
@@ -233,6 +231,37 @@ pub fn extend_base_context_stateful_fn(
     );
 }
 
+/// Replace the statement-result-store closures (`store_result`/`load_result`/
+/// `store_raw_result`) in an existing run context with a fresh, isolated
+/// [`ResultStore`].
+///
+/// `build_run_node_context` bakes a single `ResultStore` into the context. That
+/// store is fine when a context is used once, but microbatch builds the context
+/// once per model and clones it for every batch (the closure `Value`s clone the
+/// store's `Arc`, so all batches share one statement registry). With
+/// `concurrent_batches = true` the batches run on separate threads and interleave
+/// `store`/`load` calls for the same statement name (e.g. `get_columns_in_relation`,
+/// or `run_query_statement` on Snowflake), so a batch can `load` a result a peer
+/// already consumed and hit `MacroResultAlreadyLoadedError`.
+///
+/// Calling this on each per-batch context gives every batch its own registry,
+/// mirroring dbt-core where each batch runner builds its own model context.
+pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
+    let result_store = ResultStore::default();
+    context.insert(
+        "store_result".to_owned(),
+        MinijinjaValue::from_function(result_store.store_result()),
+    );
+    context.insert(
+        "load_result".to_owned(),
+        MinijinjaValue::from_function(result_store.load_result()),
+    );
+    context.insert(
+        "store_raw_result".to_owned(),
+        MinijinjaValue::from_function(result_store.store_raw_result()),
+    );
+}
+
 /// Build a run context - parent function that orchestrates the context building
 #[allow(clippy::too_many_arguments)]
 pub fn build_run_node_context<S: Serialize>(
@@ -242,11 +271,11 @@ pub fn build_run_node_context<S: Serialize>(
     agate_table: Option<AgateTable>,
     base_context: &BTreeMap<String, MinijinjaValue>,
     io_args: &IoArgs,
+    phase: ExecutionPhase,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
     let common_attr = node.common();
-    let base_attr = node.base();
     let resource_type = node.resource_type();
 
     // Stateful fns: store_result/load_result/store_raw_result/submit_python_job + context.
@@ -272,24 +301,13 @@ pub fn build_run_node_context<S: Serialize>(
     let model_fields =
         build_model_context_fields(node, deprecated_config, adapter_type, io_args, sql_header);
 
-    // Use alias for the run file path (target/run/<alias>.sql) rather than name.
-    // For most nodes, alias == name. For generic tests with long names, the name is the
-    // full (human-readable) form while alias is the truncated form. Using alias avoids
-    // ENAMETOOLONG (OS error 36) on Linux when the test name exceeds 255 chars.
-    let model_name = if base_attr.alias.is_empty() {
-        common_attr.name.clone()
-    } else {
-        base_attr.alias.clone()
-    };
-
     let write_value = MinijinjaValue::from_object(WriteConfig {
-        node_name: model_name,
         resource_type: resource_type.as_static_ref().to_string(),
-        project_root: io_args.in_dir.clone(),
-        target_path: io_args.out_dir.clone(),
-        package_name: common_attr.package_name.clone(),
-        path: common_attr.path.clone(),
-        original_file_path: common_attr.original_file_path.clone(),
+        run_file_path: node.get_node_path_abs(
+            NodePathKind::Executable,
+            &io_args.in_dir,
+            &io_args.out_dir,
+        ),
     });
 
     let load_agate_table = agate_table.map(|agate_table| {
@@ -324,12 +342,11 @@ pub fn build_run_node_context<S: Serialize>(
         MinijinjaValue::from_object(node_config),
     );
 
-    let abs_compiled =
-        node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
-    let relative_path = abs_compiled
+    let abs_current_path = node.get_node_path_abs(phase.into(), &io_args.in_dir, &io_args.out_dir);
+    let relative_path = abs_current_path
         .strip_prefix(&io_args.out_dir)
         .map(|p| p.to_path_buf())
-        .unwrap_or(abs_compiled);
+        .unwrap_or(abs_current_path);
 
     let overlay = RunNodeCtx {
         this: model_fields.this,
@@ -390,20 +407,10 @@ fn parse_hook_item(item: &YmlValue) -> Option<HookConfig> {
 /// Context function that writes a payload to file
 #[derive(Debug)]
 pub struct WriteConfig {
-    /// The node ({operation, model}) name or alias (for ENAMETOOLONG safety on Linux)
-    pub node_name: String,
     /// The resource type string (see `fusion::node::NodeType`)
     pub resource_type: String,
-    /// The DBT project root
-    pub project_root: PathBuf,
-    /// The directory to write the file into
-    pub target_path: PathBuf,
-    /// The package (project) name, used to mirror dbt-core's target/run/{pkg}/... structure
-    pub package_name: String,
-    /// The node's path relative to the project root (common_attr.path)
-    pub path: PathBuf,
-    /// The node's original source file path (common_attr.original_file_path)
-    pub original_file_path: PathBuf,
+    /// Absolute target/run path for this node.
+    pub run_file_path: PathBuf,
 }
 
 impl Object for WriteConfig {
@@ -432,16 +439,7 @@ impl Object for WriteConfig {
         };
 
         // Write the file
-        match write_file(
-            &self.project_root,
-            &self.target_path,
-            &self.node_name,
-            &self.package_name,
-            &self.path,
-            &self.original_file_path,
-            &self.resource_type,
-            payload,
-        ) {
+        match write_file(&self.run_file_path, &self.resource_type, payload) {
             Ok(_) => {}
             Err(e) => {
                 return Err(Error::new(
@@ -457,17 +455,7 @@ impl Object for WriteConfig {
 }
 
 /// Write a file to disk
-#[allow(clippy::too_many_arguments)]
-fn write_file(
-    project_root: &Path,
-    target_path: &Path,
-    node_name: &str,
-    package_name: &str,
-    path: &Path,
-    original_file_path: &Path,
-    resource_type: &str,
-    payload: &str,
-) -> Result<(), Error> {
+fn write_file(full_path: &Path, resource_type: &str, payload: &str) -> Result<(), Error> {
     // Check if model is a Macro or SourceDefinition
     if resource_type == "macro" || resource_type == "source" {
         return Err(Error::new(
@@ -475,22 +463,6 @@ fn write_file(
             "Macros and sources cannot be written to disk",
         ));
     }
-
-    // Mirror dbt-core's target/run/{package_name}/{original_file_path} structure.
-    // The directory comes from get_target_write_path; the filename is the alias (node_name)
-    // to avoid ENAMETOOLONG on Linux for generic tests with very long names.
-    // project_root.join(target_path) handles both absolute and relative target_path correctly.
-    let abs_run_path = get_target_write_path(
-        project_root,
-        &project_root.join(target_path).join(DBT_RUN_DIR_NAME),
-        package_name,
-        path,
-        original_file_path,
-    );
-    let full_path = abs_run_path
-        .parent()
-        .unwrap_or(&abs_run_path)
-        .join(format!("{node_name}.sql"));
 
     // Create parent directories if needed
     if let Some(parent) = full_path.parent()
@@ -503,7 +475,7 @@ fn write_file(
         ));
     }
 
-    match fs::write(&full_path, payload) {
+    match fs::write(full_path, payload) {
         Ok(_) => Ok(()),
         Err(e) => Err(Error::new(
             ErrorKind::InvalidOperation,

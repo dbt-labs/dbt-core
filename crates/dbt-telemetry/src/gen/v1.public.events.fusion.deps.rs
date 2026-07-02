@@ -22,7 +22,7 @@ pub struct DepsAddPackage {
     #[prost(string, tag = "4")]
     pub dbt_core_event_code: ::prost::alloc::string::String,
 }
-impl crate::StaticName for DepsAddPackage {
+impl ::dbt_tracing::StaticName for DepsAddPackage {
     const FULL_NAME: &'static str = "v1.public.events.fusion.deps.DepsAddPackage";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.deps.DepsAddPackage";
 }
@@ -63,7 +63,7 @@ pub struct DepsPackageInstalled {
     #[prost(string, tag = "5")]
     pub dbt_core_event_code: ::prost::alloc::string::String,
 }
-impl crate::StaticName for DepsPackageInstalled {
+impl ::dbt_tracing::StaticName for DepsPackageInstalled {
     const FULL_NAME: &'static str = "v1.public.events.fusion.deps.DepsPackageInstalled";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.deps.DepsPackageInstalled";
 }
@@ -87,7 +87,7 @@ pub struct DepsAllPackagesInstalled {
     #[prost(uint64, tag = "1")]
     pub package_count: u64,
 }
-impl crate::StaticName for DepsAllPackagesInstalled {
+impl ::dbt_tracing::StaticName for DepsAllPackagesInstalled {
     const FULL_NAME: &'static str = "v1.public.events.fusion.deps.DepsAllPackagesInstalled";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.deps.DepsAllPackagesInstalled";
 }

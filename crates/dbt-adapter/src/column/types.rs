@@ -180,10 +180,17 @@ impl ColumnStatic {
         )
     }
 
-    pub fn quote(&self, s: &str) -> String {
+    /// TODO: reconcile with [quote_char] for ClickHouse and remove the special handling
+    /// For ClickHouse, this function returns "{s}" (double quotes), while [quote_char]
+    /// returns `{s}` (backticks). This was done deliberately to avoid changing goldie
+    /// recordings and avoid CI job failures
+    fn quote(&self, s: &str) -> String {
         match self.0 {
-            AdapterType::Bigquery | AdapterType::Databricks => format!("`{s}`"),
-            _ => format!("\"{s}\""),
+            AdapterType::ClickHouse => format!("\"{s}\""),
+            _ => {
+                let q = quote_char(self.0);
+                format!("{q}{s}{q}")
+            }
         }
     }
 
@@ -1248,6 +1255,47 @@ mod tests {
 
         let (dtype, _) = Column::make_degenerate_types(AdapterType::Snowflake, "BLAH NOT NULL");
         assert_eq!(dtype, "BLAH");
+    }
+
+    #[test]
+    fn test_identifier_quoting_per_adapter() {
+        // Spark, like Databricks and BigQuery, quotes identifiers with backticks.
+        // Double quotes would make Spark parse them as string literals (not columns).
+        for adapter in [
+            AdapterType::Spark,
+            AdapterType::Databricks,
+            AdapterType::Bigquery,
+        ] {
+            let col = Column::new(
+                adapter,
+                "id".to_string(),
+                "int".to_string(),
+                None,
+                None,
+                None,
+            );
+            assert_eq!(
+                col.quoted(),
+                "`id`",
+                "{adapter:?} should backtick-quote identifiers"
+            );
+        }
+
+        for adapter in [AdapterType::Snowflake, AdapterType::Postgres] {
+            let col = Column::new(
+                adapter,
+                "id".to_string(),
+                "int".to_string(),
+                None,
+                None,
+                None,
+            );
+            assert_eq!(
+                col.quoted(),
+                "\"id\"",
+                "{adapter:?} should double-quote identifiers"
+            );
+        }
     }
 
     #[test]

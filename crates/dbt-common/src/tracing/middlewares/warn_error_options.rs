@@ -1,7 +1,8 @@
 use std::sync::{Arc, RwLock};
 
 use dbt_error::ErrorCode;
-use dbt_telemetry::{LogMessage, LogRecordInfo, SeverityNumber};
+use dbt_telemetry::LogMessage;
+use dbt_tracing::{LogRecordInfo, SeverityNumber};
 
 use crate::{
     tracing::{data_provider::DataProvider, layer::TelemetryMiddleware},

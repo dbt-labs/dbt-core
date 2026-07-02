@@ -1,10 +1,7 @@
-use crate::{
-    SpanStatus, TelemetryOutputFlags,
-    attributes::{
-        ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent,
-        TelemetryContext, TelemetryEventRecType,
-    },
-    serialize::arrow::ArrowAttributes,
+use crate::{attributes::DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent,
+    TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
 };
 
 use prost::Name;
@@ -25,7 +22,7 @@ pub use crate::proto::v1::public::events::fusion::node::{
     node_processed,
 };
 
-impl ProtoTelemetryEvent for NodeEvaluated {
+impl StaticTelemetryEvent for NodeEvaluated {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -46,7 +43,7 @@ impl ProtoTelemetryEvent for NodeEvaluated {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         // TODO: theoretically we may want to use a consistent scrambling/hashing of
         // identifiers as some may consider this sensitive
         let new_outcome_detail = match self.node_outcome_detail.as_ref() {
@@ -150,6 +147,7 @@ fn deserialize_node_evaluated_json_payload(
 }
 
 impl ArrowSerializableTelemetryEvent for NodeEvaluated {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Well-known fields for easier querying
@@ -256,7 +254,7 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
     }
 }
 
-impl ProtoTelemetryEvent for NodeProcessed {
+impl StaticTelemetryEvent for NodeProcessed {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -277,7 +275,7 @@ impl ProtoTelemetryEvent for NodeProcessed {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         // Similar to NodeEvaluated, scrub sensitive data from test details
         let new_outcome_detail = match self.node_outcome_detail.as_ref() {
             Some(node_processed::NodeOutcomeDetail::NodeTestDetail(test_detail)) => {
@@ -311,6 +309,7 @@ impl ProtoTelemetryEvent for NodeProcessed {
 }
 
 impl ArrowSerializableTelemetryEvent for NodeProcessed {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Well-known fields for easier querying

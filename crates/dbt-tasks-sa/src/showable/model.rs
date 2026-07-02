@@ -54,9 +54,7 @@ impl Showable for DbtModel {
                     }
 
                     match ctx.inner.execute {
-                        Execute::Remote | Execute::Local => {
-                            rendered_sql_for(ctx, unique_id.as_str(), "model")
-                        }
+                        Execute::Remote => rendered_sql_for(ctx, unique_id.as_str(), "model"),
                         Execute::Sidecar | Execute::Service => {
                             let lp_plan = task_result
                                 .as_ref()

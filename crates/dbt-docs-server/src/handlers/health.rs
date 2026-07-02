@@ -1,5 +1,7 @@
-use axum::Json;
+use axum::body::Body;
 use axum::extract::State;
+use axum::http::{StatusCode, header};
+use axum::response::Response;
 use serde::Serialize;
 
 use crate::state::SharedState;
@@ -8,13 +10,37 @@ use crate::state::SharedState;
 pub struct HealthResponse {
     pub ok: bool,
     pub version: &'static str,
-    pub index_dir: String,
+    pub project_loaded: bool,
+    pub generation: Option<String>,
 }
 
-pub async fn get_health(State(state): State<SharedState>) -> Json<HealthResponse> {
-    Json(HealthResponse {
+pub async fn get_health(State(state): State<SharedState>) -> Response {
+    let resp = HealthResponse {
         ok: true,
         version: state.server_version(),
-        index_dir: state.index_dir.display().to_string(),
-    })
+        project_loaded: state.project_loaded,
+        generation: state.generation.clone(),
+    };
+
+    let body = match serde_json::to_vec(&resp) {
+        Ok(body) => body,
+        Err(e) => {
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from(e.to_string()))
+                .expect("valid error response");
+        }
+    };
+
+    let mut builder = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json");
+    if let Some(generation) = &resp.generation {
+        builder = builder.header("X-Docs-Generation", generation);
+    }
+    builder.body(Body::from(body)).expect("valid response")
 }
+
+#[cfg(test)]
+#[path = "health_tests.rs"]
+mod health_tests;

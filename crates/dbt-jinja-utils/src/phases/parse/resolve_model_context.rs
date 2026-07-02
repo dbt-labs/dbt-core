@@ -29,7 +29,7 @@ use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtModel, NodeBaseAttributes,
         common::{DbtChecksum, DbtQuoting, NodeDependsOn},
-        serde::yml_value_to_minijinja,
+        serde::{NodeVersion, yml_value_to_minijinja},
     },
     state::DbtRuntimeConfig,
 };
@@ -196,7 +196,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             package_name: package_name.to_owned(),
             path: PathBuf::from(""),
             name_span: dbt_common::Span::default(),
-            original_file_path: PathBuf::from(""),
+            original_file_path: display_path.to_path_buf(),
             patch_path: None,
             unique_id: format!("{package_name}.{model_name}"),
             fqn,
@@ -205,6 +205,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             checksum: DbtChecksum::default(),
             language: None,
             tags: vec![],
+            classifiers: vec![],
             meta: IndexMap::new(),
         },
         __base_attr__: NodeBaseAttributes {
@@ -396,8 +397,8 @@ impl<T: ResolvableConfig<T>> Object for ResolveRefFunction<T> {
             ));
         }
 
-        // Check for version in kwargs
-        let version = parser.consume_optional_either_from_kwargs::<String>("version", "v");
+        // Check for version in kwargs — preserve original literal type (int, float, or string)
+        let version = parser.consume_optional_either_from_kwargs::<NodeVersion>("version", "v");
 
         let model_name = name;
         let namespace = package;

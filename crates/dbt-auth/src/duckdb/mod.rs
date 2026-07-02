@@ -2,7 +2,7 @@ pub mod init;
 
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 
-use dbt_xdbc::{Backend, database};
+use dbt_adbc::{Backend, database};
 
 pub struct DuckDbAuth {
     backend: Backend,

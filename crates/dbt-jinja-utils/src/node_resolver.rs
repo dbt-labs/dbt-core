@@ -37,15 +37,14 @@ fn downgraded_node_dependency_warning(
     error: &FsError,
     location: CodeLocationWithFile,
 ) -> Option<(FsError, bool)> {
-    let has_disabled_dependency = match error.code {
-        ErrorCode::DisabledDependency => true,
-        ErrorCode::DependencyNotFound => false,
+    let has_disabled_or_missing_dependency = match error.code {
+        ErrorCode::DisabledDependency | ErrorCode::DependencyNotFound => true,
         _ => return None,
     };
 
     Some((
         FsError::new(ErrorCode::NodeNotFoundOrDisabled, error.to_string()).with_location(location),
-        has_disabled_dependency,
+        has_disabled_or_missing_dependency,
     ))
 }
 
@@ -182,6 +181,18 @@ impl NodeResolver {
             && let Some(existing) = entries.iter_mut().find(|(id, _, _, _)| id == unique_id)
         {
             *existing = (unique_id.to_string(), relation.clone(), status, None);
+            return;
+        }
+
+        // Prevent duplicate unique_ids: cross-project publication nodes can be registered
+        // via from_dbt_nodes() and again during wave resolution, causing the same unique_id
+        // to appear twice and triggering "ambiguous ref" panics at compile time.
+        // Only skip when the same unique_id with the same status already exists — a disabled
+        // and an enabled entry for the same name are both needed for correct ref resolution.
+        if entries
+            .iter()
+            .any(|(id, _, s, _)| id == unique_id && *s == status)
+        {
             return;
         }
 
@@ -851,7 +862,14 @@ pub fn resolve_dependencies(
 
         let node_base = node.base_mut();
 
-        let mut has_disabled_dependency = false;
+        // Skip nodes already marked disabled (e.g. tests on disabled models).
+        // Their deps are irrelevant — they can never run — and resolving them
+        // would produce spurious NodeNotFoundOrDisabled warnings.
+        if !node_base.enabled {
+            continue;
+        }
+
+        let mut has_disabled_or_missing_dependency = false;
 
         // Check refs
         let node_package_name_value = &Some(node_package_name.clone());
@@ -896,10 +914,13 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // For tests and exposures, warn on missing or disabled dependencies instead of erroring
                     if (is_test || is_exposure)
-                        && let Some((warning, disabled_dependency)) =
+                        && let Some((warning, disable)) =
                             downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        has_disabled_dependency |= disabled_dependency;
+                        // Whether the dep is disabled or simply missing, the test must be
+                        // excluded — dbt-core issues NodeNotFoundOrDisabled in both cases and
+                        // never executes the test.
+                        has_disabled_or_missing_dependency = disable;
                         emit_warn_log_from_fs_error(&warning, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
@@ -936,10 +957,13 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // For tests and exposures, warn on missing or disabled dependencies instead of erroring
                     if (is_test || is_exposure)
-                        && let Some((warning, disabled_dependency)) =
+                        && let Some((warning, disable)) =
                             downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        has_disabled_dependency |= disabled_dependency;
+                        // Whether the dep is disabled or simply missing, the test must be
+                        // excluded — dbt-core issues NodeNotFoundOrDisabled in both cases and
+                        // never executes the test.
+                        has_disabled_or_missing_dependency = disable;
                         emit_warn_log_from_fs_error(&warning, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
@@ -978,7 +1002,7 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // Check if this is a disabled dependency error for tests or exposures
                     if (is_test || is_exposure) && e.code == ErrorCode::DisabledDependency {
-                        has_disabled_dependency = true;
+                        has_disabled_or_missing_dependency = true;
                         let err_with_loc = e.with_location(location);
                         emit_warn_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
                     } else {
@@ -991,11 +1015,11 @@ pub fn resolve_dependencies(
             };
         }
 
-        if is_test && has_disabled_dependency {
+        if is_test && has_disabled_or_missing_dependency {
             tests_to_disable.push(node_unique_id.clone());
         }
 
-        if is_exposure && has_disabled_dependency {
+        if is_exposure && has_disabled_or_missing_dependency {
             exposures_to_disable.push(node_unique_id);
         }
     }
@@ -1344,7 +1368,7 @@ mod tests {
         .expect("missing ref should be downgraded");
 
         assert_eq!(warning.0.code, ErrorCode::NodeNotFoundOrDisabled);
-        assert!(!warning.1);
+        assert!(warning.1);
     }
 
     #[test]
@@ -1451,5 +1475,68 @@ mod tests {
 
         let io = make_io();
         check_for_model_deprecations(&io, &nodes);
+    }
+
+    // Regression test for https://github.com/dbt-labs/fs/issues/11382:
+    // push_or_replace_entry with override_existing=false must not insert a duplicate
+    // when the same unique_id is already present. Cross-project publication nodes were
+    // registered via from_dbt_nodes() and again during wave resolution, causing the same
+    // unique_id to appear twice and triggering "Found ambiguous ref" panics.
+    #[test]
+    fn test_push_or_replace_entry_no_duplicate_when_override_false() {
+        let mut entries: Vec<RefRecord> = Vec::new();
+        let relation = MinijinjaValue::UNDEFINED;
+        let unique_id = "model.cross_proj.pub_model";
+
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Enabled,
+            false,
+        );
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Enabled,
+            false,
+        );
+
+        assert_eq!(
+            entries.len(),
+            1,
+            "duplicate unique_id must not be inserted when override_existing=false"
+        );
+    }
+
+    // Regression test: a disabled and an enabled entry for the same model name but same
+    // unique_id must both be retained so ref resolution can correctly find the enabled one.
+    #[test]
+    fn test_push_or_replace_entry_allows_different_status_for_same_unique_id() {
+        let mut entries: Vec<RefRecord> = Vec::new();
+        let relation = MinijinjaValue::UNDEFINED;
+        let unique_id = "model.test.my_model_2";
+
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Disabled,
+            false,
+        );
+        NodeResolver::push_or_replace_entry(
+            &mut entries,
+            unique_id,
+            &relation,
+            ModelStatus::Enabled,
+            false,
+        );
+
+        assert_eq!(
+            entries.len(),
+            2,
+            "disabled and enabled entries for the same unique_id must both be kept"
+        );
     }
 }

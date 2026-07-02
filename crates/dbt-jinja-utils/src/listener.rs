@@ -1,19 +1,21 @@
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt::Write as _,
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
 use minijinja::{
-    CodeLocation, MacroSpans, OutputTracker, OutputTrackerLocation, TypecheckingEventListener,
+    CodeLocation, JinjaLayoutEventKind, MacroSpans, OutputTracker, OutputTrackerLocation,
+    TypecheckingEventListener,
     listener::{MacroStart, RenderingEventListener},
     machinery::Span,
 };
 
 use dbt_common::{
-    ErrorCode,
+    CompiledSpans, ErrorCode,
     io_args::IoArgs,
     tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message},
 };
@@ -42,6 +44,30 @@ pub trait RenderingEventListenerFactory: Send + Sync {
 
     /// get macro spans
     fn drain_macro_spans(&self, filename: &Path) -> MacroSpans;
+
+    /// Builds the [`CompiledSpans`] for a freshly rendered node from its
+    /// converted macro spans. The default carries macro spans only; an
+    /// implementation may override this to attach additional spans associated
+    /// with `filename`.
+    fn compiled_spans(
+        &self,
+        macro_spans: Vec<dbt_common::MacroSpan>,
+        _filename: &Path,
+    ) -> Box<dyn CompiledSpans> {
+        Box::new(dbt_common::MacroSpansOnly { macro_spans })
+    }
+
+    /// Rebuilds the [`CompiledSpans`] for a node restored from the compiled-SQL
+    /// cache. The default ignores `reclassify_spans`; an implementation may
+    /// override this to reattach them.
+    fn create_spans(
+        &self,
+        macro_spans: Vec<dbt_common::MacroSpan>,
+        reclassify_spans: Vec<dbt_frontend_common::span::ReclassifySpan>,
+    ) -> Box<dyn CompiledSpans> {
+        let _ = reclassify_spans;
+        Box::new(dbt_common::MacroSpansOnly { macro_spans })
+    }
 }
 
 /// Default implementation of the `ListenerFactory` trait
@@ -77,6 +103,36 @@ impl DefaultRenderingEventListenerFactory {
             io_args,
         }
     }
+
+    /// Creates the default listeners and returns the shared output-tracker
+    /// location used by the macro-span listener, so an additional listener
+    /// (e.g. a reclassify capture listener supplied by a decorating factory)
+    /// can observe the same rendered-output position. `create_listeners`
+    /// delegates here and discards the location.
+    pub fn create_listeners_with_tracker(
+        &self,
+        filename: &Path,
+    ) -> (
+        Vec<Rc<dyn RenderingEventListener>>,
+        Rc<OutputTrackerLocation>,
+    ) {
+        // Share the output tracker location so other listeners can observe the
+        // current render position at the moment their hooks fire.
+        let shared_tracker = Rc::new(OutputTrackerLocation::default());
+        let mut listeners: Vec<Rc<dyn RenderingEventListener>> = vec![Rc::new(
+            DefaultRenderingEventListener::with_tracker(self.quiet, shared_tracker.clone()),
+        )];
+
+        if self.check_mangled_refs {
+            listeners.push(Rc::new(crate::mangled_ref::MangledRefWarningPrinter::new(
+                filename.to_path_buf(),
+                self.io_args.clone(),
+                shared_tracker.clone(),
+            )));
+        }
+
+        (listeners, shared_tracker)
+    }
 }
 
 impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
@@ -86,27 +142,7 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
         filename: &Path,
         _offset: &dbt_frontend_common::error::CodeLocation,
     ) -> Vec<Rc<dyn RenderingEventListener>> {
-        let mut listeners: Vec<Rc<dyn RenderingEventListener>> = vec![];
-
-        if self.check_mangled_refs {
-            // Share the output tracker location so MangledRefWarningPrinter can observe
-            // the current render position at the moment on_ref_or_source fires.
-            let shared_tracker = Rc::new(OutputTrackerLocation::default());
-            listeners.push(Rc::new(DefaultRenderingEventListener::with_tracker(
-                self.quiet,
-                shared_tracker.clone(),
-            )));
-            listeners.push(Rc::new(crate::mangled_ref::MangledRefWarningPrinter::new(
-                filename.to_path_buf(),
-                self.io_args.clone(),
-                shared_tracker,
-            )));
-        } else {
-            // Always add the default listener for macro spans
-            listeners.push(Rc::new(DefaultRenderingEventListener::new(self.quiet)));
-        }
-
-        listeners
+        self.create_listeners_with_tracker(filename).0
     }
 
     fn destroy_listener(&self, filename: &Path, listener: Rc<dyn RenderingEventListener>) {
@@ -165,6 +201,12 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
     /// has no data for the given key (e.g. in LSP mode).
     fn get_macro_depends_on(&self, _unique_id: &str) -> Vec<String> {
         vec![]
+    }
+
+    /// Snapshot of the full macro depends-on graph accumulated during this
+    /// invocation (node unique-id -> set of macro unique-ids). Empty by default.
+    fn all_macro_depends_on(&self) -> BTreeMap<String, BTreeSet<String>> {
+        BTreeMap::new()
     }
 
     /// Determines whether or not the listener factory is able to capture
@@ -239,6 +281,10 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
             .map(|s| s.iter().cloned().collect())
             .unwrap_or_default()
     }
+
+    fn all_macro_depends_on(&self) -> BTreeMap<String, BTreeSet<String>> {
+        self.all_depends_on.read().unwrap().clone()
+    }
 }
 
 struct DagExtractListener {
@@ -278,6 +324,9 @@ impl TypecheckingEventListener for DagExtractListener {
         _def_path: &Path,
         def_unique_id: &str,
     ) {
+        if def_unique_id == self.unique_id {
+            return;
+        }
         self.depends_on
             .borrow_mut()
             .push((self.unique_id.clone(), def_unique_id.to_string()));
@@ -357,8 +406,8 @@ impl TypecheckingEventListener for WarningPrinter {
         let mut warnings: Vec<_> = self
             .pending_warnings
             .borrow()
-            .iter()
-            .flat_map(|(_, warnings)| warnings.iter().cloned())
+            .values()
+            .flat_map(|warnings| warnings.iter().cloned())
             .collect();
         warnings.sort_by(|(loc1, msg1), (loc2, msg2)| {
             (loc1.line, loc1.col, msg1).cmp(&(loc2.line, loc2.col, msg2))
@@ -417,6 +466,167 @@ impl RenderingEventListener for MacroDependencyListener {
 
     fn on_macro_dependency(&self, template_name: &str) {
         self.macro_deps.borrow_mut().push(template_name.to_string());
+    }
+}
+
+/// A source location (`path:line:col`) captured for a [`JinjaTraceFrame`].
+#[derive(Debug, PartialEq, Eq)]
+struct JinjaTraceLocation {
+    file_path: String,
+    line_no: u32,
+    char_no: u32,
+}
+
+impl JinjaTraceLocation {
+    fn new(path: &Path, span: &Span) -> Self {
+        Self {
+            file_path: path.to_string_lossy().into_owned(),
+            line_no: span.start_line,
+            char_no: span.start_col,
+        }
+    }
+
+    /// Renders the location, stripping the noisy internal-package prefix
+    /// (`dbt_internal_packages/<package>/macros/`) so paths read cleanly.
+    fn display(&self) -> String {
+        let path = if self.file_path.is_empty() {
+            "<unknown>"
+        } else {
+            shorten_macro_path(&self.file_path)
+        };
+        format!("{path}:{}:{}", self.line_no, self.char_no)
+    }
+}
+
+/// Strips the `dbt_internal_packages/<package>/macros/` prefix from a macro path
+/// so internal macros render as e.g. `etc/statement.sql` instead of the full
+/// `dbt_internal_packages/dbt-adapters/macros/etc/statement.sql`. Paths that do
+/// not match (user project files) are returned unchanged.
+fn shorten_macro_path(path: &str) -> &str {
+    const INTERNAL: &str = "dbt_internal_packages/";
+    const MACROS: &str = "/macros/";
+    if let Some(start) = path.find(INTERNAL) {
+        if let Some(macros) = path[start..].find(MACROS) {
+            return &path[start + macros + MACROS.len()..];
+        }
+    }
+    path
+}
+
+/// A single macro execution captured by [`JinjaTraceListener`], annotated with
+/// its nesting depth, the call site (where it was invoked from), and the
+/// location where the macro is defined.
+#[derive(Debug)]
+struct JinjaTraceFrame {
+    depth: usize,
+    name: String,
+    call_site: Option<JinjaTraceLocation>,
+    definition: JinjaTraceLocation,
+}
+
+/// Listener that captures a nested trace of macro executions during rendering.
+/// Used to produce a diagnostic dump when a materialization fails.
+#[derive(Debug, Default)]
+pub struct JinjaTraceListener {
+    tree: RefCell<Vec<JinjaTraceFrame>>,
+    depth: Cell<usize>,
+}
+
+impl JinjaTraceListener {
+    /// Creates a new, empty trace listener.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns true if no macro executions have been recorded.
+    pub fn is_empty(&self) -> bool {
+        self.tree.borrow().is_empty()
+    }
+
+    /// Returns the collected macro call tree as human-readable text.
+    pub fn format_trace(&self) -> String {
+        let tree = self.tree.borrow();
+        let mut out = String::from("Jinja macro call stack (most recent call last):\n\n");
+
+        let frames: Vec<_> = tree.iter().collect();
+        let mut i = 0;
+
+        while i < frames.len() {
+            let frame = &frames[i];
+
+            // Collapse only genuine repeats: immediately adjacent frames that
+            // are the same macro (same definition) invoked from the same call
+            // site. Same name alone is not enough — the same macro called from
+            // two different places is two distinct calls, not a repeat.
+            let repeat_count = frames[i..]
+                .iter()
+                .take_while(|f| {
+                    f.depth == frame.depth
+                        && f.definition == frame.definition
+                        && f.call_site == frame.call_site
+                })
+                .count();
+
+            let indent = "  ".repeat(frame.depth);
+            let definition = frame.definition.display();
+
+            if repeat_count > 1 {
+                let _ = writeln!(out, "{indent}{} ×{repeat_count} ({definition})", frame.name);
+            } else {
+                let _ = writeln!(out, "{indent}{} ({definition})", frame.name);
+            }
+
+            if let Some(call_site) = &frame.call_site {
+                let _ = writeln!(out, "{indent}  @ {}", call_site.display());
+            }
+
+            let _ = writeln!(out);
+
+            i += repeat_count;
+        }
+        out
+    }
+}
+
+impl RenderingEventListener for JinjaTraceListener {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "JinjaTraceListener"
+    }
+
+    fn tracks_macro_call_sites(&self) -> bool {
+        true
+    }
+
+    // The call tree is built entirely from macro execution events below; the
+    // remaining rendering signals are not needed here.
+    fn on_macro_start(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+    fn on_macro_stop(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+    fn on_malicious_return(&self, _location: &CodeLocation) {}
+    fn on_function_start(&self) {}
+    fn on_function_end(&self) {}
+
+    fn on_macro_execute_start(
+        &self,
+        name: &str,
+        call_site: Option<(&Path, &Span)>,
+        def_path: &Path,
+        def_span: &Span,
+    ) {
+        self.tree.borrow_mut().push(JinjaTraceFrame {
+            depth: self.depth.get(),
+            name: name.to_string(),
+            call_site: call_site.map(|(path, span)| JinjaTraceLocation::new(path, span)),
+            definition: JinjaTraceLocation::new(def_path, def_span),
+        });
+        self.depth.set(self.depth.get() + 1);
+    }
+
+    fn on_macro_execute_end(&self, _name: &str) {
+        self.depth.set(self.depth.get().saturating_sub(1));
     }
 }
 
@@ -619,6 +829,8 @@ impl RenderingEventListener for DefaultRenderingEventListener {
             macro_start_stack_last.pop();
         }
     }
+
+    fn on_jinja_layout_event(&self, _kind: JinjaLayoutEventKind, _source_span: &Span) {}
 
     fn on_raw_emit(&self, raw: &str, source_span: &Span) {
         push_raw_source_spans(

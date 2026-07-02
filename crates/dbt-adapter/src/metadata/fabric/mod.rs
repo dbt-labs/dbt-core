@@ -11,6 +11,7 @@ use crate::{AdapterEngine, AdapterType};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterError, Cancellable};
 use dbt_common::{AdapterResult, AsyncAdapterResult};
@@ -20,7 +21,6 @@ use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use minijinja::State;
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};

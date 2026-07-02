@@ -33,13 +33,12 @@ impl From<Vec<String>> for WhereFilterIntersection {
     }
 }
 
-#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtOwner {
     pub email: Option<StringOrArrayOfStrings>,
-    #[serialize_always]
     pub name: Option<String>,
+    #[serde(flatten)]
     pub __other__: BTreeMap<String, YmlValue>,
 }
 

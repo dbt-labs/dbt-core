@@ -1,21 +1,24 @@
+use crate::AdapterEngine;
+use crate::adapter::adapter_impl::*;
 use crate::errors::{AdapterResult, AsyncAdapterResult};
 use crate::metadata::*;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
-
 use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use minijinja::State;
-
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
-pub struct SalesforceMetadataAdapter;
+pub struct SalesforceMetadataAdapter {
+    // adapter: AdapterImpl,
+}
 
 impl SalesforceMetadataAdapter {
-    pub fn new() -> Self {
-        Self
+    pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
+        let _adapter = AdapterImpl::new(engine, None);
+        Self { /* adapter */ }
     }
 }
 
@@ -45,7 +48,7 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
         _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<UDF>> {
-        let future = async move { Ok(Vec::new()) };
+        let future = std::future::ready(Ok(Default::default()));
         Box::pin(future)
     }
 
@@ -56,7 +59,7 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
         _relations: &[Arc<dyn BaseRelation>],
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
-        let future = async move { Ok(HashMap::new()) };
+        let future = std::future::ready(Ok(Default::default()));
         Box::pin(future)
     }
 
@@ -66,7 +69,7 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
         _relations_pattern: &[RelationPattern],
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
-        let future = async move { Ok(Vec::new()) };
+        let future = std::future::ready(Ok(Default::default()));
         Box::pin(future)
     }
 
@@ -75,7 +78,7 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
         _state: &State<'_, '_>,
         _catalog_schemas: Vec<(String, String, String)>,
     ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
-        Ok(Vec::new())
+        Ok(Default::default())
     }
 
     fn freshness_inner(
@@ -83,7 +86,7 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
         _relations: &[Arc<dyn BaseRelation>],
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        let future = async move { Ok(BTreeMap::new()) };
+        let future = std::future::ready(Ok(Default::default()));
         Box::pin(future)
     }
 
@@ -93,7 +96,7 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
         _db_schemas: &[CatalogAndSchema],
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
-        let future = async move { Ok(BTreeMap::new()) };
+        let future = std::future::ready(Ok(Default::default()));
         Box::pin(future)
     }
 }

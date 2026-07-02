@@ -1,7 +1,8 @@
 pub use crate::proto::v1::public::events::fusion::log::{ShowResult, ShowResultOutputFormat};
-use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
-    TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;
@@ -13,7 +14,7 @@ struct ShowResultJsonPayload<'a> {
     pub title: Cow<'a, str>,
 }
 
-impl ProtoTelemetryEvent for ShowResult {
+impl StaticTelemetryEvent for ShowResult {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -26,7 +27,7 @@ impl ProtoTelemetryEvent for ShowResult {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Self {
             content: "[REDACTED]".to_string(),
             ..self.clone()
@@ -35,6 +36,7 @@ impl ProtoTelemetryEvent for ShowResult {
 }
 
 impl ArrowSerializableTelemetryEvent for ShowResult {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             name: Some(Cow::Borrowed(self.result_type.as_str())),

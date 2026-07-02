@@ -14,6 +14,7 @@ use crate::vm::Vm;
 
 pub(crate) struct Macro {
     pub name: Value,
+    pub package_name: Option<String>,
     pub arg_spec: Vec<Value>,
     // because values need to be 'static, we can't hold a reference to the
     // instructions that declared the macro.  Instead of that we place the
@@ -96,6 +97,23 @@ impl Object for Macro {
         let (instructions, offset) = &state.macros[self.macro_ref_id];
         let vm = Vm::new(state.env());
 
+        // Notify listeners that this macro is about to execute. We report the
+        // qualified `{package}.{macro_name}` name, the call site (where the macro
+        // was invoked from, captured by the vm), and the macro's definition
+        // location (`self.path`/`self.span`).
+        let bare_name = self.name.as_str().unwrap_or_default();
+        let qualified_name = match &self.package_name {
+            Some(package) => format!("{package}.{bare_name}"),
+            None => bare_name.to_string(),
+        };
+        let call_site = state.pending_call_site.clone();
+        let call_site_ref = call_site
+            .as_ref()
+            .map(|(path, span)| (path.as_path(), span));
+        for listener in listeners {
+            listener.on_macro_execute_start(&qualified_name, call_site_ref, &self.path, &self.span);
+        }
+
         // This requires some explanation here.  Because we get the state as &State and
         // not &mut State we are required to create a new state here.  This is unfortunate
         // but makes the calling interface more convenient for the rest of the system.
@@ -113,9 +131,13 @@ impl Object for Macro {
             state,
             arg_values,
             listeners,
-        )?;
+        );
 
-        Ok(rv)
+        for listener in listeners {
+            listener.on_macro_execute_end(&qualified_name);
+        }
+
+        rv
     }
 
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -52,6 +52,9 @@ pub struct CompiledNodeRow {
     pub grain_declared: String,
     /// Grain from uniqueness tests and `unique_key` config (JSON array string).
     pub grain_tested: String,
+    /// Node-level classifier labels (JSON array string): the merge of
+    /// YAML-declared `+classifiers` and propagated model-level labels.
+    pub classifiers: String,
     /// Semantic table role (`fact`, `dimension`, `scd`, …).
     pub table_role: Option<String>,
     /// Microseconds since Unix epoch (UTC) — the `run_started_at` of the dbt
@@ -68,6 +71,7 @@ fn compiled_node_fields() -> Vec<Field> {
         Field::new("grain", DataType::Utf8, false),
         Field::new("grain_declared", DataType::Utf8, false),
         Field::new("grain_tested", DataType::Utf8, false),
+        Field::new("classifiers", DataType::Utf8, false),
         Field::new("table_role", DataType::Utf8, true),
         Field::new(
             "ingested_at",
@@ -223,6 +227,7 @@ mod tests {
             grain: "[]".to_string(),
             grain_declared: "[]".to_string(),
             grain_tested: "[]".to_string(),
+            classifiers: "[]".to_string(),
             table_role: None,
             ingested_at,
         }
@@ -401,6 +406,7 @@ mod tests {
             grain: r#"["order_id"]"#.to_string(),
             grain_declared: r#"["order_id"]"#.to_string(),
             grain_tested: r#"[]"#.to_string(),
+            classifiers: r#"[]"#.to_string(),
             table_role: Some("fact".to_string()),
             ingested_at: 1_700_000_000_000_000,
         }];

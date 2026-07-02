@@ -12,7 +12,7 @@ pub struct OnboardingScreenShown {
     )]
     pub screen: i32,
 }
-impl crate::StaticName for OnboardingScreenShown {
+impl ::dbt_tracing::StaticName for OnboardingScreenShown {
     const FULL_NAME: &'static str = "v1.public.events.fusion.onboarding.OnboardingScreenShown";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.onboarding.OnboardingScreenShown";
 }

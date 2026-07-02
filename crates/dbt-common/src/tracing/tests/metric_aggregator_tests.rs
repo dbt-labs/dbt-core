@@ -1,13 +1,14 @@
 use super::super::{
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     emit::{create_root_info_span, emit_warn_event},
-    init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
     metrics::get_metric,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
-    tests::mocks::{MockDynSpanEvent, TestLayer, test_data_layer},
 };
-use dbt_telemetry::{LogMessage, TelemetryOutputFlags};
+use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
+use dbt_telemetry::LogMessage;
+use dbt_tracing::TelemetryOutputFlags;
+use dbt_tracing::test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer};
 
 #[test]
 fn warning_logs_increment_warning_metric() {

@@ -656,7 +656,16 @@ pub fn render_extract_ref_or_source_expr<T: ResolvableConfig<T>>(
     let _ = expr.eval(resolve_model_context, &[])?;
     // Remove from Mutex and return last item
     let mut sql_resources = sql_resources.lock().unwrap();
-    let sql_resource = sql_resources.pop().unwrap();
+    let sql_resource = sql_resources.pop().ok_or_else(|| {
+        fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => span.clone(),
+            "Exposure depends_on entry `{}` does not call ref(), source(), or metric(). \
+             Each depends_on entry in your exposure YAML must use one of those forms, \
+             e.g. `ref('my_model')` or `source('my_schema', 'my_table')`.",
+            ref_str,
+        )
+    })?;
     Ok(sql_resource)
 }
 

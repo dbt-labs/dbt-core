@@ -1,9 +1,9 @@
 use crate::AdapterResponse;
 use crate::adapter::adapter_impl::AdapterImpl;
 
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
-use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
 use serde_json::json;
 

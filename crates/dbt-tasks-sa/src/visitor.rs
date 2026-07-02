@@ -18,7 +18,7 @@ use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_trace_log_message};
 use dbt_common::{ErrorCode, FsError, fs_err, status_reporter::report_completed};
 use dbt_common::{FsResult, io_args::IoArgs, unexpected_err};
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::{InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::task::TP;
 use dbt_tasks_core::task::Task;
@@ -223,6 +223,7 @@ impl SkipSet {
         task_idx: NodeIndex,
         dependents: &[HashSet<NodeIndex>],
         schedule: &DiGraph<Arc<dyn Task>, ()>,
+        reuse_downstream_tests: bool,
     ) -> (SkippedNodes, SkippedNodes) {
         match result {
             Ok(node_status) => match node_status {
@@ -235,11 +236,15 @@ impl SkipSet {
                 | NodeStatus::ReusedStillFreshNoChanges(_)
                 | NodeStatus::ReusedCloned(_) => (
                     Vec::new(),
-                    // TODO: Unfortunately, we have diverging logic for data tests vs all other node types,
-                    // when it comes to upstream being reused. All other node tasks will run and just
-                    // report themselves as reused, but for tests we have historically propagated skips
-                    // in the visitor. This should be unified eventually
-                    self.propagate_reuse_to_downstream_tests(task_idx, dependents, schedule),
+                    if reuse_downstream_tests {
+                        // TODO: Unfortunately, we have diverging logic for data tests vs all other node types,
+                        // when it comes to upstream being reused. All other node tasks will run and just
+                        // report themselves as reused, but for tests we have historically propagated skips
+                        // in the visitor. This should be unified eventually.
+                        self.propagate_reuse_to_downstream_tests(task_idx, dependents, schedule)
+                    } else {
+                        Vec::new()
+                    },
                 ),
                 NodeStatus::Succeeded
                 | NodeStatus::SucceededWithWarning
@@ -317,15 +322,21 @@ fn show_skip_summary(io: &IoArgs, skipped_nodes: &[Arc<dyn InternalDbtNodeAttrib
     }
 
     for node in skipped_nodes {
-        let node_common = node.common();
-        let unique_id = &node_common.unique_id;
+        let unique_id = &node.common().unique_id;
 
         // Show completed message for non-test nodes
         if !unique_id.starts_with("test.") && !unique_id.starts_with("unit_test.") {
             report_completed(
                 &NodeStatus::SkippedUpstreamFailed,
                 None,
-                &node_common.original_file_path.display().to_string(),
+                &node
+                    .get_node_path(
+                        NodePathKind::Definition,
+                        io.in_dir.as_path(),
+                        io.out_dir.as_path(),
+                    )
+                    .display()
+                    .to_string(),
                 false,
                 io.status_reporter.as_ref(),
             );
@@ -402,8 +413,13 @@ pub async fn visit_sequential(
             }
 
             let is_error = matches!(result, Err(_) | Ok(NodeStatus::Errored));
-            let (failed_nodes, reused_nodes) =
-                skip_set.handle_task_result(result, node_idx, &dependents, schedule);
+            let (failed_nodes, reused_nodes) = skip_set.handle_task_result(
+                result,
+                node_idx,
+                &dependents,
+                schedule,
+                should_reuse_downstream_tests(ctx),
+            );
             report_skipped_node_evaluations(ctx, node.as_ref(), &failed_nodes);
             record_skipped_stats(ctx, &failed_nodes, &SkipReason::FailedPhase);
             record_skipped_stats(ctx, &reused_nodes, &SkipReason::Reused);
@@ -605,8 +621,13 @@ pub async fn visit_parallel(
             }
 
             let is_error = matches!(result, Err(_) | Ok(NodeStatus::Errored));
-            let (failed_nodes, reused_nodes) =
-                skip_set.handle_task_result(result, node_idx, &dependents, schedule);
+            let (failed_nodes, reused_nodes) = skip_set.handle_task_result(
+                result,
+                node_idx,
+                &dependents,
+                schedule,
+                should_reuse_downstream_tests(ctx),
+            );
             if let Some(node) = maybe_node {
                 report_skipped_node_evaluations(ctx, node.as_ref(), &failed_nodes);
             }
@@ -670,6 +691,18 @@ pub async fn visit_parallel(
     Ok(())
 }
 
+fn should_reuse_downstream_tests(ctx: &TaskRunnerCtx) -> bool {
+    let state_data_tests_enabled = ctx
+        .inner
+        .run_cache_ctx
+        .run_cache_service_config
+        .as_ref()
+        .is_some_and(|config| config.enable_data_tests);
+
+    // When dbt State data-test reuse is enabled, let each test consult its own cached result.
+    !(ctx.inner.run_cache_ctx.run_cache_service_requested && state_data_tests_enabled)
+}
+
 fn get_execution_phase_from_task(node: &dyn Task) -> ExecutionPhase {
     match node.task_phase() {
         Some(TP::Render) => ExecutionPhase::Render,
@@ -711,15 +744,147 @@ fn report_skipped_node_evaluations(
     skipped_nodes: &[Arc<dyn InternalDbtNodeAttributes>],
 ) {
     if let Some(reporter) = &ctx.inner.arg.io.status_reporter {
+        let upstream_target = node.dbt_nodes().into_iter().next().map(|upstream_node| {
+            let common = upstream_node.common();
+            (common.package_name.clone(), common.name.clone(), true)
+        });
         for skipped_node in skipped_nodes.iter() {
             reporter.collect_node_evaluation(
                 &skipped_node.common().unique_id,
                 get_execution_phase_from_task(node),
                 NodeOutcome::Skipped,
-                None,
+                upstream_target.clone(),
                 StaticAnalysisKind::Off,
                 (None, Span::default()),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::nodes::{DbtModel, DbtTest};
+    use std::future::Future;
+    use std::pin::Pin;
+
+    struct TestTask {
+        resource_type: NodeType,
+        task_type: &'static str,
+        work_node_id: String,
+        nodes: Vec<Arc<dyn InternalDbtNodeAttributes>>,
+    }
+
+    impl Task for TestTask {
+        fn run_task<'a>(
+            &'a self,
+            _ctx: &'a mut TaskRunnerCtx,
+        ) -> Pin<Box<dyn Future<Output = FsResult<NodeStatus>> + Send + 'a>> {
+            Box::pin(async { Ok(NodeStatus::Succeeded) })
+        }
+
+        fn resource_type(&self) -> NodeType {
+            self.resource_type
+        }
+
+        fn task_type(&self) -> &str {
+            self.task_type
+        }
+
+        fn work_node_id(&self) -> &str {
+            &self.work_node_id
+        }
+
+        fn dbt_nodes(&self) -> Vec<Arc<dyn InternalDbtNodeAttributes>> {
+            self.nodes.clone()
+        }
+
+        fn task_phase(&self) -> Option<TP> {
+            Some(TP::Run)
+        }
+    }
+
+    fn model_node() -> Arc<dyn InternalDbtNodeAttributes> {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.test.orders".to_string();
+        Arc::new(model)
+    }
+
+    fn test_node() -> Arc<dyn InternalDbtNodeAttributes> {
+        let mut test = DbtTest::default();
+        test.__common_attr__.unique_id = "test.test.accepted_values_orders".to_string();
+        Arc::new(test)
+    }
+
+    fn model_with_downstream_test_schedule() -> (
+        DiGraph<Arc<dyn Task>, ()>,
+        Vec<HashSet<NodeIndex>>,
+        NodeIndex,
+        NodeIndex,
+    ) {
+        let mut schedule = DiGraph::new();
+        let model_task: Arc<dyn Task> = Arc::new(TestTask {
+            resource_type: NodeType::Model,
+            task_type: "run",
+            work_node_id: "model.test.orders".to_string(),
+            nodes: vec![model_node()],
+        });
+        let test_task: Arc<dyn Task> = Arc::new(TestTask {
+            resource_type: NodeType::Test,
+            task_type: "run",
+            work_node_id: "test.test.accepted_values_orders".to_string(),
+            nodes: vec![test_node()],
+        });
+        let model_idx = schedule.add_node(model_task);
+        let test_idx = schedule.add_node(test_task);
+        schedule.add_edge(model_idx, test_idx, ());
+
+        let mut dependents = vec![HashSet::new(); schedule.node_count()];
+        for edge in schedule.edge_references() {
+            dependents[edge.source().index()].insert(edge.target());
+        }
+
+        (schedule, dependents, model_idx, test_idx)
+    }
+
+    #[test]
+    fn reused_model_does_not_preempt_downstream_tests_when_state_data_tests_run() {
+        let (schedule, dependents, model_idx, test_idx) = model_with_downstream_test_schedule();
+        let mut skip_set = SkipSet::new();
+
+        let (_failed_nodes, reused_nodes) = skip_set.handle_task_result(
+            Ok(NodeStatus::ReusedNoChanges(
+                "No new changes on any upstreams".to_string(),
+            )),
+            model_idx,
+            &dependents,
+            &schedule,
+            false,
+        );
+
+        assert!(reused_nodes.is_empty());
+        assert!(!skip_set.skip.contains_key(&test_idx));
+    }
+
+    #[test]
+    fn reused_model_still_preempts_downstream_tests_in_legacy_mode() {
+        let (schedule, dependents, model_idx, test_idx) = model_with_downstream_test_schedule();
+        let mut skip_set = SkipSet::new();
+
+        let (_failed_nodes, reused_nodes) = skip_set.handle_task_result(
+            Ok(NodeStatus::ReusedNoChanges(
+                "No new changes on any upstreams".to_string(),
+            )),
+            model_idx,
+            &dependents,
+            &schedule,
+            true,
+        );
+
+        assert_eq!(reused_nodes.len(), 1);
+        assert!(matches!(
+            skip_set.skip.get(&test_idx),
+            Some(SkipReason::Reused)
+        ));
     }
 }

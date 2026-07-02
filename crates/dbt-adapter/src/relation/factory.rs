@@ -16,7 +16,7 @@ pub fn create_static_relation(
 ) -> Option<Value> {
     use AdapterType::*;
     let result = match adapter_type {
-        Snowflake | Databricks | Spark | Fabric | DuckDB | Exasol | Postgres | Redshift
+        Snowflake | Databricks | Spark | Fabric | DuckDB | Fdcs | Exasol | Postgres | Redshift
         | Salesforce | Bigquery | ClickHouse => {
             let relation_type = RelationStatic {
                 adapter_type,

@@ -5,16 +5,36 @@ versionHeaderPath: ""
 changelogPath: CHANGELOG.md
 versionExt: md
 envPrefix: "CHANGIE_"
-versionFormat: '## {{.Version}} - {{.Time.Format "January 02, 2006"}}'
+versionFormat: |-
+  ## {{.Version}}
+
+  Released {{.Time.Format "January 02, 2006"}}
 kindFormat: "### {{.Kind}}"
 
 custom:
   - key: issue
-    label: dbt-fusion issue number (leave empty if not applicable)
+    label: "[Optional] dbt-core issue number (separated by a single space if multiple)"
     type: string
+    required: false
   - key: author
-    label: Your GitHub handle (without the @ symbol)
+    label: "[Optional] Author's GitHub handle without the @ symbol (separated by a single space if multiple)"
     type: string
+    required: false
+
+# Change format: project prefix + optional issue links. Issue links are only
+# rendered for dbt-core changes (resolving to the dbt-core repo) and only when
+# an issue number is present.
+changeFormat: |-
+  {{- $IssueList := list }}
+  {{- if eq $.Custom.project "dbt-core" }}
+  {{- range $issueNbr := splitList " " $.Custom.issue }}
+    {{- if $issueNbr }}
+      {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
+      {{- $IssueList = append $IssueList $changeLink  }}
+    {{- end -}}
+  {{- end -}}
+  {{- end -}}
+  - [{{.Custom.project}}] {{.Body}}{{if $IssueList}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}}){{end}}
 
 kinds:
   - label: Breaking Changes
@@ -24,7 +44,54 @@ kinds:
   - label: Dependencies
   - label: Security
 
-# these changelogs are always for dbt-fusion
+# these changelogs are always for dbt-core
 post:
   - key: project
-    value: dbt-fusion
+    value: dbt-core
+
+newlines:
+  afterChangelogHeader: 1
+  afterKind: 1
+  afterChangelogVersion: 1
+  beforeKind: 1
+  endOfVersion: 1
+
+# Contributors section (mirrors fs). Set FUSION_TEAM (space-separated handles)
+# to exclude maintainers; otherwise all non-bot authors are listed. Issue links
+# resolve to the dbt-core repo, matching changeFormat above.
+footerFormat: |
+  {{- $contributorDict := dict }}
+  {{- $fusion_team_env := default "" .Env.FUSION_TEAM }}
+  {{- $fusion_team := splitList " " $fusion_team_env }}
+  {{- $maintainers := list "dependabot[bot]"}}
+  {{- range $team_member := $fusion_team }}
+    {{- $maintainers = append $maintainers (lower $team_member) }}
+  {{- end }}
+  {{- range $change := .Changes }}
+    {{- $authorList := splitList " " $change.Custom.author }}
+    {{- range $author := $authorList }}
+      {{- if and $author (not (has (lower $author) $maintainers)) }}
+        {{- $IssueList := list }}
+        {{- if eq $change.Custom.project "dbt-core" }}
+        {{- range $issueNbr := splitList " " $change.Custom.issue }}
+          {{- if $issueNbr }}
+            {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
+            {{- $IssueList = append $IssueList $changeLink }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- if hasKey $contributorDict $author }}
+          {{- $contributorDict = set $contributorDict $author (concat (get $contributorDict $author) $IssueList) }}
+        {{- else }}
+          {{- $contributorDict = set $contributorDict $author $IssueList }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- if $contributorDict}}
+  ### Contributors
+  {{- range $k := (keys $contributorDict | sortAlpha) }}
+  {{- $v := get $contributorDict $k }}
+  - [@{{$k}}](https://github.com/{{$k}}){{if $v}} ({{ range $index, $element := $v }}{{if $index}}, {{end}}{{$element}}{{end}}){{end}}
+  {{- end }}
+  {{- end }}

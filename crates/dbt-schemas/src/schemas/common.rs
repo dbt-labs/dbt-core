@@ -2,6 +2,8 @@
 
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashMap};
+use std::io::{BufReader, Read};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -194,6 +196,7 @@ impl ModelFreshnessRules {
         let period = self.period.as_ref().expect("period is required");
         count
             * match period {
+                FreshnessPeriod::second => 1,
                 FreshnessPeriod::minute => 60,
                 FreshnessPeriod::hour => 60 * 60,
                 FreshnessPeriod::day => 60 * 60 * 24,
@@ -227,6 +230,11 @@ where
 fn model_freshness_rules_from_duration(duration: &str) -> Result<ModelFreshnessRules, String> {
     let parsed = humantime::parse_duration(duration)
         .map_err(|e| format!("invalid lag_tolerance duration {duration:?}: {e}"))?;
+    if parsed.subsec_nanos() != 0 {
+        return Err(format!(
+            "invalid lag_tolerance duration {duration:?}: expected a whole number of seconds, minutes, hours, or days"
+        ));
+    }
     let seconds = parsed.as_secs();
 
     let (count, period) = if seconds == 0 {
@@ -238,9 +246,7 @@ fn model_freshness_rules_from_duration(duration: &str) -> Result<ModelFreshnessR
     } else if seconds % 60 == 0 {
         (seconds / 60, FreshnessPeriod::minute)
     } else {
-        return Err(format!(
-            "invalid lag_tolerance duration {duration:?}: expected a whole number of minutes, hours, or days"
-        ));
+        (seconds, FreshnessPeriod::second)
     };
 
     let count = i64::try_from(count).map_err(|_| {
@@ -257,6 +263,7 @@ fn model_freshness_rules_from_duration(duration: &str) -> Result<ModelFreshnessR
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum FreshnessPeriod {
+    second,
     minute,
     hour,
     day,
@@ -266,6 +273,7 @@ impl FromStr for FreshnessPeriod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "second" => Ok(FreshnessPeriod::second),
             "minute" => Ok(FreshnessPeriod::minute),
             "hour" => Ok(FreshnessPeriod::hour),
             "day" => Ok(FreshnessPeriod::day),
@@ -276,6 +284,7 @@ impl FromStr for FreshnessPeriod {
 impl std::fmt::Display for FreshnessPeriod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let period_str = match self {
+            FreshnessPeriod::second => "second",
             FreshnessPeriod::minute => "minute",
             FreshnessPeriod::hour => "hour",
             FreshnessPeriod::day => "day",
@@ -981,25 +990,108 @@ impl DbtChecksum {
             checksum: hex::encode(checksum),
         })
     }
-    pub fn seed_file_hash(s: &[u8], path: &str) -> Self {
-        const MAXIMUM_SEED_SIZE: usize = 1024 * 1024; // 1MB
 
-        if s.len() > MAXIMUM_SEED_SIZE {
-            // For large seeds, use path-based checksum like dbt-core
-            Self::Object(DbtChecksumObject {
+    pub fn seed_content_checksum<R: Read>(reader: R) -> std::io::Result<Self> {
+        const SEED_HASH_CHUNK_SIZE: u64 = 1024 * 1024; // 1 MiB
+        Self::seed_content_checksum_chunked(reader, SEED_HASH_CHUNK_SIZE)
+    }
+
+    pub(crate) fn seed_content_checksum_chunked<R: Read>(
+        mut reader: R,
+        chunk_size: u64,
+    ) -> std::io::Result<Self> {
+        let mut hasher = Sha256::new();
+        let mut prev_cr = false; // carry: `\r` seen at the end of the previous chunk
+
+        let mut read_chunk = || -> std::io::Result<Vec<u8>> {
+            let mut raw = Vec::new();
+            reader.by_ref().take(chunk_size).read_to_end(&mut raw)?; // handle.read(chunk_size)
+            let mut out = Vec::with_capacity(raw.len());
+            for &b in &raw {
+                match b {
+                    b'\n' if prev_cr => prev_cr = false, // drop `\n` of a split `\r\n`
+                    b'\r' => {
+                        // `\r` -> `\n`
+                        prev_cr = true;
+                        out.push(b'\n');
+                    }
+                    b => {
+                        prev_cr = false;
+                        out.push(b);
+                    }
+                }
+            }
+            Ok(out)
+        };
+
+        let mut chunk = read_chunk()?.trim_ascii_start().to_vec();
+
+        while !chunk.is_empty() {
+            let next = read_chunk()?;
+            if next.is_empty() {
+                chunk = chunk.trim_ascii_end().to_vec();
+            }
+            hasher.update(&chunk);
+            chunk = next;
+        }
+
+        Ok(Self::Object(DbtChecksumObject {
+            name: "sha256".to_string(),
+            checksum: hex::encode(hasher.finalize()),
+        }))
+    }
+
+    pub fn seed_content_checksum_legacy(s: &[u8]) -> Self {
+        let mut hasher = Sha256::new();
+        let utf8_string = String::from_utf8_lossy(s);
+        hasher.update(utf8_string.trim().as_bytes());
+        Self::Object(DbtChecksumObject {
+            name: "sha256".to_string(),
+            checksum: hex::encode(hasher.finalize()),
+        })
+    }
+
+    pub fn seed_file_checksum(
+        file_path: &Path,
+        original_file_path: &str,
+        maximum_seed_size_mib: u64,
+    ) -> FsResult<Self> {
+        // Configured value is in MiB -> convert to bytes. `None` => 1 MiB default,
+        // `Some(0)` => no limit.
+        const BYTES_PER_MIB: u64 = 1024 * 1024;
+        let maximum_seed_size = maximum_seed_size_mib.saturating_mul(BYTES_PER_MIB);
+
+        let size = std::fs::metadata(file_path)
+            .map_err(|e| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "Failed to stat seed file '{}' while computing checksum: {}",
+                    file_path.display(),
+                    e
+                )
+            })?
+            .len();
+        if maximum_seed_size != 0 && size > maximum_seed_size {
+            Ok(Self::Object(DbtChecksumObject {
                 name: "path".to_string(),
-                checksum: path.to_string(),
-            })
+                checksum: original_file_path.to_string(),
+            }))
         } else {
-            // For normal seeds, hash the content
-            let mut hasher = Sha256::new();
-            let utf8_string = String::from_utf8_lossy(s);
-            let trimmed_string = utf8_string.trim();
-            hasher.update(trimmed_string.as_bytes());
-            let checksum = hasher.finalize();
-            Self::Object(DbtChecksumObject {
-                name: "sha256".to_string(),
-                checksum: hex::encode(checksum),
+            let file = std::fs::File::open(file_path).map_err(|e| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "Failed to open seed file '{}' for content hashing: {}",
+                    file_path.display(),
+                    e
+                )
+            })?;
+            Self::seed_content_checksum(BufReader::new(file)).map_err(|e| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "Failed to hash seed file '{}' contents: {}",
+                    file_path.display(),
+                    e
+                )
             })
         }
     }
@@ -1463,11 +1555,11 @@ pub fn merge_meta(
 }
 
 /// Merge two tag lists, deduplicating and sorting the result.
-pub fn merge_tags(
-    base_tags: Option<Vec<String>>,
-    update_tags: Option<Vec<String>>,
+pub fn merge_vec(
+    base_vec: Option<Vec<String>>,
+    update_vec: Option<Vec<String>>,
 ) -> Option<Vec<String>> {
-    match (base_tags, update_tags) {
+    match (base_vec, update_vec) {
         // If both are None, result is None
         (None, None) => None,
         // If either has a value (even empty), we preserve that semantic meaning
@@ -1773,6 +1865,126 @@ mod tests {
 
     use super::*;
     use minijinja::value::Value as MinijinjaValue;
+    use std::io::Cursor;
+
+    // ---- Seed file hashing (configurable MAXIMUM_SEED_SIZE_MIB, dbt-core PR 13033) ----
+
+    fn checksum_parts(checksum: &DbtChecksum) -> (&str, &str) {
+        match checksum {
+            DbtChecksum::Object(o) => (o.name.as_str(), o.checksum.as_str()),
+            DbtChecksum::String(_) => panic!("expected object checksum"),
+        }
+    }
+
+    #[test]
+    fn test_seed_content_checksum_normalizes_crlf() {
+        // New text-mode hashing must treat CRLF and LF identically (Windows == Linux).
+        let crlf =
+            DbtChecksum::seed_content_checksum(Cursor::new(b"a,b\r\nc,d\r\n".to_vec())).unwrap();
+        let lf = DbtChecksum::seed_content_checksum(Cursor::new(b"a,b\nc,d\n".to_vec())).unwrap();
+        assert_eq!(crlf, lf);
+    }
+
+    #[test]
+    fn test_seed_content_checksum_legacy_preserves_crlf() {
+        // Legacy hashing preserves interior CRLF, so CRLF != LF (old Fusion behavior).
+        let crlf = DbtChecksum::seed_content_checksum_legacy(b"a,b\r\nc,d\r\n");
+        let lf = DbtChecksum::seed_content_checksum_legacy(b"a,b\nc,d\n");
+        assert_ne!(crlf, lf);
+    }
+
+    #[test]
+    fn test_seed_content_checksum_lf_matches_legacy() {
+        // Backward-compat: on LF-only content (Linux/macOS) the new text-mode hash
+        // must equal the legacy hash, so existing seed checksums stay stable.
+        let content = b"id,name\n1,Ada\n2,Grace\n";
+        let new = DbtChecksum::seed_content_checksum(Cursor::new(content.to_vec())).unwrap();
+        let legacy = DbtChecksum::seed_content_checksum_legacy(content);
+        assert_eq!(new, legacy);
+    }
+
+    #[test]
+    fn test_seed_content_checksum_trims_outer_whitespace() {
+        let padded =
+            DbtChecksum::seed_content_checksum(Cursor::new(b"  \n a,b\nc,d \n  ".to_vec()))
+                .unwrap();
+        let bare = DbtChecksum::seed_content_checksum(Cursor::new(b"a,b\nc,d".to_vec())).unwrap();
+        assert_eq!(padded, bare);
+    }
+
+    #[test]
+    fn test_seed_content_checksum_chunk_boundary_crlf() {
+        // A CRLF straddling a chunk boundary must still collapse to a single LF.
+        let data = b"ab\r\ncd\r\nef".to_vec();
+        let small =
+            DbtChecksum::seed_content_checksum_chunked(Cursor::new(data.clone()), 4).unwrap();
+        let big = DbtChecksum::seed_content_checksum_chunked(Cursor::new(data), 64).unwrap();
+        let lf = DbtChecksum::seed_content_checksum(Cursor::new(b"ab\ncd\nef".to_vec())).unwrap();
+        assert_eq!(small, big);
+        assert_eq!(small, lf);
+    }
+
+    #[test]
+    fn test_seed_content_checksum_incremental_large() {
+        // Content larger than a chunk hashes identically regardless of chunk size.
+        let mut data = Vec::new();
+        for i in 0..5000 {
+            data.extend_from_slice(format!("{i},row{i}\r\n").as_bytes());
+        }
+        let chunked =
+            DbtChecksum::seed_content_checksum_chunked(Cursor::new(data.clone()), 7).unwrap();
+        let whole = DbtChecksum::seed_content_checksum_chunked(Cursor::new(data), 1 << 20).unwrap();
+        assert_eq!(chunked, whole);
+    }
+
+    fn write_temp_seed(bytes: &[u8]) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("dbt_seed_hash_{}_{}.csv", std::process::id(), n));
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    #[test]
+    fn test_seed_file_checksum_under_limit_hashes_content() {
+        let path = write_temp_seed(b"id,name\n1,Ada\n");
+        let cs = DbtChecksum::seed_file_checksum(&path, "seeds/x.csv", 1).unwrap();
+        assert_eq!(checksum_parts(&cs).0, "sha256");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_seed_file_checksum_over_limit_uses_path() {
+        // File larger than the 1 MiB limit -> path-based checksum.
+        let big = vec![b'a'; 2 * 1024 * 1024];
+        let path = write_temp_seed(&big);
+        let cs = DbtChecksum::seed_file_checksum(&path, "seeds/x.csv", 1).unwrap();
+        let (name, checksum) = checksum_parts(&cs);
+        assert_eq!(name, "path");
+        assert_eq!(checksum, "seeds/x.csv");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_seed_file_checksum_zero_disables_limit() {
+        let path = write_temp_seed(b"id,name\n1,Ada\n2,Grace\n");
+        // limit 0 means "no limit": content is hashed even though the file is large.
+        let cs = DbtChecksum::seed_file_checksum(&path, "seeds/x.csv", 0).unwrap();
+        assert_eq!(checksum_parts(&cs).0, "sha256");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_seed_file_checksum_matches_content_checksum() {
+        let bytes = b"id,name\r\n1,Ada\r\n";
+        let path = write_temp_seed(bytes);
+        let file_cs = DbtChecksum::seed_file_checksum(&path, "seeds/x.csv", 0).unwrap();
+        let reader_cs = DbtChecksum::seed_content_checksum(Cursor::new(bytes.to_vec())).unwrap();
+        assert_eq!(file_cs, reader_cs);
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn test_conform_normalized_snapshot_strips_spaced_snapshot_blocks() {
@@ -2300,6 +2512,40 @@ period: hour
             msg.contains("count: None") && msg.contains("period: Some(hour)"),
             "expected diagnostic to echo the offending values; got: {msg}"
         );
+    }
+
+    #[test]
+    fn test_merge_classifiers_unions_and_deduplicates() {
+        let base = Some(vec!["finance".to_string(), "pii".to_string()]);
+        let update = Some(vec!["pii".to_string(), "gdpr".to_string()]);
+        let result = merge_vec(base, update);
+        assert_eq!(
+            result,
+            Some(vec![
+                "finance".to_string(),
+                "gdpr".to_string(),
+                "pii".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_merge_classifiers_none_child_inherits_parent() {
+        let base = Some(vec!["pii".to_string()]);
+        let result = merge_vec(base, None);
+        assert_eq!(result, Some(vec!["pii".to_string()]));
+    }
+
+    #[test]
+    fn test_merge_classifiers_none_parent_uses_child() {
+        let update = Some(vec!["finance".to_string()]);
+        let result = merge_vec(None, update);
+        assert_eq!(result, Some(vec!["finance".to_string()]));
+    }
+
+    #[test]
+    fn test_merge_classifiers_both_none_is_none() {
+        assert_eq!(merge_vec(None, None), None);
     }
 
     #[test]

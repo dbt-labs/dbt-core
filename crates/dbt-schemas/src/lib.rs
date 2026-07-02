@@ -18,8 +18,9 @@ pub mod schemas {
     pub use dbt_catalogs::{
         AdapterPropsView, CatalogSpecView, CatalogType, DatabricksUnityPropsView, DbtCatalogsView,
         FileFormat, SerializationPolicy, SnowflakeBuiltInPropsView, SnowflakeRestPropsView,
-        TableFormat, TargetFileSize, WriteIntegrationView, validate_catalogs,
+        TargetFileSize, WriteIntegrationView, validate_catalogs,
     };
+    pub use dbt_catalogs_v2::TableFormat;
     pub mod macros;
     pub mod packages;
     mod prev_state;
@@ -138,7 +139,10 @@ pub mod schemas {
         pub use configs::analysis_config::{
             AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,
         };
-        pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
+        pub use configs::common::{
+            WarehouseSpecificNodeConfig, same_warehouse_config,
+            same_warehouse_config_with_unrendered,
+        };
         pub use configs::config_keys::ConfigKeys;
         pub use configs::data_test_config::{
             DataTestConfig, ProjectDataTestConfig, ResolvedDataTestConfig,
@@ -152,7 +156,9 @@ pub mod schemas {
         pub use configs::metric_config::{
             MetricConfig, ProjectMetricConfigs, ResolvedMetricConfig,
         };
-        pub use configs::model_config::{ModelConfig, ProjectModelConfig, ResolvedModelConfig};
+        pub use configs::model_config::{
+            LatestVersionPointer, ModelConfig, ProjectModelConfig, ResolvedModelConfig,
+        };
         pub use configs::saved_query_config::{
             ExportConfigExportAs, ResolvedSavedQueryConfig, SavedQueryCache, SavedQueryConfig,
         };
@@ -192,6 +198,7 @@ pub mod schemas {
         pub use data_test_properties::DataTestProperties;
         pub use exposure_properties::ExposureProperties;
         pub use function_properties::{
+            FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL,
             FunctionArgument, FunctionKind, FunctionOverload, FunctionProperties,
             FunctionReturnType, Volatility,
         };

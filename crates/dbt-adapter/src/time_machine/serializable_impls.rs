@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::relations::base::TableFormat;
 
 use crate::relation::{RelationObject, do_create_relation};
 
@@ -257,7 +258,14 @@ impl TimeMachineSerializable for crate::catalog_relation::CatalogRelation {
             catalog_name: ext.opt_str("catalog_name"),
             integration_name: ext.opt_str("integration_name"),
             catalog_type: ext.str_or("catalog_type", ""),
-            table_format: ext.str_or("table_format", ""),
+            table_format: if ext
+                .str_or("table_format", "")
+                .eq_ignore_ascii_case("iceberg")
+            {
+                TableFormat::Iceberg
+            } else {
+                TableFormat::Default
+            },
             adapter_properties,
             is_transient: ext.opt_bool("is_transient"),
             external_volume: ext.opt_str("external_volume"),
@@ -358,7 +366,7 @@ mod tests {
             catalog_name: Some("my_catalog".to_string()),
             integration_name: Some("my_integration".to_string()),
             catalog_type: "BUILT_IN".to_string(),
-            table_format: "ICEBERG".to_string(),
+            table_format: TableFormat::Iceberg,
             adapter_properties: BTreeMap::from([("key1".to_string(), "value1".to_string())]),
             is_transient: Some(false),
             external_volume: Some("my_volume".to_string()),
@@ -368,7 +376,7 @@ mod tests {
 
         let json = original.to_time_machine_json();
         assert_eq!(json["catalog_name"], "my_catalog");
-        assert_eq!(json["table_format"], "ICEBERG");
+        assert_eq!(json["table_format"], "iceberg");
 
         let value = crate::catalog_relation::CatalogRelation::from_time_machine_json(&json, &ctx())
             .unwrap();

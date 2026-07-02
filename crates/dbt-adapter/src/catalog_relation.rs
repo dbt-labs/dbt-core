@@ -2,6 +2,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::dbt_catalogs::CatalogType;
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
+use dbt_schemas::schemas::relations::base::TableFormat;
 
 use dbt_yaml::{Mapping as YmlMapping, Span, Value as YmlValue};
 use minijinja::{
@@ -18,17 +19,42 @@ use crate::load_catalogs;
 
 mod catalog_relation_v2;
 
-/// Keep only ASCII alphanumeric and underscore characters (SQL identifier safety).
-/// Used for DuckDB ATTACH aliases so that the routing database name matches the
-/// attached alias exactly.
-pub(crate) fn sanitize_duckdb_identifier(name: &str) -> String {
-    name.chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .collect()
+/// How DuckDB must write a table for this relation's catalog / table format.
+///
+/// One named state replaces the `supports_stage_create` × `is_iceberg` boolean
+/// matrix the macros used to re-derive. Exposed to Jinja as a string-enum via
+/// the `duckdb_write_strategy` key so materializations branch on a single value
+/// instead of nested booleans.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DuckDbWriteStrategy {
+    /// `CREATE ... AS SELECT` directly (plain DuckDB tables, DuckLake).
+    CreateAsSelect,
+    /// External Iceberg catalogs (any catalog whose `table_format` is iceberg):
+    /// write the target in place — `duckdb__create_table_as` emits an empty
+    /// `CREATE` followed by `INSERT`, and the table materialization skips the
+    /// temp-table + rename dance entirely, since Iceberg REST attachments do
+    /// not support `ALTER ... RENAME`. The iceberg default: empty `CREATE` +
+    /// `INSERT` works whether or not the REST catalog supports staged creates.
+    DirectCreate,
+    /// Iceberg catalog whose user opted in to staged creates with
+    /// `stage_create_tables: true` (the duckdb-iceberg#1017 write-compat ATTACH
+    /// option, duckdb's upstream default): `CREATE ... AS SELECT` directly
+    /// against the target, still skipping the temp-table + rename dance
+    /// (renames remain unsupported over Iceberg REST).
+    DirectCreateAsSelect,
+}
+
+impl DuckDbWriteStrategy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DuckDbWriteStrategy::CreateAsSelect => "create_as_select",
+            DuckDbWriteStrategy::DirectCreate => "direct_create",
+            DuckDbWriteStrategy::DirectCreateAsSelect => "direct_create_as_select",
+        }
+    }
 }
 
 const BIGQUERY_INFO_SCHEMA: &str = "INFO_SCHEMA";
-const BIGQUERY_DEFAULT_TABLE_FORMAT: &str = "default";
 const BIGQUERY_DEFAULT_FILE_FORMAT: &str = "default";
 
 const BIGQUERY_BIGLAKE_METASTORE: &str = "biglake_metastore";
@@ -86,6 +112,9 @@ impl LinkedCatalogProvider {
     }
 }
 
+// FIXME: CatalogRelation is a flat struct that every adapter piles onto. Adapter-specific
+// egress keys (e.g. duckdb_write_strategy, supports_stage_create) should flow out of a
+// per-adapter flat map rather than being baked into shared fields and methods here.
 #[derive(Debug, serde::Serialize)]
 pub struct CatalogRelation {
     pub adapter_type: AdapterType,
@@ -96,7 +125,7 @@ pub struct CatalogRelation {
 
     // type & format
     pub catalog_type: String,
-    pub table_format: String,
+    pub table_format: TableFormat,
 
     // normalized SQL options
     pub adapter_properties: BTreeMap<String, String>,
@@ -222,7 +251,7 @@ impl CatalogRelation {
             catalog_name: None,
             integration_name: None,
             catalog_type: BIGQUERY_INFO_SCHEMA.to_string(),
-            table_format: BIGQUERY_DEFAULT_TABLE_FORMAT.to_string(),
+            table_format: TableFormat::Default,
             adapter_properties: BTreeMap::new(),
             is_transient: None,
             external_volume: None,
@@ -237,7 +266,7 @@ impl CatalogRelation {
             catalog_name: None,
             integration_name: None,
             catalog_type: "duckdb".to_string(),
-            table_format: "default".to_string(),
+            table_format: TableFormat::Default,
             file_format: None,
             external_volume: None,
             base_location: None,
@@ -297,7 +326,7 @@ impl CatalogRelation {
 
         // 4) table_format: default|iceberg (model > YAML)
         // TODO: handle these again now that you know about the default catalogs
-        let mut table_format =
+        let table_format_raw =
             Self::get_model_config_value(model, "table_format", AdapterType::Bigquery)
                 .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
                 .ok_or_else(|| {
@@ -306,7 +335,11 @@ impl CatalogRelation {
                         "table_format missing from catalogs.yml (should be impossible by schema)",
                     )
                 })?;
-        table_format.make_ascii_lowercase();
+        let table_format = if table_format_raw.eq_ignore_ascii_case("iceberg") {
+            TableFormat::Iceberg
+        } else {
+            TableFormat::Default
+        };
 
         // file_format: model > YAML
         let mut file_format =
@@ -464,13 +497,13 @@ impl CatalogRelation {
     }
 
     // https://github.com/databricks/dbt-databricks/blob/ba47ba15fb194e048866f4ce396a7eda71db2596/dbt/adapters/databricks/constants.py
-    fn default_catalog_relation_databricks() -> CatalogRelation {
+    pub fn default_catalog_relation_databricks() -> CatalogRelation {
         CatalogRelation {
             adapter_type: AdapterType::Databricks,
             catalog_name: None,
             integration_name: None,
             catalog_type: DATABRICKS_UNITY_CATALOG.to_string(),
-            table_format: DBX_DEFAULT_TABLE_FORMAT.to_string(),
+            table_format: TableFormat::Default,
             file_format: Some(DELTA_TABLE_FORMAT.to_string()),
             external_volume: None,
             base_location: None,
@@ -547,10 +580,10 @@ impl CatalogRelation {
                 ),
             ));
         }
-        let table_format = if table_format_raw.eq_ignore_ascii_case(DBX_ICEBERG_TABLE_FORMAT) {
-            DBX_ICEBERG_TABLE_FORMAT
+        let table_format = if table_format_raw.eq_ignore_ascii_case("iceberg") {
+            TableFormat::Iceberg
         } else {
-            DBX_DEFAULT_TABLE_FORMAT
+            TableFormat::Default
         };
 
         // 5) file_format: model > YAML > default(delta)
@@ -609,7 +642,7 @@ impl CatalogRelation {
             catalog_name: Some(catalog_name.to_string()),
             integration_name: Some(integration_name),
             catalog_type: catalog_type.to_string(),
-            table_format: table_format.to_string(),
+            table_format,
             file_format: Some(file_format),
             external_volume,
             base_location: None,
@@ -731,7 +764,7 @@ impl CatalogRelation {
             catalog_name: None,
             integration_name: None,
             catalog_type: CatalogType::SnowflakeIcebergRest.as_str().to_string(),
-            table_format: "iceberg".to_string(),
+            table_format: TableFormat::Iceberg,
             external_volume: None,
             base_location: None,
             adapter_properties,
@@ -800,7 +833,7 @@ impl CatalogRelation {
                     adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
                     integration_name: None,
-                    table_format: DEFAULT_TABLE_FORMAT.to_string(),
+                    table_format: TableFormat::Default,
                     catalog_type: SNOWFLAKE_RELATION_STORE.to_string(),
                     external_volume: None,
                     base_location: None,
@@ -841,7 +874,7 @@ impl CatalogRelation {
                     adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
                     integration_name: None,
-                    table_format: DEFAULT_TABLE_FORMAT.to_string(),
+                    table_format: TableFormat::Default,
                     catalog_type: SNOWFLAKE_RELATION_STORE.to_string(),
                     external_volume: None,
                     base_location: None,
@@ -903,7 +936,7 @@ impl CatalogRelation {
                     adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
                     integration_name: None,
-                    table_format,
+                    table_format: TableFormat::Iceberg,
                     catalog_type: ICEBERG_BUILT_IN_CATALOG.to_string(),
                     external_volume,
                     base_location: Some(base_location),
@@ -976,7 +1009,7 @@ impl CatalogRelation {
             })?
             .as_str();
 
-        let table_format =
+        let table_format_raw =
             Self::get_model_config_value(model, "table_format", AdapterType::Snowflake)
                 .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
                 .ok_or_else(|| {
@@ -988,16 +1021,22 @@ impl CatalogRelation {
 
         if !ALLOWED_TABLE_FORMATS_SNOWFLAKE
             .iter()
-            .any(|a| table_format.eq_ignore_ascii_case(a))
+            .any(|a| table_format_raw.eq_ignore_ascii_case(a))
         {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 format!(
-                    "Unsupported table_format '{table_format}' in catalog '{catalog_name}'. \
+                    "Unsupported table_format '{table_format_raw}' in catalog '{catalog_name}'. \
                      Must be one of ({ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE}) case insensitive."
                 ),
             ));
         }
+
+        let table_format = if table_format_raw.eq_ignore_ascii_case("iceberg") {
+            TableFormat::Iceberg
+        } else {
+            TableFormat::Default
+        };
 
         // === Build up the external volume
         let external_volume =
@@ -1065,7 +1104,7 @@ impl CatalogRelation {
         let transient_spec =
             Self::get_model_config_value(model, "transient", AdapterType::Snowflake);
 
-        if table_format.eq_ignore_ascii_case(ICEBERG_TABLE_FORMAT) && transient_spec.is_some() {
+        if table_format.is_iceberg() && transient_spec.is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "transient may not be specified for ICEBERG catalogs. Snowflake built-in catalog DDL does not support transient ICEBERG tables.",
@@ -1408,7 +1447,7 @@ impl CatalogRelation {
             catalog_name: None,
             integration_name: None,
             catalog_type: SNOWFLAKE_RELATION_STORE.to_string(),
-            table_format: DEFAULT_TABLE_FORMAT.to_string(),
+            table_format: TableFormat::Default,
             external_volume: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
@@ -1418,6 +1457,22 @@ impl CatalogRelation {
     }
 
     // === end HACK
+
+    pub fn supports_create_or_replace(&self) -> bool {
+        match self.adapter_type {
+            AdapterType::Databricks => {
+                self.table_format.is_iceberg()
+                    || self
+                        .file_format
+                        .as_deref()
+                        .is_some_and(|f| f.eq_ignore_ascii_case("delta"))
+            }
+            _ => unimplemented!(
+                "supports_create_or_replace is not implemented for {:?}",
+                self.adapter_type
+            ),
+        }
+    }
 
     // helper for get_value in impl Object
     fn gate_by_adapter(
@@ -1429,6 +1484,72 @@ impl CatalogRelation {
             value_fetch()
         } else {
             Value::from(())
+        }
+    }
+    /// The user's explicit `stage_create_tables` from catalogs.yml
+    /// `config.duckdb`, if set — mirrors the duckdb-iceberg#1017
+    /// `STAGE_CREATE_TABLES` ATTACH option and steers
+    /// [`Self::duckdb_write_strategy`].
+    fn stage_create_tables_override(&self) -> Option<bool> {
+        self.adapter_properties
+            .get("stage_create_tables")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+    }
+
+    /// Adapter-generic Jinja surface for materializations: whether dbt's write
+    /// path stage-creates (`CREATE ... AS SELECT`) for this relation. For
+    /// DuckDB this is derived from [`Self::duckdb_write_strategy`] — the FSM is
+    /// the single write-path decision point — so the key can never disagree
+    /// with the SQL the macros actually emit. (`stage_create_tables` in
+    /// catalogs.yml feeds the FSM, not this key directly.)
+    pub fn supports_stage_create(&self) -> bool {
+        match self.adapter_type {
+            AdapterType::DuckDB => matches!(
+                self.duckdb_write_strategy(),
+                DuckDbWriteStrategy::CreateAsSelect | DuckDbWriteStrategy::DirectCreateAsSelect
+            ),
+            _ => true,
+        }
+    }
+
+    /// The single write-path decision for DuckDB materializations. Collapses the
+    /// `supports_stage_create` × `table_format == 'iceberg'` boolean matrix the
+    /// macros used to re-derive into one named state, exposed to Jinja via the
+    /// `duckdb_write_strategy` key.
+    ///
+    /// TODO(catalog-relation-typed-fields): once non-DuckDB adapters carry typed
+    /// eager fields too, this can be precomputed/stored at construction rather
+    /// than derived. Tracked alongside the String->enum migration follow-up.
+    pub fn duckdb_write_strategy(&self) -> DuckDbWriteStrategy {
+        match self.adapter_type {
+            AdapterType::DuckDB => {
+                // Only true Iceberg catalogs use the direct-create path. DuckLake
+                // always writes via the standard CTAS flow, so guard on
+                // catalog_type as well as table_format — a stray `table_format`
+                // on a DuckLake catalog (which schema validation rejects, but
+                // defend in depth) must not route here.
+                let is_ducklake = self
+                    .catalog_type
+                    .eq_ignore_ascii_case(V2CatalogType::DuckLake.as_str());
+                if !is_ducklake && self.table_format.is_iceberg() {
+                    // `stage_create_tables: true` opts in to staged creates, so
+                    // dbt may CTAS the target in place; unset or false stays on
+                    // the empty CREATE + INSERT that works under either ATTACH
+                    // mode (Horizon rejects staged creates — its preset default
+                    // is false).
+                    if self.stage_create_tables_override() == Some(true) {
+                        DuckDbWriteStrategy::DirectCreateAsSelect
+                    } else {
+                        DuckDbWriteStrategy::DirectCreate
+                    }
+                } else {
+                    DuckDbWriteStrategy::CreateAsSelect
+                }
+            }
+            // The Jinja key is exposed on every CatalogRelation; only DuckDB
+            // materializations consume it, but never let it mislead (a Snowflake
+            // iceberg relation is not a duckdb direct-create target).
+            _ => DuckDbWriteStrategy::CreateAsSelect,
         }
     }
 }
@@ -1468,7 +1589,17 @@ impl Object for CatalogRelation {
             "integration_name" => Self::map_opt_str(self.integration_name.clone()),
 
             "catalog_type" => Self::map_str_val(self.catalog_type.as_str()),
-            "table_format" => Self::map_str_val(self.table_format.as_str()),
+            // FIXME: ducklake is the only catalog type whose egress string differs from its
+            // table_format enum variant. As more catalog-type-specific egress cases accumulate,
+            // consider a richer mapping instead of ad-hoc string checks here.
+            "table_format" => Self::map_str_val(if self.catalog_type == "ducklake" {
+                "ducklake"
+            } else {
+                self.table_format.as_str()
+            }),
+            // ===== DuckDB-specific =====
+            "supports_stage_create" => Value::from(self.supports_stage_create()),
+            "duckdb_write_strategy" => Value::from(self.duckdb_write_strategy().as_str()),
 
             // common optional
             "base_location" => Self::map_opt_str(self.base_location.clone()),
@@ -1562,6 +1693,33 @@ impl Object for CatalogRelation {
         })
     }
 
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &minijinja::State<'_, '_>,
+        name: &str,
+        _args: &[Value],
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
+    ) -> Result<Value, minijinja::Error> {
+        match name {
+            "supports_create_or_replace" => {
+                if load_catalogs::fetch_use_catalogs_v2() {
+                    Ok(self.gate_by_adapter(vec![AdapterType::Databricks], || {
+                        Value::from(self.supports_create_or_replace())
+                    }))
+                } else {
+                    Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "catalog_relation.supports_create_or_replace() is only available under catalogs v2",
+                    ))
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::UnknownMethod,
+                format!("Unknown method on CatalogRelation: '{name}'"),
+            )),
+        }
+    }
+
     fn render(self: &Arc<Self>, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -1569,7 +1727,7 @@ impl Object for CatalogRelation {
             self.catalog_name.as_deref().unwrap_or("<none>"),
             self.integration_name.as_deref().unwrap_or("<none>"),
             self.catalog_type,
-            self.table_format
+            self.table_format.as_str()
         )
     }
 }
@@ -1725,7 +1883,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-            assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.catalog_type, SNOWFLAKE_RELATION_STORE);
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -1761,7 +1919,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-            assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.catalog_type, SNOWFLAKE_RELATION_STORE);
         }
 
@@ -1793,7 +1951,7 @@ mod tests {
         for m in ms {
             let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
             assert_eq!(r.catalog_type, ICEBERG_BUILT_IN_CATALOG);
-            assert_eq!(r.table_format, "ICEBERG");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.external_volume.as_deref(), Some("EV"));
             assert_eq!(r.base_location.as_deref(), Some("_root/SCH/ID/sub"));
         }
@@ -1851,7 +2009,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-            assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert!(r.adapter_properties.is_empty());
         }
     }
@@ -1905,7 +2063,7 @@ mod tests {
             let r =
                 CatalogRelation::from_model_config_and_catalogs(AdapterType::Snowflake, &m, None)
                     .unwrap();
-            assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.catalog_type, SNOWFLAKE_RELATION_STORE);
         }
     }
@@ -1938,7 +2096,7 @@ mod tests {
             let r =
                 CatalogRelation::from_model_config_and_catalogs(AdapterType::Snowflake, &m, None)
                     .unwrap();
-            assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert!(r.catalog_name.is_none());
         }
     }
@@ -1987,7 +2145,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("CAT"));
             assert_eq!(r.integration_name.as_deref(), Some("WIN"));
             assert_eq!(r.catalog_type, "BUILT_IN");
-            assert_eq!(r.table_format, "ICEBERG");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
 
             // precedence: model > catalogs.yml
             assert_eq!(r.external_volume.as_deref(), Some("EV_MODEL"));
@@ -2039,7 +2197,7 @@ mod tests {
         for m in ms {
             let r = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap();
             assert_eq!(r.catalog_type, "BUILT_IN");
-            assert_eq!(r.table_format, "ICEBERG");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.external_volume.as_deref(), Some("EV"));
             assert_eq!(r.base_location.as_deref(), Some("_root/S/I/sub"));
         }
@@ -2227,7 +2385,7 @@ mod tests {
                 CatalogRelation::from_model_config_and_catalogs(AdapterType::Databricks, &m, None)
                     .unwrap();
 
-            assert_eq!(r.table_format, DBX_DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.catalog_type, "unity");
             assert_eq!(r.file_format.as_deref(), Some("delta"));
             assert!(r.adapter_properties.is_empty());
@@ -2276,7 +2434,7 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(r.table_format, DBX_DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.catalog_type, "unity");
             assert_eq!(r.file_format.as_deref(), Some("delta"));
             assert!(r.is_transient.is_none());
@@ -2342,7 +2500,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("UC"));
             assert_eq!(r.integration_name.as_deref(), Some("WIN"));
             assert_eq!(r.catalog_type, "unity");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("delta"));
             assert_eq!(
                 r.adapter_properties
@@ -2402,7 +2560,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(r.file_format.as_deref(), Some("delta"));
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
         }
     }
 
@@ -2430,7 +2588,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(r.catalog_type, "hive_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("delta"));
             assert!(r.adapter_properties.is_empty());
             assert!(r.is_transient.is_none());
@@ -2494,7 +2652,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(r.catalog_type, "hive_metastore");
-            assert_eq!(r.table_format, "default");
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.file_format.as_deref(), Some("hudi"));
             assert!(r.adapter_properties.is_empty());
             assert!(r.is_transient.is_none());
@@ -2525,7 +2683,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(r.catalog_type, "hive_metastore");
-            assert_eq!(r.table_format, "default");
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.adapter_properties.is_empty());
             assert!(r.is_transient.is_none());
@@ -2556,7 +2714,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(r.catalog_type, "hive_metastore");
-            assert_eq!(r.table_format, "default");
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
         }
     }
@@ -2585,7 +2743,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(r.catalog_type, "unity");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("delta"));
         }
     }
@@ -2637,7 +2795,7 @@ mod tests {
                 CatalogRelation::from_model_config_and_catalogs(AdapterType::Bigquery, &m, None)
                     .unwrap();
 
-            assert_eq!(r.table_format, BIGQUERY_DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(
                 r.file_format,
                 Some(BIGQUERY_DEFAULT_FILE_FORMAT.to_string())
@@ -2694,7 +2852,7 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(r.table_format, BIGQUERY_DEFAULT_TABLE_FORMAT);
+            assert_eq!(r.table_format, TableFormat::Default);
             assert_eq!(
                 r.file_format,
                 Some(BIGQUERY_DEFAULT_FILE_FORMAT.to_string())
@@ -2802,7 +2960,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -2854,7 +3012,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -2903,7 +3061,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -2954,7 +3112,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -3003,7 +3161,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -3049,7 +3207,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -3098,7 +3256,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -3291,7 +3449,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
@@ -3338,7 +3496,7 @@ mod tests {
             assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
             assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
             assert_eq!(r.catalog_type, "biglake_metastore");
-            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
             assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());

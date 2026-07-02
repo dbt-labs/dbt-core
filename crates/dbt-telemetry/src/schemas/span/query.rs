@@ -5,13 +5,13 @@ use prost::Name as _;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
-use crate::{
-    ArrowSerializableTelemetryEvent, DbtTelemetryContext, ProtoTelemetryEvent, SpanStatus,
+use crate::{DbtTelemetryContext, serialize::arrow::ArrowAttributes};
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, SpanStatus, StaticTelemetryEvent,
     TelemetryContext, TelemetryEventRecType, TelemetryOutputFlags,
-    serialize::arrow::ArrowAttributes,
 };
 
-impl ProtoTelemetryEvent for QueryExecuted {
+impl StaticTelemetryEvent for QueryExecuted {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -37,7 +37,7 @@ impl ProtoTelemetryEvent for QueryExecuted {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(QueryExecuted {
             sql: "<redacted>".to_string(), // Redact the SQL query
             query_description: None,       // Redact the query description
@@ -78,6 +78,7 @@ struct QueryExecutedJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for QueryExecuted {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Well-known fields for easier querying
@@ -172,7 +173,7 @@ impl ArrowSerializableTelemetryEvent for QueryExecuted {
     }
 }
 
-impl ProtoTelemetryEvent for ConnectionLimitWait {
+impl StaticTelemetryEvent for ConnectionLimitWait {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -198,6 +199,7 @@ impl ProtoTelemetryEvent for ConnectionLimitWait {
 }
 
 impl ArrowSerializableTelemetryEvent for ConnectionLimitWait {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

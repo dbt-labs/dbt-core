@@ -1,12 +1,13 @@
 pub use crate::proto::v1::public::events::fusion::log::{ShowDataOutput, ShowDataOutputFormat};
-use crate::{
-    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
-    TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name;
 use std::borrow::Cow;
 
-impl ProtoTelemetryEvent for ShowDataOutput {
+impl StaticTelemetryEvent for ShowDataOutput {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -22,7 +23,7 @@ impl ProtoTelemetryEvent for ShowDataOutput {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         let content = match self.output_format() {
             ShowDataOutputFormat::Tsv
             | ShowDataOutputFormat::Csv
@@ -50,6 +51,7 @@ struct ShowDataOutputJsonPayload<'a> {
 }
 
 impl ArrowSerializableTelemetryEvent for ShowDataOutput {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dbt_core_event_code: Some(Cow::Borrowed(self.dbt_core_event_code.as_str())),

@@ -179,6 +179,7 @@ pub async fn resolve_exposures(
                         .clone()
                         .map(|tags| tags.into())
                         .unwrap_or_default(),
+                    classifiers: Default::default(),
                     meta: exposure_properties_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
@@ -210,7 +211,7 @@ pub async fn resolve_exposures(
                     type_: exposure.type_.clone(),
                     url: exposure.url,
                     unrendered_config,
-                    created_at: Default::default(),
+                    created_at: chrono::Utc::now().timestamp() as f64,
                 },
                 deprecated_config: exposure_properties_config.into(),
             };
@@ -249,8 +250,10 @@ pub fn resolve_yaml_depends_on(
     let mut dependent_sources = vec![];
     let mut dependent_metrics = vec![];
 
-    // Process each dependency in the depends_on list
-    for dependency in depends_on {
+    let expanded: Vec<Spanned<String>> =
+        depends_on.iter().flat_map(split_depends_on_item).collect();
+
+    for dependency in &expanded {
         let sql_resources: Arc<Mutex<Vec<SqlResource<ExposureConfig>>>> =
             Arc::new(Mutex::new(Vec::new()));
 
@@ -285,7 +288,7 @@ pub fn resolve_yaml_depends_on(
                 dependent_refs.push(DbtRef {
                     name: ref_info.0,
                     package: ref_info.1,
-                    version: ref_info.2.map(|v| v.into()),
+                    version: ref_info.2,
                     location: Some(ref_info.3.with_file(relative_path)),
                 });
             }
@@ -309,4 +312,103 @@ pub fn resolve_yaml_depends_on(
     }
 
     Ok((dependent_refs, dependent_sources, dependent_metrics))
+}
+
+/// Split a single `depends_on` list item on top-level commas, trimming
+/// whitespace from each part and dropping empty parts (trailing comma).
+///
+/// dbt-core is lenient about comma-separated ref()/source() calls within one
+/// YAML list item and about trailing commas.  Examples:
+///   `ref('a'), ref('b')`  →  [`ref('a')`, `ref('b')`]
+///   `ref('a'),`           →  [`ref('a')`]
+///   `ref('a')`            →  [`ref('a')`]   (unchanged)
+///
+/// The split respects parenthesis depth so that commas inside argument lists
+/// (e.g. `ref('model', version=2)`) are not treated as separators.
+fn split_depends_on_item(dep: &Spanned<String>) -> Vec<Spanned<String>> {
+    let s = dep.as_str();
+    let mut parts: Vec<Spanned<String>> = Vec::new();
+    let mut depth: usize = 0;
+    let mut start = 0usize;
+
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                let part = s[start..i].trim();
+                if !part.is_empty() {
+                    parts.push(dep.clone().map(|_| part.to_string()));
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    let tail = s[start..].trim();
+    if !tail.is_empty() {
+        parts.push(dep.clone().map(|_| tail.to_string()));
+    }
+    if parts.is_empty() {
+        parts.push(dep.clone());
+    }
+    parts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spanned(s: &str) -> Spanned<String> {
+        Spanned::from(s.to_string())
+    }
+
+    fn split(s: &str) -> Vec<String> {
+        split_depends_on_item(&spanned(s))
+            .into_iter()
+            .map(|sp| sp.into_inner())
+            .collect()
+    }
+
+    #[test]
+    fn test_split_depends_on_no_comma() {
+        assert_eq!(split("ref('model_a')"), vec!["ref('model_a')"]);
+    }
+
+    #[test]
+    fn test_split_depends_on_trailing_comma() {
+        assert_eq!(split("ref('model_a'),"), vec!["ref('model_a')"]);
+    }
+
+    #[test]
+    fn test_split_depends_on_two_inline() {
+        assert_eq!(
+            split("ref('model_a'), ref('model_b')"),
+            vec!["ref('model_a')", "ref('model_b')"]
+        );
+    }
+
+    #[test]
+    fn test_split_depends_on_preserves_inner_commas() {
+        assert_eq!(
+            split("ref('model_a', version=2)"),
+            vec!["ref('model_a', version=2)"]
+        );
+    }
+
+    #[test]
+    fn test_split_depends_on_multiple_with_inner_commas() {
+        assert_eq!(
+            split("ref('a', version=2), ref('b')"),
+            vec!["ref('a', version=2)", "ref('b')"]
+        );
+    }
+
+    #[test]
+    fn test_split_depends_on_whitespace_trimmed() {
+        assert_eq!(
+            split("  ref('a')  ,  ref('b')  ,  "),
+            vec!["ref('a')", "ref('b')"]
+        );
+    }
 }

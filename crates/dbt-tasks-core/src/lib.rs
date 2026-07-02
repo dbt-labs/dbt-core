@@ -36,8 +36,9 @@ pub use stats_to_results::stats_to_results;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, IoArgs};
 use dbt_common::stats::NodeStatus;
-use dbt_common::{FsResult, MacroSpan};
+use dbt_common::{CompiledSpans, FsResult, MacroSpan};
 use dbt_dag::schedule::Schedule;
+use dbt_frontend_common::span::ReclassifySpan;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::{CommonAttributes, ContextRunResult};
 use dbt_schemas::state::ResolverState;
@@ -90,14 +91,14 @@ pub trait CompiledSqlCache: Send + Sync {
         &self,
         io: &IoArgs,
         common: &CommonAttributes,
-    ) -> Option<(String, Vec<MacroSpan>)>;
+    ) -> Option<(String, Vec<MacroSpan>, Vec<ReclassifySpan>)>;
 
     fn set_compiled_sql(
         &self,
         io: &IoArgs,
         common: &CommonAttributes,
         rendered_sql_maybe_with_cte: &str,
-        macro_spans: &[MacroSpan],
+        spans: &dyn CompiledSpans,
     ) -> FsResult<()>;
 
     fn clear(&self, unique_id: &str);
@@ -110,7 +111,7 @@ pub trait AdhocRunner: Send + Sync {
         instruction: &'a dbt_scheduler::instructions::Instruction,
         rendered_sql: &'a str,
         unique_id: Option<&'a str>,
-        connection: &'a mut Option<Box<dyn dbt_xdbc::Connection>>,
+        connection: &'a mut Option<Box<dyn dbt_adbc::Connection>>,
     ) -> Pin<
         Box<
             dyn Future<Output = FsResult<(Vec<arrow::array::RecordBatch>, arrow_schema::SchemaRef)>>

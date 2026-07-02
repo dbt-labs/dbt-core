@@ -10,7 +10,7 @@ use indexmap::IndexMap;
 
 use dbt_agate::AgateTable;
 use dbt_common::{
-    CodeLocationWithFile, ErrorCode, fs_err,
+    CodeLocationWithFile, ErrorCode, FsError, fs_err,
     io_args::IoArgs,
     io_utils::StatusReporter,
     tracing::dbt_emit::{emit_warn_log_from_fs_error, emit_warn_log_message},
@@ -1036,13 +1036,14 @@ impl Object for Exceptions {
                 let warn_string = args.get::<String>("").unwrap_or_else(|_| "".to_string());
                 let current_span = state.current_span_of_context();
                 let current_file_path = state.current_path().clone();
-                let warning = fs_err!(ErrorCode::JinjaWarn, "{}", warn_string).with_location(
-                    CodeLocationWithFile::new(
-                        current_span.start_line,
-                        current_span.start_col,
-                        current_span.start_offset,
-                        current_file_path,
-                    ),
+                let warning = Box::new(
+                    FsError::new_no_backtrace(ErrorCode::JinjaWarn, warn_string.clone())
+                        .with_location(CodeLocationWithFile::new(
+                            current_span.start_line,
+                            current_span.start_col,
+                            current_span.start_offset,
+                            current_file_path,
+                        )),
                 );
 
                 // Emit through the warn path even when warn-error upgrades it because tracing
@@ -1054,10 +1055,7 @@ impl Object for Exceptions {
                     .decision_for_error_code(warning.code)
                     == WarnErrorDecision::UpgradeToError
                 {
-                    return Err(Error::new(
-                        ErrorKind::ExitWithStatus,
-                        "warning upgraded to error via warn-error-options",
-                    ));
+                    return Err(Error::new(ErrorKind::ExitWithStatus, warn_string));
                 }
 
                 Ok(Value::UNDEFINED)

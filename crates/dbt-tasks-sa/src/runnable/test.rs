@@ -34,8 +34,8 @@ use dbt_tasks_core::task_spans::create_task_span_for_node;
 use dbt_tasks_core::test_aggregation::GenericTestGroup;
 use dbt_tasks_core::visitor::SkipReason;
 use dbt_telemetry::{
-    ExecutionPhase, NodeEvaluated, NodeOutcome, NodeOutcomeDetail, NodeType, TestEvaluationDetail,
-    TestOutcome,
+    ExecutionPhase, NodeEvaluated, NodeOutcome, NodeOutcomeDetail, NodeSkipReason, NodeType,
+    TestEvaluationDetail, TestOutcome,
 };
 
 use minijinja::Value as MinijinjaValue;
@@ -52,7 +52,7 @@ pub enum TestExecutionStatus {
 }
 
 impl TestExecutionStatus {
-    fn node_status(self) -> NodeStatus {
+    pub fn node_status(self) -> NodeStatus {
         match self {
             TestExecutionStatus::Passed => NodeStatus::TestPassed,
             TestExecutionStatus::Warned => NodeStatus::TestWarned,
@@ -68,7 +68,7 @@ impl TestExecutionStatus {
         }
     }
 
-    fn metric_key(self) -> Option<InvocationMetricKey> {
+    pub fn metric_key(self) -> Option<InvocationMetricKey> {
         match self {
             TestExecutionStatus::Passed => None,
             TestExecutionStatus::Warned => Some(InvocationMetricKey::TotalWarnings),
@@ -149,6 +149,39 @@ pub fn insert_test_run_stat(
             thread_id,
         ),
     );
+}
+
+pub fn record_test_span(test: &DbtTest, result: &TestReportedResult) {
+    record_test_span_with_skip_reason(test, result, None);
+}
+
+pub fn record_cached_test_span(test: &DbtTest, result: &TestReportedResult) {
+    record_test_span_with_skip_reason(test, result, Some(NodeSkipReason::Cached));
+}
+
+fn record_test_span_with_skip_reason(
+    test: &DbtTest,
+    result: &TestReportedResult,
+    skip_reason: Option<NodeSkipReason>,
+) {
+    let test_outcome = result.test_outcome();
+    let failures = result.failures.min(i32::MAX as usize) as i32;
+    let diff = result.diff.clone();
+
+    find_and_record_span_status_from_attrs(move |attrs: &mut NodeEvaluated| {
+        attrs.set_node_outcome(NodeOutcome::Success);
+        if let Some(skip_reason) = skip_reason {
+            attrs.set_node_skip_reason(skip_reason);
+        }
+        attrs.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+            TestEvaluationDetail::new(
+                test_outcome,
+                failures,
+                diff,
+                test.deprecated_config.store_failures,
+            ),
+        ))
+    });
 }
 
 // NOTE: AggregatedTest{Render,Analyze}Task has an inner {Render,Analyze}Task for code reuse.
@@ -613,23 +646,9 @@ pub fn process_test_result(
     let unique_id = &test.common().unique_id;
     record_test_metric(result.status);
 
-    let test_outcome = result.test_outcome();
-    let failures = result.failures.min(i32::MAX as usize) as i32;
     let node_status = result.node_status();
 
-    // Record in the span
-    let diff = result.diff;
-    find_and_record_span_status_from_attrs(move |attrs: &mut NodeEvaluated| {
-        attrs.set_node_outcome(NodeOutcome::Success);
-        attrs.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
-            TestEvaluationDetail::new(
-                test_outcome,
-                failures,
-                diff,
-                test.deprecated_config.store_failures,
-            ),
-        ))
-    });
+    record_test_span(test, &result);
 
     insert_test_run_stat(
         ctx,

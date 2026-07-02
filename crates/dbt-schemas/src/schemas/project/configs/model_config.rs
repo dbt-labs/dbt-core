@@ -31,6 +31,7 @@ use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange, OnError};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
+use crate::schemas::project::configs::common::default_classifiers;
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
@@ -39,8 +40,8 @@ use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
-    same_warehouse_config,
+    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq_with_unrendered, meta_eq,
+    omissible_option_eq, same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
@@ -180,6 +181,24 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub user_folder_for_python: Option<bool>,
+    #[serde(
+        default,
+        rename = "+incremental_apply_config_changes",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub incremental_apply_config_changes: Option<bool>,
+    #[serde(
+        default,
+        rename = "+use_safer_relation_operations",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub use_safer_relation_operations: Option<bool>,
+    #[serde(
+        default,
+        rename = "+view_update_via_alter",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub view_update_via_alter: Option<bool>,
 
     // NOTE: This is only for BigQuery materialized views
     #[serde(rename = "+description")]
@@ -232,6 +251,8 @@ pub struct ProjectModelConfig {
         deserialize_with = "u64_or_string_u64"
     )]
     pub job_execution_timeout_seconds: Option<u64>,
+    #[serde(rename = "+reservation")]
+    pub reservation: Option<String>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -439,6 +460,8 @@ pub struct ProjectModelConfig {
     pub table_format: Option<String>,
     #[serde(rename = "+tags")]
     pub tags: Omissible<StringOrArrayOfStrings>,
+    #[serde(rename = "+classifiers")]
+    pub classifiers: Omissible<StringOrArrayOfStrings>,
     #[serde(rename = "+target_lag")]
     pub target_lag: Option<String>,
     #[serde(rename = "+target_file_size")]
@@ -526,6 +549,11 @@ pub struct ModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
+    pub classifiers: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
     // serialize_with ensures meta is always present (as {} when None) for Jinja macros
@@ -678,6 +706,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             sync: config.sync,
             table_format: config.table_format,
             tags: config.tags.into_inner(),
+            classifiers: config.classifiers.into_inner(),
             unique_key: config.unique_key,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: config.description,
@@ -713,6 +742,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                reservation: config.reservation,
                 labels: config.labels,
                 labels_from_meta: config.labels_from_meta,
                 kms_key_name: config.kms_key_name,
@@ -732,6 +762,9 @@ impl From<ProjectModelConfig> for ModelConfig {
                 enable_list_inference: config.enable_list_inference,
                 intermediate_format: config.intermediate_format,
                 storage_uri: config.storage_uri,
+                incremental_apply_config_changes: config.incremental_apply_config_changes,
+                use_safer_relation_operations: config.use_safer_relation_operations,
+                view_update_via_alter: config.view_update_via_alter,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
@@ -844,6 +877,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             static_analysis: config.static_analysis,
             table_format: config.table_format,
             tags: config.tags.into(),
+            classifiers: config.classifiers.into(),
             transient: config.__warehouse_specific_config__.transient,
             unique_key: config.unique_key,
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
@@ -887,6 +921,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             job_execution_timeout_seconds: config
                 .__warehouse_specific_config__
                 .job_execution_timeout_seconds,
+            reservation: config.__warehouse_specific_config__.reservation,
             labels: config.__warehouse_specific_config__.labels,
             labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
             resource_tags: config.__warehouse_specific_config__.resource_tags,
@@ -948,6 +983,13 @@ impl From<ModelConfig> for ProjectModelConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
             schedule: config.__warehouse_specific_config__.schedule,
+            incremental_apply_config_changes: config
+                .__warehouse_specific_config__
+                .incremental_apply_config_changes,
+            use_safer_relation_operations: config
+                .__warehouse_specific_config__
+                .use_safer_relation_operations,
+            view_update_via_alter: config.__warehouse_specific_config__.view_update_via_alter,
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,
@@ -972,6 +1014,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
             pre_hook,
             meta,
             tags,
+            classifiers,
             quoting,
 
             // Flattened config (already handled above)
@@ -1052,6 +1095,8 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
+        #[allow(unused, clippy::let_unit_value)]
+        let classifiers = default_classifiers(classifiers, &parent.classifiers);
         #[allow(unused, clippy::let_unit_value)]
         let column_types = default_column_types(column_types, &parent.column_types);
         #[allow(unused, clippy::let_unit_value)]
@@ -1189,7 +1234,12 @@ impl ModelConfig {
     }
 
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
-    pub fn same_config(&self, other: &ModelConfig) -> bool {
+    pub fn same_config(
+        &self,
+        other: &ModelConfig,
+        self_unrendered_config: &BTreeMap<String, YmlValue>,
+        other_unrendered_config: &BTreeMap<String, YmlValue>,
+    ) -> bool {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
@@ -1217,7 +1267,12 @@ impl ModelConfig {
             &other.on_configuration_change,
         ); // Custom comparison for on_configuration_change
         let on_error_eq = self.on_error == other.on_error;
-        let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
+        let grants_eq_result = grants_eq_with_unrendered(
+            &self.grants,
+            &other.grants,
+            self_unrendered_config,
+            other_unrendered_config,
+        ); // Custom comparison for grants
         let packages_eq = packages_and_imports_eq(&self.packages, &other.packages); // Custom comparison for packages
         let imports_eq = packages_and_imports_eq(&self.imports, &other.imports); // Custom comparison for imports (same function as packages)
         let python_version_eq = self.python_version == other.python_version;
@@ -1245,9 +1300,11 @@ impl ModelConfig {
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
         let predicates_eq = self.predicates == other.predicates;
-        let warehouse_config_eq = same_warehouse_config(
+        let warehouse_config_eq = same_warehouse_config_with_unrendered(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
+            self_unrendered_config,
+            other_unrendered_config,
         );
 
         let result = enabled_eq
@@ -1718,6 +1775,66 @@ mod tests {
     use crate::schemas::properties::StatePreClone;
 
     #[test]
+    fn test_classifiers_merge_in_default_to() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "finance".to_string(),
+                "pii".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "gdpr".to_string(),
+                "pii".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(
+            child.classifiers,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "finance".to_string(),
+                "gdpr".to_string(),
+                "pii".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_classifiers_none_child_inherits_parent() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pii".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            classifiers: None,
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(
+            child.classifiers,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pii".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
     fn test_model_config_state_parses() {
         let config: ModelConfig = dbt_yaml::from_str(
             r#"
@@ -1828,6 +1945,53 @@ __additional_properties__: {}
         let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
         assert_eq!(lag_tolerance.count, Some(0));
         assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::minute));
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: "1s"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::second));
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance: 1 second
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::second));
+    }
+
+    #[test]
+    fn test_project_model_config_state_lag_tolerance_parses_structured_seconds() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance:
+    count: 1
+    period: second
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("+state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::second));
     }
 
     #[test]

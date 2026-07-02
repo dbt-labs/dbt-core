@@ -26,6 +26,7 @@ dbt-schemas = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-test-containers = { workspace = true }
 dbt-test-primitives = { workspace = true }
+dbt-tracing = { workspace = true }
 dbt-yaml = { workspace = true }
 diffy = { workspace = true }
 dirs = { workspace = true }

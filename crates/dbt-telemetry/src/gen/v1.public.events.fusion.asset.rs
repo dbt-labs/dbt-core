@@ -29,7 +29,7 @@ pub struct AssetParsed {
     )]
     pub phase: i32,
 }
-impl crate::StaticName for AssetParsed {
+impl ::dbt_tracing::StaticName for AssetParsed {
     const FULL_NAME: &'static str = "v1.public.events.fusion.asset.AssetParsed";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.asset.AssetParsed";
 }

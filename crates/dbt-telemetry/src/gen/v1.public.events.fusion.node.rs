@@ -19,7 +19,7 @@ pub struct TestEvaluationDetail {
     #[prost(bool, optional, tag = "5")]
     pub store_failures: ::core::option::Option<bool>,
 }
-impl crate::StaticName for TestEvaluationDetail {
+impl ::dbt_tracing::StaticName for TestEvaluationDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.TestEvaluationDetail";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.node.TestEvaluationDetail";
 }
@@ -49,7 +49,7 @@ pub struct SourceFreshnessDetail {
     #[prost(int64, optional, tag = "2")]
     pub age_seconds: ::core::option::Option<i64>,
 }
-impl crate::StaticName for SourceFreshnessDetail {
+impl ::dbt_tracing::StaticName for SourceFreshnessDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.SourceFreshnessDetail";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.node.SourceFreshnessDetail";
 }
@@ -82,7 +82,7 @@ pub struct NodeCacheDetail {
     #[prost(uint64, optional, tag = "3")]
     pub last_updated_seconds: ::core::option::Option<u64>,
 }
-impl crate::StaticName for NodeCacheDetail {
+impl ::dbt_tracing::StaticName for NodeCacheDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeCacheDetail";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeCacheDetail";
 }
@@ -104,7 +104,7 @@ pub struct NodeSkipUpstreamDetail {
     #[prost(string, tag = "1")]
     pub upstream_unique_id: ::prost::alloc::string::String,
 }
-impl crate::StaticName for NodeSkipUpstreamDetail {
+impl ::dbt_tracing::StaticName for NodeSkipUpstreamDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeSkipUpstreamDetail";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeSkipUpstreamDetail";
 }
@@ -132,7 +132,7 @@ pub struct NodeEvaluationDetail {
     )]
     pub node_warning_outcome: i32,
 }
-impl crate::StaticName for NodeEvaluationDetail {
+impl ::dbt_tracing::StaticName for NodeEvaluationDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeEvaluationDetail";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeEvaluationDetail";
 }
@@ -286,7 +286,7 @@ pub mod node_evaluated {
         NodeEvaluationDetail(super::NodeEvaluationDetail),
     }
 }
-impl crate::StaticName for NodeEvaluated {
+impl ::dbt_tracing::StaticName for NodeEvaluated {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeEvaluated";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeEvaluated";
 }
@@ -458,7 +458,7 @@ pub mod node_processed {
         NodeEvaluationDetail(super::NodeEvaluationDetail),
     }
 }
-impl crate::StaticName for NodeProcessed {
+impl ::dbt_tracing::StaticName for NodeProcessed {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeProcessed";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeProcessed";
 }

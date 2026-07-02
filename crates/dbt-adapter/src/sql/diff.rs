@@ -478,7 +478,7 @@ fn canonicalize_last_value_projection_order(sql: &str) -> String {
         let mut new_items = items.clone();
         let mut idxs: Vec<usize> = candidates.iter().map(|c| c.0).collect();
         idxs.sort_unstable();
-        for ((_, item), idx) in sorted.into_iter().zip(idxs.into_iter()) {
+        for ((_, item), idx) in sorted.into_iter().zip(idxs) {
             new_items[idx] = item;
         }
 
@@ -646,7 +646,7 @@ fn canonicalize_struct_projection_order_in_select_lists(sql: &str) -> String {
         let mut new_items = items.clone();
         let mut idxs: Vec<usize> = candidates.iter().map(|c| c.0).collect();
         idxs.sort_unstable();
-        for ((_, item), idx) in sorted.into_iter().zip(idxs.into_iter()) {
+        for ((_, item), idx) in sorted.into_iter().zip(idxs) {
             new_items[idx] = item;
         }
 
@@ -773,7 +773,7 @@ fn canonicalize_snowplow_context_identifier_projection_order(sql: &str) -> Strin
         let mut new_items = items.clone();
         let mut idxs: Vec<usize> = candidates.iter().map(|c| c.0).collect();
         idxs.sort_unstable();
-        for ((_, item), idx) in sorted.into_iter().zip(idxs.into_iter()) {
+        for ((_, item), idx) in sorted.into_iter().zip(idxs) {
             new_items[idx] = item;
         }
         if new_items == items {

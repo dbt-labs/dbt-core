@@ -45,6 +45,7 @@ use std::time::Instant;
 
 use arrow_schema::{Field, Schema};
 use chrono::{DateTime, Utc};
+use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::Cancellable;
 
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -533,7 +534,7 @@ impl MetadataResultDeserialize for Vec<crate::metadata::ViewDefinition> {
                 .get("dialect")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing 'dialect'")?;
-            let dialect: dbt_frontend_common::Dialect = dialect_str
+            let dialect: AdapterType = dialect_str
                 .parse()
                 .map_err(|_| format!("Invalid dialect '{dialect_str}'"))?;
             let default_catalog = entry
@@ -853,7 +854,7 @@ mod tests {
         let original = vec![ViewDefinition {
             fqn: r#""DB"."S"."V""#.to_string(),
             definition: "SELECT 1".to_string(),
-            dialect: dbt_frontend_common::Dialect::Snowflake,
+            dialect: AdapterType::Snowflake,
             default_catalog: "DB".to_string(),
             default_schema: "S".to_string(),
         }];

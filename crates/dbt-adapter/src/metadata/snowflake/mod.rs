@@ -16,14 +16,15 @@ use arrow_array::{
 };
 use arrow_schema::Schema;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_common::AsyncAdapterResult;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
+use dbt_frontend_common::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::*;
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::State;
 use once_cell::sync::Lazy;
@@ -121,8 +122,27 @@ fn snowflake_list_relations_query_plan(
     snowflake_metadata_query_plan("list_relations", metadata_warehouse)
 }
 
-fn snowflake_freshness_sql(database: &str, where_clauses: &[String]) -> String {
-    format!(
+fn require_snowflake_metadata_component<'a>(
+    component: &'static str,
+    value: &'a str,
+) -> AdapterResult<&'a str> {
+    let value = value.trim();
+    if !value.is_empty() {
+        return Ok(value);
+    }
+
+    Err(AdapterError::new(
+        AdapterErrorKind::Configuration,
+        format!(
+            "Snowflake metadata query requires a non-empty {component}. \
+             Configure a {component} value on the Snowflake target, model, or source."
+        ),
+    ))
+}
+
+fn snowflake_freshness_sql(database: &str, where_clauses: &[String]) -> AdapterResult<String> {
+    let database = require_snowflake_metadata_component("database", database)?;
+    Ok(format!(
         "SELECT
                 table_schema,
                 table_name,
@@ -132,7 +152,7 @@ fn snowflake_freshness_sql(database: &str, where_clauses: &[String]) -> String {
              WHERE {}",
         database,
         where_clauses.join(" OR ")
-    )
+    ))
 }
 
 fn is_table_ddl(ddl: &str) -> bool {
@@ -397,7 +417,7 @@ impl SnowflakeMetadataAdapter {
                 &token_clone,
                 |conn| {
                     let (database, where_clauses) = &database_and_where_clauses;
-                    let sql = snowflake_freshness_sql(database, where_clauses);
+                    let sql = snowflake_freshness_sql(database, where_clauses)?;
 
                     let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
                     let metadata_sql = plan
@@ -505,7 +525,7 @@ impl SnowflakeMetadataAdapter {
                             build_relation_clauses(bulk)?;
                         let mut acc: Acc = BTreeMap::new();
                         for (database, where_clauses) in where_clauses_by_database {
-                            let sql = snowflake_freshness_sql(&database, &where_clauses);
+                            let sql = snowflake_freshness_sql(&database, &where_clauses)?;
                             let plan =
                                 snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
                             let metadata_sql = plan
@@ -1160,6 +1180,86 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         self.freshness_with_overrides_inner_with_options(relations, overrides, options, token)
     }
 
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        database: &'a str,
+        schema: &'a str,
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        let schema = match require_snowflake_metadata_component("schema", schema) {
+            Ok(schema) => schema,
+            Err(e) => {
+                let future = async move { Err(Cancellable::Error(e)) };
+                return Box::pin(future);
+            }
+        };
+
+        // Schema-only WHERE clause — no per-table filtering.
+        let where_clause = format!("table_schema = '{schema}'");
+        let sql = match snowflake_freshness_sql(database, &[where_clause]) {
+            Ok(sql) => sql,
+            Err(e) => {
+                let future = async move { Err(Cancellable::Error(e)) };
+                return Box::pin(future);
+            }
+        };
+        let relations = relations.to_vec();
+        let adapter = self.adapter.clone();
+        let metadata_warehouse = options.warehouse.clone();
+        let token_clone = token.clone();
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            adapter.engine().clone(),
+            adapter.engine().threads(),
+        ));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          _: &()|
+              -> AdapterResult<Arc<RecordBatch>> {
+            with_metadata_warehouse(
+                &adapter,
+                conn,
+                metadata_warehouse.as_deref(),
+                &token_clone,
+                |conn| {
+                    let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
+                    let metadata_sql = plan
+                        .statements
+                        .last()
+                        .expect("metadata query plan always includes metadata SQL");
+                    let ctx = QueryCtx::default()
+                        .with_desc("Extracting freshness from information schema");
+                    let (_resp, agate_table) =
+                        adapter.query(&ctx, conn, metadata_sql, None, token_clone.clone())?;
+                    Ok(agate_table.original_record_batch())
+                },
+            )
+        };
+
+        let reduce_f = move |acc: &mut Acc, _: (), batch_res: AdapterResult<Arc<RecordBatch>>| {
+            let batch = batch_res?;
+            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+            let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+            for i in 0..batch.num_rows() {
+                for fqn in find_matching_relation(schemas.value(i), tables.value(i), &relations)? {
+                    acc.insert(
+                        fqn,
+                        MetadataFreshness::from_millis(timestamps.value(i), is_views.value(i))?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(vec![()]), token)
+    }
+
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-snowflake/src/dbt/include/snowflake/macros/metadata/list_relations_without_caching.sql
     fn list_relations_in_parallel_inner(
         &self,
@@ -1290,7 +1390,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                     continue;
                 }
 
-                let parsed = match dbt_frontend_common::Dialect::Snowflake.parse_fqn(&fqn) {
+                let parsed = match Dialect::Snowflake.parse_fqn(&fqn) {
                     Ok(p) => p,
                     Err(_) => continue, // unparseable — skip
                 };
@@ -1298,7 +1398,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                 acc.push(ViewDefinition {
                     fqn,
                     definition: definition.to_string(),
-                    dialect: dbt_frontend_common::Dialect::Snowflake,
+                    dialect: AdapterType::Snowflake,
                     default_catalog: parsed.catalog().name().to_string(),
                     default_schema: parsed.schema().name().to_string(),
                 });
@@ -1464,6 +1564,42 @@ mod tests {
 
     fn test_adapter_error(message: &str) -> AdapterError {
         AdapterError::new(AdapterErrorKind::UnexpectedResult, message)
+    }
+
+    #[test]
+    fn snowflake_freshness_sql_rejects_blank_database() {
+        let err =
+            snowflake_freshness_sql("  ", &["table_schema = 'PUBLIC'".to_string()]).unwrap_err();
+
+        assert_eq!(
+            err.message(),
+            "Snowflake metadata query requires a non-empty database. Configure a database value on the Snowflake target, model, or source."
+        );
+    }
+
+    #[test]
+    fn require_snowflake_metadata_component_rejects_blank_schema() {
+        let err = require_snowflake_metadata_component("schema", "\t ").unwrap_err();
+
+        assert_eq!(
+            err.message(),
+            "Snowflake metadata query requires a non-empty schema. Configure a schema value on the Snowflake target, model, or source."
+        );
+    }
+
+    #[test]
+    fn snowflake_freshness_sql_trims_database() {
+        let sql =
+            snowflake_freshness_sql(" RAW ", &["table_schema = 'PUBLIC'".to_string()]).unwrap();
+
+        assert!(sql.contains("FROM RAW.INFORMATION_SCHEMA.TABLES"));
+    }
+
+    #[test]
+    fn require_snowflake_metadata_component_returns_trimmed_value() {
+        let schema = require_snowflake_metadata_component("schema", " PUBLIC ").unwrap();
+
+        assert_eq!(schema, "PUBLIC");
     }
 
     #[test]

@@ -5,14 +5,14 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::adapter::dialect_of;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_run_cache::proto::query_cache::{CloneResponse, ReadyToCloneResponse, clone_response};
-use dbt_run_cache::request_builder::{CloneRequestInput, execution_type_from_input};
-use dbt_run_cache::service_config::CloneIncrementalInDev;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::schemas::properties::StatePreClone;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot, InternalDbtNode, InternalDbtNodeAttributes};
+use dbt_state::proto::query_cache::{CloneResponse, ReadyToCloneResponse, clone_response};
+use dbt_state::request_builder::{CloneRequestInput, execution_type_from_input};
+use dbt_state::service_config::CloneIncrementalInDev;
 
 use crate::context::TaskRunnerCtx;
 use crate::run_cache::run_cache_request::{
@@ -243,7 +243,7 @@ impl DevCloneCandidate {
         }
     }
 
-    fn execution_type(&self) -> FsResult<dbt_run_cache::proto::query_cache::ModelExecutionType> {
+    fn execution_type(&self) -> FsResult<dbt_state::proto::query_cache::ModelExecutionType> {
         let execution_type = match self {
             Self::Model { local, .. } => {
                 execution_type_from_input(&model_execution_type_input(local, false))
@@ -262,7 +262,7 @@ impl DevCloneCandidate {
         Ok(execution_type)
     }
 
-    fn table_properties(&self) -> Option<dbt_run_cache::proto::query_cache::TableProperties> {
+    fn table_properties(&self) -> Option<dbt_state::proto::query_cache::TableProperties> {
         match self {
             Self::Model { local, .. } => model_clone_table_properties(local),
             Self::Snapshot { local, .. } => snapshot_clone_table_properties(local),
@@ -322,7 +322,7 @@ impl DevCloneCandidate {
 }
 
 struct PreparedDevClone {
-    request: dbt_run_cache::proto::query_cache::CloneRequest,
+    request: dbt_state::proto::query_cache::CloneRequest,
     target_table: String,
     clone_source_table: String,
 }
@@ -546,7 +546,6 @@ fn ready_to_clone_from_clone_response(response: CloneResponse) -> Option<ReadyTo
 mod tests {
     use super::*;
     use dbt_common::io_args::StaticAnalysisKind;
-    use dbt_run_cache::proto::query_cache::{ModelExecutionType, TableProperties};
     use dbt_schemas::schemas::common::ResolvedQuoting;
     use dbt_schemas::schemas::nodes::AdapterAttr;
     use dbt_schemas::schemas::project::WarehouseSpecificNodeConfig;
@@ -555,6 +554,7 @@ mod tests {
     use dbt_schemas::schemas::{
         CommonAttributes, DbtModelAttr, DbtSnapshotAttr, NodeBaseAttributes,
     };
+    use dbt_state::proto::query_cache::{ModelExecutionType, TableProperties};
     use dbt_yaml::Spanned;
     use indexmap::IndexMap;
 

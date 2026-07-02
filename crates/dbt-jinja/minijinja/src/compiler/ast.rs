@@ -5,6 +5,7 @@ use std::ops::Deref;
 use std::fmt;
 
 use crate::compiler::tokens::Span;
+use crate::layout::JinjaLayoutEventKind;
 use crate::value::{value_map_with_capacity, Value};
 
 /// Container for nodes with location info.
@@ -211,6 +212,9 @@ pub struct ForLoop<'a> {
     pub recursive: bool,
     pub body: Vec<Stmt<'a>>,
     pub else_body: Vec<Stmt<'a>>,
+    pub start_tag_span: Span,
+    pub else_tag_span: Option<Span>,
+    pub end_tag_span: Span,
 }
 
 /// An if/else condition.
@@ -220,6 +224,10 @@ pub struct IfCond<'a> {
     pub expr: Expr<'a>,
     pub true_body: Vec<Stmt<'a>>,
     pub false_body: Vec<Stmt<'a>>,
+    pub start_tag_kind: JinjaLayoutEventKind,
+    pub start_tag_span: Span,
+    pub else_tag_span: Option<Span>,
+    pub end_tag_span: Span,
 }
 
 /// A with block.
@@ -245,6 +253,8 @@ pub struct SetBlock<'a> {
     pub target: Expr<'a>,
     pub filter: Option<Expr<'a>>,
     pub body: Vec<Stmt<'a>>,
+    pub start_tag_span: Span,
+    pub end_tag_span: Span,
 }
 
 /// A block for inheritance elements.

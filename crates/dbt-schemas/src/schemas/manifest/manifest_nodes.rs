@@ -99,6 +99,9 @@ pub struct ManifestCommonAttributes {
     pub tags: Vec<String>,
 
     #[serde(default)]
+    pub classifiers: Vec<String>,
+
+    #[serde(default)]
     pub meta: IndexMap<String, YmlValue>,
 }
 
@@ -125,6 +128,8 @@ pub struct ManifestMaterializableCommonAttributes {
     pub description: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub classifiers: Vec<String>,
     #[serde(default)]
     pub meta: IndexMap<String, YmlValue>,
 }
@@ -217,6 +222,7 @@ impl From<DbtSeed> for ManifestSeed {
                 patch_path: seed.__common_attr__.patch_path,
                 description: seed.__common_attr__.description,
                 tags: seed.__common_attr__.tags,
+                classifiers: seed.__common_attr__.classifiers,
                 meta: seed.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -289,6 +295,7 @@ impl From<DbtUnitTest> for ManifestUnitTest {
                 patch_path: unit_test.__common_attr__.patch_path,
                 description: unit_test.__common_attr__.description,
                 tags: unit_test.__common_attr__.tags,
+                classifiers: unit_test.__common_attr__.classifiers,
                 meta: unit_test.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -372,6 +379,7 @@ impl From<DbtTest> for ManifestDataTest {
 
                 description: test.__common_attr__.description,
                 tags: test.__common_attr__.tags,
+                classifiers: test.__common_attr__.classifiers,
                 meta: test.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -601,6 +609,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
                 patch_path: snapshot.__common_attr__.patch_path,
                 description: snapshot.__common_attr__.description,
                 tags: snapshot.__common_attr__.tags,
+                classifiers: snapshot.__common_attr__.classifiers,
                 meta: snapshot.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -685,6 +694,7 @@ impl From<DbtSource> for ManifestSource {
                 patch_path: source.__common_attr__.patch_path,
                 description: source.__common_attr__.description,
                 tags: source.__common_attr__.tags,
+                classifiers: source.__common_attr__.classifiers,
                 meta: source.__common_attr__.meta,
             },
             relation_name: source.__base_attr__.relation_name,
@@ -759,6 +769,7 @@ impl From<ManifestMacro> for DbtMacro {
             package_name: macro_.package_name,
             path: macro_.path,
             original_file_path: macro_.original_file_path,
+            absolute_path: PathBuf::default(),
             span: None,
             unique_id: macro_.unique_id,
             macro_sql: macro_.macro_sql,
@@ -804,7 +815,7 @@ pub struct ManifestModel {
 pub struct ManifestModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compute: Option<ComputeArg>,
     pub alias: Option<String>,
     #[serde(alias = "project", alias = "data_space")]
@@ -821,6 +832,8 @@ pub struct ManifestModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    pub classifiers: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_name: Option<String>,
     #[serde(
         default,
@@ -871,11 +884,19 @@ pub struct ManifestModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub packages: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub python_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub imports: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub secrets: Option<BTreeMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub external_access_integrations: Option<StringOrArrayOfStrings>,
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    #[serde(
+        default,
+        deserialize_with = "bool_or_string_bool",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub use_anonymous_sproc: Option<bool>,
     #[serde(
         default,
@@ -890,31 +911,51 @@ pub struct ManifestModelConfig {
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub concurrent_batches: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub merge_update_columns: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(
         default,
         serialize_with = "crate::schemas::serde::serialize_option_as_default"
     )]
     pub access: Option<Access>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub table_format: Option<String>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<ModelState>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub latest_version_pointer: Option<LatestVersionPointer>,
     pub sql_header: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub predicates: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub submission_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub python_job_config: Option<BTreeMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cluster_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub http_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub create_notebook: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub index_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_libs: Option<Vec<YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_folder_for_python: Option<bool>,
     /// Schema synchronization configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sync: Option<SyncConfig>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -1061,6 +1102,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             database: config.database,
             schema: config.schema,
             tags: config.tags,
+            classifiers: config.classifiers,
             catalog_name: config.catalog_name,
             meta: config.meta,
             group: config.group,
@@ -1131,6 +1173,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             database: config.database,
             schema: config.schema,
             tags: config.tags,
+            classifiers: config.classifiers,
             catalog_name: config.catalog_name,
             compute: config.compute,
             meta: config.meta,
@@ -1217,6 +1260,7 @@ impl From<DbtModel> for ManifestModel {
                 patch_path: model.__common_attr__.patch_path,
                 description: model.__common_attr__.description,
                 tags: model.__common_attr__.tags,
+                classifiers: model.__common_attr__.classifiers,
                 meta: model.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -1301,6 +1345,7 @@ impl From<DbtAnalysis> for ManifestAnalysis {
                 patch_path: analysis.__common_attr__.patch_path,
                 description: analysis.__common_attr__.description,
                 tags: analysis.__common_attr__.tags,
+                classifiers: analysis.__common_attr__.classifiers,
                 meta: analysis.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -1360,6 +1405,8 @@ impl From<DbtOperation> for ManifestOperation {
         Self {
             __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: operation.__common_attr__.unique_id,
+                database: operation.__base_attr__.database,
+                schema: operation.__base_attr__.schema,
                 name: operation.__common_attr__.name,
                 package_name: operation.__common_attr__.package_name,
                 fqn: operation.__common_attr__.fqn,
@@ -1367,7 +1414,9 @@ impl From<DbtOperation> for ManifestOperation {
                 original_file_path: operation.__common_attr__.original_file_path,
                 patch_path: operation.__common_attr__.patch_path,
                 description: operation.__common_attr__.description,
-                ..Default::default()
+                tags: operation.__common_attr__.tags,
+                classifiers: Default::default(),
+                meta: operation.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
                 alias: operation.__base_attr__.alias,
@@ -1474,6 +1523,7 @@ impl From<DbtFunction> for ManifestFunction {
                 original_file_path: function.__common_attr__.original_file_path,
                 description: function.__common_attr__.description,
                 tags: function.__common_attr__.tags,
+                classifiers: function.__common_attr__.classifiers,
                 meta: function.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
@@ -1522,10 +1572,9 @@ pub struct ManifestExposureNodeBaseAttributes {
     #[serde(default)]
     pub metrics: Vec<Vec<String>>,
     #[serde(default)]
-    pub created_at: Option<f64>,
+    pub created_at: f64,
 }
 
-#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestExposure {
@@ -1558,6 +1607,7 @@ impl From<DbtExposure> for ManifestExposure {
                 original_file_path: exposure.__common_attr__.original_file_path,
                 description: exposure.__common_attr__.description,
                 tags: exposure.__common_attr__.tags,
+                classifiers: exposure.__common_attr__.classifiers,
                 meta: exposure.__common_attr__.meta,
             },
             __base_attr__: ManifestExposureNodeBaseAttributes {
@@ -1566,7 +1616,7 @@ impl From<DbtExposure> for ManifestExposure {
                 sources: exposure.__base_attr__.sources,
                 metrics: exposure.__base_attr__.metrics,
                 unrendered_config: exposure.__exposure_attr__.unrendered_config,
-                created_at: None,
+                created_at: exposure.__exposure_attr__.created_at,
             },
             owner: exposure.__exposure_attr__.owner,
             label: exposure.__exposure_attr__.label,
@@ -1620,7 +1670,7 @@ pub struct ManifestMetric {
     pub config: ManifestMetricConfig,
 
     #[serde(default)]
-    pub metrics: Vec<Vec<String>>,
+    pub metrics: Vec<Vec<String>>, // TODO: seems unused, can this be removed?
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
@@ -1637,6 +1687,7 @@ impl From<DbtMetric> for ManifestMetric {
                 original_file_path: metric.__common_attr__.original_file_path,
                 description: Some(metric.__common_attr__.description.unwrap_or_default()),
                 tags: metric.__common_attr__.tags,
+                classifiers: metric.__common_attr__.classifiers,
                 meta: metric.__common_attr__.meta,
             },
             __base_attr__: ManifestMetricNodeBaseAttributes {
@@ -1655,7 +1706,7 @@ impl From<DbtMetric> for ManifestMetric {
             group: metric.__metric_attr__.group.clone(),
             config: metric.deprecated_config.into(),
             __other__: metric.__other__,
-            metrics: vec![], // TODO: metric.__metric_attr__.metrics.clone(),
+            metrics: vec![],
         }
     }
 }
@@ -1797,6 +1848,7 @@ impl From<DbtSemanticModel> for ManifestSemanticModel {
                 original_file_path: semantic_model.__common_attr__.original_file_path,
                 description: semantic_model.__common_attr__.description,
                 tags: semantic_model.__common_attr__.tags,
+                classifiers: semantic_model.__common_attr__.classifiers,
                 meta: semantic_model.__common_attr__.meta,
             },
             __base_attr__: ManifestSemanticModelNodeBaseAttributes {
@@ -1838,6 +1890,7 @@ impl From<ManifestSemanticModel> for DbtSemanticModel {
                 original_file_path: manifest_model.__common_attr__.original_file_path,
                 description: manifest_model.__common_attr__.description,
                 tags: manifest_model.__common_attr__.tags,
+                classifiers: manifest_model.__common_attr__.classifiers,
                 meta: manifest_model.__common_attr__.meta,
                 ..Default::default()
             },
@@ -1968,6 +2021,7 @@ impl From<DbtSavedQuery> for ManifestSavedQuery {
                 original_file_path: saved_query.__common_attr__.original_file_path,
                 description: saved_query.__common_attr__.description,
                 tags: saved_query.__common_attr__.tags,
+                classifiers: saved_query.__common_attr__.classifiers,
                 meta: saved_query.__common_attr__.meta,
             },
             __base_attr__: ManifestSavedQueryNodeBaseAttributes {

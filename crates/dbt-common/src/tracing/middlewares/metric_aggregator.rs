@@ -1,8 +1,9 @@
 use dbt_telemetry::{
-    ConnectionLimitWait, HookProcessed, Invocation, InvocationMetrics, LogMessage, LogRecordInfo,
-    NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, SeverityNumber,
-    SourceFreshnessOutcome, SpanEndInfo, has_node_warning, node_processed::NodeOutcomeDetail,
+    ConnectionLimitWait, HookProcessed, Invocation, InvocationMetrics, LogMessage, NodeEvaluated,
+    NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, SourceFreshnessOutcome,
+    has_node_warning, node_processed::NodeOutcomeDetail,
 };
+use dbt_tracing::{LogRecordInfo, SeverityNumber, SpanEndInfo};
 
 use super::super::{
     data_provider::DataProvider,

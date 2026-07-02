@@ -32,6 +32,9 @@ Ok(
                     } @ 3:19-4:1,
                 ],
                 else_body: [],
+                start_tag_span:  @ 2:1-2:22,
+                else_tag_span: None,
+                end_tag_span:  @ 4:1-4:13,
             } @ 2:1-4:13,
             EmitRaw {
                 raw: "\n</ul>",

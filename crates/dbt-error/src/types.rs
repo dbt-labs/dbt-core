@@ -152,6 +152,18 @@ impl FsError {
         }
     }
 
+    pub fn new_no_backtrace(code: ErrorCode, context: impl Into<String>) -> Self {
+        FsError {
+            code,
+            location: None,
+            context: context.into(),
+            cause: None,
+            backtrace: Backtrace::disabled(),
+            jinja_frames: vec![],
+            next: None,
+        }
+    }
+
     pub fn new_with_forced_backtrace(code: ErrorCode, context: impl Into<String>) -> Self {
         FsError {
             code,
@@ -225,6 +237,12 @@ impl FsError {
 
     pub fn from_jinja_err(err: minijinja::Error, context: impl Display) -> Self {
         if err.kind() == minijinja::ErrorKind::ExitWithStatus {
+            if let Some(detail) = err.detail().filter(|d| !d.is_empty()) {
+                return FsError::new_no_backtrace(
+                    ErrorCode::JinjaWarnUpgradedToError,
+                    detail.to_string(),
+                );
+            }
             return *FsError::exit_with_status(1);
         }
 
@@ -300,8 +318,10 @@ impl FsError {
         if let Some(location) = &self.location {
             s.push_str(&format!("\n  --> {location}"));
         }
-        if is_sdf_debug() && self.cause.is_some() {
-            s.push_str(&format!("\n{:#?}", self.cause.as_ref().unwrap()));
+        if is_sdf_debug()
+            && let Some(cause) = &self.cause
+        {
+            s.push_str(&format!("\n{:#?}", cause));
         }
         if let Some(backtrace) = self.get_backtrace() {
             s.push_str(&format!("\n{backtrace}"));
@@ -317,8 +337,10 @@ impl FsError {
         if let Some(location) = &self.location {
             s.push_str(&format!("\n  --> {location}"));
         }
-        if is_sdf_debug() && self.cause.is_some() {
-            s.push_str(&format!("\n{:#?}", self.cause.as_ref().unwrap()));
+        if is_sdf_debug()
+            && let Some(cause) = &self.cause
+        {
+            s.push_str(&format!("\n{:#?}", cause));
         }
         if let Some(backtrace) = self.get_backtrace() {
             s.push_str(&format!("\n{backtrace}"));

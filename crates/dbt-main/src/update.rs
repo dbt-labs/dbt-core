@@ -27,7 +27,6 @@ use async_compression::tokio::bufread::GzipDecoder;
 #[cfg(not(target_os = "windows"))]
 use futures::StreamExt;
 
-use dbt_clap_core::SystemUpdateArgs;
 use dbt_common::FsResult;
 use dbt_common::constants::DBT_CDN_URL;
 use std::future::Future;
@@ -295,7 +294,7 @@ fn resolve_version_from_manifest(
 /// Fetch versions.json and resolve the target version.
 #[doc(hidden)]
 pub async fn resolve_target_version(
-    args: &SystemUpdateArgs,
+    version: Option<&str>,
     client: &dyn UpdateHttpClient,
 ) -> FsResult<String> {
     let base_url = cdn_base_url();
@@ -310,7 +309,7 @@ pub async fn resolve_target_version(
         )
     })?;
 
-    resolve_version_from_manifest(&versions, args.version.as_deref())
+    resolve_version_from_manifest(&versions, version)
 }
 
 // ---------------------------------------------------------------------------
@@ -499,16 +498,17 @@ async fn update_package_if_needed(
 #[cfg(not(target_os = "windows"))]
 #[doc(hidden)]
 pub async fn exec_update_native(
-    args: &SystemUpdateArgs,
+    version: Option<&str>,
+    package: Option<&str>,
     dest_dir: &Path,
     client: &dyn UpdateHttpClient,
 ) -> FsResult<()> {
     let target = current_target_triple()?;
-    let package = args.package.as_deref().unwrap_or("dbt");
+    let package = package.unwrap_or("dbt");
 
     println(format!("Updating {package} for {target} (native)"));
 
-    let target_version = resolve_target_version(args, client).await?;
+    let target_version = resolve_target_version(version, client).await?;
     println(format!("Target version: {target_version}"));
 
     let install_dbt = package == "dbt" || package == "all";
@@ -533,7 +533,8 @@ pub async fn exec_update_native(
 
 #[cfg(not(target_os = "windows"))]
 async fn exec_update_legacy(
-    args: &SystemUpdateArgs,
+    version: Option<&str>,
+    package: Option<&str>,
     curr_path: &str,
     client: &dyn UpdateHttpClient,
 ) -> FsResult<()> {
@@ -548,12 +549,12 @@ async fn exec_update_legacy(
         curr_path.to_string(),
     ];
 
-    if let Some(ref version) = args.version {
+    if let Some(version) = version {
         script_args.push(String::from("--version"));
         script_args.push(version.to_string());
     }
 
-    if let Some(ref package) = args.package {
+    if let Some(package) = package {
         script_args.push(String::from("--package"));
         script_args.push(package.to_string());
     }
@@ -589,14 +590,18 @@ async fn exec_update_legacy(
     skip_all,
     fields(
         _e = ?store_event_attributes(PackageUpdate {
-            version: args.version.clone().unwrap_or_default(),
-            package: args.package.clone().unwrap_or_else(|| "dbt".to_string()),
+            version: version.unwrap_or_default().to_string(),
+            package: package.unwrap_or("dbt").to_string(),
             exe_path: None,
         }),
     )
 )]
-pub async fn exec_update(args: &SystemUpdateArgs) -> FsResult<()> {
-    exec_update_with_client(args, &ReqwestUpdateClient).await
+pub async fn exec_update(
+    version: Option<&str>,
+    package: Option<&str>,
+    force: bool,
+) -> FsResult<()> {
+    exec_update_with_client(version, package, force, &ReqwestUpdateClient).await
 }
 
 fn validate_update_package(package: Option<&str>) -> FsResult<()> {
@@ -647,13 +652,15 @@ fn blocked_self_update_message(
 /// Inner implementation that accepts an injectable HTTP client.
 /// Production code calls this via `exec_update`; tests inject a mock.
 pub(crate) async fn exec_update_with_client(
-    args: &SystemUpdateArgs,
+    version: Option<&str>,
+    package: Option<&str>,
+    force: bool,
     client: &dyn UpdateHttpClient,
 ) -> FsResult<()> {
-    validate_update_package(args.package.as_deref())?;
+    validate_update_package(package)?;
 
     let install_method = crate::install_method::InstallMethod::detect();
-    if let Some(message) = blocked_self_update_message(install_method, args.force) {
+    if let Some(message) = blocked_self_update_message(install_method, force) {
         return err!(ErrorCode::NotSupported, "{}", message);
     }
 
@@ -689,7 +696,7 @@ pub(crate) async fn exec_update_with_client(
         if use_native_update() {
             println(format!("Using native update path ({NATIVE_UPDATE_ENV}=1)"));
             let dest_dir = std::path::PathBuf::from(&curr_path);
-            return exec_update_native(args, &dest_dir, client).await;
+            return exec_update_native(version, package, &dest_dir, client).await;
         }
 
         println(format!("ANALYZING Current exe at {curr_path}/"));
@@ -710,20 +717,20 @@ pub(crate) async fn exec_update_with_client(
         #[cfg(target_os = "linux")]
         println("Updating Binary for Linux AARCH-64");
 
-        return exec_update_legacy(args, &curr_path, client).await;
+        return exec_update_legacy(version, package, &curr_path, client).await;
     }
 
     #[cfg(target_os = "windows")]
     {
         println(format!("ANALYZING Current exe at {curr_path}/"));
         println("Updating Binary for Windows X86-64");
-        exec_update_windows(args, &curr_path, client).await
+        exec_update_windows(version, &curr_path, client).await
     }
 }
 
 #[cfg(target_os = "windows")]
 async fn exec_update_windows(
-    args: &SystemUpdateArgs,
+    version: Option<&str>,
     curr_path: &str,
     client: &dyn UpdateHttpClient,
 ) -> FsResult<()> {
@@ -766,9 +773,7 @@ async fn exec_update_windows(
         "& '{}' -Update -To '{}'{}",
         path_str.replace("\\", "\\\\"),
         curr_path.replace("\\", "\\\\"),
-        args.version
-            .as_ref()
-            .map_or(String::new(), |v| format!(" -Version '{v}'"))
+        version.map_or(String::new(), |v| format!(" -Version '{v}'"))
     );
 
     let ps_exe = if env::var("PSModulePath").is_ok_and(|path| path.contains("PowerShell/7")) {
@@ -804,7 +809,6 @@ async fn exec_update_windows(
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use dbt_clap_core::SystemUpdateArgs;
     use dbt_common::{ErrorCode, FsResult, err};
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -966,12 +970,7 @@ mod tests {
         let client =
             MockHttpClient::new().with_text(format!("{}/versions.json", cdn_base_url()), &manifest);
 
-        let args = SystemUpdateArgs {
-            version: None,
-            package: None,
-            force: false,
-        };
-        let version = resolve_target_version(&args, &client).await.unwrap();
+        let version = resolve_target_version(None, &client).await.unwrap();
         assert_eq!(version, "2.0.0-preview.154");
     }
 
@@ -981,12 +980,8 @@ mod tests {
         let client =
             MockHttpClient::new().with_text(format!("{}/versions.json", cdn_base_url()), &manifest);
 
-        let args = SystemUpdateArgs {
-            version: Some("canary".to_string()),
-            package: None,
-            force: false,
-        };
-        let version = resolve_target_version(&args, &client).await.unwrap();
+        let version = Some("canary");
+        let version = resolve_target_version(version, &client).await.unwrap();
         assert_eq!(version, "2.0.0-preview.157");
     }
 
@@ -1006,12 +1001,7 @@ mod tests {
             .with_bytes(tarball_url, tarball);
 
         let tmp = tempfile::tempdir().unwrap();
-        let args = SystemUpdateArgs {
-            version: None,
-            package: Some("dbt".to_string()),
-            force: false,
-        };
-        exec_update_native(&args, tmp.path(), &client)
+        exec_update_native(None, Some("dbt"), tmp.path(), &client)
             .await
             .unwrap();
 
@@ -1041,12 +1031,7 @@ mod tests {
             );
 
         let tmp = tempfile::tempdir().unwrap();
-        let args = SystemUpdateArgs {
-            version: Some("canary".to_string()),
-            package: Some("all".to_string()),
-            force: false,
-        };
-        exec_update_native(&args, tmp.path(), &client)
+        exec_update_native(Some("canary"), Some("all"), tmp.path(), &client)
             .await
             .unwrap();
 
@@ -1110,12 +1095,7 @@ mod tests {
             MockHttpClient::new().with_text(format!("{}/versions.json", cdn_base_url()), &manifest);
 
         let tmp = tempfile::tempdir().unwrap();
-        let args = SystemUpdateArgs {
-            version: None,
-            package: Some("bogus".to_string()),
-            force: false,
-        };
-        let result = exec_update_native(&args, tmp.path(), &client).await;
+        let result = exec_update_native(None, Some("bogus"), tmp.path(), &client).await;
         assert!(result.is_err());
     }
 
@@ -1133,12 +1113,7 @@ mod tests {
             .with_bytes(tarball_url, tarball);
 
         let tmp = tempfile::tempdir().unwrap();
-        let args = SystemUpdateArgs {
-            version: None,
-            package: Some("dbt".to_string()),
-            force: false,
-        };
-        let result = exec_update_native(&args, tmp.path(), &client).await;
+        let result = exec_update_native(None, Some("dbt"), tmp.path(), &client).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.unwrap_err());
         assert!(
@@ -1164,12 +1139,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("dbt"), b"old-binary").unwrap();
 
-        let args = SystemUpdateArgs {
-            version: None,
-            package: Some("dbt".to_string()),
-            force: false,
-        };
-        exec_update_native(&args, tmp.path(), &client)
+        exec_update_native(None, Some("dbt"), tmp.path(), &client)
             .await
             .unwrap();
 
@@ -1182,12 +1152,7 @@ mod tests {
     #[tokio::test]
     async fn test_manifest_fetch_failure_propagates() {
         let client = MockHttpClient::new();
-        let args = SystemUpdateArgs {
-            version: None,
-            package: None,
-            force: false,
-        };
-        let result = resolve_target_version(&args, &client).await;
+        let result = resolve_target_version(None, &client).await;
         assert!(result.is_err());
     }
 
@@ -1323,12 +1288,7 @@ mod tests {
             .with_bytes(&tarball_url, tarball);
 
         let tmp = tempfile::tempdir().unwrap();
-        let args = SystemUpdateArgs {
-            version: None,
-            package: Some("dbt".to_string()),
-            force: false,
-        };
-        exec_update_native(&args, tmp.path(), &client)
+        exec_update_native(None, Some("dbt"), tmp.path(), &client)
             .await
             .unwrap();
 

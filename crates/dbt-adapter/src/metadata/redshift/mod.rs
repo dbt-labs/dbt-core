@@ -10,13 +10,13 @@ use arrow::array::*;
 use arrow::datatypes::GenericStringType;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_adapter_core::{AdapterType, ExecutionPhase};
+use dbt_adbc::*;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::RelationPattern;
-use dbt_xdbc::*;
 use indexmap::IndexMap;
 
 use std::collections::btree_map::Entry;
@@ -218,7 +218,8 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
     is_nullable,
     remarks,
     EXISTS(SELECT 1 FROM SVV_EXTERNAL_TABLES
-           WHERE schemaname = '{schema}'
+           WHERE redshift_database_name = '{catalog}'
+           AND schemaname = '{schema}'
            AND tablename = '{identifier}') AS is_external
 FROM SVV_ALL_COLUMNS
 WHERE database_name = '{catalog}'
@@ -1215,7 +1216,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
                 acc.push(ViewDefinition {
                     fqn: rel.semantic_fqn(),
                     definition,
-                    dialect: dbt_frontend_common::Dialect::Redshift,
+                    dialect: AdapterType::Redshift,
                     default_catalog: rel.database_as_str().unwrap_or_default().to_string(),
                     default_schema: rel.schema_as_str().unwrap_or_default().to_string(),
                 });

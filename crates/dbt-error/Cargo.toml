@@ -19,6 +19,7 @@ dbt-proc-macros = { workspace = true }
 
 # Cancellation error conversion
 dbt-base = { workspace = true }
+dbt-tracing = { workspace = true }
 
 # Core dependencies needed by error types
 arrow = { workspace = true }

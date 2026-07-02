@@ -10,6 +10,7 @@ use arrow_array::*;
 use arrow_schema::{Field, Schema};
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
 use dbt_common::cancellation::Cancellable;
@@ -21,7 +22,6 @@ use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::State;
 use once_cell::sync::Lazy;
@@ -1218,7 +1218,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             acc.push(ViewDefinition {
                 fqn,
                 definition: view_text,
-                dialect: Dialect::Databricks,
+                dialect: AdapterType::Databricks,
                 default_catalog,
                 default_schema,
             });
@@ -1227,6 +1227,79 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(fqns), token)
+    }
+
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        _database: &'a str,
+        _schema: &'a str,
+        relations: &'a [Arc<dyn BaseRelation>],
+        _options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        // Mirrors the plugin's _batch_table_names strategy:
+        //
+        // - Tables: per-relation DESCRIBE HISTORY LIMIT 1 in parallel.
+        //   INFORMATION_SCHEMA.last_altered only reflects DDL (CREATE/ALTER),
+        //   not DML writes (INSERT/UPDATE/DELETE/MERGE). Delta tables require
+        //   the transaction log for accurate freshness.
+        //   Ref: https://kb.databricks.com/unity-catalog/last_altered-column-in-information_schema-not-reflecting-data-modifications
+        //
+        // - Views: DESCRIBE HISTORY fails (no Delta log); databricks_freshness_for_relation
+        //   falls back to a per-relation INFORMATION_SCHEMA.last_altered query, which
+        //   IS accurate for views since DDL changes are the only meaningful freshness signal.
+        //
+        // The relation cache (populated via list_relations earlier in the run) determines
+        // the type for each relation without issuing additional warehouse queries —
+        // the same approach the plugin uses via adapter.get_relation().
+        if relations.is_empty() {
+            return Box::pin(async { Ok(BTreeMap::new()) });
+        }
+
+        let cache = self.adapter.engine().relation_cache();
+        let mut table_relations: Vec<Arc<dyn BaseRelation>> = Vec::new();
+        let mut view_relations: Vec<Arc<dyn BaseRelation>> = Vec::new();
+        for relation in relations {
+            let cached_type = cache
+                .get_relation(relation.as_ref())
+                .and_then(|e| e.relation().relation_type());
+            match cached_type {
+                Some(RelationType::View) | Some(RelationType::MaterializedView) => {
+                    view_relations.push(Arc::clone(relation));
+                }
+                _ => {
+                    table_relations.push(Arc::clone(relation));
+                }
+            }
+        }
+
+        // Both paths use databricks_freshness_for_relation, which issues
+        // DESCRIBE HISTORY for tables and falls back to IS for views.
+        // All relations run in parallel via MapReduce.
+        let all_relations = relations.to_vec();
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        type Acc = BTreeMap<String, MetadataFreshness>;
+        let factory = Box::new(AdapterConnectionFactory::new(
+            adapter.engine().clone(),
+            adapter.engine().threads(),
+        ));
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          relation: &Arc<dyn BaseRelation>|
+              -> AdapterResult<Option<MetadataFreshness>> {
+            databricks_freshness_for_relation(&adapter, &mut *conn, relation, token_clone.clone())
+        };
+        let reduce_f = move |acc: &mut Acc,
+                             relation: Arc<dyn BaseRelation>,
+                             result: AdapterResult<Option<MetadataFreshness>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            if let Some(freshness) = result? {
+                acc.insert(relation.semantic_fqn(), freshness);
+            }
+            Ok(())
+        };
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(all_relations), token)
     }
 }
 

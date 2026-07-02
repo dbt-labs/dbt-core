@@ -3,7 +3,7 @@ use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
-use crate::resolve::resolve_utils::validate_compute;
+use crate::resolve::resolve_utils::validate_unit_test_compute;
 use crate::utils::get_node_fqn;
 use crate::utils::get_unique_id;
 use crate::validation::check_node_static_analysis;
@@ -14,6 +14,7 @@ use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
+use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 
@@ -142,7 +143,7 @@ pub fn resolve_unit_tests(
             &package.dbt_project.all_source_paths(),
         );
 
-        let properties_config =
+        let mut properties_config =
             config_resolver.resolve_with_properties(&fqn, unit_test.config.as_ref());
         check_node_static_analysis(
             &properties_config,
@@ -151,7 +152,14 @@ pub fn resolve_unit_tests(
             dependency_package_name,
             arg.io.status_reporter.as_ref(),
         );
-        validate_compute(properties_config.compute, &mpe.relative_path)?;
+        validate_unit_test_compute(properties_config.compute, &mpe.relative_path)?;
+        // Sidecar needs a bound LP. Upgrade baseline to strict like the CLI
+        // does for non-remote --compute. Can disable via explicit off.
+        if properties_config.compute == Some(ComputeArg::Sidecar)
+            && *properties_config.static_analysis != StaticAnalysisKind::Off
+        {
+            properties_config.static_analysis = StaticAnalysisKind::Strict.into();
+        }
 
         let enabled = properties_config.enabled;
 
@@ -254,6 +262,7 @@ pub fn resolve_unit_tests(
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
+                classifiers: Default::default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {

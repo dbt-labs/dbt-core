@@ -1063,7 +1063,7 @@ pub async fn get_model(
 
     let node_sql = MODEL_DETAIL_NODE_SQL.replace("{id}", &id);
     let columns_sql = format!(
-        "SELECT column_name AS name, column_index AS index, \
+        "SELECT LOWER(column_name) AS name, column_index AS index, \
                 data_type, declared_type, inferred_type, catalog_type, \
                 description, label, granularity \
          FROM dbt.node_columns WHERE unique_id = '{id}' \

@@ -4,6 +4,7 @@ use dbt_clap_core::{Cli, Command, CoreCommand};
 use dbt_common::{FsResult, io_args::EvalArgs};
 use dbt_compilation::config::CompilationConfig;
 use dbt_compilation::core::DbtLoadedProject;
+use dbt_jinja_utils::JinjaFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_metadata::{
     file_registry::CompleteStateWithKind,
@@ -50,6 +51,7 @@ pub fn try_load_prev_compilation(
     cli: &Cli,
     type_ops_factory: Arc<dyn TypeOpsFactory>,
     adapter_factory: Arc<dyn AdapterFactory>,
+    jinja_factory: Arc<dyn JinjaFactory>,
 ) -> (PrevCompilationResult, bool) {
     let io = &eval.io;
     let has_dirty = cli.common_args.dirty;
@@ -257,8 +259,13 @@ pub fn try_load_prev_compilation(
         test_name_truncations: Default::default(),
     };
 
-    let loaded_project =
-        DbtLoadedProject::from_parts(config.clone(), type_ops_factory, adapter_factory, dbt_state);
+    let loaded_project = DbtLoadedProject::from_parts(
+        config.clone(),
+        type_ops_factory,
+        adapter_factory,
+        dbt_state,
+        jinja_factory,
+    );
 
     let compilation = Arc::new(DbtProjectCompilation {
         loaded_project: Arc::new(loaded_project),

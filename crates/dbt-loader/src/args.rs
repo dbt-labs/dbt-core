@@ -8,6 +8,7 @@ use dbt_schemas::state::DbtState;
 
 #[derive(Clone, Default)]
 pub struct LoadArgs {
+    pub command: FsCommand,
     pub io: IoArgs,
     // The profile directory to load the profiles from
     pub profiles_dir: Option<PathBuf>,
@@ -64,6 +65,7 @@ pub struct LoadArgs {
 impl LoadArgs {
     pub fn from_eval_args(arg: &EvalArgs) -> Self {
         Self {
+            command: arg.command,
             io: arg.io.clone(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),

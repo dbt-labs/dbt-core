@@ -3,6 +3,7 @@ use dbt_common::serde_utils::Omissible;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
 use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
+use minijinja::value::ValueKind;
 use serde::{
     self, Deserialize, Deserializer, Serialize, Serializer,
     de::{self, DeserializeOwned},
@@ -467,6 +468,60 @@ impl StringOrInteger {
                 }
             }
             StringOrInteger::Integer(i) => *i,
+        }
+    }
+}
+
+/// Preserves the original literal type from a Jinja `ref()` call's `version`/`v` kwarg.
+/// Matches dbt-core's `NodeVersion = Union[int, float, str]`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, DbtSchema)]
+#[serde(untagged)]
+pub enum NodeVersion {
+    Integer(i64),
+    Float(f64),
+    String(String),
+}
+
+impl std::fmt::Display for NodeVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeVersion::Integer(i) => write!(f, "{i}"),
+            NodeVersion::Float(v) => write!(f, "{v}"),
+            NodeVersion::String(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl TryFrom<minijinja::Value> for NodeVersion {
+    type Error = minijinja::Error;
+
+    fn try_from(value: minijinja::Value) -> Result<Self, Self::Error> {
+        match value.kind() {
+            ValueKind::String => Ok(NodeVersion::String(
+                value
+                    .as_str()
+                    .expect("kind is String but as_str returned None")
+                    .to_owned(),
+            )),
+            ValueKind::Number => {
+                if value.is_integer() {
+                    if let Some(i) = value.as_i64() {
+                        return Ok(NodeVersion::Integer(i));
+                    }
+                }
+                if let Ok(f) = f64::try_from(value) {
+                    Ok(NodeVersion::Float(f))
+                } else {
+                    Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "unsupported numeric type for version",
+                    ))
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "version must be a string, integer, or float",
+            )),
         }
     }
 }
@@ -1159,6 +1214,56 @@ mod tests {
         assert!(
             json.contains(r#""data_type":"varchar""#),
             "expected map form in json, got {json}",
+        );
+    }
+
+    #[test]
+    fn test_node_version_serialization_preserves_type() {
+        assert_eq!(
+            serde_json::to_string(&NodeVersion::Integer(2)).unwrap(),
+            "2"
+        );
+        assert_eq!(
+            serde_json::to_string(&NodeVersion::Float(1.5)).unwrap(),
+            "1.5"
+        );
+        assert_eq!(
+            serde_json::to_string(&NodeVersion::String("2".to_string())).unwrap(),
+            r#""2""#
+        );
+    }
+
+    #[test]
+    fn test_node_version_try_from_integral_float_stays_float() {
+        use minijinja::Value;
+        let val = Value::from(2.0f64);
+        assert_eq!(
+            NodeVersion::try_from(val).unwrap(),
+            NodeVersion::Float(2.0),
+            "integral float 2.0 must stay Float, not coerce to Integer",
+        );
+    }
+
+    #[test]
+    fn test_node_version_try_from_minijinja_value() {
+        use minijinja::Value;
+
+        let int_val = Value::from(2i64);
+        assert_eq!(
+            NodeVersion::try_from(int_val).unwrap(),
+            NodeVersion::Integer(2)
+        );
+
+        let float_val = Value::from(1.5f64);
+        assert_eq!(
+            NodeVersion::try_from(float_val).unwrap(),
+            NodeVersion::Float(1.5)
+        );
+
+        let str_val = Value::from("2");
+        assert_eq!(
+            NodeVersion::try_from(str_val).unwrap(),
+            NodeVersion::String("2".to_string())
         );
     }
 }

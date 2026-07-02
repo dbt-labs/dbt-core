@@ -23,8 +23,8 @@ use crate::schemas::common::{Access, DbtQuoting};
 use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
-    access_eq, array_of_strings_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
-    same_warehouse_config,
+    access_eq, array_of_strings_eq, docs_eq, grants_eq_with_unrendered, meta_eq,
+    omissible_option_eq, same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{
@@ -39,6 +39,16 @@ use crate::schemas::serde::{bool_or_string_bool, default_type};
 
 fn default_function_kind() -> Option<FunctionKind> {
     Some(FunctionKind::Scalar)
+}
+
+/// Snowflake-specific configuration for functions. Nested under the `snowflake`
+/// key inside `config:` in schema YAML (or `+snowflake:` under `functions:` in
+/// `dbt_project.yml`).
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
+pub struct FunctionSnowflakeConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub quote_args: Option<bool>,
 }
 
 #[skip_serializing_none]
@@ -82,6 +92,8 @@ pub struct ProjectFunctionConfig {
     pub entry_point: Option<String>,
     #[serde(rename = "+packages")]
     pub packages: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+snowflake")]
+    pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Additional properties for directory structure
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectFunctionConfig>>,
@@ -109,6 +121,7 @@ impl Default for ProjectFunctionConfig {
             runtime_version: None,
             entry_point: None,
             packages: None,
+            snowflake: None,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -158,6 +171,7 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
             runtime_version,
             entry_point,
             packages,
+            snowflake,
             __additional_properties__: _,
         } = self;
 
@@ -185,6 +199,7 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
                 volatility,
                 runtime_version,
                 entry_point,
+                snowflake,
             ]
         );
     }
@@ -233,6 +248,7 @@ pub struct FunctionConfig {
     pub runtime_version: Option<String>,
     pub entry_point: Option<String>,
     pub packages: Option<StringOrArrayOfStrings>,
+    pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Warehouse-specific configurations
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -287,6 +303,7 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
             runtime_version,
             entry_point,
             packages,
+            snowflake,
             __warehouse_specific_config__: warehouse_config,
         } = self;
 
@@ -319,6 +336,7 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
                 volatility,
                 runtime_version,
                 entry_point,
+                snowflake,
             ]
         );
     }
@@ -345,6 +363,7 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             runtime_version: config.runtime_version,
             entry_point: config.entry_point,
             packages: config.packages,
+            snowflake: config.snowflake,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig::default(),
         }
     }
@@ -352,7 +371,12 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
 
 impl FunctionConfig {
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
-    pub fn same_config(&self, other: &FunctionConfig) -> bool {
+    pub fn same_config(
+        &self,
+        other: &FunctionConfig,
+        self_unrendered_config: &BTreeMap<String, YmlValue>,
+        other_unrendered_config: &BTreeMap<String, YmlValue>,
+    ) -> bool {
         // Compare all fields individually
         let enabled_eq = self.enabled == other.enabled;
         let alias_eq = self.alias == other.alias;
@@ -361,7 +385,12 @@ impl FunctionConfig {
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let group_eq = self.group == other.group;
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
-        let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
+        let grants_eq_result = grants_eq_with_unrendered(
+            &self.grants,
+            &other.grants,
+            self_unrendered_config,
+            other_unrendered_config,
+        ); // Custom comparison for grants
         let quoting_eq = self.quoting == other.quoting;
         let on_configuration_change_eq =
             self.on_configuration_change == other.on_configuration_change;
@@ -370,9 +399,12 @@ impl FunctionConfig {
         let volatility_eq = self.volatility == other.volatility;
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
         let packages_eq = array_of_strings_eq(&self.packages, &other.packages);
-        let warehouse_config_eq = same_warehouse_config(
+        let snowflake_eq = self.snowflake == other.snowflake;
+        let warehouse_config_eq = same_warehouse_config_with_unrendered(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
+            self_unrendered_config,
+            other_unrendered_config,
         );
 
         let result = enabled_eq
@@ -390,6 +422,7 @@ impl FunctionConfig {
             && volatility_eq
             && access_eq_result
             && packages_eq
+            && snowflake_eq
             && warehouse_config_eq;
 
         if !result {
@@ -498,6 +531,14 @@ impl FunctionConfig {
                             format!("{:?}", &other.packages),
                         )),
                     ),
+                    (
+                        "snowflake",
+                        snowflake_eq,
+                        Some((
+                            format!("{:?}", &self.snowflake),
+                            format!("{:?}", &other.snowflake),
+                        )),
+                    ),
                     ("warehouse_config", warehouse_config_eq, None),
                 ],
             );
@@ -587,7 +628,8 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(a.same_config(&b));
+        let empty_uc = BTreeMap::new();
+        assert!(a.same_config(&b, &empty_uc, &empty_uc));
 
         let c = FunctionConfig {
             packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
@@ -596,6 +638,6 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!a.same_config(&c));
+        assert!(!a.same_config(&c, &empty_uc, &empty_uc));
     }
 }

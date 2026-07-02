@@ -1,4 +1,5 @@
-use dbt_telemetry::{GenericOpExecuted, GenericOpItemProcessed, SpanStatus, StatusCode};
+use dbt_telemetry::{GenericOpExecuted, GenericOpItemProcessed};
+use dbt_tracing::{SpanStatus, StatusCode};
 
 use crate::tracing::formatters::layout::{right_align_action, right_align_static_action};
 

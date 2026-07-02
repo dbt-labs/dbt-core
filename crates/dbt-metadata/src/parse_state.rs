@@ -1,6 +1,6 @@
 //! Pure-Rust parquet-backed incremental parse cache.
 //!
-//! Replaces `duckdb_incremental.rs` with zero runtime dependencies on DuckDB / xdbc.
+//! Replaces `duckdb_incremental.rs` with zero runtime dependencies on DuckDB / adbc.
 //!
 //! # Layout
 //!
@@ -219,6 +219,7 @@ pub(crate) struct NodeRow {
     pub macro_arguments_json: String, // JSON array of MacroArgument — "" for non-macros
     pub macro_span_json: String,      // JSON-encoded Span (all 6 fields) — "" if absent
     pub macro_name_span_json: String, // JSON-encoded macro_name_span — "" if absent
+    pub macro_absolute_path: String,  // absolute_path as lossy UTF-8 string — "" if absent
     // Promoted fields: redundant indexes into payload for DuckDB filter pushdown.
     // Nullable (Option) — backward-compatible with old epoch files (serde_arrow reads NULL).
     pub description: Option<String>,
@@ -363,6 +364,7 @@ fn node_fields() -> Vec<FieldRef> {
         str_field("macro_arguments_json"),
         str_field("macro_span_json"),
         str_field("macro_name_span_json"),
+        str_field("macro_absolute_path"),
         nullable_str_field("description"),
         nullable_str_field("database"),
         nullable_str_field("schema"),
@@ -481,6 +483,7 @@ fn node_row_from_macro(uid: &str, node: &DbtMacro, is_disabled: i32) -> NodeRow 
         .as_ref()
         .and_then(|s| serde_json::to_string(s).ok())
         .unwrap_or_default();
+    let macro_absolute_path = node.absolute_path.to_string_lossy().to_string();
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
@@ -496,6 +499,7 @@ fn node_row_from_macro(uid: &str, node: &DbtMacro, is_disabled: i32) -> NodeRow 
         macro_arguments_json,
         macro_span_json,
         macro_name_span_json,
+        macro_absolute_path,
         ..Default::default()
     }
 }
@@ -1510,6 +1514,7 @@ fn load_nodes(
             &row.macro_arguments_json,
             &row.macro_span_json,
             &row.macro_name_span_json,
+            &row.macro_absolute_path,
             target,
         );
     }
@@ -1526,6 +1531,7 @@ fn deserialize_into(
     macro_arguments_json: &str,
     macro_span_json: &str,
     macro_name_span_json: &str,
+    macro_absolute_path: &str,
     nodes: &mut Nodes,
 ) {
     macro_rules! deser {
@@ -1556,6 +1562,9 @@ fn deserialize_into(
                 }
                 if !macro_name_span_json.is_empty() {
                     v.macro_name_span = serde_json::from_str(macro_name_span_json).ok();
+                }
+                if !macro_absolute_path.is_empty() {
+                    v.absolute_path = PathBuf::from(macro_absolute_path);
                 }
                 nodes.macros.insert(uid.to_string(), Arc::new(v));
             }
@@ -1833,6 +1842,7 @@ mod tests {
             &r.macro_arguments_json,
             &r.macro_span_json,
             &r.macro_name_span_json,
+            &r.macro_absolute_path,
             &mut nodes,
         );
 
@@ -1918,6 +1928,7 @@ mod tests {
             &r.macro_arguments_json,
             &r.macro_span_json,
             &r.macro_name_span_json,
+            &r.macro_absolute_path,
             &mut nodes,
         );
 

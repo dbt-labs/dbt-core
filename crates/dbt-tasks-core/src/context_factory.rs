@@ -8,12 +8,13 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
 use dbt_common::collections::DashMap;
 use dbt_dag::schedule::Schedule;
+use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::RenderingEventListenerFactory;
-use dbt_run_cache::view_traversal::ViewDefinitionTraverser;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
+use dbt_state::view_traversal::ViewDefinitionTraverser;
 use petgraph::graph::DiGraph;
 
 use crate::CompiledSqlCache;
@@ -30,6 +31,7 @@ use crate::test_aggregation::GenericTestRelationships;
 /// Abstract [TaskRunnerCtx] factory.
 pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
     fn rendering_listener_factory(&self) -> Arc<dyn RenderingEventListenerFactory>;
+    fn sources_extractor(&self) -> Arc<dyn SourcesExtractor>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn build(
@@ -116,6 +118,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                 metadata: run_cache_metadata,
             } = run_cache_lifecycle;
 
+            let sources_extractor = self.sources_extractor();
             let run_cache_ctx = RunCacheCtx {
                 run_cache_metadata,
                 run_cache_dev_cloned_nodes: DashMap::default(),
@@ -126,9 +129,10 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                 view_traverser: adapter.metadata_adapter().map(|metadata_adapter| {
                     Arc::new(ViewDefinitionTraverser::new(
                         Arc::from(metadata_adapter),
-                        Arc::clone(adapter.engine().type_ops()),
+                        Arc::clone(&sources_extractor),
                     ))
                 }),
+                heuristic_clock: std::sync::OnceLock::new(),
             };
 
             Ok(TaskRunnerCtx {
@@ -145,6 +149,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                     generic_test_relationships,
                     span_manager,
                     execute,
+                    sources_extractor,
                     run_cache_ctx,
                 )),
                 schema_cache,

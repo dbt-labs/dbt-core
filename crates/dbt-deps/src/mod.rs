@@ -17,10 +17,10 @@ pub mod types;
 pub mod utils;
 
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::constants::DBT_PROJECT_YML;
+use dbt_common::constants::{DBT_PACKAGES_LOCK_FILE, DBT_PROJECT_YML};
 use dbt_common::create_info_span;
-use dbt_common::io_args::{IoArgs, ReplayMode, TimeMachineMode};
-use dbt_common::tracing::dbt_emit::emit_info_progress_message;
+use dbt_common::io_args::{FsCommand, IoArgs, ReplayMode, TimeMachineMode};
+use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_info_progress_message};
 use dbt_common::tracing::span_info::{
     SpanStatusRecorder as _, record_span_status, record_span_status_with_attrs,
 };
@@ -41,6 +41,7 @@ use crate::context::DepsOperationContext;
 #[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
 pub async fn get_or_install_packages(
     io: &IoArgs,
+    command: FsCommand,
     env: &JinjaEnv,
     packages_install_path: &Path,
     install_deps: bool,
@@ -231,6 +232,8 @@ pub async fn get_or_install_packages(
     // Auto install missing packages if not installing deps
     if !lock && !missing_packages.is_empty() {
         if !install_deps {
+            emit_auto_install_without_lock_info(io, command);
+
             // Start install span. Note that actual package count may end up being less
             // then in the package lock due to package incorporation logic
             let install_span = create_info_span(DepsAllPackagesInstalled::start(
@@ -282,4 +285,21 @@ pub async fn get_or_install_packages(
         dbt_packages_lock,
         package_def.map(|p| p.projects).unwrap_or_default(),
     ))
+}
+
+fn emit_auto_install_without_lock_info(io: &IoArgs, command: FsCommand) {
+    if io.in_dir.join(DBT_PACKAGES_LOCK_FILE).exists() {
+        return;
+    }
+
+    let command = command.as_str();
+    let command = if command.is_empty() {
+        "dbt".to_string()
+    } else {
+        format!("dbt {command}")
+    };
+
+    emit_info_log_message(format!(
+        "Auto installing dependencies while running `{command}`. To ensure dependencies are cached, run `dbt deps` to initialize a valid package-lock.yml."
+    ));
 }

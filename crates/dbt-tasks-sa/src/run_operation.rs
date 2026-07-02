@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use dbt_common::{
     ErrorCode, FsError, FsResult,
-    constants::{
-        DBT_COMPILED_DIR_NAME, DBT_CTE_PREFIX, DBT_EPHEMERAL_DIR_NAME, DBT_HOOKS_DIR_NAME,
-    },
+    constants::{DBT_CTE_PREFIX, DBT_EPHEMERAL_DIR_NAME},
     fs_err,
     io_args::IoArgs,
     stdfs, tokiofs, unexpected_fs_err,
@@ -22,8 +20,8 @@ use dbt_jinja_utils::{
     utils::{inject_and_persist_ephemeral_models, render_sql},
 };
 use dbt_schemas::schemas::{
-    ContextRunResult, InternalDbtNode, InternalDbtNodeAttributes, common::DbtMaterialization,
-    manifest::DbtOperation,
+    ContextRunResult, InternalDbtNode, InternalDbtNodeAttributes, NodePathKind,
+    common::DbtMaterialization, manifest::DbtOperation,
 };
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::context::TaskRunnerCtx;
@@ -243,37 +241,42 @@ pub async fn run_operation_on_run(
     let default_listener_factory = DefaultRenderingEventListenerFactory::default();
     let listener_factory = listener_factory.unwrap_or(&default_listener_factory);
 
-    // First, wrap the raw_code with reset_span and render it
-    let raw_code_with_reset_span = format!(
-        "{{% do reset_span('{}', {}, {}, {}, {}, {}, {}) %}}\n{}",
-        operation
-            .__common_attr__
-            .original_file_path
-            .to_string_lossy(),
-        operation.span().start.line as u32,
-        operation.span().start.column as u32,
-        operation.span().start.index as u32,
-        operation.span().end.line as u32,
-        operation.span().end.column as u32,
-        operation.span().end.index as u32,
-        operation
-            .__common_attr__
-            .raw_code
-            .as_ref()
-            .expect("raw_code is required in operation"),
-    );
+    // First, wrap the raw_code with reset_span and render it.
+    // Skip reset_span when the span is invalid (e.g. after deserialization from JSON
+    // in partial-parse mode, where the dbt_yaml Spanned wrapper loses its source span).
+    let raw_code = operation
+        .__common_attr__
+        .raw_code
+        .as_ref()
+        .expect("raw_code is required in operation");
+    let raw_code_with_reset_span = if operation.span().is_valid() {
+        format!(
+            "{{% do reset_span('{}', {}, {}, {}, {}, {}, {}) %}}\n{}",
+            operation
+                .__common_attr__
+                .original_file_path
+                .to_string_lossy(),
+            operation.span().start.line as u32,
+            operation.span().start.column as u32,
+            operation.span().start.index as u32,
+            operation.span().end.line as u32,
+            operation.span().end.column as u32,
+            operation.span().end.index as u32,
+            raw_code,
+        )
+    } else {
+        raw_code.to_string()
+    };
 
     operation_ctx.insert(
         "write".to_owned(),
         MinijinjaValue::from_object(WriteConfig {
-            // as assigned by `dbt_parser::new_operation`
-            node_name: operation.__common_attr__.name.clone(),
             resource_type: NodeType::Operation.as_str_name().to_string(),
-            project_root: io_args.in_dir.clone(),
-            target_path: io_args.out_dir.clone(),
-            package_name: operation.__common_attr__.package_name.clone(),
-            path: operation.__common_attr__.path.clone(),
-            original_file_path: operation.__common_attr__.original_file_path.clone(),
+            run_file_path: operation.get_node_path_abs(
+                NodePathKind::Executable,
+                &io_args.in_dir,
+                &io_args.out_dir,
+            ),
         }),
     );
 
@@ -301,14 +304,13 @@ pub async fn run_operation_on_run(
     )
     .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.clone()))?;
 
-    // Save the rendered sql to `target/compiled/{project}/dbt_project.yml/hooks/{name}`
-    let out_base_dir = io_args
-        .out_dir
-        .join(DBT_COMPILED_DIR_NAME)
-        .join(&operation.__common_attr__.package_name)
-        .join(DBT_HOOKS_DIR_NAME);
-    tokiofs::create_dir_all(out_base_dir.clone()).await?;
-    let compiled_path = out_base_dir.join(format!("{}.sql", operation.__common_attr__.name));
+    // Save the rendered sql to `target/compiled/{project}/dbt_project.yml/hooks/{name}.sql`,
+    // mirroring the run path obtained above and dbt-core's nested operation layout.
+    let compiled_path =
+        operation.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
+    if let Some(parent) = compiled_path.parent() {
+        tokiofs::create_dir_all(parent).await?;
+    }
     tokiofs::write(compiled_path, rendered_sql.as_bytes()).await?;
     Ok(rendered_sql)
 }

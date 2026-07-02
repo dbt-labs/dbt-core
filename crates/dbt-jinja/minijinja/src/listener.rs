@@ -5,7 +5,9 @@ use std::fmt::Write;
 use std::path::Path;
 
 use crate::compiler::tokens::Token;
+use crate::layout::JinjaLayoutEventKind;
 use crate::output_tracker::OutputTracker;
+use crate::value::Value;
 use crate::{machinery::Span, CodeLocation};
 
 /// A listener for rendering events. This is used for LSP
@@ -31,6 +33,15 @@ pub trait RenderingEventListener: std::fmt::Debug {
     /// The expanded location can be obtained from the output_tracker_location if needed.
     fn on_macro_stop(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32);
 
+    /// Called when a Jinja layout boundary is encountered during rendering.
+    fn on_jinja_layout_event(&self, _kind: JinjaLayoutEventKind, _source_span: &Span) {}
+
+    /// Called when a Jinja loop enters a repeated iteration.
+    fn on_jinja_loop_iteration_start(&self, _source_span: &Span) {}
+
+    /// Called when a Jinja loop ended without iterating.
+    fn on_jinja_loop_skipped_end(&self, _source_span: &Span) {}
+
     /// Called when raw template text is emitted into rendered output.
     fn on_raw_emit(&self, _raw: &str, _source_span: &Span) {}
 
@@ -51,9 +62,48 @@ pub trait RenderingEventListener: std::fmt::Debug {
     /// Called when a function is being exited.
     fn on_function_end(&self);
 
+    /// Called immediately before a named function call is evaluated, with the
+    /// resolved function `name` and its `args`. Paired with
+    /// [`on_function_call_end`](Self::on_function_call_end) around the call so a
+    /// listener can observe the rendered-output position before and after the
+    /// call. Domain-agnostic: the engine attaches no meaning to `name`.
+    fn on_function_call_start(&self, _name: &str, _args: &[Value]) {}
+
+    /// Called immediately after a named function call is evaluated.
+    fn on_function_call_end(&self, _name: &str) {}
+
     /// Called when a macro is invoked during rendering, to track macro dependencies.
     /// The `template_name` has the form `{package_name}.{macro_name}`.
     fn on_macro_dependency(&self, _template_name: &str) {}
+
+    /// Whether this listener wants macro call-site locations to be tracked.
+    /// Capturing the call site clones a path on every call, so the vm only does
+    /// so when at least one listener opts in. Defaults to `false`.
+    fn tracks_macro_call_sites(&self) -> bool {
+        false
+    }
+
+    /// Called just before a macro body begins executing.
+    ///
+    /// - `name` is the qualified `{package}.{macro_name}`.
+    /// - `call_site` is where the macro was invoked from (the calling
+    ///   template's path and span), when available.
+    /// - `def_path`/`def_span` is where the macro is defined.
+    ///
+    /// Paired with [`on_macro_execute_end`](Self::on_macro_execute_end) around the
+    /// body, including when the body returns an error, so callers can maintain a
+    /// balanced call stack.
+    fn on_macro_execute_start(
+        &self,
+        _name: &str,
+        _call_site: Option<(&Path, &Span)>,
+        _def_path: &Path,
+        _def_span: &Span,
+    ) {
+    }
+
+    /// Called after a macro body finishes executing (on both success and error).
+    fn on_macro_execute_end(&self, _name: &str) {}
 
     /// Called when a ref() or source() call is rendered.
     /// This is used to detect mangled refs by checking if there are

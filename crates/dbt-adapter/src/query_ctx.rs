@@ -3,10 +3,10 @@
 use crate::errors::AdapterResult;
 
 use dbt_adapter_core::DBT_EXECUTION_PHASES;
+use dbt_adbc::QueryCtx;
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
 };
-use dbt_xdbc::QueryCtx;
 use minijinja::{State, constants::CURRENT_EXECUTION_PHASE};
 use serde::Deserialize;
 

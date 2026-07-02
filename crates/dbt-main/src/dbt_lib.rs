@@ -10,7 +10,7 @@ use dbt_adapter::{
 };
 use dbt_clap_core::{
     Cli, Command, CompileArgs, CoreCommand, DocsServeArgs as ClapDocsServeArgs, DocsSubcommand,
-    LoginSubcommand, ProjectTemplate, ShowArgs, SystemCommand,
+    LoginSubcommand, ProjectTemplate, ShowArgs,
 };
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_utils::StatusReporter;
@@ -54,8 +54,7 @@ use dbt_index_core::ingest::metadata_to_parquet::{
 use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_init::init;
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv,
-    listener::{DefaultJinjaTypeCheckEventListenerFactory, JinjaTypeCheckingEventListenerFactory},
+    jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
     utils::get_catalog_by_relations,
 };
 use dbt_loader::{
@@ -100,8 +99,6 @@ use crate::{
         DbtRunTasksResult, DbtScheduleDescription, update_manifest,
     },
     retry::{RETRIABLE_COMMANDS, RetryState},
-    uninstall::exec_uninstall,
-    update::exec_update,
     utils::{InvocationContext, write_catalog_stats_parquet, write_runtime_results_parquet},
     vars::validate_engine_env_vars,
 };
@@ -257,47 +254,29 @@ async fn do_execute_fs(
         .will_execute(&cli, eval_arg, &feature_stack)
         .await?;
 
-    if let Command::Core(System(cmd)) = cli.command {
-        return match &cmd.command {
-            SystemCommand::Update(system_update_args) => {
-                exec_update(system_update_args).await.inspect_err(|e| {
-                    // Without this, the FsError returned by exec_update is silently
-                    // swallowed: the invocation summary reports "Finished 'system'
-                    // successfully" (errors==0) while the process exits non-zero,
-                    // leaving wrappers like orc/dispatch with no diagnostic. Logging
-                    // here writes the message to stderr and bumps the error counter
-                    // so the summary reflects reality.
-                    emit_error_log_from_fs_error(e.as_ref(), eval_arg.io.status_reporter.as_ref());
-                })
-            }
-            SystemCommand::Uninstall(_) => exec_uninstall().await.inspect_err(|e| {
-                emit_error_log_from_fs_error(e.as_ref(), eval_arg.io.status_reporter.as_ref());
-            }),
-            SystemCommand::InstallDrivers => {
-                dbt_xdbc::pre_install_all_drivers().map_err(|install_err| {
-                    emit_error_log_message(
-                        ErrorCode::Generic,
-                        format!("Failed to install drivers: {}", install_err).as_str(),
-                        eval_arg.io.status_reporter.as_ref(),
-                    );
-                    FsError::exit_with_status(1)
-                })
-            }
-        };
-    } else if let Command::Core(Man(_)) = &cli.command {
+    if let Command::Core(Man(_)) = &cli.command {
         return execute_man_command(eval_arg).await;
     } else if let Command::Core(Login(login_args)) = &cli.command {
         return match login_args.subcommand {
             Some(LoginSubcommand::Status) => execute_login_status().await,
-            None => execute_login(Arc::clone(&feature_stack.login_hooks), token).await,
+            None => {
+                execute_login(
+                    Arc::clone(&feature_stack.login_hooks),
+                    token,
+                    &eval_arg.io.invocation_id,
+                )
+                .await
+            }
         };
-    } else if let Command::Core(Docs(docs_args)) = cli.command {
-        return match docs_args.subcommand {
+    } else if let Command::Core(Docs(docs_args)) = &cli.command {
+        return match &docs_args.subcommand {
             Some(DocsSubcommand::Serve(serve_args)) => {
                 run_docs_serve(
-                    serve_args,
+                    serve_args.clone(),
                     &feature_stack,
                     eval_arg.io.status_reporter.as_ref(),
+                    &eval_arg.io.in_dir,
+                    &cli.common_args(),
                 )
                 .await
             }
@@ -520,7 +499,7 @@ struct AllPhasesExecutor<'a> {
     feature_stack: Arc<FeatureStack>,
     start: SystemTime,
     // simple support objects
-    jinja_type_checking_event_listener_factory: Arc<DefaultJinjaTypeCheckEventListenerFactory>,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     version_check_handle: Option<tokio::task::JoinHandle<Option<String>>>,
 }
@@ -533,15 +512,17 @@ impl<'a> AllPhasesExecutor<'a> {
         task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     ) -> Self {
         let start = SystemTime::now();
+        let jinja_type_checking_event_listener_factory = feature_stack
+            .jinja
+            .factory
+            .create_type_checking_listener_factory();
 
         Self {
             arg,
             cli,
             feature_stack,
             start,
-            jinja_type_checking_event_listener_factory: Arc::new(
-                DefaultJinjaTypeCheckEventListenerFactory::default(),
-            ),
+            jinja_type_checking_event_listener_factory,
             task_runner_hooks_factory,
             version_check_handle: None,
         }
@@ -1055,47 +1036,6 @@ impl<'a> AllPhasesExecutor<'a> {
             write_runtime_results_parquet(&run_task_results.stats.run, self.arg.as_ref());
         }
 
-        // When writing metadata epochs (--write-index), fetch catalog stats from the
-        // warehouse for executed TABLE nodes and write to run/catalog_stats parquet.
-        // This is intentionally separate from the write_json / write_catalog path:
-        // --write-index sets write_json=false so write_catalog_json is never called.
-        if self.arg.write_metadata && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
-        {
-            let metadata_adapter = adapter.metadata_adapter();
-            if let Some(metadata_adapter) = metadata_adapter {
-                let relations = metadata_adapter.create_relations_from_executed_nodes(
-                    &resolved_state,
-                    &run_task_results.stats.run,
-                );
-                if !relations.is_empty() {
-                    let base_context = build_base_context(&resolved_state, &jinja_env);
-                    match fetch_catalog_data(
-                        &adapter,
-                        &resolved_state,
-                        relations,
-                        &jinja_env,
-                        compilation.root_project_name(),
-                        &base_context,
-                        self.arg.as_ref(),
-                        20,
-                    )
-                    .await
-                    {
-                        Ok(catalog) => {
-                            write_catalog_stats_parquet(&catalog, self.arg.as_ref()).await;
-                        }
-                        Err(e) => {
-                            emit_warn_log_message(
-                                ErrorCode::Generic,
-                                format!("Failed to fetch catalog data for metadata epoch: {e}"),
-                                self.arg.io.status_reporter.as_ref(),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
         for s in &run_task_results.storeables {
             let path = self.arg.io.out_dir.join(s.out_dir_relpath());
             let mut output = stdfs::File::create(&path)?;
@@ -1125,8 +1065,7 @@ impl<'a> AllPhasesExecutor<'a> {
 
             let macro_depends_on = self
                 .jinja_type_checking_event_listener_factory
-                .depends_on()
-                .clone();
+                .all_macro_depends_on();
 
             Arc::new(update_manifest(
                 &run_task_args,
@@ -1140,9 +1079,46 @@ impl<'a> AllPhasesExecutor<'a> {
             resolved_state
         };
 
+        // Single warehouse INFORMATION_SCHEMA fetch shared by all catalog consumers.
+        // Gated on write_metadata && (write_catalog || write_index): --write-metadata alone
+        // must not hit the warehouse. For --write-catalog without --write-metadata, Block 0
+        // (write_json path) fetches independently via write_catalog_json — adding write_catalog
+        // here would introduce a second DWH round-trip for that path.
+        //
+        // NOTE on resolved_state: for --write-index, write_json=true (clap-core forces
+        // write_json=false only when self.write_metadata=true AND self.write_index=false;
+        // --write-index has self.write_metadata=false raw, so write_json stays true and
+        // update_manifest IS called above). This is safe: catalog queries use resolved_state
+        // only for relation identity (database/schema/table), not for compiled SQL or inferred
+        // schemas added by update_manifest.
+        let catalog_data: Option<DbtCatalog> = if self.arg.write_metadata
+            && (self.arg.write_catalog || self.arg.write_index)
+            && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
+        {
+            try_fetch_catalog(
+                &adapter,
+                &resolved_state,
+                &run_task_results,
+                &compilation,
+                &jinja_env,
+                self.arg.as_ref(),
+            )
+            .await
+        } else {
+            None
+        };
+
         // Produce parquet metadata epoch files (compile/nodes, compile/columns, cll, etc.).
         // Must happen before into_map_compiled_sql() consumes the manifest.
         if self.arg.write_metadata && self.arg.command != FsCommand::Show {
+            // Catalog epochs fire whenever catalog_data is Some — catalog_data is non-None
+            // only when write_metadata && (write_catalog || write_index) && Run|Build,
+            // so the if-let is sufficient; catalog.json is separately gated below.
+            if let Some(ref catalog) = catalog_data {
+                write_catalog_stats_parquet(catalog, self.arg.as_ref()).await;
+                write_catalog_columns_epoch(catalog, self.arg.as_ref());
+            }
+
             let schema_store =
                 Arc::clone(&compilation_cache_state.schema_store) as Arc<dyn SchemaStoreTrait>;
 
@@ -1151,6 +1127,15 @@ impl<'a> AllPhasesExecutor<'a> {
                 .index
                 .hooks
                 .lineage_grain_infos(&run_task_results)
+                .await?;
+
+            // Classifier propagation results (proprietary hook; empty in OSS).
+            // Merged with manifest-declared classifiers inside write_metadata_parquet.
+            let (node_classifiers, column_classifiers) = self
+                .feature_stack
+                .index
+                .hooks
+                .classifier_results(&run_task_results)
                 .await?;
 
             let recomputed_targets: HashSet<String> = if matches!(
@@ -1177,6 +1162,8 @@ impl<'a> AllPhasesExecutor<'a> {
                     None,
                     &recomputed_targets,
                     &grain_infos,
+                    &node_classifiers,
+                    &column_classifiers,
                 );
             } else if !self.arg.write_lineage {
                 write_metadata_parquet(
@@ -1187,6 +1174,8 @@ impl<'a> AllPhasesExecutor<'a> {
                     Some(&[]),
                     &recomputed_targets,
                     &grain_infos,
+                    &node_classifiers,
+                    &column_classifiers,
                 );
             } else {
                 let t_ble = {
@@ -1226,6 +1215,8 @@ impl<'a> AllPhasesExecutor<'a> {
                             Some(&column_lineage),
                             &recomputed_targets,
                             &grain_infos,
+                            &node_classifiers,
+                            &column_classifiers,
                         );
                     }
                     Err(e) => {
@@ -1243,45 +1234,37 @@ impl<'a> AllPhasesExecutor<'a> {
                             Some(&[]),
                             &empty_targets,
                             &grain_infos,
+                            &node_classifiers,
+                            &column_classifiers,
                         );
                     }
                 }
             }
 
-            // Fetch catalog and write catalog/columns epoch BEFORE write_index so the
-            // index ingestion can consume it. Only for Run/Build (need executed nodes).
+            // Write catalog.json from pre-fetched catalog — no second warehouse query.
+            // Epochs already written unconditionally above; this block is catalog.json only.
+            // Only for Run/Build: need executed nodes to populate relations.
             if self.arg.write_catalog
                 && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
             {
-                let base_context = build_base_context(&resolved_state, &jinja_env);
-                let metadata_adapter = adapter
-                    .metadata_adapter()
-                    .expect("Expected implements MetadataAdapter");
-                let relations = metadata_adapter.create_relations_from_executed_nodes(
-                    &resolved_state,
-                    &run_task_results.stats.run,
-                );
-                match write_catalog_json(
-                    &adapter,
-                    &resolved_state,
-                    relations,
-                    &jinja_env,
-                    compilation.root_project_name(),
-                    &base_context,
-                    self.arg.as_ref(),
-                    20,
-                )
-                .await
-                {
-                    Ok(catalog) => {
-                        write_catalog_columns_epoch(&catalog, self.arg.as_ref());
-                    }
-                    Err(e) => {
-                        emit_warn_log_message(
-                            ErrorCode::Generic,
-                            format!("catalog: {e}"),
-                            self.arg.io.status_reporter.as_ref(),
-                        );
+                if let Some(ref catalog) = catalog_data {
+                    match write_artifact_to_file(
+                        catalog,
+                        ArtifactType::Catalog,
+                        &self.arg.io.out_dir,
+                        DBT_CATALOG_JSON,
+                        &self.arg.io.in_dir,
+                    ) {
+                        Ok(()) => {
+                            emit_info_log_message("Successfully wrote catalog.json");
+                        }
+                        Err(e) => {
+                            emit_warn_log_message(
+                                ErrorCode::Generic,
+                                format!("catalog: {e}"),
+                                self.arg.io.status_reporter.as_ref(),
+                            );
+                        }
                     }
                 }
             }
@@ -1312,6 +1295,20 @@ impl<'a> AllPhasesExecutor<'a> {
                         self.arg.io.status_reporter.as_ref(),
                     ),
                 }
+
+                // Post-index hook: ingest the classifier registry and run the
+                // classifier "checks" gate. Returning `Err` aborts the build
+                // (a failing check is a policy violation). No-op in OSS.
+                self.feature_stack
+                    .index
+                    .hooks
+                    .did_write_index(
+                        self.arg.as_ref(),
+                        &index_dir,
+                        &run_task_results,
+                        resolved_state.as_ref(),
+                    )
+                    .await?;
             }
         }
 
@@ -1436,12 +1433,19 @@ async fn run_docs_serve(
     serve_args: ClapDocsServeArgs,
     feature_stack: &Arc<FeatureStack>,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+    project_dir: &std::path::Path,
+    common_args: &dbt_clap_core::CommonArgs,
 ) -> FsResult<()> {
+    let has_dbt_state = common_args.get_manage_state(project_dir);
+    let send_anonymous_usage_stats =
+        common_args.get_send_anonymous_usage_stats_for_project(project_dir);
     let args = dbt_docs_server::DocsServeArgs {
         target_path: serve_args.target_path,
         host: serve_args.host,
         port: serve_args.port,
         no_open: serve_args.no_open,
+        has_dbt_state,
+        send_anonymous_usage_stats,
     };
     let index_dir = dbt_docs_server::resolve_index_dir(&args);
 
@@ -1450,6 +1454,21 @@ async fn run_docs_serve(
         .clone()
         .unwrap_or_else(|| std::path::PathBuf::from("./target"));
     let metadata_dir = target.join("metadata");
+
+    if !index_dir.exists() && !metadata_dir.exists() {
+        emit_error_log_message(
+            ErrorCode::Generic,
+            format!(
+                "dbt docs serve: no data to serve\n\n\
+                 Index directory not found: {}\n\
+                 Run `dbt --write-index <run|build|compile>` to generate parquet artifacts,\n\
+                 or pass `--target-path <DIR>` pointing at a directory whose `index/` subdirectory contains them.",
+                index_dir.display(),
+            ),
+            status_reporter,
+        );
+        return Err(FsError::exit_with_status(1));
+    }
 
     if let Some(md) = metadata_dir.exists().then_some(metadata_dir.as_path()) {
         if md.exists() {
@@ -1464,10 +1483,17 @@ async fn run_docs_serve(
         }
     }
 
-    let backend: Arc<dyn Backend> = Arc::new(
-        DuckDbViewsBackend::open(&index_dir)
-            .map_err(|e| dbt_common::fs_err!(ErrorCode::Generic, "{e}"))?,
-    );
+    let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
+        Ok(b) => b,
+        Err(err) => {
+            emit_error_log_message(
+                ErrorCode::Generic,
+                format!("dbt docs serve: {err}"),
+                status_reporter,
+            );
+            return Err(FsError::exit_with_status(1));
+        }
+    });
     let providers = (feature_stack.index.providers_factory)(backend);
 
     dbt_docs_server::run_with_args(Arc::new(args), providers)
@@ -1599,6 +1625,48 @@ pub fn check_options(io_args: &IoArgs, cli: &Cli) {
     }
 }
 
+/// Fetches catalog data at most once, returning None if the adapter has no
+/// metadata support, no executed relations, or the fetch fails (warn-logged).
+/// Callers should treat None as "skip all catalog writes".
+async fn try_fetch_catalog(
+    adapter: &Arc<Adapter>,
+    resolved_state: &Arc<ResolverState>,
+    run_task_results: &RunTaskResults,
+    compilation: &DbtProjectCompilation,
+    jinja_env: &Arc<JinjaEnv>,
+    arg: &EvalArgs,
+) -> Option<DbtCatalog> {
+    let metadata_adapter = adapter.metadata_adapter()?;
+    let relations = metadata_adapter
+        .create_relations_from_executed_nodes(resolved_state, &run_task_results.stats.run);
+    if relations.is_empty() {
+        return None;
+    }
+    let base_context = build_base_context(resolved_state, jinja_env);
+    match fetch_catalog_data(
+        adapter,
+        resolved_state,
+        relations,
+        jinja_env,
+        compilation.root_project_name(),
+        &base_context,
+        arg,
+        20,
+    )
+    .await
+    {
+        Ok(catalog) => Some(catalog),
+        Err(e) => {
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("Failed to fetch catalog data: {e}"),
+                arg.io.status_reporter.as_ref(),
+            );
+            None
+        }
+    }
+}
+
 /// Fetches catalog data from the warehouse without writing any artifact.
 /// Returns the populated `DbtCatalog` (nodes keyed by unique_id with stats).
 ///
@@ -1615,7 +1683,7 @@ async fn fetch_catalog_data(
     arg: &EvalArgs,
     batches: usize,
 ) -> FsResult<DbtCatalog> {
-    emit_info_log_message("Preparing to write catalog.json");
+    emit_info_log_message("Fetching catalog from warehouse");
     let metadata_adapter = adapter
         .metadata_adapter()
         .expect("Expected implements MetadataAdapter");

@@ -453,6 +453,7 @@ pub async fn load(
 
     let (packages_lock, upstream_projects) = get_or_install_packages(
         &arg.io,
+        arg.command,
         &env,
         &packages_install_path,
         arg.install_deps,
@@ -1016,24 +1017,15 @@ pub async fn load_inner(
         model_sql_files.extend(python_model_files);
         model_sql_files.sort_by(|a, b| a.path.cmp(&b.path));
     }
-    let mut function_sql_files = find_files_by_kind_and_extension(
+    let mut function_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::FunctionPaths,
-        &["sql"],
+        &["sql", "py", "js"],
         &all_files,
     );
-    let python_function_files = find_files_by_kind_and_extension(
-        package_path,
-        &dbt_project.name,
-        &ResourcePathKind::FunctionPaths,
-        &["py"],
-        &all_files,
-    );
-    if !python_function_files.is_empty() {
-        function_sql_files.extend(python_function_files);
-        function_sql_files.sort_by(|a, b| a.path.cmp(&b.path));
-    }
+    function_files.sort_by(|a, b| a.path.cmp(&b.path));
+
     let macro_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
@@ -1096,7 +1088,7 @@ pub async fn load_inner(
         dbt_properties,
         analysis_files,
         model_sql_files,
-        function_sql_files,
+        function_sql_files: function_files,
         test_files,
         fixture_files,
         seed_files,

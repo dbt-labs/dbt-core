@@ -46,7 +46,7 @@ pub struct HookProcessed {
     )]
     pub phase: i32,
 }
-impl crate::StaticName for HookProcessed {
+impl ::dbt_tracing::StaticName for HookProcessed {
     const FULL_NAME: &'static str = "v1.public.events.fusion.hook.HookProcessed";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.hook.HookProcessed";
 }

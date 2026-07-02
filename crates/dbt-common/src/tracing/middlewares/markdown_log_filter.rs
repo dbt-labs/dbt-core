@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use dbt_telemetry::{LogMessage, LogRecordInfo, SeverityNumber};
+use dbt_telemetry::LogMessage;
+use dbt_tracing::{LogRecordInfo, SeverityNumber};
 
 use super::super::{data_provider::DataProvider, layer::TelemetryMiddleware};
 

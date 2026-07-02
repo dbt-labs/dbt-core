@@ -49,6 +49,7 @@ use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::NodeBaseAttributes;
 use dbt_schemas::schemas::TimeSpine;
 use dbt_schemas::schemas::TimeSpinePrimaryColumn;
+use dbt_schemas::schemas::common::Access;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
@@ -67,7 +68,7 @@ use dbt_schemas::schemas::project::ResolvedModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
-use dbt_schemas::schemas::serde::StringOrInteger;
+use dbt_schemas::schemas::serde::NodeVersion;
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
@@ -89,9 +90,7 @@ use super::validate_models::validate_model;
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
 /// `ref('pkg', 'name', version=N)` from a constraint `to:` string (also accepts `v=` alias).
 /// Returns `(package, name, version)`. Mirrors dbt-core's `statically_parse_ref_or_source`.
-fn parse_ref_from_constraint(
-    to: &str,
-) -> Option<(Option<String>, String, Option<StringOrInteger>)> {
+fn parse_ref_from_constraint(to: &str) -> Option<(Option<String>, String, Option<NodeVersion>)> {
     let s = to.trim();
     if !s.starts_with("ref(") || !s.ends_with(')') {
         return None;
@@ -99,7 +98,7 @@ fn parse_ref_from_constraint(
     let inner = s[4..s.len() - 1].trim();
 
     let mut positional: Vec<&str> = Vec::new();
-    let mut version: Option<StringOrInteger> = None;
+    let mut version: Option<NodeVersion> = None;
 
     for part in inner.split(',') {
         let part = part.trim();
@@ -107,11 +106,17 @@ fn parse_ref_from_constraint(
             .strip_prefix("version=")
             .or_else(|| part.strip_prefix("v="))
         {
-            let v = v.trim().trim_matches(|c| c == '\'' || c == '"');
-            version = Some(if let Ok(n) = v.parse::<i64>() {
-                StringOrInteger::Integer(n)
+            let v = v.trim();
+            let is_quoted = v.starts_with('\'') || v.starts_with('"');
+            let v = v.trim_matches(|c| c == '\'' || c == '"');
+            version = Some(if is_quoted {
+                NodeVersion::String(v.to_string())
+            } else if let Ok(n) = v.parse::<i64>() {
+                NodeVersion::Integer(n)
+            } else if let Ok(f) = v.parse::<f64>() {
+                NodeVersion::Float(f)
             } else {
-                StringOrInteger::String(v.to_string())
+                NodeVersion::String(v.to_string())
             });
         } else {
             positional.push(part.trim_matches(|c| c == '\'' || c == '"'));
@@ -441,6 +446,16 @@ pub async fn resolve_models(
         let model_constraints = resolved_versioned.constraints;
         let model_description = resolved_versioned.description;
 
+        if let Some(raw) = resolved_versioned.invalid_access.as_deref() {
+            let err = fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => dbt_asset.path.clone(),
+                "Invalid access type '{}' — must be one of: private, protected, public",
+                raw,
+            );
+            emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+        }
+
         // Iterate over metrics and construct the dependencies
         let mut metrics = Vec::new();
         for (metric, package) in sql_file_info.metrics.iter() {
@@ -579,6 +594,11 @@ pub async fn resolve_models(
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
+                classifiers: model_config
+                    .classifiers
+                    .clone()
+                    .map(|c| c.into())
+                    .unwrap_or_default(),
                 meta: model_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
@@ -602,7 +622,7 @@ pub async fn resolve_models(
                     .map(|(model, project, version, location)| DbtRef {
                         name: model.to_owned(),
                         package: project.to_owned(),
-                        version: version.clone().map(|v| v.into()),
+                        version: version.clone(),
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .chain(
@@ -718,7 +738,11 @@ pub async fn resolve_models(
                 deprecation_date,
                 primary_key: vec![], // applied in resolver.rs -> primary_key_inference.rs
                 time_spine,
-                access: model_config.access.clone().unwrap_or_default(),
+                access: resolved_versioned
+                    .access
+                    .clone()
+                    .or_else(|| model_config.access.clone())
+                    .unwrap_or_default(),
                 group: model_config.group.clone(),
                 contract: model_config.contract.clone(),
                 incremental_strategy: model_config.incremental_strategy.clone(),
@@ -800,11 +824,24 @@ pub async fn resolve_models(
                         adapter_type,
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                        false,
                     )?;
                 }
             }
             ModelStatus::Disabled => {
                 disabled_models.insert(unique_id.to_owned(), Arc::new(dbt_model));
+                if !arg.skip_creating_generic_tests {
+                    properties.as_testable().persist(
+                        package_name,
+                        &root_package.dbt_project.name,
+                        collected_generic_tests,
+                        test_name_truncations,
+                        adapter_type,
+                        &arg.io,
+                        patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                        true,
+                    )?;
+                }
             }
             ModelStatus::ParsingFailed => {}
         }
@@ -900,13 +937,19 @@ pub async fn resolve_models(
 ///   - `columns` -> `process_versioned_columns` (include/exclude merge)
 ///   - `config`  -> `VersionInfo.version_config` (deep merge)
 ///   - `meta`    -> top-level only, no per-version semantics
-///   - `access`, `docs`, `data_tests` -> not yet wired (flow through other
-///     pipelines; see follow-up issues)
+///   - `docs`, `data_tests` -> not yet wired (flow through other pipelines;
+///     see follow-up issues)
 struct ResolvedVersionedFields {
     description: String,
     constraints: Vec<ModelConstraint>,
     /// Per-version only; no fallback to top-level (dbt-core parity).
     deprecation_date: Option<String>,
+    access: Option<Access>,
+    /// Non-empty, non-parseable access string supplied at the version level. Kept separate from
+    /// `access` rather than typed as `Option<Access>` in `Versions` because serde would reject
+    /// `access: ""` as an unknown variant before we can apply dbt-core's empty-string-is-None
+    /// fallthrough semantics.
+    invalid_access: Option<String>,
 }
 
 fn resolve_versioned_fields(
@@ -946,10 +989,23 @@ fn resolve_versioned_fields(
         properties.deprecation_date.clone()
     };
 
+    // dbt-core: `unparsed_version.access or target.access`. Empty string is
+    // falsy in Python -> fall through to the top-level (config) value.
+    let raw_access = version_match.and_then(|v| v.access.clone().filter(|s| !s.is_empty()));
+    let (access, invalid_access) = match raw_access {
+        Some(raw) => match raw.parse::<Access>() {
+            Ok(a) => (Some(a), None),
+            Err(()) => (None, Some(raw)),
+        },
+        None => (None, None),
+    };
+
     ResolvedVersionedFields {
         description,
         constraints,
         deprecation_date,
+        access,
+        invalid_access,
     }
 }
 
@@ -1132,6 +1188,7 @@ fn process_python_models(
             config: merged_config,
             sql_file_info: crate::sql_file_info::SqlFileInfo {
                 sources: python_file_info.sources,
+                static_sources: vec![], // Python models have no dead-branch source discovery
                 refs: python_file_info.refs,
                 this: false,
                 metrics: vec![],
@@ -1331,7 +1388,7 @@ fn merge_python_config(
 #[cfg(test)]
 mod tests {
     use super::{parse_ref_from_constraint, parse_source_from_constraint};
-    use dbt_schemas::schemas::serde::StringOrInteger;
+    use dbt_schemas::schemas::serde::NodeVersion;
 
     #[test]
     fn test_parse_ref_single_arg() {
@@ -1369,11 +1426,7 @@ mod tests {
     fn test_parse_ref_version_kwarg_integer() {
         assert_eq!(
             parse_ref_from_constraint("ref('my_model', version=2)"),
-            Some((
-                None,
-                "my_model".to_string(),
-                Some(StringOrInteger::Integer(2))
-            ))
+            Some((None, "my_model".to_string(), Some(NodeVersion::Integer(2))))
         );
     }
 
@@ -1381,11 +1434,7 @@ mod tests {
     fn test_parse_ref_v_kwarg_alias() {
         assert_eq!(
             parse_ref_from_constraint("ref('my_model', v=1)"),
-            Some((
-                None,
-                "my_model".to_string(),
-                Some(StringOrInteger::Integer(1))
-            ))
+            Some((None, "my_model".to_string(), Some(NodeVersion::Integer(1))))
         );
     }
 
@@ -1396,7 +1445,7 @@ mod tests {
             Some((
                 None,
                 "my_model".to_string(),
-                Some(StringOrInteger::String("1.0".to_string()))
+                Some(NodeVersion::String("1.0".to_string()))
             ))
         );
     }
@@ -1408,8 +1457,34 @@ mod tests {
             Some((
                 Some("my_pkg".to_string()),
                 "my_model".to_string(),
-                Some(StringOrInteger::Integer(3))
+                Some(NodeVersion::Integer(3))
             ))
+        );
+    }
+
+    /// A quoted version must stay a string even when it looks numeric. This guards
+    /// the `is_quoted` branch: `version="2"` is `String("2")`, distinct from the
+    /// unquoted `version=2` which is `Integer(2)`. The existing `'1.0'` test would
+    /// pass either way, so it does not exercise this branch.
+    #[test]
+    fn test_parse_ref_version_kwarg_quoted_integer() {
+        assert_eq!(
+            parse_ref_from_constraint(r#"ref('my_model', version="2")"#),
+            Some((
+                None,
+                "my_model".to_string(),
+                Some(NodeVersion::String("2".to_string()))
+            ))
+        );
+    }
+
+    /// Unquoted non-integral version parses as a float (mirrors dbt-core's numeric
+    /// coercion), distinct from the quoted string form.
+    #[test]
+    fn test_parse_ref_version_kwarg_unquoted_float() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_model', version=1.5)"),
+            Some((None, "my_model".to_string(), Some(NodeVersion::Float(1.5))))
         );
     }
 

@@ -39,7 +39,7 @@ body:
   - type: textarea
     attributes:
       label: Troubleshooting
-      description: Does the bug consistently occur? Does it go away after running `Developer: Reload Window`?
+      description: "Does the bug consistently occur? Does it go away after running `Developer: Reload Window`?"
     validations:
       required: false
   - type: textarea

@@ -7,16 +7,16 @@ use tokio::task;
 
 use crate::redshift::token_service::{TokenEndpoint, create_token_service_client};
 use adbc_core::constants::ADBC_OPTION_USERNAME;
-use dbt_xdbc::redshift::{
+use dbt_adbc::redshift::{
     AUTH_IDC_CLIENT_DISPLAY_NAME, AUTH_IDC_REGION, AUTH_IDP_LISTEN_PORT, AUTH_IDP_RESPONSE_TIMEOUT,
     AUTH_ISSUER_URL, AUTH_PROVIDER, AUTH_PROVIDER_BROWSER_IDC, AUTH_PROVIDER_IDP_TOKEN, AUTH_TOKEN,
     AUTH_TOKEN_TYPE,
 };
-use dbt_xdbc::{
+use dbt_adbc::{
     Backend, database,
     redshift::{
-        self, AWS_ACCESS_KEY_ID, AWS_PROFILE, AWS_REGION, AWS_SECRET_ACCESS_KEY,
-        CLUSTER_IDENTIFIER, CLUSTER_TYPE, WORK_GROUP_NAME,
+        AWS_ACCESS_KEY_ID, AWS_PROFILE, AWS_REGION, AWS_SECRET_ACCESS_KEY, CLUSTER_IDENTIFIER,
+        CLUSTER_TYPE, WORK_GROUP_NAME,
         cluster_type::{REDSHIFT, SERVERLESS},
     },
 };
@@ -53,83 +53,53 @@ struct ConnComponents<'a> {
 
 impl Auth for RedshiftAuth {
     fn backend(&self) -> Backend {
-        #[cfg(feature = "odbc")]
-        {
-            Backend::RedshiftODBC
-        }
-        #[cfg(not(feature = "odbc"))]
-        {
-            Backend::Redshift
-        }
+        Backend::Redshift
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         let mut builder = database::Builder::new(self.backend());
         let mut warnings = Vec::new();
 
-        if self.backend() == Backend::RedshiftODBC {
-            configure_odbc(&mut builder, config)?;
-        } else {
-            // todo: update with Redshift specific configs once available
-            let method = config
-                .get("method")
-                .and_then(|v| v.as_str())
-                .unwrap_or("database");
+        // todo: update with Redshift specific configs once available
+        let method = config
+            .get("method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("database");
 
-            // Shared required configs and encoding
-            let host = config.require_string("host")?;
-            let port = config.require_string("port")?;
-            let dbname = config.require_string("database")?;
-            let host = utf8_percent_encode(&host, ENCODE_SET).to_string();
-            let port = utf8_percent_encode(&port, ENCODE_SET).to_string();
-            let dbname = utf8_percent_encode(&dbname, ENCODE_SET).to_string();
-            let conn = ConnComponents {
-                host: &host,
-                port: &port,
-                dbname: &dbname,
-            };
+        // Shared required configs and encoding
+        let host = config.require_string("host")?;
+        let port = config.require_string("port")?;
+        let dbname = config
+            .get_string("database")
+            .or_else(|| config.get_string("dbname"))
+            .ok_or_else(|| AuthError::config("missing required field 'database' (or 'dbname')"))?;
+        let host = utf8_percent_encode(&host, ENCODE_SET).to_string();
+        let port = utf8_percent_encode(&port, ENCODE_SET).to_string();
+        let dbname = utf8_percent_encode(&dbname, ENCODE_SET).to_string();
+        let conn = ConnComponents {
+            host: &host,
+            port: &port,
+            dbname: &dbname,
+        };
 
-            match method {
-                "database" => configure_database(&mut builder, config, conn)?,
-                "iam" => configure_iam(&mut builder, &mut warnings, config, conn)?,
-                "browser_identity_center" => {
-                    configure_browser_identity_center(&mut builder, config, conn)?
-                }
-                "oauth_token_identity_center" => {
-                    configure_oauth_token_identity_center(&mut builder, config, conn)?
-                }
-                method => {
-                    return Err(AuthError::config(format!(
-                        "Unsupported auth method '{method}' for Redshift. Try 'database' or 'iam' instead."
-                    )));
-                }
-            };
+        match method {
+            "database" => configure_database(&mut builder, config, conn)?,
+            "iam" => configure_iam(&mut builder, &mut warnings, config, conn)?,
+            "browser_identity_center" => {
+                configure_browser_identity_center(&mut builder, config, conn)?
+            }
+            "oauth_token_identity_center" => {
+                configure_oauth_token_identity_center(&mut builder, config, conn)?
+            }
+            method => {
+                return Err(AuthError::config(format!(
+                    "Unsupported auth method '{method}' for Redshift. Try 'database' or 'iam' instead."
+                )));
+            }
         }
 
         Ok(AuthOutcome { builder, warnings })
     }
-}
-
-fn configure_odbc(
-    builder: &mut database::Builder,
-    config: &AdapterConfig,
-) -> Result<(), AuthError> {
-    use redshift::odbc::*;
-    for key in ["host", "port", "database", "user", "password"].iter() {
-        if let Some(value) = config.get_string(key) {
-            match *key {
-                "host" => builder.with_named_option(SERVER, value),
-                "port" => builder.with_named_option(PORT_NUMBER, value),
-                "database" => builder.with_named_option(DATABASE, value),
-                "user" => builder.with_named_option(UID, value),
-                "password" => builder.with_named_option(PASSWORD, value),
-                _ => panic!("unexpected key: {key}"),
-            }?;
-        }
-    }
-
-    builder.with_named_option(DRIVER, odbc_driver_path())?;
-    Ok(())
 }
 
 fn configure_database(
@@ -309,60 +279,11 @@ fn configure_oauth_token_identity_center(
     Ok(())
 }
 
-#[cfg(feature = "odbc")]
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use adbc_core::options::OptionDatabase;
-    use dbt_yaml::Mapping;
-
-    #[test]
-    fn test_basic_user_password_auth() {
-        use redshift::odbc::*;
-        let auth = RedshiftAuth {};
-
-        let config = Mapping::from_iter([
-            ("server".into(), "redshift-cluster.aws.com".into()),
-            ("port".into(), "5439".into()),
-            ("database".into(), "dev".into()),
-            ("user".into(), "admin".into()),
-            ("password".into(), "secretpass".into()),
-        ]);
-
-        let builder = auth
-            .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
-
-        let mut unknown_options = 0;
-        builder.into_iter().for_each(|(k, v)| match k {
-            OptionDatabase::Other(ref name) => {
-                let value = match v {
-                    adbc_core::options::OptionValue::String(s) => s,
-                    _ => panic!("Expected OptionValue to be String"),
-                };
-                match name.as_str() {
-                    UID => assert_eq!(value, "admin"),
-                    PASSWORD => assert_eq!(value, "secretpass"),
-                    DRIVER => assert_eq!(value, odbc_driver_path()),
-                    SERVER => assert_eq!(value, "redshift-cluster.aws.com"),
-                    PORT_NUMBER => assert_eq!(value, "5439"),
-                    DATABASE => assert_eq!(value, "dev"),
-                    _ => unknown_options += 1,
-                }
-            }
-            _ => unknown_options += 1,
-        });
-        assert_eq!(unknown_options, 0);
-    }
-}
-
-#[cfg(not(feature = "odbc"))]
 #[cfg(test)]
 mod tests_adbc {
     use super::*;
     use crate::test_options::{other_option_value, uri_value};
-    use dbt_xdbc::redshift::cluster_type::{REDSHIFT, SERVERLESS};
+    use dbt_adbc::redshift::cluster_type::{REDSHIFT, SERVERLESS};
     use dbt_yaml::Mapping;
 
     fn iam_base_config() -> Mapping {
@@ -641,6 +562,22 @@ mod tests_adbc {
         config.remove("user");
         config.insert("iam_profile".into(), "sandbox-admin".into());
         assert_error_contains(config, "user");
+    }
+
+    #[test]
+    fn test_database_accepts_dbname_alias() {
+        let config = Mapping::from_iter([
+            ("method".into(), "database".into()),
+            ("host".into(), "cluster-host".into()),
+            ("port".into(), "5439".into()),
+            ("dbname".into(), "dev".into()),
+            ("user".into(), "admin".into()),
+            ("password".into(), "secretpass".into()),
+        ]);
+        assert!(
+            configure(config).is_ok(),
+            "auth should succeed when profile uses 'dbname' instead of 'database'"
+        );
     }
 
     #[test]

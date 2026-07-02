@@ -2,18 +2,17 @@ use crate::args::PypiPublishArgs;
 use crate::pack::normalize_wheel_name;
 use crate::pyproject;
 use crate::release_version::{semver_to_pep440, validate_release_version};
-use crate::utils::cargo_workspace_root;
+use crate::sdist::build_release_sdist;
+use crate::utils::{backoff, cargo_workspace_root, is_transient, sha256_hex};
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
 use bytes::Bytes;
 use clap::ValueEnum;
 use python_pkginfo::{Distribution, Metadata};
-use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Duration;
 
 type EnvGet<'a> = &'a dyn Fn(&str) -> Option<String>;
 
@@ -136,42 +135,6 @@ pub fn execute(args: PypiPublishArgs) -> ExitCode {
             return ExitCode::from(64);
         }
     };
-    let dist_dir = args
-        .dist
-        .clone()
-        .unwrap_or_else(|| cargo_workspace_root().join("target").join("wheels"));
-    let wheels = match discover_wheels(&dist_dir, &spec.wheel_name, args.version.as_deref()) {
-        Ok(w) => w,
-        Err(e) => {
-            eprintln!("error: {e:#}");
-            return ExitCode::from(2);
-        }
-    };
-    if wheels.is_empty() {
-        let suffix = args
-            .version
-            .as_deref()
-            .map(|v| format!(" at version {v}"))
-            .unwrap_or_default();
-        eprintln!(
-            "error: no `{}` wheels{suffix} in {}.",
-            spec.wheel_name,
-            dist_dir.display()
-        );
-        return ExitCode::from(2);
-    }
-    eprintln!(
-        "→ publishing {} `{}` wheel(s) from {}:",
-        wheels.len(),
-        spec.wheel_name,
-        dist_dir.display()
-    );
-    for w in &wheels {
-        if let Some(name) = w.file_name().and_then(|s| s.to_str()) {
-            eprintln!("    {name}");
-        }
-    }
-
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -182,13 +145,7 @@ pub fn execute(args: PypiPublishArgs) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let result = rt.block_on(async move {
-        match target {
-            PublishTarget::CodeArtifact(t) => upload_codeartifact(&t, &wheels).await,
-            PublishTarget::Pypi { token, url } => upload_pypi(&token, &url, &wheels).await,
-        }
-    });
-    match result {
+    match rt.block_on(run_publish(&args, &spec, target)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e:#}");
@@ -197,7 +154,72 @@ pub fn execute(args: PypiPublishArgs) -> ExitCode {
     }
 }
 
-async fn upload_codeartifact(target: &CodeArtifactTarget, wheels: &[PathBuf]) -> Result<()> {
+/// Resolves what to publish — a freshly-built sdist (`--download-base-url`) or
+/// local wheels — and uploads it to `target`.
+async fn run_publish(
+    args: &PypiPublishArgs,
+    spec: &pyproject::Spec,
+    target: PublishTarget,
+) -> Result<()> {
+    // `_tmp` keeps the sdist's temp dir alive until the upload finishes.
+    let (dists, _tmp): (Vec<(PathBuf, DistKind)>, _) = if let Some(base_url) =
+        &args.download_base_url
+    {
+        let http = http_client()?;
+        // clap's `requires` guarantees `--version` is set alongside the base url.
+        let version = args
+            .version
+            .as_deref()
+            .expect("clap requires --version with --download-base-url");
+        let tmp = tempfile::tempdir().context("create temp dir for sdist")?;
+        let sdist =
+            build_release_sdist(&http, spec, version, base_url, &args.targets, tmp.path()).await?;
+        (vec![(sdist, DistKind::Sdist)], Some(tmp))
+    } else {
+        let dist_dir = args
+            .dist
+            .clone()
+            .unwrap_or_else(|| cargo_workspace_root().join("target").join("wheels"));
+        let wheels = discover_wheels(&dist_dir, &spec.wheel_name, args.version.as_deref())?;
+        if wheels.is_empty() {
+            let suffix = args
+                .version
+                .as_deref()
+                .map(|v| format!(" at version {v}"))
+                .unwrap_or_default();
+            bail!(
+                "no `{}` wheel(s){suffix} in {}.",
+                spec.wheel_name,
+                dist_dir.display()
+            );
+        }
+        (
+            wheels.into_iter().map(|w| (w, DistKind::Wheel)).collect(),
+            None,
+        )
+    };
+
+    eprintln!(
+        "→ publishing {} `{}` artifact(s):",
+        dists.len(),
+        spec.wheel_name
+    );
+    for (path, _) in &dists {
+        if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+            eprintln!("    {name}");
+        }
+    }
+
+    match target {
+        PublishTarget::CodeArtifact(t) => upload_codeartifact(&t, &dists).await,
+        PublishTarget::Pypi { token, url } => upload_pypi(&token, &url, &dists).await,
+    }
+}
+
+async fn upload_codeartifact(
+    target: &CodeArtifactTarget,
+    dists: &[(PathBuf, DistKind)],
+) -> Result<()> {
     eprintln!(
         "→ aws codeartifact get-authorization-token (domain={}, region={}, profile={})",
         target.domain, target.region, target.profile,
@@ -222,16 +244,16 @@ async fn upload_codeartifact(target: &CodeArtifactTarget, wheels: &[PathBuf]) ->
 
     let url = target.upload_url();
     let http = http_client()?;
-    for w in wheels {
-        upload_wheel(&http, &url, "aws", &token, w).await?;
+    for (w, kind) in dists {
+        upload_dist(&http, &url, "aws", &token, w, *kind).await?;
     }
     Ok(())
 }
 
-async fn upload_pypi(token: &str, url: &str, wheels: &[PathBuf]) -> Result<()> {
+async fn upload_pypi(token: &str, url: &str, dists: &[(PathBuf, DistKind)]) -> Result<()> {
     let http = http_client()?;
-    for w in wheels {
-        upload_wheel(&http, url, "__token__", token, w).await?;
+    for (w, kind) in dists {
+        upload_dist(&http, url, "__token__", token, w, *kind).await?;
     }
     Ok(())
 }
@@ -243,37 +265,49 @@ fn http_client() -> Result<reqwest::Client> {
         .context("build http client")
 }
 
-/// Mirrors twine's upload payload — metadata fields are read from the wheel's
-/// METADATA so the form matches what Warehouse expects.
-async fn upload_wheel(
+/// Mirrors twine's upload payload, reading metadata from the artifact's
+/// METADATA/PKG-INFO. Handles both wheels and sdists.
+async fn upload_dist(
     http: &reqwest::Client,
     url: &str,
     user: &str,
     password: &str,
-    wheel: &Path,
+    dist: &Path,
+    kind: DistKind,
 ) -> Result<()> {
-    let filename = wheel
+    let filename = dist
         .file_name()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| anyhow!("non-UTF8 wheel filename: {}", wheel.display()))?
+        .ok_or_else(|| anyhow!("non-UTF8 distribution filename: {}", dist.display()))?
         .to_string();
-    let parsed = parse_wheel_filename(&filename)
-        .ok_or_else(|| anyhow!("wheel filename not in PEP 491 form: {filename}"))?;
 
-    let metadata = Distribution::new(wheel)
-        .with_context(|| format!("read metadata from {}", wheel.display()))?
+    let metadata = Distribution::new(dist)
+        .with_context(|| format!("read metadata from {}", dist.display()))?
         .metadata()
         .clone();
 
-    let bytes: Bytes = fs::read(wheel)
-        .with_context(|| format!("read {}", wheel.display()))?
+    // Wheels carry name/version/pyversion in the filename; the sdist's from PKG-INFO.
+    let (parsed, filetype) = match kind {
+        DistKind::Wheel => {
+            let parsed = parse_wheel_filename(&filename)
+                .ok_or_else(|| anyhow!("wheel filename not in PEP 491 form: {filename}"))?;
+            (parsed, "bdist_wheel")
+        }
+        DistKind::Sdist => (
+            ParsedWheel {
+                name: metadata.name.clone(),
+                version: metadata.version.clone(),
+                pyversion: "source".to_string(),
+            },
+            "sdist",
+        ),
+    };
+
+    let bytes: Bytes = fs::read(dist)
+        .with_context(|| format!("read {}", dist.display()))?
         .into();
     let md5_digest = format!("{:x}", md5::compute(&bytes));
-    let sha256_digest = {
-        let mut h = Sha256::new();
-        h.update(&bytes);
-        hex::encode(h.finalize())
-    };
+    let sha256_digest = sha256_hex(&bytes);
 
     eprintln!(
         "→ POST {url} ({filename}, {} bytes, sha256={sha256_digest})",
@@ -292,6 +326,7 @@ async fn upload_wheel(
         attempt += 1;
         let form = build_upload_form(
             &parsed,
+            filetype,
             &metadata,
             &md5_digest,
             &sha256_digest,
@@ -349,14 +384,14 @@ async fn upload_wheel(
 
 fn build_upload_form(
     parsed: &ParsedWheel,
+    filetype: &str,
     metadata: &Metadata,
     md5_digest: &str,
     sha256_digest: &str,
     filename: &str,
     bytes: &Bytes,
 ) -> Result<reqwest::multipart::Form> {
-    // Bytes::clone is O(1) — the heap buffer is shared, so retries don't
-    // re-copy the wheel even though Form itself isn't Clone.
+    // Bytes::clone is O(1) (shared buffer), so retries don't re-copy the artifact.
     let len = bytes.len() as u64;
     let body: reqwest::Body = bytes.clone().into();
     let file_part = reqwest::multipart::Part::stream_with_length(body, len)
@@ -370,7 +405,7 @@ fn build_upload_form(
         .text("metadata_version", metadata.metadata_version.clone())
         .text("name", parsed.name.clone())
         .text("version", parsed.version.clone())
-        .text("filetype", "bdist_wheel")
+        .text("filetype", filetype.to_string())
         .text("pyversion", parsed.pyversion.clone())
         .text("md5_digest", md5_digest.to_string())
         .text("sha256_digest", sha256_digest.to_string());
@@ -434,13 +469,6 @@ fn metadata_form_fields(m: &Metadata) -> Vec<(&'static str, String)> {
     out
 }
 
-/// Retry only on errors that have a chance of healing: connection failures,
-/// timeouts, and mid-body network blips. `is_request()` is intentionally
-/// excluded — it covers builder/config errors that won't change on retry.
-fn is_transient(e: &reqwest::Error) -> bool {
-    e.is_timeout() || e.is_connect() || e.is_body()
-}
-
 /// Treat a re-upload of an existing wheel as success so a retry after partial
 /// publish doesn't brick the run. Warehouse returns 400 with `File already
 /// exists.`; CodeArtifact returns 409.
@@ -453,9 +481,12 @@ fn is_already_exists(status: reqwest::StatusCode, body: &str) -> bool {
     lower.contains("already exists") || lower.contains("file name reuse")
 }
 
-fn backoff(attempt: u32) -> Duration {
-    // 500ms, 1s, 2s, 4s, …
-    Duration::from_millis(500u64 * (1u64 << (attempt - 1)))
+/// Which kind of distribution a file is — set by its producer, so the uploader
+/// needn't re-derive it from the filename.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DistKind {
+    Wheel,
+    Sdist,
 }
 
 #[derive(Debug, PartialEq, Eq)]

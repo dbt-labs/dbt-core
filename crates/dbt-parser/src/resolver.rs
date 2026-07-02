@@ -10,19 +10,22 @@ use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
+use dbt_jinja_utils::JinjaFactory;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{
     NodeResolver, check_for_model_deprecations, resolve_dependencies,
 };
 use dbt_jinja_utils::phases::parse::build_resolve_context;
-use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
 use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::{Access, DbtIncrementalStrategy};
 use dbt_schemas::schemas::macros::{DbtDocsMacro, build_macro_units};
-use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
+use dbt_schemas::schemas::properties::{
+    FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL, FunctionKind,
+    MetricsProperties, ModelProperties,
+};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use crate::args::ResolveArgs;
@@ -99,6 +102,7 @@ pub async fn resolve(
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     resolver_hooks: Arc<dyn ResolverHooks>,
+    jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
@@ -115,7 +119,6 @@ pub async fn resolve(
 
         let macro_files = package.macro_files.iter().chain(&package.snapshot_files);
         let resolved_macros = resolve_macros(
-            &arg.io,
             macro_files.collect::<Vec<_>>().as_slice(),
             package.embedded_file_contents.as_ref(),
         )?;
@@ -153,27 +156,31 @@ pub async fn resolve(
     let root_project_quoting =
         resolve_package_quoting(*dbt_state.root_project().quoting, adapter_type);
 
-    let jinja_env = Arc::new(initialize_parse_jinja_environment(
-        root_project_name,
-        &dbt_state.dbt_profile.profile,
-        &dbt_state.dbt_profile.target,
-        adapter_type,
-        dbt_state.dbt_profile.db_config.clone(),
-        root_project_quoting,
-        build_macro_units(&macros.macros),
-        dbt_state.vars.clone(),
-        dbt_state.cli_vars.clone(),
-        dbt_state.root_project_flags(),
-        dbt_state.run_started_at,
-        invocation_args,
-        macros
-            .macros
-            .values()
-            .map(|m| m.package_name.clone())
-            .collect(),
-        arg.io.clone(),
-        dbt_state.catalogs.clone(),
-    )?);
+    // The factory builds the environment (and registers any extra functions it
+    // provides) before any model SQL is rendered for static analysis.
+    let jinja_env = Arc::new(
+        jinja_factory.create_parse_jinja_environment(
+            root_project_name,
+            &dbt_state.dbt_profile.profile,
+            &dbt_state.dbt_profile.target,
+            adapter_type,
+            dbt_state.dbt_profile.db_config.clone(),
+            root_project_quoting,
+            build_macro_units(&macros.macros, &arg.io.in_dir),
+            dbt_state.vars.clone(),
+            dbt_state.cli_vars.clone(),
+            dbt_state.root_project_flags(),
+            dbt_state.run_started_at,
+            invocation_args,
+            macros
+                .macros
+                .values()
+                .map(|m| m.package_name.clone())
+                .collect(),
+            arg.io.clone(),
+            dbt_state.catalogs.clone(),
+        )?,
+    );
 
     // Load and resolve selectors
     let resolved_selectors_map = resolve_selectors_from_yaml(arg, root_project_name, &jinja_env)?;
@@ -186,12 +193,8 @@ pub async fn resolve(
     // let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     resolver_hooks.pre_resolve(&arg.io, adapter_type, &mut nodes, root_project_quoting)?;
-    let root_project_configs = build_root_project_configs(
-        arg,
-        dbt_state.root_project(),
-        root_project_quoting,
-        adapter_type,
-    )?;
+    let root_project_configs =
+        build_root_project_configs(arg, dbt_state.root_project(), root_project_quoting)?;
     let root_project_configs = Arc::new(root_project_configs);
     // Process packages in topological order
 
@@ -372,6 +375,11 @@ pub async fn resolve(
 
     // Check access
     let nodes_with_access_errors = check_access(arg, &nodes, &all_runtime_configs);
+
+    // Validate function configuration against per-adapter capabilities:
+    // JS UDF language support, JS-aggregate restrictions, default arguments.
+    validate_function_config(arg, &nodes, adapter_type);
+
     resolver_hooks.post_resolve(
         &arg.io,
         &mut nodes,
@@ -474,6 +482,85 @@ fn check_access(
     }
 
     violations
+}
+
+/// Validate function configuration against per-adapter capabilities:
+/// - JavaScript UDFs are only supported on BigQuery and Snowflake.
+/// - JavaScript aggregate UDFs are not supported on Snowflake.
+/// - `default_value` on arguments is only supported on Snowflake, and defaulted
+///   arguments must form a trailing suffix of the argument list (mirrors
+///   `expand_default_fields` in the SQL binder, which only peels trailing
+///   defaults when expanding `CREATE FUNCTION` into candidate arities).
+fn validate_function_config(arg: &ResolveArgs, nodes: &Nodes, adapter_type: AdapterType) {
+    use AdapterType::*;
+    let status_reporter = arg.io.status_reporter.as_ref();
+    for function in nodes.functions.values() {
+        let name = &function.__common_attr__.name;
+        let language = function.__function_attr__.language.as_deref();
+        let function_kind = function.deprecated_config.function_kind.as_ref();
+
+        // JavaScript language + function-kind support
+        match (adapter_type, language) {
+            (Bigquery, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {}
+            (Snowflake, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
+                if function_kind == Some(&FunctionKind::Aggregate) {
+                    let err = fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Function '{}' is a JavaScript aggregate function and not supported on '{}'.",
+                        name,
+                        adapter_type,
+                    );
+                    emit_error_log_from_fs_error(&err, status_reporter);
+                    continue;
+                }
+            }
+            (_, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
+                let err = fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Function '{}' uses JavaScript, which is not supported on '{}'.",
+                    name,
+                    adapter_type,
+                );
+                emit_error_log_from_fs_error(&err, status_reporter);
+                continue;
+            }
+            // SQL / Python / unspecified: no per-adapter restrictions today.
+            (_, Some(FUNCTION_LANGUAGE_SQL)) | (_, Some(FUNCTION_LANGUAGE_PYTHON)) | (_, None) => {}
+            (_, Some(other)) => {
+                unimplemented!("No per-adapter validation defined for function language '{other}'")
+            }
+        }
+
+        // Default-value argument support
+        if let Some(arguments) = function.__function_attr__.arguments.as_ref()
+            && let Some(first_default) = arguments.iter().position(|a| a.default_value.is_some())
+        {
+            match adapter_type {
+                Snowflake => {
+                    if arguments[first_default..]
+                        .iter()
+                        .any(|a| a.default_value.is_none())
+                    {
+                        let err = fs_err!(
+                            ErrorCode::InvalidConfig,
+                            "Function '{}' has arguments with 'default_value' that are not at the end of the argument list. Defaulted arguments must form a trailing suffix.",
+                            name,
+                        );
+                        emit_error_log_from_fs_error(&err, status_reporter);
+                    }
+                }
+                _ => {
+                    let err = fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Function '{}' declares an argument with 'default_value', which is not supported on '{}'.",
+                        name,
+                        adapter_type,
+                    );
+                    emit_error_log_from_fs_error(&err, status_reporter);
+                }
+            }
+        }
+    }
 }
 
 fn microbatch_model_no_event_time_inputs_warnings(nodes: &Nodes) -> Vec<FsError> {
@@ -925,6 +1012,7 @@ pub async fn resolve_inner(
         token,
         jinja_type_checking_event_listener_factory.clone(),
         &nodes.models,
+        &disabled_nodes.models,
     )
     .await?;
     nodes.tests.extend(data_tests);

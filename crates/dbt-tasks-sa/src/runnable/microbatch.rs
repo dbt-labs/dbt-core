@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::microbatch::BatchContext;
 use dbt_adapter::cast_util::downcast_value_to_dyn_base_relation;
+use dbt_adapter::formatter::SqlLiteralFormatter;
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
@@ -29,6 +30,7 @@ use tracing::warn;
 /// with batch info and internal timestamps, and controls pre/post hook lists.
 pub fn extend_microbatch_node_context(
     batch_ctx: &BatchContext,
+    adapter_type: AdapterType,
     model: &DbtModel,
     node_resolver: Arc<dyn NodeResolverTracker>,
     runtime_config: &DbtRuntimeConfig,
@@ -86,13 +88,14 @@ pub fn extend_microbatch_node_context(
         "__dbt_microbatch_batch_id__".to_string(),
         Value::from(batch_ctx.id.clone()),
     );
+    let formatter = SqlLiteralFormatter::new(adapter_type);
     jinja_context.insert(
         "__dbt_microbatch_event_time_start__".to_string(),
-        Value::from(batch_ctx.event_time_start.to_rfc3339()),
+        Value::from(formatter.format_timestamp(batch_ctx.event_time_start)),
     );
     jinja_context.insert(
         "__dbt_microbatch_event_time_end__".to_string(),
-        Value::from(batch_ctx.event_time_end.to_rfc3339()),
+        Value::from(formatter.format_timestamp(batch_ctx.event_time_end)),
     );
     jinja_context.insert(
         "__dbt_microbatch_is_first_batch__".to_string(),
@@ -108,11 +111,11 @@ pub fn extend_microbatch_node_context(
     let mut batch_info = BTreeMap::new();
     batch_info.insert(
         "event_time_start".to_string(),
-        Value::from(batch_ctx.event_time_start.to_rfc3339()),
+        Value::from(formatter.format_timestamp(batch_ctx.event_time_start)),
     );
     batch_info.insert(
         "event_time_end".to_string(),
-        Value::from(batch_ctx.event_time_end.to_rfc3339()),
+        Value::from(formatter.format_timestamp(batch_ctx.event_time_end)),
     );
     batch_info.insert("id".to_string(), Value::from(batch_ctx.id.clone()));
 
@@ -155,11 +158,11 @@ pub fn extend_microbatch_node_context(
                     // Add microbatch timestamps to config
                     config_map.insert(
                         "__dbt_internal_microbatch_event_time_start".to_string(),
-                        Value::from(batch_ctx.event_time_start.to_rfc3339()),
+                        Value::from(formatter.format_timestamp(batch_ctx.event_time_start)),
                     );
                     config_map.insert(
                         "__dbt_internal_microbatch_event_time_end".to_string(),
-                        Value::from(batch_ctx.event_time_end.to_rfc3339()),
+                        Value::from(formatter.format_timestamp(batch_ctx.event_time_end)),
                     );
 
                     model_map.insert("config".to_string(), Value::from_serialize(&config_map));

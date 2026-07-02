@@ -1,15 +1,16 @@
 pub use crate::proto::v1::public::events::fusion::update::PackageUpdate;
-use crate::{
-    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryOutputFlags,
-    attributes::TelemetryEventRecType, serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 use prost::Name as _;
 
-// Our shorthand `ProtoTelemetryEvent` trait requires arrow trait implementation,
+// Our shorthand `StaticTelemetryEvent` trait requires arrow trait implementation,
 // and since this one is not exported to Parquet, we have to implement the
 // `AnyTelemetryEvent` methods directly.
 
-impl ProtoTelemetryEvent for PackageUpdate {
+impl StaticTelemetryEvent for PackageUpdate {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -33,6 +34,7 @@ impl ProtoTelemetryEvent for PackageUpdate {
 }
 
 impl ArrowSerializableTelemetryEvent for PackageUpdate {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

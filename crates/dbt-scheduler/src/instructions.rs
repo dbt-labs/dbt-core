@@ -5,7 +5,7 @@ use std::{
 };
 
 use datafusion_expr::LogicalPlan;
-use dbt_common::error::MacroSpan;
+use dbt_common::CompiledSpans;
 #[derive(Debug, Default, Clone)]
 pub struct Instructions {
     pub sql_instructions: BTreeMap<String, SqlInstruction>,
@@ -58,8 +58,8 @@ pub enum Instruction {
 pub struct SqlInstruction {
     pub fqn: Vec<String>,
     pub sql: String,
-    pub macro_spans: Vec<MacroSpan>,
     pub original_path: PathBuf,
+    pub spans: Box<dyn CompiledSpans>,
 }
 
 // We use SqlInstructions for Tier3 and 4

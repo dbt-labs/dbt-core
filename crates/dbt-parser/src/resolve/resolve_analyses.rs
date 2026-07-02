@@ -208,6 +208,7 @@ pub async fn resolve_analyses(
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
+                classifiers: Default::default(),
                 meta: analysis_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
@@ -236,7 +237,7 @@ pub async fn resolve_analyses(
                     .map(|(model, project, version, location)| DbtRef {
                         name: model.to_owned(),
                         package: project.to_owned(),
-                        version: version.clone().map(|v| v.into()),
+                        version: version.clone(),
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .collect(),

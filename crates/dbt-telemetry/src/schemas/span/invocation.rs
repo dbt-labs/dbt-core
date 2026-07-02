@@ -1,7 +1,7 @@
-use crate::{
-    TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, StaticTelemetryEvent,
+    TelemetryEventRecType, TelemetryOutputFlags,
 };
 
 pub use crate::proto::v1::public::events::fusion::invocation::{
@@ -10,7 +10,7 @@ pub use crate::proto::v1::public::events::fusion::invocation::{
 pub use crate::proto::v1::public::events::fusion::process::Process;
 use prost::Name;
 
-impl ProtoTelemetryEvent for Invocation {
+impl StaticTelemetryEvent for Invocation {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -29,7 +29,7 @@ impl ProtoTelemetryEvent for Invocation {
         true
     }
 
-    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
         Some(Box::new(Invocation {
             raw_command: "<redacted>".to_string(),
             eval_args: self.eval_args.as_ref().map(|ea| InvocationEvalArgs {
@@ -43,6 +43,7 @@ impl ProtoTelemetryEvent for Invocation {
 }
 
 impl ArrowSerializableTelemetryEvent for Invocation {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

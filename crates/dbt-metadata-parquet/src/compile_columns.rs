@@ -39,6 +39,9 @@ pub struct CompileColumnRow {
     pub column_index: i32,
     pub column_type: Option<String>,
     pub description: Option<String>,
+    /// Per-column classifier labels: the merge of YAML-declared column
+    /// `classifiers` and propagated column-level labels.
+    pub classifiers: Vec<String>,
     pub ingested_at: i64,
 }
 
@@ -49,6 +52,11 @@ fn column_fields() -> Vec<Field> {
         Field::new("column_index", DataType::Int32, false),
         Field::new("column_type", DataType::Utf8, true),
         Field::new("description", DataType::Utf8, true),
+        Field::new(
+            "classifiers",
+            DataType::List(Arc::new(Field::new("item", DataType::Utf8, true))),
+            false,
+        ),
         Field::new(
             "ingested_at",
             DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
@@ -201,6 +209,7 @@ mod tests {
                 column_index: 0,
                 column_type: Some("INTEGER".to_string()),
                 description: Some("Primary key".to_string()),
+                classifiers: vec![],
                 ingested_at: 100,
             },
             CompileColumnRow {
@@ -209,6 +218,7 @@ mod tests {
                 column_index: 1,
                 column_type: Some("VARCHAR".to_string()),
                 description: None,
+                classifiers: vec![],
                 ingested_at: 100,
             },
         ];
@@ -235,6 +245,7 @@ mod tests {
                 column_index: 0,
                 column_type: Some("INT".to_string()),
                 description: None,
+                classifiers: vec![],
                 ingested_at: 1,
             },
             CompileColumnRow {
@@ -243,6 +254,7 @@ mod tests {
                 column_index: 1,
                 column_type: Some("INT".to_string()),
                 description: None,
+                classifiers: vec![],
                 ingested_at: 1,
             },
         ];
@@ -257,6 +269,7 @@ mod tests {
             column_index: 0,
             column_type: Some("BIGINT".to_string()),
             description: Some("Updated".to_string()),
+            classifiers: vec![],
             ingested_at: 2,
         }];
         write_compile_columns(dir_path, rows2, Some(&targets), None, None).unwrap();
@@ -283,6 +296,7 @@ mod tests {
                 column_index: 0,
                 column_type: Some(format!("TYPE_{i}")),
                 description: None,
+                classifiers: vec![],
                 ingested_at: i as i64,
             }];
             write_compile_columns(dir_path, rows, Some(&targets), None, None).unwrap();

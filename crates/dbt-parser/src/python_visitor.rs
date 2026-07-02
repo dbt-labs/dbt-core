@@ -12,6 +12,7 @@ use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_jinja_utils::serde::into_typed_with_error;
 use dbt_schemas::schemas::project::ResolvableConfig;
+use dbt_schemas::schemas::serde::NodeVersion;
 use ruff_python_ast::{
     self as ast, Expr, Stmt,
     visitor::{Visitor, walk_expr, walk_stmt},
@@ -192,14 +193,15 @@ impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
         kwargs: Vec<(String, LiteralValue)>,
         range_line: usize,
     ) {
-        // Extract version from keyword arguments (v or version)
-        let version_from_kwargs = kwargs
+        // Extract version from keyword arguments (v or version), preserving original literal type
+        let version_from_kwargs: Option<NodeVersion> = kwargs
             .iter()
             .find(|(key, _)| key == "v" || key == "version")
-            .and_then(|(_, val)| {
-                // Version can be a string or integer
-                val.as_string()
-                    .or_else(|| val.as_int().map(|i| i.to_string()))
+            .and_then(|(_, val)| match val {
+                LiteralValue::Integer(i) => Some(NodeVersion::Integer(*i)),
+                LiteralValue::Float(f) => Some(NodeVersion::Float(*f)),
+                LiteralValue::String(s) => Some(NodeVersion::String(s.clone())),
+                _ => None,
             });
 
         match args.len() {
@@ -237,15 +239,17 @@ impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
             }
             3 => {
                 // dbt.ref("package", "model", "version") - positional version takes precedence
-                if let (Some(package), Some(model), Some(version)) = (
-                    args[0].as_string(),
-                    args[1].as_string(),
-                    args[2].as_string(),
-                ) {
+                if let (Some(package), Some(model)) = (args[0].as_string(), args[1].as_string()) {
+                    let version = match &args[2] {
+                        LiteralValue::Integer(i) => Some(NodeVersion::Integer(*i)),
+                        LiteralValue::Float(f) => Some(NodeVersion::Float(*f)),
+                        LiteralValue::String(s) => Some(NodeVersion::String(s.clone())),
+                        _ => None,
+                    };
                     self.file_info.refs.push((
                         model,
                         Some(package),
-                        Some(version),
+                        version,
                         CodeLocation {
                             line: range_line as u32,
                             col: 0,
@@ -715,7 +719,10 @@ def model(dbt, session):
         assert_eq!(result.refs.len(), 1);
         assert_eq!(result.refs[0].0, "my_model");
         assert_eq!(result.refs[0].1, Some("my_package".to_string()));
-        assert_eq!(result.refs[0].2, Some("v1".to_string()));
+        assert_eq!(
+            result.refs[0].2,
+            Some(NodeVersion::String("v1".to_string()))
+        );
     }
 
     #[test]
@@ -1278,7 +1285,7 @@ def model(dbt, session):
         assert_eq!(result.refs.len(), 1);
         assert_eq!(result.refs[0].0, "my_model");
         assert_eq!(result.refs[0].1, None); // no package
-        assert_eq!(result.refs[0].2, Some("1".to_string())); // version
+        assert_eq!(result.refs[0].2, Some(NodeVersion::Integer(1))); // version
     }
 
     /// Test ref with version= keyword argument
@@ -1305,7 +1312,7 @@ def model(dbt, session):
         assert_eq!(result.refs.len(), 1);
         assert_eq!(result.refs[0].0, "my_model");
         assert_eq!(result.refs[0].1, None);
-        assert_eq!(result.refs[0].2, Some("1".to_string()));
+        assert_eq!(result.refs[0].2, Some(NodeVersion::Integer(1)));
     }
 
     /// Test ref with string version in keyword argument
@@ -1331,7 +1338,10 @@ def model(dbt, session):
 
         assert_eq!(result.refs.len(), 1);
         assert_eq!(result.refs[0].0, "my_model");
-        assert_eq!(result.refs[0].2, Some("v1".to_string()));
+        assert_eq!(
+            result.refs[0].2,
+            Some(NodeVersion::String("v1".to_string()))
+        );
     }
 
     /// Test ref with package and v= keyword argument
@@ -1358,7 +1368,7 @@ def model(dbt, session):
         assert_eq!(result.refs.len(), 1);
         assert_eq!(result.refs[0].0, "my_model");
         assert_eq!(result.refs[0].1, Some("test_package".to_string()));
-        assert_eq!(result.refs[0].2, Some("1".to_string()));
+        assert_eq!(result.refs[0].2, Some(NodeVersion::Integer(1)));
     }
 
     /// Test ref with package and version= keyword argument
@@ -1385,7 +1395,7 @@ def model(dbt, session):
         assert_eq!(result.refs.len(), 1);
         assert_eq!(result.refs[0].0, "my_model");
         assert_eq!(result.refs[0].1, Some("test_package".to_string()));
-        assert_eq!(result.refs[0].2, Some("1".to_string()));
+        assert_eq!(result.refs[0].2, Some(NodeVersion::Integer(1)));
     }
 
     /// Test multiple refs with different versioning styles
@@ -1427,22 +1437,22 @@ def model(dbt, _):
         // df2: ref with v=1
         assert_eq!(result.refs[1].0, "my_versioned_model");
         assert_eq!(result.refs[1].1, None);
-        assert_eq!(result.refs[1].2, Some("1".to_string()));
+        assert_eq!(result.refs[1].2, Some(NodeVersion::Integer(1)));
 
         // df3: ref with version=1
         assert_eq!(result.refs[2].0, "my_versioned_model");
         assert_eq!(result.refs[2].1, None);
-        assert_eq!(result.refs[2].2, Some("1".to_string()));
+        assert_eq!(result.refs[2].2, Some(NodeVersion::Integer(1)));
 
         // df4: ref with package and v=1
         assert_eq!(result.refs[3].0, "my_versioned_model");
         assert_eq!(result.refs[3].1, Some("test".to_string()));
-        assert_eq!(result.refs[3].2, Some("1".to_string()));
+        assert_eq!(result.refs[3].2, Some(NodeVersion::Integer(1)));
 
         // df5: ref with package and version=1
         assert_eq!(result.refs[4].0, "my_versioned_model");
         assert_eq!(result.refs[4].1, Some("test".to_string()));
-        assert_eq!(result.refs[4].2, Some("1".to_string()));
+        assert_eq!(result.refs[4].2, Some(NodeVersion::Integer(1)));
 
         // Check source was extracted
         assert_eq!(result.sources.len(), 1);

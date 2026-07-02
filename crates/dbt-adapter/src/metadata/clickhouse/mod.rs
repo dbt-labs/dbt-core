@@ -10,6 +10,7 @@ use arrow_schema::Schema;
 use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};
 
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
@@ -17,7 +18,6 @@ use dbt_schemas::schemas::{
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::State;
 use std::collections::btree_map::Entry;

@@ -20,7 +20,7 @@ use crate::schemas::{
     },
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtMetric {
     pub __common_attr__: CommonAttributes,
@@ -42,7 +42,7 @@ pub struct DbtMetricAttr {
     pub metadata: Option<SourceFileMetadata>,
     pub time_granularity: Option<Granularity>,
     pub unrendered_config: BTreeMap<String, YmlValue>,
-    pub metrics: Vec<MetricInput>,
+    pub metrics: Vec<MetricInput>, // TODO: seems unused, can this be removed?
     pub created_at: f64,
     pub group: Option<String>,
 }

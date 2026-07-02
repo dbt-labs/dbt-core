@@ -7,7 +7,10 @@
 
 use dbt_schemas::schemas::{common::ConstraintType, properties::ModelConstraint};
 use dbt_yaml::Spanned;
+use minijinja::Value;
+use minijinja::value::{Enumerator, Object};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// Database constraint representation with validation and DDL rendering capabilities
 ///
@@ -177,6 +180,56 @@ impl TypedConstraint {
             }
             TypedConstraint::Custom { expression, .. } => expression.clone(),
         }
+    }
+}
+
+/// Expose `TypedConstraint` fields and `render()` to Jinja templates as a proper Object.
+///
+/// Without this, `Value::from_serialize` uses serde's external tagging
+/// (`{"PrimaryKey": {...}}`) which makes `.type` and `.name` return Undefined in Jinja,
+/// producing broken SQL like `ALTER TABLE x DROP CONSTRAINT IF EXISTS ;`.
+impl Object for TypedConstraint {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str() {
+            Some("type") => Some(Value::from(match self.as_ref() {
+                TypedConstraint::Check { .. } => "check",
+                TypedConstraint::PrimaryKey { .. } => "primary_key",
+                TypedConstraint::ForeignKey { .. } => "foreign_key",
+                TypedConstraint::Custom { .. } => "custom",
+            })),
+            Some("name") => Some(Value::from_serialize(self.name())),
+            Some("expression") => Some(match self.as_ref() {
+                TypedConstraint::Check { expression, .. }
+                | TypedConstraint::Custom { expression, .. } => Value::from(expression.as_str()),
+                TypedConstraint::PrimaryKey { expression, .. }
+                | TypedConstraint::ForeignKey { expression, .. } => {
+                    Value::from_serialize(expression)
+                }
+            }),
+            Some("columns") => Some(match self.as_ref() {
+                TypedConstraint::PrimaryKey { columns, .. }
+                | TypedConstraint::ForeignKey { columns, .. } => {
+                    Value::from_iter(columns.iter().map(|c| Value::from(c.as_str())))
+                }
+                TypedConstraint::Check { columns, .. }
+                | TypedConstraint::Custom { columns, .. } => {
+                    Value::from_iter(columns.iter().flatten().map(|c| Value::from(c.as_str())))
+                }
+            }),
+            // "render" is exposed as a callable so `constraint.render()` works in templates
+            Some("render") => {
+                let this = Arc::clone(self);
+                Some(Value::from_func_func("render", move |_, _| {
+                    Ok(Value::from(TypedConstraint::render(&this)))
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        // "render" excluded: it's a callable, not a data attribute to iterate
+        Enumerator::Str(&["type", "name", "expression", "columns"])
     }
 }
 
@@ -496,6 +549,50 @@ mod tests {
     use super::*;
     use dbt_test_primitives::assert_contains;
     use std::sync::Arc;
+
+    #[test]
+    fn test_typed_constraint_jinja_attributes() {
+        let pk = Arc::new(TypedConstraint::PrimaryKey {
+            name: Some("pk_id".to_string()),
+            columns: vec!["id".to_string()],
+            expression: None,
+        });
+
+        let type_val = pk.get_value(&Value::from("type")).unwrap();
+        assert_eq!(type_val.as_str(), Some("primary_key"));
+
+        let name_val = pk.get_value(&Value::from("name")).unwrap();
+        assert_eq!(name_val.as_str(), Some("pk_id"));
+
+        let custom = Arc::new(TypedConstraint::Custom {
+            name: Some("pk_id".to_string()),
+            expression: "primary key (`id`) rely".to_string(),
+            columns: None,
+        });
+
+        let type_val = custom.get_value(&Value::from("type")).unwrap();
+        assert_eq!(type_val.as_str(), Some("custom"));
+
+        let name_val = custom.get_value(&Value::from("name")).unwrap();
+        assert_eq!(name_val.as_str(), Some("pk_id"));
+    }
+
+    #[test]
+    fn test_typed_constraint_jinja_render_callable() {
+        let pk = Arc::new(TypedConstraint::PrimaryKey {
+            name: Some("pk_id".to_string()),
+            columns: vec!["id".to_string()],
+            expression: None,
+        });
+
+        let render_val = pk.get_value(&Value::from("render")).unwrap();
+        // "render" should be a function value (non-None, non-undefined)
+        assert!(!render_val.is_undefined());
+
+        // Verify render works via TypedConstraint::render (not Object::render)
+        let rendered = TypedConstraint::render(&pk);
+        assert_eq!(rendered, "CONSTRAINT pk_id PRIMARY KEY (id)");
+    }
 
     #[test]
     fn test_typed_constraint_validation() {

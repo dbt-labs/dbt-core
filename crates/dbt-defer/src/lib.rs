@@ -19,7 +19,6 @@ use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_run_cache::run_cache_defer::RunCacheProfileResolver;
 use dbt_scheduler::node_selector::filter_select_criteria;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::schemas::IntrospectionKind;
@@ -32,6 +31,7 @@ use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::semantic_layer::semantic_manifest::SemanticManifest;
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes};
 use dbt_schemas::state::{NodeResolverTracker, ResolverState};
+use dbt_state::run_cache_defer::RunCacheProfileResolver;
 use dbt_telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
 
 use tracing::Instrument as _;
@@ -149,15 +149,8 @@ impl DeferState {
             nodes = run_cache_defer_nodes.or(nodes);
         }
 
-        let deferred: HashMap<CanonicalFqn, String> = if nodes.is_some() {
-            let deferred = defer_common(
-                arg,
-                resolved_state,
-                nodes.as_mut().unwrap(),
-                schedule,
-                &adapter,
-            )
-            .await?;
+        let deferred: HashMap<CanonicalFqn, String> = if let Some(ref mut nodes) = nodes {
+            let deferred = defer_common(arg, resolved_state, nodes, schedule, &adapter).await?;
             rewrite_recorded_relation_calls_with_deferral(resolved_state, &deferred.relation_remap);
             deferred.deferred_unique_ids
         } else {

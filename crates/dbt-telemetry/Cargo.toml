@@ -13,21 +13,16 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-arrow = { workspace = true, features = ["canonical_extension_types"] }
 arrow-schema = { workspace = true, features = ["canonical_extension_types"] }
-bitflags = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-tracing = { workspace = true }
 dbt-yaml = { workspace = true }
-opentelemetry = { workspace = true }
-opentelemetry-semantic-conventions = { workspace = true }
-opentelemetry_sdk = { workspace = true }
 pbjson = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 proto-rust-macros = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
-serde_arrow = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = { workspace = true }
 serde_with = { workspace = true }
@@ -41,14 +36,20 @@ uuid = { workspace = true }
 fake = { workspace = true, optional = true }
 
 [dev-dependencies]
+arrow = { workspace = true, features = ["canonical_extension_types"] }
 fake = { workspace = true }
+# Enables `fake::Dummy` derives on telemetry value types moved to dbt-tracing
+# (e.g. SeverityNumber) so this crate's own tests can fake them.
+dbt-tracing = { workspace = true, features = ["test-utils"] }
 # Used for round-trip testing of serialization
 bytes = { workspace = true }
 parquet = { workspace = true }
 
 [features]
-# Test-only helpers in the registry - this allows tests in dbt-telemetry-private
-test-utils = ["fake"]
+# Test-only helpers in the registry - this allows tests in dbt-telemetry-private.
+# Forwards to `dbt-tracing/test-utils` so transitive fakers (dbt-telemetry-private,
+# dbt-common) get the `fake::Dummy` derives on telemetry value types moved there.
+test-utils = ["fake", "dbt-tracing/test-utils"]
 
 [lib]
 name = "dbt_telemetry"

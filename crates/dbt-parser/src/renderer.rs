@@ -7,7 +7,7 @@ use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_errors};
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::constants::{DBT_TARGET_DIR_NAME, PARSING};
+use dbt_common::constants::{DBT_SNAPSHOTS_DIR_NAME, DBT_TARGET_DIR_NAME, PARSING};
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
@@ -38,10 +38,12 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use tracing::Instrument as _;
 
+use dbt_frontend_common::error::CodeLocation;
+use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use minijinja::{MacroSpans, Value as MinijinjaValue};
-use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{self, AtomicBool};
@@ -125,6 +127,62 @@ fn extract_model_and_version_config<T: ResolvableConfig<T>, S: GetConfig<T> + De
     Ok((Some(maybe_model), maybe_version_config))
 }
 
+/// Appends `source()` calls discovered by static AST analysis to
+/// `sql_resources`, keyed by `(source_name, table_name)`.
+///
+/// The `execute=false` discovery render only observes `source()` calls in
+/// branches that evaluate to true, so a source guarded by
+/// `{% if is_incremental() %}` or `{% if execute %}` would otherwise be missing
+/// from the model's dependencies and never have its schema fetched
+/// (dbt-fusion #1660). Sources with non-literal arguments cannot be resolved
+/// statically and are left to render-driven discovery.
+fn augment_sql_resources_with_static_sources<T: ResolvableConfig<T>>(
+    sql: &str,
+    display_path: &Path,
+    jinja_env: &JinjaEnv,
+    sql_resources: &Arc<Mutex<Vec<SqlResource<T>>>>,
+) {
+    let filename = display_path.to_string_lossy();
+    // Parse failure here is non-fatal: the render above already succeeded.
+    let Ok(discovered) = jinja_env
+        .env
+        .find_static_string_arg_calls(&filename, sql, &["source"])
+    else {
+        return;
+    };
+    if discovered.is_empty() {
+        return;
+    }
+
+    let mut resources = sql_resources.lock().unwrap();
+    let existing: HashSet<(String, String)> = resources
+        .iter()
+        .filter_map(|r| match r {
+            SqlResource::Source((name, table, _)) | SqlResource::StaticSource((name, table, _)) => {
+                Some((name.clone(), table.clone()))
+            }
+            _ => None,
+        })
+        .collect();
+
+    for call in discovered {
+        let [name, table] = call.args.as_slice() else {
+            continue;
+        };
+        let key = (name.clone(), table.clone());
+        if existing.contains(&key) {
+            continue;
+        }
+        let (name, table) = key;
+        let span = call.span;
+        resources.push(SqlResource::StaticSource((
+            name,
+            table,
+            CodeLocation::new(span.start_line, span.start_col, span.start_offset),
+        )));
+    }
+}
+
 async fn render_sql_file<T, S>(
     render_ctx: &RenderCtx<T>,
     dbt_asset: &DbtAsset,
@@ -145,12 +203,30 @@ where
 
     let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
 
-    let display_path = if dbt_asset.base_path == args.io.out_dir {
+    let display_path = if dbt_asset.base_path == args.io.out_dir
+        && dbt_asset.path.starts_with(DBT_SNAPSHOTS_DIR_NAME)
+    {
+        dbt_asset.original_path.clone()
+    } else if dbt_asset.base_path == args.io.out_dir {
         PathBuf::from(DBT_TARGET_DIR_NAME).join(dbt_asset.to_display_path(&args.io.out_dir))
     } else {
         dbt_asset.to_display_path(&args.io.in_dir)
     };
-    let display_path_str = display_path.display().to_string();
+    let display_path_str = if dbt_asset.base_path == args.io.out_dir
+        && dbt_asset.path.starts_with(DBT_SNAPSHOTS_DIR_NAME)
+        && let Some(mpe) = node_properties.get(ref_name)
+        && mpe.name_span.is_valid()
+    {
+        format!(
+            "{}:{}:{} ({})",
+            display_path.display(),
+            mpe.name_span.start.line,
+            mpe.name_span.start.column,
+            ref_name
+        )
+    } else {
+        display_path.display().to_string()
+    };
 
     let span = create_debug_span(AssetParsed::new_with_phase_from_context(
         package_name.clone(),
@@ -342,7 +418,7 @@ where
     };
     let mut listeners = listener_factory.create_listener_bundle(
         &display_path,
-        &dbt_frontend_common::error::CodeLocation::start_of_file(),
+        &CodeLocation::start_of_file(),
         &sql,
     );
     let macro_dep_listener = Rc::new(dbt_jinja_utils::listener::MacroDependencyListener::new());
@@ -358,6 +434,18 @@ where
             &display_path,
         ) {
             Ok(rendered_sql) => {
+                // A `source()` inside a Jinja branch that evaluates to false
+                // during this `execute=false` render is never observed by the
+                // render-driven `SqlResource` collection above. Walk the
+                // template AST to recover any such sources so their schemas
+                // are still fetched (dbt-fusion #1660).
+                augment_sql_resources_with_static_sources(
+                    &sql,
+                    &display_path,
+                    jinja_env,
+                    &sql_resources,
+                );
+
                 let normalized_sql = normalize_sql(&sql);
                 // Get config from current resources to use for hook rendering
                 let temp_config = {
@@ -493,7 +581,7 @@ where
                 let status = match err.code {
                     ErrorCode::DisabledModel => ModelStatus::Disabled,
                     ErrorCode::MacroSyntaxInvalid => {
-                        let err_with_loc = err.with_location(dbt_asset.path.clone());
+                        let err_with_loc = err.with_location(display_path.clone());
                         emit_error_log_from_fs_error(
                             &err_with_loc,
                             args.io.status_reporter.as_ref(),
@@ -502,7 +590,7 @@ where
                     }
                     _ => {
                         if was_enabled {
-                            let err_with_loc = err.with_location(dbt_asset.path.clone());
+                            let err_with_loc = err.with_location(display_path.clone());
                             emit_error_log_from_fs_error(
                                 &err_with_loc,
                                 args.io.status_reporter.as_ref(),
@@ -874,7 +962,7 @@ pub fn collect_hook_dependencies_from_config(
     config: &dyn ResolvedConfig,
     jinja_env: Arc<JinjaEnv>,
     adapter_type: AdapterType,
-    resource_path: &std::path::Path,
+    resource_path: &Path,
     io: IoArgs,
     hook_context: &BTreeMap<String, MinijinjaValue>,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,

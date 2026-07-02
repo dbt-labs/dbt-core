@@ -48,6 +48,7 @@ pub struct DbtColumn {
     #[serde(default)]
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<String>>,
+    pub classifiers: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
@@ -120,6 +121,7 @@ pub struct ColumnProperties {
     pub data_tests: Option<Vec<DataTests>>,
     pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
+    pub classifiers: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
@@ -336,6 +338,7 @@ pub fn process_columns(
                         .unwrap_or_default(),
                     // Top-level policy_tags takes precedence over config.policy_tags
                     policy_tags: cp.policy_tags.clone().or(cp_policy_tags),
+                    classifiers: cp.classifiers.clone(),
                     databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
                     column_mask: cp.column_mask.clone(),
                     quote: cp.quote,
@@ -374,6 +377,7 @@ mod tests {
             data_tests: None,
             granularity: None,
             policy_tags: None,
+            classifiers: None,
             databricks_tags: None,
             column_mask: None,
             quote: None,

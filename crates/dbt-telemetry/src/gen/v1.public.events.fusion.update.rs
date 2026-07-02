@@ -14,7 +14,7 @@ pub struct PackageUpdate {
     #[prost(string, optional, tag = "3")]
     pub exe_path: ::core::option::Option<::prost::alloc::string::String>,
 }
-impl crate::StaticName for PackageUpdate {
+impl ::dbt_tracing::StaticName for PackageUpdate {
     const FULL_NAME: &'static str = "v1.public.events.fusion.update.PackageUpdate";
     const TYPE_URL: &'static str = "/v1.public.events.fusion.update.PackageUpdate";
 }

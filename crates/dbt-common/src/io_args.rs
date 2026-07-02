@@ -1,6 +1,6 @@
 use crate::warn_error_options::WarnErrorOptions;
 use clap::ValueEnum;
-use dbt_adapter_core::AdapterType;
+use dbt_adapter_core::{AdapterType, STATIC_ANALYSIS_SUPPORTED_ADAPTERS};
 use dbt_base::{HashMap, HashSet};
 use dbt_telemetry::NodeType;
 use dbt_yaml::{JsonSchema, Value};
@@ -247,7 +247,6 @@ pub struct IoArgs {
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
-    pub beta_use_query_cache: bool,
     pub use_parquet_schema_store: bool,
     pub verify_parquet_schema_store: bool,
     pub host: String,
@@ -476,6 +475,9 @@ pub struct EvalArgs {
     pub write_catalog: bool,
     /// Show schema on the command line
     pub schema: Vec<JsonSchemaTypes>,
+    /// Maximum size (MiB) for seed files whose contents are hashed
+    /// 1 MiB default); `0` means "no limit".
+    pub maximum_seed_size_mib: u64,
 
     // -- fields from the private branch
     pub internal_packages_install_path: Option<PathBuf>,
@@ -488,6 +490,10 @@ pub struct EvalArgs {
     pub skip_semantic_manifest_validation: bool,
     pub export_saved_queries: bool,
     pub task_cache_url: String,
+    /// Whether dbt State management (auto-deferral) is enabled, resolved from
+    /// `--manage-state`, `DBT_ENGINE_MANAGE_STATE`, or `flags.manage_state` in
+    /// dbt_project.yml / user settings. Also surfaced on the invocation telemetry
+    /// span as `manage_state`.
     pub run_cache_service: bool,
     pub run_cache_mode: RunCacheMode,
     pub optimize_tests: HashSet<OptimizeTestsOptions>,
@@ -529,6 +535,11 @@ pub struct EvalArgs {
     /// How to load internal (embedded) dbt packages
     pub internal_package_mode: InternalPackageMode,
     /// Whether to skip running post hook operations.
+    /// Seed classifier propagation with Snowflake column tags and write
+    /// propagated labels back to Snowflake post-Run.  Only meaningful on
+    /// Snowflake adapter; combined with `write_index = true` to be valid.
+    /// Mirrors the `--classify-with-warehouse-tags` CLI flag.
+    pub classify_with_warehouse_tags: bool,
     pub skip_post_hooks: bool,
     /// Write metadata parquet epoch files (parse/nodes, compile/nodes, compile/columns, etc.)
     pub write_metadata: bool,
@@ -622,7 +633,7 @@ impl EvalArgsBuilder {
     /// Disable the static analysis for a specific adapter if the relevant dialect is unsupported.
     /// Otherwise, it's a noop
     pub fn disable_static_analysis_if_not_supported(mut self, adapter_type: AdapterType) -> Self {
-        let supported = dbt_adapter_core::adapter_type_supports_static_analysis(adapter_type);
+        let supported = STATIC_ANALYSIS_SUPPORTED_ADAPTERS.contains(&adapter_type);
 
         // FIXME(serramatutu): there is a bug in Postgres' frontend parser that makes
         // all our recordings invalid if enable it, but we can't disable it otherwise
@@ -832,6 +843,7 @@ pub enum JsonSchemaTypes {
     Packages(bool),
     Dependencies(bool),
     Telemetry(bool),
+    Catalogs(bool),
 }
 
 impl JsonSchemaTypes {
@@ -844,7 +856,8 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::DbtCloud(is_pre)
             | JsonSchemaTypes::Packages(is_pre)
             | JsonSchemaTypes::Dependencies(is_pre)
-            | JsonSchemaTypes::Telemetry(is_pre) => *is_pre,
+            | JsonSchemaTypes::Telemetry(is_pre)
+            | JsonSchemaTypes::Catalogs(is_pre) => *is_pre,
         }
     }
 
@@ -856,7 +869,8 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::Profile(_)
             | JsonSchemaTypes::DbtCloud(_)
             | JsonSchemaTypes::Packages(_)
-            | JsonSchemaTypes::Dependencies(_) => schemars::r#gen::SchemaSettings::default(),
+            | JsonSchemaTypes::Dependencies(_)
+            | JsonSchemaTypes::Catalogs(_) => schemars::r#gen::SchemaSettings::default(),
             JsonSchemaTypes::Telemetry(_) => schemars::r#gen::SchemaSettings::draft07(),
         }
     }
@@ -874,6 +888,7 @@ pub enum ClapSchemaTypes {
     Packages,
     Dependencies,
     Telemetry,
+    Catalogs,
 }
 
 impl ClapSchemaTypes {
@@ -887,6 +902,7 @@ impl ClapSchemaTypes {
             ClapSchemaTypes::Packages => JsonSchemaTypes::Packages(is_pre),
             ClapSchemaTypes::Dependencies => JsonSchemaTypes::Dependencies(is_pre),
             ClapSchemaTypes::Telemetry => JsonSchemaTypes::Telemetry(is_pre),
+            ClapSchemaTypes::Catalogs => JsonSchemaTypes::Catalogs(is_pre),
         }
     }
 }

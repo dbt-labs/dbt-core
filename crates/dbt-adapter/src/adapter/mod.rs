@@ -1,7 +1,7 @@
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
-use crate::engine::XdbcEngine;
+use crate::engine::AdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::errors::into_fs_error;
 use crate::metadata::*;
@@ -9,6 +9,7 @@ use crate::parse::adapter::ParseAdapterState;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::relation::factory::create_static_relation;
+use crate::relation::spark::DEFAULT_SPARK_DATABASE;
 use crate::relation::{Relation, RelationObject};
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
@@ -18,11 +19,14 @@ use crate::time_machine::TimeMachine;
 use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
 
+use crate::auth::DefaultAuthWarningPrinter;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::QueryCtx;
 use dbt_agate::AgateTable;
-use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
+use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
+use dbt_common::io_utils::StatusReporter;
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
@@ -31,9 +35,8 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryPartitionConfig, GrantAccessToTarget};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, TableFormat};
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
-use dbt_xdbc::QueryCtx;
 use indexmap::IndexMap;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::constants::TARGET_UNIQUE_ID;
@@ -76,6 +79,13 @@ enum InnerAdapter {
 }
 
 use InnerAdapter::*;
+
+/// Per-node connection state that must be reset after materialization.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeOverride {
+    Database,
+    Warehouse,
+}
 
 /// Type bridge adapter
 ///
@@ -159,6 +169,7 @@ impl Adapter {
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
+        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Adapter {
         let state = Self::make_parse_adapter_state(
@@ -167,6 +178,7 @@ impl Adapter {
             package_quoting,
             type_ops,
             Arc::new(RelationCache::default()),
+            status_reporter,
             catalogs,
         );
         Adapter {
@@ -182,11 +194,14 @@ impl Adapter {
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,
+        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
 
-        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
+        let warning_printer = Box::new(DefaultAuthWarningPrinter::new(status_reporter))
+            as Box<dyn AuthWarningPrinter>;
+        let auth: Arc<dyn Auth> = auth_for_backend(warning_printer, backend).into();
         let adapter_config = AdapterConfig::new(config);
         let quoting = package_quoting
             .try_into()
@@ -195,7 +210,7 @@ impl Adapter {
         // No cloud config needed — bridge adapter is used for internal operations, not user-facing queries.
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false, None);
 
-        let engine = XdbcEngine::new(
+        let engine = AdbcEngine::new(
             adapter_type,
             auth,
             adapter_config,
@@ -239,6 +254,9 @@ impl Adapter {
     /// def commit(self) -> None
     /// ```
     pub fn commit(&self) -> Result<Value, minijinja::Error> {
+        // No-op: Fusion connections are shared across nodes, so we never mutate
+        // their transaction state from this Jinja hook. DuckDB autocommits each
+        // statement; macros that need statement isolation use `auto_begin=False`.
         Ok(Value::from(true))
     }
 
@@ -362,7 +380,7 @@ impl Adapter {
 
         self.engine()
             .relation_cache()
-            .insert_many(collected_relations.into_iter());
+            .insert_many(collected_relations);
         Ok(())
     }
 
@@ -1114,9 +1132,21 @@ impl Adapter {
                 let iter = ArgsIter::new("valid_snapshot_target", &["relation"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let column_names_val = iter.next_kwarg::<Option<Value>>("column_names")?;
+                let column_names = column_names_val
+                    .map(minijinja_value_to_typed_struct::<BTreeMap<String, String>>)
+                    .transpose()
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
                 iter.finish()?;
 
-                adapter.valid_snapshot_target(state, &relation)
+                adapter.valid_snapshot_target(state, &relation, column_names)?;
+
+                Ok(none_value())
             }
             Parse(_) => Ok(none_value()),
         }
@@ -1337,8 +1367,25 @@ impl Adapter {
                             temp_relation.schema_as_resolved_str().unwrap_or_default();
                         let has_schema =
                             !resolved_catalog.is_empty() || !resolved_schema.is_empty();
+                        // Schema-wide listing is only unreliable for external
+                        // Iceberg REST catalogs (their information_schema coverage
+                        // is incomplete), so skip warming the cache only when the
+                        // *target* catalog is one of them. For a regular DuckDB
+                        // catalog we still warm once per schema — otherwise every
+                        // per-relation existence check falls back to a query over
+                        // the unqualified `information_schema.tables`, which unions
+                        // every attached database and fans out across all remote
+                        // catalogs on each call.
+                        let skip_schema_listing = match adapter.adapter_type() {
+                            AdapterType::DuckDB => {
+                                duckdb::is_duckdb_v2_external_iceberg_catalog_database(
+                                    &resolved_catalog,
+                                )
+                            }
+                            _ => false,
+                        };
 
-                        if has_schema {
+                        if has_schema && !skip_schema_listing {
                             let mut conn = adapter
                                 .borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                             let db_schema = CatalogAndSchema::from(temp_relation.as_ref());
@@ -2465,8 +2512,8 @@ impl Adapter {
         }
     }
 
-    /// Extract the database name from a Jinja relation Value and look up its table format.
-    fn table_format(&self, relation_val: &Value) -> Option<TableFormat> {
+    /// Extract the database name from a Jinja relation Value and look up its table format string.
+    fn table_format(&self, relation_val: &Value) -> Option<&'static str> {
         let database = relation_val.get_attr("database").ok().and_then(|v| {
             if v.is_undefined() || v.is_none() {
                 None
@@ -3199,33 +3246,37 @@ impl Adapter {
     ///
     /// # Returns
     ///
-    /// Returns true if the warehouse was overridden, false otherwise
+    /// Returns the required reset state if the warehouse was switched.
     #[tracing::instrument(skip(self), level = "trace")]
-    pub fn use_warehouse(&self, warehouse: Option<String>, node_id: &str) -> FsResult<bool> {
+    pub fn use_warehouse(
+        &self,
+        warehouse: Option<String>,
+        node_id: &str,
+    ) -> FsResult<Option<NodeOverride>> {
         // TODO(jason): Record/replay non-jinja internal calls non-invasively
         // https://github.com/dbt-labs/fs/issues/7736
         if let Some(tm) = self.time_machine()
             && tm.is_replaying()
         {
-            return Ok(false);
+            return Ok(None);
         }
 
         match &self.inner {
             Typed { adapter, .. } => {
-                if warehouse.is_none() {
-                    return Ok(false);
-                }
+                let Some(warehouse) = warehouse else {
+                    return Ok(None);
+                };
 
                 let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
                 adapter.use_warehouse(
                     conn.as_mut(),
-                    warehouse.unwrap(),
+                    warehouse,
                     node_id,
                     self.cancellation_token.clone(),
                 )?;
-                Ok(true)
+                Ok(Some(NodeOverride::Warehouse))
             }
-            Parse(_) => Ok(false),
+            Parse(_) => Ok(None),
         }
     }
 
@@ -3250,6 +3301,79 @@ impl Adapter {
                     node_id,
                     self.cancellation_token.clone(),
                 )?;
+                Ok(())
+            }
+            Parse(_) => Ok(()),
+        }
+    }
+
+    /// Used internally to execute a Redshift `USE <database>` statement, switching the active
+    /// database for a cross-database node. Returns the required reset state for the caller to
+    /// restore after materialization if `USE` ran. Only valid during runtime for Redshift.
+    ///
+    /// Ref: dbt-labs/dbt-adapters#1787
+    pub fn use_database(
+        &self,
+        target_database: &str,
+        node_id: &str,
+    ) -> FsResult<Option<NodeOverride>> {
+        match &self.inner {
+            Typed { adapter, .. } => match adapter.adapter_type() {
+                AdapterType::Redshift => {
+                    // TODO(jason): Record/replay non-jinja internal calls non-invasively
+                    // https://github.com/dbt-labs/fs/issues/7736
+                    if let Some(tm) = self.time_machine()
+                        && tm.is_replaying()
+                    {
+                        return Ok(None);
+                    }
+
+                    let engine = adapter.engine();
+                    if !adapter_impl::get_bool_config(engine.as_ref(), "datasharing")? {
+                        return Ok(None);
+                    }
+                    let Some(configured_database) = engine.config("database") else {
+                        return Ok(None);
+                    };
+                    let target_database = target_database.trim_matches('\"');
+                    if target_database.is_empty()
+                        || target_database.eq_ignore_ascii_case(configured_database.as_ref())
+                    {
+                        return Ok(None);
+                    }
+                    let database = target_database.to_ascii_lowercase();
+
+                    let mut conn =
+                        adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
+                    adapter.use_database(
+                        conn.as_mut(),
+                        database,
+                        node_id,
+                        self.cancellation_token.clone(),
+                    )?;
+                    Ok(Some(NodeOverride::Database))
+                }
+                other => unreachable!("use_database should only run for Redshift, got {other:?}"),
+            },
+            Parse(_) => unreachable!("use_database should only run during runtime materialization"),
+        }
+    }
+
+    /// Used internally to execute a Redshift `RESET USE` statement.
+    #[tracing::instrument(skip(self), level = "trace")]
+    pub fn reset_database(&self, node_id: &str) -> FsResult<()> {
+        // TODO(jason): Record/replay non-jinja internal calls non-invasively
+        // https://github.com/dbt-labs/fs/issues/7736
+        if let Some(tm) = self.time_machine()
+            && tm.is_replaying()
+        {
+            return Ok(());
+        }
+
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
+                adapter.reset_database(conn.as_mut(), node_id, self.cancellation_token.clone())?;
                 Ok(())
             }
             Parse(_) => Ok(()),
@@ -3451,13 +3575,19 @@ impl Adapter {
                 // needs_information: bool = False
                 let iter = ArgsIter::new(name, &["database", "schema", "identifier"], args);
 
-                let database = iter.next_arg::<&str>().or_else(|e| {
-                    if self.adapter_type() == AdapterType::Databricks {
-                        Ok(DEFAULT_DATABRICKS_DATABASE)
-                    } else {
-                        Err(e)
-                    }
-                })?;
+                let database = match iter.next_arg::<Option<&str>>()? {
+                    Some(database) => database,
+                    None => match self.adapter_type() {
+                        AdapterType::Databricks => DEFAULT_DATABRICKS_DATABASE,
+                        AdapterType::Spark => DEFAULT_SPARK_DATABASE,
+                        _ => {
+                            return Err(minijinja::Error::new(
+                                minijinja::ErrorKind::InvalidArgument,
+                                "argument 'database' to get_relation() is required",
+                            ));
+                        }
+                    },
+                };
                 let schema = iter.next_arg::<&str>()?;
                 let identifier = iter.next_arg::<&str>()?;
                 let needs_information = iter
@@ -3655,10 +3785,7 @@ impl Adapter {
                 let iter = ArgsIter::new(name, &["relation"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 iter.finish()?;
-                let format_str = self
-                    .table_format(relation_val)
-                    .map(|f| f.as_str(self.adapter_type()))
-                    .unwrap_or("default");
+                let format_str = self.table_format(relation_val).unwrap_or("default");
                 Ok(Value::from(format_str))
             }
             "is_ducklake" => {
@@ -3668,7 +3795,7 @@ impl Adapter {
                 let relation_val = iter.next_arg::<&Value>()?;
                 iter.finish()?;
                 Ok(Value::from(
-                    self.table_format(relation_val) == Some(TableFormat::DuckLake),
+                    self.table_format(relation_val) == Some("ducklake"),
                 ))
             }
             // DEPRECATED: in favor of "has_feature"

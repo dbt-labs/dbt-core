@@ -135,9 +135,13 @@ pub fn setup_bigquery_profile(
         submission_method: None,
         job_creation_timeout_seconds: None,
         job_execution_timeout_seconds: None,
+        reservation: None,
         job_retries: None,
         job_retry_deadline_seconds: None,
         target_name: None,
+        workload_pool_provider_path: None,
+        service_account_impersonation_url: None,
+        token_endpoint: None,
     };
     let mut config = ConfigProcessor::process_config(existing_config.or(Some(&default_config)))?;
 

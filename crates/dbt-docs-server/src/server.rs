@@ -1,5 +1,6 @@
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use axum::routing::{get, post};
@@ -9,9 +10,9 @@ use crate::DocsServeArgs;
 
 use crate::assets::serve_assets;
 use crate::handlers::{
-    capabilities, column_lineage, distribution, exposures, files, groups, health, lineage, macros,
-    metrics, models, nodes, project, query, saved_queries, search, seeds, semantic_models,
-    snapshots, sources, tests,
+    capabilities, column_lineage, distribution, exposures, files, groups, health, identity,
+    lineage, macros, metrics, models, nodes, project, query, saved_queries, search, seeds,
+    semantic_models, snapshots, sources, tests,
 };
 use crate::providers::Providers;
 use crate::resolve_index_dir;
@@ -24,13 +25,30 @@ use crate::state::AppState;
 /// never touches `dbt-index` or any other proprietary surface.
 pub async fn run_with_args(args: Arc<DocsServeArgs>, providers: Providers) -> io::Result<()> {
     let index_dir = resolve_index_dir(&args);
-    let state = Arc::new(AppState::new(index_dir, providers));
+    let state = Arc::new(AppState::new(
+        index_dir,
+        providers,
+        args.has_dbt_state,
+        args.send_anonymous_usage_stats,
+    ));
     serve(args, state).await
 }
 
 async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()> {
+    serve_with_shutdown(args, state, shutdown_signal()).await
+}
+
+async fn serve_with_shutdown<F>(
+    args: Arc<DocsServeArgs>,
+    state: Arc<AppState>,
+    shutdown: F,
+) -> io::Result<()>
+where
+    F: Future<Output = ()> + Send + 'static,
+{
     let app = Router::new()
         .route("/api/v1/health", get(health::get_health))
+        .route("/api/v1/identity", get(identity::get_identity))
         .route("/api/v1/capabilities", get(capabilities::get_capabilities))
         .route("/api/v1/distribution", get(distribution::get_distribution))
         .route("/api/v1/project", get(project::get_project))
@@ -131,8 +149,54 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
         }
     }
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await?;
     Ok(())
+}
+
+/// Upper bound on how long to drain in-flight requests after a shutdown
+/// signal before forcing exit. Kept under the typical Kubernetes
+/// `terminationGracePeriodSeconds` (30s) so we exit cleanly before SIGKILL.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(25);
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut term = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(_) => {
+                std::future::pending::<()>().await;
+                return;
+            }
+        };
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = term.recv() => {},
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+
+    info!(
+        target: "dbt_docs_server",
+        grace_secs = SHUTDOWN_GRACE.as_secs(),
+        "shutdown signal received; draining in-flight requests"
+    );
+    eprintln!(
+        "dbt docs serve: shutdown signal received; draining in-flight requests (grace {}s)",
+        SHUTDOWN_GRACE.as_secs()
+    );
+
+    // Bound the drain: force exit if in-flight requests do not complete in time.
+    tokio::spawn(async {
+        tokio::time::sleep(SHUTDOWN_GRACE).await;
+        eprintln!("dbt docs serve: drain grace period elapsed; forcing exit");
+        std::process::exit(0);
+    });
 }
 
 fn try_open_browser(url: &str) -> io::Result<()> {
@@ -159,3 +223,7 @@ fn try_open_browser(url: &str) -> io::Result<()> {
         Err(io::Error::other("auto-open not supported on this platform"))
     }
 }
+
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod server_tests;

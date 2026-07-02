@@ -6,8 +6,9 @@ workspace `.cargo/config.toml` alias.
 ## Subcommands
 
 - `cargo ci bump-cargo-version <version> [--dry-run] [--no-lockfile]` — writes `version` into `[workspace.package].version` and refreshes `Cargo.lock`.
-- `cargo ci pypi pack --binaries-dir DIR --version X.Y.Z [--out DIR] [--bin-name NAME] [--manylinux M]` — writes one `py3-none-{platform}` wheel per pre-built binary in `--binaries-dir` (files named by cargo target triple, `.exe` for Windows).
-- `cargo ci pypi publish --environment {staging|prod|test-pypi} [--version V] [--dist DIR] [--profile P]` — publishes wheels in `--dist` (default `target/wheels`) matching the workspace pyproject's `[project].name`. `--version` filters to that PEP 440 version. `--profile` applies only to `staging`.
+- `cargo ci pypi pack --binaries-dir DIR --version X.Y.Z [--out DIR] [--bin-name NAME]` — writes one `py3-none-{platform}` wheel per pre-built binary in `--binaries-dir` (files named by cargo target triple, `.exe` for Windows).
+- `cargo ci pypi publish --environment {staging|prod|test-pypi} [--version V] [--dist DIR]` — **wheel-upload mode**: publishes wheels in `--dist` (default `target/wheels`) matching the workspace pyproject's `[project].name`. `--version` filters to that PEP 440 version.
+- `cargo ci pypi publish --environment {staging|prod|test-pypi} --version V --download-base-url URL --target TRIPLE [--target TRIPLE]…` — **sdist mode**: downloads this release's wheels from the `https://` base URL (one per `--target`), hashes the live bytes, assembles the download-at-install sdist, and publishes only the sdist (`filetype=sdist`). `--download-base-url` requires `--version` and at least one `--target`.
 - `cargo ci homebrew render --tarballs-dir DIR --version X.Y.Z --url-template URL [--out PATH] [--formula-name NAME] [--binary-name NAME] [--conflicts-with NAME]…` — writes a `Formula/<name>.rb` from release tarballs (`fs-v{version}-{target}.tar.gz`). Reads name/license/homepage from pyproject. Linux + macOS only — Windows tarballs are skipped.
 - `cargo ci homebrew publish --formula PATH --tap-repo URL --version X.Y.Z [--tap-branch B] [--token-env VAR] [--dry-run]` — clones the tap, copies the formula into `Formula/`, commits, and pushes. Idempotent: no-op if the formula is byte-identical. `--token-env` defaults to `HOMEBREW_TAP_REPO_TOKEN`.
 
@@ -37,8 +38,18 @@ cargo build --release --bin <bin> --target <triple>   # per platform
 # stage each binary into binaries/ named by its target triple (.exe for Windows):
 #   binaries/x86_64-unknown-linux-gnu, binaries/x86_64-pc-windows-msvc.exe, …
 cargo ci pypi pack --binaries-dir binaries --version X.Y.Z
-cargo ci pypi publish --environment staging --version X.Y.Z
-cargo ci pypi publish --environment prod --version X.Y.Z
+cargo ci pypi publish --environment staging --version X.Y.Z   # uploads wheels
+cargo ci pypi publish --environment prod --version X.Y.Z      # uploads wheels
+
+# Publish the download-at-install sdist pointing at the release's wheel host
+# (one --target per published wheel):
+cargo ci pypi publish --environment prod --version X.Y.Z \
+  --download-base-url https://github.com/dbt-labs/dbt-core/releases/download/vX.Y.Z \
+  --target x86_64-unknown-linux-gnu \
+  --target aarch64-unknown-linux-gnu \
+  --target x86_64-apple-darwin \
+  --target aarch64-apple-darwin \
+  --target x86_64-pc-windows-msvc
 
 # Homebrew (requires release tarballs, not raw binaries):
 cargo ci homebrew render \

@@ -102,7 +102,6 @@ fn process_docs_macro_file(
 
 /// Resolve macros from a list of macro files
 pub fn resolve_macros(
-    io: &IoArgs,
     macro_files: &[&DbtAsset],
     embedded_contents: Option<&HashMap<DbtPath, String>>,
 ) -> FsResult<HashMap<String, DbtMacro>> {
@@ -122,7 +121,7 @@ pub fn resolve_macros(
         if ext.as_deref() == Some("jinja") || ext.as_deref() == Some("sql") {
             let macro_file_path = base_path.join(macro_file);
             let macro_sql = read_file_content(macro_file, &macro_file_path, embedded_contents)?;
-            let relative_macro_file_path = diff_paths(&macro_file_path, &io.in_dir)?;
+            let relative_macro_file_path = diff_paths(&macro_file_path, base_path)?;
             let resources = parse_macro_statements(
                 &macro_sql,
                 &relative_macro_file_path,
@@ -145,6 +144,7 @@ pub fn resolve_macros(
                             package_name: package_name.clone(),
                             path: macro_file.clone(),
                             original_file_path: relative_macro_file_path.clone(),
+                            absolute_path: macro_file_path.clone(),
                             span: Some(span),
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
@@ -173,6 +173,7 @@ pub fn resolve_macros(
                             package_name: package_name.clone(),
                             path: macro_file.clone(),
                             original_file_path: relative_macro_file_path.clone(),
+                            absolute_path: macro_file_path.clone(),
                             span: Some(span),
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
@@ -201,6 +202,7 @@ pub fn resolve_macros(
                             package_name: package_name.clone(),
                             path: macro_file.clone(),
                             original_file_path: relative_macro_file_path.clone(),
+                            absolute_path: macro_file_path.clone(),
                             span: Some(span),
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
@@ -228,6 +230,7 @@ pub fn resolve_macros(
                             package_name: package_name.clone(),
                             path: macro_file.clone(),
                             original_file_path: relative_macro_file_path.clone(),
+                            absolute_path: macro_file_path.clone(),
                             span: Some(span),
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
@@ -762,11 +765,6 @@ select 1 as id, current_timestamp as updated_at
         let asset_path = PathBuf::from("snapshots/SNAPSHOT.SQL");
         fs::write(base_path.join(&asset_path), snapshot_sql).unwrap();
 
-        let io_args = IoArgs {
-            in_dir: base_path.clone(),
-            ..Default::default()
-        };
-
         let asset = DbtAsset {
             base_path,
             original_path: asset_path.clone(),
@@ -774,7 +772,7 @@ select 1 as id, current_timestamp as updated_at
             package_name: "test_pkg".to_string(),
         };
 
-        let result = resolve_macros(&io_args, &[&asset], None)?;
+        let result = resolve_macros(&[&asset], None)?;
 
         // parse_macro_statements prefixes snapshot block names with "snapshot_", so
         // {% snapshot snapshot_actual %} becomes macro uid "snapshot.pkg.snapshot_snapshot_actual".

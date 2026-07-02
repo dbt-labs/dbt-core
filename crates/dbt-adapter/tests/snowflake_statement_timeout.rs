@@ -9,7 +9,7 @@
 //! 1. Sets the session timeout to 30s with `ALTER SESSION`.
 //! 2. Submits `CALL SYSTEM$WAIT(60)` — Snowflake should cancel at ~30s.
 //! 3. Asserts the error string and that cancellation fires near 30s, not 60s.
-//! 4. Reuses the same xdbc connection — does it remain healthy after a
+//! 4. Reuses the same adbc connection — does it remain healthy after a
 //!    canceled statement, or does the next query fail / land in a new session?
 //!    Phase 3 is the production-relevant question: dbt-fusion's recycling pool
 //!    will hand a just-canceled connection to the next node with no liveness
@@ -17,7 +17,7 @@
 //!
 //! Run:
 //! ```sh
-//! caffeinate -dimsu cargo xtask test --no-external-deps -p dbt-xdbc \
+//! caffeinate -dimsu cargo xtask test --no-external-deps -p dbt-adbc \
 //!   statement_timeout_cancellation -- --ignored --nocapture
 //! ```
 //!
@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use adbc_core::error::{Error, Result, Status};
 use adbc_core::options::AdbcVersion;
 use arrow_array::cast::AsArray;
-use dbt_xdbc::{
+use dbt_adbc::{
     Backend, Connection, Database, connection,
     database::{self, LogLevel},
     driver, snowflake,

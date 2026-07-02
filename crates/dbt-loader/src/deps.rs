@@ -64,6 +64,7 @@ pub async fn execute_deps_command(
 
     get_or_install_packages(
         &load_args.io,
+        load_args.command,
         &env,
         &packages_install_path,
         true, // install_deps

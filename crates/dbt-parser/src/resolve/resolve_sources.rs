@@ -15,7 +15,7 @@ use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
 use dbt_jinja_utils::utils::generate_relation_name;
 use dbt_schemas::schemas::common::{
     DbtChecksum, DbtMaterialization, DbtQuoting, FreshnessDefinition, FreshnessRules,
-    NodeDependsOn, merge_meta, merge_tags, normalize_quoting,
+    NodeDependsOn, merge_meta, merge_vec, normalize_quoting,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::SourceConfig;
@@ -225,7 +225,9 @@ pub async fn resolve_sources(
 
     let special_chars = Regex::new(r"[^a-zA-Z0-9_]").unwrap();
 
-    // Sources use adapter-specific quoting defaults, NOT project-level quoting
+    // Sources use adapter-specific quoting defaults, NOT project-level quoting.
+    // The defaults are only folded in below to drive SQL generation; the manifest
+    // serializes the raw user-supplied merge via `user_quoting`.
     // https://docs.getdbt.com/reference/resource-properties/quoting
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
@@ -234,7 +236,7 @@ pub async fn resolve_sources(
             init_project_config(
                 io_args,
                 &package.dbt_project.sources,
-                source_default_quoting,
+                (),
                 dependency_package_name,
             )
         })?
@@ -343,7 +345,7 @@ pub async fn resolve_sources(
                 let source_tags: Option<Vec<String>> = c.tags.take().map(|t| t.into());
                 let table_tags: Option<Vec<String>> = table_config.tags.clone().map(|t| t.into());
                 c.tags =
-                    merge_tags(source_tags, table_tags).map(StringOrArrayOfStrings::ArrayOfStrings);
+                    merge_vec(source_tags, table_tags).map(StringOrArrayOfStrings::ArrayOfStrings);
                 c.meta = merge_meta(c.meta.take(), table_config.meta.clone());
                 let merged = merge_loaded_at_pair(
                     c.loaded_at_field.as_deref(),
@@ -384,7 +386,7 @@ pub async fn resolve_sources(
         let user_quoting = DbtQuoting::merge_user(source.quoting.as_ref(), table.quoting.as_ref());
 
         let mut table_quoting = user_quoting.unwrap_or_default();
-        table_quoting.default_to(&source_config.quoting);
+        table_quoting.default_to(&source_default_quoting);
         let quoting_ignore_case = table_quoting.snowflake_ignore_case.unwrap_or(false);
 
         // Preserve the raw user-provided identifier (including any embedded quote
@@ -497,6 +499,7 @@ pub async fn resolve_sources(
                     .clone()
                     .map(|t| t.into())
                     .unwrap_or_default(),
+                classifiers: Default::default(),
                 raw_code: None,
                 checksum: DbtChecksum::default(),
                 language: None,
@@ -577,6 +580,7 @@ pub async fn resolve_sources(
                         adapter_type,
                         io_args,
                         &mpe.relative_path,
+                        false,
                     )?;
                 }
             }

@@ -8,7 +8,9 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
-use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
+use crate::resolve::resolve_tests::persist_generic_data_tests::{
+    format_node_unique_id, format_value_for_jinja,
+};
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, validate_compute,
 };
@@ -47,7 +49,7 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::DocsConfig;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::common::merge_tags;
+use dbt_schemas::schemas::common::merge_vec;
 use dbt_schemas::schemas::nodes::DbtModel;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
@@ -214,6 +216,7 @@ fn file_key_name_from_asset(asset: &GenericTestAsset) -> Option<String> {
 pub fn build_data_test_raw_code(
     test_metadata: Option<TestMetadata>,
     alias: Option<String>,
+    raw_code_config: Option<&BTreeMap<String, YmlValue>>,
 ) -> Option<String> {
     if let Some(test_metadata) = test_metadata {
         let mut test_macro_name = format!("test_{}", test_metadata.name);
@@ -221,19 +224,13 @@ pub fn build_data_test_raw_code(
             test_macro_name = format!("{}.{}", namespace, test_macro_name);
         }
 
-        // Match dbt-core's generic_test_builders.py:construct_config — only emit a
-        // `{{ config(...) }}` postfix when there's at least one explicit config key
-        // (e.g. alias when the name was truncated, or a user-supplied alias).
-        // TODO: also emit other user-supplied CONFIG_ARGS (severity, where, limit,
-        // tags, enabled, warn_if, error_if, fail_calc, store_failures,
-        // store_failures_as, sql_header, meta, database, schema). Requires threading
-        // the parent resource's MinimalPropertiesEntry.schema_value (columns -> tests
-        // -> config) into resolve_data_tests so we can distinguish YAML-supplied keys
-        // from project-level defaults. See TODO at the unrendered_config build site.
-        let config_str = match alias {
-            Some(alias) => format!("{{{{ config(alias=\"{alias}\") }}}}"),
-            None => String::new(),
-        };
+        let mut config = raw_code_config.cloned().unwrap_or_default();
+        if let Some(alias) = alias {
+            config
+                .entry("alias".to_string())
+                .or_insert_with(|| YmlValue::string(alias));
+        }
+        let config_str = build_data_test_raw_code_config(&config);
 
         return Some(format!(
             "{{{{ {test_macro_name}(**_dbt_generic_test_kwargs) }}}}{config_str}"
@@ -241,6 +238,55 @@ pub fn build_data_test_raw_code(
     }
 
     None
+}
+
+fn build_data_test_raw_code_config(config: &BTreeMap<String, YmlValue>) -> String {
+    const RAW_CODE_CONFIG_ARGS: &[&str] = &[
+        "severity",
+        "tags",
+        "enabled",
+        "where",
+        "limit",
+        "warn_if",
+        "error_if",
+        "fail_calc",
+        "store_failures",
+        "store_failures_as",
+        "sql_header",
+        "meta",
+        "database",
+        "schema",
+        "alias",
+    ];
+
+    let args = RAW_CODE_CONFIG_ARGS
+        .iter()
+        .filter_map(|key| {
+            let value = config.get(*key)?;
+            let mut value: serde_json::Value = serde_json::to_value(value).ok()?;
+            if value.as_array().is_some_and(Vec::is_empty)
+                || value.as_object().is_some_and(serde_json::Map::is_empty)
+            {
+                return None;
+            }
+            if *key == "severity"
+                && let serde_json::Value::String(severity) = &mut value
+                && !(severity.contains("{{") && severity.contains("}}"))
+            {
+                severity.make_ascii_lowercase();
+            }
+            Some(format!(
+                "{key}={}",
+                format_value_for_jinja(&value, &BTreeMap::new())
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    if args.is_empty() {
+        String::new()
+    } else {
+        format!("{{{{ config({}) }}}}", args.join(", "))
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -262,6 +308,7 @@ pub async fn resolve_data_tests(
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     models: &BTreeMap<String, Arc<DbtModel>>,
+    disabled_models: &BTreeMap<String, Arc<DbtModel>>,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
@@ -407,7 +454,7 @@ pub async fn resolve_data_tests(
         let column_tags = test_path_to_test_asset
             .get(&dbt_asset.path)
             .map(|asset| asset.column_tags.clone());
-        let tags = merge_tags(test_tags, column_tags);
+        let tags = merge_vec(test_tags, column_tags);
 
         // To conform to the unique_id format in dbt-core, we need to hash the test name
         // plus the test metadata (namespace, name, kwargs) and append the last 10 characters
@@ -418,15 +465,19 @@ pub async fn resolve_data_tests(
             // Generic test: unique_id uses the full (non-truncated) name + metadata hash.
             compute_generic_test_unique_id(package_name, test_asset)
         } else {
-            // Singular test: hash just the test name.
-            const HASH_LENGTH: usize = 10;
-            let hash_hex = format!("{:x}", md5::compute(test_name.as_str()));
-            let test_hash = &hash_hex[hash_hex.len() - HASH_LENGTH..];
-            format!("test.{package_name}.{test_name}.{test_hash}")
+            // Singular test: no hash suffix — dbt-core's SingularTestParser inherits
+            // generate_unique_id(name) from SimpleSQLParser without a hash argument:
+            // https://github.com/dbt-labs/dbt-core/blob/29d57865de9aca6372f516dfa52e4b9754b22fe0/core/dbt/parser/base.py#L251
+            format!("test.{package_name}.{test_name}")
         };
 
+        // Use test_name (the truncated/file-stem form) as the lookup key, because that is
+        // what the renderer used when it called create_listener — see resolve_model_context.rs
+        // where unique_id = "{package_name}.{model_name}" and model_name = file stem = test_name.
+        // Using fqn_name here caused a key miss when the name was truncated, leaving
+        // depends_on.macros empty. (dbt-core#15308)
         jinja_type_checking_event_listener_factory
-            .update_unique_id(&format!("{package_name}.{fqn_name}"), &unique_id);
+            .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
         let macro_depends_on =
             jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
 
@@ -542,6 +593,7 @@ pub async fn resolve_data_tests(
                 raw_code: Some("will_be_updated_below".to_string()),
                 language: Some("sql".to_string()),
                 tags: tags.unwrap_or_default(),
+                classifiers: Default::default(),
                 meta: test_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
@@ -574,7 +626,7 @@ pub async fn resolve_data_tests(
                     .map(|(model, project, version, location)| DbtRef {
                         name: model.to_owned(),
                         package: project.to_owned(),
-                        version: version.clone().map(|v| v.into()),
+                        version: version.clone(),
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .collect(),
@@ -672,21 +724,41 @@ pub async fn resolve_data_tests(
         dbt_test.__common_attr__.raw_code = if is_singular_data_test {
             get_original_file_contents(&arg.io.in_dir, &manifest_original_file_path)
         } else {
-            build_data_test_raw_code(inferred_test_metadata, components.alias.clone())
+            build_data_test_raw_code(
+                inferred_test_metadata,
+                components.alias.clone(),
+                test_path_to_test_asset
+                    .get(&dbt_asset.path)
+                    .map(|asset| &asset.raw_code_config),
+            )
         };
 
-        match status {
-            ModelStatus::Enabled => {
-                if sql_file_info.execute {
-                    nodes_with_execute.insert(unique_id.to_owned(), dbt_test);
-                } else {
-                    nodes.insert(unique_id, Arc::new(dbt_test));
+        let parent_is_disabled = dbt_test
+            .__test_attr__
+            .attached_node
+            .as_deref()
+            .is_some_and(|id| disabled_models.contains_key(id));
+
+        // match core behavior: store tests for disabled models in nodes (not disabled_nodes) with enabled = false
+        // but only when the test itself is not also explicitly disabled
+        if parent_is_disabled && status != ModelStatus::Disabled {
+            dbt_test.__base_attr__.enabled = false;
+            dbt_test.deprecated_config.enabled = Some(false);
+            nodes.insert(unique_id, Arc::new(dbt_test));
+        } else {
+            match status {
+                ModelStatus::Enabled => {
+                    if sql_file_info.execute {
+                        nodes_with_execute.insert(unique_id.to_owned(), dbt_test);
+                    } else {
+                        nodes.insert(unique_id, Arc::new(dbt_test));
+                    }
                 }
+                ModelStatus::Disabled => {
+                    disabled_tests.insert(unique_id, Arc::new(dbt_test));
+                }
+                ModelStatus::ParsingFailed => {}
             }
-            ModelStatus::Disabled => {
-                disabled_tests.insert(unique_id, Arc::new(dbt_test));
-            }
-            ModelStatus::ParsingFailed => {}
         }
     }
 
@@ -740,6 +812,7 @@ mod tests {
             test_metadata_combination_of_columns: None,
             test_metadata_model: None,
             test_metadata_kwargs: BTreeMap::new(),
+            raw_code_config: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
             version: None,
@@ -754,6 +827,45 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .unwrap(),
             "id"
+        );
+    }
+
+    #[test]
+    fn test_raw_code_config_preserves_jinja_severity_expression() {
+        let mut config = BTreeMap::new();
+        config.insert(
+            "severity".to_string(),
+            YmlValue::string("{{ env_var('DBT_SEVERITY') }}".to_string()),
+        );
+
+        assert_eq!(
+            build_data_test_raw_code_config(&config),
+            "{{ config(severity=env_var('DBT_SEVERITY')) }}"
+        );
+    }
+
+    #[test]
+    fn test_raw_code_config_normalizes_literal_severity() {
+        let mut config = BTreeMap::new();
+        config.insert("severity".to_string(), YmlValue::string("WARN".to_string()));
+
+        assert_eq!(
+            build_data_test_raw_code_config(&config),
+            "{{ config(severity=\"warn\") }}"
+        );
+    }
+
+    #[test]
+    fn test_raw_code_config_normalizes_non_enum_literal_severity() {
+        let mut config = BTreeMap::new();
+        config.insert(
+            "severity".to_string(),
+            YmlValue::string("CUSTOM".to_string()),
+        );
+
+        assert_eq!(
+            build_data_test_raw_code_config(&config),
+            "{{ config(severity=\"custom\") }}"
         );
     }
 
@@ -792,6 +904,7 @@ mod tests {
             test_metadata_combination_of_columns: None,
             test_metadata_model: Some("ref('my_model')".to_string()),
             test_metadata_kwargs: BTreeMap::new(),
+            raw_code_config: BTreeMap::new(),
             original_name: Some(full_name.to_string()),
             unique_id_hash: None,
             version: None,
@@ -832,6 +945,7 @@ mod tests {
             test_metadata_combination_of_columns: Some(vec!["a".to_string(), "b".to_string()]),
             test_metadata_model: None,
             test_metadata_kwargs: BTreeMap::new(),
+            raw_code_config: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
             version: None,

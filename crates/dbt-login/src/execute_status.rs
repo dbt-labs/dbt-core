@@ -1,10 +1,14 @@
 use std::time::SystemTime;
 
 use dbt_common::{FsError, FsResult};
-use dbt_platform_auth::{AuthChain, AuthError, Credential, ResolverKind};
+use dbt_platform_auth::{AuthChainBuilder, AuthError, Credential, OAUTH_CLIENT_ID, ResolverKind};
 
 pub async fn execute_login_status() -> FsResult<()> {
-    match AuthChain::default().resolve_with_source().await {
+    match AuthChainBuilder::new(OAUTH_CLIENT_ID)
+        .build()
+        .resolve_with_source()
+        .await
+    {
         Ok((cred, source)) => {
             let via = match source {
                 ResolverKind::EnvVar => "environment variables",

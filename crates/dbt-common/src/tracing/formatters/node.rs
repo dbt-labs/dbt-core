@@ -312,8 +312,11 @@ pub fn format_node_processed_end(
         return format_freshness_result(node, duration, colorize);
     }
 
-    // Force duration to 0 if skipped
-    let duration = if node_outcome == NodeOutcome::Skipped {
+    // Force duration to 0 if skipped or if a cached test preserved a warning/error verdict.
+    let duration = if node_outcome == NodeOutcome::Skipped
+        || (node_outcome == NodeOutcome::Success
+            && node.node_skip_reason() == NodeSkipReason::Cached)
+    {
         std::time::Duration::ZERO
     } else {
         duration
@@ -442,13 +445,15 @@ pub fn format_node_evaluated_start_legacy(node: &NodeEvaluated, command: FsComma
         phase_action
     };
 
-    // Generic tests are YAML-defined and should keep the test name for clarity.
-    // Singular SQL tests should keep the old plain path output.
-    let is_yaml_defined_test =
+    // YAML-defined nodes should keep the entry name for clarity.
+    // Singular SQL tests and legacy SQL snapshots should keep the old plain path output.
+    let is_yaml_defined_node =
         node.relative_path.ends_with(".yml") || node.relative_path.ends_with(".yaml");
 
-    if (node.node_type() == NodeType::Test || node.node_type() == NodeType::UnitTest)
-        && is_yaml_defined_test
+    if matches!(
+        node.node_type(),
+        NodeType::Test | NodeType::UnitTest | NodeType::Snapshot
+    ) && is_yaml_defined_node
     {
         let display_path: std::borrow::Cow<str> = if let Some(line) = node.defined_at_line {
             if let Some(col) = node.defined_at_col {
@@ -490,6 +495,13 @@ pub fn format_node_evaluated_end(
     let active_duration = duration.saturating_sub(std::time::Duration::from_millis(
         node.idle_time_ms.unwrap_or_default(),
     ));
+    let active_duration = if node_outcome == NodeOutcome::Success
+        && node.node_skip_reason() == NodeSkipReason::Cached
+    {
+        std::time::Duration::ZERO
+    } else {
+        active_duration
+    };
     let duration_formatted = format_duration_fixed_width(active_duration);
     let outcome_formatted = format_node_outcome_as_status(
         node_outcome,
@@ -660,4 +672,89 @@ pub fn format_freshness_result(
         qualifier_alias,
         description
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_telemetry::{
+        NodeOutcomeDetail, TestEvaluationDetail,
+        node_processed::NodeOutcomeDetail as ProcessedDetail,
+    };
+
+    fn cached_warned_test_processed() -> NodeProcessed {
+        let mut node = NodeProcessed::start(
+            "test.project.accepted_values_orders_is_today_order__True".to_string(),
+            "accepted_values_orders_is_today_order__True".to_string(),
+            None,
+            Some("dbt_test__audit".to_string()),
+            None,
+            None,
+            None,
+            NodeType::Test,
+            Some(ExecutionPhase::Run),
+            "models/marts/orders.yml".to_string(),
+            Some(37),
+            Some(13),
+            "checksum".to_string(),
+            true,
+            None,
+        );
+        node.set_node_outcome(NodeOutcome::Success);
+        node.set_node_skip_reason(NodeSkipReason::Cached);
+        node.node_outcome_detail = Some(ProcessedDetail::NodeTestDetail(
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+        ));
+        node
+    }
+
+    fn cached_warned_test_evaluated() -> NodeEvaluated {
+        let mut node = NodeEvaluated::start(
+            "test.project.accepted_values_orders_is_today_order__True".to_string(),
+            "accepted_values_orders_is_today_order__True".to_string(),
+            None,
+            Some("dbt_test__audit".to_string()),
+            None,
+            None,
+            None,
+            NodeType::Test,
+            ExecutionPhase::Run,
+            "models/marts/orders.yml".to_string(),
+            Some(37),
+            Some(13),
+            "checksum".to_string(),
+        );
+        node.set_node_outcome(NodeOutcome::Success);
+        node.set_node_skip_reason(NodeSkipReason::Cached);
+        node.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+        ));
+        node
+    }
+
+    #[test]
+    fn cached_warned_test_processed_formats_zero_duration_and_warning() {
+        let output = format_node_processed_end(
+            &cached_warned_test_processed(),
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Warned"));
+        assert!(output.contains("[-------]"));
+        assert!(output.contains("accepted_values_orders_is_today_order__True"));
+    }
+
+    #[test]
+    fn cached_warned_test_evaluated_formats_zero_duration_and_warning() {
+        let output = format_node_evaluated_end(
+            &cached_warned_test_evaluated(),
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Finished running"));
+        assert!(output.contains("[-------]"));
+        assert!(output.contains("[warn]"));
+    }
 }

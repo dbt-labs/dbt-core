@@ -2,15 +2,11 @@ use std::{borrow::Cow, path::PathBuf};
 
 use super::{
     dbt_convert::log_level_filter_to_tracing,
-    layer::{ConsumerLayer, MiddlewareLayer},
     layers::{
         file_log_layer::build_file_log_layer_with_background_writer,
         json_compat_layer::{
             build_json_compat_layer, build_json_compat_layer_with_background_writer,
         },
-        jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},
-        otlp::{OtlpResourceConfig, build_otlp_layer},
-        parquet_writer::build_parquet_writer_layer,
         query_log::build_query_log_layer_with_background_writer,
         tui_layer::build_tui_layer,
     },
@@ -18,8 +14,6 @@ use super::{
     middlewares::metric_aggregator::TelemetryMetricAggregator,
     middlewares::node_warn_outcome::TelemetryNodeWarnOutcome,
     middlewares::warn_error_options::TelemetryWarnErrorOptionsMiddleware,
-    rotating_file_writer::RotatingFileWriter,
-    shutdown::TelemetryShutdownItem,
     tracing_feature_handles::TracingConfigProvider,
 };
 use crate::{
@@ -37,7 +31,18 @@ use crate::{
     warn_error_options::WarnErrorOptions,
 };
 use dbt_error::{ErrorCode, FsError, FsResult};
-use dbt_telemetry::{LogMessage, LogRecordInfo};
+use dbt_telemetry::{LogMessage, TelemetryEventTypeRegistry};
+use dbt_tracing::{
+    LogRecordInfo,
+    layer::{ConsumerLayer, MiddlewareLayer},
+    layers::{
+        jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},
+        otlp::{OtlpResourceConfig, build_otlp_layer},
+        parquet_writer::build_parquet_writer_layer,
+    },
+    rotating_file_writer::RotatingFileWriter,
+    shutdown::TelemetryShutdownItem,
+};
 use tracing::level_filters::LevelFilter;
 
 /// Configuration for tracing.
@@ -428,7 +433,8 @@ impl FsTraceConfig {
                 .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create parquet file: {}", e))?;
 
             let (parquet_layer, writer_handle) =
-                build_parquet_writer_layer(file).map_err(FsError::from)?;
+                build_parquet_writer_layer::<_, TelemetryEventTypeRegistry>(file)
+                    .map_err(FsError::from)?;
 
             // Keep a handle for shutdown
             shutdown_items.push(writer_handle);

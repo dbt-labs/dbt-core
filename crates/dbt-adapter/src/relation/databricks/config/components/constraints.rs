@@ -15,7 +15,9 @@ use crate::relation::databricks::typed_constraint::TypedConstraint;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use indexmap::{IndexMap, IndexSet};
 use minijinja::Value;
+use minijinja::value::{Enumerator, Object};
 use serde::Serialize;
+use std::sync::Arc;
 
 pub(crate) const TYPE_NAME: &str = "constraints";
 
@@ -71,23 +73,64 @@ impl Constraints {
     /// This is necessary because Databricks:
     /// - Reformats expressions for check constraints
     /// - Does not persist the `columns` in check constraints
+    /// - Stores `custom` PK expressions (e.g. `primary key (\`id\`) rely`) as native PK constraints
+    ///   in `information_schema`, so a local `Custom` PK must normalize to `PrimaryKey` for the
+    ///   diff to be stable across incremental runs.
     ///
     /// Reference: https://raw.githubusercontent.com/databricks/dbt-databricks/refs/tags/v1.10.9/dbt/adapters/databricks/relation_configs/constraints.py
     fn normalize_constraint(constraint: &TypedConstraint) -> TypedConstraint {
         match constraint {
             TypedConstraint::Check {
                 name, expression, ..
+            } => TypedConstraint::Check {
+                name: name.clone(),
+                expression: Self::normalize_expression(expression),
+                columns: None, // Databricks doesn't persist columns for check constraints
+            },
+            TypedConstraint::Custom {
+                name, expression, ..
             } => {
-                // For check constraints, normalize expression and clear columns
-                // since Databricks doesn't persist columns for check constraints
-                TypedConstraint::Check {
-                    name: name.clone(),
-                    expression: Self::normalize_expression(expression),
-                    columns: None, // Clear columns as Databricks doesn't persist them
-                }
+                let normalized = Self::normalize_expression(expression);
+                Self::try_parse_custom_as_pk(name.clone(), &normalized).unwrap_or_else(|| {
+                    TypedConstraint::Custom {
+                        name: name.clone(),
+                        expression: normalized,
+                        columns: None,
+                    }
+                })
             }
-            _ => constraint.clone(), // Other constraint types are kept as-is
+            _ => constraint.clone(),
         }
+    }
+
+    /// Attempt to reinterpret a normalized custom expression as a PrimaryKey constraint.
+    ///
+    /// Databricks stores `primary key (\`id\`) rely` as a native PK visible in
+    /// `information_schema.key_column_usage`, so normalizing Custom→PrimaryKey lets the
+    /// diff treat them as equal and avoids a spurious DROP + re-ADD on every incremental run.
+    fn try_parse_custom_as_pk(
+        name: Option<String>,
+        normalized_expr: &str,
+    ) -> Option<TypedConstraint> {
+        let rest = normalized_expr.strip_prefix("primary key")?.trim();
+        if !rest.starts_with('(') {
+            return None;
+        }
+        let paren_end = rest.find(')')?;
+        let cols_str = &rest[1..paren_end];
+        let columns: Vec<String> = cols_str
+            .split(',')
+            .map(|s| s.trim().trim_matches('`').trim_matches('"').to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if columns.is_empty() {
+            return None;
+        }
+        Some(TypedConstraint::PrimaryKey {
+            name,
+            columns,
+            expression: None,
+        })
     }
 
     /// Process check constraints from table properties
@@ -411,7 +454,42 @@ impl ComponentConfig for Constraints {
     }
 
     fn to_jinja(&self) -> Value {
-        Value::from_serialize(self)
+        Value::from_object(self.clone())
+    }
+}
+
+/// Expose `Constraints` fields to Jinja as a proper Object so each `TypedConstraint` in the
+/// sets is wrapped via `Value::from_object` rather than serde-serialized with external tagging.
+impl Object for Constraints {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str() {
+            Some("set_constraints") => Some(Value::from_iter(
+                self.set_constraints
+                    .iter()
+                    .map(|c| Value::from_object(c.clone())),
+            )),
+            Some("unset_constraints") => Some(Value::from_iter(
+                self.unset_constraints
+                    .iter()
+                    .map(|c| Value::from_object(c.clone())),
+            )),
+            Some("set_non_nulls") => {
+                Some(Value::from_iter(self.set_non_nulls.iter().map(Value::from)))
+            }
+            Some("unset_non_nulls") => Some(Value::from_iter(
+                self.unset_non_nulls.iter().map(Value::from),
+            )),
+            _ => None,
+        }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Str(&[
+            "set_non_nulls",
+            "unset_non_nulls",
+            "set_constraints",
+            "unset_constraints",
+        ])
     }
 }
 
@@ -758,6 +836,99 @@ fk_composite,parent_type,main,default,parents,type
 
         assert!(config.set_non_nulls.is_empty());
         assert!(config.set_constraints.is_empty());
+    }
+
+    #[test]
+    fn test_custom_pk_normalizes_to_primary_key() {
+        // A custom constraint like `primary key (\`id\`) rely` must normalize to PrimaryKey
+        // because Databricks stores it as a native PK in information_schema.
+        let custom_pk = TypedConstraint::Custom {
+            name: Some("pk_id".to_string()),
+            expression: "primary key (`id`) rely".to_string(),
+            columns: None,
+        };
+        let normalized = Constraints::normalize_constraint(&custom_pk);
+        assert!(
+            matches!(normalized, TypedConstraint::PrimaryKey { ref name, ref columns, .. }
+                if name.as_deref() == Some("pk_id") && columns == &["id"]),
+            "Expected PrimaryKey, got {normalized:?}"
+        );
+    }
+
+    #[test]
+    fn test_custom_pk_diff_is_stable_against_remote_pk() {
+        // Bug 2: on every incremental run, local Custom("primary key (`id`) rely") should
+        // compare equal to remote PrimaryKey{pk_id, [id]} after normalization → no churn.
+        let remote = Constraints::new(
+            IndexSet::new(),
+            IndexSet::new(),
+            IndexSet::from([TypedConstraint::PrimaryKey {
+                name: Some("pk_id".to_string()),
+                columns: vec!["id".to_string()],
+                expression: None,
+            }]),
+            IndexSet::new(),
+        );
+        let local = Constraints::new(
+            IndexSet::new(),
+            IndexSet::new(),
+            IndexSet::from([TypedConstraint::Custom {
+                name: Some("pk_id".to_string()),
+                expression: "primary key (`id`) rely".to_string(),
+                columns: None,
+            }]),
+            IndexSet::new(),
+        );
+
+        let diff = Constraints::diff_from(&local, Some(&remote));
+        assert!(
+            diff.is_none(),
+            "Custom PK expression should match remote PK after normalization, but got diff: {diff:?}"
+        );
+    }
+
+    #[test]
+    fn test_constraints_to_jinja_exposes_object_attributes() {
+        // Bug 1: constraint.type and constraint.name must be accessible in Jinja templates.
+        let pk = TypedConstraint::PrimaryKey {
+            name: Some("pk_id".to_string()),
+            columns: vec!["id".to_string()],
+            expression: None,
+        };
+        let constraints = Constraints::new(
+            IndexSet::new(),
+            IndexSet::new(),
+            IndexSet::new(),
+            IndexSet::from([pk]),
+        );
+
+        let jinja_val = constraints.to_jinja();
+        let unset = jinja_val
+            .get_attr("unset_constraints")
+            .expect("unset_constraints should be accessible");
+        let mut iter = unset
+            .try_iter()
+            .expect("unset_constraints should be iterable");
+        let constraint_val = iter.next().expect("should have one constraint");
+
+        let type_val = constraint_val
+            .get_attr("type")
+            .expect("type should be accessible");
+        assert_eq!(type_val.as_str(), Some("primary_key"));
+
+        let name_val = constraint_val
+            .get_attr("name")
+            .expect("name should be accessible");
+        assert_eq!(name_val.as_str(), Some("pk_id"));
+
+        let render_val = constraint_val
+            .get_attr("render")
+            .expect("render should be accessible");
+        // "render" should be a function value (non-None, non-undefined)
+        assert!(
+            !render_val.is_undefined(),
+            "render should be a callable function"
+        );
     }
 
     #[test]

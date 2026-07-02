@@ -256,6 +256,13 @@ impl ProfileSetup {
                     "DuckDB profile setup not yet implemented. DuckDB runs locally without credentials."
                 ));
             }
+            AdapterType::Fdcs => {
+                // TODO: Create proper Fdcs profile setup
+                return Err(fs_err!(
+                    ErrorCode::Generic,
+                    "Fdcs profile setup not yet implemented."
+                ));
+            }
             AdapterType::ClickHouse => {
                 let clickhouse_config = match existing_config {
                     Some(DbConfig::ClickHouse(config)) => Some(config),

@@ -73,10 +73,18 @@ pub struct SemanticEntity {
     pub name: String,
     #[serde(rename = "type")]
     pub entity_type: ColumnPropertiesEntityType,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub description: Option<String>,
     pub label: Option<String>,
     pub role: Option<String>,
     pub expr: Option<String>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub config: Option<SemanticLayerElementConfig>,
     pub metadata: Option<SourceFileMetadata>,
 }

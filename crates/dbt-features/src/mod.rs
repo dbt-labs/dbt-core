@@ -10,6 +10,7 @@ pub mod adapter;
 pub mod antlr_parser;
 pub mod cli;
 pub mod index;
+pub mod jinja;
 pub mod loader;
 pub mod metricflow;
 pub mod resolver;

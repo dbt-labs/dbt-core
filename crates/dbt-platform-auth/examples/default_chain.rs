@@ -1,8 +1,12 @@
-use dbt_platform_auth::{AuthChain, AuthError, Credential};
+use dbt_platform_auth::{AuthChainBuilder, AuthError, Credential, OAUTH_CLIENT_ID};
 
 #[tokio::main]
 async fn main() {
-    match AuthChain::default().resolve().await {
+    match AuthChainBuilder::new(OAUTH_CLIENT_ID)
+        .build()
+        .resolve()
+        .await
+    {
         Ok(cred) => {
             let kind = match &cred {
                 Credential::ServiceToken { .. } => "ServiceToken",

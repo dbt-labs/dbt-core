@@ -32,9 +32,7 @@ impl Showable for DbtSnapshot {
                 self.__common_attr__.name.as_str(),
                 show_task_hooks,
                 |ctx| match ctx.inner.execute {
-                    Execute::Remote | Execute::Local => {
-                        rendered_sql_for(ctx, unique_id.as_str(), "snapshot")
-                    }
+                    Execute::Remote => rendered_sql_for(ctx, unique_id.as_str(), "snapshot"),
                     Execute::Sidecar | Execute::Service => {
                         // Query the materialized snapshot table using canonical FQN
                         let relation = create_relation_from_node(ctx.adapter_type(), self, None)?;

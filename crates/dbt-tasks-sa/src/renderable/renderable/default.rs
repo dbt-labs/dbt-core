@@ -8,7 +8,7 @@ use dbt_common::constants::{RENDERED, RENDERING};
 use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::emit::emit_debug_event;
-use dbt_common::{FsResult, stdfs};
+use dbt_common::{FsResult, MacroSpansOnly, stdfs};
 use dbt_jinja_utils::phases::compile::DependencyValidationConfig;
 use dbt_jinja_utils::utils::{
     add_task_context, inject_and_persist_ephemeral_models, macro_spans_to_macro_span_vec,
@@ -68,13 +68,18 @@ fn render_default(
 ) -> FsResult<(SqlInstruction, Arc<DashMap<String, MinijinjaValue>>)> {
     report_rendering_progress(node, ctx);
 
-    if let Some((rendered_sql_maybe_with_cte, macro_spans)) = ctx
+    if let Some((rendered_sql_maybe_with_cte, macro_spans, reclassify_spans)) = ctx
         .inner
         .compiled_sql_cache
         .try_get_compiled_sql(&ctx.inner.arg.io, node.common())
     {
         let config_map = Arc::new(convert_yml_to_dash_map(node.serialized_config()));
         show_rendered_progress(node, ctx, &rendered_sql_maybe_with_cte);
+        // The cache returns the raw span components; the rendering listener
+        // factory rebuilds the `CompiledSpans`.
+        let spans = ctx
+            .rendering_listener_factory
+            .create_spans(macro_spans, reclassify_spans);
         return Ok((
             SqlInstruction {
                 fqn: vec![
@@ -83,8 +88,8 @@ fn render_default(
                     node.base().alias.clone(),
                 ],
                 sql: rendered_sql_maybe_with_cte,
-                macro_spans,
                 original_path: node.common().original_file_path.clone(),
+                spans,
             },
             config_map,
         ));
@@ -94,8 +99,8 @@ fn render_default(
 
     add_task_context(&mut base_context, node.common(), &ctx.thread_id);
 
-    // For snapshots, use `path` (generated file) instead of `original_file_path` (source file)
-    // because the generated file may have a different name than the source file
+    // For snapshots, `path` is the generated SQL artifact used as render input.
+    // Display/error locations still use the definition path via `get_node_path`.
     let file_path = if node.resource_type() == NodeType::Snapshot {
         &node.common().path
     } else {
@@ -123,27 +128,26 @@ fn render_default(
         unit_test::apply_unit_test_overrides(&mut compile_context, overrides, ctx);
     }
 
+    let render_file_path = node
+        .get_node_path(
+            NodePathKind::Definition,
+            ctx.inner.arg.io.in_dir.as_path(),
+            ctx.inner.arg.io.out_dir.as_path(),
+        )
+        .into_owned();
+
     let rendered_sql = render_sql(
         &raw_sql,
         &ctx.env,
         &compile_context,
         ctx.rendering_listener_factory.as_ref(),
-        &node.path(),
+        &render_file_path,
     )
-    .map_err(|e| {
-        let loc = node
-            .get_node_path(
-                NodePathKind::Definition,
-                ctx.inner.arg.io.in_dir.as_path(),
-                ctx.inner.arg.io.out_dir.as_path(),
-            )
-            .into_owned();
-        e.with_location(loc)
-    })?;
+    .map_err(|e| e.with_location(render_file_path.clone()))?;
 
     let mut macro_spans = ctx
         .rendering_listener_factory
-        .drain_macro_spans(&node.common().path);
+        .drain_macro_spans(&render_file_path);
     let rendered_sql_maybe_with_cte = inject_and_persist_ephemeral_models(
         rendered_sql,
         &mut macro_spans,
@@ -151,24 +155,19 @@ fn render_default(
         node.materialized() == DbtMaterialization::Ephemeral,
         &ctx.inner.arg.io.out_dir.join(DBT_EPHEMERAL_DIR_NAME),
     )
-    .map_err(|e| {
-        let loc = node
-            .get_node_path(
-                NodePathKind::Definition,
-                ctx.inner.arg.io.in_dir.as_path(),
-                ctx.inner.arg.io.out_dir.as_path(),
-            )
-            .into_owned();
-        e.with_location(loc)
-    })?;
+    .map_err(|e| e.with_location(render_file_path.clone()))?;
 
     let macro_spans = macro_spans_to_macro_span_vec(&macro_spans);
+
+    let spans = ctx
+        .rendering_listener_factory
+        .compiled_spans(macro_spans, &render_file_path);
 
     ctx.inner.compiled_sql_cache.set_compiled_sql(
         &ctx.inner.arg.io,
         node.common(),
         &rendered_sql_maybe_with_cte,
-        &macro_spans,
+        spans.as_ref(),
     )?;
 
     show_rendered_progress(node, ctx, &rendered_sql_maybe_with_cte);
@@ -177,8 +176,8 @@ fn render_default(
         SqlInstruction {
             fqn: vec![node.database(), node.schema(), node.alias()],
             sql: rendered_sql_maybe_with_cte,
-            macro_spans,
             original_path: node.common().original_file_path.clone(),
+            spans,
         },
         config_map,
     ))
@@ -295,7 +294,7 @@ fn render_python_model(
         &ctx.inner.arg.io,
         node.common(),
         &compiled_python,
-        &[],
+        &MacroSpansOnly::default(),
     )?;
 
     Ok((
@@ -306,8 +305,8 @@ fn render_python_model(
                 node.base().alias.clone(),
             ],
             sql: compiled_python,
-            macro_spans: vec![],
             original_path: node.common().original_file_path.clone(),
+            spans: Box::<MacroSpansOnly>::default(),
         },
         config_map,
     ))

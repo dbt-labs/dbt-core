@@ -10,9 +10,6 @@ use crate::need_quotes::need_quotes;
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_sql::types::{SqlType, metadata_sql_type_key};
-use dbt_common::adapter::dialect_of;
-use dbt_frontend_common::FullyQualifiedName;
-use dbt_frontend_common::named_reference::NamedReference;
 
 // TODO: Add keys here as necessary
 pub const REDSHIFT_METADATA_SQL_TYPE_KEY: &str = "Type";
@@ -131,17 +128,6 @@ pub trait TypeOps: Send + Sync {
     fn need_quotes_for_ident(&self, id: &str) -> bool {
         need_quotes(self.adapter_type(), id)
     }
-
-    /// Parse `sql` and return the upstream table references, qualified
-    /// against `default_catalog`/`default_schema`. In-scope CTE aliases are
-    /// excluded.
-    fn extract_upstreams(
-        &self,
-        sql: &str,
-        default_catalog: &str,
-        default_schema: &str,
-        quoted_name_ignore_case: bool,
-    ) -> AdapterResult<Vec<NamedReference<FullyQualifiedName>>>;
 }
 
 pub trait TypeOpsFactory: Send + Sync {
@@ -230,12 +216,10 @@ impl TypeOps for DefaultTypeOps {
 
     fn parse_into_nullable_arrow_type(&self, s: &str) -> AdapterResult<(DataType, bool)> {
         let adapter_type = self.0;
-        SqlType::parse(adapter_type, s)
-            .map(|(sql_type, nullable)| {
-                let arrow_type = sql_type.pick_best_arrow_type(adapter_type);
-                (arrow_type, nullable)
-            })
-            .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))
+        let (sql_type, nullable) = SqlType::parse(adapter_type, s)
+            .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))?;
+        let data_type = sql_type.pick_best_arrow_type(adapter_type);
+        Ok((data_type, nullable))
     }
 
     fn adapt_seed_type(&self, _data_type: &DataType) -> Option<DataType> {
@@ -272,46 +256,6 @@ impl TypeOps for DefaultTypeOps {
             .unwrap_or_else(|_| rhs.to_string());
 
         Ok(lhs == rhs)
-    }
-
-    fn extract_upstreams(
-        &self,
-        sql: &str,
-        default_catalog: &str,
-        default_schema: &str,
-        _quoted_name_ignore_case: bool,
-    ) -> AdapterResult<Vec<NamedReference<FullyQualifiedName>>> {
-        let dialect = dialect_of(self.adapter_type()).ok_or_else(|| {
-            AdapterError::new(
-                AdapterErrorKind::NotSupported,
-                format!("Dialect not found for adapter type {}", self.adapter_type()),
-            )
-        })?;
-        // Normalize the default catalog/schema through the dialect's identifier
-        // parser so unquoted names get the same case-folding the dialect applies
-        // (e.g. Snowflake uppercases unquoted identifiers). Without this, a
-        // lowercase default_catalog such as "development" ends up in the FQN as
-        // a quoted "development", which the run-cache service's canonicalization
-        // treats as a case-sensitive identifier and fails to match against the
-        // stored uppercase "DEVELOPMENT" form.
-        let normalized_catalog = dialect
-            .parse_identifier(default_catalog)
-            .map(|id| id.to_value())
-            .unwrap_or_else(|_| default_catalog.to_string());
-        let normalized_schema = dialect
-            .parse_identifier(default_schema)
-            .map(|id| id.to_value())
-            .unwrap_or_else(|_| default_schema.to_string());
-        Ok(crate::sql::extract_sources::extract_sources_from_str(
-            sql,
-            dialect,
-            &normalized_catalog,
-            &normalized_schema,
-        )
-        .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?
-        .into_iter()
-        .map(|entity| entity.into())
-        .collect::<Vec<_>>())
     }
 }
 
@@ -583,6 +527,7 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
         AdapterType::Salesforce => todo!(),
         AdapterType::Spark => todo!(),
         AdapterType::DuckDB => todo!(),
+        AdapterType::Fdcs => todo!(),
         AdapterType::Fabric => FABRIC_METADATA_SQL_TYPE_KEY,
         AdapterType::ClickHouse => CLICKHOUSE_METADATA_SQL_TYPE_KEY,
         AdapterType::Exasol => "DATA_TYPE",
@@ -634,7 +579,7 @@ impl SdfSchemaBuilder {
         let metadata = field.metadata();
         let comment = match self.adapter_type {
             Bigquery => metadata.get("Description"),
-            Redshift | Databricks | Spark | DuckDB => {
+            Redshift | Databricks | Spark | DuckDB | Fdcs => {
                 metadata.get(ARROW_FIELD_COMMENT_METADATA_KEY)
             }
             // no evidence that these drivers store comments in metadata, but just in case
@@ -675,8 +620,8 @@ impl SdfSchemaBuilder {
     pub fn build_sdf_schema(self, type_ops: &dyn TypeOps) -> AdapterResult<SdfSchema> {
         use AdapterType::*;
         match self.adapter_type {
-            Bigquery | Redshift | Databricks | Spark | DuckDB | Fabric | ClickHouse | Exasol
-            | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => {
+            Bigquery | Redshift | Databricks | Spark | DuckDB | Fdcs | Fabric | ClickHouse
+            | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => {
                 let original_fields = self.original.fields();
                 let mut sdf_fields = Vec::with_capacity(original_fields.len());
                 for field in original_fields {
@@ -999,8 +944,8 @@ pub const fn max_varchar_size(adapter_type: AdapterType) -> Option<usize> {
         // FIXME: Actual MAX is 134_217_728 - 16_777_216 is the default value
         Snowflake => Some(16_777_216),
         Redshift => Some(256),
-        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Fabric | ClickHouse
-        | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => None,
+        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Fdcs | Fabric
+        | ClickHouse | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => None,
     }
 }
 
@@ -1010,8 +955,8 @@ pub const fn max_varbinary_size(adapter_type: AdapterType) -> Option<usize> {
         Snowflake => Some(16_777_216),
         Redshift => Some(65_535),
         // TODO: define limits for more systems
-        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Fabric | ClickHouse
-        | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => None,
+        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Fdcs | Fabric
+        | ClickHouse | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => None,
     }
 }
 

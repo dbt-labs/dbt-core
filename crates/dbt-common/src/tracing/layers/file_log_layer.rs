@@ -2,10 +2,9 @@ use dbt_error::ErrorCode;
 use dbt_telemetry::{
     AssetParsed, CompiledCode, CompiledCodeInline, ConnectionLimitWait, DepsAddPackage,
     DepsAllPackagesInstalled, DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed,
-    Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
-    NodeProcessed, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
-    ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, StateModifiedDiff, StatusCode,
-    TelemetryOutputFlags, UserLogMessage,
+    Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType,
+    PhaseExecuted, ProgressMessage, QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff,
+    UserLogMessage,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -13,9 +12,16 @@ use std::{
 };
 use tracing::level_filters::LevelFilter;
 
-use super::super::{
+use dbt_tracing::{
+    LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, StatusCode, TelemetryOutputFlags,
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
+    layer::{ConsumerLayer, TelemetryConsumer},
+    shared_writer::SharedWriter,
+    shutdown::TelemetryShutdownItem,
+};
+
+use super::super::{
     event_classifiers::is_exit_with_status_log,
     formatters::{
         asset::format_asset_parsed_end,
@@ -46,9 +52,6 @@ use super::super::{
         state_mod_diff::format_state_modified_diff_lines,
         test_result::format_test_failure,
     },
-    layer::{ConsumerLayer, TelemetryConsumer},
-    shared_writer::SharedWriter,
-    shutdown::TelemetryShutdownItem,
 };
 
 const HEADER_SEPARATOR: &str = "====================";

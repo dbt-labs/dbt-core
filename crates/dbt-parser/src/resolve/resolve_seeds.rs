@@ -294,14 +294,11 @@ pub async fn resolve_seeds(
                 path: path.to_owned(),
                 name_span: dbt_common::Span::default(),
                 original_file_path: original_file_path.clone(),
-                checksum: DbtChecksum::seed_file_hash(
-                    std::fs::read(seed_file.base_path.join(&path))
-                        .map_err(|e| {
-                            fs_err!(ErrorCode::IoError, "Failed to read seed file: {}", e)
-                        })?
-                        .as_slice(),
+                checksum: DbtChecksum::seed_file_checksum(
+                    &seed_file.base_path.join(&path),
                     &original_file_path.to_string_lossy(),
-                ),
+                    arg.maximum_seed_size_mib,
+                )?,
                 patch_path: patch_path.clone(),
                 unique_id: unique_id.clone(),
                 fqn,
@@ -316,6 +313,7 @@ pub async fn resolve_seeds(
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
+                classifiers: Default::default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
@@ -334,6 +332,7 @@ pub async fn resolve_seeds(
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 unrendered_config,
+                persist_docs: properties_config.persist_docs.clone(),
                 ..Default::default()
             },
             __seed_attr__: DbtSeedAttr {
@@ -390,6 +389,7 @@ pub async fn resolve_seeds(
                         adapter_type,
                         io_args,
                         patch_path.as_ref().unwrap_or(&path),
+                        false,
                     )?;
                 }
             }

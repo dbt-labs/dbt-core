@@ -2,9 +2,9 @@ use std::fmt::Write;
 use std::path::Path;
 
 use adbc_core::error::{Error as AdbcError, Status};
-use dbt_xdbc::driver::Builder as DriverBuilder;
-use dbt_xdbc::driver::LoadStrategy;
-use dbt_xdbc::{Backend, Connection, Database, database};
+use dbt_adbc::driver::Builder as DriverBuilder;
+use dbt_adbc::driver::LoadStrategy;
+use dbt_adbc::{Backend, Connection, Database, database};
 use std::sync::{Arc, Mutex};
 
 use crate::IndexError;
@@ -215,10 +215,12 @@ impl Db {
         let mut database = db_builder.build(&mut driver)?;
         let connection = database.new_connection()?;
 
-        Ok(Self {
+        let mut db = Self {
             shared_database: Arc::new(Mutex::new(database)),
             connection,
-        })
+        };
+        db.disable_checkpoint()?;
+        Ok(db)
     }
 
     /// Create a new read-only connection to the **same** DuckDB database.

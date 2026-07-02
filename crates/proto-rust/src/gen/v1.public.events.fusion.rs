@@ -306,6 +306,9 @@ pub struct ResourceCounts {
     /// total count of saved queries in the project.
     #[prost(int32, tag = "17")]
     pub saved_queries: i32,
+    /// total count of catalogs in the project.
+    #[prost(int32, tag = "18")]
+    pub catalogs: i32,
 }
 impl ::prost::Name for ResourceCounts {
     const NAME: &'static str = "ResourceCounts";
@@ -404,6 +407,12 @@ pub struct RunModel {
     /// empty string when the model does not use catalogs.yml.
     #[prost(string, tag = "22")]
     pub catalog_name: ::prost::alloc::string::String,
+    /// the catalog type of the model's active write integration in catalogs.yml
+    /// (ex. "iceberg_rest", "unity", "glue", "built_in", "biglake_metastore").
+    /// this is the catalog backend kind, distinct from catalog_name (the user-chosen
+    /// catalog label). empty string when the model does not use catalogs.yml.
+    #[prost(string, tag = "23")]
+    pub catalog_type: ::prost::alloc::string::String,
 }
 impl ::prost::Name for RunModel {
     const NAME: &'static str = "RunModel";
@@ -456,6 +465,61 @@ impl ::prost::Name for Onboarding {
     }
     fn type_url() -> ::prost::alloc::string::String {
         "/v1.public.events.fusion.Onboarding".into()
+    }
+}
+/// Login Event is emitted when the user runs `dbt login`. It captures whether
+/// the attempt succeeded and, when possible, identity context derived from the
+/// JWT or the local user cookie.
+#[derive(::serde::Serialize)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Login {
+    /// This field is a toggle to enable enrichment of the message by the Vortex service.
+    #[prost(message, optional, tag = "1")]
+    pub enrichment: ::core::option::Option<
+        super::super::super::events::vortex::VortexMessageEnrichment,
+    >,
+    /// Unique identifier for this event (UUID). Required.
+    #[prost(string, tag = "2")]
+    pub event_id: ::prost::alloc::string::String,
+    /// Globally unique identifier for the fusion invocation. Required.
+    #[prost(string, tag = "3")]
+    pub invocation_id: ::prost::alloc::string::String,
+    /// Whether the login attempt succeeded.
+    #[prost(bool, tag = "4")]
+    pub success: bool,
+    /// Which OAuth flow completed the login. LOGIN_TYPE_UNSPECIFIED on failure.
+    #[prost(enumeration = "LoginType", tag = "5")]
+    pub login_type: i32,
+    /// User cookie UUID from ~/.dbt/.user.yml.
+    #[prost(string, tag = "6")]
+    pub user_cookie: ::prost::alloc::string::String,
+    /// MD5 hash of the project name from dbt_project.yml.
+    /// Absent if run outside a dbt project.
+    #[prost(string, optional, tag = "7")]
+    pub project_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Platform user ID from the "sub" JWT claim.
+    /// Absent if no JWT is available.
+    #[prost(uint64, optional, tag = "8")]
+    pub platform_user_id: ::core::option::Option<u64>,
+    /// Platform tenant account ID from the "<https://dbt.com/account_id"> JWT claim.
+    /// Absent if no JWT is available.
+    #[prost(uint64, optional, tag = "9")]
+    pub platform_account_id: ::core::option::Option<u64>,
+    /// Platform account identifier from the "<https://dbt.com/account_identifier"> JWT claim.
+    /// Absent if no JWT is available or the claim is absent.
+    #[prost(string, optional, tag = "10")]
+    pub platform_account_identifier: ::core::option::Option<
+        ::prost::alloc::string::String,
+    >,
+}
+impl ::prost::Name for Login {
+    const NAME: &'static str = "Login";
+    const PACKAGE: &'static str = "v1.public.events.fusion";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.Login".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.Login".into()
     }
 }
 #[derive(::serde::Serialize, ::serde::Deserialize)]
@@ -586,6 +650,36 @@ impl OnboardingAction {
             "RUN_FINISHED" => Some(Self::RunFinished),
             "STEP_COMPLETED" => Some(Self::StepCompleted),
             "STEP_FAILED" => Some(Self::StepFailed),
+            _ => None,
+        }
+    }
+}
+#[derive(::serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LoginType {
+    Unspecified = 0,
+    Platform = 1,
+    State = 2,
+}
+impl LoginType {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "LOGIN_TYPE_UNSPECIFIED",
+            Self::Platform => "PLATFORM",
+            Self::State => "STATE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LOGIN_TYPE_UNSPECIFIED" => Some(Self::Unspecified),
+            "PLATFORM" => Some(Self::Platform),
+            "STATE" => Some(Self::State),
             _ => None,
         }
     }

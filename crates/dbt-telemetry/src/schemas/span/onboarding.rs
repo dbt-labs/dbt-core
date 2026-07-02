@@ -1,14 +1,14 @@
-use crate::{
+use crate::serialize::arrow::ArrowAttributes;
+use dbt_tracing::{
+    ArrowSerializableTelemetryEvent, StaticTelemetryEvent, TelemetryEventRecType,
     TelemetryOutputFlags,
-    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
-    serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 
 pub use crate::proto::v1::public::events::fusion::onboarding::OnboardingScreen;
 pub use crate::proto::v1::public::events::fusion::onboarding::OnboardingScreenShown;
 
-impl ProtoTelemetryEvent for OnboardingScreenShown {
+impl StaticTelemetryEvent for OnboardingScreenShown {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
     const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
@@ -22,6 +22,7 @@ impl ProtoTelemetryEvent for OnboardingScreenShown {
 }
 
 impl ArrowSerializableTelemetryEvent for OnboardingScreenShown {
+    type ArrowRecord<'a> = ArrowAttributes<'a>;
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)

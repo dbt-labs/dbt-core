@@ -2,9 +2,7 @@ use crate::AdapterResponse;
 use crate::adapter::adapter_impl::AdapterImpl;
 use std::collections::HashMap;
 
-use dbt_common::cancellation::CancellationToken;
-use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
-use dbt_xdbc::bigquery::{
+use dbt_adbc::bigquery::{
     CREATE_BATCH_REQ_BATCH_ID, CREATE_BATCH_REQ_BATCH_YML, CREATE_BATCH_REQ_PARENT,
     CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_BUCKET, CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_PATH,
     CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_FILE_NAME, CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_NAME,
@@ -14,7 +12,9 @@ use dbt_xdbc::bigquery::{
     DATAPROC_SUBMIT_JOB_REQ_CLUSTER_NAME, DATAPROC_SUBMIT_JOB_REQ_GCS_PATH, WRITE_GCS_BUCKET,
     WRITE_GCS_CONTENT, WRITE_GCS_OBJECT_NAME,
 };
-use dbt_xdbc::{Connection, QueryCtx};
+use dbt_adbc::{Connection, QueryCtx};
+use dbt_common::cancellation::CancellationToken;
+use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_yaml::Value::Mapping;
 use dbt_yaml::{Error, Value as YmlValue};
 use minijinja::{State, Value};

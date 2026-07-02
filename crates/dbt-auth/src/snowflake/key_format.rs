@@ -5,6 +5,7 @@ use rsa::{RsaPrivateKey, pkcs1::DecodeRsaPrivateKey};
 use std::sync::Once;
 
 use crate::AuthError;
+use crate::AuthWarningPrinter;
 
 pub const PEM_UNENCRYPTED_START: &str = "-----BEGIN PRIVATE KEY-----";
 pub const PEM_UNENCRYPTED_END: &str = "-----END PRIVATE KEY-----";
@@ -73,7 +74,7 @@ static WARN_ONCE: Once = Once::new();
 /// Take the DER [1] payload of a key and recognize its format.
 ///
 /// [1] https://en.wikipedia.org/wiki/X.690#DER_encoding
-fn parse_der_key_type(der: &[u8]) -> BodyKind {
+fn parse_der_key_type(warning_printer: &dyn AuthWarningPrinter, der: &[u8]) -> BodyKind {
     if PrivateKeyInfo::from_der(der).is_ok() {
         BodyKind::Pkcs8Unencrypted
     } else if let Ok(enc) = EncryptedPrivateKeyInfo::from_der(der) {
@@ -105,7 +106,7 @@ fn parse_der_key_type(der: &[u8]) -> BodyKind {
 
         if is_p12_3des || is_pbes2 {
             WARN_ONCE.call_once(|| {
-                eprintln!("{WARNING}");
+                warning_printer.warn(WARNING);
             });
         }
 
@@ -170,7 +171,10 @@ fn has_pkcs1_pem_pair(s: &str) -> bool {
 ///   - PKCS#8 encrypted   -> `BEGIN ENCRYPTED PRIVATE KEY`
 ///   - PKCS#1 RSA         -> error (ask caller to convert to PKCS#8)
 /// - If only one header present -> error.
-pub fn normalize_key(input: &str) -> Result<String, AuthError> {
+pub fn normalize_key(
+    warning_printer: &dyn AuthWarningPrinter,
+    input: &str,
+) -> Result<String, AuthError> {
     let trimmed_input = input.trim();
     match detect_pem_state(trimmed_input) {
         PemHeaderAndFooterState::Present => {
@@ -204,7 +208,7 @@ pub fn normalize_key(input: &str) -> Result<String, AuthError> {
             }
 
             // case b: treat as der and classify.
-            match parse_der_key_type(&decoded) {
+            match parse_der_key_type(warning_printer, &decoded) {
                 BodyKind::Pkcs8Unencrypted => Ok(wrap_der_as_pem(
                     &decoded,
                     PEM_UNENCRYPTED_START,
@@ -232,6 +236,9 @@ mod tests {
     use pkcs8::{EncodePrivateKey, LineEnding};
     use rsa::{RsaPrivateKey, pkcs1::EncodeRsaPrivateKey, rand_core::OsRng};
 
+    use crate::NoopAuthWarningPrinter;
+    const NOOP: NoopAuthWarningPrinter = NoopAuthWarningPrinter;
+
     fn gen_rsa() -> RsaPrivateKey {
         RsaPrivateKey::new(&mut OsRng, 2048).unwrap()
     }
@@ -258,7 +265,7 @@ mod tests {
     fn pkcs8_unencrypted_pem_passthrough() {
         let rsa = gen_rsa();
         let pem = to_pkcs8_unenc_pem(&rsa);
-        let norm = normalize_key(&pem).unwrap();
+        let norm = normalize_key(&NOOP, &pem).unwrap();
         assert_eq!(norm, pem);
     }
 
@@ -266,7 +273,7 @@ mod tests {
     fn pkcs8_unencrypted_der_b64_wraps() {
         let rsa = gen_rsa();
         let b64 = to_pkcs8_unenc_der_b64(&rsa);
-        let norm = normalize_key(&b64).unwrap();
+        let norm = normalize_key(&NOOP, &b64).unwrap();
         assert!(norm.starts_with(PEM_UNENCRYPTED_START));
     }
 
@@ -275,7 +282,7 @@ mod tests {
         let rsa = gen_rsa();
         let pem = to_pkcs8_unenc_pem(&rsa);
         let b64_of_pem = to_base64_of_pem_text(&pem);
-        let norm = normalize_key(&b64_of_pem).unwrap();
+        let norm = normalize_key(&NOOP, &b64_of_pem).unwrap();
         assert_eq!(norm, pem.trim());
     }
 
@@ -283,7 +290,7 @@ mod tests {
     fn pkcs1_der_b64_errors() {
         let rsa = gen_rsa();
         let b64_pkcs1 = to_pkcs1_der_b64(&rsa);
-        let err = normalize_key(&b64_pkcs1).unwrap_err();
+        let err = normalize_key(&NOOP, &b64_pkcs1).unwrap_err();
         let msg = format!("{err:?}");
         assert_contains!(msg, "PKCS#1");
     }
@@ -291,14 +298,14 @@ mod tests {
     #[test]
     fn header_mismatch_errors() {
         let pem = format!("{PEM_UNENCRYPTED_START}\nMII...\n{PEM_ENCRYPTED_END}");
-        let err = normalize_key(&pem).unwrap_err();
+        let err = normalize_key(&NOOP, &pem).unwrap_err();
         assert!(format!("{err:?}").contains("malformed key"));
     }
 
     #[test]
     fn unknown_malformed_errors() {
         let bad_b64 = STANDARD.encode(b"not-a-real-key");
-        let err = normalize_key(&bad_b64).unwrap_err();
+        let err = normalize_key(&NOOP, &bad_b64).unwrap_err();
         assert!(format!("{err:?}").contains("key body is not PKCS#8"));
     }
     #[test]
@@ -311,7 +318,7 @@ mod tests {
             .replace(PEM_UNENCRYPTED_START, PEM_ENCRYPTED_START)
             .replace(PEM_UNENCRYPTED_END, PEM_ENCRYPTED_END);
 
-        let norm = normalize_key(&pem_enc).unwrap();
+        let norm = normalize_key(&NOOP, &pem_enc).unwrap();
         assert_eq!(norm, pem_enc, "encrypted PEM should pass through unchanged");
     }
 
@@ -320,7 +327,7 @@ mod tests {
         // PKCS#1 PEM should be rejected in the PEM branch (headers don't match pkcs8).
         let rsa = gen_rsa();
         let pkcs1_pem = rsa.to_pkcs1_pem(LineEnding::LF).unwrap().to_string();
-        let err = normalize_key(&pkcs1_pem).unwrap_err();
+        let err = normalize_key(&NOOP, &pkcs1_pem).unwrap_err();
         assert!(
             format!("{err:?}").contains("PKCS#1"),
             "PKCS#1 PEM must not be accepted as PKCS#8 PEM"
@@ -330,7 +337,7 @@ mod tests {
     #[test]
     fn begin_without_end_errors() {
         let pem = format!("{PEM_UNENCRYPTED_START}\nMII...\n"); // missing END line
-        let err = normalize_key(&pem).unwrap_err();
+        let err = normalize_key(&NOOP, &pem).unwrap_err();
         assert!(format!("{err:?}").contains("BEGIN/END header mismatch"));
     }
 
@@ -340,7 +347,7 @@ mod tests {
         let pem = format!(
             "{PEM_UNENCRYPTED_START}\nMII...\n{PEM_UNENCRYPTED_END}\n{PEM_ENCRYPTED_START}\n..."
         );
-        let err = normalize_key(&pem).unwrap_err();
+        let err = normalize_key(&NOOP, &pem).unwrap_err();
         assert!(format!("{err:?}").contains("missing or mismatched BEGIN/END"));
     }
 
@@ -350,7 +357,7 @@ mod tests {
         let pem = format!(
             "{PEM_UNENCRYPTED_START}\nMII...\n{PEM_UNENCRYPTED_END}\n{PEM_ENCRYPTED_START}\n"
         );
-        let err = normalize_key(&pem).unwrap_err();
+        let err = normalize_key(&NOOP, &pem).unwrap_err();
         assert!(format!("{err:?}").contains("missing or mismatched BEGIN/END"));
     }
 
@@ -365,7 +372,7 @@ mod tests {
             &b64[..b64.len() / 2],
             &b64[b64.len() / 2..]
         );
-        let norm = normalize_key(&noisy).unwrap();
+        let norm = normalize_key(&NOOP, &noisy).unwrap();
         assert!(norm.starts_with(PEM_UNENCRYPTED_START));
         assert!(
             norm.ends_with(PEM_UNENCRYPTED_END),
@@ -378,7 +385,7 @@ mod tests {
         // Verify emitted PEM body lines are wrapped at 64 chars (except the last).
         let rsa = gen_rsa();
         let b64 = to_pkcs8_unenc_der_b64(&rsa);
-        let norm = normalize_key(&b64).unwrap();
+        let norm = normalize_key(&NOOP, &b64).unwrap();
 
         // Extract body between headers
         let body = norm
@@ -398,7 +405,7 @@ mod tests {
 
     #[test]
     fn empty_input_errors() {
-        let err = normalize_key("").unwrap_err();
+        let err = normalize_key(&NOOP, "").unwrap_err();
         assert!(format!("{err:?}").contains("key body is not PKCS#8"));
     }
 
@@ -412,7 +419,7 @@ mod tests {
             .replace(PEM_UNENCRYPTED_END, PEM_ENCRYPTED_END);
         let b64_of_pem = to_base64_of_pem_text(&pem_enc);
 
-        let norm = normalize_key(&b64_of_pem).unwrap();
+        let norm = normalize_key(&NOOP, &b64_of_pem).unwrap();
         assert_eq!(
             norm,
             pem_enc.trim(),
@@ -424,7 +431,7 @@ mod tests {
     fn open_ssh_pem_rejected() {
         // Non-PKCS#8 PEM header should be rejected in PEM-branch.
         let pem = "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA...\n-----END OPENSSH PRIVATE KEY-----";
-        let err = normalize_key(pem).unwrap_err();
+        let err = normalize_key(&NOOP, pem).unwrap_err();
         assert!(format!("{err:?}").contains("malformed key"));
     }
 
@@ -463,7 +470,7 @@ mod tests {
 
         let body_b64 = STANDARD.encode(&der);
 
-        let normalized = normalize_key(&body_b64).expect("normalize_key failed");
+        let normalized = normalize_key(&NOOP, &body_b64).expect("normalize_key failed");
 
         assert!(
             normalized.starts_with(PEM_ENCRYPTED_START),

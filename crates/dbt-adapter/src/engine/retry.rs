@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::Connection;
+use dbt_adbc::duration::parse_duration;
 use dbt_auth::AdapterConfig;
-use dbt_xdbc::Connection;
-use dbt_xdbc::duration::parse_duration;
 
 #[derive(Debug)]
 pub(crate) enum BackoffStrategy {

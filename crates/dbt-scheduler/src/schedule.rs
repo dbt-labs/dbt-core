@@ -284,6 +284,13 @@ fn schedule_graph(
         });
     }
 
+    selected_nodes.retain(|node_id| {
+        !nodes.get_node(node_id).is_some_and(|node| {
+            matches!(node.resource_type(), NodeType::Test | NodeType::UnitTest)
+                && !node.base().enabled
+        })
+    });
+
     let all_selected_nodes = selected_nodes.clone();
 
     // Apply exclusions: selected - sources - unused - extended_models
@@ -741,10 +748,7 @@ pub fn modify_schedule_for_sidecar_compute_boundaries(
         })
         .cloned()
         .collect();
-    for uid in removed_tests
-        .into_iter()
-        .chain(stale_test_nodes.into_iter())
-    {
+    for uid in removed_tests.into_iter().chain(stale_test_nodes) {
         // preserve invariants in schedule by propagating test node removal to dependent fields:
         // sorted_nodes = selected_nodes + frontier_nodes
         // deps = selected_nodes + frontier_nodes
@@ -1232,7 +1236,7 @@ mod tests {
 
             let models = unique_ids
                 .iter()
-                .filter(|id| !id.starts_with("test."))
+                .filter(|id| !id.starts_with("test.") && !id.starts_with("unit_test."))
                 .map(|unique_id| DbtModel {
                     __common_attr__: CommonAttributes {
                         name: unique_id.clone(),
@@ -1301,6 +1305,7 @@ mod tests {
                         schema: "schema".to_string(),
                         quoting: ResolvedQuoting::trues(),
                         static_analysis: StaticAnalysisKind::Strict.into(),
+                        enabled: true,
                         ..Default::default()
                     };
 
@@ -1367,6 +1372,7 @@ mod tests {
                             schema: "schema".to_string(),
                             quoting: ResolvedQuoting::trues(),
                             static_analysis: StaticAnalysisKind::Strict.into(),
+                            enabled: true,
                             ..Default::default()
                         },
                         __unit_test_attr__: DbtUnitTestAttr {
@@ -2777,9 +2783,9 @@ mod resource_type_filtering_tests {
         io_args::{ClapResourceType, FsCommand, StaticAnalysisKind},
     };
     use dbt_schemas::schemas::{
-        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, IntrospectionKind,
-        NodeBaseAttributes,
-        common::{Access, DbtMaterialization, ResolvedQuoting},
+        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtTest, DbtUnitTest,
+        IntrospectionKind, NodeBaseAttributes,
+        common::{Access, DbtMaterialization, NodeDependsOn, ResolvedQuoting},
         nodes::AdapterAttr,
         project::ModelConfig,
     };
@@ -3020,6 +3026,85 @@ mod resource_type_filtering_tests {
         let mut all_ids: Vec<_> = schedule.selected_nodes.iter().cloned().collect();
         all_ids.sort();
         assert_eq!(all_ids, vec!["model.a", "model.b", "seed.a", "seed.b"]);
+    }
+
+    #[test]
+    fn test_disabled_nodes_are_not_scheduled() {
+        let token = never_cancels();
+        let mut nodes = basic_nodes();
+        nodes.tests.insert(
+            "test.disabled".to_string(),
+            Arc::new(DbtTest {
+                __common_attr__: CommonAttributes {
+                    name: "disabled".to_string(),
+                    package_name: "package".to_string(),
+                    unique_id: "test.disabled".to_string(),
+                    tags: vec![],
+                    meta: IndexMap::new(),
+                    ..Default::default()
+                },
+                __base_attr__: NodeBaseAttributes {
+                    enabled: false,
+                    depends_on: NodeDependsOn {
+                        nodes: vec!["model.a".to_string()],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        );
+        nodes.unit_tests.insert(
+            "unit_test.disabled".to_string(),
+            Arc::new(DbtUnitTest {
+                __common_attr__: CommonAttributes {
+                    name: "disabled".to_string(),
+                    package_name: "package".to_string(),
+                    unique_id: "unit_test.disabled".to_string(),
+                    tags: vec![],
+                    meta: IndexMap::new(),
+                    ..Default::default()
+                },
+                __base_attr__: NodeBaseAttributes {
+                    enabled: false,
+                    depends_on: NodeDependsOn {
+                        nodes: vec!["model.a".to_string()],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        );
+        let args = make_scheduler_args(vec![]);
+        let resolved_selectors = ResolvedSelector {
+            include: None,
+            exclude: None,
+        };
+
+        let schedule = build_schedule(
+            &args,
+            &nodes,
+            None,
+            &resolved_selectors,
+            &token,
+            AdapterType::Bigquery,
+        )
+        .unwrap();
+
+        assert!(!schedule.selected_nodes.contains("test.disabled"));
+        assert!(!schedule.selected_nodes.contains("unit_test.disabled"));
+        assert!(!schedule.all_selected_nodes.contains("test.disabled"));
+        assert!(!schedule.all_selected_nodes.contains("unit_test.disabled"));
+        assert!(!schedule.sorted_nodes.contains(&"test.disabled".to_string()));
+        assert!(
+            !schedule
+                .sorted_nodes
+                .contains(&"unit_test.disabled".to_string())
+        );
+        assert!(schedule.deps.contains_key("model.a"));
+        assert!(!schedule.deps.contains_key("test.disabled"));
+        assert!(!schedule.deps.contains_key("unit_test.disabled"));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use console::Style;
-use dbt_telemetry::{ProgressMessage, SeverityNumber};
+use dbt_telemetry::ProgressMessage;
+use dbt_tracing::SeverityNumber;
 
 use super::{
     color::{GREEN, PLAIN, RED, YELLOW, maybe_apply_color},

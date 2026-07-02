@@ -91,7 +91,7 @@ const FALSE_VALUES: [&str; 5] = ["0", "false", "no", "off", ""];
 ///
 /// Unrecognized values return `true` (treat as not enabled).
 pub fn env_var_is_disabled(var_name: &str) -> bool {
-    matches!(env_var_bool(var_name), Ok(false) | Err(_))
+    matches!(env_var_bool(var_name), Ok(Some(false)) | Ok(None) | Err(_))
 }
 
 /// Parse a boolean from an environment variable.
@@ -101,13 +101,13 @@ pub fn env_var_is_disabled(var_name: &str) -> bool {
 ///
 /// Recognized true values: `1`, `true`, `yes`, `on` (case-insensitive)
 /// Recognized false values: `0`, `false`, `no`, `off`, `` (empty string, case-insensitive)
-pub fn env_var_bool(var_name: &str) -> Result<bool, String> {
+pub fn env_var_bool(var_name: &str) -> Result<Option<bool>, String> {
     match env::var_os(var_name) {
         Some(val) => {
             if TRUE_VALUES.iter().any(|s| val.eq_ignore_ascii_case(s)) {
-                Ok(true)
+                Ok(Some(true))
             } else if FALSE_VALUES.iter().any(|s| val.eq_ignore_ascii_case(s)) {
-                Ok(false)
+                Ok(Some(false))
             } else {
                 Err(format!(
                     "Invalid value for environment variable {var_name:?}: {val:?}. Expected one of: {} (true) or {} (false).",
@@ -116,6 +116,6 @@ pub fn env_var_bool(var_name: &str) -> Result<bool, String> {
                 ))
             }
         }
-        None => Ok(false),
+        None => Ok(None),
     }
 }

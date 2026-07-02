@@ -14,11 +14,11 @@ use super::omissible_utils::handle_omissible_override;
 use crate::default_to;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{
-    ClusterConfig, DbtQuoting, FreshnessDefinition, Schedule, SchemaOrigin, SyncConfig,
+    ClusterConfig, FreshnessDefinition, Schedule, SchemaOrigin, SyncConfig,
 };
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
+use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
@@ -38,8 +38,6 @@ pub struct ProjectSourceConfig {
     pub freshness: Omissible<Option<FreshnessDefinition>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+quoting")]
-    pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+loaded_at_query")]
     pub loaded_at_query: Verbatim<Option<String>>,
     #[serde(rename = "+loaded_at_field")]
@@ -64,6 +62,8 @@ pub struct ProjectSourceConfig {
         deserialize_with = "u64_or_string_u64"
     )]
     pub job_execution_timeout_seconds: Option<u64>,
+    #[serde(rename = "+reservation")]
+    pub reservation: Option<String>,
     #[serde(rename = "+labels")]
     pub labels: Option<IndexMap<String, String>>,
     #[serde(
@@ -249,18 +249,20 @@ pub struct SourceConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
-    #[resolved(promote, expect = "quoting set by apply_package_defaults")]
-    pub quoting: Option<DbtQuoting>,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Verbatim<Option<String>>,
     #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     /// Specifies where the schema metadata originates: 'remote' (default) or 'local'
     #[resolved(promote)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema_origin: Option<SchemaOrigin>,
     /// Schema synchronization configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sync: Option<SyncConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub external_location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub formatter: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -274,7 +276,6 @@ impl From<ProjectSourceConfig> for SourceConfig {
             meta: config.meta,
             freshness: config.freshness,
             tags: config.tags,
-            quoting: config.quoting,
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
@@ -316,6 +317,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                reservation: config.reservation,
                 labels: config.labels,
                 labels_from_meta: config.labels_from_meta,
                 kms_key_name: config.kms_key_name,
@@ -335,6 +337,9 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 enable_list_inference: None,
                 intermediate_format: None,
                 storage_uri: None,
+                incremental_apply_config_changes: None,
+                use_safer_relation_operations: None,
+                view_update_via_alter: None,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
@@ -390,7 +395,6 @@ impl From<SourceConfig> for ProjectSourceConfig {
             meta: config.meta,
             freshness: config.freshness,
             tags: config.tags,
-            quoting: config.quoting,
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
@@ -405,6 +409,7 @@ impl From<SourceConfig> for ProjectSourceConfig {
             job_execution_timeout_seconds: config
                 .__warehouse_specific_config__
                 .job_execution_timeout_seconds,
+            reservation: config.__warehouse_specific_config__.reservation,
             labels: config.__warehouse_specific_config__.labels,
             labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
             kms_key_name: config.__warehouse_specific_config__.kms_key_name,
@@ -474,7 +479,7 @@ impl From<SourceConfig> for ProjectSourceConfig {
 
 impl ResolvableConfig<SourceConfig> for SourceConfig {
     type Resolved = ResolvedSourceConfig;
-    type PackageDefaults = DbtQuoting;
+    type PackageDefaults = ();
     type ResolveDefaults = (StaticAnalysisKind, Option<SyncConfig>);
 
     fn get_enabled_with_default(&self) -> bool {
@@ -485,11 +490,7 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
         self.enabled = Some(false);
     }
 
-    fn apply_package_defaults(&mut self, quoting: DbtQuoting) {
-        if self.quoting.is_none() {
-            self.quoting = Some(quoting);
-        }
-    }
+    fn apply_package_defaults(&mut self, _: ()) {}
 
     fn apply_resolve_defaults(
         &mut self,
@@ -514,7 +515,6 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
             meta,
             freshness,
             tags,
-            quoting,
             loaded_at_field,
             loaded_at_query,
             static_analysis,
@@ -530,8 +530,6 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
         let warehouse_specific_config =
             warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
 
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
         #[allow(unused, clippy::let_unit_value)]
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
         #[allow(unused, clippy::let_unit_value)]

@@ -50,8 +50,16 @@ pub struct FunctionReturnType {
     pub description: Option<String>,
 }
 
+/// String identifiers for the languages a `dbt function` resource can be
+/// authored in. These are the values stored on `FunctionProperties::language`
+/// and on the corresponding manifest node.
+///TODO: This should be an enum, not a bunch of constants.
+pub const FUNCTION_LANGUAGE_SQL: &str = "sql";
+pub const FUNCTION_LANGUAGE_PYTHON: &str = "python";
+pub const FUNCTION_LANGUAGE_JAVASCRIPT: &str = "javascript";
+
 fn default_language() -> Option<String> {
-    Some("sql".to_string())
+    Some(FUNCTION_LANGUAGE_SQL.to_string())
 }
 
 /// An overload of a function with different argument signatures.

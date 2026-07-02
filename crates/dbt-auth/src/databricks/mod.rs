@@ -3,7 +3,7 @@ use database::Builder as DatabaseBuilder;
 use dbt_yaml::Value;
 use std::borrow::Cow;
 
-use dbt_xdbc::{Backend, database, databricks};
+use dbt_adbc::{Backend, database, databricks};
 
 /// User agent name provided to dbx for Fusion.
 ///
@@ -16,7 +16,6 @@ const USER_AGENT_NAME: &str = "dbt";
 /// Supported Databricks authentication types.
 /// When `auth_type` is absent, defaults to token-based (PAT) authentication.
 /// When `auth_type` is present, only `oauth` is a valid value.
-#[cfg(not(feature = "odbc"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DatabricksAuthType {
     /// OAuth authentication
@@ -25,7 +24,6 @@ enum DatabricksAuthType {
     Token,
 }
 
-#[cfg(not(feature = "odbc"))]
 impl DatabricksAuthType {
     /// Parse auth_type from config.
     /// - Absent or "token": defaults to token-based authentication
@@ -44,7 +42,6 @@ impl DatabricksAuthType {
     }
 }
 
-#[cfg(not(feature = "odbc"))]
 #[derive(Debug)]
 enum DatabricksAuthIR<'a> {
     OAuthM2M {
@@ -59,7 +56,6 @@ enum DatabricksAuthIR<'a> {
     },
 }
 
-#[cfg(not(feature = "odbc"))]
 impl<'a> DatabricksAuthIR<'a> {
     pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
         match self {
@@ -91,7 +87,6 @@ impl<'a> DatabricksAuthIR<'a> {
     }
 }
 
-#[cfg(not(feature = "odbc"))]
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<DatabricksAuthIR<'a>, AuthError> {
     // FIXME: dbt-databricks historically has allowed garbage in the auth_type field and only responds to
     // auth_type 'oauth'. Everything else means token
@@ -136,7 +131,6 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<DatabricksAuthIR<'a>, Aut
     }
 }
 
-#[cfg(not(feature = "odbc"))]
 fn apply_connection_args(
     config: &AdapterConfig,
     mut builder: DatabaseBuilder,
@@ -159,70 +153,12 @@ pub struct DatabricksAuth;
 
 impl Auth for DatabricksAuth {
     fn backend(&self) -> Backend {
-        #[cfg(feature = "odbc")]
-        {
-            Backend::DatabricksODBC
-        }
-        #[cfg(not(feature = "odbc"))]
-        {
-            Backend::Databricks
-        }
+        Backend::Databricks
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
-        #[cfg(feature = "odbc")]
-        {
-            configure_odbc(self.backend(), config)
-        }
-
-        #[cfg(not(feature = "odbc"))]
-        {
-            crate::auth_configure_pipeline!(
-                self.backend(),
-                &config,
-                parse_auth,
-                apply_connection_args
-            )
-        }
+        crate::auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
-}
-
-#[cfg(feature = "odbc")]
-fn configure_odbc(backend: Backend, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
-    let http_path = resolve_http_path(config)?;
-
-    let mut builder = DatabaseBuilder::new(backend);
-    builder.with_named_option(databricks::USER_AGENT, USER_AGENT_NAME)?;
-
-    use databricks::odbc;
-    // Config values for DSN-less connection to Databricks:
-    // https://learn.microsoft.com/en-us/azure/databricks/integrations/odbc/authentication
-    for key in ["token", "http_path", "host", "schema", "database"].into_iter() {
-        if let Some(value) = config.get_string(key) {
-            match key {
-                "token" => builder.with_named_option(odbc::TOKEN_FIELD, value),
-                "http_path" => builder.with_named_option(odbc::HTTP_PATH, http_path.clone()),
-                "host" => builder.with_named_option(odbc::HOST, value),
-                "schema" => builder.with_named_option(odbc::SCHEMA, value),
-                "database" => builder.with_named_option(odbc::CATALOG, value),
-                _ => panic!("unexpected key: {key}"),
-            }?;
-        }
-    }
-
-    // configures the ODBC driver and the defaults needed for token authentication
-    builder
-        .with_username(odbc::DEFAULT_TOKEN_UID)
-        .with_named_option(odbc::DRIVER, odbc::odbc_driver_path())?
-        .with_named_option(odbc::PORT, odbc::DEFAULT_PORT)?
-        .with_named_option(odbc::SSL, "1")?
-        .with_named_option(odbc::THRIFT_TRANSPORT, "2")?
-        .with_named_option(odbc::AUTH_MECHANISM, odbc::auth_mechanism_options::TOKEN)?;
-
-    Ok(AuthOutcome {
-        builder,
-        warnings: vec![],
-    })
 }
 
 fn resolve_http_path(config: &AdapterConfig) -> Result<Cow<'_, str>, AuthError> {
@@ -257,7 +193,6 @@ fn resolve_http_path(config: &AdapterConfig) -> Result<Cow<'_, str>, AuthError> 
     Ok(http_path)
 }
 
-#[cfg(not(feature = "odbc"))]
 fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
     if !config.contains_key("http_path") {
         return Err(AuthError::config("http_path is required"));
@@ -284,7 +219,7 @@ fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
     Ok(())
 }
 
-#[cfg(all(test, not(feature = "odbc")))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_options::other_option_value;
@@ -819,47 +754,6 @@ mod tests {
         assert!(
             result.is_err(),
             "expected an error when http_path is missing"
-        );
-    }
-}
-
-#[cfg(all(test, feature = "odbc"))]
-mod odbc_tests {
-    use super::*;
-    use crate::test_options::other_option_value;
-    use dbt_yaml::Mapping;
-
-    #[test]
-    fn test_odbc_minimal_token_connection_options_present() {
-        use databricks::odbc;
-
-        let config = Mapping::from_iter([
-            ("host".into(), "H".into()),
-            ("schema".into(), "S".into()),
-            (
-                "http_path".into(),
-                "/sql/1.0/warehouses/warehouse-id".into(),
-            ),
-            ("token".into(), "T".into()),
-            ("database".into(), "C".into()),
-        ]);
-
-        let builder = DatabricksAuth {}
-            .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
-
-        assert_eq!(
-            other_option_value(&builder, databricks::USER_AGENT),
-            Some(USER_AGENT_NAME)
-        );
-        assert_eq!(other_option_value(&builder, odbc::TOKEN_FIELD), Some("T"));
-        assert_eq!(other_option_value(&builder, odbc::HOST), Some("H"));
-        assert_eq!(other_option_value(&builder, odbc::SCHEMA), Some("S"));
-        assert_eq!(other_option_value(&builder, odbc::CATALOG), Some("C"));
-        assert_eq!(
-            other_option_value(&builder, odbc::HTTP_PATH),
-            Some("/sql/1.0/warehouses/warehouse-id")
         );
     }
 }

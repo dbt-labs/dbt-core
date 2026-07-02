@@ -20,6 +20,12 @@ Ok(
                         raw: "\n    else\n",
                     } @ 3:11-5:1,
                 ],
+                start_tag_kind: BlockStart,
+                start_tag_span:  @ 1:1-1:15,
+                else_tag_span: Some(
+                     @ 3:1-3:11,
+                ),
+                end_tag_span:  @ 5:1-5:12,
             } @ 1:1-5:12,
         ],
     } @ 1:1-5:12,

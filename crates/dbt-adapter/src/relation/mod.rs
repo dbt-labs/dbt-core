@@ -8,6 +8,7 @@ pub mod bigquery;
 pub mod databricks;
 pub mod redshift;
 pub mod snowflake;
+pub mod spark;
 
 pub mod factory;
 
@@ -149,7 +150,7 @@ mod tests {
         let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from my_table where cast(created_at as timestamp) >= '2024-07-01T00:00:00+00:00' and cast(created_at as timestamp) < '2024-07-08T18:00:00+00:00')"
+            "(select * from my_table where cast(created_at as timestamp) >= '2024-07-01T00:00:00.000000Z' and cast(created_at as timestamp) < '2024-07-08T18:00:00.000000Z')"
         );
     }
 

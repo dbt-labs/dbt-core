@@ -49,6 +49,7 @@ pub enum DbConfig {
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
+    Fdcs(Box<DuckDbConfig>),
     // Hive,
     Exasol(Box<ExasolDbConfig>),
     // Oracle,
@@ -119,6 +120,7 @@ impl DbConfig {
             DbConfig::Salesforce(config) => config.client_id.as_deref(),
             // DuckDB `path` is optional — attach-only profiles default to `:memory:`.
             DbConfig::DuckDB(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
+            DbConfig::Fdcs(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
             DbConfig::Spark(config) => config.host.as_deref(),
             DbConfig::Fabric(config) => config.host.as_deref(),
             DbConfig::Exasol(config) => config.host.as_deref(),
@@ -190,6 +192,7 @@ impl DbConfig {
                 "job_retries",
                 "job_creation_timeout_seconds",
                 "job_execution_timeout_seconds",
+                "reservation",
                 "timeout_seconds",
                 "client_id",
                 "token_uri",
@@ -230,6 +233,16 @@ impl DbConfig {
             // TODO: Salesforce connection keys
             DbConfig::Salesforce(_) => &["login_url", "database", "data_transform_run_timeout"],
             DbConfig::DuckDB(_) => &[
+                "path",
+                "database",
+                "schema",
+                "extensions",
+                "settings",
+                "secrets",
+                "attach",
+                "motherduck_token",
+            ],
+            DbConfig::Fdcs(_) => &[
                 "path",
                 "database",
                 "schema",
@@ -329,6 +342,7 @@ impl DbConfig {
             DbConfig::Spark(config) => dbt_yaml::to_value(config),
             DbConfig::Fabric(config) => dbt_yaml::to_value(config),
             DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
+            DbConfig::Fdcs(config) => dbt_yaml::to_value(config),
             DbConfig::Exasol(config) => dbt_yaml::to_value(config),
             DbConfig::ClickHouse(config) => dbt_yaml::to_value(config),
         }
@@ -349,6 +363,7 @@ impl DbConfig {
             DbConfig::Fabric(..) => AdapterType::Fabric,
             DbConfig::Exasol(..) => AdapterType::Exasol,
             DbConfig::ClickHouse(..) => AdapterType::ClickHouse,
+            DbConfig::Fdcs(..) => AdapterType::Fdcs,
         }
     }
 
@@ -367,6 +382,7 @@ impl DbConfig {
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
             DbConfig::ClickHouse(config) => config.database.as_ref(),
+            DbConfig::Fdcs(config) => config.database.as_ref(),
         }
     }
 
@@ -402,6 +418,7 @@ impl DbConfig {
             DbConfig::Databricks(config) => config.schema.as_ref(),
             DbConfig::Spark(config) => config.schema.as_ref(),
             DbConfig::DuckDB(config) => config.schema.as_ref(),
+            DbConfig::Fdcs(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
             DbConfig::Fabric(config) => config.schema.as_ref(),
             DbConfig::Exasol(config) => config.schema.as_ref(),
@@ -424,6 +441,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => None,
             DbConfig::Exasol(config) => config.threads.as_ref(),
             DbConfig::ClickHouse(config) => config.threads.as_ref(),
+            DbConfig::Fdcs(config) => config.threads.as_ref(),
         }
     }
 
@@ -442,6 +460,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => (),
             DbConfig::Exasol(config) => config.threads = threads,
             DbConfig::ClickHouse(config) => config.threads = threads,
+            DbConfig::Fdcs(config) => config.threads = threads,
         }
     }
 
@@ -481,7 +500,6 @@ impl DbConfig {
 pub enum Execute {
     #[default]
     Remote,
-    Local,
     Sidecar,
     Service,
 }
@@ -490,7 +508,6 @@ impl Display for Execute {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Execute::Remote => write!(f, "remote"),
-            Execute::Local => write!(f, "local"),
             Execute::Sidecar => write!(f, "sidecar"),
             Execute::Service => write!(f, "service"),
         }
@@ -503,7 +520,9 @@ impl std::str::FromStr for Execute {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "remote" => Ok(Execute::Remote),
-            "local" => Ok(Execute::Local),
+            // "local" and "sidecar" both resolve to Sidecar; "local" is the
+            // legacy string that predates the rename and must keep parsing.
+            "local" | "sidecar" => Ok(Execute::Sidecar),
             _ => Err(format!("Invalid execute mode: {s}")),
         }
     }
@@ -523,8 +542,9 @@ impl Execute {
         use dbt_common::io_args::LocalExecutionBackendKind;
         match compute_flag {
             LocalExecutionBackendKind::Remote => Execute::Remote,
-            LocalExecutionBackendKind::Inline => Execute::Local,
-            LocalExecutionBackendKind::Worker => Execute::Sidecar,
+            LocalExecutionBackendKind::Inline | LocalExecutionBackendKind::Worker => {
+                Execute::Sidecar
+            }
             LocalExecutionBackendKind::Service => Execute::Service,
         }
     }
@@ -808,11 +828,19 @@ pub struct BigqueryDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_execution_timeout_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub reservation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job_retries: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_retry_deadline_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workload_pool_provider_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_account_impersonation_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_endpoint: Option<YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
@@ -1529,6 +1557,7 @@ pub struct BigqueryTargetEnv {
     pub impersonate_service_account: Option<String>,
     pub job_creation_timeout_seconds: Option<i64>,
     pub job_execution_timeout_seconds: Option<i64>,
+    pub reservation: Option<String>,
     pub job_retries: Option<i64>,
     pub job_retry_deadline_seconds: Option<i64>,
     pub location: Option<String>,
@@ -1884,6 +1913,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     impersonate_service_account: config.impersonate_service_account.clone(),
                     job_creation_timeout_seconds: config.job_creation_timeout_seconds,
                     job_execution_timeout_seconds: config.job_execution_timeout_seconds,
+                    reservation: config.reservation.clone(),
                     job_retries: config.job_retries,
                     job_retry_deadline_seconds: config.job_retry_deadline_seconds,
                     location: config.location.clone(),
@@ -1969,6 +1999,29 @@ impl TryFrom<DbConfig> for TargetContext {
             })),
 
             DbConfig::DuckDB(config) => Ok(TargetContext::DuckDB(DuckDbTargetEnv {
+                path: config.path.clone(),
+                __common__: CommonTargetContext {
+                    // Derive database name from path if not explicitly set (same logic as get_database())
+                    database: config.database.clone().unwrap_or_else(|| {
+                        DuckDBPathInfo::parse_path(config.path.as_deref())
+                            .database
+                            .to_owned()
+                    }),
+                    schema: config.schema.unwrap_or_else(|| "main".to_string()),
+                    type_: adapter_type,
+                    threads: match config.threads {
+                        Some(StringOrInteger::String(threads)) => Some(
+                            threads
+                                .parse::<u16>()
+                                .map_err(|_| "threads must be a positive integer".to_string())?,
+                        ),
+                        Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
+                        None => None,
+                    },
+                },
+            })),
+
+            DbConfig::Fdcs(config) => Ok(TargetContext::DuckDB(DuckDbTargetEnv {
                 path: config.path.clone(),
                 __common__: CommonTargetContext {
                     // Derive database name from path if not explicitly set (same logic as get_database())

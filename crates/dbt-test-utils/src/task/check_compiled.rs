@@ -8,7 +8,13 @@ use dbt_common::{
 };
 use dbt_test_primitives::is_update_golden_files_mode;
 
-pub struct CheckCompiledFiles {}
+#[derive(Default)]
+pub struct CheckCompiledFiles {
+    /// When `false` (the default), compiled hook SQL (any path with a `hooks`
+    /// component) is skipped — most fixtures have no golden files for hooks and
+    /// some emit non-deterministic teardown SQL. Opt in to check hooks.
+    pub check_hooks: bool,
+}
 
 #[async_trait]
 impl Task for CheckCompiledFiles {
@@ -24,8 +30,7 @@ impl Task for CheckCompiledFiles {
                 let has_hooks = abs_path
                     .components()
                     .any(|c| c == Component::Normal("hooks".as_ref()));
-                // Exclude hooks — they were never checked before and have no golden files
-                if path_str.ends_with(".sql") && !has_hooks {
+                if path_str.ends_with(".sql") && (self.check_hooks || !has_hooks) {
                     let actual = stdfs::read_to_string(abs_path)?;
                     let path =
                         stdfs::diff_paths(abs_path, test_env.temp_dir.join(DBT_TARGET_DIR_NAME))

@@ -1,4 +1,4 @@
-use dbt_telemetry::SeverityNumber;
+use dbt_tracing::SeverityNumber;
 
 /// Format severity level as fixed-width bracketed string: [info ], [warn ], [error], etc.
 pub fn format_severity_fixed_width(severity: SeverityNumber) -> String {

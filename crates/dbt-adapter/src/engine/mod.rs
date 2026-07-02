@@ -2,10 +2,10 @@ use crate::adapter::adapter_impl::{DEFAULT_BASE_BEHAVIOR_FLAGS, adapter_specific
 
 use arrow::array::RecordBatch;
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::*;
 use dbt_common::AdapterResult;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
-use dbt_xdbc::*;
 use minijinja::State;
 
 use std::collections::BTreeMap;
@@ -19,8 +19,9 @@ pub use adapter_engine::Options;
 pub mod query_comment;
 pub mod retry;
 
-mod xdbc;
-pub use xdbc::XdbcEngine;
+mod adbc;
+pub mod duckdb_attach;
+pub use adbc::AdbcEngine;
 
 mod noop_connection;
 pub use noop_connection::NoopConnection;
