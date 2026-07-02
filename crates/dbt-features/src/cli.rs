@@ -23,8 +23,8 @@ use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_compilation::config::CompilationConfig;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
-use dbt_schemas::schemas::StateArtifacts;
+use dbt_schema_store::{CanonicalFqn, DataStoreTrait, SchemaStoreTrait};
+use dbt_schemas::schemas::{Nodes, StateArtifacts};
 use dbt_schemas::state::{DbtState, ResolverState};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::{PreTaskRunData, RunTaskResults};
@@ -337,6 +337,15 @@ pub trait CliExtensionHooks: Send + Sync {
         token: &CancellationToken,
     ) -> FsResult<()>;
 
+    async fn did_defer_nodes(
+        &self,
+        arg: &EvalArgs,
+        deferred_unique_ids: &HashMap<CanonicalFqn, String>,
+        resolved_state: &mut ResolverState,
+        nodes: &Nodes,
+        adapter: Arc<Adapter>,
+    ) -> FsResult<()>;
+
     /// Called after all compile-time setup (adapter init, defer, schema hydration)
     /// and before the task runner starts.
     ///
@@ -500,6 +509,17 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
         _map_compiled_sql: &HashMap<String, Option<String>>,
         _feature_stack: &Arc<FeatureStack>,
         _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_defer_nodes(
+        &self,
+        _arg: &EvalArgs,
+        _deferred_unique_ids: &HashMap<CanonicalFqn, String>,
+        _resolved_state: &mut ResolverState,
+        _nodes: &Nodes,
+        _adapter: Arc<Adapter>,
     ) -> FsResult<()> {
         Ok(())
     }

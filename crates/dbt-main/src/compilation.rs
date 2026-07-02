@@ -1356,6 +1356,12 @@ impl DbtProjectCompilation {
             .take()
             .map(DbtProjectCompilationCacheChanges::new);
 
+        if let Some(prev_state) = &maybe_previous_state {
+            if let Some(nodes) = &prev_state.nodes {
+                resolved_state.defer_nodes = Some(nodes.clone());
+            }
+        }
+
         Ok((
             DbtProjectCompilation {
                 loaded_project: Arc::new(loaded_project),
@@ -1836,6 +1842,19 @@ impl DbtProjectCompilation {
                 &schedule.sorted_nodes,
                 &schedule.frontier_nodes,
             );
+
+            feature_stack
+                .cli
+                .hooks
+                .did_defer_nodes(
+                    arg,
+                    &defer_state.deferred_unique_ids,
+                    &mut resolved_state,
+                    &nodes,
+                    adapter.clone(),
+                )
+                .await?;
+
             resolved_state.defer_nodes = Some(nodes);
         }
 

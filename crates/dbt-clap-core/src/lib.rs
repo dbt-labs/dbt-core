@@ -2435,6 +2435,7 @@ impl CommonArgs {
             write_lineage: self.write_lineage,
             force_enable_linter: false,
             maximum_seed_size_mib: self.resolve_maximum_seed_size_mib(in_dir),
+            command_entrypoint: arg.command,
         }
     }
 

@@ -555,6 +555,9 @@ pub struct EvalArgs {
     pub write_lineage: bool,
     /// Always enable the linter.
     pub force_enable_linter: bool,
+    /// Command that originated the execution.
+    /// Used for extension commands that execute core commands like compilation.
+    pub command_entrypoint: FsCommand,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -579,6 +582,7 @@ impl fmt::Debug for EvalArgs {
             .field("num_threads", &self.num_threads)
             .field("output_keys", &self.output_keys)
             .field("indirect_selection", &self.indirect_selection)
+            .field("command_entrypoint", &self.command_entrypoint)
             .finish()
     }
 }

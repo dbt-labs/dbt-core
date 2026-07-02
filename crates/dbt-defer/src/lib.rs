@@ -848,6 +848,50 @@ fn build_deferred_semantic_manifest(
     SemanticManifest::from(&nodes)
 }
 
+/// Update the node resolver's ref lookup table so that `{{ ref('model') }}` compiles to
+/// production relation names from the state manifest, without modifying
+/// `base_attr.database/schema`. Local static analysis is therefore unaffected.
+///
+/// Nodes already handled by `defer_common` (incrementals, snapshots, frontier nodes) are
+/// skipped via `already_deferred_unique_ids` to avoid a redundant second write.
+pub fn update_ref_lookups_from_state(
+    resolver_state: &mut ResolverState,
+    defer_nodes: &Nodes,
+    already_deferred_unique_ids: &HashSet<String>,
+    adapter_type: AdapterType,
+) -> FsResult<()> {
+    // Collect local keys first (immutable borrow) before taking mutable node_resolver.
+    let local_models: HashSet<String> = resolver_state.nodes.models.keys().cloned().collect();
+    let local_seeds: HashSet<String> = resolver_state.nodes.seeds.keys().cloned().collect();
+    let local_snapshots: HashSet<String> = resolver_state.nodes.snapshots.keys().cloned().collect();
+    let local_functions: HashSet<String> = resolver_state.nodes.functions.keys().cloned().collect();
+
+    let node_resolver = Arc::get_mut(&mut resolver_state.node_resolver)
+        .expect("Expected mutable reference to node_resolver for update_ref_lookups_from_state");
+
+    for (uid, node) in &defer_nodes.models {
+        if !already_deferred_unique_ids.contains(uid) && local_models.contains(uid) {
+            node_resolver.update_ref_with_deferral(node.as_ref(), adapter_type, true)?;
+        }
+    }
+    for (uid, node) in &defer_nodes.seeds {
+        if !already_deferred_unique_ids.contains(uid) && local_seeds.contains(uid) {
+            node_resolver.update_ref_with_deferral(node.as_ref(), adapter_type, true)?;
+        }
+    }
+    for (uid, node) in &defer_nodes.snapshots {
+        if !already_deferred_unique_ids.contains(uid) && local_snapshots.contains(uid) {
+            node_resolver.update_ref_with_deferral(node.as_ref(), adapter_type, true)?;
+        }
+    }
+    for (uid, node) in &defer_nodes.functions {
+        if !already_deferred_unique_ids.contains(uid) && local_functions.contains(uid) {
+            node_resolver.update_ref_with_deferral(node.as_ref(), adapter_type, true)?;
+        }
+    }
+    Ok(())
+}
+
 /// Pre-compute defer context and store it on the `NodeResolver` for O(1) per-ref evaluation.
 ///
 /// Must be called BEFORE `build_compiler_env` (which clones the Arc) and AFTER
