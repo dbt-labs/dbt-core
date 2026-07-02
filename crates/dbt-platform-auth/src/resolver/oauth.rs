@@ -545,7 +545,7 @@ fn build_register_url(
     let mut url = Url::parse(base)
         .map_err(|e| AuthError::Interactive(format!("invalid register URL '{base}': {e}")))?;
     url.query_pairs_mut()
-        .append_pair("redirect_uri", redirect_url)
+        .append_pair("redirect_url", redirect_url)
         .append_pair("client_id", client_id)
         .append_pair("code_challenge", code_challenge)
         .append_pair("state", state)
@@ -1408,7 +1408,7 @@ mod tests {
         let parsed = Url::parse(&url).unwrap();
         let pairs: HashMap<_, _> = parsed.query_pairs().into_owned().collect();
         assert_eq!(
-            pairs.get("redirect_uri").map(String::as_str),
+            pairs.get("redirect_url").map(String::as_str),
             Some("http://localhost:29527/")
         );
         assert_eq!(
