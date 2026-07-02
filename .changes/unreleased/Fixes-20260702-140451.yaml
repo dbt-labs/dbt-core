@@ -1,0 +1,7 @@
+kind: Fixes
+body: When re-running dbt init to edit an existing Snowflake profile, if the profilea
+time: 2026-07-02T14:04:51.656394+05:30
+custom:
+    author: priyankahotkar
+    issue: . 15364
+    project: dbt-core
