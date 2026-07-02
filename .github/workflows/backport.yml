@@ -30,14 +30,8 @@ jobs:
   backport:
     name: Backport
     runs-on: ${{ vars.UBUNTU_LATEST }}
-    # Only react to merged PRs for security reasons: the `pull_request` event
-    # runs in the context of the base branch, and gating on `merged` ensures we
-    # never act on unmerged or fork PRs.
-    # See https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request.
-    # Handle both flows: labeling an already-merged PR, and merging a PR that
-    # already carries a backport label. The `backport ` prefix (with trailing
-    # space) matches the "backport <branch>" convention and avoids triggering on
-    # labels like `no-backport`.
+    # Only react to merged PRs for security reasons (never unmerged/fork PRs).
+    # Handles both flows: labeling a merged PR, and merging an already-labeled PR.
     if: >
       github.event.pull_request.merged
       && (
