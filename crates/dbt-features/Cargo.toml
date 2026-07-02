@@ -44,6 +44,7 @@ dbt-yaml = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 minijinja = { workspace = true }
 petgraph = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
