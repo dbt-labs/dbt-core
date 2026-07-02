@@ -761,15 +761,16 @@ pub(crate) fn same_persisted_description(
     other_common: &CommonAttributes,
     other_base: &NodeBaseAttributes,
 ) -> bool {
-    // If persist_docs settings differ, they're not the same
-    if !persist_docs_configs_equal(&self_base.persist_docs, &other_base.persist_docs) {
-        log_state_mod_diff(
-            &self_common.unique_id,
-            "persisted_description - persist_docs_configs_equal",
-            [("persist_docs", false, None)],
-        );
-        return false;
-    }
+    // Mirror dbt-core's `ParsedNode.same_persisted_description`: this check does NOT compare the
+    // `persist_docs` config itself. As dbt-core notes, "the check on configs will handle the case
+    // where we have different persist settings, so we only have to care about the cases where they
+    // are the same." The `persist_docs` config is owned by the config check
+    // (`check_configs_modified`), which compares `unrendered_config` for models/sources and so
+    // treats environment-aware `persist_docs` as authoring-intent — matching dbt-core's
+    // `same_config`. Comparing the rendered `persist_docs` here as well both double-counted that
+    // config and reintroduced the environment-aware false positive from dbt-core#15286. Here we
+    // only compare the persisted descriptions, gated on whether the *current* node renders
+    // persistence on (dbt-core reads `self.config.persist_docs`).
 
     // Extract the persist settings for use below
     let self_persist_relation = self_base
