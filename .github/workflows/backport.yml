@@ -30,15 +30,19 @@ jobs:
   backport:
     name: Backport
     runs-on: ${{ vars.UBUNTU_LATEST }}
-    # Only react to merged PRs for security reasons.
-    # See https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target.
+    # Only react to merged PRs for security reasons: the `pull_request` event
+    # runs in the context of the base branch, and gating on `merged` ensures we
+    # never act on unmerged or fork PRs.
+    # See https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request.
     # Handle both flows: labeling an already-merged PR, and merging a PR that
-    # already carries a backport label.
+    # already carries a backport label. The `backport ` prefix (with trailing
+    # space) matches the "backport <branch>" convention and avoids triggering on
+    # labels like `no-backport`.
     if: >
       github.event.pull_request.merged
       && (
-        (github.event.action == 'labeled' && contains(github.event.label.name, 'backport'))
-        || (github.event.action == 'closed' && contains(join(github.event.pull_request.labels.*.name, ' '), 'backport'))
+        (github.event.action == 'labeled' && startsWith(github.event.label.name, 'backport '))
+        || (github.event.action == 'closed' && contains(format(' {0}', join(github.event.pull_request.labels.*.name, ' ')), ' backport '))
       )
     steps:
       - uses: tibdex/backport@9565281eda0731b1d20c4025c43339fb0a23812e # tibdex/backport@v2.0.4
