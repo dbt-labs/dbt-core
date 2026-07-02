@@ -1,7 +1,7 @@
 # **what?**
 # When the core team triages, we sometimes need more information from the issue creator.  In
 # those cases we remove the `status:triage` label and add the `awaiting_response` label.  Once we
-# recieve a response in the form of a comment, we want the `awaiting_response` label removed
+# receive a response in the form of a comment, we want the `awaiting_response` label removed
 # in favor of the `status:triage` label so we are aware that the issue needs action.
 
 # **why?**

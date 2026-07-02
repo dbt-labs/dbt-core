@@ -12,7 +12,7 @@
 # This will run for all PRs going into main and *.latest.  It will
 # run when they are opened, reopened, when any label is added or removed
 # and when new code is pushed to the branch.  The action will then get
-# skipped if the 'action:skip-changelog' label is present is any of the labels.
+# skipped if the 'action:skip-changelog' label is present in any of the labels.
 
 name: Check Changelog Entry
 
