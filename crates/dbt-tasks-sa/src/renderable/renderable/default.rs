@@ -25,6 +25,8 @@ use minijinja::Value as MinijinjaValue;
 
 use dbt_tasks_core::task::TaskResult;
 
+use crate::trino_inline_udfs::inject_inline_trino_udfs;
+
 use super::common::handle_render_result;
 use super::unit_test;
 
@@ -121,7 +123,9 @@ fn render_default(
     let (mut compile_context, config_map) = ctx.build_compile_node_context(
         node.as_ref(),
         &base_context,
-        DependencyValidationConfig::new_validated(),
+        DependencyValidationConfig::new_validated().render_unqualified_function_calls(
+            ctx.dbt_profile().db_config.trino_inline_udfs_enabled(),
+        ),
     );
 
     if let Some(overrides) = local_exec_unit_test_overrides {
@@ -148,12 +152,19 @@ fn render_default(
     let mut macro_spans = ctx
         .rendering_listener_factory
         .drain_macro_spans(&render_file_path);
-    let rendered_sql_maybe_with_cte = inject_and_persist_ephemeral_models(
+    let mut rendered_sql_maybe_with_cte = inject_and_persist_ephemeral_models(
         rendered_sql,
         &mut macro_spans,
         &node.base().alias,
         node.materialized() == DbtMaterialization::Ephemeral,
         &ctx.inner.arg.io.out_dir.join(DBT_EPHEMERAL_DIR_NAME),
+    )
+    .map_err(|e| e.with_location(render_file_path.clone()))?;
+    rendered_sql_maybe_with_cte = inject_inline_trino_udfs(
+        rendered_sql_maybe_with_cte,
+        &mut macro_spans,
+        node.as_ref(),
+        ctx.resolver_state(),
     )
     .map_err(|e| e.with_location(render_file_path.clone()))?;
 

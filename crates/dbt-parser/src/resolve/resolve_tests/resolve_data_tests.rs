@@ -381,6 +381,7 @@ pub async fn resolve_data_tests(
             schema: schema.to_string(),
             // tests can be defined in any yaml config
             resource_paths: package.dbt_project.all_source_paths(),
+            render_unqualified_function_calls: false,
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),

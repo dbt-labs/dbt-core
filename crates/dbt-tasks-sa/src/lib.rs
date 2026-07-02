@@ -29,5 +29,6 @@ pub mod sql;
 pub mod task;
 pub mod task_runner;
 pub mod task_runner_hooks;
+pub mod trino_inline_udfs;
 pub mod utils;
 pub mod visitor;

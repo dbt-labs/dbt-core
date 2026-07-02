@@ -41,6 +41,8 @@ pub struct DependencyValidationConfig {
     pub node_type: NodeType,
     /// `unique_id` of the node whose dependencies are being validated, if any
     pub current_node_unique_id: Option<String>,
+    /// Render function() calls as simple names for inline UDF query scopes.
+    pub render_unqualified_function_calls: bool,
 }
 
 impl DependencyValidationConfig {
@@ -88,6 +90,15 @@ impl DependencyValidationConfig {
         self.skip_validation = false;
         self
     }
+
+    /// Configure whether `function()` renders simple names instead of qualified relations.
+    pub fn render_unqualified_function_calls(
+        mut self,
+        enabled: bool,
+    ) -> DependencyValidationConfig {
+        self.render_unqualified_function_calls = enabled;
+        self
+    }
 }
 
 impl Default for DependencyValidationConfig {
@@ -97,6 +108,7 @@ impl Default for DependencyValidationConfig {
             skip_validation: true,
             node_type: NodeType::Unspecified,
             current_node_unique_id: None,
+            render_unqualified_function_calls: false,
         }
     }
 }
@@ -271,6 +283,7 @@ where
         model.common().package_name.clone(),
         runtime_config.clone(),
         validation_config_with_depends_on.clone(),
+        validation_config_with_depends_on.render_unqualified_function_calls,
     );
     let function_value = MinijinjaValue::from_object(function_function);
     base_builtins.insert("function".to_string(), function_value.clone());

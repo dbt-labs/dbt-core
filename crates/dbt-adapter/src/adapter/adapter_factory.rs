@@ -156,6 +156,23 @@ impl AdapterFactory for DefaultAdapterFactory {
             })
             .collect::<BTreeMap<_, _>>();
 
+        if adapter_type == AdapterType::Trino {
+            let auth: Arc<dyn Auth> =
+                auth_for_backend(Box::new(NoopAuthWarningPrinter), Backend::DuckDB).into();
+            let engine = Arc::new(XdbcEngine::new_mock(
+                adapter_type,
+                auth,
+                adapter_config,
+                quoting,
+                type_ops_factory.create(adapter_type),
+                self.stmt_splitter(),
+                Arc::new(RelationCache::default()),
+                behavior_flag_overrides,
+            ));
+            let adapter_impl = Arc::new(AdapterImpl::new(engine, schema_cache));
+            return Ok(Arc::new(Adapter::new(adapter_impl, None, token)));
+        }
+
         let engine = self.create_engine(
             adapter_type,
             AdapterConfig::new(adapter_config.repr().clone()),
