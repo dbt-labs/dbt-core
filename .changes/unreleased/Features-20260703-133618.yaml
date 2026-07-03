@@ -1,0 +1,7 @@
+kind: Features
+body: Post a Slack alert with the microsoft/winget-pkgs PR link when a winget publishing PR opens
+time: 2026-07-03T13:36:18.028467+05:30
+custom:
+    author: itsnamangoyal
+    issue: ""
+    project: dbt-core
