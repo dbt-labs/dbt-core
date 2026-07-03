@@ -3,6 +3,7 @@ from unittest import mock
 from dbt.artifacts.resources import DependsOn, UnitTestConfig, UnitTestFormat
 from dbt.contracts.graph.nodes import NodeType, UnitTestDefinition
 from dbt.contracts.graph.unparsed import UnitTestOutputFixture
+from dbt.exceptions import ParsingError
 from dbt.parser import SchemaParser
 from dbt.parser.unit_tests import UnitTestParser, process_models_for_unit_test
 from dbt_common.events.event_catcher import EventCatcher
@@ -291,6 +292,20 @@ class UnitTestParserTest(SchemaParserTest):
         assert "unit_test.snowplow.my_model.test_my_model_v1" in manifest.unit_tests
         versioned_ut = manifest.unit_tests["unit_test.snowplow.my_model.test_my_model_v1"]
         self.assertEqual(versioned_ut.depends_on.nodes[0], "model.snowplow.my_model.v1")
+
+    def test_missing_model_raises_parsing_error(self):
+        # A unit test whose `model` never resolves must raise in
+        # process_models_for_unit_test (covers the not-found path of the
+        # re-resolution added for dbt-core #11139).
+        block = self.yaml_block_for(UNIT_TEST_MODEL_NOT_FOUND_SOURCE, "test_missing.yml")
+        UnitTestParser(self.parser, block).parse()
+
+        manifest = self.parser.manifest
+        unit_test = manifest.unit_tests[
+            "unit_test.snowplow.my_model_doesnt_exist.test_my_model_doesnt_exist"
+        ]
+        with self.assertRaises(ParsingError):
+            process_models_for_unit_test(manifest, "snowplow", unit_test, {})
 
     def test_multiple_unit_tests(self):
         block = self.yaml_block_for(UNIT_TEST_MULTIPLE_SOURCE, "test_my_model.yml")
