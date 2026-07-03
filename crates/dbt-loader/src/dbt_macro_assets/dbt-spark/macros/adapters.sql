@@ -348,6 +348,13 @@
   {{ return(load_result('list_schemas').table) }}
 {% endmacro %}
 
+{% macro spark__check_schema_exists_like(schema) -%}
+  {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) %}
+    show databases like '{{ schema }}'
+  {% endcall %}
+  {{ return(load_result('check_schema_exists').table) }}
+{% endmacro %}
+
 {% macro spark__rename_relation(from_relation, to_relation) -%}
   {% call statement('rename_relation') -%}
     {% if not from_relation.type %}

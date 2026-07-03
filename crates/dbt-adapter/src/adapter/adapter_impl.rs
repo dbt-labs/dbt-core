@@ -996,7 +996,18 @@ impl AdapterImpl {
         let schema_column_values = {
             let col_name = match self.adapter_type() {
                 Snowflake | Salesforce => "name",
-                Databricks | Spark => "databaseName",
+                Databricks => "databaseName",
+                // `show databases` returns a single column whose name varies by Spark
+                // build/catalog: OSS Spark (3.0+) emits `namespace`, older/Hive-style
+                // builds emit `databaseName`; pick whichever name the result actually
+                // has so we stay version-agnostic.
+                Spark => {
+                    if result_set.column_by_name("databaseName").is_some() {
+                        "databaseName"
+                    } else {
+                        "namespace"
+                    }
+                }
                 Bigquery => "schema_name",
                 Redshift => {
                     if get_bool_config(self.engine().as_ref(), "datasharing")? {
@@ -1349,6 +1360,11 @@ impl AdapterImpl {
             }
         }
 
+        // Spark (Hive metastore) has no ANSI `information_schema`
+        if matches!(self.adapter_type(), Spark) {
+            return Ok(Value::from(self.spark_check_schema_exists(state, schema)?));
+        }
+
         // FIXME:
         // 1. This is used in dbt Core 1.0 as just a "container" for a database/schema,
         // but there is no actual "Relation" since it has no identifier. Using it here
@@ -1383,6 +1399,25 @@ impl AdapterImpl {
                 "invalid return value",
             )),
         }
+    }
+
+    /// Spark-native single-schema existence check.
+    ///
+    /// Runs `show databases like '<schema>'`, which filters server-side and returns
+    /// 0/1 rows. Spark's `show databases like` pattern treats only `*` and `|` as
+    /// wildcards (not `_`/`%`), so a literal schema name matches exactly; we still
+    /// verify an exact match so a name containing `*`/`|` can't over-match.
+    /// Functionally mirrors core v1's `SparkAdapter.check_schema_exists`, which
+    /// resolves existence via the `list_schemas` macro plus a membership check
+    /// https://github.com/dbt-labs/dbt-adapters/blob/v1.17.3/dbt-spark/src/dbt/adapters/spark/impl.py#L428
+    fn spark_check_schema_exists(&self, state: &State, schema: &str) -> AdapterResult<bool> {
+        let result = execute_macro_wrapper_with_package(
+            state,
+            &[Value::from(schema)],
+            "spark__check_schema_exists_like",
+            "dbt_spark",
+        )?;
+        Ok(self.list_schemas_inner(result)?.iter().any(|s| s == schema))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1449,7 +1484,10 @@ impl AdapterImpl {
         _state: &State,
         _args: &[Value],
     ) -> AdapterResult<(String, String)> {
-        if matches!(self.adapter_type(), Databricks | Spark) {
+        // Spark is handled natively in `check_schema_exists`, so it never reaches here.
+        // Databricks still uses spark__check_schema_exists, whose
+        // `information_schema.schemata` query is valid against Unity Catalog.
+        if matches!(self.adapter_type(), Databricks) {
             Ok((
                 "dbt_spark".to_string(),
                 "spark__check_schema_exists".to_string(),
@@ -5011,7 +5049,7 @@ mod tests {
                     ("attach".into(), attach),
                 ])
             }
-            Bigquery | Redshift => Mapping::new(),
+            Bigquery | Redshift | Spark | Databricks => Mapping::new(),
             _ => unimplemented!("mock config for adapter type {:?}", adapter_type),
         };
         build_engine(adapter_type, config)
@@ -5873,5 +5911,81 @@ mod tests {
             warn_unenforced: None,
         };
         assert!(adapter.render_column_constraint(constraint).is_none());
+    }
+
+    /// Build a single-column `show databases` style result with the given column
+    /// name and schema values.
+    fn schemas_batch(col_name: &str, values: &[&str]) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            col_name,
+            DataType::Utf8,
+            false,
+        )]));
+        let col: ArrayRef = Arc::new(StringArray::from(values.to_vec()));
+        Arc::new(RecordBatch::try_new(schema, vec![col]).unwrap())
+    }
+
+    // OSS Spark's `show databases` returns the schema in a column named
+    // `namespace`. list_schemas_inner must resolve it (regression for the
+    // hardcoded `databaseName` lookup that errored on OSS Spark).
+    #[test]
+    fn test_list_schemas_inner_spark_namespace() -> AdapterResult<()> {
+        let adapter = AdapterImpl::new(engine(Spark), None);
+        let batch = schemas_batch("namespace", &["default", "dt_demo"]);
+        assert_eq!(
+            adapter.list_schemas_inner(batch)?,
+            vec!["default", "dt_demo"]
+        );
+        Ok(())
+    }
+
+    // Some Spark/Hive-style builds emit `databaseName` instead; the Spark arm is
+    // version-agnostic and must resolve that too.
+    #[test]
+    fn test_list_schemas_inner_spark_database_name() -> AdapterResult<()> {
+        let adapter = AdapterImpl::new(engine(Spark), None);
+        let batch = schemas_batch("databaseName", &["default", "dt_demo"]);
+        assert_eq!(
+            adapter.list_schemas_inner(batch)?,
+            vec!["default", "dt_demo"]
+        );
+        Ok(())
+    }
+
+    // Databricks is unchanged: it always reads `databaseName`.
+    #[test]
+    fn test_list_schemas_inner_databricks_database_name() -> AdapterResult<()> {
+        let adapter = AdapterImpl::new(engine(Databricks), None);
+        let batch = schemas_batch("databaseName", &["main", "analytics"]);
+        assert_eq!(
+            adapter.list_schemas_inner(batch)?,
+            vec!["main", "analytics"]
+        );
+        Ok(())
+    }
+
+    // Spark must NOT dispatch to spark__check_schema_exists (which queries the
+    // nonexistent information_schema.schemata); it is handled natively in
+    // check_schema_exists. Databricks keeps using that macro (valid on Unity Catalog).
+    #[test]
+    fn test_check_schema_exists_macro_dispatch() -> AdapterResult<()> {
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        let databricks = AdapterImpl::new(engine(Databricks), None);
+        assert_eq!(
+            databricks.check_schema_exists_macro(&state, &[])?,
+            (
+                "dbt_spark".to_string(),
+                "spark__check_schema_exists".to_string()
+            )
+        );
+
+        let spark = AdapterImpl::new(engine(Spark), None);
+        assert_eq!(
+            spark.check_schema_exists_macro(&state, &[])?,
+            ("dbt".to_string(), "check_schema_exists".to_string())
+        );
+        Ok(())
     }
 }
