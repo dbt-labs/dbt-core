@@ -37,12 +37,13 @@ models:
 
 
 def _find_test_unique_id(manifest):
-    for unique_id in list(manifest.nodes.keys()):
-        if unique_id.startswith("test.test.unique_my_model_id"):
-            return unique_id, "nodes"
-    for unique_id in list(manifest.disabled.keys()):
-        if unique_id.startswith("test.test.unique_my_model_id"):
-            return unique_id, "disabled"
+    prefix = "test.test.unique_my_model_id"
+    node_id = next((uid for uid in manifest.nodes if uid.startswith(prefix)), None)
+    if node_id:
+        return node_id, "nodes"
+    disabled_id = next((uid for uid in manifest.disabled if uid.startswith(prefix)), None)
+    if disabled_id:
+        return disabled_id, "disabled"
     return None, None
 
 

@@ -382,3 +382,29 @@ def test_remove_tests_desync_removes_untracked_disabled_generic_test(partial_par
     partial_parsing.remove_tests(schema_file, "models", "my_model")
 
     assert desynced_test.unique_id not in partial_parsing.saved_manifest.disabled
+
+
+def test_delete_schema_data_test_patch_removes_disabled_singular_test(partial_parsing):
+    # CORE-725: a disabled singular data test lives in saved_manifest.disabled
+    # rather than saved_manifest.nodes. delete_schema_data_test_patch must find
+    # it via schema_file.node_patches and remove the stale disabled copy so it
+    # does not accumulate across partial parses.
+    schema_file_id = "my_test://" + normalize("models/schema.yml")
+    schema_file = partial_parsing.saved_manifest.files[schema_file_id]
+
+    disabled_test = make_singular_test(
+        PROJECT_NAME,
+        "my_disabled_singular_test",
+        "select 1 where false",
+        path="tests/my_disabled_singular_test.sql",
+    )
+
+    schema_file.node_patches.append(disabled_test.unique_id)
+    partial_parsing.saved_manifest.disabled[disabled_test.unique_id] = [disabled_test]
+    assert disabled_test.unique_id not in partial_parsing.saved_manifest.nodes
+
+    partial_parsing.delete_schema_data_test_patch(
+        schema_file, {"name": "my_disabled_singular_test"}
+    )
+
+    assert disabled_test.unique_id not in partial_parsing.saved_manifest.disabled
