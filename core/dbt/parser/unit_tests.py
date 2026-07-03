@@ -594,10 +594,25 @@ def process_models_for_unit_test(
             # If the model is disabled, the unit test should be disabled
             unit_test_def.config.enabled = False
         else:
-            # If we've reached here and the model is not disabled, throw an error
-            raise ParsingError(
-                f"Unit test '{unit_test_def.name}' references a model that does not exist: {target_model_id}"
-            )
+            # The stored model id may be stale: during parsing the tested model
+            # was resolved to its pre-versioning unversioned id, which model
+            # versioning has since replaced with versioned ids. This happens
+            # when the unit-test YAML is parsed before the versioned-model YAML
+            # (non-deterministic filesystem order). Re-resolve now that model
+            # versions are available (dbt-core #11139).
+            tested_node = find_tested_model_node(manifest, current_project, unit_test_def.model)
+            if tested_node is None:
+                # If we've reached here and the model is not disabled, throw an error
+                raise ParsingError(
+                    f"Unit test '{unit_test_def.name}' references a model that does not exist: {target_model_id}"
+                )
+            elif tested_node.config.enabled:
+                target_model_id = tested_node.unique_id
+                unit_test_def.depends_on.nodes[0] = target_model_id
+                unit_test_def.schema = tested_node.schema
+            else:
+                # If the model is disabled, the unit test should be disabled
+                unit_test_def.config.enabled = False
 
     if not unit_test_def.config.enabled:
         # Ensure the unit test is disabled in the manifest
