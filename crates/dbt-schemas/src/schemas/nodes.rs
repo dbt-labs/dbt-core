@@ -1760,6 +1760,10 @@ impl InternalDbtNode for DbtSeed {
         NodeType::Seed
     }
 
+    fn event_time(&self) -> Option<String> {
+        self.deprecated_config.event_time.clone()
+    }
+
     fn common(&self) -> &CommonAttributes {
         &self.__common_attr__
     }
@@ -2578,6 +2582,10 @@ impl InternalDbtNode for DbtSnapshot {
 
     fn resource_type(&self) -> NodeType {
         NodeType::Snapshot
+    }
+
+    fn event_time(&self) -> Option<String> {
+        self.deprecated_config.event_time.clone()
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {

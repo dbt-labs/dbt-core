@@ -587,13 +587,9 @@ fn microbatch_model_no_event_time_inputs_warnings(nodes: &Nodes) -> Vec<FsError>
 fn has_event_time_input(nodes: &Nodes, model: &dyn InternalDbtNode) -> bool {
     model.base().depends_on.nodes.iter().any(|unique_id| {
         nodes
-            .models
-            .get(unique_id)
-            .is_some_and(|node| node.__model_attr__.event_time.is_some())
-            || nodes
-                .sources
-                .get(unique_id)
-                .is_some_and(|node| node.deprecated_config.event_time.is_some())
+            .get_node(unique_id)
+            .and_then(|node| node.event_time())
+            .is_some()
     })
 }
 
@@ -1390,5 +1386,94 @@ mod tests {
             entry.block_contents, "# My custom overview",
             "user-defined overview must not be replaced by the default"
         );
+    }
+
+    /// A microbatch model whose only upstream is a seed with `event_time`
+    /// configured counts as having a valid event_time input (matching dbt-core),
+    /// so no `MicrobatchModelNoEventTimeInputs` warning is raised. Seeds, like
+    /// sources, store `event_time` in `deprecated_config`.
+    #[test]
+    fn test_has_event_time_input_resolves_seed() {
+        use std::sync::Arc;
+
+        use dbt_schemas::schemas::project::SeedConfig;
+        use dbt_schemas::schemas::{CommonAttributes, DbtModel, DbtSeed, Nodes};
+
+        use super::has_event_time_input;
+
+        let seed_uid = "seed.test.raw_events".to_string();
+        let make_seed = |event_time: Option<&str>| DbtSeed {
+            __common_attr__: CommonAttributes {
+                unique_id: seed_uid.clone(),
+                name: "raw_events".to_string(),
+                package_name: "test".to_string(),
+                ..Default::default()
+            },
+            deprecated_config: SeedConfig {
+                event_time: event_time.map(str::to_string),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut model = DbtModel::default();
+        model.__base_attr__.depends_on.nodes = vec![seed_uid.clone()];
+
+        // Seed declares event_time -> valid input.
+        let mut nodes = Nodes::default();
+        nodes
+            .seeds
+            .insert(seed_uid.clone(), Arc::new(make_seed(Some("event_time"))));
+        assert!(has_event_time_input(&nodes, &model));
+
+        let mut nodes = Nodes::default();
+        nodes
+            .seeds
+            .insert(seed_uid.clone(), Arc::new(make_seed(None)));
+        assert!(!has_event_time_input(&nodes, &model));
+    }
+
+    /// A microbatch model whose only upstream is a snapshot with `event_time`
+    /// configured also counts as having a valid event_time input. Snapshots, like
+    /// seeds and sources, store `event_time` in `deprecated_config`.
+    #[test]
+    fn test_has_event_time_input_resolves_snapshot() {
+        use std::sync::Arc;
+
+        use dbt_schemas::schemas::project::SnapshotConfig;
+        use dbt_schemas::schemas::{CommonAttributes, DbtModel, DbtSnapshot, Nodes};
+
+        use super::has_event_time_input;
+
+        let snapshot_uid = "snapshot.test.raw_events".to_string();
+        let make_snapshot = |event_time: Option<&str>| DbtSnapshot {
+            __common_attr__: CommonAttributes {
+                unique_id: snapshot_uid.clone(),
+                name: "raw_events".to_string(),
+                package_name: "test".to_string(),
+                ..Default::default()
+            },
+            deprecated_config: SnapshotConfig {
+                event_time: event_time.map(str::to_string),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut model = DbtModel::default();
+        model.__base_attr__.depends_on.nodes = vec![snapshot_uid.clone()];
+
+        let mut nodes = Nodes::default();
+        nodes.snapshots.insert(
+            snapshot_uid.clone(),
+            Arc::new(make_snapshot(Some("event_time"))),
+        );
+        assert!(has_event_time_input(&nodes, &model));
+
+        let mut nodes = Nodes::default();
+        nodes
+            .snapshots
+            .insert(snapshot_uid.clone(), Arc::new(make_snapshot(None)));
+        assert!(!has_event_time_input(&nodes, &model));
     }
 }

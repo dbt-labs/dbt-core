@@ -229,18 +229,10 @@ pub fn build_event_time_mapping(
 ) -> BTreeMap<String, String> {
     let mut mapping = BTreeMap::new();
 
-    // Get the dependencies from the model's __base_attr__
+    // Resolve each dependency's `event_time` through the `InternalDbtNode` trait
     for dep_id in &model.__base_attr__.depends_on.nodes {
-        // Try to get the node and its event_time configuration
-        if let Some(dep_model) = nodes.models.get(dep_id) {
-            if let Some(event_time) = &dep_model.__model_attr__.event_time {
-                mapping.insert(dep_id.clone(), event_time.clone());
-            }
-        } else if let Some(dep_source) = nodes.sources.get(dep_id) {
-            // event_time for sources is in deprecated_config
-            if let Some(event_time) = &dep_source.deprecated_config.event_time {
-                mapping.insert(dep_id.clone(), event_time.clone());
-            }
+        if let Some(event_time) = nodes.get_node(dep_id).and_then(|node| node.event_time()) {
+            mapping.insert(dep_id.clone(), event_time);
         }
     }
 
@@ -300,6 +292,81 @@ mod tests {
 
         let mapping = build_event_time_mapping(&model, &nodes);
         assert!(mapping.is_empty());
+    }
+
+    #[test]
+    fn test_build_event_time_mapping_resolves_seed_event_time() {
+        // A microbatch model whose upstream is a seed (not a model/source) should
+        // still pick up the seed's `event_time`, matching dbt-core. Seeds store
+        // event_time in `deprecated_config`, like sources.
+        use dbt_schemas::schemas::project::SeedConfig;
+        use dbt_schemas::schemas::{CommonAttributes, DbtSeed};
+
+        let seed_uid = "seed.test.raw_events".to_string();
+        let seed = DbtSeed {
+            __common_attr__: CommonAttributes {
+                unique_id: seed_uid.clone(),
+                name: "raw_events".to_string(),
+                package_name: "test".to_string(),
+                ..Default::default()
+            },
+            deprecated_config: SeedConfig {
+                event_time: Some("event_time".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut model = create_test_model();
+        model.__base_attr__.depends_on.nodes = vec![seed_uid.clone()];
+
+        let mut nodes = dbt_schemas::schemas::Nodes::default();
+        nodes.seeds.insert(seed_uid.clone(), Arc::new(seed));
+
+        let mapping = build_event_time_mapping(&model, &nodes);
+        assert_eq!(
+            mapping.get(&seed_uid).map(String::as_str),
+            Some("event_time")
+        );
+    }
+
+    #[test]
+    fn test_build_event_time_mapping_resolves_snapshot_event_time() {
+        // A microbatch model whose upstream is a snapshot should also pick up the
+        // snapshot's `event_time`. Like seeds and sources, snapshots store it in
+        // `deprecated_config`, and resolution now goes through the node trait.
+        use dbt_schemas::schemas::CommonAttributes;
+        use dbt_schemas::schemas::DbtSnapshot;
+        use dbt_schemas::schemas::project::SnapshotConfig;
+
+        let snapshot_uid = "snapshot.test.raw_events".to_string();
+        let snapshot = DbtSnapshot {
+            __common_attr__: CommonAttributes {
+                unique_id: snapshot_uid.clone(),
+                name: "raw_events".to_string(),
+                package_name: "test".to_string(),
+                ..Default::default()
+            },
+            deprecated_config: SnapshotConfig {
+                event_time: Some("event_time".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut model = create_test_model();
+        model.__base_attr__.depends_on.nodes = vec![snapshot_uid.clone()];
+
+        let mut nodes = dbt_schemas::schemas::Nodes::default();
+        nodes
+            .snapshots
+            .insert(snapshot_uid.clone(), Arc::new(snapshot));
+
+        let mapping = build_event_time_mapping(&model, &nodes);
+        assert_eq!(
+            mapping.get(&snapshot_uid).map(String::as_str),
+            Some("event_time")
+        );
     }
 
     fn create_test_model() -> DbtModel {
