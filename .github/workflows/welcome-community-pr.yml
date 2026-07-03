@@ -1,0 +1,82 @@
+# **what?**
+# Post a one-time welcome comment on pull requests from community contributors,
+# linking to the contributing guide's explanation of what happens after a PR is
+# opened (labels, the "dbt Labs CI" status check, fork-CI re-approval on each
+# push, and the bot that closes the PR once the change is merged upstream).
+#
+# **why?**
+# dbt Core is the public mirror of a private dbt Labs repository, and changes
+# flow between the two automatically. The resulting labels, comments, status
+# checks, and bot-close behavior are surprising to first-time contributors.
+# Surfacing the guide up front sets expectations and reduces confusion.
+#
+# **when?**
+# When a non-draft PR from an external contributor is opened, or when a draft
+# PR from an external contributor is marked ready for review. A hidden marker
+# in the comment body prevents duplicate comments on later events.
+
+name: Welcome community contributors
+
+on:
+  # pull_request_target so the job has write access to comment on fork PRs
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  pull-requests: write
+
+jobs:
+  welcome:
+    # Only external contributors (not maintainers/members) and not bots.
+    if: |
+      (
+        github.event.pull_request.author_association == 'CONTRIBUTOR'
+        || github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+        || github.event.pull_request.author_association == 'FIRST_TIMER'
+        || github.event.pull_request.author_association == 'NONE'
+      )
+      && github.event.pull_request.user.type != 'Bot'
+      && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post welcome comment (once)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- welcome-comment -->';
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            if (comments.some(c => c.body && c.body.includes(marker))) {
+              core.info('Welcome comment already present, skipping.');
+              return;
+            }
+
+            const guide = 'https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#what-happens-after-you-open-a-pull-request';
+            const body = [
+              '👋 Thanks for contributing to dbt Core!',
+              '',
+              'A few things to expect on your PR:',
+              '- It will be labeled `community` and triaged by a maintainer.',
+              '- CI on fork PRs requires a maintainer to add the `ci:approve-public-fork-ci` label. That label is removed on every push, so it needs re-approval after each update — this is expected.',
+              '- CI results appear here as the **dbt Labs CI** status check.',
+              '- When your change is merged, a bot will comment and close this PR. Your commit lands here shortly afterward — this means your change was accepted, not rejected.',
+              '',
+              `The full flow is documented here: [What happens after you open a pull request](${guide}).`,
+              '',
+              marker,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
