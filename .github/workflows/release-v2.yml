@@ -706,12 +706,18 @@ jobs:
           gh release upload "$TAG" --clobber "${ASSETS[@]}"
 
   # Renders Formula/dbt-core.rb from the SHA256SUMS just uploaded by the
-  # `github-release` job and pushes it to dbt-labs/homebrew-dbt. Skipped
-  # for pre-release versions (anything with a `-` in the SemVer) — brew
-  # users only get stable releases.
+  # `github-release` job and pushes it to dbt-labs/homebrew-dbt.
+  #
+  # PRE-STABLE PREVIEW WINDOW: we publish every version, including
+  # pre-releases (anything with a `-` in the SemVer), so brew users can
+  # install previews before the first 2.x stable ships. Restore the
+  # pre-release guard at first stable by swapping the `if` below back to
+  # the commented line AND re-enabling the preflight job in
+  # publish-homebrew.yml.
   publish-homebrew:
-    needs: [github-release]
-    if: ${{ !inputs.dry_run && !contains(needs.prepare-release.outputs.version, '-') }}
+    needs: [prepare-release, github-release]
+    # if: ${{ !inputs.dry_run && !contains(needs.prepare-release.outputs.version, '-') }}
+    if: ${{ !inputs.dry_run }}
     uses: ./.github/workflows/publish-homebrew.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
@@ -845,12 +851,16 @@ jobs:
 
   # Submits an updated dbtLabs.dbt-core manifest to microsoft/winget-pkgs
   # via `wingetcreate update` using the Windows installer archive from the
-  # `github-release` job. Skipped for pre-release versions (anything with
-  # a `-` in the SemVer) — winget users only get stable releases. Runs in
-  # parallel with `publish-homebrew`; both fan out from `github-release`.
+  # `github-release` job. Runs in parallel with `publish-homebrew`; both
+  # fan out from `github-release`.
+  #
+  # PRE-STABLE PREVIEW WINDOW: pre-release versions are published too. Note
+  # each preview opens a new upstream winget-pkgs PR and a permanent
+  # published version (winget accumulates versions; it does not overwrite).
+  # Restore the pre-release guard at first stable by uncommenting the `if`.
   publish-winget:
-    needs: [github-release]
-    if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
+    needs: [prepare-release, github-release]
+    # if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
     uses: ./.github/workflows/publish-winget.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}

@@ -125,6 +125,14 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 jobs:
+  # ── DISABLED DURING PRE-STABLE PREVIEW WINDOW ────────────────────────
+  # The preflight "is this the latest release" guard is turned off so every
+  # release (including pre-releases) publishes to the tap. RESTORE AT FIRST
+  # 2.x STABLE: uncomment this job AND the `needs: preflight` + `if:` lines
+  # on publish-homebrew below (all together, or the workflow is invalid).
+  # Repo-wide "latest" is correct again once a 2.x stable ships — it
+  # outranks the Python 1.x line by semver.
+  #
   # Guard: only publish the formula when this tag is GitHub's "latest"
   # release. Protects against:
   #   - Re-running an older release pipeline (re-uploads assets but
@@ -133,33 +141,33 @@ jobs:
   #   - Manual workflow_dispatch against an older version.
   # GitHub auto-marks the highest-semver non-prerelease release as latest;
   # an ops user can also flip it manually as a kill switch.
-  preflight:
-    name: Check this tag is the latest release
-    runs-on: ubuntu-latest
-    outputs:
-      is_latest: ${{ steps.check.outputs.is_latest }}
-    steps:
-      - name: Resolve latest release tag
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.tag || format('v{0}', inputs.version) }}
-        run: |
-          LATEST_TAG=$(gh release view \
-            --repo "${{ github.repository }}" \
-            --json tagName --jq .tagName)
-          if [ "$TAG" = "$LATEST_TAG" ]; then
-            echo "is_latest=true" >> "$GITHUB_OUTPUT"
-            echo "✓ $TAG is the latest release; proceeding."
-          else
-            echo "is_latest=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping brew publish: $TAG is not the latest release ($LATEST_TAG)."
-          fi
+  # preflight:
+  #   name: Check this tag is the latest release
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     is_latest: ${{ steps.check.outputs.is_latest }}
+  #   steps:
+  #     - name: Resolve latest release tag
+  #       id: check
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #         TAG: ${{ inputs.tag || format('v{0}', inputs.version) }}
+  #       run: |
+  #         LATEST_TAG=$(gh release view \
+  #           --repo "${{ github.repository }}" \
+  #           --json tagName --jq .tagName)
+  #         if [ "$TAG" = "$LATEST_TAG" ]; then
+  #           echo "is_latest=true" >> "$GITHUB_OUTPUT"
+  #           echo "✓ $TAG is the latest release; proceeding."
+  #         else
+  #           echo "is_latest=false" >> "$GITHUB_OUTPUT"
+  #           echo "::notice::Skipping brew publish: $TAG is not the latest release ($LATEST_TAG)."
+  #         fi
 
   publish-homebrew:
     name: Render + publish formula
-    needs: preflight
-    if: needs.preflight.outputs.is_latest == 'true'
+    # needs: preflight
+    # if: needs.preflight.outputs.is_latest == 'true'
     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
     env:
       TAP_REPO: ${{ inputs.tap_repo }}
