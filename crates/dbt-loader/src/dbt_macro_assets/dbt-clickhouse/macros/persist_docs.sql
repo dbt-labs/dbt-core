@@ -20,6 +20,7 @@
 
   {%- if for_columns and config.persist_column_docs() and model.columns -%}
     {% set existing_columns = adapter.get_columns_in_relation(relation) | map(attribute="name") | list %}
+    {% do validate_doc_columns(relation, model.columns, existing_columns) %}
     {% for column_name in model.columns if (column_name in existing_columns) %}
       {%- set comment = model.columns[column_name]['description'] -%}
       {%- if comment %}

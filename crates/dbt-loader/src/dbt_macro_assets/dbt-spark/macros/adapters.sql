@@ -382,7 +382,9 @@
 
 {% macro spark__persist_docs(relation, model, for_relation, for_columns) -%}
   {% if for_columns and config.persist_column_docs() and model.columns %}
-    {% do alter_column_comment(relation, model.columns) %}
+    {% set existing_columns = adapter.get_columns_in_relation(relation) | map(attribute="name") | list %}
+    {% set filtered_columns = validate_doc_columns(relation, model.columns, existing_columns) %}
+    {% do alter_column_comment(relation, filtered_columns) %}
   {% endif %}
 {% endmacro %}
 

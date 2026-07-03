@@ -351,7 +351,12 @@
   {# Override: do not set column comments for LBVs #}
   {% set is_lbv = relation.type == 'view' and config.get('bind') == false %}
   {% if for_columns and config.persist_column_docs() and model.columns and not is_lbv %}
-    {% do run_query(alter_column_comment(relation, model.columns)) %}
+    {% set existing_columns = adapter.get_columns_in_relation(relation) | map(attribute="name") | list %}
+    {% set filtered_columns = validate_doc_columns(relation, model.columns, existing_columns) %}
+    {% set alter_comment_sql = alter_column_comment(relation, filtered_columns) %}
+    {% if alter_comment_sql and alter_comment_sql | trim | length > 0 %}
+      {% do run_query(alter_comment_sql) %}
+    {% endif %}
   {% endif %}
 {% endmacro %}
 

@@ -123,7 +123,22 @@
     {% do alter_relation_comment(relation, model.description) %}
   {% endif %}
   {% if for_columns and config.persist_column_docs() and model.columns %}
-    {% do alter_column_comment(relation, model.columns) %}
+    {#-- BigQuery: build STRUCT-aware valid column names (leaves + intermediate paths) --#}
+    {% set existing_columns = adapter.get_columns_in_relation(relation) %}
+    {% set valid_names = [] %}
+    {% for col in existing_columns %}
+      {% for flat_col in col.flatten() %}
+        {% set parts = flat_col.name.split(".") %}
+        {% for i in range(1, parts | length + 1) %}
+          {% set prefix = parts[:i] | join(".") %}
+          {% if prefix not in valid_names %}
+            {% do valid_names.append(prefix) %}
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    {% endfor %}
+    {% set filtered_columns = validate_doc_columns(relation, model.columns, valid_names) %}
+    {% do alter_column_comment(relation, filtered_columns) %}
   {% endif %}
 {% endmacro %}
 
