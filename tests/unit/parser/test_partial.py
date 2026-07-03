@@ -340,3 +340,45 @@ class TestFileDiff:
                 "SingularTestParser": ["my_test://tests/my_singular_test.sql"],
             },
         }
+
+
+def test_remove_tests_desync_removes_untracked_generic_test(partial_parsing, nodes):
+    # CORE-725 MODE 2: a GenericTestNode is present in saved_manifest.nodes
+    # (enabled) but MISSING from the schema file's data_tests tracking. This
+    # desync arises when a partial_parse.msgpack survives a dbt version upgrade
+    # that tracked tests differently. remove_tests must still remove the stale
+    # node (via a data_tests-independent scan) so the re-patch does not create a
+    # duplicate and crash.
+    schema_file_id = "my_test://" + normalize("models/schema.yml")
+    schema_file = partial_parsing.saved_manifest.files[schema_file_id]
+
+    my_model = nodes[0]
+    desynced_test = make_generic_test(PROJECT_NAME, "unique", my_model, {}, column_name="id")
+    desynced_test.file_key_name = "models.my_model"
+    desynced_test.original_file_path = normalize("models/schema.yml")
+
+    partial_parsing.saved_manifest.nodes[desynced_test.unique_id] = desynced_test
+    # Not tracked in schema_file.data_tests -> desync.
+    assert desynced_test.unique_id not in schema_file.get_tests("models", "my_model")
+
+    partial_parsing.remove_tests(schema_file, "models", "my_model")
+
+    assert desynced_test.unique_id not in partial_parsing.saved_manifest.nodes
+
+
+def test_remove_tests_desync_removes_untracked_disabled_generic_test(partial_parsing, nodes):
+    # CORE-725 MODE 1/2: a disabled GenericTestNode not tracked in data_tests
+    # must also be removed from saved_manifest.disabled by remove_tests.
+    schema_file_id = "my_test://" + normalize("models/schema.yml")
+    schema_file = partial_parsing.saved_manifest.files[schema_file_id]
+
+    my_model = nodes[0]
+    desynced_test = make_generic_test(PROJECT_NAME, "unique", my_model, {}, column_name="id")
+    desynced_test.file_key_name = "models.my_model"
+    desynced_test.original_file_path = normalize("models/schema.yml")
+
+    partial_parsing.saved_manifest.disabled[desynced_test.unique_id] = [desynced_test]
+
+    partial_parsing.remove_tests(schema_file, "models", "my_model")
+
+    assert desynced_test.unique_id not in partial_parsing.saved_manifest.disabled

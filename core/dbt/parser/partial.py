@@ -1046,7 +1046,42 @@ class PartialParsing:
         for test_unique_id in tests:
             if test_unique_id in self.saved_manifest.nodes:
                 self.saved_manifest.nodes.pop(test_unique_id)
+            # Generic tests are tracked in data_tests for BOTH enabled and
+            # disabled states. When a test's `enabled` config is toggled off it
+            # lives in saved_manifest.disabled, not saved_manifest.nodes, so it
+            # must be removed from disabled too - otherwise ghost copies
+            # accumulate unbounded across partial parses (CORE-725).
+            self._remove_disabled_test(test_unique_id, schema_file.file_id)
         schema_file.remove_tests(dict_key, name)
+
+        # data_tests-independent pass: if a partial_parse.msgpack survived a dbt
+        # version upgrade that tracked tests differently, a generic test node
+        # can be present in the manifest but MISSING from schema_file.data_tests.
+        # The loop above then never removes it and the re-patch recreates it,
+        # producing a duplicate-data_tests crash (CORE-725). Scan the manifest
+        # for generic tests attached to this element in this schema file and
+        # remove them, keyed on file_key_name + file_id to avoid over-removal.
+        # Only reachable when the tracking is empty (the desync signal), so the
+        # full-manifest scan is skipped on the common, in-sync path.
+        if not tests:
+            file_key_name = f"{dict_key}.{name}"
+            for test_unique_id in list(self.saved_manifest.nodes.keys()):
+                node = self.saved_manifest.nodes[test_unique_id]
+                if (
+                    isinstance(node, GenericTestNode)
+                    and node.file_key_name == file_key_name
+                    and node.file_id == schema_file.file_id
+                ):
+                    self.saved_manifest.nodes.pop(test_unique_id)
+            for test_unique_id in list(self.saved_manifest.disabled.keys()):
+                while test_unique_id in self.saved_manifest.disabled and any(
+                    isinstance(node, GenericTestNode)
+                    and node.file_key_name == file_key_name
+                    and node.file_id == schema_file.file_id
+                    for node in self.saved_manifest.disabled[test_unique_id]
+                ):
+                    self.delete_disabled(test_unique_id, schema_file.file_id)
+
         # We also need to remove tests in other schema files that
         # reference this node.
         unique_id = f"{key_to_prefix[dict_key]}.{schema_file.project_name}.{name}"
@@ -1058,6 +1093,15 @@ class PartialParsing:
                         if child_test.attached_node in self.saved_manifest.nodes:
                             attached_node = self.saved_manifest.nodes[child_test.attached_node]
                             self.update_in_saved(attached_node.file_id)
+
+    def _remove_disabled_test(self, unique_id, file_id):
+        # delete_disabled removes ONE copy matching file_id and KeyErrors if
+        # the unique_id is absent, so guard and loop while a matching copy
+        # remains.
+        while unique_id in self.saved_manifest.disabled and any(
+            node.file_id == file_id for node in self.saved_manifest.disabled[unique_id]
+        ):
+            self.delete_disabled(unique_id, file_id)
 
     def delete_yaml_snapshot(self, schema_file, snapshot_dict):
         snapshot_name = snapshot_dict["name"]
@@ -1116,12 +1160,25 @@ class PartialParsing:
             if elem_name == data_test["name"]:
                 data_test_unique_id = unique_id
                 break
-        if data_test_unique_id and data_test_unique_id in self.saved_manifest.nodes:
-            singular_data_test = self.saved_manifest.nodes.pop(data_test_unique_id)
-            file_id = singular_data_test.file_id
-            if file_id in self.new_files:
-                self.saved_files[file_id] = deepcopy(self.new_files[file_id])
-                self.add_to_pp_files(self.saved_files[file_id])
+        if data_test_unique_id:
+            if data_test_unique_id in self.saved_manifest.nodes:
+                singular_data_test = self.saved_manifest.nodes.pop(data_test_unique_id)
+                file_id = singular_data_test.file_id
+                if file_id in self.new_files:
+                    self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                    self.add_to_pp_files(self.saved_files[file_id])
+            elif data_test_unique_id in self.saved_manifest.disabled:
+                # A disabled singular data test lives in saved_manifest.disabled
+                # rather than saved_manifest.nodes; remove the stale copy there
+                # too so it does not accumulate across partial parses (CORE-725).
+                file_ids = [
+                    node.file_id for node in self.saved_manifest.disabled[data_test_unique_id]
+                ]
+                for file_id in file_ids:
+                    self._remove_disabled_test(data_test_unique_id, file_id)
+                    if file_id in self.new_files:
+                        self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                        self.add_to_pp_files(self.saved_files[file_id])
 
     # exposures are created only from schema files, so just delete
     # the exposure or the disabled exposure.
