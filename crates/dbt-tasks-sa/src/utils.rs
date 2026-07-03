@@ -234,19 +234,66 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             Some(manifest_data_test) => Some(&mut manifest_data_test.__base_attr__),
         };
 
-        if let Some(base_mut) = base_mut {
-            let absolute_path = get_target_write_path(
-                &io.in_dir,
-                &io.out_dir.join(DBT_COMPILED_DIR_NAME),
-                &data_test.__common_attr__.package_name,
-                &data_test.__common_attr__.path,
-                &data_test.__common_attr__.original_file_path,
-            );
-            if let Ok(compiled_sql) = stdfs::read_to_string(&absolute_path) {
-                let relative_path = stdfs::diff_paths(&absolute_path, &io.in_dir)?;
-                base_mut.compiled_path = Some(relative_path.to_string_lossy().to_string());
-                base_mut.compiled_code = Some(compiled_sql.clone());
-                base_mut.compiled = Some(true);
+        if arg.write_json || arg.write_metadata {
+            if let Some(base_mut) = base_mut {
+                let absolute_path = get_target_write_path(
+                    &io.in_dir,
+                    &io.out_dir.join(DBT_COMPILED_DIR_NAME),
+                    &data_test.__common_attr__.package_name,
+                    &data_test.__common_attr__.path,
+                    &data_test.__common_attr__.original_file_path,
+                );
+                if let Ok(compiled_sql) = stdfs::read_to_string(&absolute_path) {
+                    let relative_path = stdfs::diff_paths(&absolute_path, &io.in_dir)?;
+                    base_mut.compiled_path = Some(relative_path.to_string_lossy().to_string());
+                    base_mut.compiled_code = Some(compiled_sql.clone());
+                    base_mut.compiled = Some(true);
+                }
+            }
+        }
+    }
+
+    // Process analyses
+    for (unique_id, analysis) in resolved_state.nodes.analyses.iter_mut() {
+        let manifest_analysis = dbt_manifest.as_mut().map(|dbt_manifest| {
+            let Some(manifest_analysis) = dbt_manifest.nodes.get_mut(unique_id) else {
+                return unexpected_err!(
+                    "Inconsistent manifest: analysis {} not found in manifest",
+                    unique_id
+                );
+            };
+            let DbtNode::Analysis(manifest_analysis) = manifest_analysis else {
+                return unexpected_err!(
+                    "Inconsistent manifest: analysis {} not typed DbtNode::Analysis in manifest",
+                    unique_id
+                );
+            };
+            Ok(manifest_analysis)
+        });
+
+        let manifest_analysis = match manifest_analysis {
+            None => None,
+            Some(res) => match res {
+                Err(e) => return Err(e),
+                Ok(manifest_analysis) => Some(manifest_analysis),
+            },
+        };
+
+        let base_mut = match manifest_analysis {
+            None => None,
+            Some(manifest_analysis) => Some(&mut manifest_analysis.__base_attr__),
+        };
+
+        if arg.write_json || arg.write_metadata {
+            if let Some(base_mut) = base_mut {
+                let absolute_path =
+                    analysis.get_node_path_abs(NodePathKind::Compiled, &io.in_dir, &io.out_dir);
+                if let Ok(compiled_sql) = stdfs::read_to_string(&absolute_path) {
+                    let relative_path = stdfs::diff_paths(&absolute_path, &io.in_dir)?;
+                    base_mut.compiled_path = Some(relative_path.to_string_lossy().to_string());
+                    base_mut.compiled_code = Some(compiled_sql);
+                    base_mut.compiled = Some(true);
+                }
             }
         }
     }
