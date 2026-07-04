@@ -3,5 +3,5 @@ body: dbt init no longer leaves a stale authenticator field when switching from 
 time: 2026-07-02T14:04:51.656394+05:30
 custom:
     author: priyankahotkar
-    issue: 15364
+    issue: 15378
     project: dbt-core
