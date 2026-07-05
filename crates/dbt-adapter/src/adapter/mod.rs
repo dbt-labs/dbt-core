@@ -56,7 +56,7 @@ use std::sync::Arc;
 pub mod adapter_factory;
 pub mod adapter_impl;
 pub use adapter_factory::*;
-pub use adapter_impl::{AdapterImpl, quote_component, quote_ident};
+pub use adapter_impl::{AdapterImpl, alias_types_from_state, quote_component, quote_ident};
 #[cfg(test)]
 mod tests;
 
@@ -754,7 +754,8 @@ impl Adapter {
                         replay_adapter.replay_render_raw_columns_constraints(state, columns)?,
                     ));
                 }
-                let result = adapter.render_raw_columns_constraints(columns)?;
+                let alias_types = alias_types_from_state(state);
+                let result = adapter.render_raw_columns_constraints(columns, alias_types)?;
 
                 Ok(Value::from(result))
             }

@@ -1,4 +1,5 @@
 use crate::adapter::adapter_impl::AdapterImpl;
+use crate::column::ColumnStatic;
 use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::CatalogAndSchema;
@@ -44,6 +45,17 @@ pub(crate) const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
     "_CHANGE_TIMESTAMP",
     "_CHANGE_SEQUENCE_NUMBER",
 ];
+
+/// Alias a BigQuery leaf primitive data type (e.g. FLOAT -> FLOAT64) using the
+/// shared adapter type map when contract `alias_types` is enabled. When disabled,
+/// the type is preserved verbatim (today's behavior).
+fn alias_leaf_data_type(data_type: &str, alias_types: bool) -> String {
+    if alias_types {
+        ColumnStatic::new(AdapterType::Bigquery).translate_type(data_type)
+    } else {
+        data_type.to_owned()
+    }
+}
 
 pub fn list_relations(
     engine: &dyn AdapterEngine,
@@ -119,33 +131,36 @@ impl NestedColumnDataTypes {
         node.data_type = column_type.map(String::from);
     }
 
-    pub fn format_top_level_columns_data_types(&self) -> IndexMap<String, String> {
+    pub fn format_top_level_columns_data_types(
+        &self,
+        alias_types: bool,
+    ) -> IndexMap<String, String> {
         let mut result = IndexMap::new();
         for (column_name, node) in &self.root.children {
             let data_type = match &node.data_type {
                 None => {
-                    let inner_data_type = node.format_data_type();
+                    let inner_data_type = node.format_data_type(alias_types);
                     format!("struct<{inner_data_type}>")
                 }
                 Some(data_type) => match data_type.as_str() {
                     "struct" => {
-                        let inner_data_type = node.format_data_type();
+                        let inner_data_type = node.format_data_type(alias_types);
                         format!("struct<{inner_data_type}>")
                     }
                     "array" => {
-                        let inner_data_type = node.format_data_type();
+                        let inner_data_type = node.format_data_type(alias_types);
                         format!("array<struct<{inner_data_type}>>")
                     }
                     // assume any struct or array type is a primitive type
                     _ => {
                         // ensure no sub fields
                         if node.children.is_empty() {
-                            data_type.to_owned()
+                            alias_leaf_data_type(data_type, alias_types)
                         }
                         // sub fields exist -> it's actually not a primitive type -> default to struct
                         // this is to be consistent with dbt compile behavior
                         else {
-                            let inner_data_type = node.format_data_type();
+                            let inner_data_type = node.format_data_type(alias_types);
                             format!("struct<{inner_data_type}>")
                         }
                     }
@@ -159,12 +174,12 @@ impl NestedColumnDataTypes {
 
 impl TrieNode {
     // TODO: refactor since this method is very much overlapped with `format_top_level_columns_data_types`
-    fn format_data_type(&self) -> String {
+    fn format_data_type(&self, alias_types: bool) -> String {
         let mut result = vec![];
         for (column_name, node) in &self.children {
             let data_type = match &node.data_type {
                 None => {
-                    let inner_data_type = node.format_data_type();
+                    let inner_data_type = node.format_data_type(alias_types);
                     if inner_data_type.is_empty() {
                         column_name.to_owned()
                     } else {
@@ -173,18 +188,21 @@ impl TrieNode {
                 }
                 Some(data_type) => match data_type.as_str() {
                     "struct" => {
-                        let inner_data_type = node.format_data_type();
+                        let inner_data_type = node.format_data_type(alias_types);
                         format!("{column_name} struct<{inner_data_type}>")
                     }
                     "array" => {
-                        let inner_data_type = node.format_data_type();
+                        let inner_data_type = node.format_data_type(alias_types);
                         format!("{column_name} array<struct<{inner_data_type}>>")
                     }
                     _ => {
                         if node.children.is_empty() {
-                            format!("{column_name} {data_type}")
+                            format!(
+                                "{column_name} {}",
+                                alias_leaf_data_type(data_type, alias_types)
+                            )
                         } else {
-                            let inner_data_type = node.format_data_type();
+                            let inner_data_type = node.format_data_type(alias_types);
                             format!("{column_name} struct<{inner_data_type}>")
                         }
                     }
@@ -221,12 +239,13 @@ impl TrieNode {
 pub fn nest_column_data_types(
     columns: IndexMap<String, DbtColumn>,
     constraints: Option<BTreeMap<String, String>>,
+    alias_types: bool,
 ) -> AdapterResult<IndexMap<String, DbtColumn>> {
     let mut result = NestedColumnDataTypes::default();
     for (column_name, column) in &columns {
         result.insert(column_name, column.data_type.as_ref())
     }
-    let column_to_data_type = result.format_top_level_columns_data_types();
+    let column_to_data_type = result.format_top_level_columns_data_types(alias_types);
     let constraints = constraints.unwrap_or_default();
     let mut result = IndexMap::new();
     for (column_name, data_type) in &column_to_data_type {
@@ -1482,8 +1501,8 @@ mod tests {
             nested.insert("id", Some(&"integer".to_string()));
             nested.insert("name", Some(&"string".to_string()));
 
-            let result = nested.format_top_level_columns_data_types();
-            assert_eq!(result.get("id").unwrap(), "integer");
+            let result = nested.format_top_level_columns_data_types(true);
+            assert_eq!(result.get("id").unwrap(), "INT64");
             assert_eq!(result.get("name").unwrap(), "string");
         }
 
@@ -1493,11 +1512,8 @@ mod tests {
             nested.insert("user.id", Some(&"integer".to_string()));
             nested.insert("user.name", Some(&"string".to_string()));
 
-            let result = nested.format_top_level_columns_data_types();
-            assert_eq!(
-                result.get("user").unwrap(),
-                "struct<id integer, name string>"
-            );
+            let result = nested.format_top_level_columns_data_types(true);
+            assert_eq!(result.get("user").unwrap(), "struct<id INT64, name string>");
         }
 
         // Test case 3: Array of structs
@@ -1507,7 +1523,7 @@ mod tests {
             nested.insert("addresses.street", Some(&"string".to_string()));
             nested.insert("addresses.city", Some(&"string".to_string()));
 
-            let result = nested.format_top_level_columns_data_types();
+            let result = nested.format_top_level_columns_data_types(true);
             assert_eq!(
                 result.get("addresses").unwrap(),
                 "array<struct<street string, city string>>"
@@ -1522,8 +1538,8 @@ mod tests {
             nested.insert("user.contact.email", Some(&"string".to_string()));
             nested.insert("user.contact.phone", Some(&"string".to_string()));
 
-            let result = nested.format_top_level_columns_data_types();
-            assert_eq!(result.get("id").unwrap(), "integer");
+            let result = nested.format_top_level_columns_data_types(true);
+            assert_eq!(result.get("id").unwrap(), "INT64");
             assert_eq!(
                 result.get("user").unwrap(),
                 "struct<name string, contact struct<email string, phone string>>"
@@ -1536,7 +1552,7 @@ mod tests {
             nested.insert("empty_struct", None);
             nested.insert("empty_struct.field1", Some(&"string".to_string()));
 
-            let result = nested.format_top_level_columns_data_types();
+            let result = nested.format_top_level_columns_data_types(true);
             assert_eq!(result.get("empty_struct").unwrap(), "struct<field1 string>");
         }
 
@@ -1547,11 +1563,51 @@ mod tests {
             nested.insert("metadata.key1", Some(&"string".to_string()));
             nested.insert("metadata.key2", Some(&"integer".to_string()));
 
-            let result = nested.format_top_level_columns_data_types();
+            let result = nested.format_top_level_columns_data_types(true);
             assert_eq!(
                 result.get("metadata").unwrap(),
-                "struct<key1 string, key2 integer>"
+                "struct<key1 string, key2 INT64>"
             );
+        }
+
+        // Test case 7: Alias map coverage
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("float_col", Some(&"FLOAT".to_string()));
+            nested.insert("integer_col", Some(&"INTEGER".to_string()));
+            nested.insert("text_col", Some(&"TEXT".to_string()));
+            nested.insert("string_col", Some(&"STRING".to_string()));
+            nested.insert("int64_col", Some(&"INT64".to_string()));
+            nested.insert("numeric_col", Some(&"NUMERIC".to_string()));
+
+            let result = nested.format_top_level_columns_data_types(true);
+            assert_eq!(result.get("float_col").unwrap(), "FLOAT64");
+            assert_eq!(result.get("integer_col").unwrap(), "INT64");
+            assert_eq!(result.get("text_col").unwrap(), "STRING");
+            assert_eq!(result.get("string_col").unwrap(), "STRING");
+            assert_eq!(result.get("int64_col").unwrap(), "INT64");
+            assert_eq!(result.get("numeric_col").unwrap(), "NUMERIC");
+        }
+
+        // Test case 8: Alias opt-out
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("float_col", Some(&"FLOAT".to_string()));
+
+            let result = nested.format_top_level_columns_data_types(false);
+            assert_eq!(result.get("float_col").unwrap(), "FLOAT");
+        }
+
+        // Test case 9: Nested struct leaf aliasing
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("s.x", Some(&"FLOAT".to_string()));
+
+            let result = nested.format_top_level_columns_data_types(true);
+            assert_eq!(result.get("s").unwrap(), "struct<x FLOAT64>");
+
+            let result = nested.format_top_level_columns_data_types(false);
+            assert_eq!(result.get("s").unwrap(), "struct<x FLOAT>");
         }
     }
 

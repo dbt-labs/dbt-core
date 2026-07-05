@@ -76,7 +76,7 @@ use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, Internal
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
-use minijinja::value::{Object, ValueMap};
+use minijinja::value::{Object, ValueKind, ValueMap};
 use minijinja::{self, invalid_argument, invalid_argument_inner};
 use minijinja::{State, Value, args};
 use once_cell::sync::Lazy;
@@ -222,6 +222,18 @@ pub fn database_schema_alias_from_state(state: &State) -> Option<(String, String
     let schema = model.get_attr("schema").ok()?.as_str()?.to_string();
     let alias = model.get_attr("alias").ok()?.as_str()?.to_string();
     Some((database, schema, alias))
+}
+
+/// Read the current model's `config.contract.alias_types` from Jinja state, defaulting
+/// to `true` (dbt's default) when unavailable.
+pub fn alias_types_from_state(state: &State) -> bool {
+    state
+        .lookup("model", &[])
+        .and_then(|m| m.get_attr("config").ok())
+        .and_then(|c| c.get_attr("contract").ok())
+        .and_then(|c| c.get_attr("alias_types").ok())
+        .and_then(|v| (v.kind() == ValueKind::Bool).then(|| v.is_true()))
+        .unwrap_or(true)
 }
 
 /// Checks if the given [BaseRelation] matches the node currently being rendered
@@ -2203,7 +2215,8 @@ impl AdapterImpl {
                 let table = relation.identifier_as_str()?;
                 let schema = relation.schema_as_str()?;
 
-                let nested_columns = self.do_nest_column_data_types(columns, None)?;
+                let nested_columns =
+                    self.do_nest_column_data_types(columns, None, alias_types_from_state(state))?;
 
                 let column_to_description = nested_columns
                     .iter()
@@ -2276,6 +2289,7 @@ impl AdapterImpl {
     pub fn render_raw_columns_constraints(
         &self,
         columns_map: IndexMap<String, DbtColumn>,
+        alias_types: bool,
     ) -> AdapterResult<Vec<String>> {
         match self.adapter_type() {
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
@@ -2320,8 +2334,11 @@ impl AdapterImpl {
                         }
                     }
                 }
-                let nested_columns =
-                    self.do_nest_column_data_types(columns_map, Some(rendered_constraints))?;
+                let nested_columns = self.do_nest_column_data_types(
+                    columns_map,
+                    Some(rendered_constraints),
+                    alias_types,
+                )?;
                 let result = nested_columns
                     .into_values()
                     .map(|column| {
@@ -2713,9 +2730,10 @@ impl AdapterImpl {
         &self,
         columns: IndexMap<String, DbtColumn>,
         constraints: Option<BTreeMap<String, String>>,
+        alias_types: bool,
     ) -> AdapterResult<IndexMap<String, DbtColumn>> {
         match self.adapter_type() {
-            Bigquery => nest_column_data_types(columns, constraints),
+            Bigquery => nest_column_data_types(columns, constraints, alias_types),
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
@@ -2727,7 +2745,7 @@ impl AdapterImpl {
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L323
     pub fn nest_column_data_types(
         &self,
-        _state: &State,
+        state: &State,
         columns: &Value,
     ) -> Result<Value, minijinja::Error> {
         // TODO: 'constraints' arg are ignored; didn't find an usage example, implement later
@@ -2740,7 +2758,8 @@ impl AdapterImpl {
                     )
                 })?;
 
-        let nested_columns = self.do_nest_column_data_types(columns, None)?;
+        let alias_types = alias_types_from_state(state);
+        let nested_columns = self.do_nest_column_data_types(columns, None, alias_types)?;
         let result = IndexMap::<String, Value>::from_iter(
             nested_columns
                 .into_iter()
