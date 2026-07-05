@@ -49,6 +49,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 vortex-events = { workspace = true }
+walkdir = { workspace = true }
 
 [lib]
 name = "dbt_features"

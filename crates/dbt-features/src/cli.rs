@@ -126,8 +126,10 @@ impl SystemMgmtArgs {
 pub enum OSSExtensionCommand {
     /// dbt Core 2.x system subcommand
     System(SystemMgmtArgs),
-    /// Manage Fivetran AI catalog contextsets
+    /// Manage Fivetran AI catalog contextsets (low-level admin)
     Contextset(ContextsetArgs),
+    /// Author and deploy dbt agents (v0: pushes resolved scope to a Fivetran MCP contextset)
+    Agent(AgentArgs),
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
@@ -209,11 +211,74 @@ impl ContextsetArgs {
     }
 }
 
+// ---------- dbt agent -------------------------------------------------------------------------
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct AgentArgs {
+    #[command(subcommand)]
+    pub command: AgentCommand,
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+}
+
+#[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum AgentCommand {
+    /// List all agents discovered under `<project>/agents/*.yml`.
+    List(AgentListArgs),
+    /// Show the resolved scope for one or all agents (dry-run, no network calls).
+    Show(AgentShowArgs),
+    /// Push each agent's resolved scope to the configured Fivetran MCP contextset endpoint.
+    Deploy(AgentDeployArgs),
+}
+
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
+pub struct AgentListArgs {
+    /// Project directory (defaults to CWD).
+    #[arg(long, default_value = ".")]
+    pub project_dir: PathBuf,
+}
+
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
+pub struct AgentShowArgs {
+    /// Optional agent name; shows all agents when omitted.
+    pub name: Option<String>,
+    #[arg(long, default_value = ".")]
+    pub project_dir: PathBuf,
+    /// Override the manifest location; defaults to `<project_dir>/target/manifest.json`.
+    #[arg(long)]
+    pub manifest_path: Option<PathBuf>,
+}
+
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
+pub struct AgentDeployArgs {
+    /// Optional agent name; deploys all agents when omitted.
+    pub name: Option<String>,
+    #[arg(long, default_value = ".")]
+    pub project_dir: PathBuf,
+    /// Override the manifest location; defaults to `<project_dir>/target/manifest.json`.
+    #[arg(long)]
+    pub manifest_path: Option<PathBuf>,
+    /// Show the payload but do not call the MCP endpoint.
+    #[arg(long)]
+    pub dry_run: bool,
+    #[clap(flatten)]
+    pub client: ContextsetClientArgs,
+}
+
+impl AgentArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
+        eval_args.phase = Phases::Deps;
+        eval_args
+    }
+}
+
 impl AbstractExtensionCommand for OSSExtensionCommand {
     fn name(&self) -> &'static str {
         match self {
             OSSExtensionCommand::System(_) => "system",
             OSSExtensionCommand::Contextset(_) => "contextset",
+            OSSExtensionCommand::Agent(_) => "agent",
         }
     }
 
@@ -237,7 +302,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
 
     fn is_project_command(&self) -> bool {
         use OSSExtensionCommand::*;
-        !matches!(self, System(_) | Contextset(_))
+        !matches!(self, System(_) | Contextset(_) | Agent(_))
     }
 
     fn to_eval_args(&self, common_args: &CommonArgs, system_arg: SystemArgs) -> FsResult<EvalArgs> {
@@ -254,6 +319,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
         let mut arg = match self {
             System(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
             Contextset(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Agent(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
         };
         arg.from_main = from_main;
 
@@ -265,6 +331,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
         match self {
             System(args) => args.common_args.clone(),
             Contextset(args) => args.common_args.clone(),
+            Agent(args) => args.common_args.clone(),
         }
     }
 
@@ -273,6 +340,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
         match self {
             System(_) => unreachable!("System command does not need a phase"),
             Contextset(_) => unreachable!("Contextset command does not need a phase"),
+            Agent(_) => unreachable!("Agent command does not need a phase"),
         }
     }
 
@@ -280,6 +348,7 @@ impl AbstractExtensionCommand for OSSExtensionCommand {
         match self {
             OSSExtensionCommand::System(_) => FsCommand::System,
             OSSExtensionCommand::Contextset(_) => FsCommand::Extension("contextset"),
+            OSSExtensionCommand::Agent(_) => FsCommand::Extension("agent"),
         }
     }
 
@@ -328,6 +397,133 @@ impl ExtensionCommandParser for OSSExtensionCommandParser {
 struct ContextsetPayload<'a> {
     schema_fqns: &'a [String],
     table_fqns: &'a [String],
+}
+
+async fn execute_agent_command(command: &AgentCommand) -> FsResult<()> {
+    use crate::agents;
+
+    match command {
+        AgentCommand::List(args) => {
+            let specs = agents::discover_agent_specs(&args.project_dir)?;
+            if specs.is_empty() {
+                emit_stdout_line(format!(
+                    "No agents found under {}/agents/",
+                    args.project_dir.display()
+                ));
+                return Ok(());
+            }
+            for spec in &specs {
+                emit_stdout_line(format!(
+                    "{}  {}",
+                    spec.name,
+                    spec.description.as_deref().unwrap_or("")
+                ));
+            }
+        }
+
+        AgentCommand::Show(args) => {
+            let specs = agents::discover_agent_specs(&args.project_dir)?;
+            let filtered = filter_specs(specs, args.name.as_deref())?;
+            let manifest_path = manifest_path_for(&args.project_dir, args.manifest_path.as_ref());
+            let manifest = agents::load_manifest(&manifest_path)?;
+            let resolved = agents::resolve_all(filtered, &manifest)?;
+            write_agents_json(&args.project_dir, &resolved)?;
+            emit_stdout_line(
+                serde_json::to_string_pretty(&resolved).unwrap_or_else(|_| "[]".to_string()),
+            );
+        }
+
+        AgentCommand::Deploy(args) => {
+            let specs = agents::discover_agent_specs(&args.project_dir)?;
+            let filtered = filter_specs(specs, args.name.as_deref())?;
+            let manifest_path = manifest_path_for(&args.project_dir, args.manifest_path.as_ref());
+            let manifest = agents::load_manifest(&manifest_path)?;
+            let resolved = agents::resolve_all(filtered, &manifest)?;
+            write_agents_json(&args.project_dir, &resolved)?;
+
+            for agent in &resolved {
+                let payload = ContextsetPayload {
+                    schema_fqns: &agent.resolved_scope.schema_fqns,
+                    table_fqns: &agent.resolved_scope.table_fqns,
+                };
+                emit_stdout_line(format!(
+                    "{}: {} tables across {} schemas",
+                    agent.spec.name,
+                    agent.resolved_scope.table_fqns.len(),
+                    agent.resolved_scope.schema_fqns.len()
+                ));
+                if args.dry_run {
+                    let body = serde_json::to_string_pretty(&payload)
+                        .unwrap_or_else(|_| "{}".to_string());
+                    emit_stdout_line(format!("  dry-run payload:\n{}", body));
+                    continue;
+                }
+                let body = send_contextset_request(
+                    reqwest::Method::PUT,
+                    &args.client,
+                    &agent.spec.name,
+                    Some(&payload),
+                )
+                .await?;
+                emit_response_body(body, &format!("  {} deployed.", agent.spec.name));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn filter_specs(
+    specs: Vec<crate::agents::AgentSpec>,
+    name: Option<&str>,
+) -> FsResult<Vec<crate::agents::AgentSpec>> {
+    let Some(name) = name else {
+        return Ok(specs);
+    };
+    let filtered: Vec<_> = specs.into_iter().filter(|s| s.name == name).collect();
+    if filtered.is_empty() {
+        return Err(fs_err!(
+            ErrorCode::Generic,
+            "No agent named `{}` found under agents/",
+            name
+        ));
+    }
+    Ok(filtered)
+}
+
+fn manifest_path_for(project_dir: &Path, override_path: Option<&PathBuf>) -> PathBuf {
+    if let Some(p) = override_path {
+        return p.clone();
+    }
+    project_dir.join("target").join("manifest.json")
+}
+
+fn write_agents_json(project_dir: &Path, resolved: &[crate::agents::ResolvedAgent]) -> FsResult<()> {
+    let target_dir = project_dir.join("target");
+    if let Err(err) = std::fs::create_dir_all(&target_dir) {
+        return Err(fs_err!(
+            ErrorCode::Generic,
+            "Failed to create {}: {}",
+            target_dir.display(),
+            err
+        ));
+    }
+    let path = crate::agents::agents_json_path(&target_dir);
+    let content = serde_json::to_string_pretty(resolved).map_err(|err| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to serialize agents.json: {}",
+            err
+        )
+    })?;
+    std::fs::write(&path, content).map_err(|err| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to write {}: {}",
+            path.display(),
+            err
+        )
+    })?;
+    Ok(())
 }
 
 async fn execute_contextset_command(command: &ContextsetCommand) -> FsResult<()> {
@@ -663,6 +859,16 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
             }
             Some(Contextset(args)) => {
                 if let Err(err) = execute_contextset_command(&args.command).await {
+                    emit_error_log_from_fs_error(
+                        err.as_ref(),
+                        eval_arg.io.status_reporter.as_ref(),
+                    );
+                    return Err(FsError::exit_with_status(1));
+                }
+                Err(FsError::exit_with_status(0))
+            }
+            Some(Agent(args)) => {
+                if let Err(err) = execute_agent_command(&args.command).await {
                     emit_error_log_from_fs_error(
                         err.as_ref(),
                         eval_arg.io.status_reporter.as_ref(),
