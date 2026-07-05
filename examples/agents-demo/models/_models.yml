@@ -1,0 +1,46 @@
+version: 2
+
+groups:
+  - name: sales
+    owner:
+      name: Sales team
+  - name: support
+    owner:
+      name: Support team
+  - name: finance
+    owner:
+      name: Finance team
+
+models:
+  - name: dim_customers
+    description: "One row per customer, joined against subscription history."
+    config:
+      group: sales
+      access: protected
+      tags: [certified]
+
+  - name: fct_orders
+    description: "Order fact table with revenue and status."
+    config:
+      group: sales
+      access: protected
+      tags: [certified]
+
+  - name: fct_orders_pii
+    description: "Order line items with PII columns retained for compliance."
+    config:
+      group: sales
+      access: private
+      tags: [pii]
+
+  - name: tickets
+    description: "Support tickets with routing metadata."
+    config:
+      group: support
+      tags: [certified]
+
+  - name: revenue
+    description: "Monthly recognized revenue."
+    config:
+      group: finance
+      access: private

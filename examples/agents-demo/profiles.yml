@@ -1,0 +1,10 @@
+# Zero-setup DuckDB profile. `dbt parse` uses this only to know the database name
+# — no data is written; the demo needs a manifest.json, not a materialized warehouse.
+
+agents_demo:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: dev.duckdb
+      schema: main

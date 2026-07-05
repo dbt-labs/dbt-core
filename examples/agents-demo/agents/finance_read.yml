@@ -1,0 +1,10 @@
+agents:
+  - name: finance_read
+    description: "Read-only access to recognized-revenue rollups."
+    access: private
+    scope:
+      select:
+        - "group:finance"
+    tools:
+      include: [search_tables, execute_aisql]
+    mcp_server: fivetran_primary

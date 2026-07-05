@@ -1,0 +1,17 @@
+agents:
+  - name: sales_analyst
+    description: "Answers questions about the sales pipeline. Excludes PII columns."
+    access: protected
+    scope:
+      select:
+        - "group:sales,tag:certified"
+        - "dim_customers+"
+      exclude:
+        - "tag:pii"
+    tools:
+      include:
+        - search_tables
+        - list_tables
+        - table_deep_dive
+        - execute_aisql
+    mcp_server: fivetran_primary

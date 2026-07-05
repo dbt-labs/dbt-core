@@ -1,0 +1,11 @@
+agents:
+  - name: support_triage
+    description: "Routes incoming tickets. Scope: the support group and its lineage."
+    access: protected
+    scope:
+      select:
+        - "group:support"
+        - "+tickets"
+    tools:
+      include: [search_tables, list_tables, table_deep_dive]
+    mcp_server: fivetran_primary
