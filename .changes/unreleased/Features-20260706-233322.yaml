@@ -1,0 +1,8 @@
+kind: Features
+body: Honor FORCE_COLOR and NO_COLOR environment variables so CLI output stays colored
+  when piped through a wrapper process, and can be forced off in tty contexts.
+time: 2026-07-06T23:33:22.646755279Z
+custom:
+  author: jsnb-devoted
+  issue: "15412"
+  project: dbt-core
