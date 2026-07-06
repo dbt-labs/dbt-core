@@ -1,7 +1,0 @@
-kind: Fixes
-body: Read has_dbt_state from the capabilities API instead of hardcoding false; hide the dbt State upsell for projects that already have dbt state enabled
-time: 2026-06-23T16:32:28.157671-04:00
-custom:
-    author: jcserv
-    issue: ' '
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Features
-body: 'DuckDB: read-write Horizon and Unity (Iceberg REST) catalogs via duckdb 1.5.4 / duckdb-iceberg#1017 write-compat ATTACH options (stage_create_tables, disable_multi_table_commit, etc.). Upgrades the read-only support from the base PR.'
-time: 2026-06-10T12:41:47.888004-04:00
-custom:
-    author: dataders
-    issue: "10950"
-    project: dbt-fusion

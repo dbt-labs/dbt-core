@@ -1,7 +1,0 @@
-kind: Fixes
-body: Use unrendered configs to flag changes for models and sources in state:modified selector
-time: 2026-06-24T23:19:47.340448-07:00
-custom:
-    author: ""
-    issue: "15286"
-    project: fusion

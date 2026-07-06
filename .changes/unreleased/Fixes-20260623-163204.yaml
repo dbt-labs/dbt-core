@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix explorer breadcrumbs, layout, and filter view behavior; hide analyses everywhere when the hasAnalysis feature flag is off
-time: 2026-06-23T16:32:04.497963-04:00
-custom:
-    author: jcserv
-    issue: ' '
-    project: fusion

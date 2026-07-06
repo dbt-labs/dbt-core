@@ -1,7 +1,0 @@
-kind: Fixes
-body: Accept comma-separated ref()/source() calls within a single depends_on list item and tolerate a trailing } after a Jinja expression in descriptions, matching dbt-core leniency.
-time: 2026-06-11T16:52:18.801123-05:00
-custom:
-    author: j-clemons
-    issue: ""
-    project: dbt-fusion

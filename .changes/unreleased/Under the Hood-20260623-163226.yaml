@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Consolidate nine near-identical FilterView components into a shared GenericFilterView adapter, removing ~1100 lines of duplication
-time: 2026-06-23T16:32:26.490757-04:00
-custom:
-    author: jcserv
-    issue: ' '
-    project: fusion

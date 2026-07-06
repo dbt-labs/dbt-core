@@ -1,7 +1,0 @@
-kind: Fixes
-body: state:modified no longer flags snapshots whose dbt_valid_to_current config is set as environment-aware Jinja in dbt_project.yml.
-time: 2026-06-25T08:32:48.569818915-07:00
-custom:
-    author: lottaquestions
-    issue: "15286"
-    project: dbt-core

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Resolve send_anonymous_usage_stats for docs serve with precedence --no-send-anonymous-usage-stats > DBT_SEND_ANONYMOUS_USAGE_STATS env > dbt_project.yml flags block > default true, and wire it into analytics_enabled on GET /api/v1/identity
-time: 2026-06-23T16:01:17.540495-04:00
-custom:
-    author: jcserv
-    issue: ' '
-    project: fusion

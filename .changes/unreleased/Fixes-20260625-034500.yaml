@@ -1,7 +1,0 @@
-kind: Fixes
-body: Redshift warehouse tools now accept 'dbname' field in profiles.yml (standard dbt-redshift field name)
-time: 2026-06-25T03:45:00.000000-00:00
-custom:
-    author: eakmanrq
-    issue: "11471"
-    project: dbt-index

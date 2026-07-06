@@ -1,7 +1,0 @@
-kind: Features
-body: 'dbt-agent: add guidance for staging column inference vs source reuse, missing-column add-not-remove, enumerate-all-affected-models, time-bounded seed+JOIN pattern, mandatory full-refresh after surrogate_key rename'
-time: 2026-06-14T07:42:23.518733648-07:00
-custom:
-    author: ''
-    issue: ''
-    project: dbt-fusion

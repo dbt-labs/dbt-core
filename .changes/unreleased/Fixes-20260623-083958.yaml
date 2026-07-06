@@ -1,7 +1,0 @@
-kind: Fixes
-body: state:modified no longer flags seeds whose meta config is set as environment-aware Jinja in dbt_project.yml.
-time: 2026-06-23T08:39:58.92242018-07:00
-custom:
-    author: lottaquestions
-    issue: "15286"
-    project: dbt-core

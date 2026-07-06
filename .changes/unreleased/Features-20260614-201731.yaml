@@ -1,7 +1,0 @@
-kind: Features
-body: Extract dbt-agent into dedicated crate with prompts, runner, integration tests, and benchmark scripts
-time: 2026-06-14T20:17:31.724720153-07:00
-custom:
-    author: Wolfram.Schulte
-    issue: ""
-    project: dbt-fusion

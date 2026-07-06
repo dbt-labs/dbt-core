@@ -1,7 +1,0 @@
-kind: Features
-body: 'dbt-agent: add guidance for surrogate key dbt_project.yml vars, incremental full-refresh after logic changes, staging enrichment LEFT JOIN, fct-to-dim LEFT JOIN, pre-computed age field warning, and cumulative standings MAX vs ROW_NUMBER'
-time: 2026-06-14T06:27:56.089920009-07:00
-custom:
-    author: ''
-    issue: ''
-    project: dbt-fusion

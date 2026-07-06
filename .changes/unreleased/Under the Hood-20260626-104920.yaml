@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Implement array_except as a native DuckDB extension function (sf_array_except) instead of a SQL macro
-time: 2026-06-26T10:49:20.131165-04:00
-custom:
-    author: "mach-kernel"
-    issue: "11487"
-    project: fusion

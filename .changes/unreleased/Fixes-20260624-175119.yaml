@@ -1,7 +1,0 @@
-kind: Fixes
-body: When warn_error_options upgrades a Jinja exceptions.warn() call to an error, the node message in run_results.json now shows a clean Compilation Error with the warning text, matching dbt-core behavior
-time: 2026-06-24T17:51:19.708362-06:00
-custom:
-    author: aiguofer
-    issue: ""
-    project: fusion
