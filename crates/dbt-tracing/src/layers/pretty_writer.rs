@@ -1,6 +1,8 @@
 use crate::{
     LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
-    data_provider::DataProvider, layer::TelemetryConsumer, shared_writer::SharedWriter,
+    data_provider::DataProvider,
+    layer::TelemetryConsumer,
+    shared_writer::{SharedWriter, resolve_is_terminal},
 };
 
 pub type TelemetryRecordPrettyFormatter =
@@ -24,7 +26,7 @@ impl TelemetryPrettyWriterLayer {
         W: SharedWriter + 'static,
         F: Fn(TelemetryRecordRef, bool) -> Option<String> + Send + Sync + 'static,
     {
-        let is_tty = writer.is_terminal();
+        let is_tty = resolve_is_terminal(&writer);
 
         Self {
             writer: Box::new(writer),

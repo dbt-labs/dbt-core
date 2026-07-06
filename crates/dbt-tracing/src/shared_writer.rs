@@ -1,5 +1,26 @@
 use std::io::{self, Write};
 
+/// Decide whether output should be treated as a color-capable terminal.
+///
+/// Honors the widely-adopted environment conventions before falling back to
+/// the writer's actual TTY status:
+///
+/// * `NO_COLOR` (any non-empty value) forces a non-terminal result.
+///   Widely honored convention used by many CLI tools.
+/// * `FORCE_COLOR` (any value other than `"0"`) forces a terminal result —
+///   see <https://force-color.org>. This lets wrappers that pipe stdout
+///   (e.g. a parent process capturing output) still opt into ANSI output.
+/// * Otherwise, defers to [`SharedWriter::is_terminal`].
+pub fn resolve_is_terminal<W: SharedWriter + ?Sized>(writer: &W) -> bool {
+    if std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
+        return false;
+    }
+    if let Some(v) = std::env::var_os("FORCE_COLOR") {
+        return v != "0";
+    }
+    writer.is_terminal()
+}
+
 /// A trait for threadsafe writers used by tracing layers.
 ///
 /// Writers implementing this trait are expected to handle errors internally.
