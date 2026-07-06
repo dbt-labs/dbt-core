@@ -1611,6 +1611,50 @@ mod tests {
         }
     }
 
+    // Regression test for dbt-labs/dbt-core#14097: when a BigQuery model contract
+    // has `alias_types` enabled, contract leaf types must be aliased to their
+    // BigQuery names (e.g. FLOAT -> FLOAT64) via the public `nest_column_data_types`
+    // entry point used by the contract-rendering path; when disabled, the declared
+    // type is preserved verbatim. Types that are already canonical (e.g. NUMERIC)
+    // pass through unchanged in both modes.
+    #[test]
+    fn nest_column_data_types_aliases_float_when_alias_types_enabled() {
+        fn column(name: &str, data_type: &str) -> DbtColumn {
+            DbtColumn {
+                name: name.to_string(),
+                data_type: Some(data_type.to_string()),
+                ..Default::default()
+            }
+        }
+
+        let columns: IndexMap<String, DbtColumn> = IndexMap::from([
+            ("float_col".to_string(), column("float_col", "FLOAT")),
+            ("numeric_col".to_string(), column("numeric_col", "NUMERIC")),
+        ]);
+
+        // alias_types enabled: FLOAT is aliased to FLOAT64, NUMERIC is unaffected.
+        let aliased = nest_column_data_types(columns.clone(), None, true).unwrap();
+        assert_eq!(
+            aliased.get("float_col").unwrap().data_type.as_deref(),
+            Some("FLOAT64")
+        );
+        assert_eq!(
+            aliased.get("numeric_col").unwrap().data_type.as_deref(),
+            Some("NUMERIC")
+        );
+
+        // alias_types disabled: the declared types are preserved verbatim.
+        let verbatim = nest_column_data_types(columns, None, false).unwrap();
+        assert_eq!(
+            verbatim.get("float_col").unwrap().data_type.as_deref(),
+            Some("FLOAT")
+        );
+        assert_eq!(
+            verbatim.get("numeric_col").unwrap().data_type.as_deref(),
+            Some("NUMERIC")
+        );
+    }
+
     #[test]
     fn build_views_query_renders_basic_select() {
         let sql = build_views_query(
