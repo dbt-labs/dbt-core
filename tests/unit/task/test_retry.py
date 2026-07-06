@@ -8,8 +8,6 @@ EXCLUDED_COMMANDS = {
     "freshness",
     "init",
     "list",
-    "login",
-    "status",
     "parse",
     "retry",
     "show",
