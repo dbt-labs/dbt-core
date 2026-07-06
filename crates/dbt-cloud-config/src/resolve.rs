@@ -111,6 +111,8 @@ fn resolve_cloud_config_with_env_reader(
             })
     });
 
+    let defer_job_id = env_reader("DBT_CLOUD_DEFER_JOB_ID");
+
     let job_id = env_reader("DBT_CLOUD_JOB_ID");
 
     let resolved = ResolvedCloudConfig {
@@ -119,6 +121,7 @@ fn resolve_cloud_config_with_env_reader(
         account_identifier,
         environment_id,
         defer_env_id,
+        defer_job_id,
         job_id,
     };
 
@@ -129,6 +132,7 @@ fn resolve_cloud_config_with_env_reader(
         account_identifier: None,
         environment_id: None,
         defer_env_id: None,
+        defer_job_id: None,
         job_id: None,
     } = &resolved
     {
@@ -389,6 +393,34 @@ mod tests {
         assert_eq!(creds.token, "secret");
         assert_eq!(creds.account_id, "111");
         assert_eq!(r.defer_env_id.as_deref(), Some("context-defer"));
+    }
+
+    #[test]
+    fn defer_job_id_two_tier_precedence() {
+        let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+        let pc = project_cloud(Some("456"), None, None);
+
+        // Env var set → field equals that value
+        let r = resolve_cloud_config_with_env_reader(
+            Some(&yml),
+            Some(&pc),
+            env(&[("DBT_CLOUD_DEFER_JOB_ID", "job-123")]),
+        )
+        .unwrap();
+        assert_eq!(r.defer_job_id.as_deref(), Some("job-123"));
+
+        // Empty env var is treated as unset → field is None
+        let r = resolve_cloud_config_with_env_reader(
+            Some(&yml),
+            Some(&pc),
+            env(&[("DBT_CLOUD_DEFER_JOB_ID", "")]),
+        )
+        .unwrap();
+        assert!(r.defer_job_id.is_none());
+
+        // Env var unset → field is None
+        let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
+        assert!(r.defer_job_id.is_none());
     }
 
     #[test]
