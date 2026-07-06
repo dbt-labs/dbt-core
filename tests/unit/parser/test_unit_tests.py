@@ -3,8 +3,9 @@ from unittest import mock
 from dbt.artifacts.resources import DependsOn, UnitTestConfig, UnitTestFormat
 from dbt.contracts.graph.nodes import NodeType, UnitTestDefinition
 from dbt.contracts.graph.unparsed import UnitTestOutputFixture
+from dbt.exceptions import ParsingError
 from dbt.parser import SchemaParser
-from dbt.parser.unit_tests import UnitTestParser
+from dbt.parser.unit_tests import UnitTestParser, process_models_for_unit_test
 from dbt_common.events.event_manager_client import add_callback_to_manager
 from dbt_common.events.types import SystemStdErr
 from tests.unit.parser.test_parser import SchemaParserTest, assertEqualNodes
@@ -248,6 +249,63 @@ class UnitTestParserTest(SchemaParserTest):
         ]
         self.assertEqual(len(unit_test.depends_on.nodes), 1)
         self.assertEqual(unit_test.depends_on.nodes[0], "model.snowplow.my_model_versioned.v1")
+
+    def test_versioned_model_parsed_before_versioning_is_reresolved(self):
+        # Regression test for dbt-core #11139.
+        # When the unit-test YAML is parsed before the versioned model's schema
+        # patch is applied (non-deterministic filesystem parse order), the unit
+        # test's depends_on is bound to the pre-versioning unversioned unique_id
+        # (model.snowplow.my_model). Versioning then removes that id from the
+        # manifest. process_models_for_unit_test must re-resolve the now-stale
+        # id to the versioned model instead of raising "references a model that
+        # does not exist".
+        block = self.yaml_block_for(UNIT_TEST_SOURCE, "test_my_model.yml")
+        UnitTestParser(self.parser, block).parse()
+
+        manifest = self.parser.manifest
+        manifest.files[block.file.file_id] = block.file
+        unit_test = manifest.unit_tests["unit_test.snowplow.my_model.test_my_model"]
+        # Parsed before versioning: bound to the unversioned id.
+        self.assertEqual(unit_test.depends_on.nodes, ["model.snowplow.my_model"])
+
+        # Simulate the model versioning patch: the unversioned node id is
+        # replaced by the versioned one, and ref_lookup is rebuilt.
+        del manifest.nodes["model.snowplow.my_model"]
+        versioned_node = MockNode(
+            package="snowplow",
+            name="my_model",
+            config=mock.MagicMock(enabled=True),
+            schema="test_schema",
+            refs=[],
+            sources=[],
+            patch_path=None,
+            version=1,
+            latest_version=1,
+            is_latest_version=True,
+        )
+        manifest.nodes[versioned_node.unique_id] = versioned_node
+        manifest.rebuild_ref_lookup()
+
+        models_to_versions = {"snowplow": {"my_model": [versioned_node.unique_id]}}
+        process_models_for_unit_test(manifest, "snowplow", unit_test, models_to_versions)
+
+        assert "unit_test.snowplow.my_model.test_my_model_v1" in manifest.unit_tests
+        versioned_ut = manifest.unit_tests["unit_test.snowplow.my_model.test_my_model_v1"]
+        self.assertEqual(versioned_ut.depends_on.nodes[0], "model.snowplow.my_model.v1")
+
+    def test_missing_model_raises_parsing_error(self):
+        # A unit test whose `model` never resolves must raise in
+        # process_models_for_unit_test (covers the not-found path of the
+        # re-resolution added for dbt-core #11139).
+        block = self.yaml_block_for(UNIT_TEST_MODEL_NOT_FOUND_SOURCE, "test_missing.yml")
+        UnitTestParser(self.parser, block).parse()
+
+        manifest = self.parser.manifest
+        unit_test = manifest.unit_tests[
+            "unit_test.snowplow.my_model_doesnt_exist.test_my_model_doesnt_exist"
+        ]
+        with self.assertRaises(ParsingError):
+            process_models_for_unit_test(manifest, "snowplow", unit_test, {})
 
     def test_multiple_unit_tests(self):
         block = self.yaml_block_for(UNIT_TEST_MULTIPLE_SOURCE, "test_my_model.yml")
