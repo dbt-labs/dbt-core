@@ -31,6 +31,27 @@ Contribute by opening a pull request against the current development branch, `ma
 
 Once your PR has been approved, a maintainer will take it from there and shepherd your changes into dbt Core. And that's it! Happy developing 🎉
 
+## What happens after you open a pull request
+
+dbt Core is developed through dbt Labs' internal build and review process, and this repository is kept in sync with it automatically. You don't need to do anything special for this — but it's worth knowing, because it explains the labels, comments, and status checks you'll see on your PR.
+
+1. **Your PR is triaged.** PRs opened by community members are automatically labeled `community`, and during triage they're marked `source:community` to note the change came from an external contributor. A maintainer reviews the change and, once it's on the right track, assigns a reviewer.
+
+2. **The changelog check runs.** If your PR doesn't include a changelog entry, a bot comments to let you know. See [Adding a CHANGELOG Entry](#adding-a-changelog-entry). If a changelog isn't needed, a maintainer can add the `Skip Changelog` label.
+
+3. **CI is approved (fork PRs only).** Because PRs from forks can't safely access repository secrets, a maintainer must add the `ci:approve-public-fork-ci` label before CI runs. **This label is automatically removed every time you push new commits**, so a maintainer will re-approve after each update. This is expected — it isn't a sign that anything is wrong with your change.
+
+4. **CI results and sync status appear on your PR.** Build results surface as the **dbt Labs CI** status check. The review's progress is reflected through `review-status:` labels:
+
+   | Label | Meaning |
+   | --- | --- |
+   | `review-status: in-review` | Your change synced successfully and is under review. |
+   | `review-status: sync-failed` | The sync couldn't be applied (for example, a merge conflict). A maintainer will help resolve it — you may be asked to rebase. |
+   | `review-status: merged-upstream` | Your change has been merged and will land in this repository in the next sync. |
+   | `review-status: closed-upstream` | The change was closed without merging. |
+
+5. **Your change is merged.** When your change is merged, a bot comments to let you know and closes this PR. Your commit lands in this repository in the next sync. Closing the PR in this way is normal — your contribution has been accepted, not rejected. 🎉
+
 ## Adding a CHANGELOG Entry
 
 We use [changie](https://changie.dev) to generate `CHANGELOG` entries. **Note:** Do not edit the `CHANGELOG.md` directly. Your modifications will be lost.
