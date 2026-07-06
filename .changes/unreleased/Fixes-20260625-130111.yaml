@@ -1,7 +1,0 @@
-kind: Fixes
-body: Include the snapshot filename in the snapshot fqn to match dbt-core, fixing false-positive state:modified results when dbt-core compares against a Fusion-generated manifest
-time: 2026-06-25T13:01:11.768462362-07:00
-custom:
-    author: lottaquestions
-    issue: "15286"
-    project: dbt-core

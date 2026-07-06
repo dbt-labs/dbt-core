@@ -1,7 +1,0 @@
-kind: Features
-body: 'dbt-agent: add guidance for propagating source column type changes (INT→VARCHAR) to all downstream models'
-time: 2026-06-14T06:41:34.446874726-07:00
-custom:
-    author: ''
-    issue: ''
-    project: dbt-fusion

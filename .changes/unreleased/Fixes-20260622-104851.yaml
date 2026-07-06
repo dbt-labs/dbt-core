@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix unique_id parity with dbt-core for singular and schema tests
-time: 2026-06-22T10:48:51.197984-06:00
-custom:
-    author: aiguofer
-    issue: "11021"
-    project: fusion

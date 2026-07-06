@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix operation nodes missing alias, database, schema, tags, config, and index in manifest
-time: 2026-06-22T22:22:32.967411-06:00
-custom:
-    author: aiguofer
-    issue: "11380"
-    project: fusion

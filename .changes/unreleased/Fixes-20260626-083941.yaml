@@ -1,7 +1,0 @@
-kind: Fixes
-body: state:modified no longer flags data tests whose tags or meta configs are set as environment-aware Jinja in dbt_project.yml.
-time: 2026-06-26T08:39:41.455463905-07:00
-custom:
-    author: lottaquestions
-    issue: "15286"
-    project: dbt-core
