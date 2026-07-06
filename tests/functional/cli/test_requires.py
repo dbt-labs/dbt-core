@@ -139,7 +139,6 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_PRINT",
             "DBT_ENGINE_SAMPLE",
             "DBT_ENGINE_MANAGE_STATE",
-            "DBT_ENGINE_MANAGE_STATE",
             "DBT_ENGINE_SKIP_BROWSER_AUTH",
         }
         from dbt.env_vars import _ALLOWED_ENV_VARS
