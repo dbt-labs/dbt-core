@@ -532,10 +532,14 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             Value::Object(serde_json::Map::new())
         };
 
-        // Check for conflicts at JSON level
+        // Check for conflicts at JSON level. `existing_config_json` is a
+        // serialized `DataTestConfig`, which is not `#[skip_serializing_none]`,
+        // so every optional field (e.g. `where`) is present as `null` even when
+        // the user's `config:` block never set it. Only flag a real conflict
+        // when the key is actually set (non-null) in the existing config.
         if let Value::Object(existing_map) = &existing_config_json {
             for key in config_from_deprecated.keys() {
-                if existing_map.contains_key(key) {
+                if existing_map.get(key).is_some_and(|v| !v.is_null()) {
                     return err!(
                         ErrorCode::DbtYamlValidationError,
                         "Test cannot have the same key '{}' at the top-level and in config",
