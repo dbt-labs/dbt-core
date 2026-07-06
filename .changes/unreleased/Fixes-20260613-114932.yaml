@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'dbt agent build: surface YAML parse errors via OTEL probe; fix panic on wrapped-negative line numbers in context_snippet; use --write-metadata instead of --write-index'
+time: 2026-06-13T11:49:32.514468319-07:00
+custom:
+    author: ' '
+    issue: ' '
+    project: dbt-fusion

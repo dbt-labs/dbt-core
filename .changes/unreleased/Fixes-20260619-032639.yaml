@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix Databricks incremental run SQL error when using custom PK constraints: correctly expose constraint attributes (type, name, render) to Jinja templates and normalize custom PK expressions for stable incremental diffs'
+time: 2026-06-19T03:26:39.346176727-07:00
+custom:
+    author: b-per
+    issue: "15307"
+    project: dbt-fusion

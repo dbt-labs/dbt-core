@@ -1,0 +1,7 @@
+kind: Features
+body: Add GET /api/v1/identity endpoint to dbt-docs-server
+time: 2026-06-23T13:13:58.232391-04:00
+custom:
+    author: jcserv
+    issue: ""
+    project: fusion

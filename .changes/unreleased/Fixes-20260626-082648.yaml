@@ -1,0 +1,7 @@
+kind: Fixes
+body: Hide the `completions` subcommand from dbt help output
+time: 2026-06-26T08:26:48.021955382-07:00
+custom:
+    author: b-per
+    issue: ""
+    project: fusion

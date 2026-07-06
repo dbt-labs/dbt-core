@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix macro original_file_path prefixed with dbt_packages/ instead of being package-relative
+time: 2026-06-22T22:33:39.897893-06:00
+custom:
+    author: aiguofer
+    issue: "11381"
+    project: dbt-core

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix dbt State evaluate_volatile_sql config semantics so true evaluates volatile SQL and false allows reuse.
+time: 2026-06-25T13:18:12.156389-05:00
+custom:
+    author: kczimm
+    issue: "11473"
+    project: fusion

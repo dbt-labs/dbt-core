@@ -1,0 +1,7 @@
+kind: Features
+body: 'dbt-agent: mandatory --full-refresh after surrogate_key rename prominently in surrogate_key.md'
+time: 2026-06-14T07:46:35.255413321-07:00
+custom:
+    author: ''
+    issue: ''
+    project: dbt-fusion

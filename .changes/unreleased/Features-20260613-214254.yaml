@@ -1,0 +1,7 @@
+kind: Features
+body: '[Redshift] Switch the database context per node via `USE` / `RESET USE` when datasharing is enabled and the node targets a non-default database'
+time: 2026-06-13T21:42:54.022599+05:30
+custom:
+    author: ragesh-g
+    issue:
+    project: dbt-fusion

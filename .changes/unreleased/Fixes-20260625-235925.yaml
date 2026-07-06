@@ -1,0 +1,7 @@
+kind: Fixes
+body: route tests to manifest.disabled when both parent model and test are explicitly disabled
+time: 2026-06-25T23:59:25.710797-06:00
+custom:
+    author: aiguofer
+    issue: "11408"
+    project: internal

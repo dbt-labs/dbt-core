@@ -1,0 +1,7 @@
+kind: Fixes
+body: (dbt-auth) SparkConnect auth profiles have clear internal representaiton. To the user view, no "user" is required (but may be provided). An ambient authentication mode which entrusts connections to the networking layer et. al is added."
+time: 2026-06-08T14:05:07.631038+02:00
+custom:
+    author: serramatutu versusfacit
+    issue: ""
+    project: dbt-fusion

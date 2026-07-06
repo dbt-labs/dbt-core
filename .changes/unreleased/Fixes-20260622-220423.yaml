@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix ambiguous ref panic for cross-project publication models when used as v2 parser
+time: 2026-06-22T22:04:23.017801-06:00
+custom:
+    author: aiguofer
+    issue: "11382"
+    project: fusion

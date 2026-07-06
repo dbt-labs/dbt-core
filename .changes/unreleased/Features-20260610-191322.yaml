@@ -1,0 +1,7 @@
+kind: Features
+body: 'DuckDB catalogs.yml v2: DuckLake, Iceberg REST, and local filesystem catalogs with catalog-aware materializations, plus read-only Horizon and Unity attachments (writes land with duckdb 1.5.4, #10950)'
+time: 2026-06-10T19:13:22.554825-04:00
+custom:
+    author: dataders versusfacit
+    issue: "10946"
+    project: dbt-fusion

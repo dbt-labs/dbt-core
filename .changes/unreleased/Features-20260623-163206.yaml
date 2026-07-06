@@ -1,0 +1,7 @@
+kind: Features
+body: Add compiled code toggle to the Code tab and consolidate exposure metadata fields into the unified Metadata section
+time: 2026-06-23T16:32:06.210737-04:00
+custom:
+    author: jcserv
+    issue: ' '
+    project: fusion

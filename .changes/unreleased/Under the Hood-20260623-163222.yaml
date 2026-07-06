@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Migrate dbt-docs-v2 data layer from hand-rolled fetch hooks to TanStack Query
+time: 2026-06-23T16:32:22.246822-04:00
+custom:
+    author: jcserv
+    issue: ' '
+    project: fusion

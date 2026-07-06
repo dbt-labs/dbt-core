@@ -1,0 +1,7 @@
+kind: Fixes
+body: Use redshift_database_name when checking Redshift SVV_EXTERNAL_TABLES.
+time: 2026-06-29T14:14:10.586394+05:30
+custom:
+    author: ragesh-g
+    issue: ""
+    project: fusion

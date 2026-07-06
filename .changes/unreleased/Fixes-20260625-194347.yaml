@@ -1,0 +1,8 @@
+kind: Fixes
+body: 'Fix dbt-index regressions: CLL parquet not produced on baseline→strict static-analysis
+  transition'
+time: 2026-06-25T19:43:47.770082104-07:00
+custom:
+  author: jasonlin45
+  issue: "15347"
+  project: dbt-index

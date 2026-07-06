@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix panic when a query result contains a map with non-scalar (struct) values, e.g. map<string,struct<...>>. dbt-agate now has a StructConverter so struct columns render as dicts instead of failing an unsupported Struct->Utf8 cast.
+time: 2026-06-22T08:46:00.582702+05:30
+custom:
+    author: debrin-og
+    issue: ""
+    project: fusion
