@@ -72,7 +72,7 @@ pub enum Backend {
     /// Bespoke dbt-built DuckDB driver with internal extensions.
     /// Lives at `fs/adbc/duckdb_extended/` on the CDN.
     DuckDBExtended,
-    /// Fdcs driver implementation. Behaves like DuckDB.
+    /// dbt Compute driver implementation. Behaves like DuckDB.
     Fdcs,
     /// Microsoft SQL Server implementation (ADBC).
     SQLServer,
@@ -107,7 +107,7 @@ impl fmt::Display for Backend {
             Backend::Databricks => write!(f, "Databricks"),
             Backend::Redshift => write!(f, "Redshift"),
             Backend::DuckDB | Backend::DuckDBExtended => write!(f, "DuckDB"),
-            Backend::Fdcs => write!(f, "Fdcs"),
+            Backend::Fdcs => write!(f, "dbt Compute"),
             Backend::Salesforce => write!(f, "Salesforce"),
             Backend::Spark => write!(f, "Spark"),
             Backend::SQLServer => write!(f, "SQL Server"),
@@ -130,7 +130,7 @@ impl Backend {
             Backend::Spark => Some("adbc_driver_spark"),
             Backend::Redshift => Some("adbc_driver_redshift"),
             Backend::DuckDB | Backend::DuckDBExtended => Some("duckdb"),
-            Backend::Fdcs => Some("adbc_driver_fdcs"),
+            Backend::Fdcs => Some("adbc_driver_dbt"),
             Backend::SQLServer => Some("adbc_driver_mssql"),
             Backend::Athena => Some("adbc_driver_athena"),
             Backend::ClickHouse => Some("adbc_clickhouse"),
@@ -143,7 +143,7 @@ impl Backend {
         match self {
             Backend::Snowflake => Some(b"SnowflakeDriverInit"),
             Backend::DuckDB | Backend::DuckDBExtended => Some(b"duckdb_adbc_init"),
-            Backend::Fdcs => Some(b"AdbcQuackInit"),
+            Backend::Fdcs => Some(b"AdbcDriverDbtInit"),
             Backend::Generic {
                 library_name: _,
                 entrypoint,

@@ -1,6 +1,6 @@
-//! Authentication for the FDCS backend.
+//! Authentication for the FDCS (dbt Compute) backend.
 //!
-//! FDCS is reached through the `quack_adbc` ADBC driver, which is configured
+//! FDCS is reached through the `adbc_driver_dbt` ADBC driver, which is configured
 //! entirely via named database options (see [`dbt_adbc::fdcs`]). This module
 //! translates a profile mapping into those options.
 //!
@@ -151,13 +151,13 @@ mod tests {
     #[test]
     fn base_url_and_api_key() {
         let builder = configure(Mapping::from_iter([
-            ("base_url".into(), "https://quack.example".into()),
+            ("base_url".into(), "https://compute.example".into()),
             ("method".into(), "api_key".into()),
             ("api_key".into(), "secret-key".into()),
         ]));
         assert_eq!(
             other_option_value(&builder, fdcs::BASE_URL),
-            Some("https://quack.example")
+            Some("https://compute.example")
         );
         assert_eq!(
             other_option_value(&builder, fdcs::AUTH_TYPE),
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn okta_browser_method() {
         let builder = configure(Mapping::from_iter([
-            ("base_url".into(), "https://quack.example".into()),
+            ("base_url".into(), "https://compute.example".into()),
             ("method".into(), "okta_browser".into()),
             ("okta_client_id".into(), "client-123".into()),
         ]));
@@ -190,7 +190,7 @@ mod tests {
     fn timeout_accepts_integer() {
         let config: Mapping = dbt_yaml::from_str(
             r#"
-base_url: https://quack.example
+base_url: https://compute.example
 timeout_seconds: 120
 "#,
         )
