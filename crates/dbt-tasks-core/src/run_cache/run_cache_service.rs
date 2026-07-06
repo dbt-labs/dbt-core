@@ -2712,12 +2712,13 @@ fn record_service_decision(
             // service's `execution_results` so the dispatcher in
             // `runnable/mod.rs` can replace the generic `ReusedNoChanges`
             // status with a test-shaped verdict and a NO-OP-marked stat.
-            let cached_test_failures = if unique_id.starts_with("test.") {
+            let is_test = unique_id.starts_with("test.");
+            let cached_test_failures = if is_test {
                 parse_cached_test_failures(response)
             } else {
                 None
             };
-            if unique_id.starts_with("test.") && cached_test_failures.is_none() {
+            if is_test && cached_test_failures.is_none() {
                 emit_trace_log_message(|| {
                     format!(
                         "dbt State service data test skip ignored because no cached test result was returned for node {unique_id}; executing normally"
@@ -2725,8 +2726,13 @@ fn record_service_decision(
                 });
                 return RunCacheServiceDecision::execute_without_confirmation();
             }
+            let status = if is_test {
+                NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string())
+            } else {
+                skip_node_status_from_response(response, freshness_tolerance_seconds)
+            };
             RunCacheServiceDecision::Skip {
-                status: skip_node_status_from_response(response, freshness_tolerance_seconds),
+                status,
                 sao_stored_hash: None,
                 cached_test_failures,
             }
@@ -2957,6 +2963,36 @@ mod tests {
                 "test.test.not_null_orders_order_date.abc123",
                 &skip_execution_response_with_test_failures(0),
                 0,
+                true,
+            ),
+            RunCacheServiceDecision::Skip {
+                status: NodeStatus::ReusedNoChanges(_),
+                sao_stored_hash: None,
+                cached_test_failures: Some(0),
+            }
+        ));
+    }
+
+    #[test]
+    fn stale_data_test_skip_with_cached_failures_reports_no_changes() {
+        let response = SubmitSqlResponse {
+            response: Some(submit_sql_response::Response::SkipExecution(
+                SkipExecutionResponse {
+                    explained_decision: Some(ExplainedDecision {
+                        is_stale: true,
+                        ..Default::default()
+                    }),
+                    execution_results: Some(build_test_execution_results_struct(0)),
+                    ..Default::default()
+                },
+            )),
+        };
+
+        assert!(matches!(
+            record_service_decision(
+                "test.test.not_null_orders_order_date.abc123",
+                &response,
+                3600,
                 true,
             ),
             RunCacheServiceDecision::Skip {
