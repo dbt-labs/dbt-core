@@ -636,6 +636,14 @@ mod tests {
     }
 
     #[test]
+    fn model_full_refresh_keeps_view_execution_type() {
+        let model = make_model(DbtMaterialization::View);
+        let request = build_model_sql_request(&model, sql_context(true)).unwrap();
+
+        assert_eq!(request.execution_type, ModelExecutionType::View as i32);
+    }
+
+    #[test]
     fn custom_materialization_maps_to_custom_execution_type() {
         let model = make_model(DbtMaterialization::Unknown(
             "my_materialization".to_string(),

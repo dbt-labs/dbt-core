@@ -2657,7 +2657,6 @@ fn full_refresh_blocks_model_submit(materialization: DbtMaterialization) -> bool
     matches!(
         materialization,
         DbtMaterialization::Incremental
-            | DbtMaterialization::View
             | DbtMaterialization::MaterializedView
             | DbtMaterialization::DynamicTable
             | DbtMaterialization::StreamingTable
@@ -3109,7 +3108,7 @@ mod tests {
         assert!(full_refresh_blocks_model_submit(
             DbtMaterialization::Incremental
         ));
-        assert!(full_refresh_blocks_model_submit(DbtMaterialization::View));
+        assert!(!full_refresh_blocks_model_submit(DbtMaterialization::View));
         assert!(!full_refresh_blocks_model_submit(DbtMaterialization::Table));
         assert!(!full_refresh_blocks_model_submit(
             DbtMaterialization::Unknown("custom_table".to_string())
