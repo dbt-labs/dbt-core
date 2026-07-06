@@ -83,7 +83,7 @@ fn execute_materialization_macro(
     let macro_string = format!("{macro_name}()");
     let expr = jinja_env.compile_expression(&macro_string)?;
     with_jinja_trace(&run_path, unique_id, |listeners| {
-        expr.eval(context, listeners).map_err(|e| {
+        expr.eval_with_file_only_stack_frame(context, listeners, run_path.as_path()).map_err(|e| {
             if e.code.is_database_error() {
                 // Format like dbt-core: show model name and path first, then the raw
                 // database error message indented.
@@ -119,8 +119,7 @@ fn execute_materialization_macro(
                     "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
                     e.context
                 );
-                let err = e.with_location(run_path.clone());
-                Box::new(err.with_context(message))
+                Box::new(e.with_context(message))
             }
         })
     })

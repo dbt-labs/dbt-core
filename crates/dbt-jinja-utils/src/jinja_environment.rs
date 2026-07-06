@@ -6,7 +6,7 @@ use minijinja::{
     value::{ValueMap, mutable_map::MutableMap},
 };
 use serde::Serialize;
-use std::{collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
 use tracy_client::span;
 
 /// A struct that wraps a Minijinja Expression.
@@ -24,6 +24,23 @@ impl<'env: 'source, 'source> JinjaExpression<'env, 'source> {
     ) -> FsResult<Value> {
         let result = self.0.eval(ctx, listeners).map_err(|e| {
             FsError::from_jinja_err(e, "Failed to eval the compiled Jinja expression")
+        })?;
+        Ok(result)
+    }
+
+    /// Evaluate the expression and format matching Jinja stack frames as file-only locations.
+    pub fn eval_with_file_only_stack_frame<S: Serialize>(
+        &self,
+        ctx: S,
+        listeners: &[Rc<dyn RenderingEventListener>],
+        file_only_stack_frame: &Path,
+    ) -> FsResult<Value> {
+        let result = self.0.eval(ctx, listeners).map_err(|e| {
+            FsError::from_jinja_err_with_file_only_stack_frame(
+                e,
+                "Failed to eval the compiled Jinja expression",
+                file_only_stack_frame,
+            )
         })?;
         Ok(result)
     }

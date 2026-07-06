@@ -20,9 +20,12 @@ use crate::utils::{find_enclosed_substring, is_sdf_debug};
 
 pub type FsResult<T, E = Box<FsError>> = Result<T, E>;
 
-// Helper struct to format just the stack trace from a minijinja::Error
+// Helper struct to format just the stack trace from a minijinja::Error.
 // TODO(jasonlin45): Report stack trace on CodeLocation
-struct StackTraceFormatter<'a>(&'a minijinja::Error);
+struct StackTraceFormatter<'a> {
+    err: &'a minijinja::Error,
+    file_only_stack_frame: Option<&'a Path>,
+}
 
 /// Walk the error source chain of a minijinja error looking for an `AdapterError`.
 ///
@@ -42,10 +45,83 @@ fn find_adapter_error_in_chain(
     None
 }
 
-impl<'a> Display for StackTraceFormatter<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.stack_trace(f)
+impl<'a> StackTraceFormatter<'a> {
+    fn new(err: &'a minijinja::Error) -> Self {
+        Self {
+            err,
+            file_only_stack_frame: None,
+        }
     }
+
+    fn with_file_only_stack_frame(err: &'a minijinja::Error, path: &'a Path) -> Self {
+        Self {
+            err,
+            file_only_stack_frame: Some(path),
+        }
+    }
+}
+
+impl Display for StackTraceFormatter<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if !self.err.is_stack_empty() {
+            write!(
+                f,
+                "{}",
+                self.err
+                    .stack()
+                    .iter()
+                    .rev()
+                    .map(|frame| {
+                        if self.file_only_stack_frame.is_some_and(|path| {
+                            jinja_stack_frame_matches_path(&frame.filename, path)
+                        }) {
+                            format!("\n(in {})", frame.filename)
+                        } else {
+                            format!(
+                                "\n(in {}:{}:{})",
+                                frame.filename, frame.span.start_line, frame.span.start_col
+                            )
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("")
+            )?;
+        }
+        Ok(())
+    }
+}
+
+fn jinja_stack_frame_matches_path(filename: &str, path: &Path) -> bool {
+    let filename = filename.replace('\\', "/");
+    let path = path.to_string_lossy().replace('\\', "/");
+
+    filename == path || path.ends_with(&filename) || filename.ends_with(&path)
+}
+
+fn jinja_file_only_location(
+    err: &minijinja::Error,
+    path: &Path,
+) -> Option<super::CodeLocationWithFile> {
+    err.stack()
+        .iter()
+        .find(|frame| jinja_stack_frame_matches_path(&frame.filename, path))
+        .map(|frame| super::CodeLocationWithFile::from(PathBuf::from(&frame.filename)))
+}
+
+fn format_jinja_err(err: &minijinja::Error, file_only_stack_frame: Option<&Path>) -> String {
+    let mut rendered = if let Some(detail) = err.detail() {
+        format!("{}: {}", err.kind(), detail)
+    } else {
+        err.kind().to_string()
+    };
+
+    let stack_trace = if let Some(path) = file_only_stack_frame {
+        StackTraceFormatter::with_file_only_stack_frame(err, path).to_string()
+    } else {
+        StackTraceFormatter::new(err).to_string()
+    };
+    rendered.push_str(&stack_trace);
+    rendered
 }
 
 pub struct FsError {
@@ -236,6 +312,22 @@ impl FsError {
     }
 
     pub fn from_jinja_err(err: minijinja::Error, context: impl Display) -> Self {
+        Self::from_jinja_err_inner(err, context, None)
+    }
+
+    pub fn from_jinja_err_with_file_only_stack_frame(
+        err: minijinja::Error,
+        context: impl Display,
+        path: &Path,
+    ) -> Self {
+        Self::from_jinja_err_inner(err, context, Some(path))
+    }
+
+    fn from_jinja_err_inner(
+        err: minijinja::Error,
+        context: impl Display,
+        file_only_stack_frame: Option<&Path>,
+    ) -> Self {
         if err.kind() == minijinja::ErrorKind::ExitWithStatus {
             if let Some(detail) = err.detail().filter(|d| !d.is_empty()) {
                 return FsError::new_no_backtrace(
@@ -258,6 +350,8 @@ impl FsError {
                 )
             })
             .collect();
+        let file_only_location =
+            file_only_stack_frame.and_then(|path| jinja_file_only_location(&err, path));
 
         // Check for AdapterError as source regardless of Jinja error kind.
         // Previously this was limited to ErrorKind::Execution, but adapter errors
@@ -266,7 +360,11 @@ impl FsError {
         if let Some(adapter_err) = find_adapter_error_in_chain(&err) {
             let mut fs_err = Box::<FsError>::from(adapter_err.clone());
             if !err.is_stack_empty() {
-                let stack_trace = format!("{}", StackTraceFormatter(&err));
+                let stack_trace = if let Some(path) = file_only_stack_frame {
+                    StackTraceFormatter::with_file_only_stack_frame(&err, path).to_string()
+                } else {
+                    StackTraceFormatter::new(&err).to_string()
+                };
                 let mut frames = stack_trace.lines().filter(|s| !s.is_empty());
                 // Always show the first frame (points to user code / compiled SQL)
                 if let Some(first_frame) = frames.next() {
@@ -281,7 +379,11 @@ impl FsError {
                     }
                 }
             }
-            let mut result = fs_err.with_location(MiniJinjaErrorWrapper(err));
+            let mut result = if let Some(location) = file_only_location {
+                fs_err.with_file_location(location)
+            } else {
+                fs_err.with_location(MiniJinjaErrorWrapper(err))
+            };
             result.jinja_frames = jinja_frames;
             return result;
         }
@@ -291,8 +393,18 @@ impl FsError {
             minijinja::ErrorKind::Execution => ErrorCode::ExecutionError,
             _ => ErrorCode::JinjaError,
         };
-        let mut result = FsError::new(err_code, format!("{context} {err}"))
-            .with_location(MiniJinjaErrorWrapper(err));
+        let mut result = FsError::new(
+            err_code,
+            format!(
+                "{context} {}",
+                format_jinja_err(&err, file_only_stack_frame)
+            ),
+        );
+        result = if let Some(location) = file_only_location {
+            result.with_file_location(location)
+        } else {
+            result.with_location(MiniJinjaErrorWrapper(err))
+        };
         result.jinja_frames = jinja_frames;
         result
     }
@@ -438,6 +550,17 @@ impl FsError {
 
         FsError {
             location: Some(location),
+            ..self
+        }
+    }
+
+    /// Adds a file-only location to this error, replacing any existing location.
+    pub fn with_file_location(self, location: impl Into<super::CodeLocationWithFile>) -> FsError {
+        let location = location.into();
+        FsError {
+            location: Some(super::CodeLocationWithFile::from(
+                location.file.as_ref().clone(),
+            )),
             ..self
         }
     }
@@ -1440,6 +1563,80 @@ impl From<Box<FsError>> for DataFusionError {
 // }
 
 // --- End of !!FIXME!! ---
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::BTreeMap,
+        path::{Path, PathBuf},
+    };
+
+    use crate::{CodeLocationWithFile, ErrorCode};
+
+    use super::*;
+
+    #[test]
+    fn with_file_location_discards_existing_position() {
+        let err = FsError::new(ErrorCode::Generic, "test")
+            .with_location(CodeLocationWithFile::new(1, 15, 14, "synthetic"))
+            .with_file_location(PathBuf::from("run/test/models/test_fail.sql"));
+
+        let location = err.location.expect("location");
+        assert!(!location.has_position());
+        assert_eq!(
+            location.file.as_ref().as_path(),
+            Path::new("run/test/models/test_fail.sql")
+        );
+    }
+
+    #[test]
+    fn from_jinja_err_with_file_only_stack_frame_demotes_matching_frame() {
+        use minijinja::{
+            Value,
+            compiler::tokens::Span,
+            constants::{CURRENT_PATH, CURRENT_SPAN},
+        };
+
+        let mut env = minijinja::Environment::new();
+        env.add_template("run/test/models/test_fail.sql", "{{ 'a' + 1 }}")
+            .expect("template should compile");
+        let ctx = BTreeMap::from([
+            (
+                CURRENT_PATH.to_string(),
+                Value::from("run/test/models/test_fail.sql"),
+            ),
+            (
+                CURRENT_SPAN.to_string(),
+                Value::from_serialize(Span::default()),
+            ),
+        ]);
+        let err = env
+            .get_template("run/test/models/test_fail.sql")
+            .expect("template")
+            .render(ctx, &[])
+            .expect_err("render should fail");
+
+        let err = FsError::from_jinja_err_with_file_only_stack_frame(
+            err,
+            "Failed to eval the compiled Jinja expression",
+            Path::new("../scratch/target/run/test/models/test_fail.sql"),
+        );
+
+        assert!(
+            err.context.contains("(in run/test/models/test_fail.sql)"),
+            "{}",
+            err.context
+        );
+        assert!(!err.context.contains("(in run/test/models/test_fail.sql:"));
+
+        let location = err.location.expect("location");
+        assert!(!location.has_position());
+        assert_eq!(
+            location.file.as_ref().as_path(),
+            Path::new("run/test/models/test_fail.sql")
+        );
+    }
+}
 
 mod private {
     use super::*;
