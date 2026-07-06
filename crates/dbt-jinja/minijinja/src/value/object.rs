@@ -1142,27 +1142,26 @@ pub mod mutable_vec {
 
         /// Pop a value from the end of the vector.
         pub fn pop(&self, args: &[Value]) -> Option<T> {
+            let mut inner = lock_write!(self);
             if args.is_empty() {
-                return lock_write!(self).pop();
-            } else {
-                let idx = some!(args[0].as_i64());
-                let idx = if idx < 0 {
-                    let len = lock_read!(self).len();
-                    if len == 0 {
-                        return None;
-                    }
-                    (len as i64 + idx) as usize
-                } else if idx > lock_read!(self).len() as i64 {
+                return inner.pop();
+            }
+            let raw_idx = some!(args[0].as_i64());
+            let len = inner.len();
+            let idx = if raw_idx < 0 {
+                if len == 0 {
                     return None;
-                } else {
-                    idx as usize
-                };
-
-                if idx < lock_read!(self).len() {
-                    Some(lock_write!(self).remove(idx))
-                } else {
-                    None
                 }
+                (len as i64 + raw_idx) as usize
+            } else if raw_idx > len as i64 {
+                return None;
+            } else {
+                raw_idx as usize
+            };
+            if idx < len {
+                Some(inner.remove(idx))
+            } else {
+                None
             }
         }
 
@@ -1380,7 +1379,16 @@ pub mod mutable_vec {
                     ErrorKind::InvalidOperation,
                     "insert() expects an integer as first argument"
                 )));
-                vec.insert(idx, value.clone());
+                let mut inner = lock_write!(vec);
+                let len = inner.len();
+                if idx > len {
+                    return Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("insert() index {idx} is out of bounds for list of length {len}"),
+                    ));
+                }
+                inner.insert(idx, value.clone());
+                drop(inner);
                 Ok(Value::from_dyn_object(vec.clone()))
             }
             _ if args.len() > 2 => Err(Error::new(

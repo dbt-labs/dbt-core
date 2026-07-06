@@ -335,6 +335,84 @@ fn test_mutable_vec_strings() {
     assert_snapshot!(rv, @"[]");
 }
 
+// T1: insert(idx) with idx > len must return a typed Jinja error, not panic.
+// Today this triggers a Vec::insert OOB panic at object.rs:1056, which is the
+// primary panic that poisons the RwLock and produces the "lock poisoned"
+// cascade reported in production.
+#[test]
+fn test_mutable_vec_insert_out_of_bounds_errors() {
+    let arr = Value::from_object(mutable_vec::MutableVec::<Value>::from(vec![1u32, 2, 3]));
+    let env = Environment::new();
+    let err = env
+        .render_str(
+            "{% do my_arr.insert(99, 'x') %}",
+            context! { my_arr => arr },
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::InvalidOperation);
+}
+
+// T2: after an OOB insert is rejected, the same MutableVec must still be
+// usable. If insert panics instead of returning Err, the RwLock is poisoned
+// and this second render surfaces "lock poisoned". This is the cascade guard.
+#[test]
+fn test_mutable_vec_insert_oob_does_not_poison_lock() {
+    let arr = Value::from_object(mutable_vec::MutableVec::<Value>::from(vec![1u32, 2, 3]));
+    let env = Environment::new();
+
+    let _ = env
+        .render_str(
+            "{% do my_arr.insert(99, 'x') %}",
+            context! { my_arr => arr },
+            &[],
+        )
+        .unwrap_err();
+
+    let rv = env
+        .render_str(
+            "{% do my_arr.append(4) %}{{ my_arr }}",
+            context! { my_arr => arr },
+            &[],
+        )
+        .unwrap();
+    assert_eq!(rv, "[1, 2, 3, 4]");
+}
+
+// T3: insert(idx == len) is the append-at-end boundary and must keep working.
+// Pinning this catches an off-by-one (`>=` vs `>`) in the new bounds check.
+#[test]
+fn test_mutable_vec_insert_at_len_appends() {
+    let arr = Value::from_object(mutable_vec::MutableVec::<Value>::from(vec![1u32, 2, 3]));
+    let rv = minijinja::render!(
+        "{% do my_arr.insert(3, 4) %}{{ my_arr }}",
+        my_arr => arr
+    );
+    assert_snapshot!(rv, @"[1, 2, 3, 4]");
+}
+
+// T4: pop(idx) boundary cases must not panic. The fix collapses pop's
+// read-then-write into a single write lock; these pin the boundary behavior
+// (idx > len and idx == len both yield the unwrap_or_default UNDEFINED, which
+// renders as empty, with the vec unchanged) so a future refactor cannot
+// regress to a Vec::remove OOB panic.
+#[test]
+fn test_mutable_vec_pop_out_of_bounds_no_panic() {
+    let arr = Value::from_object(mutable_vec::MutableVec::<Value>::from(vec![1u32, 2, 3]));
+    let rv = minijinja::render!(
+        "{{ my_arr.pop(99) }}|{{ my_arr }}",
+        my_arr => arr
+    );
+    assert_snapshot!(rv, @"|[1, 2, 3]");
+
+    let arr = Value::from_object(mutable_vec::MutableVec::<Value>::from(vec![1u32, 2, 3]));
+    let rv = minijinja::render!(
+        "{{ my_arr.pop(3) }}|{{ my_arr }}",
+        my_arr => arr
+    );
+    assert_snapshot!(rv, @"|[1, 2, 3]");
+}
+
 #[test]
 fn test_mutable_vec_in_set_stmt() {
     let mut env = Environment::new();
