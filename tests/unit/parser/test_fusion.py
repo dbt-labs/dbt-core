@@ -216,7 +216,6 @@ class TestParseWithFusion:
             # click-bound — must be stripped
             "DBT_ENGINE_USE_V2_PARSER": "true",
             "DBT_ENGINE_V2_PARSER": "dbt-core-experimental-parser parse",
-            "DBT_ENGINE_SKIP_BROWSER_AUTH": "true",
             "DBT_ENGINE_SQLPARSE": '{"MAX_GROUPING_DEPTH": "10"}',
             "DBT_ENGINE_DEBUG": "true",  # alias of DBT_DEBUG, click-bound
             # not click-bound — must pass through (fs uses these natively)
@@ -235,7 +234,6 @@ class TestParseWithFusion:
         child_env = captured["env"]
         assert "DBT_ENGINE_USE_V2_PARSER" not in child_env
         assert "DBT_ENGINE_V2_PARSER" not in child_env
-        assert "DBT_ENGINE_SKIP_BROWSER_AUTH" not in child_env
         assert "DBT_ENGINE_SQLPARSE" not in child_env
         assert "DBT_ENGINE_DEBUG" not in child_env
         assert child_env["DBT_ENGINE_STATE_OAUTH_CLIENT_ID"] == "client-id"

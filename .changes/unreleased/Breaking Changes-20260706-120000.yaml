@@ -1,0 +1,8 @@
+kind: Breaking Changes
+body: Remove the experimental `dbt login` command and the bundled `dbt-state` plugin
+  (including `--manage-state`/`manage_state` and the `DBT_ENGINE_STATE_*` env vars),
+  reverting PRs #13002, #13014, #13020, #13039, #13056, and #13073
+time: 2026-07-06T12:00:00.000000000Z
+custom:
+  Author: itsnamangoyal
+  Issue: "NA"
