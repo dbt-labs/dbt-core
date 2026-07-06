@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix intermittent "references a model that does not exist" parsing error when
+  unit testing versioned models, caused by non-deterministic filesystem parse order
+time: 2026-07-03T12:00:00.000000000Z
+custom:
+    Author: itsnamangoyal
+    Issue: "11139"
