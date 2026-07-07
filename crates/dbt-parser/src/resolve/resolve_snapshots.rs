@@ -51,6 +51,7 @@ use dbt_schemas::state::{
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -115,8 +116,10 @@ pub async fn resolve_snapshots(
     // Map target path to original macro path for checksum recalculation
     let mut snapshot_original_paths: HashMap<PathBuf, PathBuf> = HashMap::new();
     let default_snapshots_path = vec![DBT_SNAPSHOTS_DIR_NAME.to_string()];
+    let mut synthetic_snapshot_macro_uids: HashSet<String> = HashSet::new();
     for (macro_uid, macro_node) in macros {
         if macro_node.package_name == package_name && macro_uid.starts_with("snapshot.") {
+            synthetic_snapshot_macro_uids.insert(macro_uid.clone());
             // Write the macro call to the `snapshots` directory
             let macro_call = format!("{{{{ {}() }}}}", macro_node.name);
             let macro_name = macro_node.name.clone();
@@ -443,6 +446,7 @@ pub async fn resolve_snapshots(
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
+                .filter(|uid| !synthetic_snapshot_macro_uids.contains(uid.as_str()))
                 .collect();
 
             // For block-style snapshots (`{% snapshot foo %}...{% endsnapshot %}`),
