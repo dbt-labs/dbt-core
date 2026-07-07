@@ -38,6 +38,7 @@ pub fn apply_color_env_overrides() {
         if !clicolor_force_effective {
             // SAFETY: called at the top of main before any threads are
             // spawned; mutating the process environment here is race-free.
+            #[allow(clippy::disallowed_methods)]
             unsafe {
                 std::env::set_var("CLICOLOR_FORCE", "1");
             }

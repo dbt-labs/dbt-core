@@ -3,31 +3,40 @@ use std::io::{self, Write};
 /// Whether the writer should be treated as a terminal for **routing**
 /// purposes (e.g. selecting console vs log-file telemetry filters).
 ///
-/// * `FORCE_COLOR` (any value other than `"0"`) promotes a non-TTY writer
-///   to terminal-like — see <https://force-color.org>. This lets wrappers
-///   that pipe stdout (e.g. a parent process capturing output) still opt
-///   into console-style output.
+/// * `FORCE_COLOR` set to any value other than `"0"` promotes a non-TTY
+///   writer to terminal-like — see <https://force-color.org>. This lets
+///   wrappers that pipe stdout (e.g. a parent process capturing output)
+///   still opt into console-style output.
+/// * `FORCE_COLOR=0` (or unset) is *not* a demotion: it just declines to
+///   force, and terminal-ness falls back to the writer's actual TTY
+///   status. Treating `FORCE_COLOR=0` as "force off" would drop
+///   console-only telemetry on a real interactive terminal.
 /// * `NO_COLOR` does **not** affect this — it only disables ANSI styling
 ///   (see [`resolve_use_color`]), not terminal-ness. Demoting a real TTY
 ///   here would drop console-only telemetry records, which is beyond
 ///   `NO_COLOR`'s intended scope.
-/// * Otherwise, defers to [`SharedWriter::is_terminal`].
 pub fn resolve_is_terminal<W: SharedWriter + ?Sized>(writer: &W) -> bool {
-    if let Some(v) = std::env::var_os("FORCE_COLOR") {
-        return v != "0";
+    if std::env::var_os("FORCE_COLOR").is_some_and(|v| v != "0") {
+        return true;
     }
     writer.is_terminal()
 }
 
 /// Whether ANSI styling should be emitted for output written to this
-/// writer. Combines terminal-like status with the `NO_COLOR` convention.
+/// writer.
 ///
 /// * `NO_COLOR` (any non-empty value) disables styling regardless of the
 ///   writer's terminal status. Widely honored convention used by many
 ///   CLI tools.
+/// * `FORCE_COLOR=0` also disables styling (matches the convention
+///   established by npm's `supports-color` / `chalk`), without affecting
+///   routing decisions in [`resolve_is_terminal`].
 /// * Otherwise, returns [`resolve_is_terminal`].
 pub fn resolve_use_color<W: SharedWriter + ?Sized>(writer: &W) -> bool {
     if std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
+        return false;
+    }
+    if std::env::var_os("FORCE_COLOR").is_some_and(|v| v == "0") {
         return false;
     }
     resolve_is_terminal(writer)
