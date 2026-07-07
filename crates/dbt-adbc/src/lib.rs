@@ -339,6 +339,18 @@ where
         (self.inner.reduce_f)(acc, key, value)
     }
 
+    async fn wait_for_all_keys_claimed(
+        &self,
+        key_count: usize,
+        token: &CancellationToken,
+    ) -> Result<(), CancelledError> {
+        while self.inner.key_counter.load(Ordering::SeqCst) < key_count {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            token.check_cancellation()?;
+        }
+        Ok(())
+    }
+
     /// Run all tasks in parallel with at most `max_connections` connections.
     async fn do_run(
         self,
@@ -379,15 +391,27 @@ where
         workers.push(worker);
 
         while self.inner.key_counter.load(Ordering::SeqCst) < keys.len() {
-            if let Some(Ok(conn)) = conn_futures.next().await {
-                let worker = tokio::spawn(self.worker(
-                    conn,
-                    tx.clone(),
-                    keys.clone(),
-                    &token,
-                    cur_span.clone(),
-                ));
-                workers.push(worker);
+            if !conn_futures.is_empty() {
+                // Extra connection attempts are speculative: an existing worker may
+                // claim every key while a new connection is still opening. Stop
+                // waiting once that connection can no longer help with this work.
+                tokio::select! {
+                    conn = conn_futures.next() => {
+                        if let Some(Ok(conn)) = conn {
+                            let worker = tokio::spawn(self.worker(
+                                conn,
+                                tx.clone(),
+                                keys.clone(),
+                                &token,
+                                cur_span.clone(),
+                            ));
+                            workers.push(worker);
+                        }
+                    }
+                    claimed = self.wait_for_all_keys_claimed(keys.len(), &token) => {
+                        claimed?;
+                    }
+                }
             }
             if n_conns < max_conns {
                 let remaining_keys = {
@@ -477,4 +501,135 @@ fn cancelled_from_join_error(err: JoinError) -> CancelledError {
 
 fn cancellable_from_join_error<T>(err: JoinError) -> Cancellable<T> {
     cancelled_from_join_error(err).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::{Arc, Mutex};
+
+    struct DummyConnection;
+
+    impl Connection for DummyConnection {
+        fn new_statement(&mut self) -> adbc_core::error::Result<Box<dyn Statement>> {
+            unreachable!("test map function does not execute statements")
+        }
+
+        fn cancel(&mut self) -> adbc_core::error::Result<()> {
+            Ok(())
+        }
+
+        fn commit(&mut self) -> adbc_core::error::Result<()> {
+            Ok(())
+        }
+
+        fn rollback(&mut self) -> adbc_core::error::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct BlockingSecondConnectionFactory {
+        calls: AtomicUsize,
+        second_requested: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+        release_second: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    }
+
+    impl ConnectionFactory for BlockingSecondConnectionFactory {
+        type Error = Cancellable<()>;
+
+        fn new_connection(
+            &self,
+            _node_id: Option<&str>,
+        ) -> Result<Box<dyn Connection>, Self::Error> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) == 1 {
+                if let Some(tx) = self.second_requested.lock().unwrap().take() {
+                    let _ = tx.send(());
+                }
+                let rx = self
+                    .release_second
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .expect("second connection blocker should be present");
+                let _ = rx.recv();
+            }
+            Ok(Box::new(DummyConnection))
+        }
+
+        fn recycle_connection(&self, _conn: Box<dyn Connection>) {}
+
+        fn connection_limit(&self) -> u32 {
+            2
+        }
+    }
+
+    #[tokio::test]
+    async fn map_reduce_does_not_wait_for_extra_connection_before_reducing_completed_work() {
+        struct ReleaseOnDrop(Option<std::sync::mpsc::Sender<()>>);
+
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                if let Some(tx) = self.0.take() {
+                    let _ = tx.send(());
+                }
+            }
+        }
+
+        let (second_requested_tx, second_requested_rx) = std::sync::mpsc::channel();
+        let (release_second_tx, release_second_rx) = std::sync::mpsc::channel();
+        let release_second = ReleaseOnDrop(Some(release_second_tx));
+        let (mapped_last_tx, mapped_last_rx) = tokio::sync::oneshot::channel();
+        let mapped_last_tx = Arc::new(Mutex::new(Some(mapped_last_tx)));
+        let second_requested_rx = Arc::new(Mutex::new(Some(second_requested_rx)));
+
+        let factory = BlockingSecondConnectionFactory {
+            calls: AtomicUsize::new(0),
+            second_requested: Mutex::new(Some(second_requested_tx)),
+            release_second: Mutex::new(Some(release_second_rx)),
+        };
+        let map_f = {
+            let mapped_last_tx = Arc::clone(&mapped_last_tx);
+            let second_requested_rx = Arc::clone(&second_requested_rx);
+            Box::new(move |_conn: &mut dyn Connection, key: &u32| {
+                if *key == 1 {
+                    let rx = second_requested_rx
+                        .lock()
+                        .unwrap()
+                        .take()
+                        .expect("second connection waiter should be present");
+                    let _ = rx.recv();
+                }
+                if *key == 2
+                    && let Some(tx) = mapped_last_tx.lock().unwrap().take()
+                {
+                    let _ = tx.send(());
+                }
+                *key
+            })
+        };
+        let reduce_f = Box::new(|acc: &mut u32, _key: u32, value: u32| {
+            *acc += value;
+            Ok(())
+        });
+        let map_reduce = MapReduce::new(Box::new(factory), map_f, reduce_f, None);
+
+        let handle = tokio::spawn(async move {
+            map_reduce
+                .run(Arc::new(vec![1, 2]), CancellationToken::never_cancels())
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(1), mapped_last_rx)
+            .await
+            .expect("first worker did not process all keys")
+            .expect("first worker should process all keys");
+
+        let result = tokio::time::timeout(Duration::from_secs(3), handle).await;
+        drop(release_second);
+        let acc = result
+            .expect("MapReduce waited for an unused extra connection")
+            .expect("MapReduce task panicked")
+            .expect("MapReduce should succeed");
+        assert_eq!(acc, 3);
+    }
 }
