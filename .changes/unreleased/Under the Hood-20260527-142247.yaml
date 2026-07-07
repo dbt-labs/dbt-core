@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Add v2-parser telemetry — forward dbt-core's invocation_id and set DBT_INVOCATION_ENV=dbt-core-v2-parser on the parser subprocess so embedded telemetry correlates with the host invocation, and emit V2ParserStart/V2ParserEnd events around the handoff so pre-startup failures (missing binary, schema mismatch) are also captured. Bumps dbt-protos lower bound to 1.0.514 for the new event messages.
-time: 2026-05-27T14:22:47.358872-06:00
-custom:
-    Author: aiguofer
-    Issue: "13029"
