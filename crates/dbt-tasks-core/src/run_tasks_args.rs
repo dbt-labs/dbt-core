@@ -6,6 +6,7 @@ use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::FsCommand;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::LocalExecutionBackendKind;
+use dbt_common::io_args::OptimizeTestsOptions;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::{DisplayFormat, EvalArgs, ReplayMode};
 use dbt_common::io_args::{Phases, RunCacheMode};
@@ -98,6 +99,8 @@ pub struct RunTasksArgs {
     pub fail_fast: FailFast,
     /// Whether to skip running post hook operations.
     pub skip_post_hooks: bool,
+    /// Hidden test optimization flags.
+    pub optimize_tests: dbt_common::collections::HashSet<OptimizeTestsOptions>,
     /// Whether the gRPC run-cache service is explicitly requested via CLI flag.
     pub run_cache_service: bool,
     /// Per-invocation warn-error options resolved before task execution.
@@ -146,6 +149,7 @@ impl RunTasksArgs {
             event_time_end: arg.event_time_end.clone(),
             fail_fast,
             skip_post_hooks: arg.skip_post_hooks,
+            optimize_tests: arg.optimize_tests.clone(),
             run_cache_service: arg.run_cache_service,
             warn_error_options: arg.warn_error_options.clone(),
             empty: arg.empty,

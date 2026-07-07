@@ -4,6 +4,9 @@
 /// Module for rendering event listener functionality
 pub mod listener;
 
+/// Module for formatting Jinja macro arguments
+pub mod jinja_arg_format;
+
 /// Module for serialization/deserialization functionality
 pub mod serde;
 

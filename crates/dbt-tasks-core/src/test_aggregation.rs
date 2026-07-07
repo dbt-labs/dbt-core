@@ -1,15 +1,20 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::string_utils::maybe_truncate_test_name;
-use dbt_common::{CodeLocationWithFile, FsResult, stdfs};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsResult, fs_err, stdfs};
+use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::schemas::common::{DbtChecksum, Severity};
 use dbt_schemas::schemas::nodes::{DbtTest, TestMetadata};
 use dbt_schemas::schemas::profiles::Execute;
+use dbt_schemas::schemas::project::{
+    DEFAULT_DATA_TEST_ERROR_IF, DEFAULT_DATA_TEST_FAIL_CALC, DEFAULT_DATA_TEST_SEVERITY,
+    DEFAULT_DATA_TEST_WARN_IF,
+};
 
 // NOTE: This module intentionally mirrors the legacy resolve-phase aggregation logic
 // but runs at task time and only considers selected, enabled generic column tests.
@@ -68,11 +73,23 @@ fn is_aggregatable_test(test: &DbtTest) -> bool {
     let config = &test.deprecated_config;
     let enabled = config.enabled.is_none_or(|enabled| enabled);
     let eligible = matches!(macro_name.as_str(), "unique" | "not_null");
-    let safe = config.fail_calc.is_none()
+    let safe = config
+        .fail_calc
+        .as_deref()
+        .is_none_or(|fail_calc| fail_calc == DEFAULT_DATA_TEST_FAIL_CALC)
         && config.limit.is_none()
-        && config.severity.is_none()
-        && config.error_if.is_none()
-        && config.warn_if.is_none()
+        && config
+            .severity
+            .as_ref()
+            .is_none_or(|severity| severity == &DEFAULT_DATA_TEST_SEVERITY)
+        && config
+            .error_if
+            .as_deref()
+            .is_none_or(|error_if| error_if == DEFAULT_DATA_TEST_ERROR_IF)
+        && config
+            .warn_if
+            .as_deref()
+            .is_none_or(|warn_if| warn_if == DEFAULT_DATA_TEST_WARN_IF)
         && config.store_failures.is_none()
         && config.store_failures_as.is_none()
         && config.where_.is_none();
@@ -283,7 +300,23 @@ fn create_aggregated_test(
     let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{test_group_name}.sql"));
     let absolute_path = io_args.out_dir.join(&path);
 
-    let mut kwargs = BTreeMap::new();
+    let template_metadata = template
+        .__test_attr__
+        .test_metadata
+        .as_ref()
+        .ok_or_else(|| {
+            fs_err!(
+                ErrorCode::Unexpected,
+                "Generic test aggregation requires test metadata"
+            )
+        })?;
+    let model = template_metadata.kwargs.get("model").ok_or_else(|| {
+        fs_err!(
+            ErrorCode::Unexpected,
+            "Generic test aggregation requires test metadata with a model argument"
+        )
+    })?;
+    let mut kwargs = template_metadata.kwargs.clone();
     kwargs.insert(
         "column_names".to_string(),
         dbt_yaml::Value::Sequence(
@@ -296,23 +329,39 @@ fn create_aggregated_test(
     );
 
     let test_metadata = TestMetadata {
-        name: format!(
-            "aggregated_{}",
-            template
-                .__test_attr__
-                .test_metadata
-                .as_ref()
-                .map(|m| m.name.clone())
-                .unwrap_or_else(|| "unknown".to_string())
-        ),
+        name: format!("aggregated_{}", template_metadata.name.clone()),
         kwargs,
         namespace: None,
     };
 
+    let model_json = serde_json::to_value(model).map_err(|e| {
+        fs_err!(
+            ErrorCode::Unexpected,
+            "Failed to serialize aggregated test model argument: {}",
+            e
+        )
+    })?;
+    if model_json.is_object() {
+        return Err(fs_err!(
+            ErrorCode::Unexpected,
+            "Aggregated test arguments do not support object values"
+        ));
+    }
+    let column_names_json = serde_json::to_value(columns).map_err(|e| {
+        fs_err!(
+            ErrorCode::Unexpected,
+            "Failed to serialize aggregated test column_names argument: {}",
+            e
+        )
+    })?;
+    let jinja_set_vars = std::collections::BTreeMap::new();
+    let model_arg = format_value_for_jinja(&model_json, &jinja_set_vars);
+    let column_names_arg = format_value_for_jinja(&column_names_json, &jinja_set_vars);
+    let alias_arg =
+        serde_json::to_string(test_group_name).expect("string serialization should not fail");
     let raw_code = format!(
-        "{{{{ test_{macro_name}(**_dbt_generic_test_kwargs) }}}}{{{{ config(alias=\"{alias}\") }}}}",
+        "{{{{ test_{macro_name}(model={model_arg}, column_names={column_names_arg}) }}}}{{{{ config(alias={alias_arg}) }}}}",
         macro_name = test_metadata.name,
-        alias = test_group_name,
     );
 
     // write SQL to target so render_sql_instruction can read it
@@ -343,8 +392,226 @@ fn create_aggregated_test(
 
     // metadata
     test.__test_attr__.column_name = None;
-    test.__test_attr__.attached_node = test.__test_attr__.attached_node.clone();
     test.__test_attr__.test_metadata = Some(test_metadata);
 
     Ok(test)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    use dbt_schemas::schemas::common::StoreFailuresAs;
+    use dbt_schemas::schemas::nodes::{DbtTestAttr, Nodes};
+
+    fn test_node(unique_id: &str, macro_name: &str, column_name: &str) -> DbtTest {
+        let mut test = DbtTest::default();
+        test.__common_attr__.unique_id = unique_id.to_string();
+        test.__common_attr__.name = unique_id.to_string();
+        test.__common_attr__.package_name = "pkg".to_string();
+        test.__base_attr__.schema = "dbt_test__audit".to_string();
+        test.__base_attr__.alias = unique_id.replace('.', "_");
+        test.__test_attr__ = DbtTestAttr {
+            column_name: Some(column_name.to_string()),
+            attached_node: Some("model.pkg.orders".to_string()),
+            test_metadata: Some(TestMetadata {
+                name: macro_name.to_string(),
+                kwargs: BTreeMap::from([
+                    (
+                        "column_name".to_string(),
+                        dbt_yaml::Value::string(column_name.to_string()),
+                    ),
+                    (
+                        "model".to_string(),
+                        dbt_yaml::Value::string(
+                            "{{ get_where_subquery(ref('orders')) }}".to_string(),
+                        ),
+                    ),
+                ]),
+                namespace: None,
+            }),
+            ..Default::default()
+        };
+        test
+    }
+
+    fn resolved_default_config(test: &mut DbtTest) {
+        test.deprecated_config.enabled = Some(true);
+        test.deprecated_config.severity = Some(DEFAULT_DATA_TEST_SEVERITY.clone());
+        test.deprecated_config.fail_calc = Some(DEFAULT_DATA_TEST_FAIL_CALC.to_string());
+        test.deprecated_config.error_if = Some(DEFAULT_DATA_TEST_ERROR_IF.to_string());
+        test.deprecated_config.warn_if = Some(DEFAULT_DATA_TEST_WARN_IF.to_string());
+    }
+
+    fn schedule_and_nodes(tests: Vec<DbtTest>) -> (dbt_dag::schedule::Schedule<String>, Nodes) {
+        let mut schedule = dbt_dag::schedule::Schedule::default();
+        let mut nodes = Nodes::default();
+
+        for test in tests {
+            let unique_id = test.common().unique_id.clone();
+            schedule.selected_nodes.insert(unique_id.clone());
+            nodes.tests.insert(unique_id, Arc::new(test));
+        }
+
+        (schedule, nodes)
+    }
+
+    #[test]
+    fn aggregated_raw_code_quotes_column_names_but_preserves_model_expression() {
+        let template = test_node("test.pkg.not_null_orders_id", "not_null", "id");
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let io = dbt_common::io_args::IoArgs {
+            out_dir: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let columns = vec!["id".to_string(), "order_total".to_string()];
+
+        let test = create_aggregated_test(
+            "aggregated_not_null_orders",
+            "test.pkg.aggregated_not_null_orders",
+            &template,
+            &columns,
+            &io,
+        )
+        .expect("aggregated test");
+
+        assert_eq!(
+            test.__common_attr__.raw_code.as_deref(),
+            Some(
+                "{{ test_aggregated_not_null(model=get_where_subquery(ref('orders')), column_names=[\"id\",\"order_total\"]) }}{{ config(alias=\"aggregated_not_null_orders\") }}"
+            )
+        );
+    }
+
+    #[test]
+    fn aggregated_raw_code_escapes_alias_as_string_literal() {
+        let template = test_node("test.pkg.not_null_orders_id", "not_null", "id");
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let io = dbt_common::io_args::IoArgs {
+            out_dir: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let test = create_aggregated_test(
+            "aggregated_not_null_orders\" }}{{ var('secret') }}{{ \"",
+            "test.pkg.aggregated_not_null_orders",
+            &template,
+            &["id".to_string()],
+            &io,
+        )
+        .expect("aggregated test");
+
+        assert_eq!(
+            test.__common_attr__.raw_code.as_deref(),
+            Some(
+                "{{ test_aggregated_not_null(model=get_where_subquery(ref('orders')), column_names=[\"id\"]) }}{{ config(alias=\"aggregated_not_null_orders\\\" }}{{ var('secret') }}{{ \\\"\") }}"
+            )
+        );
+    }
+
+    #[test]
+    fn resolved_default_config_tests_aggregate() {
+        for macro_name in ["not_null", "unique"] {
+            let mut test_a = test_node(
+                &format!("test.pkg.{macro_name}_orders_id"),
+                macro_name,
+                "id",
+            );
+            let mut test_b = test_node(
+                &format!("test.pkg.{macro_name}_orders_email"),
+                macro_name,
+                "email",
+            );
+            resolved_default_config(&mut test_a);
+            resolved_default_config(&mut test_b);
+            assert!(is_aggregatable_test(&test_a));
+            assert!(is_aggregatable_test(&test_b));
+
+            let (schedule, nodes) = schedule_and_nodes(vec![test_a, test_b]);
+            let temp_dir = tempfile::tempdir().expect("temp dir");
+            let io = dbt_common::io_args::IoArgs {
+                out_dir: temp_dir.path().to_path_buf(),
+                ..Default::default()
+            };
+
+            let aggregation =
+                create_generic_test_aggregation(&io, &schedule, &nodes, Execute::Remote)
+                    .expect("aggregation")
+                    .expect("aggregated group");
+            assert_eq!(aggregation.groups.len(), 1);
+
+            let group = aggregation.groups.values().next().expect("group");
+            assert_eq!(group.member_tests.len(), 2);
+            assert!(group.name.starts_with(&format!("aggregated_{macro_name}_")));
+
+            let aggregated_sql = temp_dir
+                .path()
+                .join(DBT_GENERIC_TESTS_DIR_NAME)
+                .join(format!("{}.sql", group.name));
+            assert!(aggregated_sql.exists());
+        }
+    }
+
+    #[test]
+    fn custom_config_tests_are_not_aggregatable() {
+        let cases: Vec<(&str, fn(&mut DbtTest))> = vec![
+            ("severity", |test| {
+                test.deprecated_config.severity = Some(Severity::Warn)
+            }),
+            ("fail_calc", |test| {
+                test.deprecated_config.fail_calc = Some("sum(failures)".to_string())
+            }),
+            ("error_if", |test| {
+                test.deprecated_config.error_if = Some("> 10".to_string())
+            }),
+            ("warn_if", |test| {
+                test.deprecated_config.warn_if = Some("> 0".to_string())
+            }),
+            ("limit", |test| test.deprecated_config.limit = Some(1)),
+            ("where", |test| {
+                test.deprecated_config.where_ = Some("id is not null".to_string())
+            }),
+            ("store_failures", |test| {
+                test.deprecated_config.store_failures = Some(false)
+            }),
+            ("store_failures_as", |test| {
+                test.deprecated_config.store_failures_as = Some(StoreFailuresAs::Table)
+            }),
+        ];
+
+        for (name, mutate) in cases {
+            let mut test = test_node(
+                &format!("test.pkg.not_null_orders_{name}"),
+                "not_null",
+                name,
+            );
+            resolved_default_config(&mut test);
+            mutate(&mut test);
+            assert!(
+                !is_aggregatable_test(&test),
+                "{name} should make the test ineligible"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_config_prevents_group_creation() {
+        let mut test_a = test_node("test.pkg.unique_orders_id", "unique", "id");
+        let mut test_b = test_node("test.pkg.unique_orders_email", "unique", "email");
+        resolved_default_config(&mut test_a);
+        resolved_default_config(&mut test_b);
+        test_b.deprecated_config.warn_if = Some("> 0".to_string());
+
+        let (schedule, nodes) = schedule_and_nodes(vec![test_a, test_b]);
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let io = dbt_common::io_args::IoArgs {
+            out_dir: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let aggregation = create_generic_test_aggregation(&io, &schedule, &nodes, Execute::Remote)
+            .expect("aggregation");
+        assert!(aggregation.is_none());
+    }
 }

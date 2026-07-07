@@ -28,6 +28,11 @@ use crate::schemas::serde::{
     bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
 };
 
+pub const DEFAULT_DATA_TEST_ERROR_IF: &str = "!= 0";
+pub const DEFAULT_DATA_TEST_FAIL_CALC: &str = "count(*)";
+pub const DEFAULT_DATA_TEST_SEVERITY: Severity = Severity::Error;
+pub const DEFAULT_DATA_TEST_WARN_IF: &str = "!= 0";
+
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectDataTestConfig {
@@ -330,9 +335,9 @@ pub struct DataTestConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[resolved(promote, default = "!= 0".to_string())]
+    #[resolved(promote, default = DEFAULT_DATA_TEST_ERROR_IF.to_string())]
     pub error_if: Option<String>,
-    #[resolved(promote, default = "count(*)".to_string())]
+    #[resolved(promote, default = DEFAULT_DATA_TEST_FAIL_CALC.to_string())]
     pub fail_calc: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
@@ -340,7 +345,7 @@ pub struct DataTestConfig {
     pub limit: Option<i32>,
     #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
-    #[resolved(promote, default = Severity::Error)]
+    #[resolved(promote, default = DEFAULT_DATA_TEST_SEVERITY.clone())]
     pub severity: Option<Severity>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,
@@ -351,7 +356,7 @@ pub struct DataTestConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
-    #[resolved(promote, default = "!= 0".to_string())]
+    #[resolved(promote, default = DEFAULT_DATA_TEST_WARN_IF.to_string())]
     pub warn_if: Option<String>,
     #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,

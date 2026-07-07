@@ -151,7 +151,9 @@ pub mod schemas {
         };
         pub use configs::config_keys::ConfigKeys;
         pub use configs::data_test_config::{
-            DataTestConfig, ProjectDataTestConfig, ResolvedDataTestConfig,
+            DEFAULT_DATA_TEST_ERROR_IF, DEFAULT_DATA_TEST_FAIL_CALC, DEFAULT_DATA_TEST_SEVERITY,
+            DEFAULT_DATA_TEST_WARN_IF, DataTestConfig, ProjectDataTestConfig,
+            ResolvedDataTestConfig,
         };
         pub use configs::exposure_config::{
             ExposureConfig, ProjectExposureConfig, ResolvedExposureConfig,

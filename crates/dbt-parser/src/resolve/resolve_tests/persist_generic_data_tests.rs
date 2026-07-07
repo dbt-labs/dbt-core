@@ -10,6 +10,7 @@ use dbt_common::tracing::dbt_emit::emit_strict_parse_error;
 use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;
+use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
 use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::common::normalize_quote;
@@ -854,18 +855,6 @@ static CLEAN_REGEX: LazyLock<Regex> =
 static PATH_UNSAFE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[/\\]").expect("valid regex"));
 
-/// Matches strings that are a single bare call to one of dbt-Core's whitelisted
-/// renderable test-arg functions (e.g. `var('foo')`, `env_var('FOO', 'default')`).
-/// Mirrors `looks_like_func` in dbt-core/clients/jinja.py — used by
-/// `add_rendered_test_kwargs` to decide which test-arg strings get wrapped in
-/// `{{ }}` and rendered through the native Jinja env. The end-of-string anchor
-/// is significant: shapes like `var('x') ~ 'y'` that have content after the
-/// closing paren are intentionally excluded so we don't diverge from Core by
-/// accepting expressions Core rejects.
-static LOOKS_LIKE_FUNC: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$").expect("valid regex")
-});
-
 /// Generates a unique hash for a generic test based on uncleaned kwargs.
 /// This matches mantle's behavior where the unique_id includes a hash of the
 /// test metadata (namespace, name, kwargs) WITHOUT cleaning, ensuring that
@@ -1225,96 +1214,6 @@ fn generate_test_macro(
         sql.push_str(&format!("{{{{ config({config_str}) }}}}"));
     }
     Ok(sql)
-}
-
-/// Helper function to recursively format a JSON value for Jinja macro calls.
-pub(crate) fn format_value_for_jinja(
-    value: &Value,
-    jinja_set_vars: &BTreeMap<String, String>,
-) -> String {
-    match value {
-        Value::String(s) => {
-            // Strings shaped like a single bare call to one of dbt-Core's renderable
-            // functions (`env_var(...)`, `ref(...)`, `var(...)`, `source(...)`, `doc(...)`)
-            // are emitted unquoted so Jinja evaluates them when the generated test SQL is
-            // rendered. Core does the same in `add_rendered_test_kwargs` (clients/jinja.py)
-            // by re-wrapping such values in `{{ }}` before native rendering.
-            if s.starts_with("get_where_subquery(")
-                || LOOKS_LIKE_FUNC.is_match(s)
-                || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
-            {
-                s.to_string()
-            } else if s.starts_with("{{") && s.ends_with("}}") {
-                s[2..s.len() - 2].trim().to_string()
-            } else {
-                let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
-                format!("\"{escaped}\"")
-            }
-        }
-        Value::Array(arr) => {
-            let formatted_elements: Vec<String> = arr
-                .iter()
-                .map(|elem| format_value_for_jinja(elem, jinja_set_vars))
-                .collect();
-            format!("[{}]", formatted_elements.join(","))
-        }
-        Value::Object(obj) => {
-            let mut keys: Vec<&String> = obj.keys().collect();
-            keys.sort();
-            let formatted_pairs: Vec<String> = keys
-                .iter()
-                .map(|k| {
-                    let formatted_val = format_value_for_jinja(&obj[*k], jinja_set_vars);
-                    format!("\"{k}\":{formatted_val}")
-                })
-                .collect();
-            format!("{{{}}}", formatted_pairs.join(","))
-        }
-        _ => json_to_jinja_literal(value),
-    }
-}
-
-fn json_to_jinja_literal(v: &Value) -> String {
-    match v {
-        Value::Null => "none".to_string(),
-        Value::Bool(b) => {
-            if *b {
-                "true".to_string()
-            } else {
-                "false".to_string()
-            }
-        }
-        Value::Number(n) => n.to_string(),
-        Value::String(s) => serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string()),
-        Value::Array(arr) => {
-            let mut out = String::from("[");
-            for (i, item) in arr.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                out.push_str(&json_to_jinja_literal(item));
-            }
-            out.push(']');
-            out
-        }
-        Value::Object(map) => {
-            // Deterministic ordering for stable SQL/tests
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            let mut out = String::from("{");
-            for (i, k) in keys.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                let key = serde_json::to_string(k).unwrap_or_else(|_| "\"\"".to_string());
-                out.push_str(&key);
-                out.push(':');
-                out.push_str(&json_to_jinja_literal(&map[*k]));
-            }
-            out.push('}');
-            out
-        }
-    }
 }
 
 impl<T> TryFrom<&TestableNode<'_, T>> for Vec<GenericTestConfig>
@@ -2812,12 +2711,6 @@ mod tests {
     }
 
     #[test]
-    fn test_json_to_jinja_literal_null_becomes_none_in_list() {
-        let v = Value::Array(vec![Value::String("x".to_string()), Value::Null]);
-        assert_eq!(json_to_jinja_literal(&v), "[\"x\",none]");
-    }
-
-    #[test]
     fn test_jinja_extraction_from_arrays() {
         // Test that Jinja expressions inside arrays are properly extracted
         let mut test_args = serde_json::Map::new();
@@ -2917,7 +2810,7 @@ mod tests {
         );
 
         // The macro call should have the variable reference without quotes
-        // Note: json_to_jinja_literal converts null to "none" for proper Jinja syntax
+        // and null values converted to "none" for proper Jinja syntax.
         assert!(
             sql.contains("values=[dbt_custom_arg_values_0,none,\"regular_string\"]"),
             "Expected array with variable reference (unquoted), none, and quoted string, got: {sql}"

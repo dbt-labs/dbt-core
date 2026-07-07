@@ -1426,7 +1426,9 @@ pub enum StoreFailuresAs {
     View,
 }
 
-#[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, DbtSchema)]
+#[derive(
+    Debug, Serialize, Default, Deserialize, Clone, PartialEq, Eq, EnumString, Display, DbtSchema,
+)]
 #[serde(rename_all = "UPPERCASE")]
 #[schemars(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]

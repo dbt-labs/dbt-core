@@ -1,4 +1,4 @@
-use dbt_common::io_args::FsCommand;
+use dbt_common::io_args::{FsCommand, OptimizeTestsOptions};
 use dbt_common::static_analysis::is_strict_static_analysis;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
@@ -105,8 +105,16 @@ impl GraphBuilder {
         let nodes = &resolver_state.nodes;
 
         // Test aggregation
-        let generic_test_aggregation =
-            create_generic_test_aggregation(&self.arg.io, schedule, nodes, self.execute)?;
+        let generic_test_aggregation = if self
+            .arg
+            .optimize_tests
+            .contains(&OptimizeTestsOptions::TestAggregation)
+            && command_uses_generic_test_aggregation(self.arg.command)
+        {
+            create_generic_test_aggregation(&self.arg.io, schedule, nodes, self.execute)?
+        } else {
+            None
+        };
         let (aggregated_schedule, aggregated_nodes) =
             if let Some(aggregation) = generic_test_aggregation.as_ref() {
                 let (schedule, nodes) =
