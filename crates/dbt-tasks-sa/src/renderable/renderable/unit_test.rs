@@ -1645,6 +1645,17 @@ fn yml_value_to_sql_literal(
         YmlValue::Null(_) => Ok(literal_formatter.none_value()),
         YmlValue::Bool(b, _) => Ok(literal_formatter.format_bool(b)),
         YmlValue::Number(n, _) => Ok(n.to_string()),
+        // For BigQuery, a string fixture for a STRUCT or GEOGRAPHY column is a
+        // SQL expression (e.g. `STRUCT("A" AS f1)`, `ST_GEOGPOINT(1, 2)`) that
+        // must be injected verbatim: these types cannot be produced by CASTing
+        // a string literal. See dbt-labs/dbt-core#14625.
+        YmlValue::String(s, _)
+            if adapter_type == AdapterType::Bigquery
+                && (matches!(data_type, DataType::Struct(_))
+                    || BigqueryTyping::is_geography(data_type)) =>
+        {
+            Ok(s)
+        }
         YmlValue::String(s, _) => Ok(literal_formatter.format_str(&s)),
         // Mappings/sequences have per-dialect customizations
         YmlValue::Mapping(m, _) => {
@@ -1921,12 +1932,6 @@ fn create_bigquery_relation_to_select_from(
                 .map(|(i, value)| {
                     let field_name = schema.field(i).name().to_lowercase();
                     let formatted_name = &type_ops.format_ident(&field_name);
-                    let formatted_value = yml_value_to_sql_literal(
-                        AdapterType::Bigquery,
-                        type_ops,
-                        value,
-                        schema.field(i).data_type(),
-                    )?;
 
                     // format cast target
                     let bigquery_type = columns_mapped.get(&field_name).ok_or_else(|| {
@@ -1936,6 +1941,16 @@ fn create_bigquery_relation_to_select_from(
                             field_name
                         )
                     })?;
+
+                    // Complex-type handling (verbatim SQL-expression injection
+                    // for STRUCT/GEOGRAPHY, STRUCT(...) for mappings, arrays for
+                    // sequences) lives in `yml_value_to_sql_literal`.
+                    let formatted_value = yml_value_to_sql_literal(
+                        AdapterType::Bigquery,
+                        type_ops,
+                        value,
+                        schema.field(i).data_type(),
+                    )?;
 
                     Ok(format!(
                         "CAST({formatted_value} AS {bigquery_type}) AS {formatted_name}"
@@ -2697,6 +2712,103 @@ mod tests {
             result,
             "CAST([CAST(4 AS float64), CAST(2 AS float64)] AS ARRAY<float64>) AS array_col",
             "array_col should have typed elements and ARRAY<T> type parameter"
+        );
+    }
+
+    /// A STRUCT fixture supplied as a YAML mapping (not a string SQL
+    /// expression) must still render as a `STRUCT(...)` built from typed
+    /// fields — the non-string path flagged in review for dbt-core#14625.
+    #[test]
+    fn test_create_bigquery_relation_struct_from_mapping() {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "struct_field",
+            DataType::Struct(
+                vec![
+                    Arc::new(Field::new("field1", DataType::Utf8, true)),
+                    Arc::new(Field::new("field2", DataType::Int64, true)),
+                ]
+                .into(),
+            ),
+            true,
+        )]));
+
+        let columns =
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Bigquery))
+                .expect("Must format column types");
+
+        let mut object_map = dbt_yaml::mapping::Mapping::new();
+        object_map.insert(
+            YmlValue::string("field1".to_string()),
+            YmlValue::string("A".to_string()),
+        );
+        object_map.insert(
+            YmlValue::string("field2".to_string()),
+            YmlValue::number(1.into()),
+        );
+        let yml_rows = vec![vec![YmlValue::Mapping(object_map, Default::default())]];
+
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            yml_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+
+        assert_contains!(
+            result,
+            "STRUCT('A' AS field1, 1 AS field2)",
+            "a mapping fixture must render as STRUCT(...) with typed fields"
+        );
+    }
+
+    /// Regression for dbt-labs/dbt-core#14625: a string fixture value for a
+    /// STRUCT / GEOGRAPHY column is a SQL expression and must be injected
+    /// verbatim, not single-quoted as a string literal (which BigQuery cannot
+    /// CAST to the target type). Plain string columns must still be quoted.
+    #[test]
+    fn test_create_bigquery_relation_string_expr_for_complex_type() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new(
+                "struct_field",
+                DataType::Struct(
+                    vec![
+                        Arc::new(Field::new("field1", DataType::Utf8, true)),
+                        Arc::new(Field::new("field2", DataType::Utf8, true)),
+                    ]
+                    .into(),
+                ),
+                true,
+            ),
+            Field::new("name", DataType::Utf8, true),
+        ]));
+
+        let columns =
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Bigquery))
+                .expect("Must format column types");
+
+        let yml_rows = vec![vec![
+            YmlValue::string("STRUCT(\"A\" AS field1, \"B\" AS field2)".to_string()),
+            YmlValue::string("hello".to_string()),
+        ]];
+
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            yml_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+
+        assert_contains!(
+            result,
+            "CAST(STRUCT(\"A\" AS field1, \"B\" AS field2) AS STRUCT<field1 string, field2 string>) AS struct_field",
+            "struct expression must be injected raw, not quoted"
+        );
+        assert_contains!(
+            result,
+            "CAST('hello' AS string) AS name",
+            "plain string values must remain quoted"
         );
     }
 }
