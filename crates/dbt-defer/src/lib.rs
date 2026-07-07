@@ -929,14 +929,19 @@ pub fn set_defer_context_on_resolver(
     node_resolver.set_defer_context(node_introspections, has_analyzed_schema, nodes_materialized);
 }
 
+/// Only when the node is selected and its static analysis is set to strict,
+/// it will produce a locally analyzed schema.
 pub fn node_will_produce_local_analyzed_schema(
     unique_id: &str,
     node: &dyn InternalDbtNodeAttributes,
     frontier_nodes: &BTreeSet<String>,
 ) -> bool {
-    !frontier_nodes.contains(unique_id)
-        && !unique_id.starts_with("source.")
+    node_is_selected(unique_id, frontier_nodes)
         && is_strict_static_analysis(*node.base().static_analysis)
+}
+
+pub fn node_is_selected(unique_id: &str, frontier_nodes: &BTreeSet<String>) -> bool {
+    !frontier_nodes.contains(unique_id) && !unique_id.starts_with("source.")
 }
 
 fn compile_node_requires_deferred_upstream(
