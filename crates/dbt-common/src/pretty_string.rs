@@ -8,33 +8,40 @@ use std::sync::LazyLock;
 /// crate's global color-enabled flag. Call once, early in `main`, before any
 /// styled output is produced.
 ///
-/// * `NO_COLOR` (any non-empty value) disables ANSI styling. Widely
-///   honored convention used by many CLI tools.
-/// * `FORCE_COLOR` (any value other than `"0"`) enables ANSI styling even
-///   when stdout is not a TTY — see <https://force-color.org>. This lets
-///   parent processes that capture stdout (e.g. a wrapper piping output)
-///   still receive colored output.
-/// * If neither is set, the `console` crate's default TTY detection wins.
+/// * `NO_COLOR` disables ANSI styling. Presence-only: any value (including
+///   an empty string, as produced by `export NO_COLOR` with no assignment)
+///   counts. Widely honored convention used by many CLI tools.
+/// * `FORCE_COLOR=0` disables ANSI styling, matching the npm
+///   `supports-color` / `chalk` convention.
+/// * `FORCE_COLOR` set to any other value enables ANSI styling even when
+///   stdout is not a TTY — see <https://force-color.org>. This lets parent
+///   processes that capture stdout (e.g. a wrapper piping output) still
+///   receive colored output.
+/// * If none of the above apply, the `console` crate's default TTY
+///   detection wins.
 ///
-/// When `FORCE_COLOR` is set, `CLICOLOR_FORCE=1` is also exported so
+/// When `FORCE_COLOR` is enabling, `CLICOLOR_FORCE=1` is also exported so
 /// clap/anstream-styled output (usage/error text) is colored consistently.
 pub fn apply_color_env_overrides() {
-    if std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
+    if std::env::var_os("NO_COLOR").is_some() {
         console::set_colors_enabled(false);
         console::set_colors_enabled_stderr(false);
         return;
     }
-    if let Some(v) = std::env::var_os("FORCE_COLOR")
-        && v != "0"
-    {
+    if let Some(v) = std::env::var_os("FORCE_COLOR") {
+        if v == "0" {
+            console::set_colors_enabled(false);
+            console::set_colors_enabled_stderr(false);
+            return;
+        }
         console::set_colors_enabled(true);
         console::set_colors_enabled_stderr(true);
         // Treat an empty CLICOLOR_FORCE as unset — if a parent set it to ""
         // it did not actually opt into forcing colors, and clap/anstream
         // would otherwise still skip forced coloring, making output
         // inconsistent with the caller's FORCE_COLOR intent.
-        let clicolor_force_effective = std::env::var_os("CLICOLOR_FORCE")
-            .is_some_and(|v| !v.is_empty());
+        let clicolor_force_effective =
+            std::env::var_os("CLICOLOR_FORCE").is_some_and(|v| !v.is_empty());
         if !clicolor_force_effective {
             // SAFETY: called at the top of main before any threads are
             // spawned; mutating the process environment here is race-free.

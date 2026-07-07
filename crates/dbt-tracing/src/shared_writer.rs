@@ -25,15 +25,16 @@ pub fn resolve_is_terminal<W: SharedWriter + ?Sized>(writer: &W) -> bool {
 /// Whether ANSI styling should be emitted for output written to this
 /// writer.
 ///
-/// * `NO_COLOR` (any non-empty value) disables styling regardless of the
-///   writer's terminal status. Widely honored convention used by many
-///   CLI tools.
+/// * `NO_COLOR` disables styling regardless of the writer's terminal
+///   status. Presence-only: any value (including an empty string, as
+///   produced by `export NO_COLOR` with no assignment) counts. Widely
+///   honored convention used by many CLI tools.
 /// * `FORCE_COLOR=0` also disables styling (matches the convention
 ///   established by npm's `supports-color` / `chalk`), without affecting
 ///   routing decisions in [`resolve_is_terminal`].
 /// * Otherwise, returns [`resolve_is_terminal`].
 pub fn resolve_use_color<W: SharedWriter + ?Sized>(writer: &W) -> bool {
-    if std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
+    if std::env::var_os("NO_COLOR").is_some() {
         return false;
     }
     if std::env::var_os("FORCE_COLOR").is_some_and(|v| v == "0") {
