@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use dbt_common::adapter::dialect_of;
+use dbt_frontend_common::Dialect;
 use dbt_sql_utils::{is_empty_or_comment_only, sql_split_statements};
 
 use crate::AdapterType;
@@ -30,8 +31,17 @@ impl StmtSplitter for DefaultStmtSplitter {
     }
 
     fn is_empty(&self, sql: &str, adapter_type: AdapterType) -> bool {
-        let dialect = dialect_of(adapter_type);
-        is_empty_or_comment_only(sql, dialect)
+        use AdapterType::*;
+
+        let by_dialect = |dialect: Dialect| is_empty_or_comment_only(sql, dialect);
+        match adapter_type {
+            Snowflake => by_dialect(Dialect::Snowflake),
+            Bigquery => by_dialect(Dialect::Bigquery),
+            Databricks | Spark => by_dialect(Dialect::Databricks),
+            Redshift => by_dialect(Dialect::Redshift),
+            // fallback to the Trino lexer for unsupported lexer dialects
+            _ => by_dialect(Dialect::Trino),
+        }
     }
 }
 

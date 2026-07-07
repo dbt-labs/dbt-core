@@ -32,6 +32,7 @@ pub const MICROBATCH_SUPPORTED_ADAPTERS: &[AdapterType] = &[AdapterType::Snowfla
     Debug,
     Clone,
     Copy,
+    Hash,
     PartialEq,
     Eq,
     Display,

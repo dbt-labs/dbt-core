@@ -191,7 +191,6 @@ pub trait AdapterEngine: Send + Sync {
         self.execute_with_options(state, ctx, conn, sql, Options::new(), true, token)
     }
 
-    /// Get the configured database name.
     fn get_configured_database_name(&self) -> Option<Cow<'_, str>> {
         self.config("database")
     }

@@ -2629,9 +2629,7 @@ fn quoting_for_upstream(
 }
 
 fn run_cache_dialect(ctx: &TaskRunnerCtx) -> String {
-    dialect_of(ctx.adapter_type())
-        .map(|dialect| dialect.to_string())
-        .unwrap_or_else(|| ctx.adapter_type().to_string())
+    ctx.adapter_type().to_string()
 }
 
 fn should_honor_service_skip(ctx: &TaskRunnerCtx) -> bool {

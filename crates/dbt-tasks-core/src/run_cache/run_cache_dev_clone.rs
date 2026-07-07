@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
-use dbt_common::adapter::dialect_of;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::common::DbtMaterialization;
@@ -391,13 +390,10 @@ async fn prepare_dev_clone_request(
     }
     let source_last_modified_epoch =
         last_modified_epoch(ctx, &clone_source_table, source_relation.clone()).await;
-    let dialect = dialect_of(ctx.adapter_type())
-        .map(|dialect| dialect.to_string())
-        .unwrap_or_else(|| ctx.adapter_type().to_string());
 
     let request = CloneRequestInput {
         target_table: target_table.clone(),
-        dialect,
+        dialect: ctx.adapter_type().to_string(),
         default_catalog: candidate.local().database(),
         execution_type: candidate.execution_type()?,
         clone_source_table: clone_source_table.clone(),

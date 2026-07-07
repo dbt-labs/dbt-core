@@ -1,5 +1,10 @@
 use super::*;
+
+use strum::IntoEnumIterator;
+
 use dbt_frontend_common::dialect::Dialect;
+
+use crate::SUPPORTED_DIALECTS;
 
 #[test]
 fn test_sql_split_statements() {
@@ -30,57 +35,39 @@ fn test_sql_split_statements() {
     );
 }
 
+fn is_empty(sql: &str, dialect: Dialect) -> bool {
+    let dialect = if SUPPORTED_DIALECTS.contains(&dialect) {
+        dialect
+    } else {
+        Dialect::Trino
+    };
+    is_empty_or_comment_only(sql, dialect)
+}
+
 #[test]
 fn test_is_empty_or_comment_only() {
     // Test the comment detection helper function across all dialects
-    let all_dialects = vec![
-        Some(Dialect::Snowflake),
-        Some(Dialect::Bigquery),
-        Some(Dialect::Redshift),
-        Some(Dialect::Databricks),
-        Some(Dialect::Trino),
-        None,
-    ];
-
-    for dialect in &all_dialects {
+    for dialect in Dialect::iter() {
         // These should be considered empty/comment-only
-        assert!(is_empty_or_comment_only("", *dialect));
-        assert!(is_empty_or_comment_only("   ", *dialect));
-        assert!(is_empty_or_comment_only("/* comment */", *dialect));
-        assert!(is_empty_or_comment_only("-- line comment", *dialect));
-        assert!(is_empty_or_comment_only("  /* comment */  ", *dialect));
-        assert!(is_empty_or_comment_only("  -- comment  ", *dialect));
-        assert!(is_empty_or_comment_only(
-            "/* comment */ -- line comment",
-            *dialect
-        ));
-        assert!(is_empty_or_comment_only(
-            "/* multi\nline\ncomment */",
-            *dialect
-        ));
+        assert!(is_empty("", dialect));
+        assert!(is_empty("   ", dialect));
+        assert!(is_empty("/* comment */", dialect));
+        assert!(is_empty("-- line comment", dialect));
+        assert!(is_empty("  /* comment */  ", dialect));
+        assert!(is_empty("  -- comment  ", dialect));
+        assert!(is_empty("/* comment */ -- line comment", dialect));
+        assert!(is_empty("/* multi\nline\ncomment */", dialect));
 
         // These should NOT be considered empty - SQL with comments should be preserved
-        assert!(!is_empty_or_comment_only("select 1", *dialect));
-        assert!(!is_empty_or_comment_only(
-            "select /* comment */ 1",
-            *dialect
-        ));
-        assert!(!is_empty_or_comment_only("select 1 -- comment", *dialect));
-        assert!(!is_empty_or_comment_only(
-            "/* comment */ select 1",
-            *dialect
-        ));
+        assert!(!is_empty("select 1", dialect));
+        assert!(!is_empty("select /* comment */ 1", dialect));
+        assert!(!is_empty("select 1 -- comment", dialect));
+        assert!(!is_empty("/* comment */ select 1", dialect));
 
         // Additional critical cases that should NOT be filtered
-        assert!(!is_empty_or_comment_only(
-            "/* before */ select 1 /* after */",
-            *dialect
-        ));
-        assert!(!is_empty_or_comment_only("-- comment\nselect 1", *dialect));
-        assert!(!is_empty_or_comment_only("select 1; select 2", *dialect));
-        assert!(!is_empty_or_comment_only(
-            "/* comment */\nselect 1\n-- trailing",
-            *dialect
-        ));
+        assert!(!is_empty("/* before */ select 1 /* after */", dialect));
+        assert!(!is_empty("-- comment\nselect 1", dialect));
+        assert!(!is_empty("select 1; select 2", dialect));
+        assert!(!is_empty("/* comment */\nselect 1\n-- trailing", dialect));
     }
 }

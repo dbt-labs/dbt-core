@@ -280,18 +280,19 @@ fn do_sql_split_statements(input: &str, dialect: Option<Dialect>) -> Vec<String>
 }
 
 /// Check if a statement is empty or contains only comments and whitespace
-/// using the appropriate dialect-specific SQL lexer
-pub fn is_empty_or_comment_only(statement: &str, dialect: Option<Dialect>) -> bool {
+/// using the appropriate dialect-specific SQL lexer.
+///
+/// Falls back to the Trino lexer if the dialect is not fully supported yet.
+pub fn is_empty_or_comment_only(statement: &str, dialect: Dialect) -> bool {
+    use super::CaseInsensitiveInputStream;
+    use Dialect::*;
+    use dbt_antlr4::{TokenSource, int_stream::EOF};
+
     let trimmed = statement.trim();
     if trimmed.is_empty() {
         return true;
     }
-
-    use super::CaseInsensitiveInputStream;
-    use dbt_antlr4::{TokenSource, int_stream::EOF};
-
     let input_stream = CaseInsensitiveInputStream::new(trimmed);
-    let dialect = dialect.unwrap_or(Dialect::Trino);
 
     // Use the same macro pattern as do_sql_find_statement_delimiters
     macro_rules! dialect_dispatch {
@@ -313,11 +314,21 @@ pub fn is_empty_or_comment_only(statement: &str, dialect: Option<Dialect>) -> bo
     }
 
     match dialect {
-        Dialect::Bigquery => dialect_dispatch!(dbt_lexer_bigquery, bigquerylexer),
-        Dialect::Redshift => dialect_dispatch!(dbt_lexer_redshift, redshiftlexer),
-        Dialect::Snowflake => dialect_dispatch!(dbt_lexer_snowflake, snowflakelexer),
-        Dialect::Databricks => dialect_dispatch!(dbt_lexer_databricks, databrickslexer),
-        _ => dialect_dispatch!(dbt_lexer_trino, trinolexer),
+        Bigquery => dialect_dispatch!(dbt_lexer_bigquery, bigquerylexer),
+        Redshift => dialect_dispatch!(dbt_lexer_redshift, redshiftlexer),
+        Snowflake => dialect_dispatch!(dbt_lexer_snowflake, snowflakelexer),
+        Databricks => dialect_dispatch!(dbt_lexer_databricks, databrickslexer),
+        Trino => dialect_dispatch!(dbt_lexer_trino, trinolexer),
+        _ => {
+            // Fallback to Trino (in release builds) lexer for not fully supported dialects.
+            // If you hit this assert and wants to fallback to Trino without panicking,
+            // add an explicit match arm, but preferably implement a proper lexer for the dialect.
+            debug_assert!(
+                false,
+                "is_empty_or_comment_only() should only be called with fully supported dialects, but got {dialect:?}"
+            );
+            dialect_dispatch!(dbt_lexer_trino, trinolexer)
+        }
     }
 }
 
