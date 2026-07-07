@@ -1392,13 +1392,17 @@ fn render_unit_test(
         .collect::<FsResult<Vec<String>>>()?
         .join(", ");
 
+    // Redshift errors (SQLSTATE XX000) on a top-level UNION ALL immediately
+    // followed by ORDER BY. dbt-labs/dbt-core#14549
     query_str.push_str(&format!(
         r#"-- Build actual result given inputs
 WITH
             {}
+        SELECT * FROM (
         (SELECT {}, 'actual' AS actual_or_expected FROM {})
         UNION ALL
         (SELECT {}, 'expected' AS actual_or_expected FROM {})
+        ) unit_test_diff
         {}"#,
         subqueries_vec.join(",\n  "),
         expected_column_names_formatted,
