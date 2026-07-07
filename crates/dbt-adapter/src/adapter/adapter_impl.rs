@@ -2199,6 +2199,9 @@ impl AdapterImpl {
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
+                if let Replay(_, replay) = self.inner_adapter() {
+                    return replay.replay_update_columns(state, relation);
+                }
                 let database = relation.database_as_str()?;
                 let table = relation.identifier_as_str()?;
                 let schema = relation.schema_as_str()?;
@@ -2793,6 +2796,15 @@ impl AdapterImpl {
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
+                if let Replay(_, replay) = self.inner_adapter() {
+                    return replay.replay_grant_access_to(
+                        state,
+                        entity,
+                        entity_type,
+                        database,
+                        schema,
+                    );
+                }
                 // https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L834
                 /// but instead of locking the thread, put the lock on the dataset
                 static DATASET_LOCK: LazyLock<DashMap<String, bool>> = LazyLock::new(DashMap::new);
@@ -2881,6 +2893,9 @@ impl AdapterImpl {
     ) -> AdapterResult<Option<String>> {
         match self.adapter_type() {
             Bigquery => {
+                if let Replay(_, replay) = self.inner_adapter() {
+                    return replay.replay_get_dataset_location(state, relation);
+                }
                 // https://cloud.google.com/bigquery/docs/information-schema-datasets-schemata
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L853-L854
                 let sql = format!(
@@ -2921,6 +2936,15 @@ impl AdapterImpl {
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
+                if let Replay(_, replay) = self.inner_adapter() {
+                    return replay.replay_update_table_description(
+                        state,
+                        database,
+                        schema,
+                        identifier,
+                        description,
+                    );
+                }
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L686-L696
                 // Use BigQuery API via driver option instead of SQL
                 // Reuse QUERY_DESTINATION_TABLE for the table reference
@@ -3053,13 +3077,16 @@ impl AdapterImpl {
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
-                let table = relation.identifier_as_str()?;
-                let schema = relation.schema_as_str()?;
-
                 let columns = Column::vec_from_jinja_value(Bigquery, columns)?;
+                if let Replay(_, replay) = self.inner_adapter() {
+                    return replay.replay_alter_table_add_columns(state, relation, &columns);
+                }
                 if columns.is_empty() {
                     return Ok(none_value());
                 }
+
+                let table = relation.identifier_as_str()?;
+                let schema = relation.schema_as_str()?;
 
                 let add_columns: Vec<String> = columns
                     .iter()
@@ -3174,10 +3201,17 @@ impl AdapterImpl {
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
     pub fn get_columns_in_select_sql(
         &self,
-        _conn: &'_ mut dyn Connection,
-        _sql: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+        ctx: &QueryCtx,
+        sql: &str,
+        token: CancellationToken,
     ) -> AdapterResult<Vec<Column>> {
-        unimplemented!("only available with BigQuery adapter")
+        match self.inner_adapter() {
+            Replay(_, replay) => replay.replay_get_columns_in_select_sql(state),
+            Impl(Bigquery, _) => self.get_column_schema_from_query(state, conn, ctx, sql, token),
+            Impl(_, _) => unimplemented!("only available with BigQuery adapter"),
+        }
     }
 
     /// Used by redshift and postgres to check if the database string is consistent with what's in the project `config`
@@ -4226,6 +4260,9 @@ impl AdapterImpl {
     ) -> AdapterResult<()> {
         match self.adapter_type() {
             Bigquery => {
+                if let Replay(_, replay) = self.inner_adapter() {
+                    return replay.replay_copy_table(state, source, dest, &materialization);
+                }
                 let append = materialization == "incremental";
                 let truncate = materialization == "table";
                 if !append && !truncate {
@@ -4928,6 +4965,8 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         _query_ctx: &QueryCtx,
     ) -> AdapterResult<Vec<Column>>;
 
+    fn replay_get_columns_in_select_sql(&self, state: &State) -> AdapterResult<Vec<Column>>;
+
     fn replay_get_columns_in_relation(
         &self,
         state: &State,
@@ -4964,6 +5003,59 @@ pub trait Replayer: fmt::Debug + Send + Sync {
     ) -> AdapterResult<Value>;
 
     fn replay_is_replaceable(&self, state: &State) -> AdapterResult<bool>;
+
+    fn replay_update_table_description(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        description: &str,
+    ) -> AdapterResult<Value>;
+
+    fn replay_update_columns(
+        &self,
+        state: &State,
+        relation: &Arc<dyn BaseRelation>,
+    ) -> AdapterResult<Value>;
+
+    fn replay_load_dataframe(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+        table_name: &str,
+    ) -> AdapterResult<Value>;
+
+    fn replay_copy_table(
+        &self,
+        state: &State,
+        source: &Arc<dyn BaseRelation>,
+        destination: &Arc<dyn BaseRelation>,
+        materialization: &str,
+    ) -> AdapterResult<()>;
+
+    fn replay_get_dataset_location(
+        &self,
+        state: &State,
+        relation: &dyn BaseRelation,
+    ) -> AdapterResult<Option<String>>;
+
+    fn replay_alter_table_add_columns(
+        &self,
+        state: &State,
+        relation: &Arc<dyn BaseRelation>,
+        columns: &[Column],
+    ) -> AdapterResult<Value>;
+
+    fn replay_grant_access_to(
+        &self,
+        state: &State,
+        entity: &Arc<dyn BaseRelation>,
+        entity_type: &str,
+        database: &str,
+        schema: &str,
+    ) -> AdapterResult<Value>;
 
     fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<Value>>;
 

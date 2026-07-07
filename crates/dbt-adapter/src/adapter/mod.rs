@@ -1709,7 +1709,7 @@ impl Adapter {
                     .with_desc("get_column_schema_from_query adapter call");
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result = adapter.get_column_schema_from_query(
+                let result = adapter.get_columns_in_select_sql(
                     state,
                     conn.as_mut(),
                     &ctx,
@@ -3423,6 +3423,10 @@ impl Adapter {
                 })?;
                 let field_delimiter = iter.next_arg::<&str>()?;
                 iter.finish()?;
+
+                if let adapter_impl::InnerAdapter::Replay(_, replay) = adapter.inner_adapter() {
+                    return Ok(replay.replay_load_dataframe(state, database, schema, table_name)?);
+                }
 
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
