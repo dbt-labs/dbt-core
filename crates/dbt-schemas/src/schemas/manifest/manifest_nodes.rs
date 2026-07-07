@@ -35,7 +35,7 @@ use crate::schemas::{
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig, SyncConfig,
     },
     dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns},
-    macros::{DbtMacro, MacroArgument, MacroDependsOn},
+    macros::{DbtMacro, MacroArgument, MacroConfig, MacroDependsOn},
     manifest::{
         DbtMetric, DbtOperation, DbtSavedQuery, DbtSemanticModel,
         common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
@@ -483,7 +483,7 @@ pub struct ManifestSnapshotConfig {
     pub invalidate_hard_deletes: Option<bool>,
     #[serde(
         default,
-        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+        serialize_with = "crate::schemas::serde::serialize_option_docs_with_nulls"
     )]
     pub docs: Option<DocsConfig>,
     pub sync: Option<SyncConfig>,
@@ -734,6 +734,8 @@ pub struct ManifestMacro {
     #[serde(default)]
     pub meta: BTreeMap<String, YmlValue>,
     pub docs: Option<DocsConfig>,
+    #[serde(default)]
+    pub config: MacroConfig,
     pub patch_path: Option<PathBuf>,
     #[serde(default)]
     pub arguments: Vec<MacroArgument>,
@@ -755,6 +757,7 @@ impl From<DbtMacro> for ManifestMacro {
             description: macro_.description,
             meta: macro_.meta,
             docs: macro_.docs,
+            config: macro_.config,
             patch_path: macro_.patch_path,
             arguments: macro_.arguments,
             __other__: macro_.__other__,
@@ -777,6 +780,7 @@ impl From<ManifestMacro> for DbtMacro {
             description: macro_.description,
             meta: macro_.meta,
             docs: macro_.docs,
+            config: macro_.config,
             patch_path: macro_.patch_path,
             funcsign: None,
             args: vec![],
@@ -900,7 +904,7 @@ pub struct ManifestModelConfig {
     pub use_anonymous_sproc: Option<bool>,
     #[serde(
         default,
-        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+        serialize_with = "crate::schemas::serde::serialize_option_docs_with_nulls"
     )]
     pub docs: Option<DocsConfig>,
     #[serde(
@@ -977,7 +981,7 @@ pub struct ManifestSeedConfig {
     pub catalog_name: Option<String>,
     #[serde(
         default,
-        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+        serialize_with = "crate::schemas::serde::serialize_option_docs_with_nulls"
     )]
     pub docs: Option<DocsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]

@@ -25,6 +25,18 @@ pub struct MacroArgument {
     pub description: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct MacroConfig {
+    #[serde(default)]
+    pub meta: BTreeMap<String, Value>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_docs_with_nulls"
+    )]
+    pub docs: DocsConfig,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -48,6 +60,8 @@ pub struct DbtMacro {
     pub description: String,
     pub meta: BTreeMap<String, Value>,
     pub docs: Option<DocsConfig>,
+    #[serde(default)]
+    pub config: MacroConfig,
     pub patch_path: Option<PathBuf>,
     pub funcsign: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -110,4 +124,28 @@ pub fn build_macro_units(
             });
     }
     macros
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_macro_config_default_serializes_docs_with_nulls() {
+        // serialize_docs_with_nulls forces both fields to be present, including
+        // node_color (normally Option-skipped) as an explicit null.
+        let config = MacroConfig::default();
+        let json = serde_json::to_value(&config).expect("serializes");
+        let docs = json.get("docs").expect("docs key present");
+        assert_eq!(
+            docs.get("show").expect("show key"),
+            &serde_json::Value::Bool(true),
+            "docs.show should serialize as true (the default)"
+        );
+        assert_eq!(
+            docs.get("node_color").expect("node_color key"),
+            &serde_json::Value::Null,
+            "docs.node_color should serialize as explicit null even when None"
+        );
+    }
 }

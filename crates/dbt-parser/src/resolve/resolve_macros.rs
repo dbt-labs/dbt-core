@@ -12,6 +12,7 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::macros::DbtDocsMacro;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::macros::MacroArgument;
+use dbt_schemas::schemas::macros::MacroConfig;
 use dbt_schemas::schemas::macros::MacroDependsOn;
 use dbt_schemas::schemas::properties::MacrosProperties;
 use dbt_schemas::state::DbtAsset;
@@ -153,6 +154,7 @@ pub fn resolve_macros(
                             description: String::new(),
                             meta: BTreeMap::new(),
                             docs: None,
+                            config: MacroConfig::default(),
                             patch_path: None,
                             funcsign: None,
                             args: args.clone(),
@@ -182,6 +184,7 @@ pub fn resolve_macros(
                             description: String::new(),
                             meta: BTreeMap::new(),
                             docs: None,
+                            config: MacroConfig::default(),
                             patch_path: None,
                             funcsign: func_sign.clone(),
                             args: args.clone(),
@@ -210,6 +213,7 @@ pub fn resolve_macros(
                             description: String::new(),
                             meta: BTreeMap::new(),
                             docs: None,
+                            config: MacroConfig::default(),
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
@@ -239,6 +243,7 @@ pub fn resolve_macros(
                             description: String::new(),
                             meta: BTreeMap::new(),
                             docs: None,
+                            config: MacroConfig::default(),
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
@@ -427,6 +432,10 @@ pub fn apply_macro_patches(
             if docs.is_some() {
                 dbt_macro.docs = docs;
             }
+
+            // Reference: https://github.com/dbt-labs/dbt-mantle/blob/144da7909580abfaac1604b956c2e423d1baf2ad/core/dbt/parser/schemas.py#L1506-L1509
+            dbt_macro.config.meta = dbt_macro.meta.clone();
+            dbt_macro.config.docs = dbt_macro.docs.clone().unwrap_or_default();
 
             // Update arguments if provided in YAML
             if let Some(yml_arguments) = macro_props.arguments {
@@ -783,6 +792,83 @@ select 1 as id, current_timestamp as updated_at
              the extension guard in resolve_macros is case-sensitive and skipped the file. \
              Got keys: {:?}",
             result.keys().collect::<Vec<_>>()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_macro_patches_populates_config_meta_and_docs() -> FsResult<()> {
+        let jinja_env = JinjaEnv::new(minijinja::Environment::new());
+        let base_ctx: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
+
+        let unique_id = "macro.test_pkg.my_macro".to_string();
+        let dummy_span = minijinja::machinery::Span::default();
+        let mut macros = BTreeMap::from([(
+            unique_id.clone(),
+            DbtMacro {
+                name: "my_macro".to_string(),
+                package_name: "test_pkg".to_string(),
+                path: PathBuf::from("macros/my_macro.sql"),
+                original_file_path: PathBuf::from("macros/my_macro.sql"),
+                absolute_path: PathBuf::default(),
+                span: Some(dummy_span),
+                unique_id: unique_id.clone(),
+                macro_sql: "{% macro my_macro() %}{% endmacro %}".to_string(),
+                depends_on: MacroDependsOn::default(),
+                description: String::new(),
+                meta: BTreeMap::new(),
+                docs: None,
+                config: MacroConfig::default(),
+                patch_path: None,
+                funcsign: None,
+                args: vec![],
+                arguments: vec![],
+                macro_name_span: Some(dummy_span),
+                __other__: BTreeMap::new(),
+            },
+        )]);
+
+        let yaml_str = "name: my_macro\nmeta:\n  owner: alice\ndocs:\n  show: false\n";
+        let schema_value: dbt_yaml::Value = dbt_yaml::from_str(yaml_str).unwrap();
+
+        use crate::resolve::resolve_properties::MinimalPropertiesEntry;
+        let props_entry = MinimalPropertiesEntry {
+            name: "my_macro".to_string(),
+            name_span: Span::default(),
+            relative_path: PathBuf::from("macros/schema.yml"),
+            schema_value,
+            table_value: None,
+            version_info: None,
+            duplicate_paths: vec![],
+        };
+        let macro_properties = BTreeMap::from([("my_macro".to_string(), props_entry)]);
+
+        let io = IoArgs::default();
+        apply_macro_patches(
+            &io,
+            &mut macros,
+            &macro_properties,
+            "test_pkg",
+            &jinja_env,
+            &base_ctx,
+            false,
+        )?;
+
+        let patched = macros.get(&unique_id).expect("macro still present");
+
+        // config.meta mirrors the patched meta
+        let owner = patched
+            .config
+            .meta
+            .get("owner")
+            .expect("owner key in config.meta");
+        assert_eq!(owner.as_str(), Some("alice"));
+
+        // config.docs mirrors the patched docs (show: false)
+        assert!(
+            !patched.config.docs.show,
+            "config.docs.show should be false"
         );
 
         Ok(())

@@ -1,3 +1,4 @@
+use crate::schemas::common::DocsConfig;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use dbt_common::serde_utils::Omissible;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
@@ -119,6 +120,32 @@ where
         Some(v) => v.serialize(serializer),
         None => T::default().serialize(serializer),
     }
+}
+
+/// Serialize a `DocsConfig` always including `node_color` as an explicit null when absent.
+/// dbt-core writes manifests with omit_none=False, so node_color must be present.
+pub fn serialize_docs_with_nulls<S>(docs: &DocsConfig, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    map.serialize_entry("show", &docs.show)?;
+    map.serialize_entry("node_color", &docs.node_color)?;
+    map.end()
+}
+
+/// Serialize an `Option<DocsConfig>` — `None` becomes the default docs object with
+/// explicit nulls; `Some(v)` also serializes with explicit nulls.
+pub fn serialize_option_docs_with_nulls<S>(
+    docs: &Option<DocsConfig>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let docs = docs.as_ref().cloned().unwrap_or_default();
+    serialize_docs_with_nulls(&docs, serializer)
 }
 
 /// Serialize an `Option<Vec<T>>` as an empty array `[]` when `None`.
