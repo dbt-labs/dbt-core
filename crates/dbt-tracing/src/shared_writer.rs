@@ -1,24 +1,36 @@
 use std::io::{self, Write};
 
-/// Decide whether output should be treated as a color-capable terminal.
+/// Whether the writer should be treated as a terminal for **routing**
+/// purposes (e.g. selecting console vs log-file telemetry filters).
 ///
-/// Honors the widely-adopted environment conventions before falling back to
-/// the writer's actual TTY status:
-///
-/// * `NO_COLOR` (any non-empty value) forces a non-terminal result.
-///   Widely honored convention used by many CLI tools.
-/// * `FORCE_COLOR` (any value other than `"0"`) forces a terminal result —
-///   see <https://force-color.org>. This lets wrappers that pipe stdout
-///   (e.g. a parent process capturing output) still opt into ANSI output.
+/// * `FORCE_COLOR` (any value other than `"0"`) promotes a non-TTY writer
+///   to terminal-like — see <https://force-color.org>. This lets wrappers
+///   that pipe stdout (e.g. a parent process capturing output) still opt
+///   into console-style output.
+/// * `NO_COLOR` does **not** affect this — it only disables ANSI styling
+///   (see [`resolve_use_color`]), not terminal-ness. Demoting a real TTY
+///   here would drop console-only telemetry records, which is beyond
+///   `NO_COLOR`'s intended scope.
 /// * Otherwise, defers to [`SharedWriter::is_terminal`].
 pub fn resolve_is_terminal<W: SharedWriter + ?Sized>(writer: &W) -> bool {
-    if std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
-        return false;
-    }
     if let Some(v) = std::env::var_os("FORCE_COLOR") {
         return v != "0";
     }
     writer.is_terminal()
+}
+
+/// Whether ANSI styling should be emitted for output written to this
+/// writer. Combines terminal-like status with the `NO_COLOR` convention.
+///
+/// * `NO_COLOR` (any non-empty value) disables styling regardless of the
+///   writer's terminal status. Widely honored convention used by many
+///   CLI tools.
+/// * Otherwise, returns [`resolve_is_terminal`].
+pub fn resolve_use_color<W: SharedWriter + ?Sized>(writer: &W) -> bool {
+    if std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
+        return false;
+    }
+    resolve_is_terminal(writer)
 }
 
 /// A trait for threadsafe writers used by tracing layers.

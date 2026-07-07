@@ -29,7 +29,13 @@ pub fn apply_color_env_overrides() {
     {
         console::set_colors_enabled(true);
         console::set_colors_enabled_stderr(true);
-        if std::env::var_os("CLICOLOR_FORCE").is_none() {
+        // Treat an empty CLICOLOR_FORCE as unset — if a parent set it to ""
+        // it did not actually opt into forcing colors, and clap/anstream
+        // would otherwise still skip forced coloring, making output
+        // inconsistent with the caller's FORCE_COLOR intent.
+        let clicolor_force_effective = std::env::var_os("CLICOLOR_FORCE")
+            .is_some_and(|v| !v.is_empty());
+        if !clicolor_force_effective {
             // SAFETY: called at the top of main before any threads are
             // spawned; mutating the process environment here is race-free.
             unsafe {
