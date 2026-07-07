@@ -14,7 +14,6 @@ pub mod node_base;
 pub mod nodes;
 pub mod pagination;
 pub mod project;
-pub mod query;
 pub mod saved_queries;
 pub mod search;
 pub mod seeds;
