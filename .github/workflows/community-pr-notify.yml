@@ -1,0 +1,78 @@
+# **what?**
+# Post a Slack notification to #community-prs when a PR is labeled `community`
+
+# **why?**
+# Give the internal team real-time visibility into new community contributions
+# so they can be triaged and assigned promptly
+
+# **when?**
+# When the `community` label is applied to a pull request
+# (label is applied automatically by community-label.yml for PRs from outside core-group)
+
+name: Notify Slack on community PR
+
+on:
+  # pull_request_target required since community PRs come from forks
+  pull_request_target:
+    types: [labeled]
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  notify-community-pr:
+    name: Post to Slack
+    # Only fire when the label being applied is `community`
+    # Skip bots and dependabot
+    if: |
+      github.event.label.name == 'community'
+      && github.event.pull_request.user.type != 'Bot'
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post Slack message
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_CORE_PR_CHANNEL_URL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          resp=$(jq -n \
+            --arg repo   "$REPO" \
+            --arg title  "$PR_TITLE" \
+            --arg url    "$PR_URL" \
+            --arg author "$PR_AUTHOR" \
+            --arg number "$PR_NUMBER" \
+            '{
+              text: ("New community PR on " + $repo),
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: (":earth_asia: *New community PR* \u2014 `" + $repo + "`\n*<" + $url + "|#" + $number + " " + $title + ">*\nOpened by: *" + $author + "*")
+                  }
+                },
+                {
+                  type: "context",
+                  elements: [{ type: "mrkdwn", text: $url }]
+                }
+              ]
+            }' | \
+            curl -sS -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-type: application/json" \
+              --data @-)
+
+          # Incoming webhooks return "ok" as plain text on success
+          if [ "$resp" != "ok" ]; then
+            echo "::error::Slack webhook failed: $resp"
+            exit 1
+          fi
+          echo "Posted community PR alert for #${PR_NUMBER}"
