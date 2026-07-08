@@ -365,11 +365,20 @@ pub enum DeprecatedDbtPackageLock {
     Tarball(DeprecatedTarballPackageLock),
 }
 
+// NOTE: Every deprecated lock variant accepts and drops an optional `name` key.
+// A partially-migrated `package-lock.yml` can mix entries that carry `name`
+// with entries that do not; the missing `name` on one entry forces the whole
+// file into this deprecated parser, which then re-infers names from the
+// installed packages directory. Accepting (and ignoring) `name` here keeps such
+// mixed files from failing with `UnusedConfigKey (dbt1060)`, matching dbt Core,
+// which tolerates the key.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedHubPackageLock {
     pub package: String,
     #[serde(rename = "version")]
     pub version: PackageVersion,
+    #[serde(default, skip_serializing)]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -381,12 +390,16 @@ pub struct DeprecatedGitPackageLock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     #[serde(default, skip_serializing)]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedLocalPackageLock {
     pub local: PathBuf,
+    #[serde(default, skip_serializing)]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -400,12 +413,16 @@ pub struct DeprecatedPrivatePackageLock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     #[serde(default, skip_serializing)]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedTarballPackageLock {
     pub tarball: String,
+    #[serde(default, skip_serializing)]
+    pub name: Option<String>,
     #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
@@ -427,5 +444,39 @@ mod tests {
         let result: DbtPackagesLock = dbt_yaml::from_str(commented).unwrap();
         assert!(result.packages.is_empty());
         assert!(result.sha1_hash.is_empty());
+    }
+
+    /// A `package-lock.yml` mixing `name`/no-`name` entries fails the new schema
+    /// (the entry without `name` matches no variant), forcing the deprecated
+    /// parser — which must accept the `name` key on the other entries instead of
+    /// rejecting it. https://github.com/dbt-labs/fs/issues/11678
+    #[test]
+    fn test_deprecated_lock_tolerates_mixed_name_forms() {
+        let mixed = "\
+packages:
+  - package: fivetran/fivetran_utils
+    version: [\">=0.4.3\", \"<1.0.0\"]
+  - name: dbt_utils
+    package: dbt-labs/dbt_utils
+    version: \">=1.0.0\"
+sha1_hash: 713df304d4720d43ae7280d2363c5e1b009e7c1b
+";
+        // The new schema requires `name` on hub entries, so the first (nameless)
+        // entry makes the whole file fail to match the untagged enum.
+        assert!(
+            dbt_yaml::from_str::<DbtPackagesLock>(mixed).is_err(),
+            "mixed lock should not match the new (name-required) schema"
+        );
+
+        // The deprecated schema must accept (and drop) the `name` key.
+        let result: DeprecatedDbtPackagesLock = dbt_yaml::from_str(mixed).unwrap();
+        assert_eq!(result.packages.len(), 2);
+        match &result.packages[1] {
+            DeprecatedDbtPackageLock::Hub(hub) => {
+                assert_eq!(hub.package, "dbt-labs/dbt_utils");
+                assert_eq!(hub.name.as_deref(), Some("dbt_utils"));
+            }
+            other => panic!("expected a hub lock entry, got {other:?}"),
+        }
     }
 }
