@@ -158,22 +158,25 @@ fn parse_clustering_columns_json(raw: &str) -> Vec<String> {
         return Vec::new();
     }
 
-    inner
-        .split(',')
-        .filter_map(|token| {
-            let t = token.trim();
-            // Strip surrounding quotes if present.
-            if t.starts_with('"') && t.ends_with('"') && t.len() >= 2 {
-                Some(t[1..t.len() - 1].to_string())
-            } else if !t.is_empty() {
-                // Bare identifier — unexpected but accept gracefully.
-                Some(t.to_string())
-            } else {
-                None
-            }
-        })
-        .collect()
+    inner.split(',').filter_map(parse_token).collect()
 }
+
+/// Trims a single token from the `clusteringColumns` JSON array and strips its
+/// surrounding double-quotes.  Returns `None` for empty tokens (e.g. trailing
+/// commas), so the caller can use `filter_map` directly.
+fn parse_token(token: &str) -> Option<String> {
+    let t = token.trim();
+    if t.starts_with('"') && t.ends_with('"') && t.len() >= 2 {
+        // Quoted JSON string — strip the surrounding quotes.
+        Some(t[1..t.len() - 1].to_string())
+    } else if !t.is_empty() {
+        // Bare identifier — unexpected from Databricks but accept gracefully.
+        Some(t.to_string())
+    } else {
+        None
+    }
+}
+
 
 impl_loader!(LiquidClustering, DatabricksRelationMetadata);
 
