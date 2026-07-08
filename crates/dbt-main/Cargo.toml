@@ -24,14 +24,11 @@ windows = { version = "0.61", features = [
 [dependencies]
 dbt-adapter = { workspace = true }
 dbt-adapter-core = { workspace = true }
-dbt-adbc = { workspace = true }
 dbt-clap-core = { workspace = true }
-dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }
 dbt-dag = { workspace = true }
 dbt-defer = { workspace = true }
-dbt-df-providers = { workspace = true }
 dbt-docs-server = { workspace = true }
 dbt-error = { workspace = true }
 dbt-features = { workspace = true }
@@ -39,7 +36,6 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-index-core = { workspace = true }
 dbt-init = { workspace = true }
 dbt-jinja-utils = { workspace = true }
-dbt-lineage-core = { workspace = true }
 dbt-loader = { workspace = true }
 dbt-login = { workspace = true }
 dbt-metadata = { workspace = true }
@@ -51,7 +47,6 @@ dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }
 dbt-tasks-sa = { workspace = true }
 dbt-telemetry = { workspace = true }
-dbt-yaml = { workspace = true }
 
 arrow = { workspace = true }
 astral-tokio-tar = { workspace = true }
@@ -61,16 +56,13 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 dotenvy = { workspace = true }
-fancy-regex = { workspace = true }
 futures = { workspace = true }
 git-version = { version = "0.3.9" }
 minijinja = { workspace = true }
-pathdiff = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 run_script = { workspace = true }
 rustls = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
@@ -92,5 +84,4 @@ ignored = ["dbt-fusion-workspace-hack"]
 
 [lib]
 doctest = false
-name = "dbt_lib"
 path = "src/lib.rs"

@@ -32,8 +32,8 @@ fn make_fs_command_fn() -> Arc<CommandFn> {
                 target_dir,
                 stdout,
                 stderr,
-                dbt_lib::dbt_lib::execute_fs,
-                dbt_lib::from_lib,
+                dbt_main::dbt_lib::execute_fs,
+                dbt_main::from_lib,
                 tracing_handle,
             )
         },

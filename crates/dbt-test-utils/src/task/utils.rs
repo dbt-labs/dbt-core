@@ -5,7 +5,7 @@ use crate::task::task_seq::FeatureStackFactory;
 use dbt_clap_core::{Cli, CliParser};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, tracing::FsTraceConfig};
-use dbt_lib::ctrl_c::run_future_with_ctrlc_support;
+use dbt_main::ctrl_c::run_future_with_ctrlc_support;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::{

@@ -32,8 +32,6 @@ rand = { workspace = true }
 regex = { workspace = true }
 uuid = { workspace = true, features = ["v7"] }
 
-arrow = { workspace = true }
-arrow-schema = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }

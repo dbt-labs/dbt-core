@@ -13,12 +13,8 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-async-trait = { workspace = true }
-chrono = { workspace = true }
 dbt-adapter = { workspace = true }
-dbt-adapter-core = { workspace = true }
 dbt-adbc = { workspace = true }
-dbt-auth = { workspace = true }
 dbt-clap-core = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
@@ -34,16 +30,15 @@ dbt-loader = { workspace = true }
 dbt-login = { workspace = true }
 dbt-metadata-parquet = { workspace = true }
 dbt-parser = { workspace = true }
-dbt-scheduler = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }
 dbt-tasks-sa = { workspace = true }
-dbt-yaml = { workspace = true }
 
+async-trait = { workspace = true }
+chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 minijinja = { workspace = true }
-petgraph = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
