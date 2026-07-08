@@ -13,6 +13,7 @@ use dbt_common::ErrorCode;
 use dbt_common::io_args::IoArgs;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 
+use dbt_adapter::column::ColumnStatic;
 use dbt_adapter::load_store::ResultStore;
 use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
@@ -52,6 +53,48 @@ struct ModelContextFields {
     node: JinjaObject<LazyModelWrapper>,
 }
 
+fn model_context_alias_types(model: &YmlValue) -> bool {
+    model
+        .get("config")
+        .and_then(|config| config.get("contract"))
+        .and_then(|contract| contract.get("alias_types"))
+        .and_then(|alias_types| alias_types.as_bool())
+        .unwrap_or(true)
+}
+
+fn normalize_model_context_column_data_types(model: &mut YmlValue, adapter_type: AdapterType) {
+    if adapter_type != AdapterType::Bigquery || !model_context_alias_types(model) {
+        return;
+    }
+
+    let YmlValue::Mapping(model_map, _) = model else {
+        return;
+    };
+    let columns_key = YmlValue::string("columns".to_string());
+    let Some(YmlValue::Mapping(columns, _)) = model_map.get_mut(&columns_key) else {
+        return;
+    };
+
+    let column_static = ColumnStatic::new(adapter_type);
+    let data_type_key = YmlValue::string("data_type".to_string());
+    for (_, column) in columns.iter_mut() {
+        let YmlValue::Mapping(column_map, _) = column else {
+            continue;
+        };
+        let Some(data_type) = column_map.get_mut(&data_type_key) else {
+            continue;
+        };
+        let Some(data_type_str) = data_type.as_str().map(ToOwned::to_owned) else {
+            continue;
+        };
+
+        let translated = column_static.translate_type(&data_type_str);
+        if translated != data_type_str {
+            *data_type = YmlValue::string(translated);
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_model_context_fields<S: Serialize>(
     node: &dyn InternalDbtNode,
@@ -60,7 +103,8 @@ fn build_model_context_fields<S: Serialize>(
     io_args: &IoArgs,
     sql_header: Option<MinijinjaValue>,
 ) -> ModelContextFields {
-    let model = node.serialize();
+    let mut model = node.serialize();
+    normalize_model_context_column_data_types(&mut model, adapter_type);
     let common_attr = node.common();
     let base_attr = node.base();
     let resource_type = node.resource_type();
@@ -381,6 +425,84 @@ pub fn build_run_node_context<S: Serialize>(
     let mut context = base_context.clone();
     context.extend(to_jinja_btreemap(&overlay));
     context
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn column_data_type<'a>(model: &'a YmlValue, column_name: &str) -> &'a str {
+        model
+            .get("columns")
+            .and_then(|columns| columns.get(column_name))
+            .and_then(|column| column.get("data_type"))
+            .and_then(|data_type| data_type.as_str())
+            .expect("column data_type should exist")
+    }
+
+    #[test]
+    fn bigquery_model_context_alias_types_enabled_normalizes_column_data_types() {
+        let mut model = dbt_yaml::to_value(json!({
+            "config": {
+                "contract": {
+                    "alias_types": true
+                }
+            },
+            "columns": {
+                "float_col": {"name": "float_col", "data_type": "FLOAT"},
+                "integer_col": {"name": "integer_col", "data_type": "INTEGER"},
+                "text_col": {"name": "text_col", "data_type": "TEXT"},
+                "numeric_col": {"name": "numeric_col", "data_type": "NUMERIC"}
+            }
+        }))
+        .unwrap();
+
+        normalize_model_context_column_data_types(&mut model, AdapterType::Bigquery);
+
+        assert_eq!(column_data_type(&model, "float_col"), "FLOAT64");
+        assert_eq!(column_data_type(&model, "integer_col"), "INT64");
+        assert_eq!(column_data_type(&model, "text_col"), "STRING");
+        assert_eq!(column_data_type(&model, "numeric_col"), "NUMERIC");
+    }
+
+    #[test]
+    fn bigquery_model_context_alias_types_disabled_preserves_column_data_types() {
+        let mut model = dbt_yaml::to_value(json!({
+            "config": {
+                "contract": {
+                    "alias_types": false
+                }
+            },
+            "columns": {
+                "float_col": {"name": "float_col", "data_type": "FLOAT"}
+            }
+        }))
+        .unwrap();
+
+        normalize_model_context_column_data_types(&mut model, AdapterType::Bigquery);
+
+        assert_eq!(column_data_type(&model, "float_col"), "FLOAT");
+    }
+
+    #[test]
+    fn model_context_column_data_type_normalization_is_bigquery_only() {
+        let mut model = dbt_yaml::to_value(json!({
+            "config": {
+                "contract": {
+                    "alias_types": true
+                }
+            },
+            "columns": {
+                "float_col": {"name": "float_col", "data_type": "FLOAT"}
+            }
+        }))
+        .unwrap();
+
+        normalize_model_context_column_data_types(&mut model, AdapterType::Postgres);
+
+        assert_eq!(column_data_type(&model, "float_col"), "FLOAT");
+    }
 }
 
 fn parse_hook_item(item: &YmlValue) -> Option<HookConfig> {
