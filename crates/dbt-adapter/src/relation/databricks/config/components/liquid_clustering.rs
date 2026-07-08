@@ -166,15 +166,17 @@ fn parse_clustering_columns_json(raw: &str) -> Vec<String> {
 /// commas), so the caller can use `filter_map` directly.
 fn parse_token(token: &str) -> Option<String> {
     let t = token.trim();
-    if t.starts_with('"') && t.ends_with('"') && t.len() >= 2 {
-        // Quoted JSON string — strip the surrounding quotes.
-        Some(t[1..t.len() - 1].to_string())
-    } else if !t.is_empty() {
-        // Bare identifier — unexpected from Databricks but accept gracefully.
-        Some(t.to_string())
-    } else {
-        None
+    if t.is_empty() {
+        return None;
     }
+
+    // Quoted JSON string — strip the surrounding quotes safely.
+    if let Some(unquoted) = t.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        return Some(unquoted.to_string());
+    }
+
+    // Bare identifier — unexpected from Databricks but accept gracefully.
+    Some(t.to_string())
 }
 
 
