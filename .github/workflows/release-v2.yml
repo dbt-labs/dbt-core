@@ -587,7 +587,8 @@ jobs:
   # ------------------------------------------------------------------
   publish-pypi:
     name: Publish to PyPI
-    needs: [prepare-release, pack, tag, github-release]
+    # pack + tag are transitive via github-release; prepare-release stays for its outputs.
+    needs: [prepare-release, github-release]
     if: ${{ !inputs.dry_run }}
     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
     permissions:
