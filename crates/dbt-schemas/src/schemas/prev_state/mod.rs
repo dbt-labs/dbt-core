@@ -562,8 +562,16 @@ impl StateArtifacts {
         };
 
         let rt = current_node.resource_type(); // also the type of previous_node
-        if matches!(rt, NodeType::Model | NodeType::Source | NodeType::Test) {
-            // Approach A — full `unrendered_config` comparison (models, sources, and data tests).
+        if matches!(
+            rt,
+            NodeType::Model
+                | NodeType::Source
+                | NodeType::Seed
+                | NodeType::Snapshot
+                | NodeType::Test
+        ) {
+            // Approach A — full `unrendered_config`  comparison (models, sources, seeds, snapshots,
+            // and data tests).
             //
             // For these node types, `unrendered_config` is populated with every authored key, so
             // comparing the raw Jinja strings is an authoritative authoring-intent check: identical
@@ -589,14 +597,14 @@ impl StateArtifacts {
             return !current_node.has_same_config(previous_node, adapter_type);
         }
 
-        // Approach B — surgical per-key unrendered comparisons (all other node kinds).
+        // Approach B — surgical per-key unrendered comparisons (remaining node kinds: unit
+        // tests, exposures, functions, analyses, groups).
         //
-        // For seeds, snapshots, and other node types, `unrendered_config` may be
-        // incomplete, so the full-`unrendered_config` shortcut above is unsound. Instead, each node
-        // type's `has_same_config` implementation contains targeted unrendered comparisons for the
-        // specific keys where env-aware Jinja is known to appear (e.g. `grants`,
-        // warehouse-specific config). A new false positive for those types requires a new
-        // per-key fix; Approach A cannot yet be applied to them.
+        // For these node types, `unrendered_config` may be incomplete, so the full-`unrendered_config` shortcut
+        // above is unsound. Instead, each node type's `has_same_config` implementation contains
+        // targeted unrendered comparisons for the specific keys where env-aware Jinja is known to
+        // appear. A new false positive for those types requires a new per-key fix; the wholesale
+        // approach cannot yet be applied to them.
         !current_node.has_same_config(previous_node, adapter_type)
     }
 

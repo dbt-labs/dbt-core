@@ -761,7 +761,7 @@ pub fn meta_eq(
 }
 
 /// Helper function to compare grants fields, treating Omitted and empty as equivalent
-pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
+pub fn grants_equal(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
     match (a.as_ref(), b.as_ref()) {
         (None, None) => true,
         (Some(a_val), Some(b_val)) => a_val == b_val,
@@ -782,7 +782,7 @@ pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
 /// Semantics: `same = (grants configured && unrendered_same) || rendered_same`.
 ///   1. If `grants` is configured (present in `unrendered_config`) on at least one side and the
 ///      configured (unrendered) values are equal, the grants are the same.
-///   2. Otherwise fall back to the rendered comparison ([`grants_eq`]).
+///   2. Otherwise fall back to the rendered comparison ([`grants_equal`]).
 ///
 /// The "present on at least one side" guard is important: unlike the warehouse-specific config
 /// (which compares a whole bundle of keys at once), `grants` is a single key, so an
@@ -790,9 +790,9 @@ pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
 /// treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core manifest that
 /// does not populate `unrendered_config.grants`) would be masked.
 ///
-/// This is strictly more lenient than [`grants_eq`] alone (it can only turn a rendered
+/// This is strictly more lenient than [`grants_equal`] alone (it can only turn a rendered
 /// "different" into "same"), preserving backward compatibility.
-pub fn grants_eq_with_unrendered(
+pub fn grants_equal_with_unrendered(
     a: &OmissibleGrantConfig,
     b: &OmissibleGrantConfig,
     self_unrendered_config: &BTreeMap<String, YmlValue>,
@@ -805,7 +805,7 @@ pub fn grants_eq_with_unrendered(
     {
         return true;
     }
-    grants_eq(a, b)
+    grants_equal(a, b)
 }
 
 /// Compare warehouse-specific configurations field by field
@@ -1838,7 +1838,7 @@ mod tests {
     }
 
     #[test]
-    fn test_grants_eq_with_unrendered_jinja_equal_ignores_rendered_diff() {
+    fn test_grants_equal_with_unrendered_jinja_equal_ignores_rendered_diff() {
         // Repro for dbt-core#15302 (grants sibling of #15263): an environment-aware grants
         // config renders to ["ANALYTICS_RMP"] on prod and [] elsewhere, but the unrendered
         // jinja string is identical -> not modified, even though the rendered grants differ.
@@ -1847,7 +1847,7 @@ mod tests {
         );
         let other_unrendered_config = self_unrendered_config.clone();
         // Rendered grants differ across targets.
-        assert!(grants_eq_with_unrendered(
+        assert!(grants_equal_with_unrendered(
             &grants(&["ANALYTICS_RMP"]),
             &grants(&[]),
             &self_unrendered_config,
@@ -1856,12 +1856,12 @@ mod tests {
     }
 
     #[test]
-    fn test_grants_eq_with_unrendered_detects_real_change() {
+    fn test_grants_equal_with_unrendered_detects_real_change() {
         // A genuine change to the configured (unrendered) grants must still be detected when
         // the rendered values also differ.
         let self_unrendered_config = uc_yaml("grants:\n  select: [ROLE_A]");
         let other_unrendered_config = uc_yaml("grants:\n  select: [ROLE_B]");
-        assert!(!grants_eq_with_unrendered(
+        assert!(!grants_equal_with_unrendered(
             &grants(&["ROLE_A"]),
             &grants(&["ROLE_B"]),
             &self_unrendered_config,
@@ -1870,17 +1870,17 @@ mod tests {
     }
 
     #[test]
-    fn test_grants_eq_with_unrendered_falls_back_to_rendered() {
+    fn test_grants_equal_with_unrendered_falls_back_to_rendered() {
         // When grants are not present in the unrendered config (absent on both sides), the
         // comparison falls back to the rendered values.
         let empty_uc: BTreeMap<String, YmlValue> = BTreeMap::new();
-        assert!(grants_eq_with_unrendered(
+        assert!(grants_equal_with_unrendered(
             &grants(&["ROLE_A"]),
             &grants(&["ROLE_A"]),
             &empty_uc,
             &empty_uc,
         ));
-        assert!(!grants_eq_with_unrendered(
+        assert!(!grants_equal_with_unrendered(
             &grants(&["ROLE_A"]),
             &grants(&["ROLE_B"]),
             &empty_uc,

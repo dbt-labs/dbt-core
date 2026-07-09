@@ -19,10 +19,10 @@ use crate::schemas::common::{ExternalTable, PersistDocsConfig, hooks_equal, norm
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
-use crate::schemas::project::configs::common::{
-    grants_eq_with_unrendered, tags_eq_vec, unrendered_value_eq,
+use crate::schemas::project::configs::common::{grants_equal, tags_eq_vec};
+use crate::schemas::project::{
+    WarehouseSpecificNodeConfig, same_warehouse_config, same_warehouse_config_with_unrendered,
 };
-use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config_with_unrendered};
 use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
@@ -1321,94 +1321,33 @@ fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterializ
     }
 }
 
-/// Unrendered-aware `quote_columns` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja `quote_columns` config in
-/// `dbt_project.yml` (e.g. `+quote_columns: "{{ true if target.name == 'prod' else false }}"`) that
-/// renders to a different boolean per target is not treated as a modification. This is the
-/// `quote_columns` sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (quote_columns configured && unrendered_same) || rendered_same`.
-///   1. If `quote_columns` is configured (present in `unrendered_config`) on at least one side and
-///      the configured (unrendered) values are equal, the configs are the same.
-///   2. Otherwise fall back to the rendered comparison (`left == right`).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `quote_columns`
-/// is a single key, so an absent-on-both unrendered value must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate `unrendered_config.quote_columns`) would be masked.
-///
-/// This is strictly more lenient than the rendered equality alone (it can only turn a rendered
-/// "different" into "same"), preserving backward compatibility.
-fn quote_columns_eq_with_unrendered(
-    left: &Option<bool>,
-    right: &Option<bool>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_qc = left_unrendered_config.get("quote_columns");
-    let right_qc = right_unrendered_config.get("quote_columns");
-    if (left_qc.is_some() || right_qc.is_some()) && unrendered_value_eq(left_qc, right_qc) {
-        return true;
-    }
-    left == right
-}
-
 /// Helper functions for smart comparison of SeedConfig fields that considers
 /// None vs Some(empty) representations as equivalent
-fn seed_configs_equal(
-    left: &SeedConfig,
-    right: &SeedConfig,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
+fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
     // Compare each field with smart empty comparison
-    let column_types_eq = column_types_eq_with_unrendered(
-        &left.column_types,
-        &right.column_types,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
+    let column_types_eq = btree_map_equal(&left.column_types, &right.column_types);
     let docs_eq = docs_config_equal(&left.docs, &right.docs);
     let enabled_eq = left.enabled == right.enabled;
-    let grants_eq_result = grants_eq_with_unrendered(
-        &left.grants,
-        &right.grants,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
-    let quote_columns_eq = quote_columns_eq_with_unrendered(
-        &left.quote_columns,
-        &right.quote_columns,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
+    let grants_eq = grants_equal(&left.grants, &right.grants);
+    let quote_columns_eq = left.quote_columns == right.quote_columns;
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
     let event_time_eq = left.event_time == right.event_time;
     let full_refresh_eq = left.full_refresh == right.full_refresh;
-    let meta_eq = meta_eq_with_unrendered(
-        &left.meta,
-        &right.meta,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
+    let meta_eq = indexmap_yml_value_equal(&left.meta, &right.meta);
     let persist_docs_eq = persist_docs_configs_equal(&left.persist_docs, &right.persist_docs);
     let post_hook_eq = hooks_equal(&left.post_hook, &right.post_hook);
     let pre_hook_eq = hooks_equal(&left.pre_hook, &right.pre_hook);
     // quoting_equal(&left.quoting, &right.quoting) && // TODO: re-enable when no longer using mantle/core manifests in IA
     let materialized_eq = seed_materialized_eq(&left.materialized, &right.materialized);
-    let warehouse_config_eq = same_warehouse_config_with_unrendered(
+    let warehouse_config_eq = same_warehouse_config(
         &left.__warehouse_specific_config__,
         &right.__warehouse_specific_config__,
-        left_unrendered_config,
-        right_unrendered_config,
     );
 
     let result = column_types_eq
         && docs_eq
         && enabled_eq
-        && grants_eq_result
+        && grants_eq
         && quote_columns_eq
         && event_time_eq
         && full_refresh_eq
@@ -1447,7 +1386,7 @@ fn seed_configs_equal(
                 ),
                 (
                     "grants",
-                    grants_eq_result,
+                    grants_eq,
                     Some((
                         format!("{:?}", &left.grants),
                         format!("{:?}", &right.grants),
@@ -1539,41 +1478,6 @@ fn btree_map_equal(
     }
 }
 
-/// Unrendered-aware `column_types` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so environment-aware Jinja `column_types` configs in
-/// `dbt_project.yml` (e.g.
-/// `+column_types: {id: "{{ 'integer' if target.name == 'prod' else 'bigint' }}"}`) that render
-/// to different types per target are not treated as modifications. This is the `column_types`
-/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (column_types configured && unrendered_same) || rendered_same`.
-///   1. If `column_types` is configured (present in `unrendered_config`) on at least one side and
-///      the configured (unrendered) values are equal, the column types are the same.
-///   2. Otherwise fall back to the rendered comparison ([`btree_map_equal`]).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `column_types`
-/// is a single key, so an absent-on-both unrendered `column_types` must fall back to the rendered
-/// comparison rather than be treated as equal — otherwise a genuine rendered change (e.g. from a
-/// Mantle/core manifest that does not populate `unrendered_config.column_types`) would be masked.
-///
-/// This is strictly more lenient than [`btree_map_equal`] alone (it can only turn a rendered
-/// "different" into "same"), preserving backward compatibility.
-fn column_types_eq_with_unrendered(
-    left: &Option<BTreeMap<Spanned<String>, String>>,
-    right: &Option<BTreeMap<Spanned<String>, String>>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_ct = left_unrendered_config.get("column_types");
-    let right_ct = right_unrendered_config.get("column_types");
-    if (left_ct.is_some() || right_ct.is_some()) && unrendered_value_eq(left_ct, right_ct) {
-        return true;
-    }
-    btree_map_equal(left, right)
-}
-
 /// Compare IndexMap<String, YmlValue> considering None vs Some(empty) as equal
 fn indexmap_yml_value_equal(
     left: &Option<IndexMap<String, YmlValue>>,
@@ -1585,76 +1489,6 @@ fn indexmap_yml_value_equal(
         (None, Some(r)) => r.is_empty(),
         (Some(l), None) => l.is_empty(),
     }
-}
-
-/// Unrendered-aware `meta` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja `meta` config in
-/// `dbt_project.yml` (e.g. `+meta: {owner: "{{ 'prod_team' if target.name == 'prod' else 'dev_team' }}"}`)
-/// that renders to different values per target is not treated as a modification. This is the `meta`
-/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (meta configured && unrendered_same) || rendered_same`.
-///   1. If `meta` is configured (present in `unrendered_config`) on at least one side and the
-///      configured (unrendered) values are equal, the meta is the same.
-///   2. Otherwise fall back to the rendered comparison ([`indexmap_yml_value_equal`]).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `meta` is a
-/// single key, so an absent-on-both unrendered `meta` must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate `unrendered_config.meta`) would be masked.
-///
-/// This is strictly more lenient than [`indexmap_yml_value_equal`] alone (it can only turn a
-/// rendered "different" into "same"), preserving backward compatibility.
-fn meta_eq_with_unrendered(
-    left: &Option<IndexMap<String, YmlValue>>,
-    right: &Option<IndexMap<String, YmlValue>>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_meta = left_unrendered_config.get("meta");
-    let right_meta = right_unrendered_config.get("meta");
-    if (left_meta.is_some() || right_meta.is_some()) && unrendered_value_eq(left_meta, right_meta) {
-        return true;
-    }
-    indexmap_yml_value_equal(left, right)
-}
-
-/// Unrendered-aware comparison for a single string-valued config key (e.g. `alias`,
-/// `target_schema`, `target_database`).
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja config in
-/// `dbt_project.yml` (e.g. `+target_schema: "{{ 'prod_snap' if target.name == 'prod' else 'dev_snap' }}"`)
-/// that renders to a different string per target is not treated as a modification. This is the
-/// string-config sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (key configured && unrendered_same) || rendered_same`.
-///   1. If `key` is configured (present in `unrendered_config`) on at least one side and the
-///      configured (unrendered) values are equal, the values are the same.
-///   2. Otherwise fall back to the rendered comparison (`left == right`).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: each key is a
-/// single key, so an absent-on-both unrendered value must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate the key in `unrendered_config`) would be masked.
-///
-/// This is strictly more lenient than the rendered equality alone (it can only turn a rendered
-/// "different" into "same"), preserving backward compatibility.
-fn string_config_eq_with_unrendered(
-    left: &Option<String>,
-    right: &Option<String>,
-    key: &str,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_v = left_unrendered_config.get(key);
-    let right_v = right_unrendered_config.get(key);
-    if (left_v.is_some() || right_v.is_some()) && unrendered_value_eq(left_v, right_v) {
-        return true;
-    }
-    left == right
 }
 
 /// Compare DocsConfig considering None vs Some(default) as equal
@@ -1758,12 +1592,8 @@ impl InternalDbtNode for DbtSeed {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-            let deprecated_config_eq = seed_configs_equal(
-                &self.deprecated_config,
-                &other_model.deprecated_config,
-                &self.__base_attr__.unrendered_config,
-                &other_model.__base_attr__.unrendered_config,
-            );
+            let deprecated_config_eq =
+                seed_configs_equal(&self.deprecated_config, &other_model.deprecated_config);
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -1779,7 +1609,7 @@ impl InternalDbtNode for DbtSeed {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_seed) = other.as_any().downcast_ref::<DbtSeed>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             // TODO: Seeds might have path based checksum. When they do,
@@ -1809,7 +1639,8 @@ impl InternalDbtNode for DbtSeed {
                 }
             }
 
-            let same_config_result = self.has_same_config(other, adapter_type);
+            // Config is owned by `check_configs_modified`; calling `has_same_config` here would
+            // double-count it. This check is therefore restricted to non-config fields.
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -1827,7 +1658,6 @@ impl InternalDbtNode for DbtSeed {
             // so we do not need to do a contract check for seeds.
 
             let result = same_body_result
-                && same_config_result
                 && same_persisted_desc_result
                 && same_fqn_result
                 && same_db_repr_result;
@@ -1838,7 +1668,6 @@ impl InternalDbtNode for DbtSeed {
                     "seed",
                     [
                         ("same_body", same_body_result, None),
-                        ("same_config", same_config_result, None),
                         (
                             "same_persisted_description",
                             same_persisted_desc_result,
@@ -2586,25 +2415,14 @@ impl InternalDbtNode for DbtSnapshot {
             let other_config = &other_snapshot.deprecated_config;
 
             // Snapshot-specific Configuration
-            let alias_eq = string_config_eq_with_unrendered(
-                &self_config.alias,
-                &other_config.alias,
-                "alias",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let alias_eq = self_config.alias == other_config.alias;
             let materialized_eq = self_config.materialized == other_config.materialized;
             let strategy_eq = self_config.strategy == other_config.strategy;
             let unique_key_eq = self_config.unique_key == other_config.unique_key;
             let check_cols_eq = self_config.check_cols == other_config.check_cols;
             let updated_at_eq = self_config.updated_at == other_config.updated_at;
-            let dbt_valid_to_current_eq = string_config_eq_with_unrendered(
-                &self_config.dbt_valid_to_current,
-                &other_config.dbt_valid_to_current,
-                "dbt_valid_to_current",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let dbt_valid_to_current_eq =
+                self_config.dbt_valid_to_current == other_config.dbt_valid_to_current;
 
             let snapshot_meta_column_names_eq = {
                 use crate::schemas::project::configs::snapshot_config::SnapshotMetaColumnNames;
@@ -2630,20 +2448,8 @@ impl InternalDbtNode for DbtSnapshot {
             };
 
             let hard_deletes_eq = self_config.hard_deletes == other_config.hard_deletes;
-            let target_database_eq = string_config_eq_with_unrendered(
-                &self_config.target_database,
-                &other_config.target_database,
-                "target_database",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
-            let target_schema_eq = string_config_eq_with_unrendered(
-                &self_config.target_schema,
-                &other_config.target_schema,
-                "target_schema",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let target_database_eq = self_config.target_database == other_config.target_database;
+            let target_schema_eq = self_config.target_schema == other_config.target_schema;
 
             // General Configuration
             let enabled_eq = self_config.enabled == other_config.enabled;
@@ -2651,12 +2457,8 @@ impl InternalDbtNode for DbtSnapshot {
             let post_hook_eq = hooks_equal(&self_config.post_hook, &other_config.post_hook);
             let persist_docs_eq =
                 persist_docs_configs_equal(&self_config.persist_docs, &other_config.persist_docs);
-            let grants_eq = grants_eq_with_unrendered(
-                &self_config.grants,
-                &other_config.grants,
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let meta_eq = indexmap_yml_value_equal(&self_config.meta, &other_config.meta);
+            let grants_eq = grants_equal(&self_config.grants, &other_config.grants);
             let event_time_eq = self_config.event_time == other_config.event_time;
             let quoting_eq =
                 quoting_equal(&self_config.quoting, &other_config.quoting, adapter_type);
@@ -2670,17 +2472,14 @@ impl InternalDbtNode for DbtSnapshot {
                     (None, Some(v)) | (Some(v), None) => **v == default_sa,
                     (Some(a), Some(b)) => a == b,
                 };
-            let group_eq = self_config.group == other_config.group;
             let quote_columns_eq = self_config.quote_columns == other_config.quote_columns;
             let invalidate_hard_deletes_eq =
                 self_config.invalidate_hard_deletes == other_config.invalidate_hard_deletes;
 
             // Adapter specific configs
-            let warehouse_config_eq = same_warehouse_config_with_unrendered(
+            let warehouse_config_eq = same_warehouse_config(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
             );
 
             let result = alias_eq
@@ -2699,11 +2498,11 @@ impl InternalDbtNode for DbtSnapshot {
                 && pre_hook_eq
                 && post_hook_eq
                 && persist_docs_eq
+                && meta_eq
                 && grants_eq
                 && event_time_eq
                 && quoting_eq
                 && static_analysis_eq
-                && group_eq
                 && quote_columns_eq
                 && invalidate_hard_deletes_eq
                 // Adapter specific configs
@@ -2828,6 +2627,14 @@ impl InternalDbtNode for DbtSnapshot {
                         ),
                         ("persist_docs", persist_docs_eq, None),
                         (
+                            "meta",
+                            meta_eq,
+                            Some((
+                                format!("{:?}", &self_config.meta),
+                                format!("{:?}", &other_config.meta),
+                            )),
+                        ),
+                        (
                             "grants",
                             grants_eq,
                             Some((
@@ -2860,14 +2667,6 @@ impl InternalDbtNode for DbtSnapshot {
                             )),
                         ),
                         (
-                            "group",
-                            group_eq,
-                            Some((
-                                format!("{:?}", &self_config.group),
-                                format!("{:?}", &other_config.group),
-                            )),
-                        ),
-                        (
                             "quote_columns",
                             quote_columns_eq,
                             Some((
@@ -2894,12 +2693,13 @@ impl InternalDbtNode for DbtSnapshot {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             let same_body_result =
                 same_body(&self.__common_attr__, &other_snapshot.__common_attr__);
-            let same_config_result = self.has_same_config(other, adapter_type);
+            // Config is owned by `check_configs_modified`; calling `has_same_config` here would
+            // double-count it. This check is therefore restricted to non-config fields.
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -2919,7 +2719,6 @@ impl InternalDbtNode for DbtSnapshot {
             // See: https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/contracts/graph/nodes.py#L374
 
             let result = same_body_result
-                && same_config_result
                 && same_persisted_desc_result
                 && same_fqn_result
                 && same_db_repr_result;
@@ -2930,7 +2729,6 @@ impl InternalDbtNode for DbtSnapshot {
                     "snapshot",
                     [
                         ("same_body", same_body_result, None),
-                        ("same_config", same_config_result, None),
                         (
                             "same_persisted_description",
                             same_persisted_desc_result,

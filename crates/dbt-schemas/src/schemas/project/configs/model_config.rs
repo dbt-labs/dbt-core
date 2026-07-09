@@ -40,7 +40,7 @@ use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq_with_unrendered, meta_eq,
+    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_equal_with_unrendered, meta_eq,
     omissible_option_eq, same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::dbt_project::ResolvableConfig;
@@ -1267,7 +1267,7 @@ impl ModelConfig {
             &other.on_configuration_change,
         ); // Custom comparison for on_configuration_change
         let on_error_eq = self.on_error == other.on_error;
-        let grants_eq_result = grants_eq_with_unrendered(
+        let grants_eq = grants_equal_with_unrendered(
             &self.grants,
             &other.grants,
             self_unrendered_config,
@@ -1325,7 +1325,7 @@ impl ModelConfig {
             && on_schema_change_eq_result
             && on_configuration_change_eq_result
             && on_error_eq
-            && grants_eq_result
+            && grants_eq
             && packages_eq
             && imports_eq
             && python_version_eq
@@ -1474,7 +1474,7 @@ impl ModelConfig {
                     ),
                     (
                         "grants",
-                        grants_eq_result,
+                        grants_eq,
                         Some((
                             format!("{:?}", &self.grants),
                             format!("{:?}", &other.grants),

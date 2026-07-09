@@ -23,7 +23,7 @@ use crate::schemas::common::{Access, DbtQuoting};
 use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
-    access_eq, array_of_strings_eq, docs_eq, grants_eq_with_unrendered, meta_eq,
+    access_eq, array_of_strings_eq, docs_eq, grants_equal_with_unrendered, meta_eq,
     omissible_option_eq, same_warehouse_config_with_unrendered,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
@@ -385,7 +385,7 @@ impl FunctionConfig {
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let group_eq = self.group == other.group;
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
-        let grants_eq_result = grants_eq_with_unrendered(
+        let grants_eq = grants_equal_with_unrendered(
             &self.grants,
             &other.grants,
             self_unrendered_config,
@@ -414,7 +414,7 @@ impl FunctionConfig {
             && meta_eq_result
             && group_eq
             && docs_eq_result
-            && grants_eq_result
+            && grants_eq
             && quoting_eq
             && on_configuration_change_eq
             && static_analysis_eq
@@ -469,7 +469,7 @@ impl FunctionConfig {
                     ("docs", docs_eq_result, None),
                     (
                         "grants",
-                        grants_eq_result,
+                        grants_eq,
                         Some((
                             format!("{:?}", &self.grants),
                             format!("{:?}", &other.grants),
