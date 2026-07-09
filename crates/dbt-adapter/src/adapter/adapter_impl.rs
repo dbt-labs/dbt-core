@@ -2712,6 +2712,37 @@ impl AdapterImpl {
         }
     }
 
+    /// Join `SHOW TABLES FROM SCHEMA` metadata with `SVV_REDSHIFT_COLUMNS` to build the base
+    /// catalog used when Redshift datasharing is enabled. The SVV view is leader-only and
+    /// cannot be joined to `SHOW` results in SQL, so the catalog macro fetches both and passes
+    /// them here for an in-memory join.
+    pub fn build_catalog_from_show_tables_and_svv_columns(
+        &self,
+        show_tables_results: &[Arc<AgateTable>],
+        svv_columns: Arc<AgateTable>,
+    ) -> AdapterResult<AgateTable> {
+        match self.adapter_type() {
+            Redshift => {
+                let show_tables_batches: Vec<Arc<RecordBatch>> = show_tables_results
+                    .iter()
+                    .map(|table| table.original_record_batch())
+                    .collect();
+                let svv_batch = svv_columns.original_record_batch();
+                let catalog = metadata::redshift::join_show_tables_and_svv_columns(
+                    &show_tables_batches,
+                    svv_batch.as_ref(),
+                )?;
+                Ok(AgateTable::from_record_batch(Arc::new(catalog)))
+            }
+            Snowflake | Bigquery | Databricks | Spark | DuckDB | Fdcs | Postgres | Salesforce
+            | Fabric | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio
+            | Oracle => Err(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "build_catalog_from_show_tables_and_svv_columns is only supported for Redshift",
+            )),
+        }
+    }
+
     pub fn do_nest_column_data_types(
         &self,
         columns: IndexMap<String, DbtColumn>,

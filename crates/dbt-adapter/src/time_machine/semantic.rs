@@ -95,6 +95,7 @@ impl SemanticCategory {
             | "quote_seed_column"
             | "render_equals"
             | "convert_type"
+            | "build_catalog_from_show_tables_and_svv_columns"
             | "dispatch"
             | "commit"
             | "type"

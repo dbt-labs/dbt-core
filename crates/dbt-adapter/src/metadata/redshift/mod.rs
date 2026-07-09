@@ -7,6 +7,7 @@ use crate::relation::Relation;
 use crate::sql_types::make_arrow_field_v2;
 use crate::{AdapterEngine, AdapterResult};
 use arrow::array::*;
+use arrow::compute::concat_batches;
 use arrow::datatypes::GenericStringType;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_adapter_core::{AdapterType, ExecutionPhase};
@@ -20,7 +21,9 @@ use dbt_schemas::schemas::relations::base::RelationPattern;
 use indexmap::IndexMap;
 
 use std::collections::btree_map::Entry;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::metadata::list_objects::*;
@@ -172,6 +175,189 @@ fn parse_show_tables_batch(
     }
 
     Ok(relations)
+}
+
+/// `table_type` and `table_subtype` must already be trimmed.
+fn show_table_catalog_type(table_type: &str, table_subtype: Option<&str>) -> &'static str {
+    fn lookup(value: &str) -> Option<&'static str> {
+        match value {
+            v if v.eq_ignore_ascii_case("TABLE") => Some("BASE TABLE"),
+            v if v.eq_ignore_ascii_case("VIEW") => Some("VIEW"),
+            v if v.eq_ignore_ascii_case("MATERIALIZED VIEW") => Some("MATERIALIZED VIEW"),
+            v if v.eq_ignore_ascii_case("LATE BINDING VIEW") => Some("LATE BINDING VIEW"),
+            _ => None,
+        }
+    }
+    table_subtype
+        .and_then(lookup)
+        .or_else(|| lookup(table_type))
+        .unwrap_or("BASE TABLE")
+}
+
+fn table_hash(database: &str, schema: &str, table: &str) -> u64 {
+    const FIELD_SEPARATOR: &str = "|";
+
+    fn hash_lowercase(value: &str, hasher: &mut impl Hasher) {
+        for c in value.chars().flat_map(char::to_lowercase) {
+            c.hash(hasher);
+        }
+    }
+
+    let mut h = DefaultHasher::new();
+    database.hash(&mut h);
+    FIELD_SEPARATOR.hash(&mut h);
+    hash_lowercase(schema, &mut h);
+    FIELD_SEPARATOR.hash(&mut h);
+    hash_lowercase(table, &mut h);
+    h.finish()
+}
+
+/// Build the base catalog for Redshift datasharing by joining `SHOW TABLES FROM SCHEMA`
+/// (table metadata) with `SVV_REDSHIFT_COLUMNS` (column metadata).
+///
+/// Redshift's SVV views live on the leader node and cannot be joined to `SHOW` results in
+/// SQL, so the catalog macro fetches both and we join them here. The output columns match
+/// the legacy `pg_catalog` catalog SQL, so [`build_schemas_from_stats_sql`] and
+/// [`build_columns_from_get_columns`] consume the batch unchanged.
+///
+/// Reference: <https://github.com/dbt-labs/dbt-adapters/pull/1718>
+/// SHOW TABLES: <https://docs.aws.amazon.com/redshift/latest/dg/r_SHOW_TABLES.html>
+/// SVV_REDSHIFT_COLUMNS: <https://docs.aws.amazon.com/redshift/latest/dg/r_SVV_REDSHIFT_COLUMNS.html>
+pub(crate) fn join_show_tables_and_svv_columns(
+    show_tables_results: &[Arc<RecordBatch>],
+    svv_columns: &RecordBatch,
+) -> AdapterResult<RecordBatch> {
+    let catalog_schema = Arc::new(Schema::new(vec![
+        Field::new("table_database", DataType::Utf8, false),
+        Field::new("table_schema", DataType::Utf8, false),
+        Field::new("table_name", DataType::Utf8, false),
+        Field::new("table_type", DataType::Utf8, false),
+        Field::new("table_comment", DataType::Utf8, false),
+        Field::new("table_owner", DataType::Utf8, false),
+        Field::new("column_name", DataType::Utf8, false),
+        Field::new("column_index", DataType::Int32, false),
+        Field::new("column_type", DataType::Utf8, false),
+        Field::new("column_comment", DataType::Utf8, false),
+    ]));
+
+    let show_tables_batches: Vec<&RecordBatch> = show_tables_results
+        .iter()
+        .filter(|batch| batch.num_rows() > 0)
+        .map(|batch| batch.as_ref())
+        .collect();
+
+    if show_tables_batches.is_empty() || svv_columns.num_rows() == 0 {
+        return Ok(RecordBatch::new_empty(catalog_schema));
+    }
+
+    let show_tables = concat_batches(
+        &show_tables_batches[0].schema(),
+        show_tables_batches.iter().copied(),
+    )
+    .map_err(|e| {
+        AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!("failed to flatten redshift SHOW TABLES record batches: {e}"),
+        )
+    })?;
+
+    let show_database = show_tables.column_values::<StringArray>("database_name")?;
+    let show_schema = show_tables.column_values::<StringArray>("schema_name")?;
+    let show_table = show_tables.column_values::<StringArray>("table_name")?;
+    let show_type = show_tables.column_values::<StringArray>("table_type")?;
+    // `table_subtype` is the only column that can be absent (added in
+    // dbt-adapters#1745; pre-Patch-197 Redshift omits it), so it stays optional.
+    let show_subtype = show_tables
+        .column_by_name("table_subtype")
+        .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+    let show_owner = show_tables.column_values::<StringArray>("owner")?;
+    let show_remarks = show_tables.column_values::<StringArray>("remarks")?;
+
+    let mut tables = HashMap::with_capacity(show_tables.num_rows());
+    for show_index in 0..show_tables.num_rows() {
+        tables.insert(
+            table_hash(
+                show_database.value(show_index),
+                show_schema.value(show_index),
+                show_table.value(show_index),
+            ),
+            show_index,
+        );
+    }
+
+    let db = svv_columns.column_values::<StringArray>("database_name")?;
+    let sch = svv_columns.column_values::<StringArray>("schema_name")?;
+    let tbl = svv_columns.column_values::<StringArray>("table_name")?;
+    let name = svv_columns.column_values::<StringArray>("column_name")?;
+    let dtype = svv_columns.column_values::<StringArray>("data_type")?;
+    let remarks = svv_columns.column_values::<StringArray>("remarks")?;
+    let ordinal = svv_columns.column_values::<Int32Array>("ordinal_position")?;
+
+    // The catalog is column-level: SHOW TABLES rows with no SVV column rows do not emit
+    // catalog rows, and SVV rows without a SHOW TABLES parent are omitted.
+    let matched: Vec<(usize, usize)> = (0..svv_columns.num_rows())
+        .filter_map(|i| {
+            tables
+                .get(&table_hash(db.value(i), sch.value(i), tbl.value(i)))
+                .map(|&show_index| (show_index, i))
+        })
+        .collect();
+
+    // Column types are pinned to what the downstream `column_values` downcasts expect.
+    let columns: Vec<ArrayRef> = vec![
+        Arc::new(StringArray::from_iter_values(
+            matched
+                .iter()
+                .map(|(show_index, _)| show_database.value(*show_index)),
+        )),
+        Arc::new(StringArray::from_iter_values(
+            matched
+                .iter()
+                .map(|(show_index, _)| show_schema.value(*show_index)),
+        )),
+        Arc::new(StringArray::from_iter_values(
+            matched
+                .iter()
+                .map(|(show_index, _)| show_table.value(*show_index)),
+        )),
+        Arc::new(StringArray::from_iter_values(matched.iter().map(
+            |(show_index, _)| {
+                show_table_catalog_type(
+                    show_type.value(*show_index).trim(),
+                    show_subtype.map(|a| a.value(*show_index).trim()),
+                )
+            },
+        ))),
+        Arc::new(StringArray::from_iter_values(
+            matched
+                .iter()
+                .map(|(show_index, _)| show_remarks.value(*show_index)),
+        )),
+        Arc::new(StringArray::from_iter_values(
+            matched
+                .iter()
+                .map(|(show_index, _)| show_owner.value(*show_index)),
+        )),
+        Arc::new(StringArray::from_iter_values(
+            matched.iter().map(|(_, i)| name.value(*i)),
+        )),
+        Arc::new(Int32Array::from_iter_values(
+            matched.iter().map(|(_, i)| ordinal.value(*i)),
+        )),
+        Arc::new(StringArray::from_iter_values(
+            matched.iter().map(|(_, i)| dtype.value(*i)),
+        )),
+        Arc::new(StringArray::from_iter_values(
+            matched.iter().map(|(_, i)| remarks.value(*i)),
+        )),
+    ];
+
+    RecordBatch::try_new(catalog_schema, columns).map_err(|e| {
+        AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!("failed to build redshift catalog record batch: {e}"),
+        )
+    })
 }
 
 pub(crate) struct RedshiftListRelationsSchemasStrategy {
@@ -1289,7 +1475,10 @@ fn build_schema_from_stats_sql_without_stats(
                 schema: schema.to_string(),
                 name: table.to_string(),
                 database: Some(catalog.to_string()),
-                comment: Some(comment.to_string()),
+                comment: match comment {
+                    "" => None,
+                    _ => Some(comment.to_string()),
+                },
                 owner: Some(owner.to_string()),
             };
 
@@ -1351,7 +1540,7 @@ mod tests {
                     Arc::new(StringArray::from(subtype)),
                 ],
             )
-            .unwrap(),
+            .expect("show_tables_batch_with_subtype test fixture should build a valid RecordBatch"),
         )
     }
 
@@ -1486,7 +1675,7 @@ mod tests {
             RelationType::Table,
             quoting(),
         )
-        .unwrap()
+        .expect("relation test fixture should build a valid Redshift relation")
     }
 
     #[test]
@@ -1526,5 +1715,136 @@ mod tests {
 
         let freshness = parse_show_tables_freshness_batch(&batch, &relations).unwrap();
         assert!(freshness.is_empty());
+    }
+
+    /// (database, schema, table, type, subtype, owner, remarks)
+    fn show_tables_batch_full(
+        rows: &[(&str, &str, &str, &str, &str, &str, &str)],
+    ) -> Arc<RecordBatch> {
+        let arrow_schema = Arc::new(ArrowSchema::new(vec![
+            Field::new("database_name", DataType::Utf8, false),
+            Field::new("schema_name", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+            Field::new("table_subtype", DataType::Utf8, false),
+            Field::new("owner", DataType::Utf8, false),
+            Field::new("remarks", DataType::Utf8, false),
+        ]));
+        Arc::new(
+            RecordBatch::try_new(
+                arrow_schema,
+                vec![
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.0))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.1))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.2))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.3))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.4))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.5))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.6))),
+                ],
+            )
+            .expect("show_tables_batch_full test fixture should build a valid RecordBatch"),
+        )
+    }
+
+    /// (database, schema, table, column, ordinal_position, data_type, remarks)
+    fn svv_columns_batch(rows: &[(&str, &str, &str, &str, i32, &str, &str)]) -> RecordBatch {
+        let arrow_schema = Arc::new(ArrowSchema::new(vec![
+            Field::new("database_name", DataType::Utf8, false),
+            Field::new("schema_name", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("ordinal_position", DataType::Int32, false),
+            Field::new("data_type", DataType::Utf8, false),
+            Field::new("remarks", DataType::Utf8, false),
+        ]));
+        RecordBatch::try_new(
+            arrow_schema,
+            vec![
+                Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.0))),
+                Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.1))),
+                Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.2))),
+                Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.3))),
+                Arc::new(Int32Array::from_iter_values(rows.iter().map(|r| r.4))),
+                Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.5))),
+                Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.6))),
+            ],
+        )
+        .expect("svv_columns_batch test fixture should build a valid RecordBatch")
+    }
+
+    #[test]
+    fn test_join_show_tables_and_svv_columns() {
+        // Two relations in schema `s1`; SVV reports columns for both plus one row for a
+        // table that has no SHOW TABLES parent (which must be dropped from the catalog).
+        let show_tables = vec![show_tables_batch_full(&[
+            ("dev", "s1", "orders", "TABLE", "", "alice", "orders table"),
+            (
+                "dev",
+                "s1",
+                "cust_v",
+                "VIEW",
+                "MATERIALIZED VIEW",
+                "bob",
+                "",
+            ),
+        ])];
+        let svv = svv_columns_batch(&[
+            // Case-insensitive join: SVV reports uppercase schema/table for `orders`.
+            ("dev", "S1", "ORDERS", "id", 1, "integer", "pk"),
+            ("dev", "S1", "ORDERS", "amount", 2, "numeric", ""),
+            ("dev", "s1", "cust_v", "name", 1, "character varying", ""),
+            ("dev", "s1", "missing", "x", 1, "integer", ""),
+        ]);
+
+        let batch = join_show_tables_and_svv_columns(&show_tables, &svv).unwrap();
+
+        // 3 matched columns; the orphan `missing` row is dropped.
+        assert_eq!(batch.num_rows(), 3);
+
+        // All 10 contract columns present, with the types the catalog parsers expect.
+        let schema = batch.schema();
+        let dtype = |n: &str| schema.field_with_name(n).unwrap().data_type().clone();
+        for col in [
+            "table_database",
+            "table_schema",
+            "table_name",
+            "table_type",
+            "table_comment",
+            "table_owner",
+            "column_name",
+            "column_type",
+            "column_comment",
+        ] {
+            assert_eq!(dtype(col), DataType::Utf8, "{col} should be Utf8");
+        }
+        assert_eq!(dtype("column_index"), DataType::Int32);
+
+        let table_type = batch.column_values::<StringArray>("table_type").unwrap();
+        let table_owner = batch.column_values::<StringArray>("table_owner").unwrap();
+        let table_comment = batch.column_values::<StringArray>("table_comment").unwrap();
+        let column_index = batch.column_values::<Int32Array>("column_index").unwrap();
+        let column_comment = batch
+            .column_values::<StringArray>("column_comment")
+            .unwrap();
+
+        // Row 0: orders.id — base table, owner + comments populated, index preserved.
+        assert_eq!(table_type.value(0), "BASE TABLE");
+        assert_eq!(table_owner.value(0), "alice");
+        assert_eq!(table_comment.value(0), "orders table");
+        assert_eq!(column_index.value(0), 1);
+        assert_eq!(column_comment.value(0), "pk");
+
+        // Row 2: cust_v.name — the subtype (MATERIALIZED VIEW) wins over the type (VIEW).
+        assert_eq!(table_type.value(2), "MATERIALIZED VIEW");
+        assert_eq!(table_owner.value(2), "bob");
+    }
+
+    #[test]
+    fn test_build_catalog_empty_inputs() {
+        let batch = join_show_tables_and_svv_columns(&[], &svv_columns_batch(&[])).unwrap();
+        assert_eq!(batch.num_rows(), 0);
+        // Schema stays well-formed so the downstream parsers short-circuit on 0 rows.
+        assert_eq!(batch.schema().fields().len(), 10);
     }
 }

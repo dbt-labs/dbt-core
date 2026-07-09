@@ -507,6 +507,63 @@ impl Adapter {
         }
     }
 
+    /// Build catalog from show tables and svv columns
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-redshift/src/dbt/adapters/redshift/impl.py
+    ///
+    /// ```python
+    /// def build_catalog_from_show_tables_and_svv_columns(
+    ///     self,
+    ///     show_tables_results: List["agate.Table"],
+    ///     svv_columns: "agate.Table",
+    /// ) -> "agate.Table"
+    /// ```
+    #[tracing::instrument(skip_all, level = "trace")]
+    pub fn build_catalog_from_show_tables_and_svv_columns(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "build_catalog_from_show_tables_and_svv_columns",
+                    &["show_tables_results", "svv_columns"],
+                    args,
+                );
+                let show_tables_value = iter.next_arg::<&Value>()?;
+                let mut show_tables_results: Vec<Arc<AgateTable>> = Vec::new();
+                for table_value in show_tables_value.try_iter()? {
+                    let table = table_value.downcast_object::<AgateTable>().ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "show_tables_results must contain AgateTables",
+                        )
+                    })?;
+                    show_tables_results.push(table);
+                }
+                let svv_columns = iter
+                    .next_arg::<&Value>()?
+                    .downcast_object::<AgateTable>()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "svv_columns must be an AgateTable",
+                        )
+                    })?;
+                iter.finish()?;
+
+                let catalog = adapter.build_catalog_from_show_tables_and_svv_columns(
+                    &show_tables_results,
+                    svv_columns,
+                )?;
+                Ok(Value::from_object(catalog))
+            }
+            // During parse phase queries don't execute, so there are no real tables to join.
+            Parse(_) => Ok(Value::from_object(AgateTable::default())),
+        }
+    }
+
     /// Encloses identifier in the correct quotes for the adapter when escaping reserved column names etc.
     ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1064
@@ -3617,6 +3674,9 @@ impl Adapter {
                 iter.finish()?;
 
                 self.get_columns_in_relation(state, relation.as_ref())
+            }
+            "build_catalog_from_show_tables_and_svv_columns" => {
+                self.build_catalog_from_show_tables_and_svv_columns(state, args)
             }
             "build_catalog_relation" => {
                 let iter = ArgsIter::new(name, &["model"], args);
