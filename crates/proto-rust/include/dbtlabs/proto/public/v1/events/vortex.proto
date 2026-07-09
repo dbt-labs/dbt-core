@@ -29,6 +29,16 @@ message VortexMessage {
 
     // the time that the vortex backend fully processed the message.
     google.protobuf.Timestamp vortex_backend_processed_at = 5;
+
+    // a unique identifier for this event, generated as a UUID by the
+    // vortex client library automatically.
+    string vortex_event_id = 6;
+
+    // a stable identifier for the wrapped event's protobuf type, set by
+    // the vortex client library automatically. format:
+    // "dbt-labs/proto/<package-path>/<Message>", e.g.
+    // "dbt-labs/proto/v1/events/fusion/CloudInvocation".
+    string vortex_event_url = 7;
 }
 
 

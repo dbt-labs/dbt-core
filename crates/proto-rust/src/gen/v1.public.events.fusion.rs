@@ -522,6 +522,53 @@ impl ::prost::Name for Login {
         "/v1.public.events.fusion.Login".into()
     }
 }
+/// StaticAnalysisInvocation is emitted once per invocation when static
+/// analysis propagation completes, capturing the maximum SA level in use
+/// and per-level node counts.
+#[derive(::serde::Serialize)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StaticAnalysisInvocation {
+    /// This field is a toggle to enable enrichment of the message by the Vortex service.
+    #[prost(message, optional, tag = "1")]
+    pub enrichment: ::core::option::Option<
+        super::super::super::events::vortex::VortexMessageEnrichment,
+    >,
+    /// Unique identifier for this event (UUID). Required.
+    #[prost(string, tag = "2")]
+    pub event_id: ::prost::alloc::string::String,
+    /// Globally unique identifier for the fusion invocation. Required.
+    #[prost(string, tag = "3")]
+    pub invocation_id: ::prost::alloc::string::String,
+    /// MD5 hash of the project name from dbt_project.yml.
+    #[prost(string, tag = "4")]
+    pub project_id: ::prost::alloc::string::String,
+    /// Maximum static analysis level used across all scheduled nodes:
+    /// "strict", "baseline", "off", or "" when no nodes were scheduled.
+    #[prost(string, tag = "5")]
+    pub max_static_analysis_level: ::prost::alloc::string::String,
+    /// Originating caller: "cli" or an extension name (e.g. "lsp").
+    #[prost(string, tag = "6")]
+    pub source: ::prost::alloc::string::String,
+    /// Count of nodes running strict static analysis after propagation.
+    #[prost(int32, tag = "7")]
+    pub strict_node_count: i32,
+    /// Count of nodes running baseline static analysis after propagation.
+    #[prost(int32, tag = "8")]
+    pub baseline_node_count: i32,
+    /// Count of nodes with static analysis off after propagation.
+    #[prost(int32, tag = "9")]
+    pub off_node_count: i32,
+}
+impl ::prost::Name for StaticAnalysisInvocation {
+    const NAME: &'static str = "StaticAnalysisInvocation";
+    const PACKAGE: &'static str = "v1.public.events.fusion";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.StaticAnalysisInvocation".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.StaticAnalysisInvocation".into()
+    }
+}
 #[derive(::serde::Serialize, ::serde::Deserialize)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

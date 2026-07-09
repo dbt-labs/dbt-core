@@ -198,6 +198,7 @@ enum GetStartedStepId {
     GET_STARTED_STEP_ID_OPEN_PROJECT = 2;
     GET_STARTED_STEP_ID_CHECK_COMPATIBILITY = 3;
     GET_STARTED_STEP_ID_REGISTER = 4;
+    GET_STARTED_STEP_ID_INSTALL_WIZARD = 5;
 }
 
 // Status of a Get Started onboarding step
@@ -220,6 +221,8 @@ enum GetStartedInteractionType {
     // Step state transitions
     GET_STARTED_INTERACTION_TYPE_STEP_COMPLETED = 6;
     GET_STARTED_INTERACTION_TYPE_ALL_STEPS_COMPLETED = 7;
+    GET_STARTED_INTERACTION_TYPE_INSTALL_WIZARD_CLICKED = 8;
+    GET_STARTED_INTERACTION_TYPE_SKIP_WIZARD_CLICKED = 9;
 }
 
 // Status of a Query Results panel query at completion.

@@ -470,3 +470,39 @@ enum LoginType {
   PLATFORM = 1;
   STATE = 2;
 }
+
+// StaticAnalysisInvocation is emitted once per invocation when static
+// analysis propagation completes, capturing the maximum SA level in use
+// and per-level node counts.
+message StaticAnalysisInvocation {
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
+
+  // This field is a toggle to enable enrichment of the message by the Vortex service.
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+  // Unique identifier for this event (UUID). Required.
+  string event_id = 2;
+
+  // Globally unique identifier for the fusion invocation. Required.
+  string invocation_id = 3;
+
+  // MD5 hash of the project name from dbt_project.yml.
+  string project_id = 4;
+
+  // Maximum static analysis level used across all scheduled nodes:
+  // "strict", "baseline", "off", or "" when no nodes were scheduled.
+  string max_static_analysis_level = 5;
+
+  // Originating caller: "cli" or an extension name (e.g. "lsp").
+  string source = 6;
+
+  // Count of nodes running strict static analysis after propagation.
+  int32 strict_node_count = 7;
+
+  // Count of nodes running baseline static analysis after propagation.
+  int32 baseline_node_count = 8;
+
+  // Count of nodes with static analysis off after propagation.
+  int32 off_node_count = 9;
+}

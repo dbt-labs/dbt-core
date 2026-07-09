@@ -1,4 +1,5 @@
 use dbt_common::collections::DashMap;
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{
     DiscreteEventEmitter, FsResult,
     stats::{NodeStatus, Stat},
@@ -12,7 +13,7 @@ use dbt_schemas::{
 pub use proto_rust::v1::public::events::fusion::LoginType;
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, Login, PackageInstall, ResourceCounts,
-    RunModel,
+    RunModel, StaticAnalysisInvocation,
 };
 use proto_rust::v1::public::fields::core_types::ObservabilityMetric;
 use serde::{Deserialize, Serialize};
@@ -637,6 +638,39 @@ pub fn login_event(
         platform_user_id: c.and_then(|x| x.platform_user_id),
         platform_account_id: c.and_then(|x| x.platform_account_id),
         platform_account_identifier: c.and_then(|x| x.platform_account_identifier.clone()),
+    };
+
+    let _ = log_proto(message);
+}
+
+pub fn static_analysis_propagation_event(
+    invocation_id: String,
+    project_id: String,
+    max_sa_level: Option<StaticAnalysisKind>,
+    source: &str,
+    strict_count: usize,
+    baseline_count: usize,
+    off_count: usize,
+) {
+    let max_static_analysis_level = match max_sa_level {
+        Some(StaticAnalysisKind::Strict | StaticAnalysisKind::On | StaticAnalysisKind::Unsafe) => {
+            "strict".to_string()
+        }
+        Some(StaticAnalysisKind::Baseline) => "baseline".to_string(),
+        Some(StaticAnalysisKind::Off) => "off".to_string(),
+        None => "".to_string(),
+    };
+
+    let message = StaticAnalysisInvocation {
+        enrichment: None,
+        event_id: Uuid::new_v4().to_string(),
+        invocation_id,
+        project_id,
+        max_static_analysis_level,
+        source: source.to_string(),
+        strict_node_count: strict_count as i32,
+        baseline_node_count: baseline_count as i32,
+        off_node_count: off_count as i32,
     };
 
     let _ = log_proto(message);
