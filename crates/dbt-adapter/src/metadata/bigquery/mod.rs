@@ -1227,9 +1227,8 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 
-    /// Check if the returned error is due to insufficient permissions.
-    fn is_permission_error(&self, _e: &AdapterError) -> bool {
-        false
+    fn is_permission_error(&self, e: &AdapterError) -> bool {
+        is_bigquery_permission_error(e)
     }
 
     fn fetch_view_definitions_inner<'a>(
@@ -1416,6 +1415,22 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
 fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
     e.message().contains("Error 404: Not found:")
 }
+
+/// BigQuery surfaces access-control failures as googleapi HTTP 403 errors.
+/// This covers both plain IAM denials (e.g. the executing identity lacks
+/// `bigquery.datasets.create`) and VPC Service Controls policy violations.
+fn is_bigquery_permission_error(e: &AdapterError) -> bool {
+    let msg = e.message();
+    // Match access-control reasons only, not HTTP status: BigQuery also returns
+    // 403 for quota failures (`quotaExceeded`, `rateLimitExceeded`,
+    // `billingNotEnabled`), which must not be swallowed here.
+    // https://cloud.google.com/bigquery/docs/error-messages
+    msg.contains("accessDenied")
+        || msg.contains("policyViolation")
+        || msg.contains("VPC Service Controls")
+        || msg.contains("PERMISSION_DENIED")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1617,5 +1632,39 @@ mod tests {
         );
         assert_eq!(where_by_db[db_key], vec!["table_id = 'orders'"]);
         assert_eq!(rels_by_db[db_key].len(), 1);
+    }
+
+    /// IAM and VPC Service Controls denials are permission errors; not-found
+    /// and quota errors are not.
+    #[test]
+    fn test_is_bigquery_permission_error() {
+        let vpc_sc = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "[BigQuery] googleapi: Error 403: VPC Service Controls: Request is \
+             prohibited by organization's policy. policyViolation",
+        );
+        assert!(is_bigquery_permission_error(&vpc_sc));
+
+        let iam_denied = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "googleapi: Error 403: Access Denied: Permission \
+             bigquery.datasets.create denied, accessDenied",
+        );
+        assert!(is_bigquery_permission_error(&iam_denied));
+
+        // Not a permission error.
+        let not_found = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "googleapi: Error 404: Not found: Dataset foo:bar",
+        );
+        assert!(!is_bigquery_permission_error(&not_found));
+
+        // 403 but not a permission error.
+        let quota = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "googleapi: Error 403: Quota exceeded: Your project exceeded quota \
+             for dataset operations, quotaExceeded",
+        );
+        assert!(!is_bigquery_permission_error(&quota));
     }
 }
