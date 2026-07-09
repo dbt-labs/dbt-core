@@ -20,7 +20,7 @@ use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serializ
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    grants_eq_with_unrendered, tags_eq, tags_eq_vec, unrendered_value_eq,
+    grants_eq_with_unrendered, tags_eq_vec, unrendered_value_eq,
 };
 use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config_with_unrendered};
 use crate::schemas::relations::default_dbt_quoting_for;
@@ -1621,40 +1621,6 @@ fn meta_eq_with_unrendered(
     indexmap_yml_value_equal(left, right)
 }
 
-/// Unrendered-aware `tags` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja `tags` config in
-/// `dbt_project.yml` (e.g. `+tags: "{{ 'prod_tag' if target.name == 'prod' else 'dev_tag' }}"`)
-/// that renders to a different tag set per target is not treated as a modification. This is the
-/// `tags` sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (tags configured && unrendered_same) || rendered_same`.
-///   1. If `tags` is configured (present in `unrendered_config`) on at least one side and the
-///      configured (unrendered) values are equal, the tags are the same.
-///   2. Otherwise fall back to the rendered comparison ([`tags_eq`], which uses set semantics).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `tags` is a
-/// single key, so an absent-on-both unrendered `tags` must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate `unrendered_config.tags`) would be masked.
-///
-/// This is strictly more lenient than [`tags_eq`] alone (it can only turn a rendered "different"
-/// into "same"), preserving backward compatibility.
-fn tags_eq_with_unrendered(
-    left: &Option<StringOrArrayOfStrings>,
-    right: &Option<StringOrArrayOfStrings>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_tags = left_unrendered_config.get("tags");
-    let right_tags = right_unrendered_config.get("tags");
-    if (left_tags.is_some() || right_tags.is_some()) && unrendered_value_eq(left_tags, right_tags) {
-        return true;
-    }
-    tags_eq(left, right)
-}
-
 /// Unrendered-aware comparison for a single string-valued config key (e.g. `alias`,
 /// `target_schema`, `target_database`).
 ///
@@ -1955,35 +1921,34 @@ impl InternalDbtNode for DbtTest {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
-            // these fields are what dbt compares for test nodes
-            // Some other configs were skipped
-            // The dbt-core method compares unrendered_config values for
-            // database as well, but we do not have unrendered_config values
-            // so we do not do that comparison
-            let enabled_eq = self.deprecated_config.enabled == other.deprecated_config.enabled;
-            let alias_eq = self.deprecated_config.alias == other.deprecated_config.alias;
-            let tags_eq = tags_eq_with_unrendered(
-                &self.deprecated_config.tags,
-                &other.deprecated_config.tags,
-                &self.__base_attr__.unrendered_config,
-                &other.__base_attr__.unrendered_config,
-            );
-            let meta_eq = meta_eq_with_unrendered(
-                &self.deprecated_config.meta,
-                &other.deprecated_config.meta,
-                &self.__base_attr__.unrendered_config,
-                &other.__base_attr__.unrendered_config,
-            );
-            let group_eq = self.deprecated_config.group == other.deprecated_config.group;
-            let quoting_eq = quoting_equal(
-                &self.deprecated_config.quoting,
-                &other.deprecated_config.quoting,
-                adapter_type,
-            );
+            // Rendered comparison of a data test node's config fields — the Stage-2 fallback of
+            // `check_configs_modified`.
+            // The checks here are meant to be for the same keys as in the Stage-1 unrendered checks
+            // directed by `DBTTEST_CONFIG_MODIFIERS`.
+            let c = &self.deprecated_config;
+            let o = &other.deprecated_config;
 
-            let result = enabled_eq && alias_eq && tags_eq && meta_eq && group_eq && quoting_eq;
+            let severity_eq = c.severity == o.severity;
+            let where_eq = c.where_ == o.where_;
+            let limit_eq = c.limit == o.limit;
+            let fail_calc_eq = c.fail_calc == o.fail_calc;
+            let warn_if_eq = c.warn_if == o.warn_if;
+            let error_if_eq = c.error_if == o.error_if;
+            let store_failures_eq = c.store_failures == o.store_failures;
+            let store_failures_as_eq = c.store_failures_as == o.store_failures_as;
+            let sql_header_eq = c.sql_header == o.sql_header;
+
+            let result = severity_eq
+                && where_eq
+                && limit_eq
+                && fail_calc_eq
+                && warn_if_eq
+                && error_if_eq
+                && store_failures_eq
+                && store_failures_as_eq
+                && sql_header_eq;
 
             if !result {
                 log_state_mod_diff(
@@ -1991,51 +1956,57 @@ impl InternalDbtNode for DbtTest {
                     "test_config",
                     [
                         (
-                            "enabled",
-                            enabled_eq,
+                            "severity",
+                            severity_eq,
+                            Some((format!("{:?}", &c.severity), format!("{:?}", &o.severity))),
+                        ),
+                        (
+                            "where",
+                            where_eq,
+                            Some((format!("{:?}", &c.where_), format!("{:?}", &o.where_))),
+                        ),
+                        (
+                            "limit",
+                            limit_eq,
+                            Some((format!("{:?}", &c.limit), format!("{:?}", &o.limit))),
+                        ),
+                        (
+                            "fail_calc",
+                            fail_calc_eq,
+                            Some((format!("{:?}", &c.fail_calc), format!("{:?}", &o.fail_calc))),
+                        ),
+                        (
+                            "warn_if",
+                            warn_if_eq,
+                            Some((format!("{:?}", &c.warn_if), format!("{:?}", &o.warn_if))),
+                        ),
+                        (
+                            "error_if",
+                            error_if_eq,
+                            Some((format!("{:?}", &c.error_if), format!("{:?}", &o.error_if))),
+                        ),
+                        (
+                            "store_failures",
+                            store_failures_eq,
                             Some((
-                                format!("{:?}", &self.deprecated_config.enabled),
-                                format!("{:?}", &other.deprecated_config.enabled),
+                                format!("{:?}", &c.store_failures),
+                                format!("{:?}", &o.store_failures),
                             )),
                         ),
                         (
-                            "alias",
-                            alias_eq,
+                            "store_failures_as",
+                            store_failures_as_eq,
                             Some((
-                                format!("{:?}", &self.deprecated_config.alias),
-                                format!("{:?}", &other.deprecated_config.alias),
+                                format!("{:?}", &c.store_failures_as),
+                                format!("{:?}", &o.store_failures_as),
                             )),
                         ),
                         (
-                            "tags",
-                            tags_eq,
+                            "sql_header",
+                            sql_header_eq,
                             Some((
-                                format!("{:?}", &self.deprecated_config.tags),
-                                format!("{:?}", &other.deprecated_config.tags),
-                            )),
-                        ),
-                        (
-                            "meta",
-                            meta_eq,
-                            Some((
-                                format!("{:?}", &self.deprecated_config.meta),
-                                format!("{:?}", &other.deprecated_config.meta),
-                            )),
-                        ),
-                        (
-                            "group",
-                            group_eq,
-                            Some((
-                                format!("{:?}", &self.deprecated_config.group),
-                                format!("{:?}", &other.deprecated_config.group),
-                            )),
-                        ),
-                        (
-                            "quoting",
-                            quoting_eq,
-                            Some((
-                                format!("{:?}", &self.deprecated_config.quoting),
-                                format!("{:?}", &other.deprecated_config.quoting),
+                                format!("{:?}", &c.sql_header),
+                                format!("{:?}", &o.sql_header),
                             )),
                         ),
                     ],
@@ -2048,32 +2019,26 @@ impl InternalDbtNode for DbtTest {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_test) = other.as_any().downcast_ref::<DbtTest>() {
-            let same_config_result = self.has_same_config(other, adapter_type);
             let same_fqn_result = self.common().fqn == other_test.common().fqn;
 
-            let result = same_config_result && same_fqn_result;
-
-            if !result {
+            if !same_fqn_result {
                 log_state_mod_diff(
                     &self.__common_attr__.unique_id,
                     "test",
-                    [
-                        ("same_config", same_config_result, None),
-                        (
-                            "same_fqn",
-                            same_fqn_result,
-                            Some((
-                                format!("{:?}", &self.common().fqn),
-                                format!("{:?}", &other_test.common().fqn),
-                            )),
-                        ),
-                    ],
+                    [(
+                        "same_fqn",
+                        same_fqn_result,
+                        Some((
+                            format!("{:?}", &self.common().fqn),
+                            format!("{:?}", &other_test.common().fqn),
+                        )),
+                    )],
                 );
             }
 
-            result
+            same_fqn_result
         } else {
             false
         }
@@ -5041,6 +5006,23 @@ pub struct DbtTest {
     pub __other__: BTreeMap<String, YmlValue>,
 }
 
+/// Keys in a data test that count as a change for `--select state:modified`.
+/// Based on dbt-core's `TestConfig.same_contents`, which fully overrides `BaseConfig.same_contents`
+/// used for other node types.
+/// This list is used directly in the Stage-1 check of unrendered configs in `check_configs_modified`
+/// and is coordinated with the Stage-2 check of rendered configs in `DbtTest::has_same_config`.
+pub(crate) const DBTTEST_CONFIG_MODIFIERS: &[&str] = &[
+    "severity",
+    "where",
+    "limit",
+    "fail_calc",
+    "warn_if",
+    "error_if",
+    "store_failures",
+    "store_failures_as",
+    "sql_header",
+];
+
 impl DbtTest {
     pub fn relation_name(&self) -> String {
         format!(
@@ -7454,5 +7436,123 @@ mod seed_has_same_content_tests {
         // Even if the fallback were to run, it cannot conjure a matching hash —
         // `root_path` is None so the filesystem code is skipped entirely.
         assert!(!current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    /// Guards the coordination between the two data-test config comparisons in
+    /// `check_configs_modified`, which encode the SAME dbt-core `TestConfig` modifier set in two
+    /// different representations that can silently drift:
+    ///   * Stage 1 (unrendered) — `unrendered_configs_eq` iterates `DBTTEST_CONFIG_MODIFIERS`
+    ///     mechanically, so it stays in sync by construction.
+    ///   * Stage 2 (rendered)   — `DbtTest::has_same_config` compares typed config fields BY HAND;
+    ///     nothing links it back to the constant, so adding/removing a modifier in one place without
+    ///     the other is an easy mistake.
+    ///
+    /// For every data-test config key, assert that Stage 2 treats the key as a change IFF the key is
+    /// in `DBTTEST_CONFIG_MODIFIERS`. This is bidirectional: it fails on an add/remove in EITHER
+    /// representation (a modifier only in the constant, or a field compared only in Stage 2).
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn data_test_modifier_set_agrees_across_stage1_and_stage2() {
+        use super::{DBTTEST_CONFIG_MODIFIERS, DataTestConfig, DbtTest};
+        use crate::schemas::common::{DbtMaterialization, DbtQuoting, Severity, StoreFailuresAs};
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        // Each case mutates exactly one config field away from its default so that Stage 2's
+        // rendered comparison can observe it. `expected` is derived from the Stage-1 allowlist, so
+        // this table never hard-codes the modifier/non-modifier split — it only has to exercise the
+        // field. When you add a field to `DataTestConfig`, add a case here too; the coverage check
+        // below fails if any `DBTTEST_CONFIG_MODIFIERS` key is left unexercised.
+        let cases: Vec<(&str, Box<dyn Fn(&mut DataTestConfig)>)> = vec![
+            // --- dbt-core `TestConfig` modifiers: MUST count as a change ---
+            ("severity", Box::new(|c| c.severity = Some(Severity::Warn))),
+            ("where", Box::new(|c| c.where_ = Some("id > 0".to_string()))),
+            ("limit", Box::new(|c| c.limit = Some(10))),
+            (
+                "fail_calc",
+                Box::new(|c| c.fail_calc = Some("count(*)".to_string())),
+            ),
+            (
+                "warn_if",
+                Box::new(|c| c.warn_if = Some("!= 0".to_string())),
+            ),
+            (
+                "error_if",
+                Box::new(|c| c.error_if = Some("!= 0".to_string())),
+            ),
+            (
+                "store_failures",
+                Box::new(|c| c.store_failures = Some(true)),
+            ),
+            (
+                "store_failures_as",
+                Box::new(|c| c.store_failures_as = Some(StoreFailuresAs::Table)),
+            ),
+            (
+                "sql_header",
+                Box::new(|c| c.sql_header = Some("set x = 1".to_string())),
+            ),
+            // --- non-modifiers: dbt-core `TestConfig` ignores these, so they must NOT count ---
+            ("enabled", Box::new(|c| c.enabled = Some(false))),
+            (
+                "alias",
+                Box::new(|c| c.alias = Some("an_alias".to_string())),
+            ),
+            (
+                "database",
+                Box::new(|c| c.database = Some("a_db".to_string())),
+            ),
+            ("group", Box::new(|c| c.group = Some("a_group".to_string()))),
+            (
+                "tags",
+                Box::new(|c| c.tags = Some(StringOrArrayOfStrings::String("a_tag".to_string()))),
+            ),
+            ("full_refresh", Box::new(|c| c.full_refresh = Some(true))),
+            (
+                "materialized",
+                Box::new(|c| c.materialized = Some(DbtMaterialization::View)),
+            ),
+            (
+                "quoting",
+                Box::new(|c| c.quoting = Some(DbtQuoting::default())),
+            ),
+            (
+                "meta",
+                Box::new(|c| {
+                    let mut m = indexmap::IndexMap::new();
+                    m.insert("owner".to_string(), dbt_yaml::to_value("bob").unwrap());
+                    c.meta = Some(m);
+                }),
+            ),
+        ];
+
+        // Coverage: every Stage-1 modifier must be exercised, else a modifier could drift untested.
+        for key in DBTTEST_CONFIG_MODIFIERS {
+            assert!(
+                cases.iter().any(|(k, _)| k == key),
+                "DBTTEST_CONFIG_MODIFIERS key `{key}` is not exercised by this test; add a case."
+            );
+        }
+
+        for (key, mutate) in &cases {
+            let base = DbtTest::default();
+            let mut mutated = base.clone();
+            mutate(&mut mutated.deprecated_config);
+
+            // `has_same_config` returns false when Stage 2 considers the config changed.
+            let stage2_is_modifier =
+                !base.has_same_config(&mutated as &dyn InternalDbtNode, AdapterType::DuckDB);
+            let stage1_is_modifier = DBTTEST_CONFIG_MODIFIERS.contains(key);
+
+            assert_eq!(
+                stage2_is_modifier, stage1_is_modifier,
+                "Data-test config key `{key}` disagrees between the two `state:modified` config \
+                 comparisons: Stage 1 (`DBTTEST_CONFIG_MODIFIERS`, unrendered) says \
+                 modifier={stage1_is_modifier}, but Stage 2 (`DbtTest::has_same_config`, rendered) \
+                 says modifier={stage2_is_modifier}. The two must agree. To reconcile: if `{key}` \
+                 should count as a data-test change, add it to BOTH `DBTTEST_CONFIG_MODIFIERS` and \
+                 the field comparisons in `DbtTest::has_same_config`; if it should not, remove it \
+                 from both (both live in nodes.rs)."
+            );
+        }
     }
 }

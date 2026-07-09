@@ -31,7 +31,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
-use super::resolve_tests::persist_generic_data_tests::{TestableNodeTrait, TestableTable};
+use super::resolve_tests::persist_generic_data_tests::{
+    TestableNodeTrait, TestableTable, extract_test_unrendered_configs,
+};
 
 fn merge_raw_time_threshold(
     merged_freshness: &mut dbt_yaml::Mapping,
@@ -262,6 +264,13 @@ pub async fn resolve_sources(
         // This comes in two places: nested under each source, and nested under `tables:`
         let raw_schema_yml_config = extract_config_map(&mpe.schema_value);
         let raw_table_yml_config = mpe.table_value.as_ref().and_then(extract_config_map);
+        // Capture raw (unrendered) schema.yml test config before `table_value` is moved into
+        // the typed `table` below; consumed by `persist` for generic tests' unrendered_config.
+        let raw_table_test_configs = mpe
+            .table_value
+            .as_ref()
+            .map(extract_test_unrendered_configs)
+            .unwrap_or_default();
 
         let source: SourceProperties = into_typed_with_jinja(
             io_args,
@@ -581,6 +590,7 @@ pub async fn resolve_sources(
                         io_args,
                         &mpe.relative_path,
                         false,
+                        &raw_table_test_configs,
                     )?;
                 }
             }

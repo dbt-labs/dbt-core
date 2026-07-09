@@ -1,5 +1,6 @@
 use super::utils::{base_tests_inner, column_tests_inner};
 use crate::args::ResolveArgs;
+use crate::resolve::resolve_utils::extract_config_map;
 use dbt_adapter_core::*;
 use dbt_common::FsError;
 use dbt_common::FsResult;
@@ -50,6 +51,80 @@ pub struct ColumnTestEntry {
     pub tags: Vec<String>,
 }
 
+/// Raw (unrendered) schema.yml `config:` blocks for a resource's generic tests, captured
+/// from the *raw* `schema_value` before Jinja is rendered. Ordered per test so callers can
+/// correlate positionally with the (rendered) typed tests that `persist` iterates — the raw
+/// and typed test lists have identical shape and order, so index correlation is exact and
+/// avoids re-matching by name.
+///
+/// The typed `DataTestConfig` cannot be reused here: schema.yml Jinja is rendered before
+/// deserialization (e.g. `severity: "{{ ... }}"` becomes a `Severity` enum value), so the
+/// typed config holds rendered values. `unrendered_config` must preserve authored Jinja, so
+/// we source these maps from the raw YAML — mirroring how models/seeds snapshot their own
+/// `config:` via `extract_config_map` before render.
+#[derive(Debug, Clone, Default)]
+pub struct TestUnrenderedConfigs {
+    /// Per model/table-level test, in `data_tests`/`tests` order.
+    pub model_level: Vec<BTreeMap<String, dbt_yaml::Value>>,
+    /// Per column name (unquoted) → per-test raw config, in `data_tests`/`tests` order.
+    pub columns: BTreeMap<String, Vec<BTreeMap<String, dbt_yaml::Value>>>,
+}
+
+/// Extract the raw `config:` mapping authored on a single test entry in schema.yml.
+/// Handles the three YAML shapes that deserialize into [`DataTests`]:
+/// - a bare string (`- not_null`) → no config → empty map;
+/// - the multi-key shape (`{test_name: <t>, config: {...}}`) → `config` at the top level;
+/// - the single-key shape (`{not_null: {config: {...}}}`) → `config` nested under the test key.
+fn raw_test_entry_config(entry: &dbt_yaml::Value) -> BTreeMap<String, dbt_yaml::Value> {
+    let Some(mapping) = entry.as_mapping() else {
+        // Bare-string test (or unexpected scalar): no authored config.
+        return BTreeMap::new();
+    };
+    // Multi-key shape carries an explicit `test_name:` key alongside `config:`.
+    let config_holder = if mapping.get("test_name").is_some() {
+        entry
+    } else {
+        // Single-key shape: `{ <test-type>: { config: {...}, ... } }`.
+        match mapping.iter().next() {
+            Some((_, inner)) => inner,
+            None => return BTreeMap::new(),
+        }
+    };
+    extract_config_map(config_holder).unwrap_or_default()
+}
+
+/// Collect the raw per-test `config:` blocks (in order) from a `data_tests`/`tests` sequence.
+fn raw_tests_seq_configs(container: &dbt_yaml::Value) -> Vec<BTreeMap<String, dbt_yaml::Value>> {
+    let tests = container
+        .get("data_tests")
+        .or_else(|| container.get("tests"));
+    match tests.and_then(|t| t.as_sequence()) {
+        Some(seq) => seq.iter().map(raw_test_entry_config).collect(),
+        None => Vec::new(),
+    }
+}
+
+/// Build [`TestUnrenderedConfigs`] from a resource's raw `schema_value` (for sources, the raw
+/// table value). Navigates model/table-level `data_tests`/`tests` and `columns[*].data_tests`.
+pub fn extract_test_unrendered_configs(schema_value: &dbt_yaml::Value) -> TestUnrenderedConfigs {
+    let model_level = raw_tests_seq_configs(schema_value);
+
+    let mut columns: BTreeMap<String, Vec<BTreeMap<String, dbt_yaml::Value>>> = BTreeMap::new();
+    if let Some(cols) = schema_value.get("columns").and_then(|c| c.as_sequence()) {
+        for col in cols {
+            let Some(name) = col.get("name").and_then(|n| n.as_str()) else {
+                continue;
+            };
+            columns.insert(name.to_string(), raw_tests_seq_configs(col));
+        }
+    }
+
+    TestUnrenderedConfigs {
+        model_level,
+        columns,
+    }
+}
+
 pub struct TestableNode<'a, T: TestableNodeTrait> {
     inner: &'a T,
 }
@@ -66,6 +141,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         io_args: &IoArgs,
         original_file_path: &PathBuf,
         suppress_deprecated_test_validation: bool,
+        raw_test_configs: &TestUnrenderedConfigs,
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
         // Process tests for each version (or single resource)
@@ -73,8 +149,15 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         for test_config in test_configs {
             // Handle model-level tests
             if let Some(tests) = &test_config.model_tests {
-                for test in tests {
+                for (i, test) in tests.iter().enumerate() {
                     let column_test: DataTests = test.clone();
+                    // The raw model-level test list has the same order as the typed one, so
+                    // index correlation gives this test's authored schema.yml config.
+                    let unrendered_schema_config = raw_test_configs
+                        .model_level
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_default();
                     let test_asset = persist_inner(
                         project_name,
                         root_project_name,
@@ -87,6 +170,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         test_name_truncations,
                         &[],
                         suppress_deprecated_test_validation,
+                        unrendered_schema_config,
                     )?;
                     collected_generic_tests.push(test_asset);
                 }
@@ -95,7 +179,9 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
             // Handle column-level tests
             if let Some(column_tests) = &test_config.column_tests {
                 for (column_name, entry) in column_tests {
-                    for test in &entry.tests {
+                    // Raw per-test configs for this column (same order as `entry.tests`).
+                    let col_configs = raw_test_configs.columns.get(column_name);
+                    for (i, test) in entry.tests.iter().enumerate() {
                         // Need dialect to quote properly
                         let (column_name, should_quote) =
                             normalize_quote(entry.quote, adapter_type, column_name);
@@ -106,6 +192,10 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         } else {
                             column_name.to_string()
                         };
+                        let unrendered_schema_config = col_configs
+                            .and_then(|v| v.get(i))
+                            .cloned()
+                            .unwrap_or_default();
                         let test_asset = persist_inner(
                             project_name,
                             root_project_name,
@@ -118,6 +208,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             test_name_truncations,
                             &entry.tags,
                             suppress_deprecated_test_validation,
+                            unrendered_schema_config,
                         )?;
                         collected_generic_tests.push(test_asset);
                     }
@@ -143,6 +234,7 @@ fn persist_inner(
     test_name_truncations: &mut HashMap<String, String>,
     column_tags: &[String],
     suppress_deprecated_test_validation: bool,
+    unrendered_schema_config: BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<GenericTestAsset> {
     // If this is not the root project, we need to pass the project name as a dependency package name
     let dependecy_package_name = if project_name != root_project_name {
@@ -292,6 +384,7 @@ fn persist_inner(
         original_name,
         unique_id_hash: Some(test_hash),
         column_tags: column_tags.to_vec(),
+        unrendered_schema_config,
     })
 }
 

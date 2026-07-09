@@ -32,6 +32,9 @@ use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
+use super::resolve_tests::persist_generic_data_tests::{
+    TestUnrenderedConfigs, extract_test_unrendered_configs,
+};
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub async fn resolve_seeds(
@@ -76,6 +79,18 @@ pub async fn resolve_seeds(
                 Some((name.clone(), config_map))
             })
             .collect();
+
+    // Raw (unrendered) schema.yml test config blocks, consumed by `persist` to populate
+    // generic tests' unrendered_config with their schema.yml config.
+    let raw_test_configs: BTreeMap<String, TestUnrenderedConfigs> = seed_properties
+        .iter()
+        .map(|(name, mpe)| {
+            (
+                name.clone(),
+                extract_test_unrendered_configs(&mpe.schema_value),
+            )
+        })
+        .collect();
 
     let mut seed_root_dirs: Vec<String> = package
         .dbt_project
@@ -390,6 +405,7 @@ pub async fn resolve_seeds(
                         io_args,
                         patch_path.as_ref().unwrap_or(&path),
                         false,
+                        &raw_test_configs.get(seed_name).cloned().unwrap_or_default(),
                     )?;
                 }
             }

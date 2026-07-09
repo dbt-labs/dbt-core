@@ -159,6 +159,12 @@ pub struct GenericTestAsset {
     /// Tags from `columns[*].config.tags` in schema YAML, carried for generic column tests.
     /// Empty for model-level and singular tests.
     pub column_tags: Vec<String>,
+    /// Raw (unrendered) schema.yml `config:` block authored on this generic test, captured
+    /// from the raw YAML before Jinja render. Fed as the `schema` arg to
+    /// `build_unrendered_config` so generic tests carry their schema.yml config (`where`,
+    /// `severity`, `limit`, schema.yml `tags`/`meta`, …) in `unrendered_config`, matching
+    /// models/seeds/snapshots. Empty when the test has no schema.yml config.
+    pub unrendered_schema_config: BTreeMap<String, dbt_yaml::Value>,
 }
 
 impl fmt::Display for GenericTestAsset {

@@ -161,7 +161,7 @@ pub fn array_of_strings_eq(
     }
 }
 
-/// Compare optional tag fields with set semantics.
+/// Compare plain `Vec<String>` tag fields (e.g. `CommonAttributes.tags`) with set semantics.
 ///
 /// dbt-core builds tag lists by *concatenating* inherited tags (project + model +
 /// column + test level), which produces duplicates in the manifest — e.g. a column
@@ -174,20 +174,6 @@ pub fn array_of_strings_eq(
 /// Use this only for tag-shaped fields. For ordered/multiset fields like Python
 /// `packages` (where order or duplicates can be meaningful), use
 /// `array_of_strings_eq` instead.
-pub fn tags_eq(a: &Option<StringOrArrayOfStrings>, b: &Option<StringOrArrayOfStrings>) -> bool {
-    use std::collections::BTreeSet;
-    let to_set = |v: &Option<StringOrArrayOfStrings>| -> BTreeSet<String> {
-        match v {
-            None => BTreeSet::new(),
-            Some(StringOrArrayOfStrings::String(s)) => BTreeSet::from([s.clone()]),
-            Some(StringOrArrayOfStrings::ArrayOfStrings(arr)) => arr.iter().cloned().collect(),
-        }
-    };
-    to_set(a) == to_set(b)
-}
-
-/// Same set semantics as [`tags_eq`], for plain `Vec<String>` tag fields
-/// (e.g. `CommonAttributes.tags`). Same caveat: only use for tag-shaped fields.
 pub fn tags_eq_vec(a: &[String], b: &[String]) -> bool {
     use std::collections::BTreeSet;
     a.iter().cloned().collect::<BTreeSet<_>>() == b.iter().cloned().collect::<BTreeSet<_>>()
@@ -1801,53 +1787,9 @@ mod tests {
     }
 
     #[test]
-    fn test_tags_eq_ignores_duplicates_and_ordering() {
-        // Regression: dbt-core concatenates inherited tag lists (model + column +
-        // test level), producing duplicates in the manifest like ['weekly', 'weekly'].
-        // Fusion deduplicates. For state:modified parity, equality must be set-based.
-        let with_dupes = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-            "weekly".to_string(),
-        ]));
-        let dedup = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-        ]));
-        let single_string = Some(StringOrArrayOfStrings::String("weekly".to_string()));
-
-        assert!(tags_eq(&with_dupes, &dedup));
-        assert!(tags_eq(&dedup, &with_dupes));
-        assert!(tags_eq(&with_dupes, &single_string));
-        assert!(tags_eq(&single_string, &with_dupes));
-
-        // Order should also be ignored.
-        let abc = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "a".to_string(),
-            "b".to_string(),
-            "c".to_string(),
-        ]));
-        let cab = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "c".to_string(),
-            "a".to_string(),
-            "b".to_string(),
-        ]));
-        assert!(tags_eq(&abc, &cab));
-    }
-
-    #[test]
-    fn test_tags_eq_none_and_empty_array() {
-        // Same none/empty equivalence as array_of_strings_eq.
-        let none_val: Option<StringOrArrayOfStrings> = None;
-        let empty_array = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![]));
-
-        assert!(tags_eq(&none_val, &empty_array));
-        assert!(tags_eq(&empty_array, &none_val));
-        assert!(tags_eq(&none_val, &none_val));
-    }
-
-    #[test]
     fn test_tags_eq_vec_set_semantics() {
-        // Plain Vec<String> tag form (e.g. CommonAttributes.tags) — same set
-        // semantics as tags_eq. Saved queries store tags as Vec<String>.
+        // Plain Vec<String> tag form (e.g. CommonAttributes.tags) — set semantics
+        // (ordering and multiplicity ignored). Saved queries store tags as Vec<String>.
         let with_dupes = vec!["weekly".to_string(), "weekly".to_string()];
         let dedup = vec!["weekly".to_string()];
         assert!(tags_eq_vec(&with_dupes, &dedup));
@@ -1862,21 +1804,6 @@ mod tests {
         // Real differences still flagged
         let with_extra = vec!["weekly".to_string(), "critical".to_string()];
         assert!(!tags_eq_vec(&with_extra, &dedup));
-    }
-
-    #[test]
-    fn test_tags_eq_genuinely_different_tags() {
-        // Set semantics must still flag real differences as unequal.
-        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-            "critical".to_string(),
-        ]));
-        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-        ]));
-
-        assert!(!tags_eq(&left, &right));
-        assert!(!tags_eq(&right, &left));
     }
 
     fn uc(entries: &[(&str, YmlValue)]) -> BTreeMap<String, YmlValue> {

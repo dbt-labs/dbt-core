@@ -84,6 +84,9 @@ use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
+use super::resolve_tests::persist_generic_data_tests::{
+    TestUnrenderedConfigs, extract_test_unrendered_configs,
+};
 use super::resolve_utils::validate_compute;
 use super::validate_models::validate_model;
 
@@ -258,6 +261,20 @@ pub async fn resolve_models(
             .filter_map(|(key, mpe)| {
                 let config_map = extract_config_map(&mpe.schema_value)?;
                 Some((key.clone(), config_map))
+            })
+            .collect();
+
+    // Snapshot raw (unrendered) schema.yml test config blocks in the same window, before
+    // render nulls schema_value. Consumed by `persist` to populate generic tests'
+    // unrendered_config with their schema.yml config.
+    let raw_test_configs: BTreeMap<String, TestUnrenderedConfigs> =
+        models_properties_sans_semantics
+            .iter()
+            .map(|(key, mpe)| {
+                (
+                    key.clone(),
+                    extract_test_unrendered_configs(&mpe.schema_value),
+                )
             })
             .collect();
 
@@ -825,6 +842,7 @@ pub async fn resolve_models(
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
                         false,
+                        &raw_test_configs.get(ref_name).cloned().unwrap_or_default(),
                     )?;
                 }
             }
@@ -840,6 +858,7 @@ pub async fn resolve_models(
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
                         true,
+                        &raw_test_configs.get(ref_name).cloned().unwrap_or_default(),
                     )?;
                 }
             }

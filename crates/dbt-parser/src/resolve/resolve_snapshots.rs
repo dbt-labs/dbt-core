@@ -9,6 +9,9 @@ use crate::renderer::{
     render_unresolved_sql_files,
 };
 use crate::resolve::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
+use crate::resolve::resolve_tests::persist_generic_data_tests::{
+    TestUnrenderedConfigs, extract_test_unrendered_configs,
+};
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map, validate_compute,
 };
@@ -178,6 +181,18 @@ pub async fn resolve_snapshots(
                 Some((name.clone(), config_map))
             })
             .collect();
+
+    // Raw (unrendered) schema.yml test config blocks, consumed by `persist` to populate
+    // generic tests' unrendered_config with their schema.yml config.
+    let raw_test_configs: BTreeMap<String, TestUnrenderedConfigs> = snapshot_properties
+        .iter()
+        .map(|(name, mpe)| {
+            (
+                name.clone(),
+                extract_test_unrendered_configs(&mpe.schema_value),
+            )
+        })
+        .collect();
 
     // Save snapshot from yml to the `snapshots` directory
     for (snapshot_name, mpe) in snapshot_properties.iter_mut() {
@@ -645,6 +660,10 @@ pub async fn resolve_snapshots(
                             &arg.io,
                             patch_path.as_ref().unwrap_or(&dbt_asset.path),
                             false,
+                            &raw_test_configs
+                                .get(snapshot_name)
+                                .cloned()
+                                .unwrap_or_default(),
                         )?;
                     }
                 }
