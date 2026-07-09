@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 187] = [
+); 191] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -113,12 +113,20 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "4aaf192f26f791ab58850ff357235717245963e9e83401246ac72b54771517a3",
     ),
     (
+        ("clickhouse", "apple-darwin", "aarch64", "0.1.0"),
+        "0ccd62dbf47dc9714a328e70a1718faad4a188d222170849411829f2339bc5d2",
+    ),
+    (
         ("clickhouse", "apple-darwin", "aarch64", "0.1.0-alpha.1"),
         "d7f4dd2f67c4ba4e1569986d893ef9a877c3ae385da4ff3aa1faa646adb96f2a",
     ),
     (
         ("clickhouse", "apple-darwin", "aarch64", "0.1.0-alpha.2"),
         "7ba6156458599b35f6a1c5a2ddbc4cd62036c1d2e46abad702bb950478697472",
+    ),
+    (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.0"),
+        "66050b3e1e945cdc9a8c6980e99396aea0592daf37d7e3d28f0ae4eeec2c8f2d",
     ),
     (
         ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.0-alpha.1"),
@@ -129,12 +137,20 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "81cc15fea37bdf211f97be1eafd09d364d1772396a067f314ffbf01a943afec7",
     ),
     (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.0"),
+        "6a6805df2b0ffed47beb2c78b4ddd6b2548fe100e42221c9bbcd0999fcae9bd4",
+    ),
+    (
         ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.0-alpha.1"),
         "ef018d0c80498777583c92403781d8cda934aa5709dd27b624154f18d3891425",
     ),
     (
         ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.0-alpha.2"),
         "d548d9e1e3511553f2e89fe66614e8cb4d69012f194491b869d31cbdbf19343f",
+    ),
+    (
+        ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.0"),
+        "1f92179cc7f154de97edace0c5f1bad016f3dbd4b4b0c4a037401f84114309a7",
     ),
     (
         ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.0-alpha.1"),
