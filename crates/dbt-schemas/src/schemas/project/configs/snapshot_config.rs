@@ -238,6 +238,8 @@ pub struct ProjectSnapshotConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
+    #[serde(rename = "+resource_tags")]
+    pub resource_tags: Option<IndexMap<String, String>>,
     #[serde(
         default,
         rename = "+require_partition_filter",
@@ -609,7 +611,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 partitions: config.partitions,
                 enable_refresh: config.enable_refresh,
                 refresh_interval_minutes: config.refresh_interval_minutes,
-                resource_tags: None,
+                resource_tags: config.resource_tags,
                 max_staleness: config.max_staleness,
                 jar_file_uri: None,
                 timeout: None,
@@ -747,6 +749,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             refresh_interval_minutes: config
                 .__warehouse_specific_config__
                 .refresh_interval_minutes,
+            resource_tags: config.__warehouse_specific_config__.resource_tags,
             max_staleness: config.__warehouse_specific_config__.max_staleness,
             // Databricks fields
             file_format: config.__warehouse_specific_config__.file_format,
@@ -928,4 +931,67 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
 impl ConfigKeys for SnapshotConfig {
     // The default implementation from the trait will handle
     // extracting field names via serialization automatically
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ProjectSnapshotConfig, SnapshotConfig};
+
+    #[test]
+    fn test_project_snapshot_config_resource_tags_parses() {
+        let config: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+  "123456789012/cost-center": "analytics"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resource_tags = config
+            .resource_tags
+            .expect("+resource_tags should parse on ProjectSnapshotConfig");
+        assert_eq!(resource_tags.len(), 2);
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+        assert_eq!(resource_tags["123456789012/cost-center"], "analytics");
+    }
+
+    #[test]
+    fn test_project_snapshot_config_resource_tags_propagates_to_snapshot_config() {
+        let project_config: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let snapshot_config: SnapshotConfig = project_config.into();
+        let resource_tags = snapshot_config
+            .__warehouse_specific_config__
+            .resource_tags
+            .expect("resource_tags should propagate from ProjectSnapshotConfig to SnapshotConfig");
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
+
+    #[test]
+    fn test_snapshot_config_resource_tags_propagates_to_project_snapshot_config() {
+        let project_config: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let snapshot_config: SnapshotConfig = project_config.into();
+        let round_tripped: ProjectSnapshotConfig = snapshot_config.into();
+        let resource_tags = round_tripped.resource_tags.expect(
+            "resource_tags should propagate from SnapshotConfig back to ProjectSnapshotConfig",
+        );
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
 }

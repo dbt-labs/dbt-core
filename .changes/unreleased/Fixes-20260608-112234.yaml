@@ -1,0 +1,7 @@
+kind: Fixes
+body: Add +resource_tags config support for seeds and snapshots in dbt_project.yml
+time: 2026-06-08T11:22:34.488709+02:00
+custom:
+    author: Thrasi
+    issue: "15207"
+    project: dbt-fusion
