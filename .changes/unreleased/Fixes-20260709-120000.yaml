@@ -1,0 +1,7 @@
+kind: Fixes
+body: Bound the main-thread completion waits in run_queue so SIGINT (Ctrl-C) reliably
+    cancels an in-progress run instead of hanging until the query finishes
+time: 2026-07-09T12:00:00.000000000Z
+custom:
+    Author: tauhid621
+    Issue: ""

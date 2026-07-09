@@ -350,15 +350,17 @@ class GraphRunnableTask(ConfiguredTask):
         while not self.job_queue.empty():
             self.handle_job_queue(pool, callback)
 
-        # block on completion
+        # Block on completion with a bounded wait so SIGINT is serviced (an
+        # unbounded wait can swallow it, leaving Ctrl-C unable to cancel).
         if get_flags().FAIL_FAST:
             # checkout for an errors after task completion in case of
             # fast failure
-            while self.job_queue.wait_until_something_was_done():
+            while self.job_queue.wait_until_something_was_done(timeout=1.0):
                 self._raise_set_error()
         else:
             # wait until every task will be complete
-            self.job_queue.join()
+            while self.job_queue.inner.unfinished_tasks:
+                self.job_queue.join(timeout=1.0)
 
         # if an error got set during join(), raise it.
         self._raise_set_error()

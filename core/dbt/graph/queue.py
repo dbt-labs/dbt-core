@@ -212,17 +212,24 @@ class GraphQueue:
         if is_microbatch:
             self.in_progress_microbatch.add(node_id)
 
-    def join(self) -> None:
-        """Join the queue. Blocks until all tasks are marked as done.
+    def join(self, timeout: Optional[float] = None) -> None:
+        """Join the queue. Blocks until all tasks are marked as done, or until
+        ``timeout`` seconds elapse. A bounded wait lets the main thread service
+        pending signals (e.g. SIGINT) regardless of which thread received them.
 
         Make sure not to call this before the queue reports that it is empty.
         """
-        self.inner.join()
+        if timeout is None:
+            self.inner.join()
+            return
+        with self.inner.all_tasks_done:
+            if self.inner.unfinished_tasks:
+                self.inner.all_tasks_done.wait(timeout)
 
-    def wait_until_something_was_done(self) -> int:
-        """Block until a task is done, then return the number of unfinished
-        tasks.
+    def wait_until_something_was_done(self, timeout: Optional[float] = None) -> int:
+        """Block until a task is done (or ``timeout`` elapses), then return the
+        number of unfinished tasks.
         """
         with self.lock:
-            self.some_task_done.wait()
+            self.some_task_done.wait(timeout)
             return self.inner.unfinished_tasks
