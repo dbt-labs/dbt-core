@@ -692,13 +692,7 @@ async fn bulk_prefetch_last_modified_by_schema(
 
     // Separate relations with overrides — they need the per-table path so
     // their custom freshness queries (loaded_at_query / loaded_at_field) fire.
-    let (override_relations, bulk_relations): (
-        BTreeMap<String, Arc<dyn BaseRelation>>,
-        BTreeMap<String, Arc<dyn BaseRelation>>,
-    ) = relations
-        .iter()
-        .map(|(k, v)| (k.clone(), Arc::clone(v)))
-        .partition(|(name, _)| overrides.contains_key(name.as_str()));
+    let (override_relations, bulk_relations) = split_relations_by_override(relations, overrides);
 
     // Handle overrides via the existing per-table path.
     if !override_relations.is_empty() {
@@ -2191,9 +2185,76 @@ async fn prefetch_last_modified_epochs(
         ),
         None,
     );
-    if let Err(err) = refresh_last_modified_epochs(ctx, &misses, overrides).await {
+    let refresh_result =
+        refresh_planned_last_modified_misses(ctx, &misses, overrides, ctx.adapter_type()).await;
+    if let Err(err) = refresh_result {
         emit_trace_log_message(|| format!("dbt State metadata prefetch failed: {err}"));
     }
+}
+
+async fn refresh_planned_last_modified_misses(
+    ctx: &TaskRunnerCtx,
+    misses: &BTreeMap<String, Arc<dyn BaseRelation>>,
+    overrides: &BTreeMap<String, FreshnessOverride>,
+    adapter_type: AdapterType,
+) -> FsResult<()> {
+    let plan = plan_last_modified_miss_refresh(adapter_type, misses, overrides);
+    if !plan.targeted_relations.is_empty() {
+        refresh_last_modified_epochs(ctx, &plan.targeted_relations, overrides).await?;
+    }
+    if !plan.schema_prefetch_relations.is_empty() {
+        bulk_prefetch_last_modified_by_schema(ctx, &plan.schema_prefetch_relations, overrides)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Splits submit-time last-modified cache misses by the warehouse query path
+/// they should use.
+struct LastModifiedMissRefreshPlan {
+    targeted_relations: BTreeMap<String, Arc<dyn BaseRelation>>,
+    schema_prefetch_relations: BTreeMap<String, Arc<dyn BaseRelation>>,
+}
+
+/// BigQuery normal misses use the schema prefetch path to avoid high fanout
+/// per-table `__TABLES__` queries. Overrides stay targeted because their
+/// freshness comes from custom `loaded_at_*` logic.
+fn plan_last_modified_miss_refresh(
+    adapter_type: AdapterType,
+    misses: &BTreeMap<String, Arc<dyn BaseRelation>>,
+    overrides: &BTreeMap<String, FreshnessOverride>,
+) -> LastModifiedMissRefreshPlan {
+    if matches!(adapter_type, AdapterType::Bigquery) {
+        let (targeted_relations, schema_prefetch_relations) =
+            split_relations_by_override(misses, overrides);
+        LastModifiedMissRefreshPlan {
+            targeted_relations,
+            schema_prefetch_relations,
+        }
+    } else {
+        LastModifiedMissRefreshPlan {
+            targeted_relations: misses
+                .iter()
+                .map(|(name, relation)| (name.clone(), Arc::clone(relation)))
+                .collect(),
+            schema_prefetch_relations: BTreeMap::new(),
+        }
+    }
+}
+
+/// Returns `(override_relations, bulk_relations)` so callers can keep source
+/// freshness overrides out of schema-level metadata scans.
+fn split_relations_by_override(
+    relations: &BTreeMap<String, Arc<dyn BaseRelation>>,
+    overrides: &BTreeMap<String, FreshnessOverride>,
+) -> (
+    BTreeMap<String, Arc<dyn BaseRelation>>,
+    BTreeMap<String, Arc<dyn BaseRelation>>,
+) {
+    relations
+        .iter()
+        .map(|(k, v)| (k.clone(), Arc::clone(v)))
+        .partition(|(name, _)| overrides.contains_key(name.as_str()))
 }
 
 async fn refresh_last_modified_epochs(
@@ -4296,6 +4357,66 @@ mod tests {
         )
         .unwrap()
         .semantic_fqn()
+    }
+
+    #[test]
+    fn bigquery_submit_time_misses_plan_schema_prefetch_except_overrides() {
+        let bulk_relation: Arc<dyn BaseRelation> = create_relation(
+            AdapterType::Bigquery,
+            "db".to_string(),
+            "analytics".to_string(),
+            Some("orders".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap()
+        .into();
+        let override_relation: Arc<dyn BaseRelation> = create_relation(
+            AdapterType::Bigquery,
+            "db".to_string(),
+            "analytics".to_string(),
+            Some("source_events".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap()
+        .into();
+        let bulk_name = bulk_relation.semantic_fqn();
+        let override_name = override_relation.semantic_fqn();
+        let relations = BTreeMap::from([
+            (bulk_name.clone(), bulk_relation),
+            (override_name.clone(), override_relation),
+        ]);
+        let overrides = BTreeMap::from([(
+            override_name.clone(),
+            FreshnessOverride::Field("loaded_at".to_string()),
+        )]);
+
+        let bigquery_plan =
+            plan_last_modified_miss_refresh(AdapterType::Bigquery, &relations, &overrides);
+        assert_eq!(bigquery_plan.schema_prefetch_relations.len(), 1);
+        assert!(
+            bigquery_plan
+                .schema_prefetch_relations
+                .contains_key(&bulk_name)
+        );
+        assert_eq!(bigquery_plan.targeted_relations.len(), 1);
+        assert!(
+            bigquery_plan
+                .targeted_relations
+                .contains_key(&override_name)
+        );
+
+        let snowflake_plan =
+            plan_last_modified_miss_refresh(AdapterType::Snowflake, &relations, &overrides);
+        assert!(snowflake_plan.schema_prefetch_relations.is_empty());
+        assert_eq!(snowflake_plan.targeted_relations.len(), 2);
+        assert!(snowflake_plan.targeted_relations.contains_key(&bulk_name));
+        assert!(
+            snowflake_plan
+                .targeted_relations
+                .contains_key(&override_name)
+        );
     }
 
     #[test]
