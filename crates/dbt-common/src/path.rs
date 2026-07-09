@@ -64,6 +64,33 @@ pub fn get_target_write_path(
     out_dir.join(package_name).join(path_segment)
 }
 
+/// Strip the first matching resource-root prefix (e.g. `models`) from a
+/// package-relative path, yielding the path dbt exposes to Jinja as
+/// `model.path` (relative to the resource directory).
+///
+/// dbt-core stores a node's `path` relative to the configured resource root
+/// (e.g. `staging/orders.sql`), distinct from `original_file_path` which stays
+/// package-relative (e.g. `models/staging/orders.sql`). Fusion keeps the
+/// package-relative form internally (it is joined with package roots for file
+/// I/O and parse caching), so the resource-relative form is derived on demand
+/// for the Jinja `model.path` value.
+///
+/// Returns the input unchanged when no configured root matches or when the path
+/// is exactly a resource root (empty remainder).
+///
+/// dbt-core reference: `FilePath.relative_path`.
+pub fn strip_resource_paths(path: &Path, resource_paths: &[String]) -> PathBuf {
+    for resource_path in resource_paths {
+        let resource_path = Path::new(resource_path);
+        if let Ok(stripped) = path.strip_prefix(resource_path)
+            && !stripped.as_os_str().is_empty()
+        {
+            return stripped.to_path_buf();
+        }
+    }
+    path.to_path_buf()
+}
+
 use normalize_path::NormalizePath;
 
 /// Self-normalizing path. Wrapper around [PathBuf].

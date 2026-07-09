@@ -361,6 +361,11 @@ where
     let sql_resources = Arc::new(Mutex::new(Vec::new()));
     let execute_exists = Arc::new(AtomicBool::new(false));
 
+    // dbt-core exposes `model.path` relative to the resource root (e.g.
+    // `staging/orders.sql`); strip the configured model-paths prefix from the
+    // package-relative asset path so config-block reads of `model.path` match.
+    let model_path = dbt_common::path::strip_resource_paths(&dbt_asset.path, resource_paths);
+
     let mut resolve_model_context = base_ctx.clone();
     resolve_model_context.extend(build_resolve_model_context(
         &properties_config,
@@ -376,6 +381,7 @@ where
         sql_resources.clone(),
         execute_exists.clone(),
         &display_path,
+        &model_path,
         &args.io,
         args.static_analysis,
     ));
