@@ -149,6 +149,20 @@ impl CoreCommand {
             Completions(_) => None,
         }
     }
+
+    /// Returns whether the command was invoked with `--full-refresh`, for the
+    /// commands that support the flag; `false` for all others.
+    pub fn full_refresh(&self) -> bool {
+        use CoreCommand::*;
+        match self {
+            Compile(compile_args) => compile_args.full_refresh,
+            Run(run_args) => run_args.full_refresh,
+            Seed(seed_args) => seed_args.full_refresh,
+            Build(build_args) => build_args.full_refresh,
+            Clone(clone_args) => clone_args.full_refresh,
+            _ => false,
+        }
+    }
 }
 
 pub trait AbstractExtensionCommand: Send + Sync + fmt::Debug + Any {
