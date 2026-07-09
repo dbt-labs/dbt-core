@@ -584,7 +584,6 @@ jobs:
   # repo-level `PYPI_API_TOKEN` secret (passed to `cargo ci pypi publish`
   # as `DBT_PYPI_PROD_TOKEN`). `release_target` selects which of the two
   # distributions (`dbt-core`, `dbt-core-experimental-parser`) to publish.
-  # Independently retriable: an sdist re-upload is idempotent.
   # ------------------------------------------------------------------
   publish-pypi:
     name: Publish to PyPI
