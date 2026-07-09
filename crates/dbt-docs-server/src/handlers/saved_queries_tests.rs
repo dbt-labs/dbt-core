@@ -71,6 +71,7 @@ fn make_state(backend: SavedQueryDetailMockBackend) -> Arc<AppState> {
         providers,
         do_not_track: false,
         send_anonymous_usage_stats: true,
+        analytics: Arc::new(crate::handlers::analytics::VortexSink),
     })
 }
 
@@ -570,6 +571,7 @@ fn make_list_state(backend: SavedQueryListMockBackend) -> Arc<AppState> {
         providers,
         do_not_track: false,
         send_anonymous_usage_stats: true,
+        analytics: Arc::new(crate::handlers::analytics::VortexSink),
     })
 }
 

@@ -3,15 +3,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
-use axum::routing::get;
+use axum::routing::{get, post};
 use tracing::info;
 
 use crate::DocsServeArgs;
 
 use crate::assets::serve_assets;
 use crate::handlers::{
-    capabilities, column_lineage, distribution, exposures, files, groups, health, identity,
-    lineage, macros, metrics, models, nodes, project, saved_queries, search, seeds,
+    analytics, capabilities, column_lineage, distribution, exposures, files, groups, health,
+    identity, lineage, macros, metrics, models, nodes, project, saved_queries, search, seeds,
     semantic_models, snapshots, sources, tests,
 };
 use crate::providers::Providers;
@@ -129,6 +129,7 @@ where
         )
         .route("/api/v1/search", get(search::search))
         .route("/api/v1/search/facets", get(search::search_facets))
+        .route("/api/v1/analytics/events", post(analytics::post_events))
         .fallback(serve_assets)
         .with_state(state.clone());
 
@@ -179,6 +180,9 @@ async fn shutdown_signal() {
         let _ = tokio::signal::ctrl_c().await;
     }
 
+    // TODO(META-7739): analytics events buffered in the vortex_sender worker are
+    // not flushed on shutdown. Loss on Ctrl-C is acceptable (worker flushes every
+    // ~500ms); if that changes, call `vortex_sender::log_proto_and_shutdown` here.
     info!(
         target: "dbt_docs_server",
         grace_secs = SHUTDOWN_GRACE.as_secs(),

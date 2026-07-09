@@ -21,6 +21,7 @@ dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }
 dbt-dag = { workspace = true }
 dbt-docs-server = { workspace = true }
+dbt-env = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-index-core = { workspace = true }
