@@ -322,11 +322,11 @@ where
         store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),
         target_package_name: model.common().package_name.clone(),
         target_unique_id: model.common().unique_id.clone(),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: root_project_name.to_string(),
-            current_project_name: None,
+        context: JinjaObject::new(MacroLookupContext::new(
+            root_project_name.to_string(),
+            None,
             packages,
-        }),
+        )),
         current_path: model
             .common()
             .original_file_path

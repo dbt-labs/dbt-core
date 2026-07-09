@@ -68,11 +68,11 @@ pub async fn run_operation_inline_sql(
     packages.insert(resolver_state.root_project_name.clone());
     ctx.insert(
         "context".to_owned(),
-        MinijinjaValue::from_object(MacroLookupContext {
-            root_project_name: resolver_state.root_project_name.clone(),
-            current_project_name: None,
+        MinijinjaValue::from_object(MacroLookupContext::new(
+            resolver_state.root_project_name.clone(),
+            None,
             packages,
-        }),
+        )),
     );
 
     ctx.insert(CURRENT_PATH.to_string(), Value::from("<inline_sql>"));
@@ -449,11 +449,11 @@ pub async fn run_operation(
 
     run_operation_context.insert(
         "context".to_owned(),
-        Value::from_object(MacroLookupContext {
-            root_project_name: resolver_state.root_project_name.clone(),
-            current_project_name: None,
+        Value::from_object(MacroLookupContext::new(
+            resolver_state.root_project_name.clone(),
+            None,
             packages,
-        }),
+        )),
     );
 
     let template = jinja_env.get_template(&template_name)?;

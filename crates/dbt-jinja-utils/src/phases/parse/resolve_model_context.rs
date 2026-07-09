@@ -303,11 +303,11 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         load_result: MinijinjaValue::from_function(result_store.load_result()),
         store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),
         execute: JinjaObject::new(ParseExecute::new(execute_exists)),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: root_project_name.to_string(),
-            current_project_name: None,
+        context: JinjaObject::new(MacroLookupContext::new(
+            root_project_name.to_string(),
+            None,
             packages,
-        }),
+        )),
         target_unique_id: format!("{package_name}.{model_name}"),
         current_path: display_path.to_string_lossy().into_owned(),
         current_span: MinijinjaValue::from_serialize(Span::default()),

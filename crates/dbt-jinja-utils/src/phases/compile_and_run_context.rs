@@ -128,11 +128,11 @@ pub fn build_compile_and_run_base_context(
         execute: true,
         builtins: MinijinjaValue::from_object(builtins),
         dbt_metadata_envs: MinijinjaValue::from_object(meta_envs),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: package_name.to_string(),
-            current_project_name: None,
+        context: JinjaObject::new(MacroLookupContext::new(
+            package_name.to_string(),
+            None,
             packages,
-        }),
+        )),
         graph: MinijinjaValue::from_object(LazyFlatGraph::new(nodes, defer_nodes)),
         store_result: MinijinjaValue::from_function(result_store.store_result()),
         load_result: MinijinjaValue::from_function(result_store.load_result()),

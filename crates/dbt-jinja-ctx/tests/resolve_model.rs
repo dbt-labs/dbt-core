@@ -52,11 +52,11 @@ fn fixture_resolve_model_ctx() -> ResolveModelCtx {
         load_result: MinijinjaValue::from("load-result-stub"),
         store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
         execute: JinjaObject::new(ParseExecute::new(Arc::new(AtomicBool::new(false)))),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: "my_project".to_string(),
-            current_project_name: None,
-            packages: BTreeSet::new(),
-        }),
+        context: JinjaObject::new(MacroLookupContext::new(
+            "my_project".to_string(),
+            None,
+            BTreeSet::new(),
+        )),
         target_unique_id: "my_project.dbt_columns".to_string(),
         current_path: "models/dbt_columns.sql".to_string(),
         current_span: MinijinjaValue::from_serialize(Span::default()),

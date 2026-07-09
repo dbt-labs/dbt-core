@@ -223,11 +223,11 @@ pub fn extend_base_context_stateful_fn(
 
     base_context.insert(
         "context".to_owned(),
-        MinijinjaValue::from_object(MacroLookupContext {
-            root_project_name: root_project_name.to_string(),
-            current_project_name: None,
+        MinijinjaValue::from_object(MacroLookupContext::new(
+            root_project_name.to_string(),
+            None,
             packages,
-        }),
+        )),
     );
 }
 
@@ -290,11 +290,11 @@ pub fn build_run_node_context<S: Serialize>(
 
     let mut packages_with_root = packages;
     packages_with_root.insert(common_attr.package_name.clone());
-    let context_lookup = JinjaObject::new(MacroLookupContext {
-        root_project_name: common_attr.package_name.clone(),
-        current_project_name: None,
-        packages: packages_with_root,
-    });
+    let context_lookup = JinjaObject::new(MacroLookupContext::new(
+        common_attr.package_name.clone(),
+        None,
+        packages_with_root,
+    ));
 
     // Per-node model-specific fields (this/database/schema/identifier, hooks,
     // config, model, node).
