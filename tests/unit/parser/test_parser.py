@@ -1802,7 +1802,9 @@ class SnapshotParserTest(BaseParserTest):
             select 1 as id, now() as last_update"""
         full_file = """
         {{% snapshot foo %}}{}{{% endsnapshot %}}
-        """.format(raw_code)
+        """.format(
+            raw_code
+        )
         block = self.file_block_for(full_file, "nested/snap_1.sql")
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
@@ -1872,7 +1874,9 @@ class SnapshotParserTest(BaseParserTest):
         full_file = """
         {{% snapshot foo %}}{}{{% endsnapshot %}}
         {{% snapshot bar %}}{}{{% endsnapshot %}}
-        """.format(raw_1, raw_2)
+        """.format(
+            raw_1, raw_2
+        )
         block = self.file_block_for(full_file, "nested/snap_1.sql")
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
