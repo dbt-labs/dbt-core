@@ -19,24 +19,30 @@
 # `cargo ci bump-cargo-version` for the workspace version bump.
 #
 # Flow: prepare-release → { build (matrix), test } → pack → tag →
-# { publish-pypi, github-release → publish-homebrew }. build and test
-# fan out from prepare-release in parallel and both gate pack — a failing
-# test aborts the release before any wheels are written. tag is a small
-# gate that everything downstream depends on; publish-pypi and
-# github-release run in parallel and are each independently retriable.
-# publish-homebrew runs after github-release (it needs the uploaded
-# SHA256SUMS) and is gated to non-pre-release versions that GitHub
-# marked as "Latest".
+# github-release → { publish-pypi, publish-homebrew, publish-winget }.
+# build and test fan out from prepare-release in parallel and both gate
+# pack — a failing test aborts the release before any wheels are written.
+# tag is a small gate that everything downstream depends on. github-release
+# uploads the wheels + tarballs the downstream publishers consume, so they
+# all run after it: publish-pypi builds its download-at-install sdist from
+# the uploaded wheels, and publish-homebrew renders its formula from the
+# uploaded SHA256SUMS. publish-homebrew is gated to non-pre-release versions
+# that GitHub marked as "Latest".
 #
 # Repo setup (required `vars.*` runner labels, branch protection, secret
 # provisioning) is documented in `crates/dbt-ci/README.md`.
 #
 # **PyPI publishing**
-# `publish-pypi` uploads to production PyPI via `cargo ci pypi publish`
-# with `--environment prod`, authenticating with the repo-level
-# `PYPI_API_TOKEN` secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`).
-# Two distributions are published — `dbt-core` and
-# `dbt-core-experimental-parser` — selected by the `release_target` input.
+# `publish-pypi` runs after `github-release` and publishes a
+# download-at-install sdist (not wheels). It points `cargo ci pypi publish`
+# at the GitHub Release download URL via `--download-base-url`, which fetches
+# each platform wheel (one per `--target`), hashes the live bytes, and
+# assembles an sdist pinning those filenames + sha256s; pip fetches the
+# matching wheel from the Release at install time. Runs with
+# `--environment prod`, authenticating with the repo-level `PYPI_API_TOKEN`
+# secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`). Two distributions
+# are published — `dbt-core` and `dbt-core-experimental-parser` — selected
+# by the `release_target` input.
 #
 # **Homebrew publishing**
 # `publish-homebrew` renders `Formula/dbt-core.rb` from the SHA256SUMS the
@@ -570,15 +576,19 @@ jobs:
           git push origin "$TAG"
 
   # ------------------------------------------------------------------
-  # Publish wheels to production PyPI. Skipped on dry-run. Isolated so a
-  # GitHub Release flake doesn't force a re-upload. Authenticates with the
+  # Publish the download-at-install sdist to production PyPI. Skipped on
+  # dry-run. Runs after `github-release` because it fetches this release's
+  # wheels from the GitHub Release download URL (`--download-base-url`),
+  # hashes the live bytes, and publishes an sdist pinning those filenames +
+  # sha256s — no wheels are uploaded to PyPI. Authenticates with the
   # repo-level `PYPI_API_TOKEN` secret (passed to `cargo ci pypi publish`
   # as `DBT_PYPI_PROD_TOKEN`). `release_target` selects which of the two
   # distributions (`dbt-core`, `dbt-core-experimental-parser`) to publish.
+  # Independently retriable: an sdist re-upload is idempotent.
   # ------------------------------------------------------------------
   publish-pypi:
     name: Publish to PyPI
-    needs: [prepare-release, pack, tag]
+    needs: [prepare-release, pack, tag, github-release]
     if: ${{ !inputs.dry_run }}
     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
     permissions:
@@ -586,6 +596,9 @@ jobs:
     env:
       CARGO_INCREMENTAL: 0
       RUSTC_WRAPPER: sccache
+      # GitHub Release download URL hosting this version's wheels; the sdist
+      # backend fetches the matching wheel from here at install time.
+      BASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.prepare-release.outputs.tag }}
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
@@ -605,19 +618,13 @@ jobs:
         with:
           version: "v0.12.0"
 
-      - name: Download release assets
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: dist
-
-      - name: List release assets
-        run: ls -la dist/
-
-      # `cargo ci pypi publish` filters `dist/` by [project].name in
-      # pyproject.toml (see crates/dbt-ci/src/publish.rs `discover_wheels`),
-      # so to publish both distributions we publish once, swap pyproject in
-      # place, then publish again. Mirrors the pack-job pattern.
+      # sdist mode reads the distribution name from pyproject's [project].name
+      # to build the wheel filenames it downloads from BASE_URL, so to publish
+      # both distributions we publish once, swap pyproject in place, then
+      # publish again. Mirrors the pack-job pattern.
+      #
+      # One --target per wheel uploaded to the Release; keep in lockstep with
+      # the `build` job's matrix — each target's wheel is fetched and hashed.
       - name: Publish (dbt-core)
         if: inputs.release_target != 'parser'
         env:
@@ -626,7 +633,12 @@ jobs:
           cargo ci pypi publish \
             --environment prod \
             --version "${{ needs.prepare-release.outputs.version }}" \
-            --dist dist
+            --download-base-url "$BASE_URL" \
+            --target x86_64-unknown-linux-gnu \
+            --target aarch64-unknown-linux-gnu \
+            --target x86_64-apple-darwin \
+            --target aarch64-apple-darwin \
+            --target x86_64-pc-windows-msvc
 
       - name: Rename pyproject for parser publish
         if: inputs.release_target != 'core'
@@ -642,7 +654,12 @@ jobs:
           cargo ci pypi publish \
             --environment prod \
             --version "${{ needs.prepare-release.outputs.version }}" \
-            --dist dist
+            --download-base-url "$BASE_URL" \
+            --target x86_64-unknown-linux-gnu \
+            --target aarch64-unknown-linux-gnu \
+            --target x86_64-apple-darwin \
+            --target aarch64-apple-darwin \
+            --target x86_64-pc-windows-msvc
 
       - name: Restore pyproject name after parser publish
         if: ${{ always() && inputs.release_target != 'core' }}
