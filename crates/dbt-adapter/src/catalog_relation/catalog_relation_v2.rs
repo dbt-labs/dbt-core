@@ -33,8 +33,7 @@ const FIELD_CONNECTION_ID: &str = "connection_id";
 const ADAPTER_PROP_LOCATION_ROOT: &str = "location_root";
 const ADAPTER_PROP_USE_UNIFORM: &str = "use_uniform";
 
-// snowflake cld
-const ADAPTER_PROP_CATALOG_DATABASE: &str = "catalog_database";
+const FIELD_CATALOG_DATABASE: &str = "catalog_database";
 const ADAPTER_PROP_AUTO_REFRESH: &str = "auto_refresh";
 const ADAPTER_PROP_MAX_DATA_EXTENSION_TIME_IN_DAYS: &str = "max_data_extension_time_in_days";
 const ADAPTER_PROP_TARGET_FILE_SIZE: &str = "target_file_size";
@@ -401,6 +400,10 @@ impl CatalogRelation {
 
         let mut external_volume = None;
         let mut adapter_properties = BTreeMap::new();
+
+        let catalog_database =
+            get_yaml_str(databricks, FIELD_CATALOG_DATABASE).map(|s| s.to_string());
+
         let use_uniform = UniformMode::from_bool(
             parse_model_bool(model, FIELD_USE_UNIFORM, AdapterType::Databricks)?
                 .or_else(|| get_yaml_bool(databricks, FIELD_USE_UNIFORM))
@@ -450,6 +453,7 @@ impl CatalogRelation {
             table_format,
             file_format: Some(file_format),
             external_volume,
+            catalog_database,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -487,6 +491,7 @@ impl CatalogRelation {
             table_format: catalog.table_format,
             file_format: Some(file_format),
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -506,7 +511,7 @@ impl CatalogRelation {
         let table_format = catalog.table_format;
 
         let mut adapter_properties = BTreeMap::new();
-        let database = get_yaml_str(snowflake, ADAPTER_PROP_CATALOG_DATABASE)
+        let catalog_database = get_yaml_str(snowflake, FIELD_CATALOG_DATABASE)
             .map(|db| db.to_string())
             .ok_or_else(|| {
                 AdapterError::new(
@@ -516,7 +521,6 @@ impl CatalogRelation {
                     ),
                 )
             })?;
-        adapter_properties.insert(ADAPTER_PROP_CATALOG_DATABASE.to_string(), database);
 
         let auto_refresh = parse_model_bool(model, FIELD_AUTO_REFRESH, AdapterType::Snowflake)?
             .or_else(|| get_yaml_bool(snowflake, FIELD_AUTO_REFRESH));
@@ -561,6 +565,7 @@ impl CatalogRelation {
             catalog_type: CatalogType::SnowflakeIcebergRest.as_str().to_string(),
             table_format,
             external_volume: None,
+            catalog_database: Some(catalog_database),
             base_location: None,
             adapter_properties,
             is_transient: Some(false),
@@ -608,6 +613,9 @@ impl CatalogRelation {
         );
 
         let mut adapter_properties = BTreeMap::new();
+
+        let catalog_database =
+            get_yaml_str(snowflake, FIELD_CATALOG_DATABASE).map(|s| s.to_string());
 
         let change_tracking =
             parse_model_bool(model, FIELD_CHANGE_TRACKING, AdapterType::Snowflake)?
@@ -674,6 +682,7 @@ impl CatalogRelation {
             catalog_type: CatalogType::SnowflakeBuiltIn.as_str().to_string(),
             table_format: catalog.table_format,
             external_volume,
+            catalog_database,
             base_location: Some(base_location),
             adapter_properties,
             is_transient: Some(false),
@@ -775,6 +784,9 @@ impl CatalogRelation {
             Self::get_model_config_value(model, FIELD_STORAGE_URI, AdapterType::Bigquery)
                 .unwrap_or_else(|| format!("{external_volume}/{base_location}"));
 
+        let catalog_database =
+            get_yaml_str(bigquery, FIELD_CATALOG_DATABASE).map(|s| s.to_string());
+
         let mut adapter_properties = BTreeMap::new();
 
         if let Some(connection_id) = connection_id {
@@ -791,6 +803,7 @@ impl CatalogRelation {
             adapter_properties,
             is_transient: None,
             external_volume: None,
+            catalog_database,
             base_location: None,
             file_format: Some(file_format),
         })
@@ -849,6 +862,7 @@ impl CatalogRelation {
             table_format,
             file_format: None,
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -894,6 +908,7 @@ impl CatalogRelation {
             table_format,
             file_format: None,
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -934,6 +949,7 @@ impl CatalogRelation {
             table_format,
             file_format: Some(file_format),
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -1068,6 +1084,7 @@ catalogs:
     table_format: iceberg
     config:
       databricks:
+        catalog_database: "MAIN"
         file_format: parquet
 "#,
         );
@@ -1087,6 +1104,108 @@ catalogs:
 
             assert_eq!(r.catalog_type, "unity");
             assert_eq!(r.file_format.as_deref(), Some("parquet"));
+        }
+    }
+
+    #[test]
+    fn databricks_v2_unity_catalog_database() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UC
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        catalog_database: "MAIN"
+        file_format: parquet
+"#,
+        );
+        let conf = json!({ "catalog_name": "UC" });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_database.as_deref(), Some("MAIN"));
+        }
+    }
+
+    #[test]
+    fn snowflake_v2_horizon_catalog_database() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: SF_HORIZON
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: my_volume
+        catalog_database: "PROD_DB"
+"#,
+        );
+        let conf = json!({ "catalog_name": "SF_HORIZON", "schema": "S", "identifier": "I" });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Snowflake,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_database.as_deref(), Some("PROD_DB"));
+        }
+    }
+
+    #[test]
+    fn bigquery_v2_biglake_catalog_database() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: BQ
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: gs://bucket
+        file_format: parquet
+        base_location_root: root
+        catalog_database: "analytics-project"
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "BQ",
+            "schema": "analytics",
+            "alias": "events"
+        });
+        let ms = [
+            model(AdapterType::Bigquery, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Bigquery,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_database.as_deref(), Some("analytics-project"));
         }
     }
 
@@ -1400,12 +1519,7 @@ catalogs:
             assert!(r.integration_name.is_none());
             assert_eq!(r.catalog_type, CatalogType::SnowflakeIcebergRest.as_str());
             assert_eq!(r.table_format, TableFormat::Iceberg);
-            assert_eq!(
-                r.adapter_properties
-                    .get("catalog_database")
-                    .map(|s| s.as_str()),
-                Some("MY_CLD")
-            );
+            assert_eq!(r.catalog_database.as_deref(), Some("MY_CLD"));
         }
     }
 
@@ -1445,12 +1559,7 @@ catalogs:
             )
             .unwrap();
 
-            assert_eq!(
-                r.adapter_properties
-                    .get("catalog_database")
-                    .map(|s| s.as_str()),
-                Some("YAML_DB")
-            );
+            assert_eq!(r.catalog_database.as_deref(), Some("YAML_DB"));
             assert_eq!(
                 r.adapter_properties.get("auto_refresh").map(|s| s.as_str()),
                 Some("true")

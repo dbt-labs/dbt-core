@@ -93,7 +93,6 @@ const ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE: &str = "DEFAULT|ICEBERG";
 
 const SNOWFLAKE_ATTR: &str = "snowflake_attr";
 const DUCKDB_ATTR: &str = "duckdb_attr";
-const ADAPTER_PROP_CATALOG_DATABASE: &str = "catalog_database";
 const ADAPTER_PROP_CATALOG_LINKED_DATABASE_TYPE: &str = "catalog_linked_database_type";
 
 #[derive(Debug, Clone, Copy)]
@@ -136,6 +135,11 @@ pub struct CatalogRelation {
     // Snowflake uses directly
     // Databricks uses as a catalog_relation notion for location_root
     pub external_volume: Option<String>,
+
+    // === Snowflake, BigQuery (biglake), Databricks (unity) — v2 only
+    // The physical database/project/catalog that models using this integration should land in.
+    // Takes highest priority in generate_database_name over model database config and target.database.
+    pub catalog_database: Option<String>,
 
     // === Snowflake
     // built_in only: synthesized base_location_root and base_location_subpath model attributes
@@ -255,6 +259,7 @@ impl CatalogRelation {
             adapter_properties: BTreeMap::new(),
             is_transient: None,
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             file_format: Some(BIGQUERY_DEFAULT_FILE_FORMAT.to_string()),
         }
@@ -269,6 +274,7 @@ impl CatalogRelation {
             table_format: TableFormat::Default,
             file_format: None,
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
             is_transient: None,
@@ -434,6 +440,7 @@ impl CatalogRelation {
             adapter_properties,
             is_transient: None,
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             file_format: Some(file_format),
         })
@@ -506,6 +513,7 @@ impl CatalogRelation {
             table_format: TableFormat::Default,
             file_format: Some(DELTA_TABLE_FORMAT.to_string()),
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
             is_transient: None,
@@ -645,6 +653,7 @@ impl CatalogRelation {
             table_format,
             file_format: Some(file_format),
             external_volume,
+            catalog_database: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -766,6 +775,7 @@ impl CatalogRelation {
             catalog_type: CatalogType::SnowflakeIcebergRest.as_str().to_string(),
             table_format: TableFormat::Iceberg,
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties,
             is_transient: Some(false),
@@ -836,6 +846,7 @@ impl CatalogRelation {
                     table_format: TableFormat::Default,
                     catalog_type: SNOWFLAKE_RELATION_STORE.to_string(),
                     external_volume: None,
+                    catalog_database: None,
                     base_location: None,
                     adapter_properties: BTreeMap::new(),
                     is_transient: Some(transient_parsed.unwrap_or(true)),
@@ -879,6 +890,7 @@ impl CatalogRelation {
                     external_volume: None,
                     base_location: None,
                     adapter_properties: BTreeMap::new(),
+                    catalog_database: None,
                     is_transient: Some(transient_parsed.unwrap_or(true)),
                     file_format: None,
                 })
@@ -939,6 +951,7 @@ impl CatalogRelation {
                     table_format: TableFormat::Iceberg,
                     catalog_type: ICEBERG_BUILT_IN_CATALOG.to_string(),
                     external_volume,
+                    catalog_database: None,
                     base_location: Some(base_location),
                     adapter_properties,
                     is_transient: Some(false), // always FALSE for ICEBERG
@@ -1118,6 +1131,7 @@ impl CatalogRelation {
             catalog_type: catalog_type.to_string(),
             table_format,
             external_volume,
+            catalog_database: None,
             base_location: Some(base_location),
             adapter_properties,
             is_transient: Some(false), // catalogs.yml hardcoded to iceberg table_format => always false
@@ -1449,6 +1463,7 @@ impl CatalogRelation {
             catalog_type: SNOWFLAKE_RELATION_STORE.to_string(),
             table_format: TableFormat::Default,
             external_volume: None,
+            catalog_database: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
             is_transient: Some(true), // default transient for DEFAULT table format
@@ -1649,9 +1664,11 @@ impl Object for CatalogRelation {
             "external_root" => Self::map_properties_str(&self.adapter_properties, "external_root"),
 
             // v2-only REST surface
-            "catalog_database" => {
-                Self::map_properties_str(&self.adapter_properties, ADAPTER_PROP_CATALOG_DATABASE)
-            }
+            "catalog_database" => self
+                .catalog_database
+                .as_deref()
+                .map(Value::from)
+                .unwrap_or(Value::UNDEFINED),
             "linked_catalog_provider" => self
                 .linked_catalog_provider()
                 .map(Value::from_object)
