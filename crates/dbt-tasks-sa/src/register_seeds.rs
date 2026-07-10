@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
+use dbt_adapter::column::ColumnStatic;
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter::sql_types::TypeOps;
 use dbt_adapter_core::AdapterType;
@@ -278,16 +279,26 @@ fn parse_provided_types(
     column_descriptions: &BTreeMap<Spanned<String>, String>,
     type_ops: &dyn TypeOps,
 ) -> FsResult<LogicalTypeMap> {
+    // Adapter-specific type aliases in `+column_types` (e.g. BigQuery `float`,
+    // `integer`) must be normalized to their canonical names (`FLOAT64`, `INT64`)
+    // before parsing, mirroring dbt-adapters' `Column.translate_type`. dbt Core
+    // does not statically validate these; it hands the type to the warehouse,
+    // which accepts the alias. Without this, a valid seed config fails with
+    // `Invalid column description`.
+    let column_static = ColumnStatic::new(type_ops.adapter_type());
     let mut logical_types: BTreeMap<String, DataType> = BTreeMap::new();
     for (field_name, descr) in column_descriptions.iter() {
         // this creates a Logical type
-        let parsed_field = type_ops.parse_column_description(descr).map_err(|_| {
-            fs_err!(
-                code => ErrorCode::InvalidType,
-                loc => field_name.span().clone(),
-                "Invalid column description: {descr}",
-            )
-        })?;
+        let translated = column_static.translate_type(descr);
+        let parsed_field = type_ops
+            .parse_column_description(&translated)
+            .map_err(|_| {
+                fs_err!(
+                    code => ErrorCode::InvalidType,
+                    loc => field_name.span().clone(),
+                    "Invalid column description: {descr}",
+                )
+            })?;
         let logical_type = parsed_field.data_type().clone();
 
         logical_types.insert(field_name.as_ref().clone(), logical_type);
