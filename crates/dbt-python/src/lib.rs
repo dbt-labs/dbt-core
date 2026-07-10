@@ -170,7 +170,13 @@ fn invoke_inner(
     // shutdown=false leaves the Vortex telemetry producer (a process global)
     // alive — tearing it down on the first invoke breaks logging on every
     // later one. The runtime built above still drops when this call returns.
-    let result = tokio_rt.block_on(dbt_main::dbt_lib::execute_fs_and_shutdown(
+    //
+    // spawn onto the runtime (mirroring main_impl.rs) rather than block_on the
+    // engine future directly: block_on drives the root future on the *calling*
+    // thread, which here is Python's main thread. On Windows that stack is
+    // ~1 MB and the recursive parser/compiler overflows it. spawn moves the
+    // work onto a worker thread, which has the 8 MB thread_stack_size above.
+    let handle = tokio_rt.spawn(dbt_main::dbt_lib::execute_fs_and_shutdown(
         arg,
         cli,
         false,
@@ -178,6 +184,14 @@ fn invoke_inner(
         feature_stack,
         token,
     ));
+    let result = match tokio_rt.block_on(handle) {
+        Ok(result) => result,
+        // The engine task panicked; surface it as an exception rather than
+        // letting the JoinError propagate as an opaque failure.
+        Err(join_err) => {
+            return Ok((2, None, Some(format!("dbt engine panicked: {join_err}"))));
+        }
+    };
 
     match result {
         Ok(exec) => Ok((0, Some(exec), None)),
