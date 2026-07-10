@@ -79,10 +79,15 @@ jobs:
 
   # ------------------------------------------------------------------
   # Build the extension with maturin and run the pytest golden suite.
-  # Full Python matrix on Linux; one macOS job for platform coverage
-  # (the wheel is abi3, so the extension is identical across versions —
-  # the matrix mainly guards the pure-Python layer). requires_warehouse
-  # tests are deselected by pyproject addopts, so this stays hermetic.
+  #
+  # The wheel is abi3-py310: the compiled extension is a single artifact,
+  # byte-identical regardless of which CPython loads it, so the Rust/PyO3/FFI
+  # layer is not Python-version-sensitive. That makes a full version matrix
+  # mostly wasted. Instead we test the abi3 floor (3.10) on every platform —
+  # each has a distinct .so/.dylib/.pyd and its own maturin/protoc behavior,
+  # which is where real bugs hide. The pure-Python shim's floor is already
+  # enforced by ruff+mypy in check-py. requires_warehouse tests are deselected
+  # by pyproject addopts (hermetic).
   # ------------------------------------------------------------------
   test-py:
     name: test-py (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -95,25 +100,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `venv` is the venv's executables dir — bin/ on POSIX, Scripts/ on
+          # Windows — so the maturin/pytest steps below stay OS-agnostic.
           - os: linux
             runner: ${{ vars.UBUNTU_LATEST }}
             python-version: "3.10"
-          - os: linux
-            runner: ${{ vars.UBUNTU_LATEST }}
-            python-version: "3.11"
-          - os: linux
-            runner: ${{ vars.UBUNTU_LATEST }}
-            python-version: "3.12"
-          - os: linux
-            runner: ${{ vars.UBUNTU_LATEST }}
-            python-version: "3.13"
-          - os: linux
-            runner: ${{ vars.UBUNTU_LATEST }}
-            python-version: "3.14"
+            venv: .venv/bin
           - os: macos
             runner: ${{ vars.MACOS_RUNNER }}
-            python-version: "3.12"
+            python-version: "3.10"
+            venv: .venv/bin
+          - os: windows
+            runner: ${{ vars.WINDOWS_RUNNER_32 }}
+            python-version: "3.10"
+            venv: .venv/Scripts
     steps:
+      # Windows: disable CRLF conversion (corrupts fixtures / trips Cargo.lock
+      # hash checks) and enable long paths (Rust target dirs blow past MAX_PATH).
+      - name: Fixup Git (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --system core.longpaths true
+
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
 
       - name: Setup Python
@@ -178,11 +187,30 @@ jobs:
           /tmp/protoc/bin/protoc --version
           rm /tmp/protoc.zip
 
+      # pwsh, not bash: Git Bash on the Windows runner has no `unzip`, so we use
+      # Expand-Archive (mirrors release-v2.yml's Windows protoc step).
+      - name: Install Protocol Buffer Compiler (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          if (Get-Command protoc -ErrorAction SilentlyContinue) {
+            Write-Host "protoc already installed: $(protoc --version)"
+            exit 0
+          }
+          $PB_VERSION = "29.4"
+          $PB_URL = "https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-win64.zip"
+          $extractPath = "$env:TEMP\protoc"
+          Invoke-WebRequest -OutFile "$env:TEMP\protoc.zip" $PB_URL
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath $extractPath -Force
+          echo "$extractPath\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "PROTOC_INCLUDE=$extractPath\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & "$extractPath\bin\protoc.exe" --version
+
       - name: Create venv and install maturin + pytest
         working-directory: crates/dbt-python
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip "maturin>=1.0,<2.0" "pytest>=8"
+          ${{ matrix.venv }}/python -m pip install --upgrade pip "maturin>=1.0,<2.0" "pytest>=8"
 
       # No --locked: a pull_request build compiles the PR head merged into a
       # moving main, so a committed Cargo.lock routinely goes stale on merge.
@@ -191,7 +219,7 @@ jobs:
       # reconcile the lock rather than fail the run on dependency bookkeeping.
       - name: Build extension (maturin develop)
         working-directory: crates/dbt-python
-        run: .venv/bin/maturin develop
+        run: ${{ matrix.venv }}/maturin develop
 
       - name: sccache stats
         if: always()
@@ -199,4 +227,4 @@ jobs:
 
       - name: pytest
         working-directory: crates/dbt-python
-        run: .venv/bin/pytest
+        run: ${{ matrix.venv }}/pytest
