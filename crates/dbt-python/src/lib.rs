@@ -5,8 +5,8 @@ use dbt_features::cli::DefaultCliParserFactory;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::feature_stack_builder::FeatureStackBuilder;
 use dbt_features::tracing::TracingFeature;
-use dbt_lib::dbt_lib::CommandExecutionResult;
-use dbt_lib::{print_trimmed_error, run_cli_with_code};
+use dbt_main::dbt_lib::CommandExecutionResult;
+use dbt_main::{print_trimmed_error, run_cli_with_code};
 use pyo3::prelude::*;
 use std::sync::{Arc, OnceLock};
 
@@ -170,7 +170,7 @@ fn invoke_inner(
     // shutdown=false leaves the Vortex telemetry producer (a process global)
     // alive — tearing it down on the first invoke breaks logging on every
     // later one. The runtime built above still drops when this call returns.
-    let result = tokio_rt.block_on(dbt_lib::dbt_lib::execute_fs_and_shutdown(
+    let result = tokio_rt.block_on(dbt_main::dbt_lib::execute_fs_and_shutdown(
         arg,
         cli,
         false,
