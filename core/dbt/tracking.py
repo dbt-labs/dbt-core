@@ -54,6 +54,7 @@ RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-1-1"
 PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
 ARTIFACT_UPLOAD = "iglu:com.dbt/artifact_upload/jsonschema/1-0-0"
 MANAGE_STATE_SPEC = "iglu:com.dbt/manage_state/jsonschema/1-0-0"
+HINT_VIEW_SPEC = "iglu:com.dbt/hint_view/jsonschema/1-0-0"
 
 SNOWPLOW_TRACKER_VERSION = Version(snowplow_version)
 
@@ -365,6 +366,22 @@ def track_deprecation_warn(options):
         action="deprecation",
         label=get_invocation_id(),
         property_="warn",
+        context=context,
+    )
+
+
+def track_hint_view(hint_type: str) -> None:
+    if active_user is None:
+        return
+
+    context = [SelfDescribingJson(HINT_VIEW_SPEC, {"hint_type": hint_type})]
+
+    track(
+        active_user,
+        category="dbt",
+        action="hint",
+        label=get_invocation_id(),
+        property_="view",
         context=context,
     )
 
