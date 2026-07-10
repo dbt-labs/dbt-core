@@ -900,6 +900,28 @@ impl From<PrimaryKeyConfig> for Option<StringOrArrayOfStrings> {
 // - Always serializes as a list
 // - Generates correct JSON schema automatically
 
+/// A ClickHouse data-skipping index: `{name, definition}` items consumed by the
+/// ClickHouse macros (`ADD INDEX {{ index.get('name') }} {{ index.get('definition') }}`).
+/// Both fields are required, so no `skip_serializing_none` is needed.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+pub struct ClickhouseIndex {
+    name: String,
+    definition: String,
+}
+
+/// One element of the shared `indexes` config. Adapter shapes are kept as distinct
+/// typed variants (like `PartitionConfig` does for BigQuery); the required fields are
+/// disjoint (`columns` vs `name`+`definition`), so untagged deserialization is
+/// unambiguous, and each variant serializes its own shape back to Jinja.
+#[derive(Debug, Clone, PartialEq, UntaggedEnumDeserialize, Serialize, DbtSchema)]
+#[serde(untagged)]
+pub enum IndexItem {
+    /// Postgres: `{columns, unique, type}`
+    Postgres(PostgresIndex),
+    /// ClickHouse: `{name, definition}`
+    ClickHouse(ClickhouseIndex),
+}
+
 /// A wrapper type for the `indexes` config field that handles flexible deserialization.
 ///
 /// dbt-core accepts both list and dictionary formats for indexes. This type accepts
@@ -915,7 +937,7 @@ impl From<PrimaryKeyConfig> for Option<StringOrArrayOfStrings> {
 /// // Serializes as: [{columns: ["id"], unique: true}]  (keys are discarded)
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, DbtSchema)]
-pub struct IndexesConfig(Option<Vec<PostgresIndex>>);
+pub struct IndexesConfig(Option<Vec<IndexItem>>);
 
 impl IndexesConfig {
     /// Creates a new empty IndexesConfig
@@ -923,13 +945,13 @@ impl IndexesConfig {
         Self(None)
     }
 
-    /// Creates an IndexesConfig from a Vec of PostgresIndex
-    pub fn from_vec(indexes: Vec<PostgresIndex>) -> Self {
+    /// Creates an IndexesConfig from a Vec of IndexItem
+    pub fn from_vec(indexes: Vec<IndexItem>) -> Self {
         Self(Some(indexes))
     }
 
     /// Consumes self and returns the inner value
-    pub fn into_inner(self) -> Option<Vec<PostgresIndex>> {
+    pub fn into_inner(self) -> Option<Vec<IndexItem>> {
         self.0
     }
 
@@ -954,8 +976,8 @@ impl IndexesConfig {
     }
 }
 
-impl AsRef<Option<Vec<PostgresIndex>>> for IndexesConfig {
-    fn as_ref(&self) -> &Option<Vec<PostgresIndex>> {
+impl AsRef<Option<Vec<IndexItem>>> for IndexesConfig {
+    fn as_ref(&self) -> &Option<Vec<IndexItem>> {
         &self.0
     }
 }
@@ -965,7 +987,7 @@ impl Serialize for IndexesConfig {
     where
         S: Serializer,
     {
-        // Always serialize as Option<Vec<PostgresIndex>>
+        // Always serialize as Option<Vec<IndexItem>>
         self.0.serialize(serializer)
     }
 }
@@ -979,14 +1001,14 @@ impl<'de> Deserialize<'de> for IndexesConfig {
         use std::fmt;
         use std::marker::PhantomData;
 
-        struct IndexesVisitor(PhantomData<PostgresIndex>);
+        struct IndexesVisitor(PhantomData<IndexItem>);
 
         impl<'de> Visitor<'de> for IndexesVisitor {
-            type Value = Option<Vec<PostgresIndex>>;
+            type Value = Option<Vec<IndexItem>>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str(
-                    "a sequence of PostgresIndex, a map of name -> PostgresIndex, or null",
+                    "a sequence of index configs, a map of name -> index config, or null",
                 )
             }
 
@@ -1021,7 +1043,7 @@ impl<'de> Deserialize<'de> for IndexesConfig {
             {
                 let mut vec = Vec::new();
                 // Discard the keys, collect just the values
-                while let Some((_key, value)) = map.next_entry::<String, PostgresIndex>()? {
+                while let Some((_key, value)) = map.next_entry::<String, IndexItem>()? {
                     vec.push(value);
                 }
                 Ok(Some(vec))
@@ -1034,13 +1056,13 @@ impl<'de> Deserialize<'de> for IndexesConfig {
     }
 }
 
-impl From<Option<Vec<PostgresIndex>>> for IndexesConfig {
-    fn from(value: Option<Vec<PostgresIndex>>) -> Self {
+impl From<Option<Vec<IndexItem>>> for IndexesConfig {
+    fn from(value: Option<Vec<IndexItem>>) -> Self {
         IndexesConfig(value)
     }
 }
 
-impl From<IndexesConfig> for Option<Vec<PostgresIndex>> {
+impl From<IndexesConfig> for Option<Vec<IndexItem>> {
     fn from(config: IndexesConfig) -> Self {
         config.0
     }
@@ -1127,12 +1149,60 @@ impl std::fmt::Display for FloatOrString {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schemas::common::PartitionConfig;
     use dbt_common::serde_utils::Omissible;
 
     #[derive(Serialize, Deserialize)]
     struct TestConfig {
         #[serde(default)]
         grants: OmissibleGrantConfig,
+    }
+
+    #[test]
+    fn partition_by_round_trips_string_and_list() {
+        let scalar: PartitionConfig = dbt_yaml::from_str("toYYYYMM(created_at)").unwrap();
+        assert_eq!(
+            dbt_yaml::to_string(&scalar).unwrap().trim(),
+            "toYYYYMM(created_at)"
+        );
+
+        let list: PartitionConfig = dbt_yaml::from_str("[a, b]").unwrap();
+        let round_tripped: Vec<String> =
+            dbt_yaml::from_str(&dbt_yaml::to_string(&list).unwrap()).unwrap();
+        assert_eq!(round_tripped, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn indexes_round_trip_clickhouse_and_postgres_shapes() {
+        // ClickHouse {name, definition}
+        let ch: IndexesConfig =
+            dbt_yaml::from_str("[{name: idx1, definition: 'a TYPE minmax GRANULARITY 4'}]")
+                .unwrap();
+        let ch_yaml = dbt_yaml::to_string(&ch).unwrap();
+        assert!(ch_yaml.contains("name: idx1"), "got: {ch_yaml}");
+        assert!(
+            ch_yaml.contains("definition: a TYPE minmax GRANULARITY 4"),
+            "got: {ch_yaml}"
+        );
+        assert!(matches!(
+            ch.as_ref().as_deref(),
+            Some([IndexItem::ClickHouse(_)])
+        ));
+
+        // Postgres {columns, unique} — list form
+        let pg: IndexesConfig =
+            dbt_yaml::from_str("[{columns: [id], unique: true}]").unwrap();
+        let pg_yaml = dbt_yaml::to_string(&pg).unwrap();
+        assert!(pg_yaml.contains("columns"), "got: {pg_yaml}");
+        assert!(matches!(
+            pg.as_ref().as_deref(),
+            Some([IndexItem::Postgres(_)])
+        ));
+
+        // Postgres dict-of-indexes form still works
+        let pg_map: IndexesConfig =
+            dbt_yaml::from_str("{my_index: {columns: [id], unique: true}}").unwrap();
+        assert_eq!(pg_map.len(), 1);
     }
 
     #[test]
