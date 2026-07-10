@@ -201,6 +201,20 @@ impl Object for RelationObject {
                 self.get(&key, default)
             }
             "render" => Ok(render_without_filter(self)),
+            "derivative" => {
+                let iter = ArgsIter::new("derivative", &["suffix", "relation_type"], args);
+                let suffix = iter.next_arg::<&str>()?;
+                let relation_type = iter.next_arg::<Option<&str>>()?;
+                let interpret_suffix_as_full_identifier = iter
+                    .next_kwarg::<Option<bool>>("interpret_suffix_as_full_identifier")?
+                    .unwrap_or(false);
+                iter.finish()?;
+                let relation_type = relation_type
+                    .filter(|s| !s.is_empty())
+                    .map(RelationType::from);
+                self.derivative(suffix, relation_type, interpret_suffix_as_full_identifier)
+                    .map(|r| Value::from_object(RelationObject::new(r)))
+            }
             "without_identifier" => self
                 .without_identifier()
                 .map(|r| Value::from_object(RelationObject::new(r))),
@@ -871,5 +885,36 @@ mod tests {
 
         assert_eq!(relation.render_self_as_str(), "`analytics`.`events`");
         assert_eq!(relation.database(), Some(""));
+    }
+
+    #[test]
+    fn derivative_appends_suffix_and_overrides_type_for_clickhouse() {
+        let relation = do_create_relation(
+            AdapterType::ClickHouse,
+            "ignored".to_string(),
+            "analytics".to_string(),
+            Some("events".to_string()),
+            Some(RelationType::Table),
+            ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        // suffix appended to identifier, type overridden, database stays empty
+        let mv = relation
+            .derivative("_mv", Some(RelationType::MaterializedView), false)
+            .unwrap();
+        assert_eq!(mv.render_self_as_str(), "`analytics`.`events_mv`");
+        assert_eq!(mv.database(), Some(""));
+        assert_eq!(mv.relation_type(), Some(RelationType::MaterializedView));
+
+        // interpret_suffix_as_full_identifier replaces the identifier entirely,
+        // and omitting relation_type inherits the source relation's type
+        let full = relation.derivative("custom_name", None, true).unwrap();
+        assert_eq!(full.render_self_as_str(), "`analytics`.`custom_name`");
+        assert_eq!(full.relation_type(), Some(RelationType::Table));
     }
 }
