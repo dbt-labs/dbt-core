@@ -3,12 +3,12 @@ from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Type
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.artifacts.resources import Catalog
 from dbt.artifacts.schemas.results import NodeResult, NodeStatus, RunStatus
-from dbt.hints import HintType, show_hint
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtInternalError
 from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
+from dbt.hints import HintType, show_hint
 from dbt.node_types import NodeType
 from dbt.runners import ExposureRunner as exposure_runner
 from dbt.runners import SavedQueryRunner as saved_query_runner

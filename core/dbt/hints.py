@@ -1,9 +1,8 @@
+from dbt.flags import get_flags
+from dbt.tracking import track_hint_view
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
-
-from dbt.flags import get_flags
-from dbt.tracking import track_hint_view
 
 # Hint message text shown to the user. Keep these actionable and point at docs.
 REUSE_RELATIONS_ON_TOO_MANY_MODELS = (
@@ -29,7 +28,7 @@ hint_to_msg_map: dict[HintType, str] = {
 }
 
 
-def show_hint(hint_type: str) -> None:
+def show_hint(hint_type: HintType) -> None:
     """Surface a hint to the user, unless hints have been disabled via the
     hints_enabled flag. Also records a telemetry event so we can tell which
     hints are actually being seen."""
