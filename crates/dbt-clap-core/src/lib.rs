@@ -1591,11 +1591,14 @@ pub struct CommonArgs {
 
     /// Enable full metadata output: incremental parse cache, epoch parquet state, and no JSON
     /// artifacts. Implies --partial-parse --no-write-json.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
+    ///
+    /// Not user-facing: kept for backwards compatibility with programmatic callers. Use
+    /// --write-index instead.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), hide = true)]
     pub write_metadata: bool,
 
-    /// Write parquet index to target/index/. Implies --write-metadata so that epoch parquet
-    /// is produced, then converts metadata → index parquet via the snapshot writer.
+    /// Write the parquet index to target/index/. With --static-analysis strict, also writes
+    /// column schemas and column-level lineage.
     #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_index: bool,
 
@@ -1620,8 +1623,8 @@ pub struct CommonArgs {
     pub index_dir: Option<PathBuf>,
 
     /// Compute and write column-level lineage into compile/cll parquet.
-    /// Requires --write-metadata and --static-analysis strict. Omitting this flag
-    /// skips the expensive CLL graph build, keeping --write-metadata fast.
+    /// Requires --write-index and --static-analysis strict. Omitting this flag
+    /// skips the expensive CLL graph build, keeping index writing fast.
     #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_lineage: bool,
 
