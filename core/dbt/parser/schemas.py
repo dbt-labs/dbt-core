@@ -1399,6 +1399,23 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
                 )
             )
 
+            # An overload SQL body can contain its own ref()/source()/function()
+            # calls. The overload node is about to be deleted, so carry those
+            # dependencies onto the root — otherwise the DAG edges would be
+            # silently lost, since the root's own body never mentions them.
+            # process_refs/process_sources/process_functions run later over the
+            # root and resolve these into depends_on. Dedup against the root's
+            # own dependencies so a shared reference doesn't get duplicated.
+            for ref in overload_node.refs:
+                if ref not in root_node.refs:
+                    root_node.refs.append(ref)
+            for source in overload_node.sources:
+                if source not in root_node.sources:
+                    root_node.sources.append(source)
+            for function in overload_node.functions:
+                if function not in root_node.functions:
+                    root_node.functions.append(function)
+
             # Track the overload→root relationship for partial parsing
             self.manifest.function_overload_owners[overload_node.file_id] = root_node.unique_id
 
