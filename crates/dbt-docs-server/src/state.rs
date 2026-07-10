@@ -4,8 +4,9 @@ use std::sync::Arc;
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
 
+use crate::handlers::analytics::{AnalyticsSink, VortexSink};
 use crate::providers::Providers;
-pub use dbt_docs_core::DistInfo;
+pub use dbt_docs_core::{DistInfo, TelemetryHydration};
 
 /// Shared application state held by the axum router.
 pub struct AppState {
@@ -20,6 +21,9 @@ pub struct AppState {
     /// RFC3339 timestamp of the loaded snapshot (`index_dir` mtime), or
     /// `None` on empty-start. Computed once at boot; a staleness signal.
     pub generation: Option<String>,
+    /// Sink for docs analytics events (`POST /api/v1/analytics/events`).
+    /// Production forwards to Vortex; tests inject a recording double.
+    pub analytics: Arc<dyn AnalyticsSink>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -55,6 +59,7 @@ impl AppState {
             send_anonymous_usage_stats,
             project_loaded,
             generation,
+            analytics: Arc::new(VortexSink),
         }
     }
 
@@ -93,12 +98,25 @@ impl AppState {
         self
     }
 
+    /// Inject a recording analytics sink for testing.
+    #[cfg(test)]
+    pub fn with_analytics(mut self, sink: Arc<dyn AnalyticsSink>) -> Self {
+        self.analytics = sink;
+        self
+    }
+
     pub fn dist_info(&self) -> DistInfo {
         self.providers.dist_info.dist_info()
     }
 
     pub fn server_version(&self) -> &'static str {
         self.providers.dist_info.server_version()
+    }
+
+    /// Server-authoritative telemetry fields hydrated onto docs analytics
+    /// events. Mirrors [`Self::dist_info`] / [`Self::server_version`].
+    pub fn telemetry_hydration(&self) -> TelemetryHydration {
+        self.providers.dist_info.telemetry_hydration()
     }
 
     pub fn has_column_lineage(&self) -> bool {

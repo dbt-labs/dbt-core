@@ -47,11 +47,11 @@ fn fixture_compile_base_ctx() -> CompileBaseCtx {
         execute: true,
         builtins: MinijinjaValue::from_object(builtins_inner),
         dbt_metadata_envs: MinijinjaValue::from_object(BTreeMap::<String, MinijinjaValue>::new()),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: "my_project".to_string(),
-            current_project_name: None,
-            packages: Default::default(),
-        }),
+        context: JinjaObject::new(MacroLookupContext::new(
+            "my_project".to_string(),
+            None,
+            Default::default(),
+        )),
         graph: MinijinjaValue::UNDEFINED,
         store_result: MinijinjaValue::from("store-result-stub"),
         load_result: MinijinjaValue::from("load-result-stub"),

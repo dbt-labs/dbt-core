@@ -84,6 +84,9 @@ use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
+use super::resolve_tests::persist_generic_data_tests::{
+    TestUnrenderedConfigs, extract_test_unrendered_configs,
+};
 use super::resolve_utils::validate_compute;
 use super::validate_models::validate_model;
 
@@ -261,6 +264,20 @@ pub async fn resolve_models(
             })
             .collect();
 
+    // Snapshot raw (unrendered) schema.yml test config blocks in the same window, before
+    // render nulls schema_value. Consumed by `persist` to populate generic tests'
+    // unrendered_config with their schema.yml config.
+    let raw_test_configs: BTreeMap<String, TestUnrenderedConfigs> =
+        models_properties_sans_semantics
+            .iter()
+            .map(|(key, mpe)| {
+                (
+                    key.clone(),
+                    extract_test_unrendered_configs(&mpe.schema_value),
+                )
+            })
+            .collect();
+
     // Split SQL and Python models for different processing paths
     let (sql_files, python_files): (Vec<_>, Vec<_>) =
         package.model_sql_files.iter().cloned().partition(|asset| {
@@ -338,12 +355,8 @@ pub async fn resolve_models(
             .ok()
             .and_then(|sql| parse_unrendered_config(&sql, false));
 
-        // Set to Inline if this is the inline file
-        let is_inline_file = package
-            .inline_file
-            .as_ref()
-            .map(|inline_file| inline_file == &dbt_asset)
-            .unwrap_or(false);
+        // A model is an ad-hoc inline model iff it lives in the dedicated "" package.
+        let is_inline_file = package_name.is_empty();
         if is_inline_file {
             model_config.materialized = DbtMaterialization::Inline;
         }
@@ -825,6 +838,7 @@ pub async fn resolve_models(
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
                         false,
+                        &raw_test_configs.get(ref_name).cloned().unwrap_or_default(),
                     )?;
                 }
             }
@@ -840,6 +854,7 @@ pub async fn resolve_models(
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
                         true,
+                        &raw_test_configs.get(ref_name).cloned().unwrap_or_default(),
                     )?;
                 }
             }

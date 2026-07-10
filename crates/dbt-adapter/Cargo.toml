@@ -31,15 +31,13 @@ dbt-telemetry = { workspace = true }
 dbt-tracing = { workspace = true }
 dbt-yaml = { workspace = true }
 
+adbc-core = { workspace = true }
 arrow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-json = { workspace = true }
 arrow-schema = { workspace = true }
 base64 = { workspace = true }
-parquet = { workspace = true }
-
-adbc-core = { workspace = true }
 chrono = { workspace = true }
 crossbeam-skiplist = { workspace = true }
 crossbeam-utils = { workspace = true }

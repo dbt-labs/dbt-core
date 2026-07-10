@@ -1,5 +1,3 @@
-// This code was generated from dbt-make-dbt-schemas/json_schemas/dbt_project.json on 2025-03-31T06:22:06. Do not edit.
-
 use std::collections::HashMap;
 use std::collections::btree_map::Iter;
 use std::fmt::Debug;
@@ -179,6 +177,54 @@ pub struct DbtProject {
     #[serde(rename = "restrict-access")]
     pub restrict_access: Option<bool>,
     pub vars: Verbatim<Option<dbt_yaml::Value>>,
+}
+
+impl Default for DbtProject {
+    fn default() -> Self {
+        DbtProject {
+            name: String::new(),
+            version: None,
+            profile: None,
+            analysis_paths: None,
+            asset_paths: None,
+            macro_paths: None,
+            model_paths: None,
+            function_paths: None,
+            seed_paths: None,
+            snapshot_paths: None,
+            test_paths: None,
+            docs_paths: None,
+            target_path: None,
+            log_path: None,
+            packages_install_path: None,
+            metrics: None,
+            models: None,
+            functions: None,
+            snapshots: None,
+            seeds: None,
+            sources: None,
+            tests: None,
+            unit_tests: None,
+            data_tests: None,
+            exposures: None,
+            analyses: None,
+            saved_queries: None,
+            semantic_models: None,
+            clean_targets: None,
+            config_version: None,
+            dbt_cloud: None,
+            dispatch: None,
+            flags: None,
+            on_run_end: Verbatim::from(None),
+            on_run_start: Verbatim::from(None),
+            query_comment: Verbatim::from(None),
+            quoting: Spanned::new(None),
+            sync: None,
+            require_dbt_version: None,
+            restrict_access: None,
+            vars: Verbatim::from(None),
+        }
+    }
 }
 
 impl DbtProject {

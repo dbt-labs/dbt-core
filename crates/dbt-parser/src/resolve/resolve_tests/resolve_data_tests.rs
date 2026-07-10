@@ -532,15 +532,6 @@ pub async fn resolve_data_tests(
         };
 
         // For singular tests, parse the user-written SQL for inline {{ config(...) }}.
-        // For generic column tests, the schema.yml config (e.g. where, limit) is not yet
-        // captured here. The raw config lives nested inside the parent resource's
-        // MinimalPropertiesEntry.schema_value (columns -> tests -> config), but
-        // test_properties only contains standalone/singular tests — generic column tests
-        // are absent. Extracting it would require navigating model/seed/snapshot/source
-        // schema_value by (resource_name, column_name, test_name), which is not yet
-        // threaded into resolve_data_tests. For now, generic tests only get project-level
-        // config in unrendered_config; schema.yml config keys like `where` and `limit`
-        // are missing. TODO: implement this.
         let raw_inline_config = if is_singular_data_test {
             dbt_common::tokiofs::read_to_string(dbt_asset.base_path.join(&dbt_asset.path))
                 .await
@@ -550,16 +541,19 @@ pub async fn resolve_data_tests(
             None
         };
 
-        // TODO: For generic column tests, schema.yml config keys like `where` and `limit`
-        // are not yet captured here; only project-level config is included. Implementing
-        // this requires navigating the parent resource's MinimalPropertiesEntry.schema_value
-        // by (resource_name, column_name, test_name), which is not yet threaded into
-        // resolve_data_tests.
+        // For generic tests, the schema.yml `config:` block (`where`, `severity`, `limit`,
+        // schema.yml `tags`/`meta`, …) is captured raw (pre-render) on the GenericTestAsset by
+        // `persist` and passed here as the `schema` arg, matching how models/seeds/snapshots
+        // populate unrendered_config. Singular tests carry no such asset (raw_inline_config
+        // covers them).
+        let raw_schema_config = test_path_to_test_asset
+            .get(&dbt_asset.path)
+            .map(|test_asset| &test_asset.unrendered_schema_config);
         let unrendered_config = build_unrendered_config(
             &fqn,
             &raw_local_project_config,
             raw_root_project_cfg.as_ref(),
-            None,
+            raw_schema_config,
             raw_inline_config.as_ref(),
             false,
         );
@@ -816,6 +810,7 @@ mod tests {
             unique_id_hash: None,
             version: None,
             column_tags: vec![],
+            unrendered_schema_config: BTreeMap::new(),
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -908,6 +903,7 @@ mod tests {
             unique_id_hash: None,
             version: None,
             column_tags: vec![],
+            unrendered_schema_config: BTreeMap::new(),
         };
 
         let unique_id = compute_generic_test_unique_id("my_project", &asset);
@@ -949,6 +945,7 @@ mod tests {
             unique_id_hash: None,
             version: None,
             column_tags: vec![],
+            unrendered_schema_config: BTreeMap::new(),
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");

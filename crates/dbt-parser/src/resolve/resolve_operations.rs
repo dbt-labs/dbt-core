@@ -176,6 +176,7 @@ fn new_operation(
                 sql_resources.clone(),
                 execute_exists,
                 &operation.__common_attr__.original_file_path,
+                &PathBuf::new(),
                 io,
                 global_static_analysis,
             ));

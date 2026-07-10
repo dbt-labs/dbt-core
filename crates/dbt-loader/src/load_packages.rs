@@ -411,7 +411,6 @@ pub fn construct_internal_packages(
             seed_files: vec![],
             docs_files: vec![],
             snapshot_files: vec![],
-            inline_file: None,
             all_paths: HashMap::from([
                 (ResourcePathKind::ModelPaths, vec![]),
                 (ResourcePathKind::AnalysisPaths, vec![]),

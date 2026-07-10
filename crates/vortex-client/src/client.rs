@@ -615,12 +615,15 @@ impl VortexProducerClient {
 }
 
 fn box_any_message(any: pbjson_types::Any) -> Box<VortexMessage> {
+    let vortex_event_url = any.type_url.clone();
     Box::new(VortexMessage {
         any: Some(any),
         vortex_event_created_at: Some(VortexProducerClient::current_timestamp()),
         vortex_client_sent_at: None,
         vortex_backend_received_at: None,
         vortex_backend_processed_at: None,
+        vortex_event_id: uuid::Uuid::new_v4().to_string(),
+        vortex_event_url,
     })
 }
 

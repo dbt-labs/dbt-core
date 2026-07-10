@@ -736,6 +736,13 @@ impl EvalArgs {
         self.connection = connection;
         self
     }
+
+    pub fn invocation_source(&self) -> &'static str {
+        match self.command_entrypoint {
+            FsCommand::Extension(s) => s,
+            _ => "cli",
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------------------------

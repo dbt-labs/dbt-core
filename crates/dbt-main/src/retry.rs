@@ -23,6 +23,8 @@ pub struct RetryState {
     pub retryable_node_ids: Vec<String>,
     /// The static analysis setting from the original run, if present
     pub original_static_analysis: Option<StaticAnalysisKind>,
+    /// Whether the original run was invoked with --full-refresh
+    pub original_full_refresh: bool,
 }
 
 impl RetryState {
@@ -47,6 +49,15 @@ impl RetryState {
             .and_then(|v| v.as_str())
             .and_then(|s| StaticAnalysisKind::from_str(s).ok());
 
+        // Parse full_refresh setting from args.__other__ so retry preserves the
+        // original run's --full-refresh behavior for incremental models.
+        let original_full_refresh = artifact
+            .args
+            .__other__
+            .get("full_refresh")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
         // Collect all retryable nodes: error, fail, skipped, warn
         // The graph infrastructure will handle dependency ordering automatically
         let retryable_node_ids: Vec<String> = artifact
@@ -67,6 +78,7 @@ impl RetryState {
             original_command,
             retryable_node_ids,
             original_static_analysis,
+            original_full_refresh,
         })
     }
 
@@ -86,15 +98,21 @@ impl RetryState {
         // XXX: the RetryState should have enough information to reconstruct
         // the original command with all necessary args, but that's unfortunately
         // not the case yet
+        // Preserve the original run's --full-refresh for commands that support it.
+        // (test/snapshot have no such flag.)
+        let full_refresh = self.original_full_refresh;
+
         let core_cmd = match self.original_command.as_str() {
             "run" => CoreCommand::Run(RunArgs {
                 common_args,
                 static_analysis,
+                full_refresh,
                 ..RunArgs::default()
             }),
             "build" => CoreCommand::Build(BuildArgs {
                 common_args,
                 static_analysis,
+                full_refresh,
                 ..BuildArgs::default()
             }),
             "test" => CoreCommand::Test(TestArgs {
@@ -105,6 +123,7 @@ impl RetryState {
             "seed" => CoreCommand::Seed(SeedArgs {
                 common_args,
                 static_analysis,
+                full_refresh,
                 ..SeedArgs::default()
             }),
             "snapshot" => CoreCommand::Snapshot(SnapshotArgs {
@@ -115,6 +134,7 @@ impl RetryState {
             "compile" => CoreCommand::Compile(CompileArgs {
                 common_args,
                 static_analysis,
+                full_refresh,
                 ..CompileArgs::default()
             }),
             other => {
@@ -151,6 +171,7 @@ mod tests {
             original_command: original_cmd.into(),
             retryable_node_ids: vec!["some_node_id".to_string()],
             original_static_analysis: original_sa,
+            original_full_refresh: false,
         };
         let retry_args = RetryArgs {
             common_args: CommonArgs::default(),
@@ -195,6 +216,63 @@ expected_sa: {expected_sa:?}",
                 }
             }
         }
+    }
+
+    fn cmd_for_retry_full_refresh(original_cmd: &str, original_full_refresh: bool) -> CoreCommand {
+        let state = RetryState {
+            original_command: original_cmd.into(),
+            retryable_node_ids: vec!["some_node_id".to_string()],
+            original_static_analysis: None,
+            original_full_refresh,
+        };
+        let retry_args = RetryArgs {
+            common_args: CommonArgs::default(),
+            static_analysis: None,
+        };
+        state.to_command(&retry_args).unwrap()
+    }
+
+    #[test]
+    fn test_command_for_retry_preserves_full_refresh() {
+        // Commands that support --full-refresh must propagate it from the original run.
+        for cmd in &["run", "build", "seed", "compile"] {
+            assert!(
+                cmd_for_retry_full_refresh(cmd, true).full_refresh(),
+                "expected full_refresh=true to be preserved for command: {cmd}"
+            );
+            assert!(
+                !cmd_for_retry_full_refresh(cmd, false).full_refresh(),
+                "expected full_refresh=false to be preserved for command: {cmd}"
+            );
+        }
+        // test/snapshot have no --full-refresh flag; they always report false.
+        for cmd in &["test", "snapshot"] {
+            assert!(!cmd_for_retry_full_refresh(cmd, true).full_refresh());
+        }
+    }
+
+    #[test]
+    fn test_from_run_results_parses_full_refresh() {
+        let with_ff = create_run_results_json_with_full_refresh(
+            &[("model.my_project.model_a", "error")],
+            "build",
+            Some(true),
+        );
+        let state = RetryState::from_run_results(with_ff.path()).unwrap();
+        assert!(state.original_full_refresh);
+
+        let without_ff = create_run_results_json_with_full_refresh(
+            &[("model.my_project.model_a", "error")],
+            "build",
+            Some(false),
+        );
+        let state = RetryState::from_run_results(without_ff.path()).unwrap();
+        assert!(!state.original_full_refresh);
+
+        // Missing full_refresh (e.g. run_results from an older version) defaults to false.
+        let file = create_run_results_json(&[("model.my_project.model_a", "error")], "build");
+        let state = RetryState::from_run_results(file.path()).unwrap();
+        assert!(!state.original_full_refresh);
     }
 
     #[test]
@@ -244,6 +322,52 @@ expected_sa: {expected_sa:?}",
                 "args": {{
                     "command": "{}",
                     "which": "{}"{sa_part}
+                }}
+            }}"#,
+            results_json.join(","),
+            which,
+            which
+        );
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(json.as_bytes()).unwrap();
+        file
+    }
+
+    /// Helper to create a run_results.json file for testing with optional full_refresh
+    fn create_run_results_json_with_full_refresh(
+        results: &[(&str, &str)],
+        which: &str,
+        full_refresh: Option<bool>,
+    ) -> NamedTempFile {
+        let results_json: Vec<String> = results
+            .iter()
+            .map(|(unique_id, status)| {
+                format!(
+                    r#"{{"status": "{}", "unique_id": "{}", "timing": [], "thread_id": "Thread-1", "execution_time": 0.1, "adapter_response": {{}}}}"#,
+                    status, unique_id
+                )
+            })
+            .collect();
+
+        let ff_part = full_refresh
+            .map(|ff| format!(r#", "full_refresh": {}"#, ff))
+            .unwrap_or_default();
+
+        let json = format!(
+            r#"{{
+                "metadata": {{
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/run-results/v6.json",
+                    "dbt_version": "1.9.0",
+                    "generated_at": "2024-01-01T00:00:00Z",
+                    "invocation_id": "test-invocation-id",
+                    "env": {{}}
+                }},
+                "results": [{}],
+                "elapsed_time": 1.0,
+                "args": {{
+                    "command": "{}",
+                    "which": "{}"{ff_part}
                 }}
             }}"#,
             results_json.join(","),

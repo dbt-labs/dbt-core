@@ -7,7 +7,9 @@ use dbt_common::io_args::EvalArgs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_docs_server::Providers;
-use dbt_docs_server::providers::{Backend, DefaultDistInfoProvider};
+use dbt_docs_server::providers::{
+    Backend, DefaultDistInfoProvider, DistInfo, DistInfoProvider, TelemetryHydration,
+};
 use dbt_index_core::column_impact::UnavailableColumnImpact;
 use dbt_index_core::column_lineage::UnavailableColumnLineage;
 use dbt_lineage_core::{CllEdge, PlanGrainInfo};
@@ -73,12 +75,40 @@ pub struct IndexFeature {
     pub providers_factory: fn(Arc<dyn Backend>) -> Providers,
 }
 
+/// Distribution/telemetry provider backed by the process-global [`dbt_env`].
+///
+/// Reuses [`DefaultDistInfoProvider`] for the distribution name / login state
+/// (OSS: `oss` / not logged in), but overrides [`Self::telemetry_hydration`] to
+/// read the real dbt version and dbt Cloud IDs from
+/// [`dbt_env::env::InternalEnv::global`] so analytics events are hydrated
+/// authoritatively server-side.
+pub struct EnvDistInfoProvider;
+
+impl DistInfoProvider for EnvDistInfoProvider {
+    fn dist_info(&self) -> DistInfo {
+        DefaultDistInfoProvider.dist_info()
+    }
+
+    fn telemetry_hydration(&self) -> TelemetryHydration {
+        let info = self.dist_info();
+        let cfg = dbt_env::env::InternalEnv::global().invocation_config();
+        TelemetryHydration {
+            distribution: info.name,
+            dbt_version: cfg.dbt_version.clone(),
+            is_logged_in: info.is_logged_in,
+            dbt_cloud_account_identifier: cfg.account_identifier.clone(),
+            dbt_cloud_project_id: cfg.project_id.clone(),
+            dbt_cloud_environment_id: cfg.environment_id.clone(),
+        }
+    }
+}
+
 pub fn default_providers_factory(backend: Arc<dyn Backend>) -> Providers {
     Providers {
         backend: backend.clone(),
         column_lineage: Arc::new(UnavailableColumnLineage::new()),
         column_impact: Arc::new(UnavailableColumnImpact::new()),
-        dist_info: Arc::new(DefaultDistInfoProvider),
+        dist_info: Arc::new(EnvDistInfoProvider),
     }
 }
 

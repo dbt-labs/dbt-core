@@ -159,6 +159,12 @@ pub struct GenericTestAsset {
     /// Tags from `columns[*].config.tags` in schema YAML, carried for generic column tests.
     /// Empty for model-level and singular tests.
     pub column_tags: Vec<String>,
+    /// Raw (unrendered) schema.yml `config:` block authored on this generic test, captured
+    /// from the raw YAML before Jinja render. Fed as the `schema` arg to
+    /// `build_unrendered_config` so generic tests carry their schema.yml config (`where`,
+    /// `severity`, `limit`, schema.yml `tags`/`meta`, …) in `unrendered_config`, matching
+    /// models/seeds/snapshots. Empty when the test has no schema.yml config.
+    pub unrendered_schema_config: BTreeMap<String, dbt_yaml::Value>,
 }
 
 impl fmt::Display for GenericTestAsset {
@@ -231,7 +237,6 @@ pub struct DbtPackage {
     pub seed_files: Vec<DbtAsset>,
     pub docs_files: Vec<DbtAsset>,
     pub snapshot_files: Vec<DbtAsset>,
-    pub inline_file: Option<DbtAsset>,
     pub dependencies: BTreeSet<String>,
     pub all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>>,
     /// Pre-read file contents for embedded (internal) packages.
@@ -240,6 +245,29 @@ pub struct DbtPackage {
     pub embedded_file_contents: Option<HashMap<DbtPath, String>>,
     /// Raw dbt_project.yml.
     pub raw_project_yml: dbt_yaml::Value,
+}
+
+impl Default for DbtPackage {
+    fn default() -> Self {
+        DbtPackage {
+            dbt_project: DbtProject::default(),
+            package_root_path: PathBuf::new(),
+            dbt_properties: vec![],
+            analysis_files: vec![],
+            model_sql_files: vec![],
+            function_sql_files: vec![],
+            macro_files: vec![],
+            test_files: vec![],
+            fixture_files: vec![],
+            seed_files: vec![],
+            docs_files: vec![],
+            snapshot_files: vec![],
+            dependencies: BTreeSet::new(),
+            all_paths: HashMap::new(),
+            embedded_file_contents: None,
+            raw_project_yml: dbt_yaml::Value::default(),
+        }
+    }
 }
 
 pub use dbt_jinja_vars::DbtVars;

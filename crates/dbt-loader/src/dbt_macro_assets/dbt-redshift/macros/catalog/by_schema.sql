@@ -6,7 +6,16 @@
       -- leader-only, and cannot be joined to other compute-based queries 
       -- TODO: https://github.com/dbt-labs/fs/issues/6859#issue-3648357670 #}
 
-    {% set catalog = _redshift__get_base_catalog_by_schema(dbschema.database, schemas) %}
+    {#- DIVERGENCE BEGIN: upstream uses redshift__use_show_apis(); Fusion uses adapter.has_feature("datasharing") -#}
+    {% if adapter.has_feature("datasharing") %}
+    {#- DIVERGENCE END -#}
+        {% set catalog = _redshift__get_base_catalog_by_schema_show(dbschema.database, schemas) %}
+    {% else %}
+        {#-- Compute a left-outer join in memory. Some Redshift queries are
+          -- leader-only, and cannot be joined to other compute-based queries #}
+        {% set catalog = _redshift__get_base_catalog_by_schema(dbschema.database, schemas) %}
+    {% endif %}
+
 
     {#% set select_extended = redshift__can_select_from('svv_table_info') %#}
     {#% if select_extended %#}
@@ -21,6 +30,8 @@
 {% endmacro %}
 
 
+{# Standard Redshift catalog path: uses system catalog queries, which do not cover
+   datashared objects across databases. #}
 {% macro _redshift__get_base_catalog_by_schema(database, schemas) -%}
     {%- call statement('base_catalog', fetch_result=True) -%}
         with
@@ -34,6 +45,19 @@
         order by "column_index"
     {%- endcall -%}
     {{ return(load_result('base_catalog').table) }}
+{%- endmacro %}
+
+
+{# Datasharing catalog path: uses SHOW TABLES plus SVV_REDSHIFT_COLUMNS because
+   system catalog queries cannot see shared cross-database objects. #}
+{% macro _redshift__get_base_catalog_by_schema_show(database, schemas) -%}
+    {% set columns_filter %}
+        {%- for schema in schemas -%}
+            schema_name = lower('{{ schema }}'){%- if not loop.last %} or {% endif -%}
+        {%- endfor -%}
+    {% endset %}
+
+    {{ return(_redshift__get_base_catalog_show(database, schemas, columns_filter)) }}
 {%- endmacro %}
 
 

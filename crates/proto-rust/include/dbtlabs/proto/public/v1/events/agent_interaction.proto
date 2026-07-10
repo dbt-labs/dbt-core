@@ -47,3 +47,59 @@ message AgentToolCallPermissionCheck {
   // and joining with backend ToolCalled events.
   string call_id = 8;
 }
+
+message AgentToolCallPresented {
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
+
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  string copilot_request_id = 3;
+  string thread_id = 4;
+  string tool_name = 5;
+  string call_id = 6;
+  string agent_mode = 7;
+  string skill_name = 8;          // populated only when tool_name = "load_dbt_skill"
+  int64 skills_available_count = 9;
+}
+
+// Fires when execution begins. A Started without a matching Completed indicates the tool ran but never returned.
+message AgentToolCallStarted {
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
+
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  string copilot_request_id = 3;
+  string thread_id = 4;
+  string tool_name = 5;
+  string call_id = 6;
+  string agent_mode = 7;
+  string skill_name = 8;
+  bool auto_allowed = 9;
+}
+
+// Possible values for AgentToolCallCompleted.status:
+//   "success" - tool ran to completion
+//   "error"   - tool returned an error
+//   "timeout" - tool exceeded its execution budget
+message AgentToolCallCompleted {
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
+
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  string copilot_request_id = 3;
+  string thread_id = 4;
+  string tool_name = 5;
+  string call_id = 6;
+  string agent_mode = 7;
+  string skill_name = 8;
+  string status = 9;
+  optional int64 output_length = 10;
+  optional string error_message = 11;
+  bool auto_allowed = 12;
+  // Server-generated id correlating to backend command execution.
+  // Populated only for invoke_dbt, run_autofix, run_dbt_index.
+  optional string command_id = 13;
+}

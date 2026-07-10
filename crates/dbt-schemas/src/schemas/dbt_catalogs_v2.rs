@@ -105,6 +105,9 @@ const HORIZON_SNOWFLAKE_FIELDS: &[FieldSpec] = &[
         .required()
         .non_empty()
         .doc("Non-empty external volume name registered in Snowflake."),
+    FieldSpec::string("catalog_database")
+        .non_empty()
+        .doc("Snowflake database where models using this catalog should land. When set, takes precedence over model database config and target.database."),
     FieldSpec::boolean("change_tracking"),
     FieldSpec::u32_max("data_retention_time_in_days", 90)
         .doc("Days to retain table data after deletion. Range 0–90."),
@@ -174,6 +177,9 @@ const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
 ];
 
 const UNITY_DATABRICKS_FIELDS: &[FieldSpec] = &[
+    FieldSpec::string("catalog_database")
+        .non_empty()
+        .doc("Name of the Databricks Unity Catalog to use as the database for models. When set, takes precedence over catalog name for database routing."),
     FieldSpec::enumerated("file_format", UNITY_DATABRICKS_FILE_FORMATS).required(),
     FieldSpec::string("location_root").non_empty(),
     FieldSpec::boolean("use_uniform")
@@ -189,6 +195,9 @@ const BIGLAKE_BIGQUERY_FIELDS: &[FieldSpec] = &[
         .non_empty()
         .doc("Cloud Storage bucket path (gs://<bucket_name>)."),
     FieldSpec::enumerated("file_format", BIGLAKE_FILE_FORMATS).required(),
+    FieldSpec::string("catalog_database")
+        .non_empty()
+        .doc("GCP project where models using this catalog should land. When set, takes precedence over model database config and target.database."),
     FieldSpec::string("base_location_root").non_empty(),
     FieldSpec::string("connection_id").non_empty(),
 ];
@@ -1582,13 +1591,13 @@ catalogs:
     config:
       snowflake:
         external_volume: my_external_volume
-        catalog_database: SOME_DB
+        auto_refresh: true
 "#;
         let res = parse_and_validate(yaml);
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("Unknown key 'catalog_database'"),
+            msg.contains("Unknown key 'auto_refresh'"),
             "unexpected error: {msg}"
         );
     }

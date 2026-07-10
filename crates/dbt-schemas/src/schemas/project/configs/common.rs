@@ -161,7 +161,7 @@ pub fn array_of_strings_eq(
     }
 }
 
-/// Compare optional tag fields with set semantics.
+/// Compare plain `Vec<String>` tag fields (e.g. `CommonAttributes.tags`) with set semantics.
 ///
 /// dbt-core builds tag lists by *concatenating* inherited tags (project + model +
 /// column + test level), which produces duplicates in the manifest — e.g. a column
@@ -174,20 +174,6 @@ pub fn array_of_strings_eq(
 /// Use this only for tag-shaped fields. For ordered/multiset fields like Python
 /// `packages` (where order or duplicates can be meaningful), use
 /// `array_of_strings_eq` instead.
-pub fn tags_eq(a: &Option<StringOrArrayOfStrings>, b: &Option<StringOrArrayOfStrings>) -> bool {
-    use std::collections::BTreeSet;
-    let to_set = |v: &Option<StringOrArrayOfStrings>| -> BTreeSet<String> {
-        match v {
-            None => BTreeSet::new(),
-            Some(StringOrArrayOfStrings::String(s)) => BTreeSet::from([s.clone()]),
-            Some(StringOrArrayOfStrings::ArrayOfStrings(arr)) => arr.iter().cloned().collect(),
-        }
-    };
-    to_set(a) == to_set(b)
-}
-
-/// Same set semantics as [`tags_eq`], for plain `Vec<String>` tag fields
-/// (e.g. `CommonAttributes.tags`). Same caveat: only use for tag-shaped fields.
 pub fn tags_eq_vec(a: &[String], b: &[String]) -> bool {
     use std::collections::BTreeSet;
     a.iter().cloned().collect::<BTreeSet<_>>() == b.iter().cloned().collect::<BTreeSet<_>>()
@@ -775,7 +761,7 @@ pub fn meta_eq(
 }
 
 /// Helper function to compare grants fields, treating Omitted and empty as equivalent
-pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
+pub fn grants_equal(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
     match (a.as_ref(), b.as_ref()) {
         (None, None) => true,
         (Some(a_val), Some(b_val)) => a_val == b_val,
@@ -796,7 +782,7 @@ pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
 /// Semantics: `same = (grants configured && unrendered_same) || rendered_same`.
 ///   1. If `grants` is configured (present in `unrendered_config`) on at least one side and the
 ///      configured (unrendered) values are equal, the grants are the same.
-///   2. Otherwise fall back to the rendered comparison ([`grants_eq`]).
+///   2. Otherwise fall back to the rendered comparison ([`grants_equal`]).
 ///
 /// The "present on at least one side" guard is important: unlike the warehouse-specific config
 /// (which compares a whole bundle of keys at once), `grants` is a single key, so an
@@ -804,9 +790,9 @@ pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
 /// treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core manifest that
 /// does not populate `unrendered_config.grants`) would be masked.
 ///
-/// This is strictly more lenient than [`grants_eq`] alone (it can only turn a rendered
+/// This is strictly more lenient than [`grants_equal`] alone (it can only turn a rendered
 /// "different" into "same"), preserving backward compatibility.
-pub fn grants_eq_with_unrendered(
+pub fn grants_equal_with_unrendered(
     a: &OmissibleGrantConfig,
     b: &OmissibleGrantConfig,
     self_unrendered_config: &BTreeMap<String, YmlValue>,
@@ -819,7 +805,7 @@ pub fn grants_eq_with_unrendered(
     {
         return true;
     }
-    grants_eq(a, b)
+    grants_equal(a, b)
 }
 
 /// Compare warehouse-specific configurations field by field
@@ -1801,53 +1787,9 @@ mod tests {
     }
 
     #[test]
-    fn test_tags_eq_ignores_duplicates_and_ordering() {
-        // Regression: dbt-core concatenates inherited tag lists (model + column +
-        // test level), producing duplicates in the manifest like ['weekly', 'weekly'].
-        // Fusion deduplicates. For state:modified parity, equality must be set-based.
-        let with_dupes = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-            "weekly".to_string(),
-        ]));
-        let dedup = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-        ]));
-        let single_string = Some(StringOrArrayOfStrings::String("weekly".to_string()));
-
-        assert!(tags_eq(&with_dupes, &dedup));
-        assert!(tags_eq(&dedup, &with_dupes));
-        assert!(tags_eq(&with_dupes, &single_string));
-        assert!(tags_eq(&single_string, &with_dupes));
-
-        // Order should also be ignored.
-        let abc = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "a".to_string(),
-            "b".to_string(),
-            "c".to_string(),
-        ]));
-        let cab = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "c".to_string(),
-            "a".to_string(),
-            "b".to_string(),
-        ]));
-        assert!(tags_eq(&abc, &cab));
-    }
-
-    #[test]
-    fn test_tags_eq_none_and_empty_array() {
-        // Same none/empty equivalence as array_of_strings_eq.
-        let none_val: Option<StringOrArrayOfStrings> = None;
-        let empty_array = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![]));
-
-        assert!(tags_eq(&none_val, &empty_array));
-        assert!(tags_eq(&empty_array, &none_val));
-        assert!(tags_eq(&none_val, &none_val));
-    }
-
-    #[test]
     fn test_tags_eq_vec_set_semantics() {
-        // Plain Vec<String> tag form (e.g. CommonAttributes.tags) — same set
-        // semantics as tags_eq. Saved queries store tags as Vec<String>.
+        // Plain Vec<String> tag form (e.g. CommonAttributes.tags) — set semantics
+        // (ordering and multiplicity ignored). Saved queries store tags as Vec<String>.
         let with_dupes = vec!["weekly".to_string(), "weekly".to_string()];
         let dedup = vec!["weekly".to_string()];
         assert!(tags_eq_vec(&with_dupes, &dedup));
@@ -1862,21 +1804,6 @@ mod tests {
         // Real differences still flagged
         let with_extra = vec!["weekly".to_string(), "critical".to_string()];
         assert!(!tags_eq_vec(&with_extra, &dedup));
-    }
-
-    #[test]
-    fn test_tags_eq_genuinely_different_tags() {
-        // Set semantics must still flag real differences as unequal.
-        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-            "critical".to_string(),
-        ]));
-        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-        ]));
-
-        assert!(!tags_eq(&left, &right));
-        assert!(!tags_eq(&right, &left));
     }
 
     fn uc(entries: &[(&str, YmlValue)]) -> BTreeMap<String, YmlValue> {
@@ -1911,7 +1838,7 @@ mod tests {
     }
 
     #[test]
-    fn test_grants_eq_with_unrendered_jinja_equal_ignores_rendered_diff() {
+    fn test_grants_equal_with_unrendered_jinja_equal_ignores_rendered_diff() {
         // Repro for dbt-core#15302 (grants sibling of #15263): an environment-aware grants
         // config renders to ["ANALYTICS_RMP"] on prod and [] elsewhere, but the unrendered
         // jinja string is identical -> not modified, even though the rendered grants differ.
@@ -1920,7 +1847,7 @@ mod tests {
         );
         let other_unrendered_config = self_unrendered_config.clone();
         // Rendered grants differ across targets.
-        assert!(grants_eq_with_unrendered(
+        assert!(grants_equal_with_unrendered(
             &grants(&["ANALYTICS_RMP"]),
             &grants(&[]),
             &self_unrendered_config,
@@ -1929,12 +1856,12 @@ mod tests {
     }
 
     #[test]
-    fn test_grants_eq_with_unrendered_detects_real_change() {
+    fn test_grants_equal_with_unrendered_detects_real_change() {
         // A genuine change to the configured (unrendered) grants must still be detected when
         // the rendered values also differ.
         let self_unrendered_config = uc_yaml("grants:\n  select: [ROLE_A]");
         let other_unrendered_config = uc_yaml("grants:\n  select: [ROLE_B]");
-        assert!(!grants_eq_with_unrendered(
+        assert!(!grants_equal_with_unrendered(
             &grants(&["ROLE_A"]),
             &grants(&["ROLE_B"]),
             &self_unrendered_config,
@@ -1943,17 +1870,17 @@ mod tests {
     }
 
     #[test]
-    fn test_grants_eq_with_unrendered_falls_back_to_rendered() {
+    fn test_grants_equal_with_unrendered_falls_back_to_rendered() {
         // When grants are not present in the unrendered config (absent on both sides), the
         // comparison falls back to the rendered values.
         let empty_uc: BTreeMap<String, YmlValue> = BTreeMap::new();
-        assert!(grants_eq_with_unrendered(
+        assert!(grants_equal_with_unrendered(
             &grants(&["ROLE_A"]),
             &grants(&["ROLE_A"]),
             &empty_uc,
             &empty_uc,
         ));
-        assert!(!grants_eq_with_unrendered(
+        assert!(!grants_equal_with_unrendered(
             &grants(&["ROLE_A"]),
             &grants(&["ROLE_B"]),
             &empty_uc,

@@ -17,10 +17,10 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use minijinja::arg_utils::ArgsIter;
-use minijinja::dispatch_object::DispatchObject;
+use minijinja::arg_utils::{ArgParser, ArgsIter};
+use minijinja::dispatch_object::{DispatchObject, macro_namespace_template_resolver};
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::Object;
+use minijinja::value::{Object, ValueKind, ValueMap, mutable_map::MutableMap};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 
 /// A namespace object for `{{ dbt.macro_name }}` (or
@@ -122,11 +122,36 @@ pub struct MacroLookupContext {
     pub current_project_name: Option<String>,
     /// The packages available in the project.
     pub packages: BTreeSet<String>,
+    /// Values written by user Jinja via `context.update(...)`.
+    local_values: Arc<MutableMap>,
 }
 
-impl Object for MacroLookupContext {
-    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match key.as_str()? {
+impl MacroLookupContext {
+    /// Create a new macro lookup context.
+    pub fn new(
+        root_project_name: String,
+        current_project_name: Option<String>,
+        packages: BTreeSet<String>,
+    ) -> Self {
+        Self {
+            root_project_name,
+            current_project_name,
+            packages,
+            local_values: Arc::new(MutableMap::new()),
+        }
+    }
+
+    fn with_current_project(&self, current_project_name: Option<String>) -> Self {
+        Self {
+            root_project_name: self.root_project_name.clone(),
+            current_project_name,
+            packages: BTreeSet::new(),
+            local_values: self.local_values.clone(),
+        }
+    }
+
+    fn get_context_value(&self, key: &Value) -> Option<Value> {
+        self.local_values.get(key).or_else(|| match key.as_str()? {
             // NOTE(serramatutu): In Core, the following non-macro keys are
             // all members of `MacroLookupContext`. They can technically be
             // used (the usage is undocumented and not encouraged):
@@ -137,29 +162,158 @@ impl Object for MacroLookupContext {
             // avoid polluting this scope and sticking as faithfully as
             // possible to the "intended" behavior (only looking up macros).
             "project_name" => Some(Value::from(self.root_project_name.clone())),
+            _ => None,
+        })
+    }
 
-            lookup_macro => {
-                if self.packages.contains(lookup_macro) {
-                    Some(Value::from_object(MacroLookupContext {
-                        root_project_name: self.root_project_name.clone(),
-                        current_project_name: Some(lookup_macro.to_string()),
-                        packages: BTreeSet::new(),
-                    }))
-                } else {
-                    Some(Value::from_object(DispatchObject {
-                        macro_name: lookup_macro.to_string(),
-                        package_name: self.current_project_name.clone(),
-                        strict: self.current_project_name.is_some(),
-                        auto_execute: false,
-                        // TODO: If the macro uses a recursive context (i.e.
-                        // context['self']) we will stack overflow but there
-                        // is no way to conjure up a context object here
-                        // without access to State.
-                        context: None,
-                    }))
-                }
-            }
+    fn get_package_context(&self, key: &Value) -> Option<Value> {
+        let package_name = key.as_str()?;
+        self.packages
+            .contains(package_name)
+            .then(|| Value::from_object(self.with_current_project(Some(package_name.to_string()))))
+    }
+
+    fn get_macro_from_state(
+        &self,
+        state: &State<'_, '_>,
+        key: &Value,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Option<Value> {
+        if self.current_project_name.is_some() {
+            return None;
         }
+        let macro_name = key.as_str()?;
+        let template_name = macro_namespace_template_resolver(state, macro_name, &mut Vec::new())?;
+        self.dispatch_object_for_template(&template_name, state, listeners)
+    }
+
+    fn get_macro_from_current_project(
+        &self,
+        state: &State<'_, '_>,
+        key: &Value,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Option<Value> {
+        let package_name = self.current_project_name.as_ref()?;
+        let macro_name = key.as_str()?;
+        let template_name = format!("{package_name}.{macro_name}");
+        state.env().get_template(&template_name).ok()?;
+        self.dispatch_object_for_template(&template_name, state, listeners)
+    }
+
+    fn dispatch_object_for_template(
+        &self,
+        template_name: &str,
+        state: &State<'_, '_>,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Option<Value> {
+        listeners
+            .iter()
+            .for_each(|listener| listener.on_macro_dependency(template_name));
+        let (package_name, macro_name) = template_name.split_once('.')?;
+
+        Some(Value::from_object(DispatchObject {
+            macro_name: macro_name.to_string(),
+            package_name: Some(package_name.to_string()),
+            strict: true,
+            auto_execute: false,
+            context: Some(state.get_base_context()),
+        }))
+    }
+
+    fn update_local_values(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let parser = ArgParser::new(args, None);
+        let num_pos_args = parser.positional_len();
+        if num_pos_args > 1 {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::TooManyArguments,
+                format!(
+                    "update() takes at most one positional argument, but {} were given",
+                    num_pos_args
+                ),
+            ));
+        }
+
+        let mut entries = ValueMap::new();
+        let pos_args = parser.get_args_as_vec_of_values();
+        if let Some(other) = pos_args.first() {
+            entries.extend(dict_update_entries(other)?);
+        }
+
+        for (key, value) in parser.get_kwargs_as_value_map() {
+            entries.insert(key, value);
+        }
+
+        self.local_values.update(&entries);
+        Ok(Value::NONE)
+    }
+}
+
+fn dict_update_entries(other: &Value) -> Result<ValueMap, MinijinjaError> {
+    if other.kind() == ValueKind::Map
+        && let Some(entries) = other.as_object().and_then(|obj| obj.try_iter_pairs())
+    {
+        return Ok(entries.collect());
+    }
+
+    let mut entries = ValueMap::new();
+    let iter = other.try_iter().map_err(|_| {
+        MinijinjaError::new(
+            MinijinjaErrorKind::CannotUnpack,
+            "update() expects a mapping or iterable of pairs",
+        )
+    })?;
+    for entry in iter {
+        let mut pair = entry.try_iter().map_err(|_| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::CannotUnpack,
+                "update() sequence element is not iterable",
+            )
+        })?;
+        let key = pair.next().ok_or_else(|| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::CannotUnpack,
+                "update() sequence element has length 0; 2 is required",
+            )
+        })?;
+        let value = pair.next().ok_or_else(|| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::CannotUnpack,
+                "update() sequence element has length 1; 2 is required",
+            )
+        })?;
+        if pair.next().is_some() {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::CannotUnpack,
+                "update() sequence element has length greater than 2; 2 is required",
+            ));
+        }
+        entries.insert(key, value);
+    }
+    Ok(entries)
+}
+
+impl Object for MacroLookupContext {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        self.get_context_value(key).or_else(|| {
+            let lookup_macro = key.as_str()?;
+            if self.packages.contains(lookup_macro) {
+                Some(Value::from_object(
+                    self.with_current_project(Some(lookup_macro.to_string())),
+                ))
+            } else {
+                Some(Value::from_object(DispatchObject {
+                    macro_name: lookup_macro.to_string(),
+                    package_name: self.current_project_name.clone(),
+                    strict: self.current_project_name.is_some(),
+                    auto_execute: false,
+                    // TODO: If the macro uses a recursive context (i.e.
+                    // context['self']) we will stack overflow but there
+                    // is no way to conjure up a context object here
+                    // without access to State.
+                    context: None,
+                }))
+            }
+        })
     }
 
     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
@@ -186,10 +340,14 @@ impl Object for MacroLookupContext {
                 iter.finish()?;
 
                 Ok(self
-                    .get_value(key)
+                    .get_context_value(key)
+                    .or_else(|| self.get_package_context(key))
+                    .or_else(|| self.get_macro_from_current_project(state, key, listeners))
+                    .or_else(|| self.get_macro_from_state(state, key, listeners))
                     .or_else(|| default.cloned())
                     .unwrap_or(Value::from(None::<Value>)))
             }
+            "update" => self.update_local_values(args),
             _ => {
                 if let Some(value) = self.get_value(&Value::from(method)) {
                     return value.call(state, args, listeners);

@@ -8,10 +8,11 @@ use dbt_schemas::schemas::{
     packages::{DbtPackageEntry, LocalPackage},
     project::DbtProjectNameOnly,
 };
+use normalize_path::NormalizePath;
 use sha1::Digest;
 
 use dbt_common::{
-    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs, tokiofs,
+    ErrorCode, FsResult, constants::DBT_PROJECT_YML, fs_err, io_args::IoArgs, tokiofs,
 };
 
 const DEFAULT_DEPS_MAX_CONCURRENCY: usize = 8;
@@ -155,6 +156,31 @@ pub fn scrub_package_name_secret_env_vars(package_name: &str) -> Option<Cow<'_, 
     }
 }
 
+/// Build the error raised when a package's `dbt_project.yml` cannot be found.
+///
+/// `checkout_path` is the resolved package directory (which may contain `..`
+/// segments, e.g. `.../datahub/../common`). It is normalized lexically so the
+/// reported path is readable; we normalize rather than canonicalize because a
+/// genuinely-missing directory cannot be canonicalized. `dir_exists` selects
+/// between "directory missing entirely" and "directory present but missing
+/// `dbt_project.yml`".
+fn missing_dbt_project_error(checkout_path: &Path, dir_exists: bool) -> Box<dbt_common::FsError> {
+    let normalized = checkout_path.normalize();
+    if dir_exists {
+        fs_err!(
+            ErrorCode::IoError,
+            "Package does not contain a dbt_project.yml file: {}. Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml.",
+            normalized.display()
+        )
+    } else {
+        fs_err!(
+            ErrorCode::IoError,
+            "Package directory not found: {}. Verify that each entry within packages.yml (and their transitive dependencies) points to a directory containing a dbt_project.yml file.",
+            normalized.display()
+        )
+    }
+}
+
 pub async fn read_and_validate_dbt_project(
     io: &IoArgs,
     checkout_path: &Path,
@@ -164,11 +190,12 @@ pub async fn read_and_validate_dbt_project(
 ) -> FsResult<DbtProject> {
     let path_to_dbt_project = checkout_path.join(DBT_PROJECT_YML);
     if !tokiofs::path_exists(&path_to_dbt_project).await {
-        return err!(
-            ErrorCode::IoError,
-            "Package does not contain a dbt_project.yml file: {}",
-            checkout_path.display()
-        );
+        // Distinguish "the package directory is missing entirely" from "the
+        // directory exists but has no dbt_project.yml", so a co-location
+        // problem (e.g. a `local:` package source dir not present) is not
+        // misreported as a missing project file.
+        let dir_exists = tokiofs::path_exists(checkout_path).await;
+        return Err(missing_dbt_project_error(checkout_path, dir_exists));
     }
 
     // Try to deserialize only the package name for error reporting,
@@ -249,6 +276,46 @@ pub fn sanitize_git_url(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_dbt_project_error_normalizes_dotdot_in_path() {
+        // `.../datahub/../common` should be reported as the resolved
+        // `.../common`, not verbatim with the `..` segment.
+        let checkout_path = Path::new("/repo/datahub/../common");
+        let err = missing_dbt_project_error(checkout_path, true);
+        let msg = err.to_string();
+        // Build the expected path via `normalize()` so the comparison uses the
+        // platform's path separator (`/repo/common` on Unix, `\repo\common` on
+        // Windows) rather than hard-coded forward slashes.
+        let expected = checkout_path.normalize().display().to_string();
+        assert!(
+            msg.contains(&expected),
+            "expected normalized path in message, got: {msg}"
+        );
+        assert!(!msg.contains(".."), "path should be normalized, got: {msg}");
+    }
+
+    #[test]
+    fn missing_dbt_project_error_reports_missing_project_file_when_dir_exists() {
+        let err = missing_dbt_project_error(Path::new("/repo/common"), true);
+        let msg = err.to_string();
+        assert!(
+            msg.contains("does not contain a dbt_project.yml file"),
+            "got: {msg}"
+        );
+        assert!(!msg.contains("directory not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn missing_dbt_project_error_reports_missing_directory_when_dir_absent() {
+        let err = missing_dbt_project_error(Path::new("/repo/does_not_exist"), false);
+        let msg = err.to_string();
+        assert!(msg.contains("Package directory not found"), "got: {msg}");
+        assert!(
+            !msg.contains("does not contain a dbt_project.yml file"),
+            "got: {msg}"
+        );
+    }
 
     #[test]
     fn test_sanitize_git_url_basic_credentials() {

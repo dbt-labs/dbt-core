@@ -12,7 +12,7 @@ pub struct IdentityResponse {
 
 pub async fn get_identity(State(state): State<SharedState>) -> Json<IdentityResponse> {
     Json(IdentityResponse {
-        is_logged_in: false,
+        is_logged_in: state.telemetry_hydration().is_logged_in,
         analytics_enabled: !state.do_not_track && state.send_anonymous_usage_stats,
     })
 }

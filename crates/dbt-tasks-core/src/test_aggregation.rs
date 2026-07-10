@@ -334,35 +334,7 @@ fn create_aggregated_test(
         namespace: None,
     };
 
-    let model_json = serde_json::to_value(model).map_err(|e| {
-        fs_err!(
-            ErrorCode::Unexpected,
-            "Failed to serialize aggregated test model argument: {}",
-            e
-        )
-    })?;
-    if model_json.is_object() {
-        return Err(fs_err!(
-            ErrorCode::Unexpected,
-            "Aggregated test arguments do not support object values"
-        ));
-    }
-    let column_names_json = serde_json::to_value(columns).map_err(|e| {
-        fs_err!(
-            ErrorCode::Unexpected,
-            "Failed to serialize aggregated test column_names argument: {}",
-            e
-        )
-    })?;
-    let jinja_set_vars = std::collections::BTreeMap::new();
-    let model_arg = format_value_for_jinja(&model_json, &jinja_set_vars);
-    let column_names_arg = format_value_for_jinja(&column_names_json, &jinja_set_vars);
-    let alias_arg =
-        serde_json::to_string(test_group_name).expect("string serialization should not fail");
-    let raw_code = format!(
-        "{{{{ test_{macro_name}(model={model_arg}, column_names={column_names_arg}) }}}}{{{{ config(alias={alias_arg}) }}}}",
-        macro_name = test_metadata.name,
-    );
+    let raw_code = build_aggregated_raw_code(&test_metadata.name, model, columns, test_group_name)?;
 
     // write SQL to target so render_sql_instruction can read it
     if let Some(parent) = absolute_path.parent() {
@@ -395,6 +367,42 @@ fn create_aggregated_test(
     test.__test_attr__.test_metadata = Some(test_metadata);
 
     Ok(test)
+}
+
+fn build_aggregated_raw_code(
+    test_name: &str,
+    model: &dbt_yaml::Value,
+    columns: &[String],
+    alias: &str,
+) -> FsResult<String> {
+    let model_json = serde_json::to_value(model).map_err(|e| {
+        fs_err!(
+            ErrorCode::Unexpected,
+            "Failed to serialize aggregated test model argument: {}",
+            e
+        )
+    })?;
+    if model_json.is_object() {
+        return Err(fs_err!(
+            ErrorCode::Unexpected,
+            "Aggregated test arguments do not support object values"
+        ));
+    }
+    let column_names_json = serde_json::to_value(columns).map_err(|e| {
+        fs_err!(
+            ErrorCode::Unexpected,
+            "Failed to serialize aggregated test column_names argument: {}",
+            e
+        )
+    })?;
+    let jinja_set_vars = std::collections::BTreeMap::new();
+    let model_arg = format_value_for_jinja(&model_json, &jinja_set_vars);
+    let column_names_arg = format_value_for_jinja(&column_names_json, &jinja_set_vars);
+    let alias_arg = serde_json::to_string(alias).expect("string serialization should not fail");
+
+    Ok(format!(
+        "{{{{ test_{test_name}(model={model_arg}, column_names={column_names_arg}) }}}}{{{{ config(alias={alias_arg}) }}}}",
+    ))
 }
 
 #[cfg(test)]
@@ -487,26 +495,24 @@ mod tests {
     #[test]
     fn aggregated_raw_code_escapes_alias_as_string_literal() {
         let template = test_node("test.pkg.not_null_orders_id", "not_null", "id");
-        let temp_dir = tempfile::tempdir().expect("temp dir");
-        let io = dbt_common::io_args::IoArgs {
-            out_dir: temp_dir.path().to_path_buf(),
-            ..Default::default()
-        };
-
-        let test = create_aggregated_test(
+        let template_metadata = template
+            .__test_attr__
+            .test_metadata
+            .as_ref()
+            .expect("test metadata");
+        let model = template_metadata.kwargs.get("model").expect("model");
+        let columns = ["id".to_string()];
+        let raw_code = build_aggregated_raw_code(
+            "aggregated_not_null",
+            model,
+            &columns,
             "aggregated_not_null_orders\" }}{{ var('secret') }}{{ \"",
-            "test.pkg.aggregated_not_null_orders",
-            &template,
-            &["id".to_string()],
-            &io,
         )
-        .expect("aggregated test");
+        .expect("raw code");
 
         assert_eq!(
-            test.__common_attr__.raw_code.as_deref(),
-            Some(
-                "{{ test_aggregated_not_null(model=get_where_subquery(ref('orders')), column_names=[\"id\"]) }}{{ config(alias=\"aggregated_not_null_orders\\\" }}{{ var('secret') }}{{ \\\"\") }}"
-            )
+            raw_code,
+            "{{ test_aggregated_not_null(model=get_where_subquery(ref('orders')), column_names=[\"id\"]) }}{{ config(alias=\"aggregated_not_null_orders\\\" }}{{ var('secret') }}{{ \\\"\") }}"
         );
     }
 

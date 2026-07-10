@@ -382,7 +382,7 @@ mod tests {
     use super::*;
     use crate::service_config::DEFAULT_OAUTH_AUTH_URL;
     use async_trait::async_trait;
-    use dbt_platform_auth::resolver::{AuthResolver, EnvVarResolver};
+    use dbt_platform_auth::resolver::{AuthResolver, CloudYamlResolver};
     use jsonwebtoken::{EncodingKey, Header, encode};
     use serde::Serialize;
     use std::sync::Mutex as StdMutex;
@@ -398,64 +398,44 @@ mod tests {
         AuthChain::new(vec![])
     }
 
-    /// Builds an `AuthChain` containing only `EnvVarResolver`. Pair with a
-    /// `DbtCloudEnvGuard` so the env vars consumed by the resolver are scoped
-    /// to the test.
-    fn env_var_auth_chain() -> AuthChain {
-        AuthChain::new(vec![AuthResolver::EnvVar(EnvVarResolver)])
-    }
-
-    /// Serializes any test that mutates `DBT_CLOUD_*` env vars.
-    static TEST_ENV_LOCK: StdMutex<()> = StdMutex::new(());
-
-    /// RAII helper that sets `DBT_CLOUD_*` env vars (consumed by
-    /// `EnvVarResolver`) for the duration of a test, holding `TEST_ENV_LOCK`
-    /// to prevent races, and restoring any prior values on drop so the host
-    /// process's environment is left untouched.
-    struct DbtCloudEnvGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-        prior: [(&'static str, Option<String>); 3],
-    }
-
-    impl DbtCloudEnvGuard {
-        fn new(token: &str, host: &str, account_id: &str) -> Self {
-            let lock = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            let prior = [
-                ("DBT_CLOUD_TOKEN", std::env::var("DBT_CLOUD_TOKEN").ok()),
-                (
-                    "DBT_CLOUD_ACCOUNT_HOST",
-                    std::env::var("DBT_CLOUD_ACCOUNT_HOST").ok(),
-                ),
-                (
-                    "DBT_CLOUD_ACCOUNT_ID",
-                    std::env::var("DBT_CLOUD_ACCOUNT_ID").ok(),
-                ),
-            ];
-            unsafe {
-                #[allow(clippy::disallowed_methods)]
-                std::env::set_var("DBT_CLOUD_TOKEN", token);
-                #[allow(clippy::disallowed_methods)]
-                std::env::set_var("DBT_CLOUD_ACCOUNT_HOST", host);
-                #[allow(clippy::disallowed_methods)]
-                std::env::set_var("DBT_CLOUD_ACCOUNT_ID", account_id);
-            }
-            Self { _lock: lock, prior }
-        }
-    }
-
-    impl Drop for DbtCloudEnvGuard {
-        fn drop(&mut self) {
-            for (name, value) in &self.prior {
-                unsafe {
-                    match value {
-                        #[allow(clippy::disallowed_methods)]
-                        Some(v) => std::env::set_var(name, v),
-                        #[allow(clippy::disallowed_methods)]
-                        None => std::env::remove_var(name),
-                    }
-                }
-            }
-        }
+    /// Writes a `dbt_cloud.yml` into `dir` describing the given platform
+    /// credential and returns an `AuthChain` that resolves it via
+    /// `CloudYamlResolver`.
+    ///
+    /// This feeds the credential through a file rather than `DBT_CLOUD_*`
+    /// process env vars on purpose: mutating the environment from a test is
+    /// unsound in the multi-threaded test binary (`std::env::set_var` races
+    /// with any other thread reading the environment — e.g. a concurrent
+    /// `reqwest::Client` build), which made unrelated auth tests flaky.
+    fn cloud_yaml_auth_chain(
+        dir: &TempDir,
+        token: &str,
+        host: &str,
+        account_id: &str,
+    ) -> AuthChain {
+        let cloud_path = dir.path().join("dbt_cloud.yml");
+        let yaml = format!(
+            r#"version: "1"
+context:
+  active-project: "test-project"
+  active-host: "{host}"
+projects:
+  - project-name: "Test Project"
+    project-id: "test-project"
+    account-name: "acme"
+    account-id: "{account_id}"
+    account-host: "{host}"
+    token-name: "test-token"
+    token-value: "{token}"
+"#
+        );
+        std::fs::write(&cloud_path, yaml).unwrap();
+        AuthChain::new(vec![AuthResolver::CloudYaml(CloudYamlResolver {
+            path: Some(cloud_path),
+            // Point at a path that does not exist so no ambient `dbt_project.yml`
+            // in the working directory can influence resolution.
+            dbt_project_path: Some(dir.path().join("no_dbt_project.yml")),
+        })])
     }
 
     fn make_jwt(scope: &str) -> String {
@@ -953,15 +933,15 @@ mod tests {
             .mount(&server)
             .await;
 
-        let _env = DbtCloudEnvGuard::new("dbtc_platform_token", "ab123.us1.dbt.com", "42");
-
         let dir = TempDir::new().unwrap();
+        let auth_chain =
+            cloud_yaml_auth_chain(&dir, "dbtc_platform_token", "ab123.us1.dbt.com", "42");
         let config = config_with(&server.uri(), None, Some("dev"));
         let source = OAuthTokenSource::with_components(
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            env_var_auth_chain(),
+            auth_chain,
         )
         .unwrap();
 
@@ -1016,16 +996,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let _env = DbtCloudEnvGuard::new("dbtc_platform_token", "ab123.us1.dbt.com", "42");
-
         let dir = TempDir::new().unwrap();
+        let auth_chain =
+            cloud_yaml_auth_chain(&dir, "dbtc_platform_token", "ab123.us1.dbt.com", "42");
         let config = config_with(&server.uri(), None, Some("dev"));
         // FakeFlow would error if reached — exchange failure must propagate, not fall back.
         let source = OAuthTokenSource::with_components(
             &config,
             token_store_in(&dir),
             FakeFlow::new(vec![]),
-            env_var_auth_chain(),
+            auth_chain,
         )
         .unwrap();
 

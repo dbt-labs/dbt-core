@@ -272,6 +272,7 @@ pub fn resolve_yaml_depends_on(
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from(relative_path),
+            &PathBuf::new(),
             io_args,
             global_static_analysis,
         ));

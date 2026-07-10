@@ -3,7 +3,7 @@ use dbt_common::tracing::{FsTraceConfig, dbt_init::init_tracing};
 use dbt_features::cli::DefaultCliParserFactory;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::tracing::TracingFeature;
-use dbt_lib::print_trimmed_error;
+use dbt_main::print_trimmed_error;
 
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 fn main() -> ExitCode {
     let version = env!("CARGO_PKG_VERSION");
     let cli_parser = DefaultCliParserFactory.create("dbt-core", version);
-    let cli = dbt_lib::prepare_cli_or_exit(&cli_parser);
+    let cli = dbt_main::prepare_cli_or_exit(&cli_parser);
 
     let mut arg = from_main(&cli);
 
@@ -48,5 +48,5 @@ fn main() -> ExitCode {
             .build()
             .into();
 
-    dbt_lib::run_cli(cli, arg, feature_stack)
+    dbt_main::run_cli(cli, arg, feature_stack)
 }

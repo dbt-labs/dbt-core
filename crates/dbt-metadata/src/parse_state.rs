@@ -1602,6 +1602,12 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
             !pkg.package_root_path
                 .components()
                 .any(|c| c.as_os_str() == "dbt_internal_packages")
+                // The inline ("") package holds the transient --inline SQL asset. It is
+                // reconstructed fresh by `prepare_inline_sql` on every run (its temp file is
+                // regenerated with a new uuid), so it must not be persisted to the cache —
+                // otherwise the incremental path would restore a stale, empty "" stub and the
+                // fresh injection would create a duplicate "" package.
+                && !pkg.dbt_project.name.is_empty()
         })
         .map(|(i, pkg)| {
             let all_paths: HashMap<ResourcePathKind, Vec<(String, u64)>> = pkg
@@ -1641,6 +1647,7 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
 mod tests {
     use super::*;
     use crate::index_resolution::resolve_dirty_unique_ids_from_index;
+    use dbt_schemas::state::DbtAsset;
     use minijinja::machinery::Span;
     use tempfile::TempDir;
 
@@ -2181,7 +2188,6 @@ mod tests {
             seed_files: vec![],
             docs_files: vec![],
             snapshot_files: vec![],
-            inline_file: None,
             dependencies: BTreeSet::new(),
             all_paths: HashMap::new(),
             embedded_file_contents: None,
@@ -2204,11 +2210,24 @@ mod tests {
             seed_files: vec![],
             docs_files: vec![],
             snapshot_files: vec![],
-            inline_file: None,
             dependencies: BTreeSet::new(),
             all_paths: HashMap::new(),
             embedded_file_contents: Some(HashMap::new()),
             raw_project_yml: dbt_yaml::Value::default(),
+        }
+    }
+
+    fn make_inline_package(out_dir: &Path) -> DbtPackage {
+        let asset = DbtAsset {
+            base_path: out_dir.to_path_buf(),
+            path: PathBuf::from("inline_00000000.sql"),
+            original_path: PathBuf::from("inline_00000000.sql"),
+            package_name: String::new(),
+        };
+        DbtPackage {
+            package_root_path: out_dir.to_path_buf(),
+            model_sql_files: vec![asset],
+            ..DbtPackage::default()
         }
     }
 
@@ -2245,6 +2264,29 @@ mod tests {
             snaps.iter().all(|s| s.package_name != "dbt_utils"),
             "internal package must be excluded"
         );
+    }
+
+    /// snapshot_packages must exclude the inline ("") package. It holds the
+    /// transient --inline SQL asset which is regenerated (with a fresh uuid) on
+    /// every run, so persisting it would cause a stale, empty "" stub to be
+    /// restored on the incremental path while `prepare_inline_sql` injects a
+    /// fresh one — producing a duplicate "" package.
+    #[test]
+    fn snapshot_packages_excludes_inline_package() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        let user = make_user_package(root, "my_project");
+        let inline = make_inline_package(root);
+
+        let snaps = snapshot_packages(&[user, inline]);
+
+        assert_eq!(
+            snaps.len(),
+            1,
+            "the inline package must be excluded from the parquet snapshot"
+        );
+        assert_eq!(snaps[0].package_name, "my_project");
     }
 
     /// After a round-trip through snapshot_packages + reconstruct_package_metadata,

@@ -5,7 +5,7 @@ use crate::schemas::manifest::nodes_from_dbt_manifest;
 use crate::schemas::project::configs::common::{log_state_mod_diff, unrendered_value_eq};
 use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{
-    InternalDbtNode, Nodes, nodes::DbtModel, nodes::DbtTest,
+    InternalDbtNode, Nodes, nodes::DBTTEST_CONFIG_MODIFIERS, nodes::DbtModel, nodes::DbtTest,
     nodes::is_invalid_for_relation_comparison, nodes::same_persisted_description,
 };
 use dbt_adapter_core::AdapterType;
@@ -562,18 +562,26 @@ impl StateArtifacts {
         };
 
         let rt = current_node.resource_type(); // also the type of previous_node
-        if matches!(rt, NodeType::Model | NodeType::Source) {
-            // Approach A — wholesale unrendered comparison (models and sources).
+        if matches!(
+            rt,
+            NodeType::Model
+                | NodeType::Source
+                | NodeType::Seed
+                | NodeType::Snapshot
+                | NodeType::Test
+        ) {
+            // Approach A — full `unrendered_config`  comparison (models, sources, seeds, snapshots,
+            // and data tests).
             //
             // For these node types, `unrendered_config` is populated with every authored key, so
             // comparing the raw Jinja strings is an authoritative authoring-intent check: identical
             // strings across targets means the author changed nothing, even if the rendered values
             // differ per target (e.g. `"{{ 'table' if target.name == 'prod' else 'view' }}"`).
             //
-            // Stage 1: if every key in `unrendered_config` is equal (apart from the per-type
-            // excluded keys; see `excluded_unrendered_config_keys`), the node is not
-            // config-modified — return early without touching rendered values.
-            if wholesale_unrendered_configs_eq(
+            // Stage 1: if every `unrendered_config` key that is relevant for the node type (see
+            // `UnrenderedKeyRelevance`) is equal, the node is not config-modified — return early
+            // without touching rendered values.
+            if unrendered_configs_eq(
                 rt,
                 &previous_node.base().unrendered_config,
                 &current_node.base().unrendered_config,
@@ -589,14 +597,14 @@ impl StateArtifacts {
             return !current_node.has_same_config(previous_node, adapter_type);
         }
 
-        // Approach B — surgical per-key unrendered comparisons (all other node kinds).
+        // Approach B — surgical per-key unrendered comparisons (remaining node kinds: unit
+        // tests, exposures, functions, analyses, groups).
         //
-        // For seeds, snapshots, data tests, and other node types, `unrendered_config` may be
-        // incomplete, so the wholesale shortcut above is unsound. Instead, each node type's
-        // `has_same_config` implementation contains targeted unrendered comparisons for the
-        // specific keys where env-aware Jinja is known to appear (e.g. `grants`,
-        // warehouse-specific config). A new false positive for those types requires a new
-        // per-key fix; the wholesale approach cannot yet be applied to them.
+        // For these node types, `unrendered_config` may be incomplete, so the full-`unrendered_config` shortcut
+        // above is unsound. Instead, each node type's `has_same_config` implementation contains
+        // targeted unrendered comparisons for the specific keys where env-aware Jinja is known to
+        // appear. A new false positive for those types requires a new per-key fix; the wholesale
+        // approach cannot yet be applied to them.
         !current_node.has_same_config(previous_node, adapter_type)
     }
 
@@ -818,23 +826,15 @@ impl StateArtifacts {
 ///
 /// Roughly, the configs must have the same pre-rendering Jinja contents, but certain variations
 /// are considered insignificant: key spelling (`pre_hook`/`pre-hook`; see [`canonicalize_hook_keys`])
-/// and whitespace/emptiness (see [`unrendered_value_eq`]). Keys returned by
-/// [`excluded_unrendered_config_keys`] for this node type are skipped entirely.
-///
-/// This mirrors dbt-core's `BaseConfig.same_contents`, which treats a node as config-modified iff
-/// any config key present on either side differs — EXCEPT keys whose config-class field is marked
-/// `CompareBehavior.Exclude`. (Engine: dbt-common
-/// <https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/contracts/config/base.py> —
-/// `same_contents` iterates declared `Include` fields *plus* every extra key via
-/// `chain(unrendered, other)`, with `CompareBehavior` defaulting to `Include`.) The per-type
-/// exclusion sets, and why each key is excluded, live in [`excluded_unrendered_config_keys`].
-fn wholesale_unrendered_configs_eq(
+/// and whitespace/emptiness (see [`unrendered_value_eq`]).
+/// Which keys are compared at all depends on the node type's [`UnrenderedKeyRelevance`].
+fn unrendered_configs_eq(
     node_type: NodeType,
     previous_uc: &std::collections::BTreeMap<String, dbt_yaml::Value>,
     current_uc: &std::collections::BTreeMap<String, dbt_yaml::Value>,
     unique_id: &str,
 ) -> bool {
-    let excluded = excluded_unrendered_config_keys(node_type);
+    let relevance = UnrenderedKeyRelevance::for_node_type(node_type);
 
     let previous = canonicalize_hook_keys(previous_uc);
     let current = canonicalize_hook_keys(current_uc);
@@ -847,7 +847,7 @@ fn wholesale_unrendered_configs_eq(
 
     let mut all_eq = true;
     for key in all_keys {
-        if excluded.contains(&key) {
+        if !relevance.key_is_relevant(key) {
             continue;
         }
         let a = previous.get(key);
@@ -868,44 +868,79 @@ fn wholesale_unrendered_configs_eq(
     all_eq
 }
 
-/// Config keys that must NOT count as a config modification in the wholesale comparison, per node
-/// type. This is the per-type counterpart of dbt-core's `CompareBehavior.Exclude` metadata.
-///
-/// A key is excluded for one of two reasons:
-/// - *Parity-exclude*: dbt-core does not treat the key as a config modification at all, and checks
-///   it nowhere else — so neither do we.
-/// - *Ownership-exclude*: the key IS a modification, but in Fusion's decomposition it is owned by a
-///   sibling sub-check (relation identity → `check_relation_modified`, mirroring dbt-core's separate
-///   `same_database_representation`). Excluding it here only avoids double-counting; the correctness
-///   claim is that the *union* of `is_modified`'s sub-checks equals dbt-core's comparison.
-fn excluded_unrendered_config_keys(node_type: NodeType) -> &'static [&'static str] {
-    match node_type {
-        // Models, seeds, snapshots, and data tests: their config classes all derive from dbt-core's
-        // `NodeAndTestConfig`, whose `CompareBehavior.Exclude` fields are exactly these five
-        // (core/dbt/artifacts/resources/v1/config.py @ v1.10.0; `ModelConfig`/`SeedConfig`/
-        // `SnapshotConfig`/`TestConfig` add no further `Exclude` fields).
-        NodeType::Model | NodeType::Seed | NodeType::Snapshot | NodeType::Test => {
-            &[
-                "tags", "group", // parity-excludes
-                "schema", "database",
-                "alias", // ownership-excludes, counted in `check_relation_modified`
-            ]
+/// Which `unrendered_config` keys are *relevant* to the config-modified comparison for a given node
+/// type. It encodes the two dbt-core comparison methods as one of two explicit rules:
+/// - `Denylist` (models, seeds, snapshots, sources) mirrors dbt-core's `BaseConfig.same_contents`,
+///   which treats a node as config-modified iff any config key present on either side differs,
+///   EXCEPT keys whose config-class field is marked `CompareBehavior.Exclude`.
+///   (<https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/contracts/config/base.py>)
+/// - `Allowlist` (data tests) corresponds to dbt-core's `TestConfig.same_contents`, a bespoke
+///   override that ignores `CompareBehavior` and treats ONLY a fixed set of modifier keys as
+///   relevant.
+enum UnrenderedKeyRelevance {
+    ///  Every key present on either side is relevant EXCEPT these. (Core's `BaseConfig.same_contents`)
+    Denylist(&'static [&'static str]),
+    /// ONLY these keys are relevant; everything else is ignored. (Core's `TestConfig.same_contents`)
+    Allowlist(&'static [&'static str]),
+}
+
+impl UnrenderedKeyRelevance {
+    fn for_node_type(node_type: NodeType) -> Self {
+        match node_type {
+            NodeType::Test => Self::Allowlist(DBTTEST_CONFIG_MODIFIERS),
+            _ => Self::Denylist(Self::base_config_excluded_keys(node_type)),
         }
-        // Sources: dbt-core's `SourceConfig` marks nothing `Exclude`, but what counts as a source
-        // change is defined by `SourceDefinition.same_contents`
-        // (core/dbt/contracts/graph/nodes.py @ v1.10.0), which deliberately ignores tags
-        // ("metadata/tags changes are not changes") and compares relation identity separately via
-        // `same_database_representation`.
-        NodeType::Source => {
-            &[
-                "tags", // parity-exclude
-                "schema", "database",
-                "alias", // ownership-excludes, counted in `check_relation_modified`
-            ]
+    }
+
+    /// Is `key` relevant to the comparison under this rule?
+    fn key_is_relevant(&self, key: &str) -> bool {
+        match self {
+            UnrenderedKeyRelevance::Denylist(excluded) => !excluded.contains(&key),
+            UnrenderedKeyRelevance::Allowlist(allowed) => allowed.contains(&key),
         }
-        // Other node types do not yet take the wholesale path (see `check_configs_modified`); exclude
-        // nothing rather than guess.
-        _ => &[],
+    }
+
+    /// Config keys that must NOT count as a config modification under a `Denylist`
+    /// (models/seeds/snapshots/sources) — the per-type counterpart of dbt-core's
+    /// `CompareBehavior.Exclude` metadata.
+    ///
+    /// A key is excluded for one of two reasons:
+    /// - *Parity-exclude*: dbt-core does not treat the key as a config modification at all, and
+    ///   checks it nowhere else — so neither do we.
+    /// - *Ownership-exclude*: the key IS a modification, but in Fusion's decomposition it is owned
+    ///   by a sibling sub-check (relation identity → `check_relation_modified`, mirroring dbt-core's
+    ///   separate `same_database_representation`). Excluding it here only avoids double-counting;
+    ///   the correctness claim is that the *union* of `is_modified`'s sub-checks equals dbt-core's
+    ///   comparison.
+    fn base_config_excluded_keys(node_type: NodeType) -> &'static [&'static str] {
+        match node_type {
+            // Models, seeds, and snapshots use dbt-core's `BaseConfig.same_contents`, whose set of
+            // non-modification keys is exactly the `CompareBehavior.Exclude` fields of
+            // `NodeAndTestConfig` — the five below (core/dbt/artifacts/resources/v1/config.py @
+            // v1.10.0; `ModelConfig`/`SeedConfig`/`SnapshotConfig` add no further `Exclude` fields).
+            NodeType::Model | NodeType::Seed | NodeType::Snapshot => {
+                &[
+                    "tags", "group", // parity-excludes
+                    "schema", "database",
+                    "alias", // ownership-excludes, counted in `check_relation_modified`
+                ]
+            }
+            // Sources: dbt-core's `SourceConfig` marks nothing `Exclude`, but what counts as a
+            // source change is defined by `SourceDefinition.same_contents`
+            // (core/dbt/contracts/graph/nodes.py @ v1.10.0), which deliberately ignores tags
+            // ("metadata/tags changes are not changes") and compares relation identity separately
+            // via `same_database_representation`.
+            NodeType::Source => {
+                &[
+                    "tags", // parity-exclude
+                    "schema", "database",
+                    "alias", // ownership-excludes, counted in `check_relation_modified`
+                ]
+            }
+            // Other node types do not yet take the full-`unrendered_config` path (see
+            // `check_configs_modified`); exclude nothing rather than guess.
+            _ => &[],
+        }
     }
 }
 

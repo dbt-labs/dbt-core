@@ -27,6 +27,7 @@ use regex::Regex;
 /// * `dict.get`
 /// * `dict.items`
 /// * `dict.keys`
+/// * `dict.meta_get`
 /// * `dict.values`
 /// * `dict.to_dict`
 /// * `list.count`
@@ -811,6 +812,20 @@ fn map_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Err
                 Some(value) if !value.is_none() => value,
                 _ => default.cloned().unwrap_or_else(|| Value::from(())),
             })
+        }
+        "meta_get" => {
+            let iter = ArgsIter::new("meta_get", &["key"], args);
+            let key = iter.next_pos_arg_aliased::<&Value>(&["name"])?;
+            let default = iter
+                .next_kwarg::<Option<&Value>>("default")?
+                .cloned()
+                .unwrap_or_else(|| Value::from(()));
+            iter.finish()?;
+
+            Ok(obj
+                .get_value(&Value::from("meta"))
+                .and_then(|meta| meta.as_object().and_then(|meta| meta.get_value(key)))
+                .unwrap_or(default))
         }
         "to_dict" => {
             let () = from_args(args)?;

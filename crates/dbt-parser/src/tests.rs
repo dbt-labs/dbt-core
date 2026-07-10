@@ -62,6 +62,7 @@ mod tests {
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from("test"),
+            &PathBuf::from("test"),
             &IoArgs::default(),
             Some(StaticAnalysisKind::Strict),
         );

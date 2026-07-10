@@ -30,6 +30,27 @@ use super::compile_config::CompileConfig;
 /// The name of the repl model
 pub const REPL_MODEL_NAME: &str = "__repl__";
 
+/// Resolve the configured `model-paths` (resource roots) for a node's package,
+/// falling back to the dbt default (`models`) when unset. Dependency packages
+/// carry their own runtime config, so look those up separately from the root
+/// project. Used to derive the resource-relative `model.path` Jinja value.
+fn model_paths_for_package(runtime_config: &DbtRuntimeConfig, package_name: &str) -> Vec<String> {
+    let paths = if runtime_config.inner.project_name == package_name {
+        runtime_config.inner.model_paths.clone()
+    } else {
+        runtime_config
+            .dependencies
+            .get(package_name)
+            .map(|cfg| cfg.inner.model_paths.clone())
+            .unwrap_or_default()
+    };
+    if paths.is_empty() {
+        vec!["models".to_string()]
+    } else {
+        paths
+    }
+}
+
 /// Configure ref validation behavior
 #[derive(Debug, Clone)]
 pub struct DependencyValidationConfig {
@@ -285,6 +306,19 @@ where
     base_builtins.insert("source".to_string(), source_value.clone());
 
     let mut model_map = convert_yml_to_value_map(model.serialize());
+    // dbt-core exposes `model.path` relative to the resource root (e.g.
+    // `staging/orders.sql`), not package-relative (`models/staging/orders.sql`).
+    // Fusion stores the package-relative form on the node (it is used for file
+    // I/O and parse caching), so derive the resource-relative form here for the
+    // Jinja `model.path` value to match dbt-core.
+    if model.resource_type() == NodeType::Model {
+        let model_paths = model_paths_for_package(&runtime_config, &model.common().package_name);
+        let jinja_path = dbt_common::path::strip_resource_paths(&model.common().path, &model_paths);
+        model_map.insert(
+            "path".to_owned(),
+            MinijinjaValue::from(jinja_path.to_string_lossy().into_owned()),
+        );
+    }
     model_map.insert(
         "batch".to_owned(),
         MinijinjaValue::from_object(init_batch_context()),
@@ -322,11 +356,11 @@ where
         store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),
         target_package_name: model.common().package_name.clone(),
         target_unique_id: model.common().unique_id.clone(),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: root_project_name.to_string(),
-            current_project_name: None,
+        context: JinjaObject::new(MacroLookupContext::new(
+            root_project_name.to_string(),
+            None,
             packages,
-        }),
+        )),
         current_path: model
             .common()
             .original_file_path

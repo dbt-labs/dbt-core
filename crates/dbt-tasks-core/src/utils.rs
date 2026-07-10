@@ -46,17 +46,13 @@ pub fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsAr
         env: dbt_common::constants::collect_dbt_custom_envs(),
     };
 
+    // Extra CLI args beyond `command`/`which`. These are flattened to the top
+    // level of `args` on serialization (via the `__other__` dunder-flatten
+    // field), matching dbt-core's flat run_results.json args layout so that
+    // `dbt retry` can read them back.
     let mut args_map = BTreeMap::new();
     let command_str = arg.command.as_str();
 
-    args_map.insert(
-        "command".to_string(),
-        dbt_yaml::Value::string(command_str.to_string()),
-    );
-    args_map.insert(
-        "which".to_string(),
-        dbt_yaml::Value::string(command_str.to_string()),
-    );
     args_map.insert(
         "static_analysis".to_string(),
         if let Some(sa) = arg.static_analysis {
@@ -64,6 +60,10 @@ pub fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsAr
         } else {
             dbt_yaml::Value::null()
         },
+    );
+    args_map.insert(
+        "full_refresh".to_string(),
+        dbt_yaml::Value::bool(arg.full_refresh),
     );
 
     let args = RunResultsArgs {
@@ -85,7 +85,16 @@ pub fn write_run_results_json(stats: &Stats, arg: &EvalArgs) -> FsResult<()> {
     let run_results_path = arg.io.out_dir.join("run_results.json");
     let run_results_file = File::create(run_results_path)?;
     let run_results_artifact = build_run_results_artifact(stats, arg);
-    serde_json::to_writer(run_results_file, &run_results_artifact)?;
+    // Serialize via dbt_yaml first so the `__other__` dunder-flatten field is
+    // flattened into the parent object (raw `serde_json` would emit it as a
+    // literal nested `__other__` key, which the reader cannot interpret).
+    let yml_val = dbt_yaml::to_value(&run_results_artifact).map_err(|e| {
+        dbt_common::fs_err!(
+            ErrorCode::SerializationError,
+            "Failed to serialize run_results: {e}"
+        )
+    })?;
+    serde_json::to_writer(run_results_file, &yml_val)?;
     Ok(())
 }
 
@@ -96,6 +105,40 @@ pub fn write_run_results_json_or_warn(stats: &Stats, arg: &EvalArgs) {
             ErrorCode::IoError,
             format!("Failed to write run_results.json: {e}"),
             arg.io.status_reporter.as_ref(),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::RunResultsArtifact;
+
+    /// The args written to run_results.json must be flat at the top level (matching
+    /// dbt-core), so `dbt retry` can read them back. Guards against regressing to a raw
+    /// `serde_json` write that would emit `__other__` as a literal nested object.
+    #[test]
+    fn test_run_results_args_round_trip_full_refresh() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut arg = EvalArgs::default();
+        arg.io.out_dir = tmp.path().to_path_buf();
+        arg.full_refresh = true;
+
+        let stats = Stats {
+            stats: vec![],
+            nodes: None,
+        };
+        write_run_results_json(&stats, &arg).unwrap();
+
+        let artifact = RunResultsArtifact::from_file(&tmp.path().join("run_results.json")).unwrap();
+        assert_eq!(
+            artifact
+                .args
+                .__other__
+                .get("full_refresh")
+                .and_then(|v| v.as_bool()),
+            Some(true),
+            "full_refresh must round-trip as a flat, readable arg"
         );
     }
 }

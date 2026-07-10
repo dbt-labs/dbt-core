@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod capabilities;
 pub mod column_lineage;
 pub mod distribution;

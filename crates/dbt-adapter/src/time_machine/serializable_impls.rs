@@ -269,6 +269,7 @@ impl TimeMachineSerializable for crate::catalog_relation::CatalogRelation {
             adapter_properties,
             is_transient: ext.opt_bool("is_transient"),
             external_volume: ext.opt_str("external_volume"),
+            catalog_database: ext.opt_str("catalog_database"),
             base_location: ext.opt_str("base_location"),
             file_format: ext.opt_str("file_format"),
         };
@@ -370,6 +371,7 @@ mod tests {
             adapter_properties: BTreeMap::from([("key1".to_string(), "value1".to_string())]),
             is_transient: Some(false),
             external_volume: Some("my_volume".to_string()),
+            catalog_database: None,
             base_location: Some("/path/to/data".to_string()),
             file_format: None,
         };

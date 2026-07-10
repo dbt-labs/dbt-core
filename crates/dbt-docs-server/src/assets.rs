@@ -45,7 +45,7 @@ pub use crate::embed::serve_assets;
 
 /// Stub used when the `embed-ui` feature is disabled. Returns 501.
 #[cfg(not(feature = "embed-ui"))]
-pub async fn serve_assets(_uri: axum::http::Uri) -> Response {
+pub async fn serve_assets(_uri: http::Uri) -> Response {
     Response::builder()
         .status(StatusCode::NOT_IMPLEMENTED)
         .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")

@@ -18,7 +18,6 @@ dbt-adapter-core = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-deps = { workspace = true }
-dbt-env = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-jinja-vars = { workspace = true }
@@ -31,7 +30,6 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dirs = { workspace = true }
-flate2 = { workspace = true }
 ignore = { workspace = true }
 indexmap = { workspace = true }
 minijinja = { workspace = true }

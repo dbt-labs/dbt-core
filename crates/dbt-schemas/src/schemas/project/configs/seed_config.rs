@@ -187,6 +187,8 @@ pub struct ProjectSeedConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
+    #[serde(rename = "+resource_tags")]
+    pub resource_tags: Option<IndexMap<String, String>>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
     #[serde(rename = "+file_format")]
@@ -411,7 +413,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 partitions: config.partitions,
                 enable_refresh: config.enable_refresh,
                 refresh_interval_minutes: config.refresh_interval_minutes,
-                resource_tags: None,
+                resource_tags: config.resource_tags,
                 max_staleness: config.max_staleness,
                 jar_file_uri: None,
                 timeout: None,
@@ -539,6 +541,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             refresh_interval_minutes: config
                 .__warehouse_specific_config__
                 .refresh_interval_minutes,
+            resource_tags: config.__warehouse_specific_config__.resource_tags,
             max_staleness: config.__warehouse_specific_config__.max_staleness,
             // Databricks fields
             file_format: config.__warehouse_specific_config__.file_format,
@@ -688,4 +691,67 @@ impl ResolvableConfig<SeedConfig> for SeedConfig {
 impl ConfigKeys for SeedConfig {
     // The default implementation from the trait will handle
     // extracting field names via serialization automatically
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ProjectSeedConfig, SeedConfig};
+
+    #[test]
+    fn test_project_seed_config_resource_tags_parses() {
+        let config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+  "123456789012/cost-center": "analytics"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resource_tags = config
+            .resource_tags
+            .expect("+resource_tags should parse on ProjectSeedConfig");
+        assert_eq!(resource_tags.len(), 2);
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+        assert_eq!(resource_tags["123456789012/cost-center"], "analytics");
+    }
+
+    #[test]
+    fn test_project_seed_config_resource_tags_propagates_to_seed_config() {
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let seed_config: SeedConfig = project_config.into();
+        let resource_tags = seed_config
+            .__warehouse_specific_config__
+            .resource_tags
+            .expect("resource_tags should propagate from ProjectSeedConfig to SeedConfig");
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
+
+    #[test]
+    fn test_seed_config_resource_tags_propagates_to_project_seed_config() {
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let seed_config: SeedConfig = project_config.into();
+        let round_tripped: ProjectSeedConfig = seed_config.into();
+        let resource_tags = round_tripped
+            .resource_tags
+            .expect("resource_tags should propagate from SeedConfig back to ProjectSeedConfig");
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
 }

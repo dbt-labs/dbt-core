@@ -81,6 +81,7 @@ fn make_state(backend: TestDetailMockBackend) -> Arc<AppState> {
         providers,
         do_not_track: false,
         send_anonymous_usage_stats: true,
+        analytics: Arc::new(crate::handlers::analytics::VortexSink),
     })
 }
 
@@ -828,6 +829,7 @@ fn make_list_state(backend: TestListMockBackend) -> Arc<AppState> {
         providers,
         do_not_track: false,
         send_anonymous_usage_stats: true,
+        analytics: Arc::new(crate::handlers::analytics::VortexSink),
     })
 }
 

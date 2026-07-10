@@ -781,6 +781,17 @@ impl<'a> Parser<'a> {
         }
 
         match token {
+            // An identifier spelled like a literal keyword (`true`/`false`/`none`) is a valid
+            // keyword-argument *name* when immediately followed by `=`, e.g. `namespace(none=0)`.
+            // Python Jinja recognizes this at the token level in `parse_call_args`; here we must
+            // avoid collapsing it into a `Const` so `parse_args` can still see an `Expr::Var`.
+            // A bare literal followed by a single `=` is never a valid value expression, and
+            // comparison uses `==` (`Token::Eq`), so this only affects the kwarg-name case.
+            Token::Ident(
+                name @ ("true" | "True" | "TRUE" | "false" | "False" | "FALSE" | "none" | "None"),
+            ) if matches!(ok!(self.stream.current()), Some((Token::Assign, _))) => {
+                Ok(ast::Expr::Var(Spanned::new(ast::Var { id: name }, span)))
+            }
             Token::Ident("true" | "True" | "TRUE") => Ok(const_val!(true)),
             Token::Ident("false" | "False" | "FALSE") => Ok(const_val!(false)),
             Token::Ident("none" | "None") => Ok(const_val!(())),

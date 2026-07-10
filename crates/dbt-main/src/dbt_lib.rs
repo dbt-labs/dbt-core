@@ -648,6 +648,7 @@ impl<'a> AllPhasesExecutor<'a> {
             let arg_for_retry = self.arg.to_mut();
             arg_for_retry.command = command_for_retry.as_command();
             arg_for_retry.static_analysis = effective_sa;
+            arg_for_retry.full_refresh = retry_state.original_full_refresh;
 
             // Create a custom schedule for the retryable nodes from the original run.
             // This keeps retry bounded to nodes recorded in run_results.json instead

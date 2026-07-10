@@ -86,6 +86,17 @@ fn test_dict_methods() {
     assert!(eval_expr("{'x': 42}.items()|list == [('x', 42)]").is_true());
     assert!(eval_expr("{'x': 42}.get('x') == 42").is_true());
     assert!(eval_expr("{'x': 42}.get('y') is none").is_true());
+    assert!(
+        eval_expr("{'meta': {'owner': 'analytics'}}.meta_get('owner') == 'analytics'").is_true()
+    );
+    assert!(eval_expr("{'meta': {}}.meta_get('owner') is none").is_true());
+    assert!(eval_expr("{'meta': {}}.meta_get('owner', 'fallback') == 'fallback'").is_true());
+    assert!(
+        eval_expr("{'meta': {}}.meta_get('owner', default='fallback') == 'fallback'").is_true()
+    );
+    assert!(eval_expr("{'meta': {'owner': none}}.meta_get('owner', 'fallback') is none").is_true());
+    assert!(eval_expr("{}.meta_get('owner', 'fallback') == 'fallback'").is_true());
+    assert!(eval_expr("{'meta': 'nope'}.meta_get('owner', 'fallback') == 'fallback'").is_true());
 }
 
 #[test]

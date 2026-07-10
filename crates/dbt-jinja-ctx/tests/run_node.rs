@@ -56,11 +56,11 @@ fn fixture_run_node_ctx(
         load_result: MinijinjaValue::from("load-result-stub"),
         store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
         submit_python_job: MinijinjaValue::from("submit-python-job-stub"),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: "my_project".to_string(),
-            current_project_name: None,
-            packages: BTreeSet::new(),
-        }),
+        context: JinjaObject::new(MacroLookupContext::new(
+            "my_project".to_string(),
+            None,
+            BTreeSet::new(),
+        )),
         write: MinijinjaValue::from("write-stub"),
         load_agate_table,
         builtins: MinijinjaValue::from_object(builtins_inner),
