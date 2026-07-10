@@ -291,6 +291,7 @@ minijinja = { path = "crates/dbt-jinja/minijinja", features = [
   "loader",
   "custom_syntax",
   "preserve_order",
+  "unicode",
 ] }
 minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
   "pycompat",
