@@ -767,7 +767,9 @@ jobs:
     with:
       version: ${{ needs.prepare-release.outputs.version }}
       tag: ${{ needs.prepare-release.outputs.tag }}
-      dry_run: false
+      # Hardcoded true (defense-in-depth): the job is `if: false` today, but if
+      # someone re-enables it to experiment, it must never push to the prod tap.
+      dry_run: true
       # Must match the `build` job's `BINARY_NAME` env and the
       # `ARCHIVE_BASE` template's `${PACKAGE_NAME}-` prefix. Hardcoded
       # because reusable-workflow `with:` blocks don't accept the `env`
@@ -909,7 +911,9 @@ jobs:
     uses: ./.github/workflows/publish-winget.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
-      dry_run: ${{ inputs.dry_run }}
+      # Hardcoded true (defense-in-depth): the job is `if: false` today, but if
+      # someone re-enables it to experiment, it must never open a winget PR.
+      dry_run: true
     permissions:
       contents: read
     secrets: inherit
