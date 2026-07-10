@@ -122,7 +122,13 @@ jobs:
     uses: ./.github/workflows/release-prep-v2.yml
     with:
       version: ${{ inputs.version }}
-      dry_run: ${{ inputs.dry_run }}
+      # Hardcoded true (not inputs.dry_run): a "wet" prepare cuts a prod-style
+      # `release/v${VERSION}` branch, which would collide with a real
+      # production release of the same version. Forcing dry-run here keeps this
+      # test workflow on throwaway `release/dry-run/v…-<run_id>` branches.
+      # This only affects branch naming — the Test PyPI publish is gated
+      # separately on the workflow's own `inputs.dry_run`.
+      dry_run: true
       source_ref: ${{ inputs.source_ref }}
 
   # ------------------------------------------------------------------
