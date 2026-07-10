@@ -440,6 +440,20 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default)]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // ClickHouse 
+    // dictionary materialization
+    pub connection_overrides: Option<BTreeMap<String, YmlValue>>,
+    pub fields: Option<Vec<YmlValue>>,
+    pub source_type: Option<String>,
+    pub url: Option<String>,
+    pub format: Option<String>,
+    pub layout: Option<String>,
+    pub lifetime: Option<YmlValue>,
+    pub range: Option<YmlValue>,
+    pub table: Option<String>,
+    pub update_field: Option<String>,
+    pub update_lag: Option<YmlValue>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -576,6 +590,20 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
             // Salesforce
             primary_key,
             category,
+
+            // ClickHouse 
+            //dictionary materialization
+            connection_overrides,
+            fields,
+            source_type,
+            url,
+            format,
+            layout,
+            lifetime,
+            range,
+            table,
+            update_field,
+            update_lag,
         } = self;
 
         default_to!(
@@ -680,6 +708,19 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
                 // Salesforce
                 primary_key,
                 category,
+                // ClickHouse 
+                //dictionary materialization
+                connection_overrides,
+                fields,
+                source_type,
+                url,
+                format,
+                layout,
+                lifetime,
+                range,
+                table,
+                update_field,
+                update_lag,
             ]
         );
     }
@@ -892,6 +933,17 @@ pub fn same_warehouse_config(
     let indexes_eq = self_wh.indexes == other_wh.indexes;
     let primary_key_eq = self_wh.primary_key == other_wh.primary_key;
     let category_eq = self_wh.category == other_wh.category;
+    let connection_overrides_eq = self_wh.connection_overrides == other_wh.connection_overrides;
+    let fields_eq = self_wh.fields == other_wh.fields;
+    let source_type_eq = self_wh.source_type == other_wh.source_type;
+    let url_eq = self_wh.url == other_wh.url;
+    let format_eq = self_wh.format == other_wh.format;
+    let layout_eq = self_wh.layout == other_wh.layout;
+    let lifetime_eq = self_wh.lifetime == other_wh.lifetime;
+    let range_eq = self_wh.range == other_wh.range;
+    let table_eq = self_wh.table == other_wh.table;
+    let update_field_eq = self_wh.update_field == other_wh.update_field;
+    let update_lag_eq = self_wh.update_lag == other_wh.update_lag;
 
     let result = partition_by_eq
         && cluster_by_eq
@@ -962,7 +1014,18 @@ pub fn same_warehouse_config(
         && table_type_eq
         && indexes_eq
         && primary_key_eq
-        && category_eq;
+        && category_eq
+        && connection_overrides_eq
+        && fields_eq
+        && source_type_eq
+        && url_eq
+        && format_eq
+        && layout_eq
+        && lifetime_eq
+        && range_eq
+        && table_eq
+        && update_field_eq
+        && update_lag_eq;
 
     if !result {
         log_state_mod_diff(
@@ -1643,6 +1706,19 @@ pub const WAREHOUSE_SPECIFIC_CONFIG_KEYS: &[&str] = &[
     // Salesforce
     "primary_key",
     "category",
+    // ClickHouse
+    // dictionary materialization
+    "connection_overrides",
+    "fields",
+    "source_type",
+    "url",
+    "format",
+    "layout",
+    "lifetime",
+    "range",
+    "table",
+    "update_field",
+    "update_lag",
 ];
 
 /// Compare two `unrendered_config` values, treating absent/`null`/empty as equivalent and
@@ -2050,6 +2126,17 @@ mod tests {
             indexes: Default::default(),
             primary_key: Default::default(),
             category: Some(DataLakeObjectCategory::Other),
+            connection_overrides: Some(Default::default()),
+            fields: Some(Vec::new()),
+            source_type: Some("clickhouse".to_string()),
+            url: Some("u".to_string()),
+            format: Some("f".to_string()),
+            layout: Some("HASHED()".to_string()),
+            lifetime: Some(YmlValue::string("300".to_string())),
+            range: Some(YmlValue::string("r".to_string())),
+            table: Some("t".to_string()),
+            update_field: Some("uf".to_string()),
+            update_lag: Some(YmlValue::string("1".to_string())),
         };
 
         let value = dbt_yaml::to_value(&cfg).expect("serialize warehouse config");

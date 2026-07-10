@@ -494,6 +494,20 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 // data test is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                // ClickHouse 
+                // dictionary materialization
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
             },
         }
     }

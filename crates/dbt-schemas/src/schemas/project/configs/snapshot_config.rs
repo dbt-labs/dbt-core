@@ -666,6 +666,18 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 // snapshot is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
             },
         }
     }

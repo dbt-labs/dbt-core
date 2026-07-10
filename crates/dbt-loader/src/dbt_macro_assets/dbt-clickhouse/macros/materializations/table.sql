@@ -90,6 +90,13 @@
 
 {% macro primary_key_clause(label) %}
   {%- set primary_key = config.get('primary_key', validator=validation.any[basestring]) -%}
+  {#- Fusion compatibility: Fusion's typed primary_key config arrives as a list
+      (scalar inputs are listified), so join it back into the raw string this
+      clause renders. No-op in Python, where the basestring validator raises
+      before a non-string value can reach this point. -#}
+  {%- if primary_key is not none and primary_key is not string -%}
+    {%- set primary_key = primary_key | join(', ') -%}
+  {%- endif %}
 
   {%- if primary_key is not none %}
     {{ label }} {{ primary_key }}

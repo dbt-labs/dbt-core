@@ -4069,6 +4069,7 @@ impl Adapter {
                     })?;
                 self.get_csv_data(table)
             }
+            "get_credentials" => self.get_credentials(args),
             "render_equals" => {
                 let iter = ArgsIter::new(name, &["expr1", "expr2"], args);
                 let expr1 = iter.next_arg::<&str>()?;
@@ -4080,6 +4081,20 @@ impl Adapter {
                 minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on adapter object: '{name}'"),
             )),
+        }
+    }
+
+    /// ClickHouse: `adapter.get_credentials(connection_overrides)` — connection
+    /// parameters for dictionary SOURCE clauses. See [AdapterImpl::get_credentials].
+    pub fn get_credentials(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_credentials", &["connection_overrides"], args);
+        let overrides = iter.next_arg::<Option<&Value>>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => {
+                Ok(adapter.get_credentials(overrides.unwrap_or(&Value::UNDEFINED)))
+            }
+            Parse(_) => Ok(empty_map_value()),
         }
     }
 
