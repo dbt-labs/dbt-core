@@ -94,6 +94,13 @@ pub fn prepare_cli_or_exit(cli_parser: &CliParser) -> Box<Cli> {
 }
 
 pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>) -> ExitCode {
+    ExitCode::from(run_cli_with_code(cli, arg, feature_stack))
+}
+
+/// Same as [`run_cli`] but yields the raw exit code instead of an [`ExitCode`],
+/// so embedders (e.g. the `dbt-core` Python extension's console entrypoint) can
+/// pass it to `std::process::exit`.
+pub fn run_cli_with_code(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>) -> u8 {
     let event_emitter = feature_stack.instrumentation.event_emitter.as_ref();
     let fail_fast_flag = cli.common_args.fail_fast;
 
@@ -156,12 +163,14 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
         arg,
         cli,
         true,
+        false,
         Arc::clone(&feature_stack),
         token,
     ));
     let future = Box::pin(async {
         // JoinError is produced if future panics, so we .unwrap()
-        future.await.unwrap()
+        // The CLI doesn't consume the captured artifacts, so drop them.
+        future.await.unwrap().map(|_| ())
     });
 
     let result: FsResult<Option<CancellationReport>> = tokio_rt.block_on(
@@ -206,12 +215,12 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
             }
 
             // Otherwise, allow graceful shutdown and normal exit:
-            ExitCode::from(0)
+            0
         }
         Err(err) => {
             // If any step failed, assume error is already printed, just exit
             // with a corresponding exit code:
-            ExitCode::from(err.exit_status().unwrap_or(1) as u8)
+            err.exit_status().unwrap_or(1) as u8
         }
     }
 }

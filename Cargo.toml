@@ -42,6 +42,7 @@ members = [
   "crates/dbt-metadata",
   "crates/dbt-metadata-parquet",
   "crates/dbt-profile",
+  "crates/dbt-python",
   "crates/dbt-state",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
@@ -574,6 +575,7 @@ prost = "0.14"
 prost-build = "0.14"
 prost-types = "0.14"
 pyo3 = { version = "0.29", features = ["extension-module"] }
+pythonize = "0.29"
 
 # jsonschema
 jsonschema-valid = "0.5.2"

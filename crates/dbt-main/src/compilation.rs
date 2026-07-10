@@ -379,6 +379,9 @@ impl<'a> CompilationPhasesExecutor<'a> {
         semantic_manifest: &SemanticManifest,
         invocation_id: &str,
         jinja_env: &Arc<JinjaEnv>,
+        // When set, stash the parse manifest here for a library caller. parse
+        // exits at this phase checkpoint, so this is the only place to capture it.
+        manifest_capture: Option<&mut Option<DbtManifestV12>>,
     ) -> FsResult<()> {
         if self.arg.write_json {
             // Write semantic manifest
@@ -403,6 +406,9 @@ impl<'a> CompilationPhasesExecutor<'a> {
                     DBT_MANIFEST_JSON,
                     &self.arg.io.in_dir,
                 )?;
+                if let Some(sink) = manifest_capture {
+                    *sink = Some(dbt_manifest.clone());
+                }
             }
         }
 
@@ -855,6 +861,7 @@ impl DbtProjectCompilation {
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        manifest_capture: Option<&mut Option<DbtManifestV12>>,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -862,6 +869,8 @@ impl DbtProjectCompilation {
     )> {
         // Route through the incremental path when partial_parse is active.
         // initialize_cli_incremental handles cache load, fast-reuse, and fallback.
+        // That path doesn't surface the parse manifest to library callers yet
+        // (follow-up); a plain `parse` (no partial-parse flags) uses the full path.
         if cli.common_args.effective_partial_parse() {
             return Self::initialize_cli_incremental(
                 feature_stack,
@@ -902,6 +911,7 @@ impl DbtProjectCompilation {
             None,
             token,
             version_check_handle,
+            manifest_capture,
         )
         .await
     }
@@ -963,6 +973,7 @@ impl DbtProjectCompilation {
                         None,
                         token,
                         version_check_handle,
+                        None,
                     )
                     .await;
                 }
@@ -1037,6 +1048,7 @@ impl DbtProjectCompilation {
             maybe_prev.clone(),
             token,
             version_check_handle,
+            None,
         )
         .await;
 
@@ -1073,6 +1085,7 @@ impl DbtProjectCompilation {
                             None,
                             token,
                             version_check_handle,
+                            None,
                         )
                         .await;
                     }
@@ -1092,6 +1105,7 @@ impl DbtProjectCompilation {
                                 None,
                                 token,
                                 version_check_handle,
+                                None,
                             )
                             .await;
                         }
@@ -1109,6 +1123,7 @@ impl DbtProjectCompilation {
                         None,
                         token,
                         version_check_handle,
+                        None,
                     )
                     .await
                 }
@@ -1131,6 +1146,7 @@ impl DbtProjectCompilation {
                     None,
                     token,
                     version_check_handle,
+                    None,
                 )
                 .await
             }
@@ -1180,6 +1196,7 @@ impl DbtProjectCompilation {
             prev_compilation,
             token,
             &mut None,
+            None,
         )
         .await
     }
@@ -1198,6 +1215,7 @@ impl DbtProjectCompilation {
         maybe_prev_compilation: Option<Arc<DbtProjectCompilation>>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        manifest_capture: Option<&mut Option<DbtManifestV12>>,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -1309,6 +1327,7 @@ impl DbtProjectCompilation {
                 &semantic_manifest,
                 &invocation_id,
                 &jinja_env,
+                manifest_capture,
             )
             .await?;
         token.check_cancellation()?;

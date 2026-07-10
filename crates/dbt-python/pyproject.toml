@@ -1,0 +1,54 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "dbt-core"
+requires-python = ">=3.10"
+dynamic = ["version"]
+
+# The `dbt` CLI is served from this wheel's compiled extension (dbt._core), so
+# `pip install dbt-core` provides both the command line and the programmatic API.
+[project.scripts]
+dbt = "dbt.cli.main:cli"
+
+[tool.maturin]
+# The compiled extension lands at dbt/_core.so inside the installed package.
+module-name = "dbt._core"
+# Pure-Python sources shipped alongside the extension. Kept inside the crate so
+# maturin bundles them into the wheel (a python-source outside the crate dir is
+# not picked up by `maturin build`).
+python-source = "python"
+
+[dependency-groups]
+test = ["pytest>=8"]
+lint = ["ruff>=0.6", "mypy>=1.11"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tier 1 is hermetic; warehouse-gated tests opt in via the marker.
+addopts = "-m 'not requires_warehouse'"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "C4"]
+
+[tool.mypy]
+# 3.10 is our minimum supported version and mypy's floor.
+python_version = "3.10"
+warn_unused_configs = true
+# The dbt package lives under the crate's python/ dir (maturin python-source).
+mypy_path = "python"
+
+# The compiled extension has no type stubs yet (pyo3-stub-gen is a follow-up).
+[[tool.mypy.overrides]]
+module = "dbt._core"
+ignore_missing_imports = true
+
+# pytest is only installed in the test venv, not the lint venv (check-py).
+[[tool.mypy.overrides]]
+module = "pytest"
+ignore_missing_imports = true

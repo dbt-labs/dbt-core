@@ -1,0 +1,17 @@
+# parse/list/compile don't open a connection, so the default target is snowflake
+# with dummy creds (1s timeout) — keeps the hermetic tests warehouse-free. The
+# in-process datafusion engine would be ideal but isn't implemented yet, so it's
+# not the default. Warehouse tests override the target via target_env_var.
+hello_world:
+  target: '{{ env_var("target_env_var", "snowflake_local") }}'
+  outputs:
+    snowflake_local:
+      type: snowflake
+      database: js
+      schema: pub
+      warehouse: compute_wh
+      user: admin
+      password: admin
+      account: snowflake.local
+      connect_timeout: 1
+      role: accountadmin

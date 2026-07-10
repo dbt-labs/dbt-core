@@ -12,7 +12,7 @@ use dbt_schemas::{
 use crate::stats_to_results;
 
 /// Build a `RunResultsArtifact` from run stats.
-fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsArtifact {
+pub fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsArtifact {
     let now = SystemTime::now();
     let generated_at: DateTime<Utc> = DateTime::from(now);
 

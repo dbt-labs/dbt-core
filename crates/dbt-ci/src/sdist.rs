@@ -80,12 +80,15 @@ pub(crate) fn build_sdist(
 
 /// Builds the release sdist by fetching each `--target`'s wheel from `base_url`
 /// and hashing the live bytes, so the manifest matches what installers fetch.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn build_release_sdist(
     http: &reqwest::Client,
     spec: &Spec,
     version: &str,
     base_url: &str,
     targets: &[String],
+    python_tag: &str,
+    abi_tag: &str,
     out_dir: &Path,
 ) -> Result<PathBuf> {
     if targets.is_empty() {
@@ -102,7 +105,7 @@ pub(crate) async fn build_release_sdist(
     for triple in targets {
         let platform_tag = target_to_platform_tag(triple)
             .ok_or_else(|| anyhow!("unsupported --target {triple:?}"))?;
-        let filename = wheel_filename(&dist, &version_pep440, &platform_tag);
+        let filename = wheel_filename(&dist, &version_pep440, python_tag, abi_tag, &platform_tag);
         let url = format!("{base}/{filename}");
         eprintln!("→ GET {url}");
         let bytes = download(http, &url).await?;

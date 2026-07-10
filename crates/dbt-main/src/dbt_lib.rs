@@ -62,6 +62,8 @@ use dbt_loader::{
 };
 use dbt_login::{execute_login, execute_login_status};
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
+use dbt_schemas::schemas::RunResultsArtifact;
+use dbt_schemas::schemas::manifest::DbtManifest;
 use dbt_schemas::{
     man::execute_man_command,
     schemas::legacy_catalog::{DbtCatalog, build_catalog},
@@ -75,8 +77,9 @@ use dbt_schemas::{
     state::ResolverState,
 };
 use dbt_tasks_core::{
-    RunTaskResults, task_runner_hooks::TaskRunnerHooksFactory,
-    utils::write_run_results_json_or_warn,
+    RunTaskResults,
+    task_runner_hooks::TaskRunnerHooksFactory,
+    utils::{build_run_results_artifact, write_run_results_json_or_warn},
 };
 use dbt_tasks_sa::base_context::build_base_context;
 use dbt_telemetry::ArtifactType;
@@ -105,22 +108,34 @@ use crate::{
 
 // ------------------------------------------------------------------------------------------------
 
+/// In-memory result of a command invocation, returned to library callers (the
+/// Python binding). Empty for commands that produce no artifacts, and only
+/// populated when the caller passes `capture_results = true` — capturing the
+/// manifest clones it, which is wasteful on the one-shot CLI path.
+#[derive(Default)]
+pub struct CommandExecutionResult {
+    pub manifest: Option<DbtManifest>,
+    pub run_results: Option<RunResultsArtifact>,
+    pub catalog: Option<DbtCatalog>,
+}
+
 pub async fn execute_fs(
     system_arg: SystemArgs,
     cli: Box<Cli>,
     feature_stack: Arc<FeatureStack>,
     token: CancellationToken,
-) -> FsResult<()> {
-    execute_fs_and_shutdown(system_arg, cli, false, feature_stack, token).await
+) -> FsResult<CommandExecutionResult> {
+    execute_fs_and_shutdown(system_arg, cli, false, false, feature_stack, token).await
 }
 
 pub async fn execute_fs_and_shutdown(
     system_arg: SystemArgs,
     cli: Box<Cli>,
     shutdown: bool,
+    capture_results: bool,
     feature_stack: Arc<FeatureStack>,
     token: CancellationToken,
-) -> FsResult<()> {
+) -> FsResult<CommandExecutionResult> {
     // Resolve EvalArgs from SystemArgs and Cli. This will create out folders,
     // for commands that need it and canonicalize the paths. May error on invalid paths.
     // If this fails (e.g., not in a dbt project directory), print a concise error and exit 1.
@@ -168,13 +183,21 @@ pub async fn execute_fs_and_shutdown(
 
     // Create the Invocation span as a new root
     let invocation_span = create_root_info_span(create_invocation_attributes("dbt", &eval_arg));
-    let result = do_execute_fs(&eval_arg, cli, feature_stack, &token)
-        .instrument(invocation_span.clone())
-        .await;
+    let mut captured_result: Option<CommandExecutionResult> = None;
+    let result = do_execute_fs(
+        &eval_arg,
+        cli,
+        capture_results,
+        &mut captured_result,
+        feature_stack,
+        &token,
+    )
+    .instrument(invocation_span.clone())
+    .await;
 
     // Record span run result
     let span_status = match &result {
-        Ok(()) => None,
+        Ok(_) => None,
         Err(err) => match err.exit_status() {
             Some(0) => None,
             Some(_) => Some("Executed with errors".to_string()),
@@ -189,7 +212,7 @@ pub async fn execute_fs_and_shutdown(
         // it's a "successful sentinel", not a real failure. exit_status() == Some(0)
         // catches it and ExitRepl; everything else with exit_status() == None is a real error.
         let status = match &result {
-            Ok(()) => "success",
+            Ok(_) => "success",
             Err(e) if e.exit_status() == Some(0) => "success",
             Err(_) => "error",
         };
@@ -228,13 +251,23 @@ is false. This should not happen."
         .unwrap();
     }
 
-    result
+    // Hand the captured artifacts (if any) to the caller. Phase-checkpoint
+    // commands (parse, list, ...) signal success via Err(exit_status == 0) — a
+    // success sentinel — after the artifacts have been captured, so treat that
+    // the same as Ok here. Real errors propagate unchanged.
+    match result {
+        Ok(()) => Ok(captured_result.unwrap_or_default()),
+        Err(e) if e.exit_status() == Some(0) => Ok(captured_result.unwrap_or_default()),
+        Err(e) => Err(e),
+    }
 }
 
 #[allow(clippy::cognitive_complexity)]
 async fn do_execute_fs(
     eval_arg: &EvalArgs,
     cli: Box<Cli>,
+    capture_results: bool,
+    result_sink: &mut Option<CommandExecutionResult>,
     feature_stack: Arc<FeatureStack>,
     token: &CancellationToken,
 ) -> FsResult<()> {
@@ -387,13 +420,24 @@ async fn do_execute_fs(
     }
     // Handle project specific commands
     let hooks_factory = Arc::clone(&feature_stack.task_runner.hooks_factory);
-    execute_setup_and_all_phases(eval_arg, &cli, feature_stack, hooks_factory, token).await
+    execute_setup_and_all_phases(
+        eval_arg,
+        &cli,
+        capture_results,
+        result_sink,
+        feature_stack,
+        hooks_factory,
+        token,
+    )
+    .await
 }
 
 #[allow(clippy::cognitive_complexity)]
 pub async fn execute_setup_and_all_phases(
     eval_arg: &EvalArgs,
     cli: &Cli,
+    capture_results: bool,
+    result_sink: &mut Option<CommandExecutionResult>,
     feature_stack: Arc<FeatureStack>,
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     token: &CancellationToken,
@@ -412,7 +456,13 @@ pub async fn execute_setup_and_all_phases(
     let mut executor = {
         let arg = Cow::Borrowed(eval_arg);
         let cli = Cow::Borrowed(cli);
-        AllPhasesExecutor::new(arg, cli, feature_stack, task_runner_hooks_factory)
+        AllPhasesExecutor::new(
+            arg,
+            cli,
+            capture_results,
+            feature_stack,
+            task_runner_hooks_factory,
+        )
     };
 
     let result = match executor.execute_all_phases(token).await {
@@ -423,6 +473,9 @@ pub async fn execute_setup_and_all_phases(
             Err(FsError::exit_with_status(1))
         }
     };
+
+    // Hand the captured artifacts (if any) up to the caller via the sink.
+    *result_sink = executor.captured_result.take();
 
     // Surface an "update available" hint if the background version check
     // produced one. Shared between `dbt` and `dbt-repl` — for the REPL it
@@ -502,12 +555,17 @@ struct AllPhasesExecutor<'a> {
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     version_check_handle: Option<tokio::task::JoinHandle<Option<String>>>,
+    // When true, retain the in-memory manifest/run-results/catalog for a library
+    // caller; populated by execute_all_phases into `captured_result`.
+    capture_results: bool,
+    captured_result: Option<CommandExecutionResult>,
 }
 
 impl<'a> AllPhasesExecutor<'a> {
     pub fn new(
         arg: Cow<'a, EvalArgs>,
         cli: Cow<'a, Cli>,
+        capture_results: bool,
         feature_stack: Arc<FeatureStack>,
         task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     ) -> Self {
@@ -525,6 +583,8 @@ impl<'a> AllPhasesExecutor<'a> {
             jinja_type_checking_event_listener_factory,
             task_runner_hooks_factory,
             version_check_handle: None,
+            capture_results,
+            captured_result: None,
         }
     }
 
@@ -626,7 +686,11 @@ impl<'a> AllPhasesExecutor<'a> {
             .instrumentation
             .event_emitter
             .as_ref();
-        DbtProjectCompilation::initialize_cli(
+        // Capture the parse manifest if a library caller asked for it: parse
+        // exits at a phase checkpoint inside initialize_cli, so it's surfaced via
+        // this sink rather than the post-run capture point in execute_all_phases.
+        let mut manifest_capture: Option<DbtManifest> = None;
+        let result = DbtProjectCompilation::initialize_cli(
             &self.feature_stack,
             self.arg.as_ref(),
             self.cli.as_ref(),
@@ -635,8 +699,17 @@ impl<'a> AllPhasesExecutor<'a> {
                 as Arc<dyn JinjaTypeCheckingEventListenerFactory>,
             token,
             &mut self.version_check_handle,
+            self.capture_results.then_some(&mut manifest_capture),
         )
-        .await
+        .await;
+        if let Some(manifest) = manifest_capture.take() {
+            self.captured_result = Some(CommandExecutionResult {
+                manifest: Some(manifest),
+                run_results: None,
+                catalog: None,
+            });
+        }
+        result
     }
 
     /// Run tasks based on the arguments.
@@ -1107,6 +1180,21 @@ impl<'a> AllPhasesExecutor<'a> {
         } else {
             None
         };
+
+        // Capture in-memory artifacts for a library caller before the manifest is
+        // consumed below by into_map_compiled_sql(). Gated on capture_results so the
+        // CLI path never pays for the manifest clone. run_results follow the same
+        // parse-skips-run_results rule as the on-disk write above.
+        if self.capture_results {
+            let run_results = (self.arg.command != FsCommand::Parse).then(|| {
+                build_run_results_artifact(&run_task_results.stats.run, self.arg.as_ref())
+            });
+            self.captured_result = Some(CommandExecutionResult {
+                manifest: Some(dbt_manifest.clone()),
+                run_results,
+                catalog: catalog_data.clone(),
+            });
+        }
 
         // Produce parquet metadata epoch files (compile/nodes, compile/columns, cll, etc.).
         // Must happen before into_map_compiled_sql() consumes the manifest.

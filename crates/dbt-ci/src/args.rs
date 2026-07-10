@@ -4,9 +4,10 @@ use std::path::PathBuf;
 
 #[derive(Args, Debug)]
 pub struct PypiPublishArgs {
-    /// `staging`, `prod`, or `test-pypi`.
-    #[arg(long, value_enum)]
-    pub environment: Environment,
+    /// `staging`, `prod`, or `test-pypi`. Not needed when only building an sdist
+    /// (`--sdist-out`), which stages a file instead of uploading.
+    #[arg(long, value_enum, required_unless_present = "sdist_out")]
+    pub environment: Option<Environment>,
 
     /// Wheel source dir for wheel-upload mode. Defaults to `<workspace>/target/wheels`.
     #[arg(long)]
@@ -17,13 +18,34 @@ pub struct PypiPublishArgs {
     pub version: Option<String>,
 
     /// sdist mode: build the sdist from this release's wheels at this https base
-    /// URL, then publish only the sdist. Requires `--version` and `--target`.
+    /// URL. Requires `--version` and `--target`.
     #[arg(long, value_name = "URL", requires = "version")]
     pub download_base_url: Option<String>,
 
     /// Cargo target triple to include in the sdist manifest (repeatable). sdist mode only.
     #[arg(long = "target", value_name = "TRIPLE", action = clap::ArgAction::Append, requires = "download_base_url")]
     pub targets: Vec<String>,
+
+    /// Dir holding the `pyproject.toml` whose `[project]` metadata drives the
+    /// wheel name and sdist. Defaults to the cargo workspace root (the `dbt` CLI);
+    /// point at `fs/sa/crates/dbt-python` for the `dbt-core` extension package.
+    #[arg(long, value_name = "DIR")]
+    pub project_dir: Option<PathBuf>,
+
+    /// Interpreter tag of the referenced wheels (sdist mode). `py3` for the binary
+    /// CLI wheel, `cp310` for the maturin abi3 extension wheel.
+    #[arg(long, default_value = "py3", requires = "download_base_url")]
+    pub python_tag: String,
+
+    /// ABI tag of the referenced wheels (sdist mode). `none` for the binary CLI
+    /// wheel, `abi3` for the maturin extension wheel.
+    #[arg(long, default_value = "none", requires = "download_base_url")]
+    pub abi_tag: String,
+
+    /// Build the sdist into this dir and stage it there instead of uploading.
+    /// Used by the release pipeline to publish via S3/CDN. sdist mode only.
+    #[arg(long, value_name = "DIR", requires = "download_base_url")]
+    pub sdist_out: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
