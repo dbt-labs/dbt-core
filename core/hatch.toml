@@ -81,6 +81,7 @@ dependencies = [
     # Other
     "pip-tools",
     "protobuf>=6.0,<8.0",
+    "opentelemetry-sdk>=1.26,<3.0",
 ]
 
 pre-install-commands = [
@@ -188,6 +189,7 @@ dependencies = [
     "flaky",
     "freezegun>=1.5.1",
     "hypothesis",
+    "opentelemetry-sdk>=1.26,<3.0",
 ]
 
 pre-install-commands = [
