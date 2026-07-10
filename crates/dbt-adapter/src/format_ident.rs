@@ -7,7 +7,7 @@ pub fn format_ident(id: &str, adapter: AdapterType) -> String {
     if need_quotes(id, adapter) {
         match adapter {
             AdapterType::Fabric => format!("[{}]", id),
-            AdapterType::ClickHouse => format!("`{id}`"),
+            AdapterType::Bigquery | AdapterType::ClickHouse => format!("`{id}`"),
             _ => format!("\"{}\"", id),
         }
     } else {
@@ -519,8 +519,15 @@ mod tests {
     }
 
     #[test]
+    fn test_format_ident_quoted_bigquery() {
+        let id = "my-project";
+        let formatted = format_ident(id, AdapterType::Bigquery);
+        assert_eq!(formatted, "`my-project`");
+    }
+
+    #[test]
     fn test_format_ident_quoted_default() {
-        // Non-Fabric/ClickHouse adapters use an empty keyword baseline, so reserved
+        // Adapters without custom quoting use an empty keyword baseline, so reserved
         // words are not detected and the identifier comes back unquoted.
         let id = "select";
         assert_eq!(format_ident(id, AdapterType::Postgres), "select");

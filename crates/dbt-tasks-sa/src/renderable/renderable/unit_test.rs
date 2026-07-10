@@ -2080,6 +2080,15 @@ mod tests {
     }
 
     #[test]
+    fn test_create_cte_name_from_fqn_with_hyphenated_bigquery_project() {
+        let adapter_type = AdapterType::Bigquery;
+        let fqn = "`my-project.dataset.table`";
+        let result =
+            create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
+        assert_eq!(result, "`my-project_dataset_table`");
+    }
+
+    #[test]
     fn test_create_cte_name_from_fqn_with_snowflake_quotes() {
         let adapter_type = AdapterType::Snowflake;
         let fqn = "database.schema.table";
