@@ -53,7 +53,7 @@ use std::{
 };
 
 fn strip_in_dir(io: &IoArgs, base_path: &Path, path: &Path) -> DbtPath {
-    DbtPath::from_path(
+    DbtPath::from(
         base_path
             .join(path)
             .strip_prefix(&io.in_dir)
@@ -513,11 +513,8 @@ fn determine_changeset_from_previous_resolved_nodes<'a>(
 
     let file_changes = FileChanges {
         changed_files: changed_files.into_iter().map(DbtPath::from).collect(),
-        unimpacted_files: unimpacted_files
-            .into_iter()
-            .map(DbtPath::from_path)
-            .collect(),
-        impacted_files: impacted_files.into_iter().map(DbtPath::from_path).collect(),
+        unimpacted_files: unimpacted_files.into_iter().map(DbtPath::from).collect(),
+        impacted_files: impacted_files.into_iter().map(DbtPath::from).collect(),
         deleted_files: HashSet::default(), // not supported yet
         new_files: HashSet::default(),     // not supported yet
     };

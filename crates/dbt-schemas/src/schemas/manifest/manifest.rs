@@ -1,7 +1,7 @@
 use crate::schemas::project::ResolvableConfig;
 use chrono::{DateTime, Utc};
 use dbt_adapter_core::AdapterType;
-use dbt_common::Span;
+use dbt_common::{Span, path::DbtPath};
 use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -167,8 +167,8 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                     let mut model_node: ManifestModel = (**node).clone().into();
 
                     if is_public_model_from_publication(resolver_state, &model_node) {
-                        model_node.__common_attr__.path = PathBuf::new();
-                        model_node.__common_attr__.original_file_path = PathBuf::new();
+                        model_node.__common_attr__.path = DbtPath::new();
+                        model_node.__common_attr__.original_file_path = DbtPath::new();
                     } else {
                         let path_config = path_config_for_package(
                             resolver_state,
@@ -379,8 +379,10 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 let mut manifest_group: ManifestGroup = (**group).clone().into();
                 let path_config =
                     path_config_for_package(resolver_state, &manifest_group.package_name);
-                manifest_group.path =
-                    strip_resource_path(&manifest_group.path, &path_config.model_paths);
+                manifest_group.path = DbtPath::from(strip_resource_path(
+                    &manifest_group.path,
+                    &path_config.model_paths,
+                ));
                 (id.clone(), manifest_group)
             })
             .collect(),
@@ -448,8 +450,11 @@ fn normalize_manifest_common_path(
     resource_paths: &[String],
 ) {
     let package_relative_path = strip_package_root_path(&common.path, path_config);
-    common.path = strip_resource_path(&package_relative_path, resource_paths);
-    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+    common.path = DbtPath::from(strip_resource_path(&package_relative_path, resource_paths));
+    common.original_file_path = DbtPath::from(strip_package_root_path(
+        &common.original_file_path,
+        path_config,
+    ));
 }
 
 /// dbt-core property resources may live under several configured roots.
@@ -459,8 +464,14 @@ fn normalize_manifest_common_attrs_property_path(
     path_config: &ManifestPathConfig,
 ) {
     let package_relative_path = strip_package_root_path(&common.path, path_config);
-    common.path = strip_property_resource_path(&package_relative_path, path_config);
-    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+    common.path = DbtPath::from(strip_property_resource_path(
+        &package_relative_path,
+        path_config,
+    ));
+    common.original_file_path = DbtPath::from(strip_package_root_path(
+        &common.original_file_path,
+        path_config,
+    ));
 }
 
 /// Same path normalization as property resources, for manifest nodes that use
@@ -470,8 +481,14 @@ fn normalize_manifest_materializable_property_path(
     path_config: &ManifestPathConfig,
 ) {
     let package_relative_path = strip_package_root_path(&common.path, path_config);
-    common.path = strip_property_resource_path(&package_relative_path, path_config);
-    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+    common.path = DbtPath::from(strip_property_resource_path(
+        &package_relative_path,
+        path_config,
+    ));
+    common.original_file_path = DbtPath::from(strip_package_root_path(
+        &common.original_file_path,
+        path_config,
+    ));
 }
 
 /// Analyses are special in dbt-core manifests: strip the configured analysis
@@ -483,11 +500,14 @@ fn normalize_manifest_analysis_path(
     let package_relative_path = strip_package_root_path(&common.path, path_config);
     let stripped = strip_resource_path(&package_relative_path, &path_config.analysis_paths);
     common.path = if stripped == package_relative_path {
-        stripped
+        DbtPath::from(stripped)
     } else {
-        PathBuf::from("analysis").join(stripped)
+        DbtPath::from("analysis").join(stripped)
     };
-    common.original_file_path = strip_package_root_path(&common.original_file_path, path_config);
+    common.original_file_path = DbtPath::from(strip_package_root_path(
+        &common.original_file_path,
+        path_config,
+    ));
 }
 
 /// dbt-core emits patch paths as package URIs (`package://path`).
@@ -499,10 +519,10 @@ fn normalize_manifest_patch_path(
         return;
     };
     let package_relative_patch_path = strip_package_root_path(patch_path, path_config);
-    common.patch_path = Some(package_uri_path(
+    common.patch_path = Some(DbtPath::from(package_uri_path(
         &common.package_name,
         &package_relative_patch_path,
-    ));
+    )));
 }
 
 /// Prefix bare paths with a package URI; leave existing URI-like paths alone.
@@ -525,20 +545,32 @@ fn package_uri_path(package_name: &str, path: &Path) -> PathBuf {
 fn normalize_docs_macro_path(docs_macro: &mut DbtDocsMacro, path_config: &ManifestPathConfig) {
     let package_relative_path = strip_package_root_path(&docs_macro.path, path_config);
     docs_macro.path = if path_config.docs_paths.is_empty() {
-        strip_default_docs_resource_path(&package_relative_path, path_config)
+        DbtPath::from(strip_default_docs_resource_path(
+            &package_relative_path,
+            path_config,
+        ))
     } else {
-        strip_resource_path(&package_relative_path, &path_config.docs_paths)
+        DbtPath::from(strip_resource_path(
+            &package_relative_path,
+            &path_config.docs_paths,
+        ))
     };
-    docs_macro.original_file_path =
-        strip_package_root_path(&docs_macro.original_file_path, path_config);
+    docs_macro.original_file_path = DbtPath::from(strip_package_root_path(
+        &docs_macro.original_file_path,
+        path_config,
+    ));
 }
 
 /// Sources keep property-file paths project-relative in dbt-core manifests.
 fn normalize_manifest_source_path(source: &mut ManifestSource, path_config: &ManifestPathConfig) {
-    source.__common_attr__.path =
-        strip_package_root_path(&source.__common_attr__.path, path_config);
-    source.__common_attr__.original_file_path =
-        strip_package_root_path(&source.__common_attr__.original_file_path, path_config);
+    source.__common_attr__.path = DbtPath::from(strip_package_root_path(
+        &source.__common_attr__.path,
+        path_config,
+    ));
+    source.__common_attr__.original_file_path = DbtPath::from(strip_package_root_path(
+        &source.__common_attr__.original_file_path,
+        path_config,
+    ));
 }
 
 /// Apply dbt-core's implicit docs search roots when `docs-paths` is omitted.
@@ -591,7 +623,7 @@ fn strip_resource_path_from_slices(path: &Path, resource_path_slices: &[&[String
 fn normalize_manifest_test_path(test: &mut ManifestDataTest, path_config: &ManifestPathConfig) {
     if is_generic_manifest_test(test) {
         if let Some(file_name) = test.__common_attr__.path.file_name() {
-            test.__common_attr__.path = PathBuf::from(file_name.to_os_string());
+            test.__common_attr__.path = DbtPath::from(file_name.to_os_string());
         }
     } else {
         normalize_manifest_common_path(
@@ -600,8 +632,10 @@ fn normalize_manifest_test_path(test: &mut ManifestDataTest, path_config: &Manif
             &path_config.test_paths,
         );
     }
-    test.__common_attr__.original_file_path =
-        strip_package_root_path(&test.__common_attr__.original_file_path, path_config);
+    test.__common_attr__.original_file_path = DbtPath::from(strip_package_root_path(
+        &test.__common_attr__.original_file_path,
+        path_config,
+    ));
 }
 
 /// Detect generic data tests after conversion into the manifest shape.
@@ -886,8 +920,10 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     let mut manifest_group = ManifestGroup::from((**group).clone());
                     let path_config =
                         path_config_for_package(resolver_state, &manifest_group.package_name);
-                    manifest_group.path =
-                        strip_resource_path(&manifest_group.path, &path_config.model_paths);
+                    manifest_group.path = DbtPath::from(strip_resource_path(
+                        &manifest_group.path,
+                        &path_config.model_paths,
+                    ));
                     (
                         id.clone(),
                         vec![serialize_with_resource_type(
@@ -1152,7 +1188,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     unique_id,
                     Arc::new(DbtTest {
                         // TODO: persist the line/column info through the manifest as well
-                        defined_at: Some(test.__common_attr__.original_file_path.clone().into()),
+                        defined_at: Some(
+                            test.__common_attr__.original_file_path.to_path_buf().into(),
+                        ),
 
                         manifest_original_file_path: test
                             .__common_attr__
@@ -1171,7 +1209,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 // `generated_sql_file` field should really never be
                                 // None (see [ManifestDataTest])
                                 || test.__common_attr__.original_file_path.clone(),
-                                PathBuf::from,
+                                DbtPath::from,
                             ),
                             patch_path: test.__common_attr__.patch_path,
 

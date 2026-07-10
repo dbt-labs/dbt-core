@@ -594,27 +594,27 @@ pub fn node_metadata_from_state(state: &State) -> Option<(NodeId, PathBuf)> {
             if let Ok(model) = DbtModel::deserialize(&node) {
                 Some((
                     model.__common_attr__.unique_id,
-                    model.__common_attr__.original_file_path,
+                    model.__common_attr__.original_file_path.to_path_buf(),
                 ))
             } else if let Ok(test) = DbtTest::deserialize(&node) {
                 Some((
                     test.__common_attr__.unique_id,
-                    test.__common_attr__.original_file_path,
+                    test.__common_attr__.original_file_path.to_path_buf(),
                 ))
             } else if let Ok(snapshot) = DbtSnapshot::deserialize(&node) {
                 Some((
                     snapshot.__common_attr__.unique_id,
-                    snapshot.__common_attr__.original_file_path,
+                    snapshot.__common_attr__.original_file_path.to_path_buf(),
                 ))
             } else if let Ok(seed) = DbtSeed::deserialize(&node) {
                 Some((
                     seed.__common_attr__.unique_id,
-                    seed.__common_attr__.original_file_path,
+                    seed.__common_attr__.original_file_path.to_path_buf(),
                 ))
             } else if let Ok(unit_test) = DbtUnitTest::deserialize(&node) {
                 Some((
                     unit_test.__common_attr__.unique_id,
-                    unit_test.__common_attr__.original_file_path,
+                    unit_test.__common_attr__.original_file_path.to_path_buf(),
                 ))
             } else {
                 // Fallback: direct attribute extraction for Object types

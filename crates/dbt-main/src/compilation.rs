@@ -791,7 +791,7 @@ impl DbtProjectCompilation {
             .root_package()
             .package_root_path
             .as_path();
-        DbtPath::from_path(path)
+        DbtPath::from(path)
     }
 
     pub fn adapter_type(&self) -> AdapterType {

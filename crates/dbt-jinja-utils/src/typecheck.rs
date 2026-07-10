@@ -69,7 +69,7 @@ pub fn typecheck(
         arg_io,
         offset.clone(),
         noqa_comments
-            .get(&DbtPath::from_path(relative_file_path))
+            .get(&DbtPath::from(relative_file_path))
             .cloned(),
         unique_id,
     );

@@ -7,6 +7,7 @@ use crate::validation::check_node_static_analysis;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -492,8 +493,8 @@ pub async fn resolve_sources(
             __common_attr__: CommonAttributes {
                 name: table_name.to_owned(),
                 package_name: package_name.to_owned(),
-                original_file_path: mpe.relative_path.clone(),
-                path: mpe.relative_path.clone(),
+                original_file_path: DbtPath::from(&mpe.relative_path),
+                path: DbtPath::from(&mpe.relative_path),
                 name_span: dbt_common::Span::from_serde_span(
                     mpe.name_span,
                     mpe.relative_path.clone(),
@@ -501,7 +502,7 @@ pub async fn resolve_sources(
                 unique_id: unique_id.to_owned(),
                 fqn,
                 description: Some(table.description.clone().unwrap_or_default()),
-                patch_path: Some(mpe.relative_path.clone()),
+                patch_path: Some(DbtPath::from(&mpe.relative_path)),
                 meta: source_config.meta.clone().unwrap_or_default(),
                 tags: source_config
                     .tags

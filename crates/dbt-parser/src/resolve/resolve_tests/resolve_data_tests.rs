@@ -31,6 +31,7 @@ use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::try_read_yml_to_str;
+use dbt_common::path::DbtPath;
 use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
@@ -518,7 +519,7 @@ pub async fn resolve_data_tests(
         let manifest_original_file_path = if is_singular_data_test {
             generated_file_path.clone()
         } else {
-            patch_path.clone()
+            DbtPath::from(patch_path)
         };
 
         // Populate TestMetadata only for generic data tests (not singular .sql tests)
@@ -564,7 +565,7 @@ pub async fn resolve_data_tests(
             __common_attr__: CommonAttributes {
                 name: fqn_name.clone(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.to_owned(),
+                path: DbtPath::from(dbt_asset.path.to_owned()),
                 name_span: dbt_common::Span::default(),
                 // original_file_path is a misnomer for tests, it's the path to the generated sql file
                 original_file_path: generated_file_path,

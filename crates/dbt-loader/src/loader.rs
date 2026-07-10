@@ -917,7 +917,7 @@ pub async fn load_inner(
     // make all paths relative to the project directory
     for (_, files) in all_files.iter_mut() {
         for (path, _) in files.iter_mut() {
-            *path = DbtPath::from_path(diff_paths(path.as_path(), package_path).unwrap());
+            *path = DbtPath::from(diff_paths(&path, package_path).unwrap());
         }
         //
         // make deterministic: Sort files based on their relative paths
@@ -1337,10 +1337,7 @@ fn collect_profiles_yml_if_exists(
 ) {
     if let Ok(timestamp) = last_modified(&dbt_profile.relative_profile_path) {
         let entry = all_paths.entry(ResourcePathKind::ProfilePaths).or_default();
-        entry.push((
-            DbtPath::from_path(&dbt_profile.relative_profile_path),
-            timestamp,
-        ));
+        entry.push((DbtPath::from(&dbt_profile.relative_profile_path), timestamp));
     }
 }
 
@@ -1365,11 +1362,11 @@ fn find_session_files(package_path: &Path) -> FsResult<Vec<(DbtPath, SystemTime)
         if relative_path == DBT_PROJECT_YML {
             let dbt_project_path = package_path.join(relative_path);
             let dbt_project_timestamp = last_modified(&dbt_project_path)?;
-            result.push((DbtPath::from_path(dbt_project_path), dbt_project_timestamp));
+            result.push((DbtPath::from(dbt_project_path), dbt_project_timestamp));
         } else {
             let path = package_path.join(relative_path);
             if let Ok(timestamp) = last_modified(&path) {
-                result.push((DbtPath::from_path(path), timestamp));
+                result.push((DbtPath::from(path), timestamp));
             }
         }
     }

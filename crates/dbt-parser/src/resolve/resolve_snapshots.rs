@@ -27,6 +27,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::path::DbtPath;
 use dbt_common::tokiofs;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs, unexpected_fs_err};
@@ -261,7 +262,7 @@ pub async fn resolve_snapshots(
                 );
                 let asset = DbtAsset {
                     path: target_path.clone(),
-                    original_path,
+                    original_path: original_path.to_path_buf(),
                     package_name: package_name.clone(),
                     base_path: arg.io.out_dir.clone(),
                 };
@@ -498,16 +499,16 @@ pub async fn resolve_snapshots(
                 __common_attr__: CommonAttributes {
                     name: snapshot_name.to_string(),
                     package_name: package_name.clone(),
-                    path: dbt_asset.path.clone(),
+                    path: DbtPath::from(&dbt_asset.path),
                     name_span: snapshot_name_span,
                     raw_code: Some(snapshot_block_body.unwrap_or(raw_code)),
                     // The original file path where the snapshot was defined
                     // For package snapshots, this includes the package path (e.g., dbt_packages/my_pkg/snapshots/foo.sql)
-                    original_file_path: dbt_asset.original_path.clone(),
+                    original_file_path: DbtPath::from(&dbt_asset.original_path),
                     unique_id: unique_id.clone(),
                     fqn,
                     description: Some(properties.description.clone().unwrap_or_default()),
-                    patch_path: patch_path.clone(),
+                    patch_path: patch_path.as_ref().map(DbtPath::from),
                     checksum: recalculated_checksum,
                     language: Some("sql".to_string()),
                     tags: snapshot_config

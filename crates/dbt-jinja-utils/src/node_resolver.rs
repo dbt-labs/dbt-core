@@ -881,7 +881,9 @@ pub fn resolve_dependencies(
         } in node_base.refs.iter()
         {
             let location = if let Some(location) = location {
-                location.clone().with_file(Arc::new(node_path.clone()))
+                location
+                    .clone()
+                    .with_file(Arc::new(node_path.to_path_buf()))
             } else {
                 CodeLocationWithFile::default()
             };
@@ -939,7 +941,9 @@ pub fn resolve_dependencies(
             let table_name = source[1].clone();
 
             let location = if let Some(location) = location {
-                location.clone().with_file(Arc::new(node_path.clone()))
+                location
+                    .clone()
+                    .with_file(Arc::new(node_path.to_path_buf()))
             } else {
                 CodeLocationWithFile::default()
             };
@@ -984,7 +988,9 @@ pub fn resolve_dependencies(
         } in node_base.functions.iter()
         {
             let location = if let Some(location) = location {
-                location.clone().with_file(Arc::new(node_path.clone()))
+                location
+                    .clone()
+                    .with_file(Arc::new(node_path.to_path_buf()))
             } else {
                 CodeLocationWithFile::default()
             };
@@ -1052,7 +1058,7 @@ pub fn resolve_dependencies(
                         CodeLocationWithFile::default,
                         |loc| {
                             loc.clone()
-                                .with_file(Arc::new(operation.__common_attr__.path.clone()))
+                                .with_file(Arc::new(operation.__common_attr__.path.to_path_buf()))
                         },
                     );
 
@@ -1104,8 +1110,9 @@ pub fn resolve_dependencies(
                         let location = source_wrapper.location.as_ref().map_or_else(
                             CodeLocationWithFile::default,
                             |loc| {
-                                loc.clone()
-                                    .with_file(Arc::new(operation.__common_attr__.path.clone()))
+                                loc.clone().with_file(Arc::new(
+                                    operation.__common_attr__.path.to_path_buf(),
+                                ))
                             },
                         );
 

@@ -1,3 +1,4 @@
+use dbt_common::path::DbtPath;
 use indexmap::IndexMap;
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -89,8 +90,8 @@ pub struct ManifestCommonAttributes {
     pub fqn: Vec<String>,
 
     // Paths
-    pub path: PathBuf,
-    pub original_file_path: PathBuf,
+    pub path: DbtPath,
+    pub original_file_path: DbtPath,
 
     // Meta
     pub description: Option<String>,
@@ -120,9 +121,9 @@ pub struct ManifestMaterializableCommonAttributes {
     pub fqn: Vec<String>,
 
     // Paths
-    pub path: PathBuf,
-    pub original_file_path: PathBuf,
-    pub patch_path: Option<PathBuf>,
+    pub path: DbtPath,
+    pub original_file_path: DbtPath,
+    pub patch_path: Option<DbtPath>,
 
     // Meta
     pub description: Option<String>,
@@ -724,8 +725,8 @@ impl From<DbtSource> for ManifestSource {
 pub struct ManifestMacro {
     pub name: String,
     pub package_name: String,
-    pub path: PathBuf,
-    pub original_file_path: PathBuf,
+    pub path: DbtPath,
+    pub original_file_path: DbtPath,
     pub unique_id: String,
     pub macro_sql: String,
     #[serde(default)]
@@ -772,7 +773,7 @@ impl From<ManifestMacro> for DbtMacro {
             package_name: macro_.package_name,
             path: macro_.path,
             original_file_path: macro_.original_file_path,
-            absolute_path: PathBuf::default(),
+            absolute_path: DbtPath::default(),
             span: None,
             unique_id: macro_.unique_id,
             macro_sql: macro_.macro_sql,

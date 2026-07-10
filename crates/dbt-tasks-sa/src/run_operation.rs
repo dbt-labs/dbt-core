@@ -287,7 +287,7 @@ pub async fn run_operation_on_run(
         listener_factory,
         &operation.__common_attr__.original_file_path,
     )
-    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.clone()))?;
+    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.to_path_buf()))?;
     // Then wrap the rendered SQL with call statement and render again
     let instruction_plus_wrapper = format!(
         "{{% call statement(None, auto_begin=false, fetch_result=false) %}}\n{}\n{{% endcall %}}",
@@ -302,7 +302,7 @@ pub async fn run_operation_on_run(
         listener_factory,
         &operation.__common_attr__.original_file_path,
     )
-    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.clone()))?;
+    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.to_path_buf()))?;
 
     // Save the rendered sql to `target/compiled/{project}/dbt_project.yml/hooks/{name}.sql`,
     // mirroring the run path obtained above and dbt-core's nested operation layout.

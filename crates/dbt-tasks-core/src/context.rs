@@ -1,6 +1,5 @@
 use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -11,6 +10,7 @@ use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::collections::{DashMap, SccHashMap};
+use dbt_common::path::DbtPath;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_dag::schedule::Schedule;
 use dbt_frontend_common::sources_extractor::SourcesExtractor;
@@ -274,7 +274,7 @@ impl TaskRunnerCtx {
         })
     }
 
-    pub fn try_get_model_original_file_path(&self, unique_id: &str) -> Option<&PathBuf> {
+    pub fn try_get_model_original_file_path(&self, unique_id: &str) -> Option<&DbtPath> {
         self.resolver_state
             .nodes
             .models

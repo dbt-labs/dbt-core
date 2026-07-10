@@ -418,6 +418,7 @@ fn request_build_error(error: RequestBuildError) -> Box<dbt_common::FsError> {
 mod tests {
     use super::*;
     use dbt_common::io_args::StaticAnalysisKind;
+    use dbt_common::path::DbtPath;
     use dbt_schemas::schemas::common::{
         Access, DbtIncrementalStrategy, DbtMaterialization, DbtUniqueKey, OnSchemaChange,
         ResolvedQuoting,
@@ -433,7 +434,6 @@ mod tests {
     use dbt_yaml::Spanned;
     use indexmap::IndexMap;
     use std::collections::BTreeMap;
-    use std::path::PathBuf;
 
     fn make_common(unique_id: &str, name: &str) -> CommonAttributes {
         CommonAttributes {
@@ -441,7 +441,7 @@ mod tests {
             name: name.to_string(),
             package_name: "jaffle_shop".to_string(),
             fqn: vec!["jaffle_shop".to_string(), name.to_string()],
-            original_file_path: PathBuf::from(format!("models/{name}.sql")),
+            original_file_path: DbtPath::from(format!("models/{name}.sql")),
             tags: vec![],
             meta: IndexMap::new(),
             ..Default::default()
@@ -506,7 +506,7 @@ mod tests {
 
         DbtSeed {
             __common_attr__: CommonAttributes {
-                original_file_path: PathBuf::from("seeds/cities.csv"),
+                original_file_path: DbtPath::from("seeds/cities.csv"),
                 ..make_common("seed.jaffle_shop.cities", "cities")
             },
             __base_attr__: make_base(DbtMaterialization::Seed, "cities"),

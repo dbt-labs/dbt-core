@@ -1,6 +1,9 @@
 use std::{
-    ffi::OsStr,
+    borrow::{Borrow, Cow},
+    ffi::{OsStr, OsString},
+    fmt::Debug,
     hash::Hash,
+    ops::Deref,
     path::{Component, Display, Path, PathBuf},
 };
 
@@ -52,7 +55,7 @@ pub fn get_target_write_path(
     path: &Path,
     original_file_path: &Path,
 ) -> PathBuf {
-    let abs_ofp = in_dir.join(original_file_path).normalize();
+    let abs_ofp = DbtPath::normalize(&in_dir.join(original_file_path)).to_path_buf();
     let escapes_root = !abs_ofp.starts_with(in_dir);
     let path_segment = if escapes_root {
         path.to_path_buf()
@@ -63,6 +66,8 @@ pub fn get_target_write_path(
     };
     out_dir.join(package_name).join(path_segment)
 }
+
+use serde::{Deserialize, Serialize};
 
 /// Strip the first matching resource-root prefix (e.g. `models`) from a
 /// package-relative path, yielding the path dbt exposes to Jinja as
@@ -91,19 +96,87 @@ pub fn strip_resource_paths(path: &Path, resource_paths: &[String]) -> PathBuf {
     path.to_path_buf()
 }
 
-use normalize_path::NormalizePath;
-
 /// Self-normalizing path. Wrapper around [PathBuf].
 /// Case-sensitivity for equality ([PartialEq] and [Eq]) is determined by the OS.
 /// Comparisons ([Ord] and [PartialOrd]) are always case-sensitive.
+/// Back-slashes '\' are replaced with forward-slashes '/'.
 /// Use this instead of [PathBuf].
-#[derive(Clone, Debug, Default, Ord, PartialOrd)]
+#[derive(Clone, Debug, Default, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct DbtPath(PathBuf);
+
+enum PrefixDoubleSlash {
+    None,
+    Colon,
+    StartsWith,
+}
 
 #[allow(unused)]
 impl DbtPath {
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
-        Self(path.as_ref().normalize())
+    fn normalize(value: &Path) -> DbtPath {
+        let mut collapse_parent_depth = 0;
+        let mut ret = PathBuf::new();
+
+        // Replace slashes first before we get components because it will incorrectly
+        // separate the components if we do not.
+        // Collapses parents except if the parents are first.
+        let value = PathBuf::from(value.to_string_lossy().replace("\\", "/"));
+
+        let value_string = value.to_string_lossy();
+        let prefix_double_slash = if value_string.rmatches("://").count() == 1
+            && value_string.rmatches(":/").count() == 1
+        {
+            PrefixDoubleSlash::Colon
+        } else if value_string.starts_with("//") {
+            PrefixDoubleSlash::StartsWith
+        } else {
+            PrefixDoubleSlash::None
+        };
+
+        for component in value.components() {
+            match component {
+                Component::Prefix(prefix_component) => {
+                    collapse_parent_depth += 1;
+                    ret.push(prefix_component.as_os_str())
+                }
+                Component::RootDir => {
+                    collapse_parent_depth += 1;
+                    ret.push(component.as_os_str());
+                }
+                Component::CurDir => {
+                    collapse_parent_depth += 1;
+                    ret.push(".");
+                }
+                Component::ParentDir => {
+                    if collapse_parent_depth > 0 {
+                        ret.pop();
+                        collapse_parent_depth -= 1;
+                    } else {
+                        ret.push("..");
+                    }
+                }
+                Component::Normal(c) => {
+                    collapse_parent_depth += 1;
+                    ret.push(c);
+                }
+            }
+        }
+
+        let ret = PathBuf::from(ret.to_string_lossy().replace("\\", "/"));
+        let ret = match prefix_double_slash {
+            PrefixDoubleSlash::None => ret,
+            PrefixDoubleSlash::Colon => {
+                PathBuf::from(ret.to_string_lossy().replacen(":/", "://", 1))
+            }
+            PrefixDoubleSlash::StartsWith => {
+                PathBuf::from("/".to_string() + &ret.to_string_lossy())
+            }
+        };
+
+        Self(ret)
+    }
+
+    pub fn new() -> Self {
+        Self(PathBuf::new())
     }
 
     /// See [PathBuf::as_path] for documentation.
@@ -146,8 +219,8 @@ impl DbtPath {
     }
 
     /// See [Path::join] for documentation.
-    pub fn join(&self, path: &DbtPath) -> Self {
-        Self(self.0.join(path.as_path()).normalize())
+    pub fn join<P: AsRef<Path>>(&self, path: P) -> Self {
+        Self::normalize(&self.0.join(path))
     }
 
     /// Case-sensitivity based on the OS.
@@ -163,14 +236,20 @@ impl DbtPath {
 
     /// Case-sensitivity based on the OS.
     pub fn get_relative_path(&self, base_path: &DbtPath) -> Option<Self> {
-        Some(Self(
-            diff_paths_os_ascii_case(&self.0, &base_path.0)?.normalize(),
-        ))
+        Some(Self::normalize(&diff_paths_os_ascii_case(
+            &self.0,
+            &base_path.0,
+        )?))
     }
 
     /// See [Path::to_str] for documentation.
     pub fn to_str(&self) -> Option<&str> {
         self.0.to_str()
+    }
+
+    /// See [Path::to_string_lossy] for documentation.
+    pub fn to_string_lossy(&self) -> Cow<'_, str> {
+        self.0.to_string_lossy()
     }
 
     /// See [Path::display] for documentation.
@@ -185,19 +264,68 @@ impl DbtPath {
 
 impl From<String> for DbtPath {
     fn from(value: String) -> Self {
-        Self(PathBuf::from(value).normalize())
+        Self::normalize(&PathBuf::from(value))
     }
 }
 
 impl From<&String> for DbtPath {
     fn from(value: &String) -> Self {
-        Self(PathBuf::from(value).normalize())
+        Self::normalize(&PathBuf::from(value))
     }
 }
 
 impl From<&str> for DbtPath {
     fn from(value: &str) -> Self {
-        Self(PathBuf::from(value).normalize())
+        Self::normalize(&PathBuf::from(value))
+    }
+}
+
+impl From<PathBuf> for DbtPath {
+    fn from(value: PathBuf) -> Self {
+        Self::normalize(&value)
+    }
+}
+
+impl From<&PathBuf> for DbtPath {
+    fn from(value: &PathBuf) -> Self {
+        Self::normalize(value)
+    }
+}
+
+impl From<OsString> for DbtPath {
+    fn from(value: OsString) -> Self {
+        Self::normalize(&PathBuf::from(value))
+    }
+}
+
+impl From<&Path> for DbtPath {
+    fn from(value: &Path) -> Self {
+        Self::normalize(&PathBuf::from(value))
+    }
+}
+
+impl AsRef<Path> for DbtPath {
+    fn as_ref(&self) -> &Path {
+        self.as_path()
+    }
+}
+
+impl AsRef<OsStr> for DbtPath {
+    fn as_ref(&self) -> &OsStr {
+        self.0.as_ref()
+    }
+}
+
+impl Borrow<Path> for DbtPath {
+    fn borrow(&self) -> &Path {
+        self.0.deref()
+    }
+}
+
+impl Deref for DbtPath {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        self.0.deref()
     }
 }
 
@@ -227,6 +355,12 @@ impl Hash for DbtPath {
             }
             state.write_u8(0xff);
         }
+    }
+}
+
+impl std::fmt::Display for DbtPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -478,5 +612,113 @@ mod tests {
         let relative = DbtPath::from("models/my_model.sql");
         assert!(empty.is_empty());
         assert!(!relative.is_empty());
+    }
+
+    #[test]
+    fn normalize_back_slash_to_forward_slash() {
+        let path = DbtPath::from("models\\my_model.sql");
+        assert_eq!("models/my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn normalize_back_slash_to_forward_slash_2() {
+        let path = DbtPath::from("C:\\models\\my_model.sql");
+        assert_eq!("C:/models/my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn normalize_back_slash_to_forward_slash_3() {
+        let path = DbtPath::from("C:\\models\\..\\my_model.sql");
+        assert_eq!("C:/my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn normalize_back_slash_to_forward_slash_4() {
+        let path = DbtPath::from("C:/models\\../my_model.sql");
+        assert_eq!("C:/my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first() {
+        let path = DbtPath::from("../my_model.sql");
+        assert_eq!("../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_2() {
+        let path = DbtPath::from("../../my_model.sql");
+        assert_eq!("../../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_3() {
+        let path = DbtPath::from("../../folder/../my_model.sql");
+        assert_eq!("../../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_4() {
+        let path = DbtPath::from("test/../../my_model.sql");
+        assert_eq!("../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_5() {
+        let path = DbtPath::from("test/test2/../../../my_model.sql");
+        assert_eq!("../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_6() {
+        let path = DbtPath::from("test/test2/../../my_model.sql");
+        assert_eq!("my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_7() {
+        let path = DbtPath::from("../../folder/../../my_model.sql");
+        assert_eq!("../../../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_8() {
+        let path = DbtPath::from("/../my_model.sql");
+        assert_eq!("/my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_9() {
+        let path = DbtPath::from("/../../my_model.sql");
+        assert_eq!("/../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_10() {
+        let path = DbtPath::from("./../my_model.sql");
+        assert_eq!("my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn should_not_collapse_parent_if_it_is_first_11() {
+        let path = DbtPath::from("./../../my_model.sql");
+        assert_eq!("../my_model.sql", path.to_string_lossy());
+    }
+
+    #[test]
+    fn custom_prefix_should_have_expected_forward_slahses() {
+        let path = DbtPath::from("jaffle_shop://models//schema.yml");
+        assert_eq!("jaffle_shop://models/schema.yml", path.to_string_lossy());
+    }
+
+    #[test]
+    fn custom_prefix_should_have_expected_forward_slahses_2() {
+        let path = DbtPath::from("jaffle_shop:\\\\models\\\\schema.yml");
+        assert_eq!("jaffle_shop://models/schema.yml", path.to_string_lossy());
+    }
+
+    #[test]
+    fn custom_prefix_should_have_expected_forward_slahses_3() {
+        let path = DbtPath::from("//models//schema.yml");
+        assert_eq!("//models/schema.yml", path.to_string_lossy());
     }
 }

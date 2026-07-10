@@ -1007,7 +1007,7 @@ pub fn reconstruct_package_metadata(snapshot: &PackageSnapshot) -> FsResult<DbtP
                 .iter()
                 .map(|(path_str, nanos)| {
                     (
-                        DbtPath::from_path(Path::new(path_str)),
+                        DbtPath::from(Path::new(path_str)),
                         nanos_to_system_time(*nanos),
                     )
                 })
@@ -1210,7 +1210,7 @@ mod tests {
             all_paths: HashMap::from([(
                 ResourcePathKind::ModelPaths,
                 vec![(
-                    DbtPath::from_path(Path::new("/tmp/project/models/x.sql")),
+                    DbtPath::from(Path::new("/tmp/project/models/x.sql")),
                     nanos_to_system_time(5_000_000_000),
                 )],
             )]),
@@ -3531,7 +3531,7 @@ mod tests {
             package_root_path: tmp.path().to_path_buf(),
             all_paths: HashMap::from([(
                 ResourcePathKind::ModelPaths,
-                vec![(DbtPath::from_path(Path::new("models/m.sql")), saved_mtime)],
+                vec![(DbtPath::from(Path::new("models/m.sql")), saved_mtime)],
             )]),
             dbt_properties: vec![],
             analysis_files: vec![],
@@ -3568,7 +3568,7 @@ mod tests {
             package_root_path: tmp.path().to_path_buf(),
             all_paths: HashMap::from([(
                 ResourcePathKind::ModelPaths,
-                vec![(DbtPath::from_path(Path::new("models/m.sql")), old_mtime)],
+                vec![(DbtPath::from(Path::new("models/m.sql")), old_mtime)],
             )]),
             dbt_properties: vec![],
             analysis_files: vec![],
@@ -4099,7 +4099,7 @@ mod tests {
                 name: name.into(),
                 package_name: "p".into(),
                 fqn: vec!["p".into(), name.into()],
-                original_file_path: PathBuf::from(path),
+                original_file_path: DbtPath::from(path),
                 ..CommonAttributes::default()
             },
             __base_attr__: NodeBaseAttributes {

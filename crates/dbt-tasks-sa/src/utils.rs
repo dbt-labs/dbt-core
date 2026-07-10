@@ -726,7 +726,7 @@ pub fn typecheck_macros(
             .filter_map(|m| {
                 let path =
                     m.get_node_path_abs(NodePathKind::Definition, &arg.io.in_dir, &arg.io.out_dir);
-                seen.insert(path.clone()).then(|| DbtPath::from_path(path))
+                seen.insert(path.clone()).then(|| DbtPath::from(path))
             })
             .collect::<Vec<_>>()
     };
@@ -740,7 +740,7 @@ pub fn typecheck_macros(
             continue;
         }
         let relative_file_path = m.original_file_path.clone();
-        let absolute_file_path = DbtPath::from_path(m.get_node_path_abs(
+        let absolute_file_path = DbtPath::from(m.get_node_path_abs(
             NodePathKind::Definition,
             &arg.io.in_dir,
             &arg.io.out_dir,
@@ -778,7 +778,7 @@ pub fn typecheck_macros(
                     span.start_line,
                     span.start_col,
                     span.start_offset,
-                    relative_file_path.clone(),
+                    relative_file_path.to_path_buf(),
                 ),
             )
         } else {
@@ -815,7 +815,7 @@ fn collect_noqa_comments(
     let mut noqa_comments = HashMap::new();
 
     for file in files {
-        let absolute_file_path = DbtPath::from_path(io.in_dir.join(file.as_path()));
+        let absolute_file_path = DbtPath::from(io.in_dir.join(file.as_path()));
         let content = if let Some(content) = content_cache.get(&absolute_file_path) {
             content.clone()
         } else {
