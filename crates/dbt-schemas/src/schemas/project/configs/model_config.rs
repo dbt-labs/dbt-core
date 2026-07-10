@@ -505,6 +505,19 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+sync")]
     pub sync: Option<SyncConfig>,
 
+    // ClickHouse
+    // table materialization
+    #[serde(rename = "+engine")]
+    pub engine: Option<String>,
+    #[serde(rename = "+order_by")]
+    pub order_by: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+ttl")]
+    pub ttl: Option<String>,
+    #[serde(rename = "+settings")]
+    pub settings: Option<BTreeMap<String, YmlValue>>,
+    #[serde(rename = "+query_settings")]
+    pub query_settings: Option<BTreeMap<String, YmlValue>>,
+
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -805,6 +818,12 @@ impl From<ProjectModelConfig> for ModelConfig {
 
                 primary_key: config.primary_key,
                 category: config.category,
+
+                engine: config.engine,
+                order_by: config.order_by,
+                ttl: config.ttl,
+                settings: config.settings,
+                query_settings: config.query_settings,
             },
             // Python-specific fields - initialized to None here, set during Python AST analysis
             config_keys_used: None,
@@ -993,6 +1012,11 @@ impl From<ModelConfig> for ProjectModelConfig {
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,
+            engine: config.__warehouse_specific_config__.engine,
+            order_by: config.__warehouse_specific_config__.order_by,
+            ttl: config.__warehouse_specific_config__.ttl,
+            settings: config.__warehouse_specific_config__.settings,
+            query_settings: config.__warehouse_specific_config__.query_settings,
             __additional_properties__: BTreeMap::new(),
         }
     }
