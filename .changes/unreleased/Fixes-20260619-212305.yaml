@@ -1,0 +1,12 @@
+kind: Fixes
+body: >-
+  Normalize line endings when hashing file contents delivered through a file
+  diff (the `--partial-parse-file-diff` / dbt Cloud path), matching the
+  normalization the on-disk read path (`load_source_file`) already applies.
+  Previously `ReadFilesFromDiff` hashed the raw content, so a model or YAML file
+  authored with Windows (CRLF) line endings was falsely reported as
+  `state:modified` when compared against a manifest built on another platform.
+time: 2026-06-19T21:23:06.0000000Z
+custom:
+    Author: claygeo
+    Issue: "11473"
