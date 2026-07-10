@@ -113,7 +113,7 @@ Humans like CLIs. Agents like CLIs. dbt is, first and foremost, a CLI. We think 
 
 By that we mean *all* capabilities of dbt — open source and proprietary, local and remote — should have an entry point in the CLI.
 
-The start is: `dbt login` for connected platform features. We're planning to add this in the next dbt Core v1.X release (v1.13), to smooth the onboarding path for folks who want to use [dbt State](https://docs.getdbt.com/docs/deploy/dbt-state-about). `dbt login` is already in dbt Core v2 and in Fusion, where it will get you access to things (available in Fusion only) like advanced SQL comprehension, linting, and column-level lineage.
+The start is: `dbt login` for connected platform features. We're planning to add this in the next dbt Core v1.X release (v1.13), to smooth the onboarding path for folks who want to use [dbt State](https://docs.getdbt.com/docs/deploy/dbt-state-about). `dbt login` is already in dbt Core v2 and in Fusion, where it will also get you access to Fusion-only things like advanced SQL comprehension, linting, and column-level lineage.
 
 You do not need to use those features. You do not need to run `dbt login` if you don’t want to. The code in `dbt-core` to power those features is in thin clients, all licensed under Apache 2.0. But when you run `dbt --help`, you will start seeing the new `login` command.
 
