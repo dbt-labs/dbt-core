@@ -355,12 +355,8 @@ pub async fn resolve_models(
             .ok()
             .and_then(|sql| parse_unrendered_config(&sql, false));
 
-        // Set to Inline if this is the inline file
-        let is_inline_file = package
-            .inline_file
-            .as_ref()
-            .map(|inline_file| inline_file == &dbt_asset)
-            .unwrap_or(false);
+        // A model is an ad-hoc inline model iff it lives in the dedicated "" package.
+        let is_inline_file = package_name.is_empty();
         if is_inline_file {
             model_config.materialized = DbtMaterialization::Inline;
         }

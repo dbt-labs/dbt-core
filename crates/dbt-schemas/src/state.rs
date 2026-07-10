@@ -237,7 +237,6 @@ pub struct DbtPackage {
     pub seed_files: Vec<DbtAsset>,
     pub docs_files: Vec<DbtAsset>,
     pub snapshot_files: Vec<DbtAsset>,
-    pub inline_file: Option<DbtAsset>,
     pub dependencies: BTreeSet<String>,
     pub all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>>,
     /// Pre-read file contents for embedded (internal) packages.
@@ -246,6 +245,29 @@ pub struct DbtPackage {
     pub embedded_file_contents: Option<HashMap<DbtPath, String>>,
     /// Raw dbt_project.yml.
     pub raw_project_yml: dbt_yaml::Value,
+}
+
+impl Default for DbtPackage {
+    fn default() -> Self {
+        DbtPackage {
+            dbt_project: DbtProject::default(),
+            package_root_path: PathBuf::new(),
+            dbt_properties: vec![],
+            analysis_files: vec![],
+            model_sql_files: vec![],
+            function_sql_files: vec![],
+            macro_files: vec![],
+            test_files: vec![],
+            fixture_files: vec![],
+            seed_files: vec![],
+            docs_files: vec![],
+            snapshot_files: vec![],
+            dependencies: BTreeSet::new(),
+            all_paths: HashMap::new(),
+            embedded_file_contents: None,
+            raw_project_yml: dbt_yaml::Value::default(),
+        }
+    }
 }
 
 pub use dbt_jinja_vars::DbtVars;

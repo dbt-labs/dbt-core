@@ -332,7 +332,8 @@ pub async fn load(
         //    OnceLock::set silently no-ops if already set, which is correct (same binary,
         //    same dispatch config).
         // 5. The inline SQL file is NOT in prev_root_package.all_paths. It is injected
-        //    separately by prepare_inline_sql after this block, into dbt_state.packages[0].
+        //    separately by prepare_inline_sql after this block, into a dedicated "" package
+        //    (appended to dbt_state.packages), never into the root package.
         let new_root_package = if arg.inline_sql.is_some() {
             if DISPATCH_CONFIG.get().is_none() {
                 let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
@@ -1097,7 +1098,6 @@ pub async fn load_inner(
         snapshot_files,
         dependencies,
         all_paths: all_files,
-        inline_file: None,
         embedded_file_contents: None,
         raw_project_yml,
     })
@@ -1382,7 +1382,9 @@ fn find_session_files(package_path: &Path) -> FsResult<Vec<(DbtPath, SystemTime)
 /// This function:
 /// 1. Writes the inline SQL to target/inline_<uuid>.sql
 /// 2. Creates a DbtAsset for the file
-/// 3. Adds it to the root package's model_sql_files
+/// 3. Injects the asset into a dedicated "" (empty-named) package, rather than the
+///    root package, so that inline SQL handling does not depend on the root package
+///    being present or enabled.
 /// 4. Returns the generated model name for later reference
 ///
 /// # Arguments
@@ -1411,18 +1413,39 @@ async fn prepare_inline_sql(
         base_path: out_dir.to_path_buf(),
         path: path.clone(),
         original_path: path,
-        package_name: dbt_state.root_project_name().to_string(),
+        package_name: String::new(),
     };
 
-    // Set inline_file in root package and add to model_sql_files
-    let root_project_name = dbt_state.root_project_name().to_string();
-    if let Some(root_package) = dbt_state
+    // Inject the inline SQL into a dedicated "" package so that inline handling
+    // is independent of the root package (which may be disabled or absent).
+    // Create the "" package only if it does not already exist; otherwise reuse it
+    // so repeated calls accumulate inline models instead of spawning duplicates.
+    let inline_package_name = String::new();
+    let needs_vars = !dbt_state.vars.contains_key(&inline_package_name);
+    if needs_vars {
+        // The "" package needs vars like any other package. Mirror the global (root)
+        // vars, which is what non-root packages receive during `load_vars`.
+        let global_vars = dbt_state
+            .vars
+            .get(dbt_state.root_project_name())
+            .cloned()
+            .unwrap_or_default();
+        dbt_state.vars.insert(inline_package_name, global_vars);
+    }
+
+    if let Some(inline_package) = dbt_state
         .packages
         .iter_mut()
-        .find(|p| p.dbt_project.name == root_project_name)
+        .find(|p| p.dbt_project.name.is_empty())
     {
-        root_package.inline_file = Some(inline_asset.clone());
-        root_package.model_sql_files.push(inline_asset);
+        inline_package.model_sql_files.push(inline_asset);
+    } else {
+        let inline_package = DbtPackage {
+            package_root_path: out_dir.to_path_buf(),
+            model_sql_files: vec![inline_asset],
+            ..DbtPackage::default()
+        };
+        dbt_state.packages.push(inline_package);
     }
 
     Ok(model_name)
