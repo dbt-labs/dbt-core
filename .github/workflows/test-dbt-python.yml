@@ -184,9 +184,14 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip "maturin>=1.0,<2.0" "pytest>=8"
 
+      # No --locked: a pull_request build compiles the PR head merged into a
+      # moving main, so a committed Cargo.lock routinely goes stale on merge.
+      # This is a test job, not a reproducible release build (release-v2.yml
+      # keeps --locked because it checks out a pinned ref), so let cargo
+      # reconcile the lock rather than fail the run on dependency bookkeeping.
       - name: Build extension (maturin develop)
         working-directory: crates/dbt-python
-        run: .venv/bin/maturin develop --locked
+        run: .venv/bin/maturin develop
 
       - name: sccache stats
         if: always()
