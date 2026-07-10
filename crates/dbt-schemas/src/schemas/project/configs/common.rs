@@ -245,6 +245,14 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default)]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // ClickHouse
+    // table materialization
+    pub engine: Option<String>,
+    pub order_by: Option<StringOrArrayOfStrings>,
+    pub ttl: Option<String>,
+    pub settings: Option<BTreeMap<String, YmlValue>>,
+    pub query_settings: Option<BTreeMap<String, YmlValue>>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -447,6 +455,11 @@ pub fn same_warehouse_config(
     let indexes_eq = self_wh.indexes == other_wh.indexes;
     let primary_key_eq = self_wh.primary_key == other_wh.primary_key;
     let category_eq = self_wh.category == other_wh.category;
+    let engine_eq = self_wh.engine == other_wh.engine;
+    let order_by_eq = self_wh.order_by == other_wh.order_by;
+    let ttl_eq = self_wh.ttl == other_wh.ttl;
+    let settings_eq = self_wh.settings == other_wh.settings;
+    let query_settings_eq = self_wh.query_settings == other_wh.query_settings;
 
     let result = partition_by_eq
         && cluster_by_eq
@@ -517,7 +530,12 @@ pub fn same_warehouse_config(
         && table_type_eq
         && indexes_eq
         && primary_key_eq
-        && category_eq;
+        && category_eq
+        && engine_eq
+        && order_by_eq
+        && ttl_eq
+        && settings_eq
+        && query_settings_eq;
 
     if !result {
         log_state_mod_diff(
@@ -1082,6 +1100,46 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.category),
                         format!("{:?}", &other_wh.category),
+                    )),
+                ),
+                (
+                    "engine",
+                    engine_eq,
+                    Some((
+                        format!("{:?}", &self_wh.engine),
+                        format!("{:?}", &other_wh.engine),
+                    )),
+                ),
+                (
+                    "order_by",
+                    order_by_eq,
+                    Some((
+                        format!("{:?}", &self_wh.order_by),
+                        format!("{:?}", &other_wh.order_by),
+                    )),
+                ),
+                (
+                    "ttl",
+                    ttl_eq,
+                    Some((
+                        format!("{:?}", &self_wh.ttl),
+                        format!("{:?}", &other_wh.ttl),
+                    )),
+                ),
+                (
+                    "settings",
+                    settings_eq,
+                    Some((
+                        format!("{:?}", &self_wh.settings),
+                        format!("{:?}", &other_wh.settings),
+                    )),
+                ),
+                (
+                    "query_settings",
+                    query_settings_eq,
+                    Some((
+                        format!("{:?}", &self_wh.query_settings),
+                        format!("{:?}", &other_wh.query_settings),
                     )),
                 ),
             ],

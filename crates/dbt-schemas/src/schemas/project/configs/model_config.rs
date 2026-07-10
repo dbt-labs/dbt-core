@@ -516,6 +516,19 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+sync")]
     pub sync: Option<SyncConfig>,
 
+    // ClickHouse
+    // table materialization
+    #[serde(rename = "+engine")]
+    pub engine: Option<String>,
+    #[serde(rename = "+order_by")]
+    pub order_by: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+ttl")]
+    pub ttl: Option<String>,
+    #[serde(rename = "+settings")]
+    pub settings: Option<BTreeMap<String, YmlValue>>,
+    #[serde(rename = "+query_settings")]
+    pub query_settings: Option<BTreeMap<String, YmlValue>>,
+
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -821,6 +834,12 @@ impl From<ProjectModelConfig> for ModelConfig {
 
                 primary_key: config.primary_key,
                 category: config.category,
+
+                engine: config.engine,
+                order_by: config.order_by,
+                ttl: config.ttl,
+                settings: config.settings,
+                query_settings: config.query_settings,
             },
             // Python-specific fields - initialized to None here, set during Python AST analysis
             config_keys_used: None,
@@ -1012,6 +1031,11 @@ impl From<ModelConfig> for ProjectModelConfig {
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,
+            engine: config.__warehouse_specific_config__.engine,
+            order_by: config.__warehouse_specific_config__.order_by,
+            ttl: config.__warehouse_specific_config__.ttl,
+            settings: config.__warehouse_specific_config__.settings,
+            query_settings: config.__warehouse_specific_config__.query_settings,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -2008,5 +2032,88 @@ __additional_properties__: {}
                 "matplotlib".to_string(),
             ])))
         );
+    }
+
+    #[test]
+    fn test_clickhouse_project_config_keys_parse_with_plus_prefix() {
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++engine: ReplacingMergeTree()
++order_by:
+  - id
+  - ts
++ttl: ts + INTERVAL 30 DAY
++settings:
+  index_granularity: 4096
++query_settings:
+  join_use_nulls: 1
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.engine.as_deref(), Some("ReplacingMergeTree()"));
+        assert_eq!(
+            config.order_by,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "id".to_string(),
+                "ts".to_string(),
+            ]))
+        );
+        assert_eq!(config.ttl.as_deref(), Some("ts + INTERVAL 30 DAY"));
+        let settings = config.settings.as_ref().expect("+settings should parse");
+        assert_eq!(
+            settings.get("index_granularity").and_then(|v| v.as_i64()),
+            Some(4096)
+        );
+        let query_settings = config
+            .query_settings
+            .as_ref()
+            .expect("+query_settings should parse");
+        assert_eq!(
+            query_settings.get("join_use_nulls").and_then(|v| v.as_i64()),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn test_clickhouse_config_keys_roundtrip_through_model_config() {
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++engine: MergeTree()
++order_by: id
++ttl: ts + INTERVAL 1 DAY
++settings:
+  allow_nullable_key: 1
++query_settings:
+  max_threads: 4
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        // ProjectModelConfig -> ModelConfig lands the keys in the warehouse config
+        let model_config: ModelConfig = project_config.clone().into();
+        let wh = &model_config.__warehouse_specific_config__;
+        assert_eq!(wh.engine, project_config.engine);
+        assert_eq!(
+            wh.order_by,
+            Some(StringOrArrayOfStrings::String("id".to_string()))
+        );
+        assert_eq!(wh.ttl, project_config.ttl);
+        assert_eq!(wh.settings, project_config.settings);
+        assert_eq!(wh.query_settings, project_config.query_settings);
+
+        // ModelConfig -> ProjectModelConfig restores them
+        let roundtripped: ProjectModelConfig = model_config.into();
+        assert_eq!(roundtripped.engine, project_config.engine);
+        assert_eq!(roundtripped.order_by, project_config.order_by);
+        assert_eq!(roundtripped.ttl, project_config.ttl);
+        assert_eq!(roundtripped.settings, project_config.settings);
+        assert_eq!(roundtripped.query_settings, project_config.query_settings);
     }
 }
