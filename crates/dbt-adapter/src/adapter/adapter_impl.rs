@@ -197,6 +197,26 @@ pub(crate) fn get_bool_config(engine: &dyn AdapterEngine, key: &str) -> AdapterR
         .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e.to_string()))
 }
 
+/// Redshift-specific features exposed to macros via `adapter.has_feature()`.
+/// Returns `None` when `name` is not a recognized Redshift feature.
+pub(crate) fn redshift_has_feature(
+    engine: &dyn AdapterEngine,
+    name: &str,
+) -> AdapterResult<Option<bool>> {
+    match name {
+        "datasharing" => Ok(Some(get_bool_config(engine, "datasharing")?)),
+        "drop_without_cascade" => Ok(Some(get_bool_config(engine, "drop_without_cascade")?)),
+        "grants_extended" => Ok(Some(
+            engine
+                .behavior_flag_overrides()
+                .get("redshift_grants_extended")
+                .copied()
+                .unwrap_or(false),
+        )),
+        _ => Ok(None),
+    }
+}
+
 pub fn quote_ident(adapter_type: AdapterType, identifier: &str) -> String {
     let q = dbt_adapter_core::quote_char(adapter_type);
     format!("{q}{identifier}{q}")
@@ -1553,21 +1573,21 @@ impl AdapterImpl {
             }
             // Assume that all other adapters support transactions for now.
             (_, "transactions") => Ok(Some(true)),
-            (Redshift, "datasharing") => Ok(Some(get_bool_config(
-                self.engine().as_ref(),
-                "datasharing",
-            )?)),
-            (Redshift, "drop_without_cascade") => Ok(Some(get_bool_config(
-                self.engine().as_ref(),
-                "drop_without_cascade",
-            )?)),
-            (Redshift, "grants_extended") => Ok(Some(
-                self.engine()
-                    .behavior_flag_overrides()
-                    .get("redshift_grants_extended")
-                    .copied()
-                    .unwrap_or(false),
-            )),
+            (Redshift, name) => match redshift_has_feature(self.engine().as_ref(), name)? {
+                Some(value) => Ok(Some(value)),
+                None => {
+                    emit_warn_log_message(
+                        ErrorCode::InvalidArgument,
+                        format!(
+                            "Unrecognized feature: {} for {} adapter",
+                            name,
+                            self.adapter_type()
+                        ),
+                        None,
+                    );
+                    Ok(None)
+                }
+            },
             (Databricks, _) => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
