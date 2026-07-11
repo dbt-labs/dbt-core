@@ -2,6 +2,6 @@ kind: Under the Hood
 body: Sync dbt-redshift bundled macros with upstream dbt-adapters, including extended grants support, alter_column_type, and catalog metadata helpers.
 time: 2026-07-11T09:30:00.000000+05:30
 custom:
-    author: kpandey
+    author: kunalpandey1
     issue: "15467"
     project: dbt-fusion
