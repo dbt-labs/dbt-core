@@ -207,7 +207,7 @@ class TestDbtRunnerHooks:
         dbt.invoke(["run", "--select", "models", "model2"])
         assert get_node_info() == {}
         exported_spans = span_exporter.get_finished_spans()
-        assert len(exported_spans) == 10
+        assert len(exported_spans) == 11
         assert exported_spans[0].instrumentation_scope.name == "dbt.runner"
         span_names = [span.name for span in exported_spans]
         span_names.sort()
@@ -222,6 +222,7 @@ class TestDbtRunnerHooks:
             "model.test.model2",
             "model.test.models",
             "on-run-end",
+            "operation.test.test-on-run-end-0",
         ]
         model2_span = None
         models_span = None
@@ -238,10 +239,18 @@ class TestDbtRunnerHooks:
         assert model2_span is not None
         assert metadata_span is not None
 
-        assert "node.status" in models_span.attributes
-        assert "node.materialization" in models_span.attributes
-        assert "node.database" in models_span.attributes
-        assert "node.schema" in models_span.attributes
+        assert "node_outcome" in models_span.attributes
+        assert "materialization" in models_span.attributes
+        assert "database" in models_span.attributes
+        assert "schema" in models_span.attributes
+        assert models_span.attributes["node_outcome"] in ("success", "error", "warn", "skipped")
+        assert models_span.attributes["materialization"] is not None
+        assert models_span.attributes["node_type"] == "model"
+        assert "unique_id" in models_span.attributes
+        assert "name" in models_span.attributes
+        assert "node_type" in models_span.attributes
+        assert "identifier" in models_span.attributes
+        assert "relative_path" in models_span.attributes
 
         assert len(model2_span.links) == 1
         assert model2_span.links[0].attributes["upstream.name"] == "model.test.models"

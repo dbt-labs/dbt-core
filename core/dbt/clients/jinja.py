@@ -80,8 +80,8 @@ class MacroGenerator(CallableMacroGenerator):
                 self.stack.pop(unique_id)
 
     # this makes MacroGenerator objects callable like functions
-    def __call__(self, *args, **kwargs):
-        if "run_hooks" == self.get_name() and len(*args) > 0:
+    def __call__(self, *args, **kwargs) -> Any:
+        if self.get_name() == "run_hooks" and args and args[0]:
             span_name = kwargs["span_name"] if "span_name" in kwargs else "hook_span"
             with self.track_call(), self.macro_tracer.start_as_current_span(span_name):
                 return self.call_macro(*args, **kwargs)

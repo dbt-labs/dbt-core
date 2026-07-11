@@ -19,7 +19,8 @@ from typing import (
 )
 
 from opentelemetry import context, trace
-from opentelemetry.trace import Link, SpanContext, StatusCode
+from opentelemetry.context.context import Context
+from opentelemetry.trace import Link, Span, SpanContext, StatusCode
 
 import dbt.exceptions
 import dbt.tracking
@@ -78,6 +79,11 @@ from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
+
+
+def _set_span_attr(span: Span, key: str, value: Any) -> None:
+    if value is not None:
+        span.set_attribute(key, value)
 
 
 class GraphRunnableMode(StrEnum):
@@ -259,7 +265,9 @@ class GraphRunnableTask(ConfiguredTask):
         runner.compiler.selected_node_ids = self.compiler.selected_node_ids
         return runner
 
-    def call_runner(self, runner: BaseRunner, parent_context=None) -> NodeResult:
+    def call_runner(
+        self, runner: BaseRunner, parent_context: Optional[Context] = None
+    ) -> NodeResult:
         node_info = runner.node.node_info
         links = []
         if hasattr(runner.node, "depends_on") and hasattr(runner.node.depends_on, "nodes"):
@@ -301,12 +309,31 @@ class GraphRunnableTask(ConfiguredTask):
                 thread_exception = e
             finally:
                 if result is not None:
-                    if result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess):
+                    if result.status in (
+                        NodeStatus.Error,
+                        NodeStatus.Fail,
+                        NodeStatus.PartialSuccess,
+                    ):
                         node_span.set_status(StatusCode.ERROR)
-                    node_span.set_attribute("node.status", result.status.value)
-                    node_span.set_attribute("node.materialization", node_info["materialized"])
-                    node_span.set_attribute("node.database", node_info["node_relation"]["database"])
-                    node_span.set_attribute("node.schema", node_info["node_relation"]["schema"])
+                    else:
+                        node_span.set_status(StatusCode.OK)
+                    node = runner.node
+                    node_relation = node_info["node_relation"]
+                    _set_span_attr(node_span, "unique_id", node_info["unique_id"])
+                    _set_span_attr(node_span, "node_outcome", result.status.value)
+                    _set_span_attr(node_span, "materialization", node_info["materialized"])
+                    _set_span_attr(node_span, "database", node_relation["database"])
+                    _set_span_attr(node_span, "schema", node_relation["schema"])
+                    _set_span_attr(node_span, "name", node_info["node_name"])
+                    _set_span_attr(node_span, "node_type", node_info["resource_type"])
+                    _set_span_attr(node_span, "identifier", node_relation["alias"])
+                    _set_span_attr(
+                        node_span, "relative_path", getattr(node, "original_file_path", None)
+                    )
+                    _set_span_attr(
+                        node_span, "rows_affected", result.adapter_response.get("rows_affected")
+                    )
+                    _set_span_attr(node_span, "query_id", result.adapter_response.get("query_id"))
                     try:
                         fire_event(
                             NodeFinished(

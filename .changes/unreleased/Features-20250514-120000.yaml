@@ -1,6 +1,0 @@
-kind: Features
-body: Add OpenTelemetry trace instrumentation for dbt executions
-time: 2025-05-14T12:00:00.000000-07:00
-custom:
-    Author: sfc-gh-vguttha
-    Issue: "11367"

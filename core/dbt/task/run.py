@@ -1174,8 +1174,11 @@ class RunTask(CompileTask):
         num_hooks = len(ordered_hooks)
 
         with self.dbt_tracer.start_as_current_span(hook_type) as hook_span:
+            hook_span.set_attribute("hook_type", hook_type.value)
             for idx, hook in enumerate(ordered_hooks, 1):
-                with log_contextvars(node_info=hook.node_info):
+                with log_contextvars(
+                    node_info=hook.node_info
+                ), self.dbt_tracer.start_as_current_span(hook.unique_id) as hook_node_span:
                     hook.index = idx
                     hook_name = f"{hook.package_name}.{hook_type}.{hook.index - 1}"
                     execution_time = 0.0
@@ -1225,7 +1228,17 @@ class RunTask(CompileTask):
                         message = f"{hook_name} skipped"
 
                     hook.update_event_status(node_status=status)
-                    hook_span.set_attribute("node.status", status.value)
+                    hook_node_span.set_attribute("hook_type", hook_type.value)
+                    hook_node_span.set_attribute("package_name", hook.package_name)
+                    hook_node_span.set_attribute("name", hook.name)
+                    hook_node_span.set_attribute("hook_index", hook.index)
+                    hook_node_span.set_attribute("unique_id", hook.unique_id)
+                    hook_node_span.set_attribute("hook_outcome", status.value)
+                    hook_node_span.set_status(
+                        StatusCode.ERROR
+                        if status not in (RunStatus.Success, RunStatus.Skipped)
+                        else StatusCode.OK
+                    )
 
                     self.node_results.append(
                         RunResult(
