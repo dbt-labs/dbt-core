@@ -217,6 +217,53 @@ pub(crate) fn redshift_has_feature(
     }
 }
 
+fn warn_unrecognized_has_feature(adapter_type: AdapterType, name: &str) {
+    emit_warn_log_message(
+        ErrorCode::InvalidArgument,
+        format!(
+            "Unrecognized feature: {name} for {adapter_type} adapter"
+        ),
+        None,
+    );
+}
+
+fn resolve_has_feature(
+    adapter: &AdapterImpl,
+    state: &State,
+    name: &str,
+    token: CancellationToken,
+) -> AdapterResult<Option<bool>> {
+    let is_motherduck = |engine: &dyn AdapterEngine| {
+        engine
+            .config("path")
+            .map(|p| dbt_auth::is_motherduck_path(&p))
+            .unwrap_or(false)
+    };
+
+    match (adapter.adapter_type(), name) {
+        (DuckDB, "motherduck") => Ok(Some(is_motherduck(adapter.engine().as_ref()))),
+        (DuckDB, "transactions") => Ok(Some(!is_motherduck(adapter.engine().as_ref()))),
+        // Assume that all other adapters support transactions for now.
+        (_, "transactions") => Ok(Some(true)),
+        (Redshift, name) => match redshift_has_feature(adapter.engine().as_ref(), name)? {
+            Some(value) => Ok(Some(value)),
+            None => {
+                warn_unrecognized_has_feature(adapter.adapter_type(), name);
+                Ok(None)
+            }
+        },
+        (Databricks, _) => {
+            let mut conn = adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+            let has_capability = adapter.has_dbr_capability(state, conn.as_mut(), name, token)?;
+            Ok(Some(has_capability))
+        }
+        _ => {
+            warn_unrecognized_has_feature(adapter.adapter_type(), name);
+            Ok(None)
+        }
+    }
+}
+
 pub fn quote_ident(adapter_type: AdapterType, identifier: &str) -> String {
     let q = dbt_adapter_core::quote_char(adapter_type);
     format!("{q}{identifier}{q}")
@@ -1557,58 +1604,7 @@ impl AdapterImpl {
         name: &str,
         token: CancellationToken,
     ) -> AdapterResult<Option<bool>> {
-        // PRE-CONDITION: adapter_type is DuckDB
-        let is_motherduck = |engine: &dyn AdapterEngine| {
-            engine
-                .config("path")
-                .map(|p| dbt_auth::is_motherduck_path(&p))
-                .unwrap_or(false)
-        };
-
-        match (self.adapter_type(), name) {
-            (DuckDB, "motherduck") => Ok(Some(is_motherduck(self.engine().as_ref()))),
-            (DuckDB, "transactions") => {
-                // MotherDuck does not support explicit transactions
-                Ok(Some(!is_motherduck(self.engine().as_ref())))
-            }
-            // Assume that all other adapters support transactions for now.
-            (_, "transactions") => Ok(Some(true)),
-            (Redshift, name) => match redshift_has_feature(self.engine().as_ref(), name)? {
-                Some(value) => Ok(Some(value)),
-                None => {
-                    emit_warn_log_message(
-                        ErrorCode::InvalidArgument,
-                        format!(
-                            "Unrecognized feature: {} for {} adapter",
-                            name,
-                            self.adapter_type()
-                        ),
-                        None,
-                    );
-                    Ok(None)
-                }
-            },
-            (Databricks, _) => {
-                let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let has_capability = self.has_dbr_capability(state, conn.as_mut(), name, token)?;
-                Ok(Some(has_capability))
-            }
-            _ => {
-                emit_warn_log_message(
-                    ErrorCode::InvalidArgument,
-                    format!(
-                        "Unrecognized feature: {} for {} adapter",
-                        name,
-                        self.adapter_type()
-                    ),
-                    None,
-                );
-                // None is falsy, so features should be named in such a way that
-                // `false` is the most reasonable assumption.
-                Ok(None)
-            }
-        }
+        resolve_has_feature(self, state, name, token)
     }
 
     /// Returns a dict with database/schema/identifier for temp tables on MotherDuck.
