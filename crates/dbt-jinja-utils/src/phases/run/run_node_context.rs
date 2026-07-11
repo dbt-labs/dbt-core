@@ -77,10 +77,7 @@ fn normalize_model_context_column_data_types(model: &mut YmlValue, adapter_type:
 
     let column_static = ColumnStatic::new(adapter_type);
     let data_type_key = YmlValue::string("data_type".to_string());
-    for (_, column) in columns.iter_mut() {
-        let YmlValue::Mapping(column_map, _) = column else {
-            continue;
-        };
+    for column_map in columns.values_mut().filter_map(YmlValue::as_mapping_mut) {
         let Some(data_type) = column_map.get_mut(&data_type_key) else {
             continue;
         };
@@ -95,6 +92,11 @@ fn normalize_model_context_column_data_types(model: &mut YmlValue, adapter_type:
     }
 }
 
+fn normalized_model_context(mut model: YmlValue, adapter_type: AdapterType) -> YmlValue {
+    normalize_model_context_column_data_types(&mut model, adapter_type);
+    model
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_model_context_fields<S: Serialize>(
     node: &dyn InternalDbtNode,
@@ -103,8 +105,7 @@ fn build_model_context_fields<S: Serialize>(
     io_args: &IoArgs,
     sql_header: Option<MinijinjaValue>,
 ) -> ModelContextFields {
-    let mut model = node.serialize();
-    normalize_model_context_column_data_types(&mut model, adapter_type);
+    let model = node.serialize();
     let common_attr = node.common();
     let base_attr = node.base();
     let resource_type = node.resource_type();
@@ -175,7 +176,7 @@ fn build_model_context_fields<S: Serialize>(
         config_map.insert("sql_header".to_string(), sql_header);
     }
 
-    let mut model_map = convert_yml_to_value_map(model);
+    let mut model_map = convert_yml_to_value_map(normalized_model_context(model, adapter_type));
 
     // We are reading the raw_sql here for snapshots and models
     let raw_sql_path = match resource_type {

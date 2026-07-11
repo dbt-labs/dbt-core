@@ -1554,7 +1554,10 @@ mod tests {
                 "struct<key1 string, key2 integer>"
             );
         }
+    }
 
+    #[test]
+    fn test_format_top_level_columns_data_types_preserves_type_strings() {
         // Test case 7: Type strings are preserved verbatim
         {
             let mut nested = NestedColumnDataTypes::default();

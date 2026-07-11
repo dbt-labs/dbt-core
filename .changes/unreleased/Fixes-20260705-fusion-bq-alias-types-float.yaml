@@ -1,5 +1,5 @@
 kind: Fixes
-body: 'Apply the contract `alias_types` config on BigQuery so leaf primitive types (e.g. `FLOAT` -> `FLOAT64`) are aliased in contract DDL and empty-schema queries, matching dbt Core.'
+body: 'Normalize BigQuery model context column data types when contract `alias_types` is enabled (e.g. `FLOAT` -> `FLOAT64`), matching dbt Core.'
 time: 2026-07-05T00:00:00.000000+00:00
 custom:
     author: mvanhorn
