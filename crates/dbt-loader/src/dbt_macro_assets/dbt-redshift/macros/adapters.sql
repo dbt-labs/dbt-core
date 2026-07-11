@@ -1,6 +1,9 @@
 
 {% macro dist(dist) %}
   {%- if dist is not none -%}
+      {%- if dist is not string -%}
+        {% do exceptions.raise_compiler_error("The 'dist' config must be a single value (e.g. dist: primary_key), not a list or other type. Redshift distribution key accepts only one column or one of: all, even, auto.") %}
+      {%- endif -%}
       {%- set dist = dist.strip().lower() -%}
 
       {%- if dist in ['all', 'even'] -%}
@@ -283,30 +286,71 @@
 {% endmacro %}
 
 {% macro redshift__list_relations_without_caching(schema_relation) %}
-
-  {% call statement('list_relations_without_caching', fetch_result=True) -%}
-    select
+  {#- DIVERGENCE: v2 routes list_relations_without_caching through native Rust when
+      datasharing is enabled. Preserve the v1 SHOW path for 1.x handoff only. -#}
+  {%- if not dbt_version.startswith('2.') and redshift__use_show_apis() -%}
+    {% call statement('show_tables', fetch_result=True) -%}
+      SHOW TABLES FROM SCHEMA {{ adapter.quote(schema_relation.database) }}.{{ adapter.quote(schema_relation.schema) }}
+    {% endcall %}
+    {% set show_result = load_result('show_tables').table %}
+    {% set table_and_view_relations = adapter.transform_show_tables_for_list_relations(show_result) %}
+    {% set function_relations = redshift__list_function_relations_without_caching(schema_relation) %}
+    {{ return(adapter.combine_show_tables_and_function_relations(table_and_view_relations, function_relations)) }}
+  {%- else -%}
+    {% call statement('list_relations_without_caching', fetch_result=True) -%}
+      select
         table_catalog as database,
         table_name as name,
         table_schema as schema,
         'table' as type
-    from information_schema.tables
-    where table_schema ilike '{{ schema_relation.schema }}'
-    and table_type = 'BASE TABLE'
-    union all
-    select
-      table_catalog as database,
-      table_name as name,
-      table_schema as schema,
-      case
-        when view_definition ilike '%create materialized view%'
-          then 'materialized_view'
-        else 'view'
-      end as type
-    from information_schema.views
-    where table_schema ilike '{{ schema_relation.schema }}'
+      from information_schema.tables
+      where table_schema ilike '{{ schema_relation.schema }}'
+      and table_type = 'BASE TABLE'
+      union all
+      select
+        table_catalog as database,
+        table_name as name,
+        table_schema as schema,
+        case
+          when view_definition ilike '%create materialized view%'
+            then 'materialized_view'
+          else 'view'
+        end as type
+      from information_schema.views
+      where table_schema ilike '{{ schema_relation.schema }}'
+      union all
+      select distinct
+        '{{ schema_relation.database }}' as database,
+        proname as name,
+        ns.nspname as schema,
+        'function' as type
+      from pg_proc
+      join pg_namespace as ns on pronamespace = ns.oid
+      where ns.nspname ilike '{{ schema_relation.schema }}'
+    {% endcall %}
+    {{ return(load_result('list_relations_without_caching').table) }}
+  {%- endif -%}
+{% endmacro %}
+
+
+{% macro redshift__list_function_relations_without_caching(schema_relation) %}
+  {#
+    There is no SHOW API equivalent for functions in Redshift (unlike `SHOW TABLES FROM SCHEMA`),
+    so we always use pg_proc regardless of the `use_show_apis` flag. This is safe because
+    Redshift datasharing does not support sharing UDFs or stored procedures across databases,
+    meaning functions are always local to the current database.
+  #}
+  {% call statement('list_function_relations_without_caching', fetch_result=True) -%}
+    select distinct
+      '{{ schema_relation.database }}' as database,
+      proname::varchar as name,
+      ns.nspname::varchar as schema,
+      'function' as type
+    from pg_proc
+    join pg_namespace as ns on pronamespace = ns.oid
+    where ns.nspname ilike '{{ schema_relation.schema }}'
   {% endcall %}
-  {{ return(load_result('list_relations_without_caching').table) }}
+  {{ return(load_result('list_function_relations_without_caching').table) }}
 {% endmacro %}
 
 {% macro redshift__information_schema_name(database) -%}
@@ -338,9 +382,20 @@
   {% endif %}
 {% endmacro %}
 
-{% macro redshift__check_schema_exists(information_schema, schema) -%}
-  {{ return(postgres__check_schema_exists(information_schema, schema)) }}
-{%- endmacro %}
+{% macro redshift__check_schema_exists(information_schema, schema) %}
+  {% if redshift__use_show_apis() %}
+    {% call statement('check_schema_exists', fetch_result=True) -%}
+      SHOW SCHEMAS FROM DATABASE {{ adapter.quote(information_schema.database) }}
+      LIKE '{{ schema }}'
+    {% endcall %}
+    {%- set table = load_result('check_schema_exists').table -%}
+
+    {# We return list of list because the base adapter expects column count #}
+    {{ return([[table.rows | length]]) }}
+  {% else %}
+    {{ return(postgres__check_schema_exists(information_schema, schema)) }}
+  {% endif %}
+{% endmacro %}
 
 
 {% macro redshift__persist_docs(relation, model, for_relation, for_columns) -%}
@@ -386,13 +441,41 @@
 {% endmacro %}
 
 
+{% macro redshift__alter_column_type(relation, column_name, new_column_type) -%}
+  {#
+    Redshift ALTER COLUMN TYPE only supports VARCHAR and VARBYTE (size changes).
+    For those, use native ALTER; for any other type change, fall back to
+    default add/copy/drop/rename.
+
+    The native ALTER TABLE ALTER COLUMN cannot run inside a transaction block.
+    It is only safe to use when `redshift_skip_autocommit_transaction_statements`
+    is enabled (i.e. we are not wrapping statements in BEGIN/COMMIT).
+    When the flag is off, always use the default migration path.
+  #}
+  {% set type_lower = (new_column_type | lower) | trim %}
+  {#- DIVERGENCE: Fusion always skips autocommit transaction wrapping for Redshift. -#}
+  {% if dbt_version.startswith('2.') %}
+    {% set skip_txn = true %}
+  {% else %}
+    {% set skip_txn = adapter.behavior.redshift_skip_autocommit_transaction_statements.no_warn %}
+  {% endif %}
+  {% if skip_txn and (type_lower[:7] == 'varchar' or type_lower[:17] == 'character varying' or type_lower[:7] == 'varbyte') %}
+    {% call statement('alter_column_type') %}
+      alter table {{ relation.render() }} alter column {{ adapter.quote(column_name) }} type {{ new_column_type }}
+    {% endcall %}
+  {% else %}
+    {{ default__alter_column_type(relation, column_name, new_column_type) }}
+  {% endif %}
+{% endmacro %}
+
+
 {% macro redshift__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
 
   {% if add_columns %}
 
     {% for column in add_columns %}
       {% set sql -%}
-          alter {{ relation.type }} {{ relation }} add column {{ column.name }} {{ column.data_type }}
+          alter {{ relation.type }} {{ relation }} add column {{ column.quoted }} {{ column.data_type }}
       {% endset %}
       {% do run_query(sql) %}
     {% endfor %}
@@ -403,11 +486,19 @@
 
     {% for column in remove_columns %}
       {% set sql -%}
-          alter {{ relation.type }} {{ relation }} drop column {{ column.name }}
+          alter {{ relation.type }} {{ relation }} drop column {{ column.quoted }}
       {% endset %}
       {% do run_query(sql) %}
     {% endfor %}
 
   {% endif %}
 
+{% endmacro %}
+
+
+{% macro redshift__show_tables_from_schema(database, schema) %}
+    {%- call statement('show_tables', fetch_result=True) -%}
+        SHOW TABLES FROM SCHEMA {{ adapter.quote(database) }}.{{ adapter.quote(schema) }}
+    {%- endcall -%}
+    {{ return(load_result('show_tables')) }}
 {% endmacro %}

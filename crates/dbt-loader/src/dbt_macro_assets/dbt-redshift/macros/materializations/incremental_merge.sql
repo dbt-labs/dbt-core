@@ -1,18 +1,5 @@
 {% macro redshift__get_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=none) -%}
-    {%- set predicates = [] -%}
-    {% if incremental_predicates is not none %}
-        {%- set incremental_predicates_list = [] + incremental_predicates -%}
-        {%- for pred in incremental_predicates_list -%}
-            {% if "DBT_INTERNAL_DEST." in pred %}
-                {%- set pred =  pred | replace("DBT_INTERNAL_DEST.", target ~ "." ) -%}
-            {% endif %}
-            {% if "dbt_internal_dest." in pred %}
-                {%- set pred =  pred | replace("dbt_internal_dest.", target ~ "." ) -%}
-            {% endif %}
-            {% do predicates.append(pred) %}
-        {% endfor %}
-    {% endif %}
-
+    {%- set predicates = _update_predicates(target, incremental_predicates) -%}
     {%- set merge_update_columns = config.get('merge_update_columns') -%}
     {%- set merge_exclude_columns = config.get('merge_exclude_columns') -%}
     {%- set update_columns = get_merge_update_columns(merge_update_columns, merge_exclude_columns, dest_columns) -%}

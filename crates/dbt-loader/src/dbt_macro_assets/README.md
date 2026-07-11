@@ -5,6 +5,9 @@ All adapter macros are currently maintained in:
 
 ## Changelog
 
+### [2026-07-11]
+  - dbt-redshift: sync macros from dbt-labs/dbt-adapters (commit a045dfae0185796010bea1a97092cbe6a5f4128b)
+
 ### [2026-03-04]
   - dbt-databricks: v1.11.5 (commit 24325a3195171d36972804e545b2ccf967ab575d)
 

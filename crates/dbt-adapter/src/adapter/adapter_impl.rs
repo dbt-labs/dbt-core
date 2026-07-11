@@ -1561,6 +1561,13 @@ impl AdapterImpl {
                 self.engine().as_ref(),
                 "drop_without_cascade",
             )?)),
+            (Redshift, "grants_extended") => Ok(Some(
+                self.engine()
+                    .behavior_flag_overrides()
+                    .get("redshift_grants_extended")
+                    .copied()
+                    .unwrap_or(false),
+            )),
             (Databricks, _) => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
@@ -4714,7 +4721,24 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
             vec![flag]
         }
         Postgres | Redshift | Salesforce | Spark | DuckDB | Fdcs | ClickHouse | Exasol
-        | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => vec![],
+        | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
+            if adapter_type == Redshift {
+                let redshift_grants_extended = BehaviorFlag::new(
+                    "redshift_grants_extended",
+                    false,
+                    Some(
+                        "Enable groups and roles support in dbt grants config. \
+                         When enabled, grantee names must use 'user:', 'group:', or 'role:' prefixes. \
+                         Unprefixed entries are treated as users for backward compatibility.",
+                    ),
+                    None,
+                    None,
+                );
+                vec![redshift_grants_extended]
+            } else {
+                vec![]
+            }
+        }
     }
 }
 
@@ -5621,6 +5645,21 @@ mod tests {
             .has_feature(&state, "datasharing", CancellationToken::never_cancels())
             .unwrap();
         assert_eq!(result, Some(true));
+    }
+
+    #[test]
+    fn test_has_feature_grants_extended_false_by_default() {
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let adapter = AdapterImpl::new(engine(Redshift), None);
+        let result = adapter
+            .has_feature(
+                &state,
+                "grants_extended",
+                CancellationToken::never_cancels(),
+            )
+            .unwrap();
+        assert_eq!(result, Some(false));
     }
 
     #[test]
