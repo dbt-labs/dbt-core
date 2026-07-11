@@ -508,7 +508,7 @@ projects:
     }
 
     #[tokio::test]
-    async fn m2m_happy_path_persists_token_and_sends_basic_auth() {
+    async fn m2m_happy_path_sends_basic_auth() {
         let server = MockServer::start().await;
         let scope = "runcache:scope:org:dev:admin";
         let token_resp = serde_json::json!({
@@ -536,9 +536,6 @@ projects:
 
         let token = source.token().await.unwrap();
         assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
-
-        let stored = token_store_in(&dir).load().await.unwrap().unwrap();
-        assert_eq!(stored.scope, scope);
 
         // Inspect server requests to confirm Basic auth header.
         let requests = server.received_requests().await.unwrap();

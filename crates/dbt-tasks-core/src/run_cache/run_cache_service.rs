@@ -49,6 +49,7 @@ use dbt_state::request_builder::{
     ExecutionOutcomeInput, sql_execution_record_from_submit_request,
     values_execution_record_from_submit_request,
 };
+use dbt_telemetry::NodeType;
 
 use crate::run_cache::run_cache_request::{
     SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
@@ -1736,11 +1737,11 @@ async fn build_sql_context(
             sql,
             tables: tables.tables,
             query_dependencies: query_dependencies.dependencies,
-            freshness_tolerance_seconds: if is_view {
-                0
-            } else {
-                freshness_tolerance_seconds_for_node(node, config.freshness_tolerance_seconds)
-            },
+            freshness_tolerance_seconds: request_freshness_tolerance_seconds_for_node(
+                node,
+                is_view,
+                config.freshness_tolerance_seconds,
+            ),
             lenient_dependencies,
             tolerate_nondeterminism: resolve_tolerate_nondeterminism(
                 node,
@@ -1788,6 +1789,18 @@ fn freshness_tolerance_seconds_for_node(
     state_lag_tolerance
         .or(legacy_build_after)
         .unwrap_or(service_default)
+}
+
+fn request_freshness_tolerance_seconds_for_node(
+    node: &dyn InternalDbtNodeAttributes,
+    is_view: bool,
+    service_default: i64,
+) -> i64 {
+    if node.resource_type() == NodeType::Test || is_view {
+        0
+    } else {
+        freshness_tolerance_seconds_for_node(node, service_default)
+    }
 }
 
 fn freshness_rule_to_seconds(rule: &ModelFreshnessRules) -> Option<i64> {
@@ -3706,6 +3719,16 @@ mod tests {
         });
 
         assert_eq!(freshness_tolerance_seconds_for_node(&model, 2700), 7200);
+    }
+
+    #[test]
+    fn request_freshness_tolerance_for_data_tests_is_always_zero() {
+        let test = DbtTest::default();
+
+        assert_eq!(
+            request_freshness_tolerance_seconds_for_node(&test, false, 2700),
+            0
+        );
     }
 
     #[test]
