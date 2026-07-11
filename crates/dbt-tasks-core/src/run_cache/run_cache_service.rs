@@ -2084,15 +2084,12 @@ async fn collect_table_modified_infos(
 
     let mut table_infos = Vec::new();
     for (name, relation) in leaf_table_relations {
-        if let Some(last_modified_epoch) =
-            last_modified_epoch_for_relation(ctx, &name, relation).await?
-        {
+        let last_modified_epoch = last_modified_epoch_for_relation(ctx, &name, relation).await?;
+        if last_modified_epoch.is_some() || name != target_name {
             table_infos.push(TableModifiedInfo {
                 name,
                 last_modified_epoch,
             });
-        } else if name != target_name {
-            metadata_complete = false;
         }
     }
 
@@ -3532,6 +3529,61 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn unresolved_upstream_last_modified_keeps_metadata_complete() {
+        let mut model = make_model(
+            "model.test.fact_orders",
+            "db",
+            "analytics",
+            "fact_orders",
+            DbtMaterialization::Table,
+        );
+        Arc::make_mut(&mut model)
+            .__base_attr__
+            .depends_on
+            .nodes
+            .push("source.test.raw.orders".to_string());
+        let source = make_source("source.test.raw.orders", "db", "raw", "orders");
+        let ctx = test_task_runner_ctx_with_nodes(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(EmptySourcesExtractor),
+            nodes_from(vec![model.clone()], vec![source]),
+            ["model.test.fact_orders".to_string()].into_iter().collect(),
+        );
+        let target_fqn = fqn_of("db", "analytics", "fact_orders");
+        let upstream_fqn = fqn_of("db", "raw", "orders");
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&target_fqn, Some(123));
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&upstream_fqn, None);
+
+        let tables = collect_table_modified_infos(
+            &ctx,
+            model.as_ref(),
+            false,
+            &BTreeSet::from([upstream_fqn.clone()]),
+            &BTreeMap::new(),
+        )
+        .await
+        .unwrap();
+
+        assert!(tables.metadata_complete);
+        assert!(tables.tables.contains(&TableModifiedInfo {
+            name: target_fqn,
+            last_modified_epoch: Some(123),
+        }));
+        assert!(tables.tables.contains(&TableModifiedInfo {
+            name: upstream_fqn,
+            last_modified_epoch: None,
+        }));
+    }
+
     #[test]
     fn env_requested_service_uses_read_write_when_cli_mode_is_noop() {
         assert!(effective_run_cache_service_use_cache(
@@ -3705,7 +3757,7 @@ mod tests {
         ]);
         let tables = vec![TableModifiedInfo {
             name: "prod.analytics.customers".to_string(),
-            last_modified_epoch: 123,
+            last_modified_epoch: Some(123),
         }];
         let query_dependencies = vec![QueryDependency {
             name: "prod.analytics.orders".to_string(),

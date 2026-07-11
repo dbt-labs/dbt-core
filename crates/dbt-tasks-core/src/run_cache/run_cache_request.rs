@@ -528,7 +528,7 @@ mod tests {
             sql: "select * from raw.orders".to_string(),
             tables: vec![TableModifiedInfo {
                 name: "raw.orders".to_string(),
-                last_modified_epoch: 123,
+                last_modified_epoch: Some(123),
             }],
             query_dependencies: vec![],
             freshness_tolerance_seconds: 2700,

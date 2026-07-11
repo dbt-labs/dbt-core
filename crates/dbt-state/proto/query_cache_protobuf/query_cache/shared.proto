@@ -19,7 +19,7 @@ enum ModelExecutionType {
 
 message TableModifiedInfo {
   string name = 1;
-  int64 last_modified_epoch = 2;
+  optional int64 last_modified_epoch = 2;
 }
 
 message QueryDependency {
