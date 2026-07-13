@@ -363,7 +363,7 @@ pub fn construct_internal_packages(
             // Cache all file contents
             if let Some(file) = assets::MacroAssets::get(asset_str) {
                 let content = String::from_utf8_lossy(&file.data).into_owned();
-                embedded_file_contents.insert(DbtPath::from_path(&rel_path), content);
+                embedded_file_contents.insert(DbtPath::from(&rel_path), content);
             }
 
             // Only add .sql files to macro_files

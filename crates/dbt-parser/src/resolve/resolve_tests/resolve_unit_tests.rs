@@ -18,6 +18,7 @@ use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 
+use dbt_common::path::DbtPath;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -246,8 +247,8 @@ pub fn resolve_unit_tests(
             __common_attr__: CommonAttributes {
                 name: unit_test_name.to_owned(),
                 package_name: package_name.to_owned(),
-                original_file_path: mpe.relative_path.clone(),
-                path: mpe.relative_path.clone(),
+                original_file_path: DbtPath::from(&mpe.relative_path),
+                path: DbtPath::from(&mpe.relative_path),
                 name_span: dbt_common::Span::default(),
                 unique_id: base_unique_id.clone(),
                 fqn,

@@ -49,6 +49,7 @@ use dbt_state::request_builder::{
     ExecutionOutcomeInput, sql_execution_record_from_submit_request,
     values_execution_record_from_submit_request,
 };
+use dbt_telemetry::NodeType;
 
 use crate::run_cache::run_cache_request::{
     SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
@@ -1736,11 +1737,11 @@ async fn build_sql_context(
             sql,
             tables: tables.tables,
             query_dependencies: query_dependencies.dependencies,
-            freshness_tolerance_seconds: if is_view {
-                0
-            } else {
-                freshness_tolerance_seconds_for_node(node, config.freshness_tolerance_seconds)
-            },
+            freshness_tolerance_seconds: request_freshness_tolerance_seconds_for_node(
+                node,
+                is_view,
+                config.freshness_tolerance_seconds,
+            ),
             lenient_dependencies,
             tolerate_nondeterminism: resolve_tolerate_nondeterminism(
                 node,
@@ -1788,6 +1789,18 @@ fn freshness_tolerance_seconds_for_node(
     state_lag_tolerance
         .or(legacy_build_after)
         .unwrap_or(service_default)
+}
+
+fn request_freshness_tolerance_seconds_for_node(
+    node: &dyn InternalDbtNodeAttributes,
+    is_view: bool,
+    service_default: i64,
+) -> i64 {
+    if node.resource_type() == NodeType::Test || is_view {
+        0
+    } else {
+        freshness_tolerance_seconds_for_node(node, service_default)
+    }
 }
 
 fn freshness_rule_to_seconds(rule: &ModelFreshnessRules) -> Option<i64> {
@@ -2084,15 +2097,12 @@ async fn collect_table_modified_infos(
 
     let mut table_infos = Vec::new();
     for (name, relation) in leaf_table_relations {
-        if let Some(last_modified_epoch) =
-            last_modified_epoch_for_relation(ctx, &name, relation).await?
-        {
+        let last_modified_epoch = last_modified_epoch_for_relation(ctx, &name, relation).await?;
+        if last_modified_epoch.is_some() || name != target_name {
             table_infos.push(TableModifiedInfo {
                 name,
                 last_modified_epoch,
             });
-        } else if name != target_name {
-            metadata_complete = false;
         }
     }
 
@@ -3532,6 +3542,61 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn unresolved_upstream_last_modified_keeps_metadata_complete() {
+        let mut model = make_model(
+            "model.test.fact_orders",
+            "db",
+            "analytics",
+            "fact_orders",
+            DbtMaterialization::Table,
+        );
+        Arc::make_mut(&mut model)
+            .__base_attr__
+            .depends_on
+            .nodes
+            .push("source.test.raw.orders".to_string());
+        let source = make_source("source.test.raw.orders", "db", "raw", "orders");
+        let ctx = test_task_runner_ctx_with_nodes(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(EmptySourcesExtractor),
+            nodes_from(vec![model.clone()], vec![source]),
+            ["model.test.fact_orders".to_string()].into_iter().collect(),
+        );
+        let target_fqn = fqn_of("db", "analytics", "fact_orders");
+        let upstream_fqn = fqn_of("db", "raw", "orders");
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&target_fqn, Some(123));
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&upstream_fqn, None);
+
+        let tables = collect_table_modified_infos(
+            &ctx,
+            model.as_ref(),
+            false,
+            &BTreeSet::from([upstream_fqn.clone()]),
+            &BTreeMap::new(),
+        )
+        .await
+        .unwrap();
+
+        assert!(tables.metadata_complete);
+        assert!(tables.tables.contains(&TableModifiedInfo {
+            name: target_fqn,
+            last_modified_epoch: Some(123),
+        }));
+        assert!(tables.tables.contains(&TableModifiedInfo {
+            name: upstream_fqn,
+            last_modified_epoch: None,
+        }));
+    }
+
     #[test]
     fn env_requested_service_uses_read_write_when_cli_mode_is_noop() {
         assert!(effective_run_cache_service_use_cache(
@@ -3657,6 +3722,16 @@ mod tests {
     }
 
     #[test]
+    fn request_freshness_tolerance_for_data_tests_is_always_zero() {
+        let test = DbtTest::default();
+
+        assert_eq!(
+            request_freshness_tolerance_seconds_for_node(&test, false, 2700),
+            0
+        );
+    }
+
+    #[test]
     fn state_require_fresh_data_from_overrides_legacy_updates_on() {
         let mut model = model_with_state(ModelState {
             lag_tolerance: None,
@@ -3705,7 +3780,7 @@ mod tests {
         ]);
         let tables = vec![TableModifiedInfo {
             name: "prod.analytics.customers".to_string(),
-            last_modified_epoch: 123,
+            last_modified_epoch: Some(123),
         }];
         let query_dependencies = vec![QueryDependency {
             name: "prod.analytics.orders".to_string(),

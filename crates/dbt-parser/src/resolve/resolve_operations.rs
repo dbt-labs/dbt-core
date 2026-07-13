@@ -6,11 +6,11 @@ use std::{
 
 use crate::utils::NoOpConfig;
 use dbt_adapter_core::AdapterType;
-use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsResult, fs_err,
     io_args::{IoArgs, StaticAnalysisKind},
 };
+use dbt_common::{path::DbtPath, tracing::dbt_emit::emit_warn_log_from_fs_error};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     listener::DefaultRenderingEventListenerFactory,
@@ -131,8 +131,8 @@ fn new_operation(
                 // compiled output writes to `hooks/<name>.sql`. Without it, fusion's
                 // path renders as a directory and the compiled file lands at
                 // `hooks/<name>` with no extension.
-                path: PathBuf::from("hooks").join(format!("{name}.sql")),
-                original_file_path: original_file_path.clone(),
+                path: DbtPath::from("hooks").join(format!("{name}.sql")),
+                original_file_path: DbtPath::from(&original_file_path),
                 unique_id,
                 fqn: vec![project_name.to_string(), "hooks".to_string(), name.clone()],
                 checksum: DbtChecksum::hash(operation_sql.trim().as_bytes()),
@@ -226,7 +226,7 @@ fn new_operation(
                                         location.line,
                                         location.col,
                                         location.index,
-                                        operation.__common_attr__.original_file_path.clone(),
+                                        operation.__common_attr__.original_file_path.to_path_buf(),
                                     )),
                                 });
                             }
@@ -237,7 +237,7 @@ fn new_operation(
                                         location.line,
                                         location.col,
                                         location.index,
-                                        operation.__common_attr__.original_file_path.clone(),
+                                        operation.__common_attr__.original_file_path.to_path_buf(),
                                     )),
                                 });
                             }
@@ -258,7 +258,7 @@ fn new_operation(
                         operation.__common_attr__.name,
                         err.to_string()
                     )
-                    .with_location(operation.__common_attr__.original_file_path.clone());
+                    .with_location(operation.__common_attr__.original_file_path.to_path_buf());
                     emit_warn_log_from_fs_error(&err, io.status_reporter.as_ref());
                 }
             }

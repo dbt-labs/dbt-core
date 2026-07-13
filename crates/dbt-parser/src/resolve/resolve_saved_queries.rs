@@ -7,6 +7,7 @@ use crate::utils::{
 };
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -242,7 +243,7 @@ pub async fn resolve_saved_queries(
                 __common_attr__: CommonAttributes {
                     name: saved_query_name.clone(),
                     package_name: package_name.to_string(),
-                    path: mpe.relative_path.clone(),
+                    path: DbtPath::from(&mpe.relative_path),
                     original_file_path: get_original_file_path(
                         &package.package_root_path,
                         &arg.io.in_dir,
@@ -252,7 +253,7 @@ pub async fn resolve_saved_queries(
                         mpe.name_span.clone(),
                         mpe.relative_path.clone(),
                     ),
-                    patch_path: Some(mpe.relative_path.clone()),
+                    patch_path: Some(DbtPath::from(&mpe.relative_path)),
                     unique_id: unique_id.clone(),
                     fqn,
                     description: saved_query_props.description,

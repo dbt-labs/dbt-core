@@ -334,7 +334,7 @@ async fn compute_file_changeset(
                     let package_root = &current_dbt_state.packages[0].package_root_path;
                     let relative_path = current
                         .0
-                        .get_relative_path(&DbtPath::from_path(package_root))
+                        .get_relative_path(&DbtPath::from(package_root))
                         .map(|p| p.to_str().unwrap_or_default().to_string())
                         .unwrap_or_else(|| current.0.to_str().unwrap_or_default().to_string());
                     changed.push(relative_path);

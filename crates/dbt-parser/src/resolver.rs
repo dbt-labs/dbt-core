@@ -6,6 +6,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args::FsCommand;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_common::path::DbtPath;
 use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::event_info::store_event_attributes;
@@ -46,7 +47,6 @@ use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
 use minijinja::constants::CURRENT_PATH;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
@@ -144,8 +144,8 @@ pub async fn resolve(
         .or_insert_with(|| DbtDocsMacro {
             name: "__overview__".to_string(),
             package_name: "dbt".to_string(),
-            path: PathBuf::from("overview.md"),
-            original_file_path: PathBuf::from("docs/overview.md"),
+            path: DbtPath::from("overview.md"),
+            original_file_path: DbtPath::from("docs/overview.md"),
             unique_id: overview_uid,
             block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
         });
@@ -1320,8 +1320,8 @@ async fn resolve_package_waves(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::path::PathBuf;
 
+    use dbt_common::path::DbtPath;
     use dbt_schemas::schemas::macros::DbtDocsMacro;
 
     use crate::constants::DEFAULT_OVERVIEW_CONTENTS;
@@ -1334,8 +1334,8 @@ mod tests {
             .or_insert_with(|| DbtDocsMacro {
                 name: "__overview__".to_string(),
                 package_name: "dbt".to_string(),
-                path: PathBuf::from("overview.md"),
-                original_file_path: PathBuf::from("docs/overview.md"),
+                path: DbtPath::from("overview.md"),
+                original_file_path: DbtPath::from("docs/overview.md"),
                 unique_id: overview_uid,
                 block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
             });
@@ -1369,8 +1369,8 @@ mod tests {
         let user_doc = DbtDocsMacro {
             name: "__overview__".to_string(),
             package_name: "my_project".to_string(),
-            path: PathBuf::from("models/overview.md"),
-            original_file_path: PathBuf::from("models/overview.md"),
+            path: DbtPath::from("models/overview.md"),
+            original_file_path: DbtPath::from("models/overview.md"),
             unique_id: uid.clone(),
             block_contents: "# My custom overview".to_string(),
         };

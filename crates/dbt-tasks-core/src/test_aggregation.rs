@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
+use dbt_common::path::DbtPath;
 use dbt_common::string_utils::maybe_truncate_test_name;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
@@ -346,9 +347,9 @@ fn create_aggregated_test(
 
     test.__common_attr__.name = test_group_name.to_string();
     test.__common_attr__.unique_id = test_group_id.to_string();
-    test.__common_attr__.path = path;
-    test.__common_attr__.original_file_path = absolute_path.clone();
-    test.manifest_original_file_path = absolute_path;
+    test.__common_attr__.path = DbtPath::from(path);
+    test.__common_attr__.original_file_path = DbtPath::from(&absolute_path);
+    test.manifest_original_file_path = DbtPath::from(&absolute_path);
     test.__common_attr__.raw_code = Some(raw_code.clone());
     test.__common_attr__.checksum = DbtChecksum::hash(raw_code.trim().as_bytes());
     test.__common_attr__.fqn = vec![

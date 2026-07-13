@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::path::DbtPath;
 use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
 };
@@ -191,9 +192,9 @@ pub async fn resolve_functions(
                 name: function_name.to_owned(),
                 name_span: Default::default(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.clone(),
+                path: DbtPath::from(&dbt_asset.path),
                 original_file_path,
-                patch_path,
+                patch_path: patch_path.map(DbtPath::from),
                 fqn,
                 description: properties.description,
                 raw_code: Some(raw_code),

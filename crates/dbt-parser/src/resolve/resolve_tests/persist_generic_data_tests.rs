@@ -139,7 +139,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         test_name_truncations: &mut HashMap<String, String>,
         adapter_type: AdapterType,
         io_args: &IoArgs,
-        original_file_path: &PathBuf,
+        original_file_path: &Path,
         suppress_deprecated_test_validation: bool,
         raw_test_configs: &TestUnrenderedConfigs,
     ) -> FsResult<()> {
@@ -229,7 +229,7 @@ fn persist_inner(
     column_name: Option<&str>,
     test: &DataTests,
     io_args: &IoArgs,
-    original_file_path: &PathBuf,
+    original_file_path: &Path,
     seen_tests: &mut HashSet<String>,
     test_name_truncations: &mut HashMap<String, String>,
     column_tags: &[String],
@@ -324,7 +324,7 @@ fn persist_inner(
     stdfs::write(&test_file, generated_test_sql)?;
     let dbt_asset = DbtAsset {
         path,
-        original_path: original_file_path.clone(),
+        original_path: original_file_path.to_path_buf(),
         base_path: io_args.out_dir.to_path_buf(),
         package_name: project_name.to_string(),
     };

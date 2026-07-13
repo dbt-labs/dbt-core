@@ -187,17 +187,19 @@ pub fn split_versions(models: Vec<&ModelProperties>) -> Vec<ModelProperties> {
 /// If `base_path` differs from `in_dir`, attempts to compute a relative path
 /// from `base_path.join(sub_path)` to `in_dir`. If that fails, returns `sub_path`.
 /// Otherwise, if `base_path` equals `in_dir`, returns `sub_path` directly.
-pub fn get_original_file_path(base_path: &Path, in_dir: &Path, sub_path: &Path) -> PathBuf {
+pub fn get_original_file_path(base_path: &Path, in_dir: &Path, sub_path: &Path) -> DbtPath {
     if base_path != in_dir {
-        pathdiff::diff_paths(base_path.join(sub_path), in_dir)
-            .unwrap_or_else(|| sub_path.to_owned())
+        DbtPath::from(
+            pathdiff::diff_paths(base_path.join(sub_path), in_dir)
+                .unwrap_or_else(|| sub_path.to_owned()),
+        )
     } else {
-        sub_path.to_owned()
+        DbtPath::from(sub_path.to_owned())
     }
 }
 
 /// Returns the contents of a file given an original_file_path and in_dir,
-pub fn get_original_file_contents(in_dir: &Path, original_file_path: &PathBuf) -> Option<String> {
+pub fn get_original_file_contents(in_dir: &Path, original_file_path: &Path) -> Option<String> {
     let absolute_path = in_dir.join(original_file_path);
     // Match dbt-core's `load_file_contents(strip=True)`: trim leading/trailing
     // whitespace so raw_code parity holds for state:modified / same_body.
@@ -896,7 +898,7 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
         if project_file_path.exists() {
             // Get the relative path to the workspace root (arg.io.in_dir)
             if let Ok(workspace_path) = stdfs::diff_paths(&project_file_path, &io.in_dir) {
-                file_paths.push(DbtPath::from_path(io.in_dir.join(workspace_path)));
+                file_paths.push(DbtPath::from(io.in_dir.join(workspace_path)));
             }
         }
 
@@ -908,7 +910,7 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
             .chain(&package.docs_files)
         {
             let file_path = io.in_dir.join(&asset.path);
-            file_paths.push(DbtPath::from_path(file_path));
+            file_paths.push(DbtPath::from(file_path));
         }
 
         // Use bulk operation for better performance

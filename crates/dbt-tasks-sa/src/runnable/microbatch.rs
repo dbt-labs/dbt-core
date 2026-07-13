@@ -282,6 +282,8 @@ pub fn is_incremental(
 
 #[cfg(test)]
 mod tests {
+    use dbt_common::path::DbtPath;
+
     use super::*;
 
     #[test]
@@ -372,15 +374,14 @@ mod tests {
     fn create_test_model() -> DbtModel {
         use dbt_schemas::schemas::project::ModelConfig;
         use dbt_schemas::schemas::{CommonAttributes, DbtModelAttr, NodeBaseAttributes};
-        use std::path::PathBuf;
 
         DbtModel {
             __common_attr__: CommonAttributes {
                 unique_id: "model.test.my_model".to_string(),
                 name: "my_model".to_string(),
                 package_name: "test".to_string(),
-                path: PathBuf::from("models/my_model.sql"),
-                original_file_path: PathBuf::from("models/my_model.sql"),
+                path: DbtPath::from("models/my_model.sql"),
+                original_file_path: DbtPath::from("models/my_model.sql"),
                 ..Default::default()
             },
             __base_attr__: NodeBaseAttributes::default(),

@@ -8,7 +8,7 @@ use chrono::Utc;
 use dbt_adapter_core::{AdapterType, MICROBATCH_SUPPORTED_ADAPTERS};
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::path::{get_snapshot_compiled_path, get_target_write_path};
+use dbt_common::path::{DbtPath, get_snapshot_compiled_path, get_target_write_path};
 use dbt_common::tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
@@ -612,11 +612,11 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     }
 
     fn path(&self) -> PathBuf {
-        self.common().path.clone()
+        self.common().path.to_path_buf()
     }
 
     fn original_file_path(&self) -> PathBuf {
-        self.common().original_file_path.clone()
+        self.common().original_file_path.to_path_buf()
     }
 
     fn package_name(&self) -> String {
@@ -3730,7 +3730,7 @@ impl InternalDbtNode for DbtMacro {
         _out_dir: &Path,
     ) -> PathBuf {
         if self.has_absolute_path() {
-            self.absolute_path.clone()
+            self.absolute_path.to_path_buf()
         } else {
             in_dir.join(&self.original_file_path)
         }
@@ -4548,14 +4548,14 @@ pub struct CommonAttributes {
     pub fqn: Vec<String>,
 
     // Paths
-    pub path: PathBuf,
+    pub path: DbtPath,
 
     /// The original file path where this node was defined
     ///
     /// **NOTE**: For [DbtTest] nodes, this is currently the path to the
     /// generated SQL file, *NOT* the path to the YAML file where the test was
     /// defined!
-    pub original_file_path: PathBuf,
+    pub original_file_path: DbtPath,
 
     #[serde(
         default,
@@ -4563,7 +4563,7 @@ pub struct CommonAttributes {
         deserialize_with = "deserialize_empty_string_as_none"
     )]
     pub raw_code: Option<String>,
-    pub patch_path: Option<PathBuf>,
+    pub patch_path: Option<DbtPath>,
     pub name_span: dbt_common::Span,
 
     // Checksum
@@ -4795,7 +4795,7 @@ pub struct DbtTest {
     pub defined_at: Option<dbt_common::CodeLocationWithFile>,
 
     // not to be confused with __common_attr__.original_file_path, which is the path to the generated sql file
-    pub manifest_original_file_path: PathBuf,
+    pub manifest_original_file_path: DbtPath,
 
     // To be deprecated
     #[serde(rename = "config")]
@@ -5806,7 +5806,7 @@ mod tests {
     use crate::schemas::manifest::{DbtMetric, DbtOperation, DbtSavedQuery};
     use crate::schemas::project::SnapshotMetaColumnNames;
     use dbt_adapter_core::AdapterType;
-    use dbt_common::path::path_separator_eq;
+    use dbt_common::path::{DbtPath, path_separator_eq};
     use dbt_telemetry::ExecutionPhase;
     use dbt_yaml::Verbatim;
 
@@ -5816,8 +5816,8 @@ mod tests {
         let mut snapshot = DbtSnapshot::default();
         snapshot.__common_attr__.name = name.to_string();
         snapshot.__common_attr__.package_name = "pkg".to_string();
-        snapshot.__common_attr__.path = PathBuf::from(path);
-        snapshot.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        snapshot.__common_attr__.path = DbtPath::from(path);
+        snapshot.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         snapshot.__base_attr__.alias = name.to_string();
         snapshot
     }
@@ -5856,8 +5856,8 @@ mod tests {
         let mut analysis = DbtAnalysis::default();
         analysis.__common_attr__.name = name.to_string();
         analysis.__common_attr__.package_name = "pkg".to_string();
-        analysis.__common_attr__.path = PathBuf::from(original_file_path);
-        analysis.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        analysis.__common_attr__.path = DbtPath::from(original_file_path);
+        analysis.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         analysis.__base_attr__.alias = name.to_string();
         analysis
     }
@@ -5898,8 +5898,8 @@ mod tests {
         let mut function = DbtFunction::default();
         function.__common_attr__.name = name.to_string();
         function.__common_attr__.package_name = "pkg".to_string();
-        function.__common_attr__.path = PathBuf::from(original_file_path);
-        function.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        function.__common_attr__.path = DbtPath::from(original_file_path);
+        function.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         function.__base_attr__.alias = name.to_string();
         function
     }
@@ -5941,8 +5941,8 @@ mod tests {
         let mut seed = DbtSeed::default();
         seed.__common_attr__.name = name.to_string();
         seed.__common_attr__.package_name = "pkg".to_string();
-        seed.__common_attr__.path = PathBuf::from(original_file_path);
-        seed.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        seed.__common_attr__.path = DbtPath::from(original_file_path);
+        seed.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         seed.__base_attr__.alias = name.to_string();
         seed
     }
@@ -5981,8 +5981,8 @@ mod tests {
         let mut source = DbtSource::default();
         source.__common_attr__.name = name.to_string();
         source.__common_attr__.package_name = "pkg".to_string();
-        source.__common_attr__.path = PathBuf::from(original_file_path);
-        source.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        source.__common_attr__.path = DbtPath::from(original_file_path);
+        source.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         source.__base_attr__.alias = name.to_string();
         source
     }
@@ -6020,8 +6020,8 @@ mod tests {
         let mut exposure = DbtExposure::default();
         exposure.__common_attr__.name = name.to_string();
         exposure.__common_attr__.package_name = "pkg".to_string();
-        exposure.__common_attr__.path = PathBuf::from(original_file_path);
-        exposure.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        exposure.__common_attr__.path = DbtPath::from(original_file_path);
+        exposure.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         exposure.__base_attr__.alias = name.to_string();
         exposure
     }
@@ -6056,8 +6056,8 @@ mod tests {
         let mut metric = DbtMetric::default();
         metric.__common_attr__.name = name.to_string();
         metric.__common_attr__.package_name = "pkg".to_string();
-        metric.__common_attr__.path = PathBuf::from(original_file_path);
-        metric.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        metric.__common_attr__.path = DbtPath::from(original_file_path);
+        metric.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         metric.__base_attr__.alias = name.to_string();
         metric
     }
@@ -6092,8 +6092,8 @@ mod tests {
         let mut saved_query = DbtSavedQuery::default();
         saved_query.__common_attr__.name = name.to_string();
         saved_query.__common_attr__.package_name = "pkg".to_string();
-        saved_query.__common_attr__.path = PathBuf::from(original_file_path);
-        saved_query.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        saved_query.__common_attr__.path = DbtPath::from(original_file_path);
+        saved_query.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         saved_query.__base_attr__.alias = name.to_string();
         saved_query
     }
@@ -6128,8 +6128,8 @@ mod tests {
         let mut operation = DbtOperation::default();
         operation.__common_attr__.name = name.to_string();
         operation.__common_attr__.package_name = "pkg".to_string();
-        operation.__common_attr__.path = PathBuf::from("hooks").join(format!("{name}.sql"));
-        operation.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        operation.__common_attr__.path = DbtPath::from("hooks").join(format!("{name}.sql"));
+        operation.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         operation
     }
 
@@ -6167,8 +6167,8 @@ mod tests {
         DbtMacro {
             name: name.to_string(),
             package_name: "pkg".to_string(),
-            path: PathBuf::from(original_file_path),
-            original_file_path: PathBuf::from(original_file_path),
+            path: DbtPath::from(original_file_path),
+            original_file_path: DbtPath::from(original_file_path),
             ..Default::default()
         }
     }
@@ -7045,6 +7045,7 @@ mod seed_has_same_content_tests {
     use std::path::PathBuf;
 
     use dbt_adapter_core::AdapterType;
+    use dbt_common::path::DbtPath;
 
     use crate::schemas::common::{DbtChecksum, DbtChecksumObject};
     use crate::schemas::nodes::{CommonAttributes, DbtSeed, DbtSeedAttr, InternalDbtNode};
@@ -7079,8 +7080,8 @@ mod seed_has_same_content_tests {
                 name: "demo_seed".to_string(),
                 package_name: "test".to_string(),
                 fqn: vec!["test".to_string(), "demo_seed".to_string()],
-                path: PathBuf::from("seeds/demo_seed.csv"),
-                original_file_path: PathBuf::from("seeds/demo_seed.csv"),
+                path: DbtPath::from("seeds/demo_seed.csv"),
+                original_file_path: DbtPath::from("seeds/demo_seed.csv"),
                 ..Default::default()
             },
             ..Default::default()
@@ -7097,8 +7098,8 @@ mod seed_has_same_content_tests {
                 name: "demo_seed".to_string(),
                 package_name: "test".to_string(),
                 fqn: vec!["test".to_string(), "demo_seed".to_string()],
-                path: PathBuf::from("seeds/demo_seed.csv"),
-                original_file_path: PathBuf::from("seeds/demo_seed.csv"),
+                path: DbtPath::from("seeds/demo_seed.csv"),
+                original_file_path: DbtPath::from("seeds/demo_seed.csv"),
                 ..Default::default()
             },
             __seed_attr__: DbtSeedAttr {

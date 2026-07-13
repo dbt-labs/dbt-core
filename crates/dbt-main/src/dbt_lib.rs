@@ -968,8 +968,15 @@ impl<'a> AllPhasesExecutor<'a> {
         use CoreCommand::*;
 
         let type_ops_factory = Arc::clone(&self.feature_stack.adapter.type_ops_factory);
+
+        let retry_schedule = self.prepare_for_potential_retry()?;
+
+        let (mut compilation, jinja_env, compilation_cache_changes) =
+            self.load_and_resolve_state(token).await?;
+
         // Inform the user that schemas require --static-analysis strict, and CLL requires
-        // --write-lineage in addition.
+        // --write-lineage in addition. Emitted after load_and_resolve_state so the project's
+        // warn_error_options (applied during loading) can silence/upgrade these warnings.
         if self.arg.write_metadata
             && matches!(
                 self.arg.command,
@@ -982,7 +989,7 @@ impl<'a> AllPhasesExecutor<'a> {
         {
             emit_warn_log_message(
                 ErrorCode::Generic,
-                "--write-metadata: column schemas will not be populated without `--static-analysis strict`; add `--write-lineage` to also write column-level lineage.",
+                "--write-index: column schemas will not be populated without `--static-analysis strict`; add `--write-lineage` to also write column-level lineage.",
                 self.arg.io.status_reporter.as_ref(),
             );
         } else if self.arg.write_metadata
@@ -998,15 +1005,10 @@ impl<'a> AllPhasesExecutor<'a> {
         {
             emit_warn_log_message(
                 ErrorCode::Generic,
-                "--write-metadata: add `--write-lineage` to write column-level lineage into compile/cll parquet.",
+                "--write-index: add `--write-lineage` to write column-level lineage into compile/cll parquet.",
                 self.arg.io.status_reporter.as_ref(),
             );
         }
-
-        let retry_schedule = self.prepare_for_potential_retry()?;
-
-        let (mut compilation, jinja_env, compilation_cache_changes) =
-            self.load_and_resolve_state(token).await?;
 
         let schedule_desc = retry_schedule
             .as_ref()

@@ -526,7 +526,7 @@ mod tests {
             sql: "select * from raw.orders".to_string(),
             tables: vec![TableModifiedInfo {
                 name: "raw.orders".to_string(),
-                last_modified_epoch: 123,
+                last_modified_epoch: Some(123),
             }],
             query_dependencies: vec![QueryDependency {
                 name: "raw.order_view".to_string(),
@@ -554,7 +554,7 @@ mod tests {
         assert_eq!(request.target_table.as_deref(), Some("analytics.orders"));
         assert_eq!(request.execution_type, ModelExecutionType::Merge as i32);
         assert_eq!(request.labels, labels);
-        assert_eq!(request.tables[0].last_modified_epoch, 123);
+        assert_eq!(request.tables[0].last_modified_epoch, Some(123));
         assert_eq!(
             request.clone_table_properties.unwrap().hours_to_expiration,
             Some(12)
@@ -596,7 +596,7 @@ mod tests {
             sql: "select * from raw.orders".to_string(),
             tables: vec![TableModifiedInfo {
                 name: "raw.orders".to_string(),
-                last_modified_epoch: 123,
+                last_modified_epoch: Some(123),
             }],
             query_dependencies: Vec::new(),
             semantic_extras: HashMap::new(),

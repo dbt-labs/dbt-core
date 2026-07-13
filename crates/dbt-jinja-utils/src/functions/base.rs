@@ -1519,6 +1519,7 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_common::path::DbtPath;
     use minijinja::{Environment, Value};
     use minijinja_contrib::pycompat::unknown_method_callback;
 
@@ -1825,7 +1826,6 @@ mod tests {
     fn build_flat_graph_populates_defer_relation_for_deferrable_nodes() {
         use dbt_schemas::schemas::nodes::{CommonAttributes, NodeBaseAttributes};
         use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot};
-        use std::path::PathBuf;
 
         fn make_model(unique_id: &str, name: &str, alias: &str, schema: &str) -> Arc<DbtModel> {
             Arc::new(DbtModel {
@@ -1834,8 +1834,8 @@ mod tests {
                     name: name.to_string(),
                     package_name: "pkg".to_string(),
                     fqn: vec!["pkg".to_string(), name.to_string()],
-                    path: PathBuf::from(format!("{name}.sql")),
-                    original_file_path: PathBuf::from(format!("models/{name}.sql")),
+                    path: DbtPath::from(format!("{name}.sql")),
+                    original_file_path: DbtPath::from(format!("models/{name}.sql")),
                     ..Default::default()
                 },
                 __base_attr__: NodeBaseAttributes {

@@ -58,6 +58,7 @@ fn t(label: &str, start: Instant) {
 }
 
 use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
+use dbt_common::path::DbtPath;
 use parquet::arrow::{ProjectionMask, arrow_reader::ParquetRecordBatchReaderBuilder};
 use serde::{Deserialize, Serialize};
 
@@ -1564,7 +1565,7 @@ fn deserialize_into(
                     v.macro_name_span = serde_json::from_str(macro_name_span_json).ok();
                 }
                 if !macro_absolute_path.is_empty() {
-                    v.absolute_path = PathBuf::from(macro_absolute_path);
+                    v.absolute_path = DbtPath::from(macro_absolute_path);
                 }
                 nodes.macros.insert(uid.to_string(), Arc::new(v));
             }

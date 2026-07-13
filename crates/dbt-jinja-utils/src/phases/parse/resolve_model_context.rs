@@ -15,6 +15,7 @@ use chrono_tz::{Europe::London, Tz};
 use dbt_adapter::{cast_util::THIS_RELATION_KEY, load_store::ResultStore};
 use dbt_common::{
     io_args::{IoArgs, StaticAnalysisKind},
+    path::DbtPath,
     serde_utils::convert_yml_to_value_map,
 };
 use dbt_frontend_common::error::CodeLocation;
@@ -195,13 +196,9 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         __common_attr__: CommonAttributes {
             name: model_name.to_owned(),
             package_name: package_name.to_owned(),
-            // `model.path` is exposed relative to the resource root (e.g.
-            // `staging/orders.sql`), matching dbt-core. Callers that don't have a
-            // meaningful resource-relative path (operations, exposures, unit tests)
-            // pass an empty path, preserving the prior behavior for those contexts.
-            path: model_path.to_path_buf(),
+            path: DbtPath::from(model_path),
             name_span: dbt_common::Span::default(),
-            original_file_path: display_path.to_path_buf(),
+            original_file_path: DbtPath::from(display_path),
             patch_path: None,
             unique_id: format!("{package_name}.{model_name}"),
             fqn,

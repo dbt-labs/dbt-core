@@ -81,8 +81,8 @@ fn process_docs_macro_file(
                     DbtDocsMacro {
                         name: name.clone(),
                         package_name: package_name.to_string(),
-                        path: docs_asset.path.clone(),
-                        original_file_path: relative_docs_file_path.clone(),
+                        path: DbtPath::from(&docs_asset.path),
+                        original_file_path: DbtPath::from(relative_docs_file_path),
                         unique_id,
                         block_contents: part.trim().to_string(),
                     },
@@ -120,9 +120,9 @@ pub fn resolve_macros(
             .and_then(OsStr::to_str)
             .map(str::to_ascii_lowercase);
         if ext.as_deref() == Some("jinja") || ext.as_deref() == Some("sql") {
-            let macro_file_path = base_path.join(macro_file);
+            let macro_file_path = DbtPath::from(base_path.join(macro_file));
             let macro_sql = read_file_content(macro_file, &macro_file_path, embedded_contents)?;
-            let relative_macro_file_path = diff_paths(&macro_file_path, base_path)?;
+            let relative_macro_file_path = DbtPath::from(diff_paths(&macro_file_path, base_path)?);
             let resources = parse_macro_statements(
                 &macro_sql,
                 &relative_macro_file_path,
@@ -143,7 +143,7 @@ pub fn resolve_macros(
                         let dbt_macro = DbtMacro {
                             name: name.clone(),
                             package_name: package_name.clone(),
-                            path: macro_file.clone(),
+                            path: DbtPath::from(macro_file),
                             original_file_path: relative_macro_file_path.clone(),
                             absolute_path: macro_file_path.clone(),
                             span: Some(span),
@@ -173,7 +173,7 @@ pub fn resolve_macros(
                         let dbt_macro = DbtMacro {
                             name: name.clone(),
                             package_name: package_name.clone(),
-                            path: macro_file.clone(),
+                            path: DbtPath::from(macro_file),
                             original_file_path: relative_macro_file_path.clone(),
                             absolute_path: macro_file_path.clone(),
                             span: Some(span),
@@ -203,7 +203,7 @@ pub fn resolve_macros(
                         let dbt_macro = DbtMacro {
                             name: name.clone(),
                             package_name: package_name.clone(),
-                            path: macro_file.clone(),
+                            path: DbtPath::from(macro_file),
                             original_file_path: relative_macro_file_path.clone(),
                             absolute_path: macro_file_path.clone(),
                             span: Some(span),
@@ -232,7 +232,7 @@ pub fn resolve_macros(
                         let dbt_macro = DbtMacro {
                             name: name.clone(),
                             package_name: package_name.clone(),
-                            path: macro_file.clone(),
+                            path: DbtPath::from(macro_file),
                             original_file_path: relative_macro_file_path.clone(),
                             absolute_path: macro_file_path.clone(),
                             span: Some(span),
@@ -275,7 +275,7 @@ fn read_file_content(
     absolute_path: &Path,
     embedded_contents: Option<&HashMap<DbtPath, String>>,
 ) -> FsResult<String> {
-    match embedded_contents.and_then(|m| m.get(&DbtPath::from_path(relative_path))) {
+    match embedded_contents.and_then(|m| m.get(&DbtPath::from(relative_path))) {
         Some(content) => Ok(content.clone()),
         None => fs::read_to_string(absolute_path).map_err(|e| {
             fs_err!(
@@ -809,9 +809,9 @@ select 1 as id, current_timestamp as updated_at
             DbtMacro {
                 name: "my_macro".to_string(),
                 package_name: "test_pkg".to_string(),
-                path: PathBuf::from("macros/my_macro.sql"),
-                original_file_path: PathBuf::from("macros/my_macro.sql"),
-                absolute_path: PathBuf::default(),
+                path: DbtPath::from("macros/my_macro.sql"),
+                original_file_path: DbtPath::from("macros/my_macro.sql"),
+                absolute_path: DbtPath::default(),
                 span: Some(dummy_span),
                 unique_id: unique_id.clone(),
                 macro_sql: "{% macro my_macro() %}{% endmacro %}".to_string(),

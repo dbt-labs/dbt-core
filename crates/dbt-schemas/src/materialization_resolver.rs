@@ -22,7 +22,7 @@ const BUILTIN_MATERIALIZATIONS: &[&str] = &[
     "clone",
 ];
 
-/// Indicates where a macro originates from for resolution priority  
+/// Indicates where a macro originates from for resolution priority
 /// Values match Python exactly: Core=1, Imported=2, Root=3
 /// After sorting, the LAST element is taken (highest precedence)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -287,15 +287,16 @@ impl MaterializationResolver {
 
 #[cfg(test)]
 mod tests {
+    use dbt_common::path::DbtPath;
+
     use super::*;
-    use std::path::PathBuf;
 
     fn build_macro(name: &str, package: &str) -> DbtMacro {
         let mut m = DbtMacro::default();
         m.name = name.to_string();
         m.package_name = package.to_string();
         m.unique_id = format!("macro.{package}.{name}");
-        m.original_file_path = PathBuf::from(format!("macros/{package}/{name}.sql"));
+        m.original_file_path = DbtPath::from(format!("macros/{package}/{name}.sql"));
         m.path = m.original_file_path.clone();
         m.description = String::new();
         m

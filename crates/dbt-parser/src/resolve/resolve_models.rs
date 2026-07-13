@@ -33,6 +33,7 @@ use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::StatusReporter;
+use dbt_common::path::DbtPath;
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
@@ -587,10 +588,10 @@ pub async fn resolve_models(
             __common_attr__: CommonAttributes {
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.to_owned(),
+                path: DbtPath::from(dbt_asset.path.to_owned()),
                 name_span: dbt_common::Span::default(),
                 original_file_path,
-                patch_path: patch_path.clone(),
+                patch_path: patch_path.as_ref().map(DbtPath::from),
                 unique_id: unique_id.clone(),
                 fqn,
                 // dbt-core: description is always default ''

@@ -6,6 +6,7 @@ use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
 use dbt_adapter_core::AdapterType;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -160,12 +161,12 @@ pub async fn resolve_exposures(
                 __common_attr__: CommonAttributes {
                     name: exposure_name.to_string(),
                     package_name: package_name.to_string(),
-                    path: mpe.relative_path.clone(),
+                    path: DbtPath::from(&mpe.relative_path),
                     name_span: dbt_common::Span::from_serde_span(
                         mpe.name_span.clone(),
                         mpe.relative_path.clone(),
                     ),
-                    original_file_path: mpe.relative_path.clone(),
+                    original_file_path: DbtPath::from(&mpe.relative_path),
                     unique_id: unique_id.clone(),
                     fqn,
                     // dbt-core: description is always default ''

@@ -1429,7 +1429,7 @@ WITH
             e
         )
     })
-    .map_err(|e| e.with_location(original_file_path.clone()))?;
+    .map_err(|e| e.with_location(original_file_path.to_path_buf()))?;
     let macro_spans = ctx
         .rendering_listener_factory
         .drain_macro_spans(original_file_path);

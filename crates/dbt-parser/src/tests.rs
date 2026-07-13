@@ -664,6 +664,32 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_macro_with_non_ascii_name() -> FsResult<()> {
+        let sql = r#"
+            {% macro trans_añadir_costes(nombre_tabla) %}
+                select * from {{ nombre_tabla }}
+            {% endmacro %}
+        "#;
+
+        let resources = parse_macro_statements(sql, &PathBuf::from("test.sql"), &["macro"])?;
+        assert_eq!(resources.len(), 1);
+        match &resources[0] {
+            SqlResource::Macro(name, _, _, args, _) => {
+                assert_eq!(name, "trans_añadir_costes");
+                assert_eq!(
+                    args,
+                    &vec![ArgSpec {
+                        name: "nombre_tabla".to_string(),
+                        is_optional: false,
+                    }]
+                );
+            }
+            other => panic!("expected macro resource, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_test_macro() -> FsResult<()> {
         let sql = r#"
             {% test positive_value(model, column_name) %}

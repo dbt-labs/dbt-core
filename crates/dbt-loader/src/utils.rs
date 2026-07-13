@@ -84,7 +84,7 @@ pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
                 }
                 let metadata = metadata(entry.path())?;
                 let modified_time = metadata.modified()?;
-                info_paths.push((DbtPath::from_path(entry.path()), modified_time));
+                info_paths.push((DbtPath::from(entry.path()), modified_time));
             }
         }
     }

@@ -5,6 +5,7 @@ use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -193,13 +194,13 @@ pub async fn resolve_analyses(
             __common_attr__: CommonAttributes {
                 name: analysis_name.to_owned(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.to_owned(),
+                path: DbtPath::from(dbt_asset.path.to_owned()),
                 name_span: dbt_common::Span::default(),
                 original_file_path,
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
-                patch_path,
+                patch_path: patch_path.map(DbtPath::from),
                 checksum: sql_file_info.checksum.clone(),
                 language: Some("sql".to_string()),
                 raw_code: Some(raw_code),
