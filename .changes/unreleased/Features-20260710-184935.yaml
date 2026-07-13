@@ -1,7 +1,0 @@
-kind: Features
-body: Add python programmatic invocations support
-time: 2026-07-10T18:49:35.079897+05:30
-custom:
-    author: ash2shukla
-    issue: ""
-    project: dbt-core
