@@ -1167,11 +1167,9 @@ impl InternalDbtNode for DbtModel {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            let deprecated_config_eq = self.deprecated_config.same_config(
-                &other_model.deprecated_config,
-                &self.__base_attr__.unrendered_config,
-                &other_model.__base_attr__.unrendered_config,
-            );
+            let deprecated_config_eq = self
+                .deprecated_config
+                .same_config(&other_model.deprecated_config);
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -1187,7 +1185,7 @@ impl InternalDbtNode for DbtModel {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         // TODO: the checksum for extended model is always different in mantle and fusion, dig more into this
         if self.is_extended_model() {
             return true;
@@ -1196,7 +1194,8 @@ impl InternalDbtNode for DbtModel {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             let same_body_result = same_body(&self.__common_attr__, &other_model.__common_attr__);
-            let same_config_result = self.has_same_config(other, adapter_type);
+            // Config is owned by `check_configs_modified`; calling `has_same_config` here would
+            // double-count it. This check is therefore restricted to non-config fields.
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -1213,7 +1212,6 @@ impl InternalDbtNode for DbtModel {
             let same_contract_result = self.same_contract(other_model);
 
             let result = same_body_result
-                && same_config_result
                 && same_persisted_desc_result
                 && same_fqn_result
                 && same_db_repr_result
@@ -1225,7 +1223,6 @@ impl InternalDbtNode for DbtModel {
                     "model",
                     [
                         ("same_body", same_body_result, None),
-                        ("same_config", same_config_result, None),
                         (
                             "same_persisted_description",
                             same_persisted_desc_result,
@@ -2192,11 +2189,9 @@ impl InternalDbtNode for DbtSource {
                     (Some(a), Some(b)) => a == b,
                 };
 
-            let warehouse_config_eq = same_warehouse_config_with_unrendered(
+            let warehouse_config_eq = same_warehouse_config(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
-                &self.__base_attr__.unrendered_config,
-                &other_source.__base_attr__.unrendered_config,
             );
 
             let result = enabled_eq

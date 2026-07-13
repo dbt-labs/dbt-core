@@ -40,8 +40,8 @@ use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_equal_with_unrendered, meta_eq,
-    omissible_option_eq, same_warehouse_config_with_unrendered,
+    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_equal, meta_eq, omissible_option_eq,
+    same_warehouse_config,
 };
 use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
@@ -1234,12 +1234,7 @@ impl ModelConfig {
     }
 
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
-    pub fn same_config(
-        &self,
-        other: &ModelConfig,
-        self_unrendered_config: &BTreeMap<String, YmlValue>,
-        other_unrendered_config: &BTreeMap<String, YmlValue>,
-    ) -> bool {
+    pub fn same_config(&self, other: &ModelConfig) -> bool {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
@@ -1267,12 +1262,7 @@ impl ModelConfig {
             &other.on_configuration_change,
         ); // Custom comparison for on_configuration_change
         let on_error_eq = self.on_error == other.on_error;
-        let grants_eq = grants_equal_with_unrendered(
-            &self.grants,
-            &other.grants,
-            self_unrendered_config,
-            other_unrendered_config,
-        ); // Custom comparison for grants
+        let grants_eq = grants_equal(&self.grants, &other.grants); // Custom comparison for grants
         let packages_eq = packages_and_imports_eq(&self.packages, &other.packages); // Custom comparison for packages
         let imports_eq = packages_and_imports_eq(&self.imports, &other.imports); // Custom comparison for imports (same function as packages)
         let python_version_eq = self.python_version == other.python_version;
@@ -1300,11 +1290,9 @@ impl ModelConfig {
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
         let predicates_eq = self.predicates == other.predicates;
-        let warehouse_config_eq = same_warehouse_config_with_unrendered(
+        let warehouse_config_eq = same_warehouse_config(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
-            self_unrendered_config,
-            other_unrendered_config,
         );
 
         let result = enabled_eq
