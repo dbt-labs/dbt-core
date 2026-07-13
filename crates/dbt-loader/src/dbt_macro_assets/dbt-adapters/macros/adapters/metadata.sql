@@ -78,6 +78,18 @@
 {% endmacro %}
 
 
+-- funcsign: (string) -> agate_table
+{% macro check_schema_exists_like(schema) -%}
+  {{ return(adapter.dispatch('check_schema_exists_like', 'dbt')(schema)) }}
+{% endmacro %}
+
+-- funcsign: (string) -> agate_table
+{% macro default__check_schema_exists_like(schema) -%}
+  {{ exceptions.raise_not_implemented(
+    'check_schema_exists_like macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
+
+
 -- funcsign: (relation) -> list[relation]
 {% macro list_relations_without_caching(schema_relation) %}
   {{ return(adapter.dispatch('list_relations_without_caching', 'dbt')(schema_relation)) }}

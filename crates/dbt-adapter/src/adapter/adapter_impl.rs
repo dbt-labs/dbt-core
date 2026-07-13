@@ -11,7 +11,7 @@ use crate::errors::{
 use crate::formatter::format_sql_with_bindings;
 use crate::macro_exec::{
     convert_macro_result_to_record_batch, execute_macro, execute_macro_with_package,
-    execute_macro_wrapper_with_package,
+    execute_macro_wrapper, execute_macro_wrapper_with_package,
 };
 use crate::metadata::bigquery::nested_projection::render_struct_projection;
 use crate::metadata::bigquery::{
@@ -1362,7 +1362,11 @@ impl AdapterImpl {
 
         // Spark (Hive metastore) has no ANSI `information_schema`
         if matches!(self.adapter_type(), Spark) {
-            return Ok(Value::from(self.spark_check_schema_exists(state, schema)?));
+            let result =
+                execute_macro_wrapper(state, &[Value::from(schema)], "check_schema_exists_like")?;
+            return Ok(Value::from(
+                self.list_schemas_inner(result)?.iter().any(|s| s == schema),
+            ));
         }
 
         // FIXME:
@@ -1399,25 +1403,6 @@ impl AdapterImpl {
                 "invalid return value",
             )),
         }
-    }
-
-    /// Spark-native single-schema existence check.
-    ///
-    /// Runs `show databases like '<schema>'`, which filters server-side and returns
-    /// 0/1 rows. Spark's `show databases like` pattern treats only `*` and `|` as
-    /// wildcards (not `_`/`%`), so a literal schema name matches exactly; we still
-    /// verify an exact match so a name containing `*`/`|` can't over-match.
-    /// Functionally mirrors core v1's `SparkAdapter.check_schema_exists`, which
-    /// resolves existence via the `list_schemas` macro plus a membership check
-    /// https://github.com/dbt-labs/dbt-adapters/blob/v1.17.3/dbt-spark/src/dbt/adapters/spark/impl.py#L428
-    fn spark_check_schema_exists(&self, state: &State, schema: &str) -> AdapterResult<bool> {
-        let result = execute_macro_wrapper_with_package(
-            state,
-            &[Value::from(schema)],
-            "spark__check_schema_exists_like",
-            "dbt_spark",
-        )?;
-        Ok(self.list_schemas_inner(result)?.iter().any(|s| s == schema))
     }
 
     #[allow(clippy::too_many_arguments)]
