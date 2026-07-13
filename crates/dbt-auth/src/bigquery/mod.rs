@@ -4,6 +4,7 @@ use dbt_adbc::bigquery::auth_type;
 use dbt_adbc::{Backend, bigquery, database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use url::Url;
 
 type YmlValue = dbt_yaml::Value;
 
@@ -123,6 +124,37 @@ impl<'a> BigqueryAuthIR<'a> {
 
 /// Identity provider `type`s accepted in `token_endpoint` for `external-oauth-wif`.
 const SUPPORTED_TOKEN_ENDPOINT_TYPES: &[&str] = &["entra"];
+
+// The bigquery ADBC driver appends "bigquery/v2/" to the hostname provided
+// in `api_endpoint`. Here, we reject anything that isn't "http(s)://host[:port]/"
+// to fit that routine's preconditions.
+fn validate_api_endpoint(endpoint: &str) -> Result<(), AuthError> {
+    let url = Url::parse(endpoint).map_err(|_| {
+        AuthError::config(format!(
+            "'api_endpoint' must start with 'http://' or 'https://': {endpoint:?}"
+        ))
+    })?;
+
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err(AuthError::config(format!(
+            "'api_endpoint' must start with 'http://' or 'https://': {endpoint:?}"
+        )));
+    }
+
+    if !endpoint.ends_with('/') {
+        return Err(AuthError::config(format!(
+            "'api_endpoint' must end with a trailing '/': {endpoint:?}"
+        )));
+    }
+
+    if url.path() != "/" || url.query().is_some() || url.fragment().is_some() {
+        return Err(AuthError::config(format!(
+            "'api_endpoint' must be a bare host (with optional port), e.g. 'https://your-proxy.example.com/': {endpoint:?}"
+        )));
+    }
+
+    Ok(())
+}
 
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<BigqueryAuthIR<'a>, AuthError> {
     let method = config
@@ -294,6 +326,7 @@ fn apply_connection_args(
     builder.with_named_option(bigquery::DATASET_ID, dataset_id)?;
 
     if let Some(api_endpoint) = config.get_str("api_endpoint") {
+        validate_api_endpoint(api_endpoint)?;
         builder.with_named_option(bigquery::API_ENDPOINT, api_endpoint)?;
     }
 
@@ -499,7 +532,7 @@ mod tests {
 method: service-account-json
 database: my_db
 schema: my_schema
-api_endpoint: https://bigquery.googleapis.com/bigquery/v2/
+api_endpoint: https://bigquery.googleapis.com/
 keyfile_json:
     type: service_account
     project_id: bq-project
@@ -534,7 +567,7 @@ location: my_location
         );
         assert_eq!(
             other_option_value(&builder, bigquery::API_ENDPOINT).unwrap(),
-            "https://bigquery.googleapis.com/bigquery/v2/"
+            "https://bigquery.googleapis.com/"
         );
         assert_eq!(
             other_option_value(&builder, bigquery::AUTH_TYPE).unwrap(),
@@ -578,18 +611,57 @@ location: my_location
 database: my_db
 schema: my_schema
 method: oauth
-api_endpoint: https://definitely-not-bigquery.invalid
+api_endpoint: https://definitely-not-bigquery.invalid/
 "#;
         let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
         let builder = try_configure(config).unwrap();
         assert_eq!(
             other_option_value(&builder, bigquery::API_ENDPOINT).unwrap(),
-            "https://definitely-not-bigquery.invalid"
+            "https://definitely-not-bigquery.invalid/"
         );
         assert_eq!(
             other_option_value(&builder, bigquery::AUTH_TYPE).unwrap(),
             auth_type::DEFAULT
         );
+    }
+
+    #[test]
+    fn test_builder_from_auth_config_oauth_api_endpoint_rejects_missing_trailing_slash() {
+        let yaml_doc = r#"
+database: my_db
+schema: my_schema
+method: oauth
+api_endpoint: https://definitely-not-bigquery.invalid
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(err.msg(), "trailing '/'");
+    }
+
+    #[test]
+    fn test_builder_from_auth_config_oauth_api_endpoint_rejects_path() {
+        let yaml_doc = r#"
+database: my_db
+schema: my_schema
+method: oauth
+api_endpoint: https://bigquery.googleapis.com/bigquery/v2/
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(err.msg(), "bare host");
+    }
+
+    #[test]
+    fn test_builder_from_auth_config_oauth_api_endpoint_rejects_missing_scheme() {
+        let yaml_doc = r#"
+database: my_db
+schema: my_schema
+method: oauth
+api_endpoint: definitely-not-bigquery.invalid/
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let err = try_configure(config).unwrap_err();
+        assert_contains!(err.msg(), "http://' or 'https://'");
     }
 
     #[test]
