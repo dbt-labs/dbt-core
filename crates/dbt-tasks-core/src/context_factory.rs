@@ -76,6 +76,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                 run_task_args.as_ref(),
                 execute,
                 resolver_state.adapter_type,
+                resolver_state.cloud_config.as_ref(),
             )
             .await;
 

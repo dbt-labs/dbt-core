@@ -41,6 +41,8 @@ pub struct ProjectDbtCloudConfig {
     pub project_id: Option<StringOrInteger>,
     #[serde(rename = "defer-env-id")]
     pub defer_env_id: Option<StringOrInteger>,
+    #[serde(rename = "state-org-id")]
+    pub state_org_id: Option<StringOrInteger>,
 
     // unsure if any of these other keys are actually used or expected
     pub account_id: Option<StringOrInteger>,
@@ -434,5 +436,52 @@ mod tests {
             vars: Verbatim::from(None),
         };
         assert_eq!(project.get_project_id(), "92c907bdbc0c4f27451b9b9fdb1bc8ec");
+    }
+
+    #[test]
+    fn project_dbt_cloud_config_accepts_state_org_id() {
+        let project: DbtProject = dbt_yaml::from_str(
+            r#"
+name: test
+dbt-cloud:
+  project-id: 123
+  defer-env-id: 456
+  state-org-id: 789
+"#,
+        )
+        .unwrap();
+
+        let dbt_cloud = project.dbt_cloud.expect("dbt-cloud config");
+        assert_eq!(dbt_cloud.state_org_id, Some(StringOrInteger::Integer(789)));
+    }
+
+    #[test]
+    fn project_schema_includes_state_org_id() {
+        use crate::man::deny_additional_properties_in_root;
+
+        fn has_property(value: &serde_json::Value, property: &str) -> bool {
+            match value {
+                serde_json::Value::Object(map) => {
+                    map.get("properties")
+                        .and_then(serde_json::Value::as_object)
+                        .is_some_and(|properties| properties.contains_key(property))
+                        || map.values().any(|value| has_property(value, property))
+                }
+                serde_json::Value::Array(values) => {
+                    values.iter().any(|value| has_property(value, property))
+                }
+                _ => false,
+            }
+        }
+
+        let generator = schemars::r#gen::SchemaSettings::draft07().into_generator();
+        let mut schema = generator.into_root_schema_for::<DbtProject>();
+        deny_additional_properties_in_root(&mut schema);
+        let schema_json = serde_json::to_value(&schema).unwrap();
+
+        assert!(
+            has_property(&schema_json, "state-org-id"),
+            "state-org-id should be a property in the dbt-cloud project config schema"
+        );
     }
 }

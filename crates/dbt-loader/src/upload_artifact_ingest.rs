@@ -637,6 +637,7 @@ mod tests {
             environment_id: Some("216".to_string()),
             defer_env_id: None,
             defer_job_id: None,
+            state_org_id: None,
             job_id: None,
         })
     }

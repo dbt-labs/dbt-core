@@ -596,6 +596,7 @@ pub struct ResolverState {
     pub macros: Macros,
     pub operations: Operations,
     pub dbt_profile: DbtProfile,
+    pub cloud_config: Option<ResolvedCloudConfig>,
     pub render_results: RenderResults,
     pub node_resolver: Arc<dyn NodeResolverTracker>,
     pub get_relation_calls: GetRelationCalls,

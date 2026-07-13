@@ -4362,6 +4362,7 @@ mod tests {
                 relative_profile_path: PathBuf::new(),
                 threads: None,
             },
+            cloud_config: None,
             render_results: RenderResults::default(),
             node_resolver: Arc::new(DummyNodeResolverTracker),
             get_relation_calls: Default::default(),

@@ -2,6 +2,8 @@ use std::env;
 use std::fmt;
 use std::time::Duration;
 
+use dbt_cloud_config::ResolvedCloudConfig;
+
 pub const DEFAULT_API_URL: &str = "api.state.dbt.com:443";
 pub const DEFAULT_OAUTH_TOKEN_URL: &str = "https://auth.state.dbt.com/token";
 pub const DEFAULT_OAUTH_AUTH_URL: &str = "https://auth.state.dbt.com";
@@ -66,6 +68,12 @@ pub struct RunCacheServiceConfig {
 impl RunCacheServiceConfig {
     pub fn from_env() -> Result<Self, RunCacheServiceConfigError> {
         Self::from_env_getter(|name| env::var(name).ok())
+    }
+
+    pub fn from_env_and_cloud_config(
+        cloud_config: Option<&ResolvedCloudConfig>,
+    ) -> Result<Self, RunCacheServiceConfigError> {
+        Self::from_env_getter_and_cloud_config(|name| env::var(name).ok(), cloud_config)
     }
 
     pub fn is_explicitly_requested_from_env() -> bool {
@@ -225,6 +233,16 @@ impl RunCacheServiceConfig {
         })
     }
 
+    fn from_env_getter_and_cloud_config<F>(
+        get_env: F,
+        cloud_config: Option<&ResolvedCloudConfig>,
+    ) -> Result<Self, RunCacheServiceConfigError>
+    where
+        F: FnMut(&str) -> Option<String>,
+    {
+        Self::from_env_getter(get_env).map(|config| config.with_cloud_config(cloud_config))
+    }
+
     pub fn disabled() -> Self {
         Self {
             enabled: false,
@@ -263,6 +281,13 @@ impl RunCacheServiceConfig {
         } else {
             format!("{scheme}://{api_url}")
         }
+    }
+
+    fn with_cloud_config(mut self, cloud_config: Option<&ResolvedCloudConfig>) -> Self {
+        if self.org_id.is_none() {
+            self.org_id = cloud_config.and_then(|config| config.state_org_id.clone());
+        }
+        self
     }
 }
 
@@ -436,6 +461,20 @@ mod tests {
         RunCacheServiceConfig::from_env_getter(|name| values.get(name).cloned())
     }
 
+    fn config_from_pairs_and_cloud_config(
+        pairs: &[(&str, &str)],
+        cloud_config: Option<&ResolvedCloudConfig>,
+    ) -> Result<RunCacheServiceConfig, RunCacheServiceConfigError> {
+        let values = pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+            .collect::<BTreeMap<_, _>>();
+        RunCacheServiceConfig::from_env_getter_and_cloud_config(
+            |name| values.get(name).cloned(),
+            cloud_config,
+        )
+    }
+
     #[test]
     fn defaults_match_python_client_surface() {
         let config = config_from_pairs(&[]).unwrap();
@@ -495,6 +534,34 @@ mod tests {
                 (name == "DBT_RUN_CACHE_API_URL").then(|| "legacy.example:1234".to_string())
             })
         );
+    }
+
+    #[test]
+    fn cloud_config_state_org_id_sets_org_id() {
+        let cloud_config = ResolvedCloudConfig {
+            state_org_id: Some("project-org".to_string()),
+            ..Default::default()
+        };
+
+        let config = config_from_pairs_and_cloud_config(&[], Some(&cloud_config)).unwrap();
+
+        assert_eq!(config.org_id.as_deref(), Some("project-org"));
+    }
+
+    #[test]
+    fn env_org_id_overrides_cloud_config_state_org_id() {
+        let cloud_config = ResolvedCloudConfig {
+            state_org_id: Some("project-org".to_string()),
+            ..Default::default()
+        };
+
+        let config = config_from_pairs_and_cloud_config(
+            &[("RUN_CACHE_ORG_ID", "env-org")],
+            Some(&cloud_config),
+        )
+        .unwrap();
+
+        assert_eq!(config.org_id.as_deref(), Some("env-org"));
     }
 
     #[test]

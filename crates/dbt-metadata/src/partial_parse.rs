@@ -3841,6 +3841,7 @@ mod tests {
             macros: Macros::default(),
             operations: Operations::default(),
             dbt_profile: dbt_state.dbt_profile.clone(),
+            cloud_config: dbt_state.cloud_config.clone(),
             render_results: Default::default(),
             node_resolver: Arc::new(DummyNodeResolverTracker),
             get_relation_calls: Default::default(),

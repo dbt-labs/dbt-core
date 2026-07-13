@@ -1,4 +1,5 @@
 use dbt_adapter_core::AdapterType;
+use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::ErrorCode;
 use dbt_common::io_args::FsCommand;
 use dbt_common::tracing::dbt_emit::{
@@ -35,8 +36,9 @@ impl RunCacheLifecycle {
         arg: &RunTasksArgs,
         execute: Execute,
         adapter_type: AdapterType,
+        cloud_config: Option<&ResolvedCloudConfig>,
     ) -> Self {
-        let service = initialize_run_cache_service(arg, execute, adapter_type).await;
+        let service = initialize_run_cache_service(arg, execute, adapter_type, cloud_config).await;
         let metadata_ttl_seconds = service
             .config
             .as_ref()
@@ -60,6 +62,7 @@ async fn initialize_run_cache_service(
     arg: &RunTasksArgs,
     execute: Execute,
     adapter_type: AdapterType,
+    cloud_config: Option<&ResolvedCloudConfig>,
 ) -> RunCacheServiceLifecycle {
     if !should_initialize_run_cache_service(
         arg,
@@ -83,7 +86,7 @@ async fn initialize_run_cache_service(
         };
     }
 
-    let config = match RunCacheServiceConfig::from_env() {
+    let config = match RunCacheServiceConfig::from_env_and_cloud_config(cloud_config) {
         Ok(config) => config,
         Err(err) => {
             increment_metric(
