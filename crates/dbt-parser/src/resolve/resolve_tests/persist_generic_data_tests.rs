@@ -1354,15 +1354,7 @@ fn collect_versioned_model_tests(
         let mut version_config = base_test_config.clone();
         version_config.version_num = Some(version_suffix.to_string());
 
-        // Override with version-specific tests if they exist
-        // Base model level tests are exclusive or with versioned model level tests
-        if version.tests.is_some() && version.data_tests.is_some() {
-            return err!(
-                ErrorCode::InvalidConfig,
-                "Cannot have both 'tests' and 'data_tests' defined"
-            );
-        }
-        if let Some(version_tests) = version.tests.clone().or_else(|| version.data_tests.clone()) {
+        if let Some(version_tests) = version.data_tests.clone() {
             version_config.model_tests = Some(version_tests);
         }
 
@@ -2022,6 +2014,80 @@ mod tests {
                 .unwrap_or(false),
             "v2 must not have a test for cost_center_bkey (it is excluded)"
         );
+    }
+
+    #[test]
+    fn test_version_model_tests_legacy_alias_ignored() {
+        let base_config = versioned_model_base_config();
+        let version = version_with_model_tests(
+            Some(vec![DataTests::String(Spanned::from(
+                "not_null".to_string(),
+            ))]),
+            None,
+        );
+
+        let result = collect_versioned_model_tests(&base_config, &[version]).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].version_num.as_deref(), Some("1"));
+        assert!(
+            result[0].model_tests.is_none(),
+            "version-level `tests` should not create model tests"
+        );
+    }
+
+    #[test]
+    fn test_version_model_data_tests_prefer_data_tests_when_legacy_alias_also_present() {
+        let base_config = versioned_model_base_config();
+        let data_test = DataTests::String(Spanned::from("unique".to_string()));
+        let version = version_with_model_tests(
+            Some(vec![DataTests::String(Spanned::from(
+                "not_null".to_string(),
+            ))]),
+            Some(vec![data_test]),
+        );
+
+        let result = collect_versioned_model_tests(&base_config, &[version]).unwrap();
+
+        assert_eq!(result.len(), 1);
+        let model_tests = result[0]
+            .model_tests
+            .as_ref()
+            .expect("version data_tests should be preserved");
+        assert_eq!(model_tests.len(), 1);
+        assert_eq!(model_tests[0].test_name(), Some("unique"));
+    }
+
+    fn versioned_model_base_config() -> GenericTestConfig {
+        GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "orders".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        }
+    }
+
+    fn version_with_model_tests(
+        tests: Option<Vec<DataTests>>,
+        data_tests: Option<Vec<DataTests>>,
+    ) -> Versions {
+        use dbt_yaml::Verbatim;
+
+        Versions {
+            v: dbt_yaml::Value::Number(dbt_yaml::Number::from(1), Span::zero()),
+            deprecation_date: None,
+            defined_in: None,
+            description: None,
+            access: None,
+            config: Verbatim::from(None),
+            constraints: None,
+            data_tests,
+            tests,
+            columns: None,
+            __additional_properties__: Verbatim::from(HashMap::new()),
+        }
     }
 
     #[test]
