@@ -4,14 +4,17 @@ from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 
+# Prefix prepended to every hint when surfaced to the user.
+HINT_PREFIX = "[HINT] "
+
 # Hint message text shown to the user. Keep these actionable and point at docs.
 REUSE_RELATIONS_ON_TOO_MANY_MODELS = (
-    "[HINT] You're building a lot from scratch. Did you know you can speed up your "
+    "You're building a lot from scratch. Did you know you can speed up your "
     "builds by reusing relations from other schemas: check out "
     "https://docs.getdbt.com/docs/optimizing-builds?utm_source=dbt-cli"
 )
 LONG_PARSING_WITHOUT_V2_PARSER = (
-    "[HINT] Your parse is taking a long time. Did you know you can speed up your "
+    "Your parse is taking a long time. Did you know you can speed up your "
     "parsing with the new rust parser: check out "
     "https://docs.getdbt.com/reference/global-configs/parsing?utm_source=dbt-cli#opt-in-v2-parser"
 )
@@ -36,5 +39,5 @@ def show_hint(hint_type: HintType) -> None:
         return
 
     msg = hint_to_msg_map[hint_type]
-    fire_event(Note(msg=msg))
+    fire_event(Note(msg=f"{HINT_PREFIX}{msg}"))
     track_hint_view(hint_type)

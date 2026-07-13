@@ -3,7 +3,7 @@ from unittest import mock
 import pytest
 
 from dbt import hints
-from dbt.hints import HintType, hint_to_msg_map, show_hint
+from dbt.hints import HINT_PREFIX, HintType, hint_to_msg_map, show_hint
 
 
 def test_hint_to_msg_map_covers_every_hint_type():
@@ -33,7 +33,7 @@ class TestShowHint:
 
         mock_fire_event.assert_called_once()
         note = mock_fire_event.call_args.args[0]
-        assert note.msg == hint_to_msg_map[HintType.LONG_PARSING_WITHOUT_V2_PARSER]
+        assert note.msg == HINT_PREFIX + hint_to_msg_map[HintType.LONG_PARSING_WITHOUT_V2_PARSER]
         mock_track_hint_view.assert_called_once_with(HintType.LONG_PARSING_WITHOUT_V2_PARSER)
 
     def test_does_nothing_when_disabled(self, mock_fire_event, mock_track_hint_view):

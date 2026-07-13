@@ -1,7 +1,11 @@
 import pytest
 from pytest_mock import MockerFixture
 
-from dbt.hints import LONG_PARSING_WITHOUT_V2_PARSER, REUSE_RELATIONS_ON_TOO_MANY_MODELS
+from dbt.hints import (
+    HINT_PREFIX,
+    LONG_PARSING_WITHOUT_V2_PARSER,
+    REUSE_RELATIONS_ON_TOO_MANY_MODELS,
+)
 from dbt.tests.util import run_dbt
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.types import Note
@@ -16,7 +20,7 @@ def no_snowplow(mocker: MockerFixture):
 
 def hint_events(catcher: EventCatcher, hint_msg: str):
     # Note fires for lots of things; keep only the specific hint we care about.
-    return [e for e in catcher.caught_events if e.data.msg == hint_msg]
+    return [e for e in catcher.caught_events if e.data.msg == HINT_PREFIX + hint_msg]
 
 
 class TestReuseRelationsHint:
