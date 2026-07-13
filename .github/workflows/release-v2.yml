@@ -1,9 +1,21 @@
 # **what?**
-# Cut a `dbt-sa-cli` release: bump version on a release branch, build the
-# binary matrix via `cargo build`, pack each binary into a wheel via
-# `cargo ci pypi pack`, tag the build commit, publish to PyPI, create a
-# GitHub Release with the platform tarballs, and push a Homebrew formula
-# to the dbt-labs/homebrew-dbt tap.
+# TEST-PYPI variant of release-v2.yml. Runs the same build/test/pack path but
+# publishes wheels ONLY to Test PyPI (test.pypi.org) and touches NO production
+# instances. Every production-facing job from release-v2.yml is hard-disabled
+# here with `if: false`:
+#   - tag                (git tag push to origin)
+#   - github-release     (public GitHub Release)
+#   - publish-homebrew   (dbt-labs/homebrew-dbt tap)
+#   - publish-winget     (microsoft/winget-pkgs PR)
+#   - changelog-backport (PR to main)
+# Use this to rehearse a release end-to-end against Test PyPI. For real
+# releases use release-v2.yml. This file intentionally duplicates release-v2.yml
+# rather than sharing jobs, so the production workflow stays untouched; keep the
+# build/test/pack jobs in sync with it by hand.
+#
+# NOTE: prepare-release still bumps the workspace version and pushes a
+# `release/…` branch to origin (needed so build/pack have something to check
+# out). That's an internal branch, not a production distribution endpoint.
 #
 # **why?**
 # OSS release path for the standalone analyzer CLI. The build (`cargo build`)
@@ -32,9 +44,9 @@
 # provisioning) is documented in `crates/dbt-ci/README.md`.
 #
 # **PyPI publishing**
-# `publish-pypi` uploads to production PyPI via `cargo ci pypi publish`
-# with `--environment prod`, authenticating with the repo-level
-# `PYPI_API_TOKEN` secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`).
+# `publish-pypi` uploads to Test PyPI via `cargo ci pypi publish` with
+# `--environment test-pypi`, authenticating with the repo-level
+# `TEST_PYPI_API_TOKEN` secret (passed to the tool as `DBT_PYPI_TEST_TOKEN`).
 # Two distributions are published — `dbt-core` and
 # `dbt-core-experimental-parser` — selected by the `release_target` input.
 #
@@ -55,8 +67,8 @@
 name: Release dbt Core V2
 run-name: >-
   ${{
-    inputs.dry_run && format('Release v{0} (dry run — build only)', inputs.version)
-    || format('Release v{0}', inputs.version)
+    inputs.dry_run && format('Test-PyPI release v{0} (dry run — build only)', inputs.version)
+    || format('Test-PyPI release v{0}', inputs.version)
   }}
 
 on:
@@ -87,7 +99,7 @@ on:
         default: both
 
 concurrency:
-  group: ${{ inputs.dry_run && format('publish-release-dry-{0}', github.run_id) || 'publish-release-prod' }}
+  group: ${{ inputs.dry_run && format('publish-release-test-dry-{0}', github.run_id) || 'publish-release-test' }}
   cancel-in-progress: false
 
 permissions:
@@ -110,7 +122,13 @@ jobs:
     uses: ./.github/workflows/release-prep-v2.yml
     with:
       version: ${{ inputs.version }}
-      dry_run: ${{ inputs.dry_run }}
+      # Hardcoded true (not inputs.dry_run): a "wet" prepare cuts a prod-style
+      # `release/v${VERSION}` branch, which would collide with a real
+      # production release of the same version. Forcing dry-run here keeps this
+      # test workflow on throwaway `release/dry-run/v…-<run_id>` branches.
+      # This only affects branch naming — the Test PyPI publish is gated
+      # separately on the workflow's own `inputs.dry_run`.
+      dry_run: true
       source_ref: ${{ inputs.source_ref }}
 
   # ------------------------------------------------------------------
@@ -567,7 +585,7 @@ jobs:
   tag:
     name: Tag release commit
     needs: [prepare-release, pack]
-    if: ${{ !inputs.dry_run }}
+    if: false  # TEST MODE: never push a git tag to origin.
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -596,15 +614,17 @@ jobs:
           git push origin "$TAG"
 
   # ------------------------------------------------------------------
-  # Publish wheels to production PyPI. Skipped on dry-run. Isolated so a
-  # GitHub Release flake doesn't force a re-upload. Authenticates with the
-  # repo-level `PYPI_API_TOKEN` secret (passed to `cargo ci pypi publish`
-  # as `DBT_PYPI_PROD_TOKEN`). `release_target` selects which of the two
-  # distributions (`dbt-core`, `dbt-core-experimental-parser`) to publish.
+  # Publish wheels to Test PyPI (test.pypi.org). Skipped on dry-run.
+  # Authenticates with the repo-level `TEST_PYPI_API_TOKEN` secret (passed
+  # to `cargo ci pypi publish` as `DBT_PYPI_TEST_TOKEN`). `release_target`
+  # selects which of the two distributions (`dbt-core`,
+  # `dbt-core-experimental-parser`) to publish.
+  # Unlike release-v2.yml, this does NOT need `tag` — the tag job is disabled
+  # in test mode and a Test PyPI upload doesn't require a git tag.
   # ------------------------------------------------------------------
   publish-pypi:
-    name: Publish to PyPI
-    needs: [prepare-release, pack, tag]
+    name: Publish to Test PyPI
+    needs: [prepare-release, pack]
     if: ${{ !inputs.dry_run }}
     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
     permissions:
@@ -647,10 +667,10 @@ jobs:
       - name: Publish (dbt-core)
         if: inputs.release_target != 'parser'
         env:
-          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          DBT_PYPI_TEST_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
         run: |
           cargo ci pypi publish \
-            --environment prod \
+            --environment test-pypi \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --dist dist
 
@@ -663,10 +683,10 @@ jobs:
       - name: Publish (dbt-core-experimental-parser)
         if: inputs.release_target != 'core'
         env:
-          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          DBT_PYPI_TEST_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
         run: |
           cargo ci pypi publish \
-            --environment prod \
+            --environment test-pypi \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --dist dist
 
@@ -685,7 +705,7 @@ jobs:
   github-release:
     name: Create GitHub Release
     needs: [prepare-release, pack, tag]
-    if: ${{ !inputs.dry_run }}
+    if: false  # TEST MODE: never create a public GitHub Release.
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -742,13 +762,14 @@ jobs:
   # publish-homebrew.yml.
   publish-homebrew:
     needs: [prepare-release, github-release]
-    # if: ${{ !inputs.dry_run && !contains(needs.prepare-release.outputs.version, '-') }}
-    if: ${{ !inputs.dry_run }}
+    if: false  # TEST MODE: never push to the dbt-labs/homebrew-dbt tap.
     uses: ./.github/workflows/publish-homebrew.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
       tag: ${{ needs.prepare-release.outputs.tag }}
-      dry_run: false
+      # Hardcoded true (defense-in-depth): the job is `if: false` today, but if
+      # someone re-enables it to experiment, it must never push to the prod tap.
+      dry_run: true
       # Must match the `build` job's `BINARY_NAME` env and the
       # `ARCHIVE_BASE` template's `${PACKAGE_NAME}-` prefix. Hardcoded
       # because reusable-workflow `with:` blocks don't accept the `env`
@@ -765,7 +786,7 @@ jobs:
   changelog-backport:
     name: Backport changelog to main
     needs: [prepare-release, publish-pypi, github-release]
-    if: ${{ !inputs.dry_run }}
+    if: false  # TEST MODE: never open a backport PR to main.
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -886,11 +907,13 @@ jobs:
   # Restore the pre-release guard at first stable by uncommenting the `if`.
   publish-winget:
     needs: [prepare-release, github-release]
-    # if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
+    if: false  # TEST MODE: never submit a microsoft/winget-pkgs PR.
     uses: ./.github/workflows/publish-winget.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
-      dry_run: ${{ inputs.dry_run }}
+      # Hardcoded true (defense-in-depth): the job is `if: false` today, but if
+      # someone re-enables it to experiment, it must never open a winget PR.
+      dry_run: true
     permissions:
       contents: read
     secrets: inherit
