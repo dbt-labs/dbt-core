@@ -103,6 +103,7 @@ class TestTrackHintView:
                 dbt.tracking.track_hint_view("some_hint")
 
         mock_track.assert_called_once()
+        assert mock_track.call_args.kwargs["action"] == "hint_view"
         context = mock_track.call_args.kwargs["context"]
         assert len(context) == 1
         self_describing = context[0].to_json()

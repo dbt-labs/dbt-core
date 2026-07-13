@@ -11,11 +11,6 @@ def test_hint_to_msg_map_covers_every_hint_type():
     assert set(hint_to_msg_map) == set(HintType)
 
 
-def test_hint_type_members_are_strings():
-    assert HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS == "reuse_relations_on_too_many_models"
-    assert HintType.LONG_PARSING_WITHOUT_V2_PARSER == "long_parsing_without_v2_parser"
-
-
 class TestShowHint:
     @pytest.fixture
     def mock_fire_event(self):

@@ -379,9 +379,8 @@ def track_hint_view(hint_type: str) -> None:
     track(
         active_user,
         category="dbt",
-        action="hint",
+        action="hint_view",
         label=get_invocation_id(),
-        property_="view",
         context=context,
     )
 
