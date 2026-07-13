@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "adbc-record-replay"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "adbc_core",
  "arrow",
@@ -2484,7 +2484,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-adapter"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "adbc-record-replay",
  "adbc_core",
@@ -2543,7 +2543,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-adapter-core"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "serde",
@@ -2552,7 +2552,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-adapter-sql"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow-schema",
  "dbt-adapter-core",
@@ -2562,7 +2562,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-adbc"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "adbc_core",
  "adbc_driver_manager",
@@ -2601,7 +2601,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-agate"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-array",
@@ -2634,7 +2634,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-auth"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "adbc_core",
  "arrow-array",
@@ -2661,14 +2661,14 @@ dependencies = [
 
 [[package]]
 name = "dbt-base"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
 ]
 
 [[package]]
 name = "dbt-ci"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-clap-core"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2712,7 +2712,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-classification-types"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "im",
@@ -2722,7 +2722,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-cloud-api"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "reqwest 0.12.28",
@@ -2734,7 +2734,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-cloud-config"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "dbt-schemas",
@@ -2744,7 +2744,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-common"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arc-swap",
  "blake3",
@@ -2794,7 +2794,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-compilation"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow-schema",
  "async-trait",
@@ -2821,7 +2821,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-csv"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -2838,7 +2838,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-dag"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-common",
  "dbt-fusion-workspace-hack",
@@ -2850,7 +2850,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-defer"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-adapter",
  "dbt-adapter-core",
@@ -2869,7 +2869,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-deps"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "astral-tokio-tar",
  "async-compression",
@@ -2901,7 +2901,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-df-providers"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -2924,7 +2924,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-docs-core"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "dbt-index-core",
@@ -2933,7 +2933,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-docs-server"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow-array",
  "arrow-json",
@@ -2960,7 +2960,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-env"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "dbt-schemas",
@@ -2968,7 +2968,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-error"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "datafusion-common",
@@ -2996,7 +2996,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-features"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3032,7 +3032,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-frontend-common"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -3063,14 +3063,14 @@ checksum = "a8430f049d5c7bbc7a95ae1bd10e769c4008cc6df873faab785eedbbae3ad902"
 
 [[package]]
 name = "dbt-handles"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
 ]
 
 [[package]]
 name = "dbt-ident"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "serde",
@@ -3079,7 +3079,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-index-core"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "adbc_core",
  "arrow-array",
@@ -3101,7 +3101,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-init"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-adapter-core",
  "dbt-cloud-api",
@@ -3124,7 +3124,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-jinja-ctx"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -3142,7 +3142,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-jinja-filters"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "minijinja",
@@ -3150,7 +3150,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-jinja-utils"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "chrono",
@@ -3186,7 +3186,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-jinja-vars"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "dbt-yaml",
@@ -3198,7 +3198,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-lexer-bigquery"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-antlr4",
  "dbt-fusion-workspace-hack",
@@ -3206,7 +3206,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-lexer-databricks"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-antlr4",
  "dbt-fusion-workspace-hack",
@@ -3214,7 +3214,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-lexer-duckdb"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-antlr4",
  "dbt-fusion-workspace-hack",
@@ -3222,7 +3222,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-lexer-redshift"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-antlr4",
  "dbt-fusion-workspace-hack",
@@ -3230,7 +3230,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-lexer-snowflake"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-antlr4",
  "dbt-fusion-workspace-hack",
@@ -3238,7 +3238,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-lexer-trino"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-antlr4",
  "dbt-fusion-workspace-hack",
@@ -3246,7 +3246,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-lineage-core"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "dbt-scheduler",
@@ -3254,7 +3254,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-loader"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3294,7 +3294,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-login"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "async-trait",
  "base64",
@@ -3320,7 +3320,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-main"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "astral-tokio-tar",
@@ -3378,7 +3378,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-metadata"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "blake3",
@@ -3408,7 +3408,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-metadata-parquet"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "dbt-common",
@@ -3422,7 +3422,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-metricflow"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow-array",
  "arrow-ipc",
@@ -3441,7 +3441,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-parser"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -3476,7 +3476,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-platform-auth"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "base64",
  "dbt-fusion-workspace-hack",
@@ -3498,7 +3498,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-pretty-table"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -3511,7 +3511,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-proc-macros"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "proc-macro2",
@@ -3521,7 +3521,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-profile"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "dbt-jinja-filters",
@@ -3538,7 +3538,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-python"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-base",
  "dbt-clap-core",
@@ -3556,7 +3556,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-sa-cli"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-clap-core",
  "dbt-common",
@@ -3570,7 +3570,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-scheduler"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "chrono",
  "clean-path",
@@ -3593,7 +3593,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-schema-store"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -3614,7 +3614,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-schemas"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "blake3",
  "chrono",
@@ -3649,7 +3649,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-selector-parser"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-common",
  "dbt-fusion-workspace-hack",
@@ -3659,14 +3659,14 @@ dependencies = [
 
 [[package]]
 name = "dbt-sql-keywords"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
 ]
 
 [[package]]
 name = "dbt-sql-utils"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-antlr4",
  "dbt-frontend-common",
@@ -3682,7 +3682,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-state"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow-array",
  "arrow-schema",
@@ -3735,7 +3735,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-tasks-core"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -3779,7 +3779,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-tasks-sa"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "adbc_core",
  "arrow",
@@ -3826,7 +3826,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-telemetry"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -3852,7 +3852,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-test-containers"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "bollard",
  "clap",
@@ -3871,14 +3871,14 @@ dependencies = [
 
 [[package]]
 name = "dbt-test-primitives"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
 ]
 
 [[package]]
 name = "dbt-test-utils"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "async-trait",
@@ -3924,7 +3924,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-tracing"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -3957,7 +3957,7 @@ dependencies = [
 
 [[package]]
 name = "dbt-tui-progress"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "console 0.16.4",
  "counter",
@@ -7415,7 +7415,7 @@ dependencies = [
 
 [[package]]
 name = "proto-rust"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "chrono",
  "dbt-fusion-workspace-hack",
@@ -7426,7 +7426,7 @@ dependencies = [
 
 [[package]]
 name = "proto-rust-macros"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-fusion-workspace-hack",
  "proc-macro2",
@@ -9930,7 +9930,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vortex-client"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "dbt-env",
  "dbt-fusion-workspace-hack",
@@ -9948,7 +9948,7 @@ dependencies = [
 
 [[package]]
 name = "vortex-events"
-version = "2.0.0-alpha.3"
+version = "2.0.0-dev.17"
 dependencies = [
  "base64",
  "dbt-common",
