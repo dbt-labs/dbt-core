@@ -3052,9 +3052,17 @@ impl Adapter {
         }
     }
 
-    pub fn is_cluster(&self) -> Result<Value, minijinja::Error> {
+    pub fn is_cluster(&self, state: &State) -> Result<Value, minijinja::Error> {
         let is_cluster = match &self.inner {
-            Typed { adapter, .. } => adapter.is_cluster().map_err(minijinja::Error::from)?,
+            Typed { adapter, .. } => {
+                if let Some(replay_adapter) = adapter.as_replay() {
+                    replay_adapter
+                        .replay_is_cluster(state)
+                        .map_err(minijinja::Error::from)?
+                } else {
+                    adapter.is_cluster().map_err(minijinja::Error::from)?
+                }
+            }
             Parse(_) => false,
         };
         Ok(Value::from(is_cluster))
@@ -3848,7 +3856,7 @@ impl Adapter {
             "parse_index" => self.parse_index(state, args),
             // sql: str
             "redact_credentials" => self.redact_credentials(state, args),
-            "is_cluster" => self.is_cluster(),
+            "is_cluster" => self.is_cluster(state),
             // capability_name: str
             "has_dbr_capability" => self.has_dbr_capability(state, args),
             "table_format" => {

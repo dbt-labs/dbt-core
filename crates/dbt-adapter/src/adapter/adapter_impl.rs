@@ -3645,6 +3645,11 @@ impl AdapterImpl {
         token: CancellationToken,
     ) -> AdapterResult<bool> {
         debug_assert!(self.adapter_type() == Databricks);
+
+        if let Replay(_, replay) = self.inner_adapter() {
+            return replay.replay_has_dbr_capability(state, capability_name);
+        }
+
         let capability = dbr_capabilities::DbrCapability::from_str(capability_name)
             .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
 
@@ -3942,6 +3947,10 @@ impl AdapterImpl {
     ) -> AdapterResult<bool> {
         match self.adapter_type() {
             adapter_type @ Databricks => {
+                if let Replay(_, replay) = self.inner_adapter() {
+                    return replay.replay_is_uniform(state);
+                }
+
                 // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
                 let node_yml = node.as_internal_node().serialize();
                 let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
@@ -4052,6 +4061,23 @@ impl AdapterImpl {
         token: CancellationToken,
     ) -> AdapterResult<RelationConfig> {
         use crate::relation::databricks::config::relation_types;
+
+        if let Replay(_, replay) = self.inner_adapter() {
+            let recorded = replay.replay_get_relation_config(state)?;
+            let relation_type = relation.relation_type().ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "relation_type is required to reconstruct a recorded get_relation_config"
+                        .to_string(),
+                )
+            })?;
+            let rebuilt = relation_types::relation_config_from_recorded(
+                self.adapter_type(),
+                relation_type,
+                &recorded,
+            );
+            return rebuilt;
+        }
 
         let (relation_type, remote_state) = {
             // IMPORTANT: do not bypass replay by constructing an AdapterImpl from the engine.
@@ -5104,6 +5130,20 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         _column_names: Option<BTreeMap<String, String>>,
         _strategy: Arc<SnapshotStrategy>,
     ) -> AdapterResult<()>;
+
+    fn replay_is_uniform(&self, state: &State) -> AdapterResult<bool>;
+
+    fn replay_has_dbr_capability(
+        &self,
+        state: &State,
+        capability_name: &str,
+    ) -> AdapterResult<bool>;
+
+    fn replay_is_cluster(&self, state: &State) -> AdapterResult<bool>;
+
+    /// Returns the recorded `get_relation_config` payload (`{"config": {...}}`).
+    /// The engine method reconstructs a `RelationConfig` from it.
+    fn replay_get_relation_config(&self, state: &State) -> AdapterResult<serde_json::Value>;
 }
 
 #[cfg(test)]

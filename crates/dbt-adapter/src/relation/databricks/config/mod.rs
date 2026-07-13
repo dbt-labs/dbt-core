@@ -1,5 +1,3 @@
-// TODO(serramatutu): revisit this expect dead_code once all this code is being used for real
-#[expect(dead_code)]
 pub(crate) mod components;
 pub(crate) mod relation_types;
 
