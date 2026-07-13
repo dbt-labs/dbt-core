@@ -195,6 +195,36 @@ fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
     None
 }
 
+fn filter_core_builtin_test_macro_dependencies(
+    test_asset: Option<&GenericTestAsset>,
+    macros: &mut Vec<String>,
+) {
+    // This filtering is intentionally not a strictly semantic account of dependencies
+    // in the test macro body. A project-defined test with the same name as a built-in
+    // retains get_where_subquery even when its macro body does not call that helper,
+    // because dbt-core renders the generated model kwarg for every test macro that does
+    // not resolve to the exact built-in unique ID. Keep that behavior for manifest parity.
+    let Some(test_name) = test_asset.and_then(|asset| asset.test_metadata_name.as_deref()) else {
+        return;
+    };
+    let builtin_macro = match test_name {
+        "not_null" => "macro.dbt.test_not_null",
+        "unique" => "macro.dbt.test_unique",
+        _ => return,
+    };
+    let test_macro_suffix = format!(".test_{test_name}");
+    let is_core_builtin_test = macros
+        .iter()
+        .any(|macro_id| macro_id.as_str() == builtin_macro)
+        && !macros.iter().any(|macro_id| {
+            macro_id.as_str() != builtin_macro && macro_id.ends_with(&test_macro_suffix)
+        });
+
+    if is_core_builtin_test {
+        macros.retain(|macro_id| macro_id != "macro.dbt.get_where_subquery");
+    }
+}
+
 fn file_key_name_from_asset(asset: &GenericTestAsset) -> Option<String> {
     // Match dbt-core's `{yaml_key}.{name}` for generic tests. Source tests use
     // the source collection name rather than the table name.
@@ -478,8 +508,12 @@ pub async fn resolve_data_tests(
         // depends_on.macros empty. (dbt-core#15308)
         jinja_type_checking_event_listener_factory
             .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
-        let macro_depends_on =
+        let mut macro_depends_on =
             jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
+        filter_core_builtin_test_macro_dependencies(
+            test_path_to_test_asset.get(&dbt_asset.path).copied(),
+            &mut macro_depends_on,
+        );
 
         // Check if this test_name corresponds to any test in our collected tests
         // If so, use the original_file_path from the GenericTestAsset for the fqn construction and original_file_path
