@@ -105,786 +105,791 @@ defaults:
 
 jobs:
   # ------------------------------------------------------------------
+  # TEMP TEST MODE: everything below except the two Slack notification
+  # jobs is commented out so both can be exercised in a single run.
+  # Restore before merging.
+  # ------------------------------------------------------------------
+  # ------------------------------------------------------------------
   # Cut release/vX.Y.Z, bump workspace version, generate the changelog,
   # push the branch.
   # Exposes branch/tag/version outputs that the rest of the pipeline hangs off.
   # ------------------------------------------------------------------
-  prepare-release:
-    name: Prepare release branch
-    permissions:
-      contents: write
-    uses: ./.github/workflows/release-prep-v2.yml
-    with:
-      version: ${{ inputs.version }}
-      dry_run: ${{ inputs.dry_run }}
-      source_ref: ${{ inputs.source_ref }}
-
-  # ------------------------------------------------------------------
-  # Build the binary per target via `cargo build`. This is the
-  # canonical build path; the wheel writer just consumes its output.
-  # Linux runs in manylinux_2_28 containers for PyPI ABI compliance.
-  # ------------------------------------------------------------------
-  build:
-    name: Build binary (${{ matrix.target }})
-    needs: [prepare-release]
-    runs-on: ${{ matrix.os }}
-    container:
-      image: ${{ matrix.container }}
-    permissions:
-      contents: read
-    env:
-      CARGO_INCREMENTAL: 0
-      RUST_BACKTRACE: 1
-      RUSTC_WRAPPER: sccache
-      BINARY_NAME: dbt-sa-cli
-      PACKAGE_NAME: dbt-core
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ${{ vars.UBUNTU_RUNNER_32 }}
-            container: quay.io/pypa/manylinux_2_28_x86_64
-          - target: aarch64-unknown-linux-gnu
-            os: ${{ vars.UBUNTU_RUNNER_ARM_32 }}
-            container: quay.io/pypa/manylinux_2_28_aarch64
-          - target: x86_64-apple-darwin
-            os: ${{ vars.MACOS_RUNNER }}
-            container: ""
-          - target: aarch64-apple-darwin
-            os: ${{ vars.MACOS_RUNNER }}
-            container: ""
-          - target: x86_64-pc-windows-msvc
-            os: ${{ vars.WINDOWS_RUNNER_32 }}
-            container: ""
-    steps:
-      # Windows: disable CRLF conversion on checkout (corrupts text fixtures
-      # and trips Cargo.lock hash checks) and enable long paths (Rust target
-      # dirs blow past MAX_PATH fast).
-      - name: Fixup Git (Windows only)
-        if: runner.os == 'Windows'
-        run: |
-          git config --global core.autocrlf false
-          git config --system core.longpaths true
-
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-release.outputs.branch }}
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache cargo registry and target
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
-        with:
-          key: ${{ matrix.target }}
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
-        with:
-          version: "v0.12.0"
-
-      - name: Install Protocol Buffer Compiler (Linux)
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          if command -v protoc &> /dev/null; then
-            echo "protoc already installed: $(protoc --version)"
-            exit 0
-          fi
-          if [ -x "/tmp/protoc/bin/protoc" ]; then
-            echo "protoc found in /tmp/protoc/bin"
-            echo "/tmp/protoc/bin" >> $GITHUB_PATH
-            /tmp/protoc/bin/protoc --version
-            exit 0
-          fi
-          echo "Installing Protocol Buffer Compiler..."
-          PB_VERSION="29.4"
-          case "$(uname -m)" in
-            x86_64) PB_ARCH="x86_64" ;;
-            aarch64|arm64) PB_ARCH="aarch_64" ;;
-            *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
-          esac
-          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
-          curl -LsSf $PB_URL -o /tmp/protoc.zip
-          rm -rf /tmp/protoc
-          unzip -o /tmp/protoc.zip -d /tmp/protoc
-          echo "/tmp/protoc/bin" >> $GITHUB_PATH
-          /tmp/protoc/bin/protoc --version
-          rm /tmp/protoc.zip
-
-      - name: Install Protocol Buffer Compiler (macOS)
-        if: ${{ runner.os == 'macOS' }}
-        run: |
-          if command -v protoc &> /dev/null; then
-            echo "protoc already installed: $(protoc --version)"
-            exit 0
-          fi
-          if [ -x "/tmp/protoc/bin/protoc" ]; then
-            echo "protoc found in /tmp/protoc/bin"
-            echo "/tmp/protoc/bin" >> $GITHUB_PATH
-            /tmp/protoc/bin/protoc --version
-            exit 0
-          fi
-          echo "Installing Protocol Buffer Compiler..."
-          PB_VERSION="29.4"
-          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-osx-universal_binary.zip"
-          curl -LsSf $PB_URL -o /tmp/protoc.zip
-          rm -rf /tmp/protoc
-          unzip -o /tmp/protoc.zip -d /tmp/protoc
-          echo "/tmp/protoc/bin" >> $GITHUB_PATH
-          /tmp/protoc/bin/protoc --version
-          rm /tmp/protoc.zip
-
-      - name: Install Protocol Buffer Compiler (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
-        run: |
-          try {
-            $existing = Get-Command protoc -ErrorAction Stop
-            Write-Host "protoc already installed: $($existing.Source)"
-            & protoc --version
-            exit 0
-          } catch {
-            # protoc not found, continue with installation
-          }
-
-          $extractPath = "$env:TEMP\protoc"
-          $protocPath = Join-Path $extractPath "bin"
-          $protocExe = Join-Path $protocPath "protoc.exe"
-          if (Test-Path $protocExe) {
-            Write-Host "protoc found in $protocPath"
-            echo "$protocPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            & "$protocExe" --version
-            exit 0
-          }
-
-          Write-Host "Installing Protocol Buffer Compiler..."
-          $PB_VERSION = "29.4"
-          $PB_URL = "https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-win64.zip"
-          $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
-          Invoke-WebRequest -OutFile $tmp $PB_URL
-          Expand-Archive -Path $tmp -DestinationPath $extractPath -Force
-          echo "$protocPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          & "$protocExe" --version
-          Remove-Item $tmp
-
-      - name: Build release binary
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
-        with:
-          timeout_minutes: 45
-          max_attempts: 2
-          shell: bash
-          command: |
-            cargo build --release --locked --bin "$BINARY_NAME" --target "${{ matrix.target }}"
-
-      - name: sccache stats
-        if: always()
-        run: sccache --show-stats || true
-
-      - name: Strip release binary
-        env:
-          TARGET: ${{ matrix.target }}
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            strip "target/${TARGET}/release/${BINARY_NAME}.exe"
-          else
-            strip "target/${TARGET}/release/${BINARY_NAME}"
-          fi
-
-      - name: Sign macOS dbt binary
-        if: ${{ runner.os == 'macOS' }}
-        uses: ./.github/actions/macos-sign
-        with:
-          directory: target/${{ matrix.target }}/release
-          filenames: "${{ env.BINARY_NAME }}"
-          disable-library-validation: "true"
-          certificate-base64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          p12-base64: ${{ secrets.APPLE_P12_BASE64 }}
-          p12-password: ${{ secrets.APPLE_P12_PASSWORD }}
-          keychain-password: ${{ github.run_id }}
-
-      - name: Sign Windows binaries
-        if: ${{ runner.os == 'Windows' }}
-        uses: ./.github/actions/windows-sign
-        with:
-          directory: target/${{ matrix.target }}/release
-          filenames: "${{ env.BINARY_NAME }}.exe"
-          certificate-b64: ${{ secrets.CODE_SIGNING_CERTIFICATE_B64 }}
-          certificate-password: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
-          certificates-path: "./certificates"
-
-      - name: Stage binary for pack
-        env:
-          TARGET: ${{ matrix.target }}
-        run: |
-          # `cargo ci pypi pack` expects binaries named by target triple
-          # so a single --binaries-dir call can resolve all platforms.
-          mkdir -p binaries
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cp "target/${TARGET}/release/${BINARY_NAME}.exe" "binaries/${TARGET}.exe"
-          else
-            cp "target/${TARGET}/release/${BINARY_NAME}" "binaries/${TARGET}"
-          fi
-
-      - name: Create release archive
-        env:
-          TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-        run: |
-          ARCHIVE_BASE="${PACKAGE_NAME}-${VERSION}-${TARGET}"
-          mkdir -p archives "stage/${ARCHIVE_BASE}"
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cp "target/${TARGET}/release/${BINARY_NAME}.exe" "stage/${ARCHIVE_BASE}/"
-            (cd stage && 7z a -tzip "../archives/${ARCHIVE_BASE}.zip" "${ARCHIVE_BASE}" >/dev/null)
-          else
-            cp "target/${TARGET}/release/${BINARY_NAME}" "stage/${ARCHIVE_BASE}/"
-            tar -czf "archives/${ARCHIVE_BASE}.tar.gz" -C stage "${ARCHIVE_BASE}"
-          fi
-          ls -la archives/
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
-        with:
-          name: binary-${{ matrix.target }}
-          path: binaries/*
-          if-no-files-found: error
-
-      - name: Upload archive artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
-        with:
-          name: archive-${{ matrix.target }}
-          path: archives/*
-          if-no-files-found: error
-
-  # ------------------------------------------------------------------
-  # Run the workspace test suite. Parallel to `build` (both fan out from
-  # `prepare-release`) and gates `pack` so a failing test aborts the
-  # release before any wheels are produced. Linux-only — host OS
-  # coverage lives in the regular CI workflow; this is a release gate.
-  # ------------------------------------------------------------------
-  test:
-    name: Test workspace
-    needs: [prepare-release]
-    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
-    permissions:
-      contents: read
-    env:
-      CARGO_INCREMENTAL: 0
-      RUST_BACKTRACE: 1
-      RUST_MIN_STACK: "8388608"
-      RUSTC_WRAPPER: sccache
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-release.outputs.branch }}
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry and target
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
-        with:
-          key: test-x86_64-unknown-linux-gnu
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
-        with:
-          version: "v0.12.0"
-
-      - name: Install Protocol Buffer Compiler
-        run: |
-          if command -v protoc &> /dev/null; then
-            echo "protoc already installed: $(protoc --version)"
-            exit 0
-          fi
-          if [ -x "/tmp/protoc/bin/protoc" ]; then
-            echo "protoc found in /tmp/protoc/bin"
-            echo "/tmp/protoc/bin" >> $GITHUB_PATH
-            /tmp/protoc/bin/protoc --version
-            exit 0
-          fi
-          echo "Installing Protocol Buffer Compiler..."
-          PB_VERSION="29.4"
-          case "$(uname -m)" in
-            x86_64) PB_ARCH="x86_64" ;;
-            aarch64|arm64) PB_ARCH="aarch_64" ;;
-            *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
-          esac
-          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
-          curl -LsSf $PB_URL -o /tmp/protoc.zip
-          rm -rf /tmp/protoc
-          unzip -o /tmp/protoc.zip -d /tmp/protoc
-          echo "/tmp/protoc/bin" >> $GITHUB_PATH
-          /tmp/protoc/bin/protoc --version
-          rm /tmp/protoc.zip
-
-      - name: Install cargo-nextest
-        run: cargo install cargo-nextest --locked
-
-      - name: Run tests
-        run: cargo nextest run
-
-      - name: sccache stats
-        if: always()
-        run: sccache --show-stats || true
-
-  # ------------------------------------------------------------------
-  # Pack all platform binaries into wheels. Single job — wheel writing
-  # is pure-Rust zip + metadata, fast, doesn't need the build matrix.
-  # ------------------------------------------------------------------
-  pack:
-    name: Pack wheels
-    needs: [prepare-release, build, test]
-    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
-    permissions:
-      contents: read
-    env:
-      CARGO_INCREMENTAL: 0
-      RUSTC_WRAPPER: sccache
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-release.outputs.branch }}
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry and dbt-ci build
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
-        with:
-          shared-key: cargo-ci-tool
-          cache-targets: "true"
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
-        with:
-          version: "v0.12.0"
-
-      - name: Download all binaries
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
-        with:
-          path: binaries
-          pattern: binary-*
-          merge-multiple: true
-
-      - name: List binaries
-        run: ls -la binaries/
-
-      # Two distribution names are produced from the same binaries:
-      #   - dbt-core                       (script: dbt)
-      #   - dbt-core-experimental-parser   (script: dbt-core-experimental-parser)
-      # `cargo ci pypi pack` reads the wheel/distribution name from
-      # [project].name in pyproject.toml — there's no CLI override — so we
-      # pack once, swap pyproject in place, then pack again. The edit is
-      # scoped to the runner's checkout and never committed.
-      - name: Pack wheels (dbt-core)
-        env:
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-        run: |
-          cargo ci pypi pack \
-            --binaries-dir binaries \
-            --version "$VERSION" \
-            --bin-name dbt \
-            --out target/wheels
-
-      - name: Rename pyproject for parser pack
-        run: |
-          sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
-          grep '^name = ' pyproject.toml
-
-      - name: Pack wheels (dbt-core-experimental-parser)
-        env:
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-        run: |
-          cargo ci pypi pack \
-            --binaries-dir binaries \
-            --version "$VERSION" \
-            --bin-name dbt-core-experimental-parser \
-            --out target/wheels
-
-      - name: Restore pyproject name after parser pack
-        if: always()
-        run: |
-          sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
-          grep '^name = ' pyproject.toml
-
-      - name: Download all archives
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
-        with:
-          path: target/archives
-          pattern: archive-*
-          merge-multiple: true
-
-      # Stage every release asset in a single `dist/` directory: wheels
-      # (PyPI), platform archives (GitHub Release), and one SHA256SUMS
-      # covering both. Mirrors the layout the publisher downloads into.
-      - name: Stage release assets
-        run: |
-          mkdir -p dist
-          shopt -s nullglob
-          cp target/wheels/*.whl dist/
-          cp target/archives/*.tar.gz target/archives/*.zip dist/
-          (cd dist && sha256sum *.whl *.tar.gz *.zip | tee SHA256SUMS)
-          ls -la dist/
-
-      - name: Upload release assets
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
-        with:
-          name: release-assets
-          path: dist/*
-          if-no-files-found: error
-
-  # ------------------------------------------------------------------
-  # Tag the release branch HEAD. Tiny, fast, sets the immutable ref
-  # everything downstream hangs off. Skipped on dry-run — the throwaway
-  # `release/dry-run/...` branch isn't worth tagging, and the upstream
-  # `prepare-release` step already rejects pre-existing tags.
-  # Idempotent: re-running a successful tag job is a no-op; pointing
-  # at a different SHA than the existing tag fails loudly.
-  # ------------------------------------------------------------------
-  tag:
-    name: Tag release commit
-    needs: [prepare-release, pack]
-    if: ${{ !inputs.dry_run }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-release.outputs.branch }}
-
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Tag branch HEAD
-        env:
-          TAG: ${{ needs.prepare-release.outputs.tag }}
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-        run: |
-          HEAD_SHA=$(git rev-parse HEAD)
-          EXISTING=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
-          if [ -n "$EXISTING" ] && [ "$EXISTING" != "$HEAD_SHA" ]; then
-            echo "::error::Tag $TAG already exists at $EXISTING but HEAD is $HEAD_SHA."
-            exit 1
-          fi
-          git tag -a "$TAG" -m "Release $VERSION" 2>/dev/null || true
-          git push origin "$TAG"
-
-  # ------------------------------------------------------------------
-  # Publish the download-at-install sdist to production PyPI. Skipped on
-  # dry-run. Runs after `github-release` because it fetches this release's
-  # wheels from the GitHub Release download URL (`--download-base-url`),
-  # hashes the live bytes, and publishes an sdist pinning those filenames +
-  # sha256s — no wheels are uploaded to PyPI. Authenticates with the
-  # repo-level `PYPI_API_TOKEN` secret (passed to `cargo ci pypi publish`
-  # as `DBT_PYPI_PROD_TOKEN`). `release_target` selects which of the two
-  # distributions (`dbt-core`, `dbt-core-experimental-parser`) to publish.
-  # ------------------------------------------------------------------
-  publish-pypi:
-    name: Publish to PyPI
-    # pack + tag are transitive via github-release; prepare-release stays for its outputs.
-    needs: [prepare-release, github-release]
-    if: ${{ !inputs.dry_run }}
-    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
-    permissions:
-      contents: read
-    env:
-      CARGO_INCREMENTAL: 0
-      RUSTC_WRAPPER: sccache
-      # GitHub Release download URL hosting this version's wheels; the sdist
-      # backend fetches the matching wheel from here at install time.
-      BASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.prepare-release.outputs.tag }}
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-release.outputs.branch }}
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry and dbt-ci build
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
-        with:
-          shared-key: cargo-ci-tool
-          cache-targets: "true"
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
-        with:
-          version: "v0.12.0"
-
-      # sdist mode reads the distribution name from pyproject's [project].name
-      # to build the wheel filenames it downloads from BASE_URL, so to publish
-      # both distributions we publish once, swap pyproject in place, then
-      # publish again. Mirrors the pack-job pattern.
-      #
-      # One --target per wheel uploaded to the Release; keep in lockstep with
-      # the `build` job's matrix — each target's wheel is fetched and hashed.
-      - name: Publish (dbt-core)
-        if: inputs.release_target != 'parser'
-        env:
-          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          cargo ci pypi publish \
-            --environment prod \
-            --version "${{ needs.prepare-release.outputs.version }}" \
-            --download-base-url "$BASE_URL" \
-            --target x86_64-unknown-linux-gnu \
-            --target aarch64-unknown-linux-gnu \
-            --target x86_64-apple-darwin \
-            --target aarch64-apple-darwin \
-            --target x86_64-pc-windows-msvc
-
-      - name: Rename pyproject for parser publish
-        if: inputs.release_target != 'core'
-        run: |
-          sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
-          grep '^name = ' pyproject.toml
-
-      - name: Publish (dbt-core-experimental-parser)
-        if: inputs.release_target != 'core'
-        env:
-          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          cargo ci pypi publish \
-            --environment prod \
-            --version "${{ needs.prepare-release.outputs.version }}" \
-            --download-base-url "$BASE_URL" \
-            --target x86_64-unknown-linux-gnu \
-            --target aarch64-unknown-linux-gnu \
-            --target x86_64-apple-darwin \
-            --target aarch64-apple-darwin \
-            --target x86_64-pc-windows-msvc
-
-      - name: Restore pyproject name after parser publish
-        if: ${{ always() && inputs.release_target != 'core' }}
-        run: |
-          sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
-          grep '^name = ' pyproject.toml
-
-  # ------------------------------------------------------------------
-  # Create the GitHub Release with all assets. Skipped on dry-run.
-  # Idempotent: if the release already exists, re-uploads assets with
-  # --clobber so a flaky asset upload can be retried without manual
-  # cleanup.
-  # ------------------------------------------------------------------
-  github-release:
-    name: Create GitHub Release
-    needs: [prepare-release, pack, tag]
-    if: ${{ !inputs.dry_run }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-release.outputs.branch }}
-
-      - name: Download release assets
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: dist
-
-      - name: Create or update GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.prepare-release.outputs.tag }}
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-        run: |
-          shopt -s nullglob
-          ASSETS=(dist/*.whl dist/*.tar.gz dist/*.zip)
-          [ -f dist/SHA256SUMS ] && ASSETS+=(dist/SHA256SUMS)
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; re-uploading assets."
-          else
-            # Pre-release versions (SemVer with a pre-release segment) shouldn't
-            # surface as "Latest" on the Releases page.
-            CREATE_ARGS=(--title "$TAG")
-            [[ "$VERSION" == *-* ]] && CREATE_ARGS+=(--prerelease)
-
-            NOTES=".changes/${VERSION}.md"
-            if [ -f "$NOTES" ]; then
-              CREATE_ARGS+=(--notes-file "$NOTES")
-            else
-              echo "::warning::$NOTES not found; using autogenerated notes."
-              CREATE_ARGS+=(--generate-notes)
-            fi
-
-            gh release create "$TAG" "${CREATE_ARGS[@]}"
-          fi
-
-          gh release upload "$TAG" --clobber "${ASSETS[@]}"
-
-  # Renders Formula/dbt-core.rb from the SHA256SUMS just uploaded by the
-  # `github-release` job and pushes it to dbt-labs/homebrew-dbt.
-  #
-  # PRE-STABLE PREVIEW WINDOW: we publish every version, including
-  # pre-releases (anything with a `-` in the SemVer), so brew users can
-  # install previews before the first 2.x stable ships. Restore the
-  # pre-release guard at first stable by swapping the `if` below back to
-  # the commented line AND re-enabling the preflight job in
-  # publish-homebrew.yml.
-  publish-homebrew:
-    needs: [prepare-release, github-release]
-    # if: ${{ !inputs.dry_run && !contains(needs.prepare-release.outputs.version, '-') }}
-    if: ${{ !inputs.dry_run }}
-    uses: ./.github/workflows/publish-homebrew.yml
-    with:
-      version: ${{ needs.prepare-release.outputs.version }}
-      tag: ${{ needs.prepare-release.outputs.tag }}
-      dry_run: false
-      # Must match the `build` job's `BINARY_NAME` env and the
-      # `ARCHIVE_BASE` template's `${PACKAGE_NAME}-` prefix. Hardcoded
-      # because reusable-workflow `with:` blocks don't accept the `env`
-      # context — keep these in lockstep with the build job manually.
-      binary_name: dbt-sa-cli
-      tarball_prefix: dbt-core-
-    permissions:
-      contents: read
-    secrets: inherit
-
-  # Open a PR back to main with only the release commit's changelog delta
-  # (new `.changes/<version>.md`, regenerated CHANGELOG.md, deleted
-  # unreleased entries) — the version bump stays on the release branch.
-  changelog-backport:
-    name: Backport changelog to main
-    needs: [prepare-release, publish-pypi, github-release]
-    if: ${{ !inputs.dry_run }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0  # need the release commit and its parent
-
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Build changelog backport branch
-        id: backport
-        env:
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-          RELEASE_BRANCH: ${{ needs.prepare-release.outputs.branch }}
-        run: |
-          git fetch origin "$RELEASE_BRANCH"
-
-          PR_BRANCH="changelog/backport-v${VERSION}"
-          git switch -c "$PR_BRANCH"
-
-          REL="origin/${RELEASE_BRANCH}"
-
-          # Handle each part of the changelog delta with the right tool rather
-          # than one patch — main may be a different lineage than the release
-          # branch's parent, so the version bump never comes along and the
-          # batched-away entries may not even exist here.
-
-          # 1. The new release-notes file changie generated for this version.
-          git checkout "$REL" -- ".changes/${VERSION}.md"
-
-          # 2. Remove the unreleased entries the release batched away, but only
-          #    those still present — main may never have had them, or a prior
-          #    backport already removed them (--ignore-unmatch, not an error).
-          DELETED="$(git diff --diff-filter=D --name-only "${REL}~1" "$REL" -- .changes/unreleased)"
-          if [ -n "$DELETED" ]; then
-            printf '%s\n' "$DELETED" | xargs git rm -q --ignore-unmatch --
-          fi
-
-          # 3. Regenerated CHANGELOG.md, applied as a patch (not a copy) so
-          #    sections added to main concurrently survive — `--3way` merges,
-          #    and `--reverse --check` lets a re-run after merge skip cleanly.
-          PATCH="$(mktemp)"
-          git diff "${REL}~1" "$REL" -- CHANGELOG.md > "$PATCH"
-          if [ -s "$PATCH" ] && ! git apply --reverse --check "$PATCH" 2>/dev/null; then
-            git apply --index --3way "$PATCH"
-          fi
-
-          git add -A .changes CHANGELOG.md
-
-          # Nothing new relative to main (e.g. a prior backport PR already
-          # merged before this re-run) — skip cleanly to stay idempotent.
-          if git diff --cached --quiet; then
-            echo "::notice::No changelog delta to backport for v${VERSION}."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git commit -m "chore: backport v${VERSION} changelog to main"
-
-          # Fetch any existing remote branch so --force-with-lease can guard
-          # against clobbering unexpected updates while staying re-run safe.
-          git fetch origin "$PR_BRANCH" 2>/dev/null || true
-          git push --force-with-lease origin "$PR_BRANCH"
-
-          {
-            echo "skip=false"
-            echo "pr_branch=$PR_BRANCH"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Open or update pull request
-        if: steps.backport.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-          PR_BRANCH: ${{ steps.backport.outputs.pr_branch }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          # Only an open PR is updated by the force-push; a closed/merged one
-          # shouldn't block recreating the backport.
-          STATE="$(gh pr view "$PR_BRANCH" --json state --jq .state 2>/dev/null || true)"
-          if [ "$STATE" = "OPEN" ]; then
-            echo "PR for $PR_BRANCH is open; the force-pushed branch updates it."
-            exit 0
-          fi
-
-          gh pr create \
-            --base main \
-            --head "$PR_BRANCH" \
-            --title "chore: backport v${VERSION} changelog to main" \
-            --body "$(cat <<EOF
-          Backports the changelog generated by the \`v${VERSION}\` release back to main.
-
-          Contains only the changelog delta from the release commit:
-          - new \`.changes/${VERSION}.md\`
-          - regenerated \`CHANGELOG.md\`
-          - deletion of the \`.changes/unreleased/*.yaml\` entries \`changie batch\` consumed
-
-          The Cargo version bump is intentionally excluded — main keeps its own version.
-
-          Release workflow: ${RUN_URL}
-          EOF
-          )"
-
-  # Submits an updated dbtLabs.dbt-core manifest to microsoft/winget-pkgs
-  # via `wingetcreate update` using the Windows installer archive from the
-  # `github-release` job. Runs in parallel with `publish-homebrew`; both
-  # fan out from `github-release`.
-  #
-  # PRE-STABLE PREVIEW WINDOW: pre-release versions are published too. Note
-  # each preview opens a new upstream winget-pkgs PR and a permanent
-  # published version (winget accumulates versions; it does not overwrite).
-  # Restore the pre-release guard at first stable by uncommenting the `if`.
-  publish-winget:
-    needs: [prepare-release, github-release]
-    # if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
-    uses: ./.github/workflows/publish-winget.yml
-    with:
-      version: ${{ needs.prepare-release.outputs.version }}
-      dry_run: ${{ inputs.dry_run }}
-    permissions:
-      contents: read
-    secrets: inherit
+  # prepare-release:
+#     name: Prepare release branch
+#     permissions:
+#       contents: write
+#     uses: ./.github/workflows/release-prep-v2.yml
+#     with:
+#       version: ${{ inputs.version }}
+#       dry_run: ${{ inputs.dry_run }}
+#       source_ref: ${{ inputs.source_ref }}
+
+#   # ------------------------------------------------------------------
+#   # Build the binary per target via `cargo build`. This is the
+#   # canonical build path; the wheel writer just consumes its output.
+#   # Linux runs in manylinux_2_28 containers for PyPI ABI compliance.
+#   # ------------------------------------------------------------------
+#   build:
+#     name: Build binary (${{ matrix.target }})
+#     needs: [prepare-release]
+#     runs-on: ${{ matrix.os }}
+#     container:
+#       image: ${{ matrix.container }}
+#     permissions:
+#       contents: read
+#     env:
+#       CARGO_INCREMENTAL: 0
+#       RUST_BACKTRACE: 1
+#       RUSTC_WRAPPER: sccache
+#       BINARY_NAME: dbt-sa-cli
+#       PACKAGE_NAME: dbt-core
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         include:
+#           - target: x86_64-unknown-linux-gnu
+#             os: ${{ vars.UBUNTU_RUNNER_32 }}
+#             container: quay.io/pypa/manylinux_2_28_x86_64
+#           - target: aarch64-unknown-linux-gnu
+#             os: ${{ vars.UBUNTU_RUNNER_ARM_32 }}
+#             container: quay.io/pypa/manylinux_2_28_aarch64
+#           - target: x86_64-apple-darwin
+#             os: ${{ vars.MACOS_RUNNER }}
+#             container: ""
+#           - target: aarch64-apple-darwin
+#             os: ${{ vars.MACOS_RUNNER }}
+#             container: ""
+#           - target: x86_64-pc-windows-msvc
+#             os: ${{ vars.WINDOWS_RUNNER_32 }}
+#             container: ""
+#     steps:
+#       # Windows: disable CRLF conversion on checkout (corrupts text fixtures
+#       # and trips Cargo.lock hash checks) and enable long paths (Rust target
+#       # dirs blow past MAX_PATH fast).
+#       - name: Fixup Git (Windows only)
+#         if: runner.os == 'Windows'
+#         run: |
+#           git config --global core.autocrlf false
+#           git config --system core.longpaths true
+
+#       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+#         with:
+#           ref: ${{ needs.prepare-release.outputs.branch }}
+
+#       - name: Install Rust
+#         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+#         with:
+#           targets: ${{ matrix.target }}
+
+#       - name: Cache cargo registry and target
+#         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+#         with:
+#           key: ${{ matrix.target }}
+
+#       - name: Setup sccache
+#         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+#         with:
+#           version: "v0.12.0"
+
+#       - name: Install Protocol Buffer Compiler (Linux)
+#         if: ${{ runner.os == 'Linux' }}
+#         run: |
+#           if command -v protoc &> /dev/null; then
+#             echo "protoc already installed: $(protoc --version)"
+#             exit 0
+#           fi
+#           if [ -x "/tmp/protoc/bin/protoc" ]; then
+#             echo "protoc found in /tmp/protoc/bin"
+#             echo "/tmp/protoc/bin" >> $GITHUB_PATH
+#             /tmp/protoc/bin/protoc --version
+#             exit 0
+#           fi
+#           echo "Installing Protocol Buffer Compiler..."
+#           PB_VERSION="29.4"
+#           case "$(uname -m)" in
+#             x86_64) PB_ARCH="x86_64" ;;
+#             aarch64|arm64) PB_ARCH="aarch_64" ;;
+#             *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+#           esac
+#           PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
+#           curl -LsSf $PB_URL -o /tmp/protoc.zip
+#           rm -rf /tmp/protoc
+#           unzip -o /tmp/protoc.zip -d /tmp/protoc
+#           echo "/tmp/protoc/bin" >> $GITHUB_PATH
+#           /tmp/protoc/bin/protoc --version
+#           rm /tmp/protoc.zip
+
+#       - name: Install Protocol Buffer Compiler (macOS)
+#         if: ${{ runner.os == 'macOS' }}
+#         run: |
+#           if command -v protoc &> /dev/null; then
+#             echo "protoc already installed: $(protoc --version)"
+#             exit 0
+#           fi
+#           if [ -x "/tmp/protoc/bin/protoc" ]; then
+#             echo "protoc found in /tmp/protoc/bin"
+#             echo "/tmp/protoc/bin" >> $GITHUB_PATH
+#             /tmp/protoc/bin/protoc --version
+#             exit 0
+#           fi
+#           echo "Installing Protocol Buffer Compiler..."
+#           PB_VERSION="29.4"
+#           PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-osx-universal_binary.zip"
+#           curl -LsSf $PB_URL -o /tmp/protoc.zip
+#           rm -rf /tmp/protoc
+#           unzip -o /tmp/protoc.zip -d /tmp/protoc
+#           echo "/tmp/protoc/bin" >> $GITHUB_PATH
+#           /tmp/protoc/bin/protoc --version
+#           rm /tmp/protoc.zip
+
+#       - name: Install Protocol Buffer Compiler (Windows)
+#         if: ${{ runner.os == 'Windows' }}
+#         shell: pwsh
+#         run: |
+#           try {
+#             $existing = Get-Command protoc -ErrorAction Stop
+#             Write-Host "protoc already installed: $($existing.Source)"
+#             & protoc --version
+#             exit 0
+#           } catch {
+#             # protoc not found, continue with installation
+#           }
+
+#           $extractPath = "$env:TEMP\protoc"
+#           $protocPath = Join-Path $extractPath "bin"
+#           $protocExe = Join-Path $protocPath "protoc.exe"
+#           if (Test-Path $protocExe) {
+#             Write-Host "protoc found in $protocPath"
+#             echo "$protocPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+#             & "$protocExe" --version
+#             exit 0
+#           }
+
+#           Write-Host "Installing Protocol Buffer Compiler..."
+#           $PB_VERSION = "29.4"
+#           $PB_URL = "https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-win64.zip"
+#           $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+#           Invoke-WebRequest -OutFile $tmp $PB_URL
+#           Expand-Archive -Path $tmp -DestinationPath $extractPath -Force
+#           echo "$protocPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+#           & "$protocExe" --version
+#           Remove-Item $tmp
+
+#       - name: Build release binary
+#         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
+#         with:
+#           timeout_minutes: 45
+#           max_attempts: 2
+#           shell: bash
+#           command: |
+#             cargo build --release --locked --bin "$BINARY_NAME" --target "${{ matrix.target }}"
+
+#       - name: sccache stats
+#         if: always()
+#         run: sccache --show-stats || true
+
+#       - name: Strip release binary
+#         env:
+#           TARGET: ${{ matrix.target }}
+#         run: |
+#           if [ "${{ runner.os }}" = "Windows" ]; then
+#             strip "target/${TARGET}/release/${BINARY_NAME}.exe"
+#           else
+#             strip "target/${TARGET}/release/${BINARY_NAME}"
+#           fi
+
+#       - name: Sign macOS dbt binary
+#         if: ${{ runner.os == 'macOS' }}
+#         uses: ./.github/actions/macos-sign
+#         with:
+#           directory: target/${{ matrix.target }}/release
+#           filenames: "${{ env.BINARY_NAME }}"
+#           disable-library-validation: "true"
+#           certificate-base64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+#           p12-base64: ${{ secrets.APPLE_P12_BASE64 }}
+#           p12-password: ${{ secrets.APPLE_P12_PASSWORD }}
+#           keychain-password: ${{ github.run_id }}
+
+#       - name: Sign Windows binaries
+#         if: ${{ runner.os == 'Windows' }}
+#         uses: ./.github/actions/windows-sign
+#         with:
+#           directory: target/${{ matrix.target }}/release
+#           filenames: "${{ env.BINARY_NAME }}.exe"
+#           certificate-b64: ${{ secrets.CODE_SIGNING_CERTIFICATE_B64 }}
+#           certificate-password: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
+#           certificates-path: "./certificates"
+
+#       - name: Stage binary for pack
+#         env:
+#           TARGET: ${{ matrix.target }}
+#         run: |
+#           # `cargo ci pypi pack` expects binaries named by target triple
+#           # so a single --binaries-dir call can resolve all platforms.
+#           mkdir -p binaries
+#           if [ "${{ runner.os }}" = "Windows" ]; then
+#             cp "target/${TARGET}/release/${BINARY_NAME}.exe" "binaries/${TARGET}.exe"
+#           else
+#             cp "target/${TARGET}/release/${BINARY_NAME}" "binaries/${TARGET}"
+#           fi
+
+#       - name: Create release archive
+#         env:
+#           TARGET: ${{ matrix.target }}
+#           VERSION: ${{ needs.prepare-release.outputs.version }}
+#         run: |
+#           ARCHIVE_BASE="${PACKAGE_NAME}-${VERSION}-${TARGET}"
+#           mkdir -p archives "stage/${ARCHIVE_BASE}"
+#           if [ "${{ runner.os }}" = "Windows" ]; then
+#             cp "target/${TARGET}/release/${BINARY_NAME}.exe" "stage/${ARCHIVE_BASE}/"
+#             (cd stage && 7z a -tzip "../archives/${ARCHIVE_BASE}.zip" "${ARCHIVE_BASE}" >/dev/null)
+#           else
+#             cp "target/${TARGET}/release/${BINARY_NAME}" "stage/${ARCHIVE_BASE}/"
+#             tar -czf "archives/${ARCHIVE_BASE}.tar.gz" -C stage "${ARCHIVE_BASE}"
+#           fi
+#           ls -la archives/
+
+#       - name: Upload binary artifact
+#         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+#         with:
+#           name: binary-${{ matrix.target }}
+#           path: binaries/*
+#           if-no-files-found: error
+
+#       - name: Upload archive artifact
+#         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+#         with:
+#           name: archive-${{ matrix.target }}
+#           path: archives/*
+#           if-no-files-found: error
+
+#   # ------------------------------------------------------------------
+#   # Run the workspace test suite. Parallel to `build` (both fan out from
+#   # `prepare-release`) and gates `pack` so a failing test aborts the
+#   # release before any wheels are produced. Linux-only — host OS
+#   # coverage lives in the regular CI workflow; this is a release gate.
+#   # ------------------------------------------------------------------
+#   test:
+#     name: Test workspace
+#     needs: [prepare-release]
+#     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+#     permissions:
+#       contents: read
+#     env:
+#       CARGO_INCREMENTAL: 0
+#       RUST_BACKTRACE: 1
+#       RUST_MIN_STACK: "8388608"
+#       RUSTC_WRAPPER: sccache
+#     steps:
+#       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+#         with:
+#           ref: ${{ needs.prepare-release.outputs.branch }}
+
+#       - name: Install Rust
+#         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+#       - name: Cache cargo registry and target
+#         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+#         with:
+#           key: test-x86_64-unknown-linux-gnu
+
+#       - name: Setup sccache
+#         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+#         with:
+#           version: "v0.12.0"
+
+#       - name: Install Protocol Buffer Compiler
+#         run: |
+#           if command -v protoc &> /dev/null; then
+#             echo "protoc already installed: $(protoc --version)"
+#             exit 0
+#           fi
+#           if [ -x "/tmp/protoc/bin/protoc" ]; then
+#             echo "protoc found in /tmp/protoc/bin"
+#             echo "/tmp/protoc/bin" >> $GITHUB_PATH
+#             /tmp/protoc/bin/protoc --version
+#             exit 0
+#           fi
+#           echo "Installing Protocol Buffer Compiler..."
+#           PB_VERSION="29.4"
+#           case "$(uname -m)" in
+#             x86_64) PB_ARCH="x86_64" ;;
+#             aarch64|arm64) PB_ARCH="aarch_64" ;;
+#             *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+#           esac
+#           PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
+#           curl -LsSf $PB_URL -o /tmp/protoc.zip
+#           rm -rf /tmp/protoc
+#           unzip -o /tmp/protoc.zip -d /tmp/protoc
+#           echo "/tmp/protoc/bin" >> $GITHUB_PATH
+#           /tmp/protoc/bin/protoc --version
+#           rm /tmp/protoc.zip
+
+#       - name: Install cargo-nextest
+#         run: cargo install cargo-nextest --locked
+
+#       - name: Run tests
+#         run: cargo nextest run
+
+#       - name: sccache stats
+#         if: always()
+#         run: sccache --show-stats || true
+
+#   # ------------------------------------------------------------------
+#   # Pack all platform binaries into wheels. Single job — wheel writing
+#   # is pure-Rust zip + metadata, fast, doesn't need the build matrix.
+#   # ------------------------------------------------------------------
+#   pack:
+#     name: Pack wheels
+#     needs: [prepare-release, build, test]
+#     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+#     permissions:
+#       contents: read
+#     env:
+#       CARGO_INCREMENTAL: 0
+#       RUSTC_WRAPPER: sccache
+#     steps:
+#       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+#         with:
+#           ref: ${{ needs.prepare-release.outputs.branch }}
+
+#       - name: Install Rust
+#         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+#       - name: Cache cargo registry and dbt-ci build
+#         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+#         with:
+#           shared-key: cargo-ci-tool
+#           cache-targets: "true"
+
+#       - name: Setup sccache
+#         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+#         with:
+#           version: "v0.12.0"
+
+#       - name: Download all binaries
+#         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+#         with:
+#           path: binaries
+#           pattern: binary-*
+#           merge-multiple: true
+
+#       - name: List binaries
+#         run: ls -la binaries/
+
+#       # Two distribution names are produced from the same binaries:
+#       #   - dbt-core                       (script: dbt)
+#       #   - dbt-core-experimental-parser   (script: dbt-core-experimental-parser)
+#       # `cargo ci pypi pack` reads the wheel/distribution name from
+#       # [project].name in pyproject.toml — there's no CLI override — so we
+#       # pack once, swap pyproject in place, then pack again. The edit is
+#       # scoped to the runner's checkout and never committed.
+#       - name: Pack wheels (dbt-core)
+#         env:
+#           VERSION: ${{ needs.prepare-release.outputs.version }}
+#         run: |
+#           cargo ci pypi pack \
+#             --binaries-dir binaries \
+#             --version "$VERSION" \
+#             --bin-name dbt \
+#             --out target/wheels
+
+#       - name: Rename pyproject for parser pack
+#         run: |
+#           sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
+#           grep '^name = ' pyproject.toml
+
+#       - name: Pack wheels (dbt-core-experimental-parser)
+#         env:
+#           VERSION: ${{ needs.prepare-release.outputs.version }}
+#         run: |
+#           cargo ci pypi pack \
+#             --binaries-dir binaries \
+#             --version "$VERSION" \
+#             --bin-name dbt-core-experimental-parser \
+#             --out target/wheels
+
+#       - name: Restore pyproject name after parser pack
+#         if: always()
+#         run: |
+#           sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
+#           grep '^name = ' pyproject.toml
+
+#       - name: Download all archives
+#         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+#         with:
+#           path: target/archives
+#           pattern: archive-*
+#           merge-multiple: true
+
+#       # Stage every release asset in a single `dist/` directory: wheels
+#       # (PyPI), platform archives (GitHub Release), and one SHA256SUMS
+#       # covering both. Mirrors the layout the publisher downloads into.
+#       - name: Stage release assets
+#         run: |
+#           mkdir -p dist
+#           shopt -s nullglob
+#           cp target/wheels/*.whl dist/
+#           cp target/archives/*.tar.gz target/archives/*.zip dist/
+#           (cd dist && sha256sum *.whl *.tar.gz *.zip | tee SHA256SUMS)
+#           ls -la dist/
+
+#       - name: Upload release assets
+#         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+#         with:
+#           name: release-assets
+#           path: dist/*
+#           if-no-files-found: error
+
+#   # ------------------------------------------------------------------
+#   # Tag the release branch HEAD. Tiny, fast, sets the immutable ref
+#   # everything downstream hangs off. Skipped on dry-run — the throwaway
+#   # `release/dry-run/...` branch isn't worth tagging, and the upstream
+#   # `prepare-release` step already rejects pre-existing tags.
+#   # Idempotent: re-running a successful tag job is a no-op; pointing
+#   # at a different SHA than the existing tag fails loudly.
+#   # ------------------------------------------------------------------
+#   tag:
+#     name: Tag release commit
+#     needs: [prepare-release, pack]
+#     if: ${{ !inputs.dry_run }}
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#     steps:
+#       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+#         with:
+#           ref: ${{ needs.prepare-release.outputs.branch }}
+
+#       - name: Configure git identity
+#         run: |
+#           git config user.name "github-actions[bot]"
+#           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+#       - name: Tag branch HEAD
+#         env:
+#           TAG: ${{ needs.prepare-release.outputs.tag }}
+#           VERSION: ${{ needs.prepare-release.outputs.version }}
+#         run: |
+#           HEAD_SHA=$(git rev-parse HEAD)
+#           EXISTING=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
+#           if [ -n "$EXISTING" ] && [ "$EXISTING" != "$HEAD_SHA" ]; then
+#             echo "::error::Tag $TAG already exists at $EXISTING but HEAD is $HEAD_SHA."
+#             exit 1
+#           fi
+#           git tag -a "$TAG" -m "Release $VERSION" 2>/dev/null || true
+#           git push origin "$TAG"
+
+#   # ------------------------------------------------------------------
+#   # Publish the download-at-install sdist to production PyPI. Skipped on
+#   # dry-run. Runs after `github-release` because it fetches this release's
+#   # wheels from the GitHub Release download URL (`--download-base-url`),
+#   # hashes the live bytes, and publishes an sdist pinning those filenames +
+#   # sha256s — no wheels are uploaded to PyPI. Authenticates with the
+#   # repo-level `PYPI_API_TOKEN` secret (passed to `cargo ci pypi publish`
+#   # as `DBT_PYPI_PROD_TOKEN`). `release_target` selects which of the two
+#   # distributions (`dbt-core`, `dbt-core-experimental-parser`) to publish.
+#   # ------------------------------------------------------------------
+#   publish-pypi:
+#     name: Publish to PyPI
+#     # pack + tag are transitive via github-release; prepare-release stays for its outputs.
+#     needs: [prepare-release, github-release]
+#     if: ${{ !inputs.dry_run }}
+#     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+#     permissions:
+#       contents: read
+#     env:
+#       CARGO_INCREMENTAL: 0
+#       RUSTC_WRAPPER: sccache
+#       # GitHub Release download URL hosting this version's wheels; the sdist
+#       # backend fetches the matching wheel from here at install time.
+#       BASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.prepare-release.outputs.tag }}
+#     steps:
+#       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+#         with:
+#           ref: ${{ needs.prepare-release.outputs.branch }}
+
+#       - name: Install Rust
+#         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+#       - name: Cache cargo registry and dbt-ci build
+#         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+#         with:
+#           shared-key: cargo-ci-tool
+#           cache-targets: "true"
+
+#       - name: Setup sccache
+#         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+#         with:
+#           version: "v0.12.0"
+
+#       # sdist mode reads the distribution name from pyproject's [project].name
+#       # to build the wheel filenames it downloads from BASE_URL, so to publish
+#       # both distributions we publish once, swap pyproject in place, then
+#       # publish again. Mirrors the pack-job pattern.
+#       #
+#       # One --target per wheel uploaded to the Release; keep in lockstep with
+#       # the `build` job's matrix — each target's wheel is fetched and hashed.
+#       - name: Publish (dbt-core)
+#         if: inputs.release_target != 'parser'
+#         env:
+#           DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+#         run: |
+#           cargo ci pypi publish \
+#             --environment prod \
+#             --version "${{ needs.prepare-release.outputs.version }}" \
+#             --download-base-url "$BASE_URL" \
+#             --target x86_64-unknown-linux-gnu \
+#             --target aarch64-unknown-linux-gnu \
+#             --target x86_64-apple-darwin \
+#             --target aarch64-apple-darwin \
+#             --target x86_64-pc-windows-msvc
+
+#       - name: Rename pyproject for parser publish
+#         if: inputs.release_target != 'core'
+#         run: |
+#           sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
+#           grep '^name = ' pyproject.toml
+
+#       - name: Publish (dbt-core-experimental-parser)
+#         if: inputs.release_target != 'core'
+#         env:
+#           DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+#         run: |
+#           cargo ci pypi publish \
+#             --environment prod \
+#             --version "${{ needs.prepare-release.outputs.version }}" \
+#             --download-base-url "$BASE_URL" \
+#             --target x86_64-unknown-linux-gnu \
+#             --target aarch64-unknown-linux-gnu \
+#             --target x86_64-apple-darwin \
+#             --target aarch64-apple-darwin \
+#             --target x86_64-pc-windows-msvc
+
+#       - name: Restore pyproject name after parser publish
+#         if: ${{ always() && inputs.release_target != 'core' }}
+#         run: |
+#           sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
+#           grep '^name = ' pyproject.toml
+
+#   # ------------------------------------------------------------------
+#   # Create the GitHub Release with all assets. Skipped on dry-run.
+#   # Idempotent: if the release already exists, re-uploads assets with
+#   # --clobber so a flaky asset upload can be retried without manual
+#   # cleanup.
+#   # ------------------------------------------------------------------
+#   github-release:
+#     name: Create GitHub Release
+#     needs: [prepare-release, pack, tag]
+#     if: ${{ !inputs.dry_run }}
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#     steps:
+#       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+#         with:
+#           ref: ${{ needs.prepare-release.outputs.branch }}
+
+#       - name: Download release assets
+#         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+#         with:
+#           name: release-assets
+#           path: dist
+
+#       - name: Create or update GitHub Release
+#         env:
+#           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           TAG: ${{ needs.prepare-release.outputs.tag }}
+#           VERSION: ${{ needs.prepare-release.outputs.version }}
+#         run: |
+#           shopt -s nullglob
+#           ASSETS=(dist/*.whl dist/*.tar.gz dist/*.zip)
+#           [ -f dist/SHA256SUMS ] && ASSETS+=(dist/SHA256SUMS)
+
+#           if gh release view "$TAG" >/dev/null 2>&1; then
+#             echo "Release $TAG already exists; re-uploading assets."
+#           else
+#             # Pre-release versions (SemVer with a pre-release segment) shouldn't
+#             # surface as "Latest" on the Releases page.
+#             CREATE_ARGS=(--title "$TAG")
+#             [[ "$VERSION" == *-* ]] && CREATE_ARGS+=(--prerelease)
+
+#             NOTES=".changes/${VERSION}.md"
+#             if [ -f "$NOTES" ]; then
+#               CREATE_ARGS+=(--notes-file "$NOTES")
+#             else
+#               echo "::warning::$NOTES not found; using autogenerated notes."
+#               CREATE_ARGS+=(--generate-notes)
+#             fi
+
+#             gh release create "$TAG" "${CREATE_ARGS[@]}"
+#           fi
+
+#           gh release upload "$TAG" --clobber "${ASSETS[@]}"
+
+#   # Renders Formula/dbt-core.rb from the SHA256SUMS just uploaded by the
+#   # `github-release` job and pushes it to dbt-labs/homebrew-dbt.
+#   #
+#   # PRE-STABLE PREVIEW WINDOW: we publish every version, including
+#   # pre-releases (anything with a `-` in the SemVer), so brew users can
+#   # install previews before the first 2.x stable ships. Restore the
+#   # pre-release guard at first stable by swapping the `if` below back to
+#   # the commented line AND re-enabling the preflight job in
+#   # publish-homebrew.yml.
+#   publish-homebrew:
+#     needs: [prepare-release, github-release]
+#     # if: ${{ !inputs.dry_run && !contains(needs.prepare-release.outputs.version, '-') }}
+#     if: ${{ !inputs.dry_run }}
+#     uses: ./.github/workflows/publish-homebrew.yml
+#     with:
+#       version: ${{ needs.prepare-release.outputs.version }}
+#       tag: ${{ needs.prepare-release.outputs.tag }}
+#       dry_run: false
+#       # Must match the `build` job's `BINARY_NAME` env and the
+#       # `ARCHIVE_BASE` template's `${PACKAGE_NAME}-` prefix. Hardcoded
+#       # because reusable-workflow `with:` blocks don't accept the `env`
+#       # context — keep these in lockstep with the build job manually.
+#       binary_name: dbt-sa-cli
+#       tarball_prefix: dbt-core-
+#     permissions:
+#       contents: read
+#     secrets: inherit
+
+#   # Open a PR back to main with only the release commit's changelog delta
+#   # (new `.changes/<version>.md`, regenerated CHANGELOG.md, deleted
+#   # unreleased entries) — the version bump stays on the release branch.
+#   changelog-backport:
+#     name: Backport changelog to main
+#     needs: [prepare-release, publish-pypi, github-release]
+#     if: ${{ !inputs.dry_run }}
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#       pull-requests: write
+#     steps:
+#       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+#         with:
+#           ref: main
+#           fetch-depth: 0  # need the release commit and its parent
+
+#       - name: Configure git identity
+#         run: |
+#           git config user.name "github-actions[bot]"
+#           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+#       - name: Build changelog backport branch
+#         id: backport
+#         env:
+#           VERSION: ${{ needs.prepare-release.outputs.version }}
+#           RELEASE_BRANCH: ${{ needs.prepare-release.outputs.branch }}
+#         run: |
+#           git fetch origin "$RELEASE_BRANCH"
+
+#           PR_BRANCH="changelog/backport-v${VERSION}"
+#           git switch -c "$PR_BRANCH"
+
+#           REL="origin/${RELEASE_BRANCH}"
+
+#           # Handle each part of the changelog delta with the right tool rather
+#           # than one patch — main may be a different lineage than the release
+#           # branch's parent, so the version bump never comes along and the
+#           # batched-away entries may not even exist here.
+
+#           # 1. The new release-notes file changie generated for this version.
+#           git checkout "$REL" -- ".changes/${VERSION}.md"
+
+#           # 2. Remove the unreleased entries the release batched away, but only
+#           #    those still present — main may never have had them, or a prior
+#           #    backport already removed them (--ignore-unmatch, not an error).
+#           DELETED="$(git diff --diff-filter=D --name-only "${REL}~1" "$REL" -- .changes/unreleased)"
+#           if [ -n "$DELETED" ]; then
+#             printf '%s\n' "$DELETED" | xargs git rm -q --ignore-unmatch --
+#           fi
+
+#           # 3. Regenerated CHANGELOG.md, applied as a patch (not a copy) so
+#           #    sections added to main concurrently survive — `--3way` merges,
+#           #    and `--reverse --check` lets a re-run after merge skip cleanly.
+#           PATCH="$(mktemp)"
+#           git diff "${REL}~1" "$REL" -- CHANGELOG.md > "$PATCH"
+#           if [ -s "$PATCH" ] && ! git apply --reverse --check "$PATCH" 2>/dev/null; then
+#             git apply --index --3way "$PATCH"
+#           fi
+
+#           git add -A .changes CHANGELOG.md
+
+#           # Nothing new relative to main (e.g. a prior backport PR already
+#           # merged before this re-run) — skip cleanly to stay idempotent.
+#           if git diff --cached --quiet; then
+#             echo "::notice::No changelog delta to backport for v${VERSION}."
+#             echo "skip=true" >> "$GITHUB_OUTPUT"
+#             exit 0
+#           fi
+
+#           git commit -m "chore: backport v${VERSION} changelog to main"
+
+#           # Fetch any existing remote branch so --force-with-lease can guard
+#           # against clobbering unexpected updates while staying re-run safe.
+#           git fetch origin "$PR_BRANCH" 2>/dev/null || true
+#           git push --force-with-lease origin "$PR_BRANCH"
+
+#           {
+#             echo "skip=false"
+#             echo "pr_branch=$PR_BRANCH"
+#           } >> "$GITHUB_OUTPUT"
+
+#       - name: Open or update pull request
+#         if: steps.backport.outputs.skip != 'true'
+#         env:
+#           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           VERSION: ${{ needs.prepare-release.outputs.version }}
+#           PR_BRANCH: ${{ steps.backport.outputs.pr_branch }}
+#           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+#         run: |
+#           # Only an open PR is updated by the force-push; a closed/merged one
+#           # shouldn't block recreating the backport.
+#           STATE="$(gh pr view "$PR_BRANCH" --json state --jq .state 2>/dev/null || true)"
+#           if [ "$STATE" = "OPEN" ]; then
+#             echo "PR for $PR_BRANCH is open; the force-pushed branch updates it."
+#             exit 0
+#           fi
+
+#           gh pr create \
+#             --base main \
+#             --head "$PR_BRANCH" \
+#             --title "chore: backport v${VERSION} changelog to main" \
+#             --body "$(cat <<EOF
+#           Backports the changelog generated by the \`v${VERSION}\` release back to main.
+
+#           Contains only the changelog delta from the release commit:
+#           - new \`.changes/${VERSION}.md\`
+#           - regenerated \`CHANGELOG.md\`
+#           - deletion of the \`.changes/unreleased/*.yaml\` entries \`changie batch\` consumed
+
+#           The Cargo version bump is intentionally excluded — main keeps its own version.
+
+#           Release workflow: ${RUN_URL}
+#           EOF
+#           )"
+
+#   # Submits an updated dbtLabs.dbt-core manifest to microsoft/winget-pkgs
+#   # via `wingetcreate update` using the Windows installer archive from the
+#   # `github-release` job. Runs in parallel with `publish-homebrew`; both
+#   # fan out from `github-release`.
+#   #
+#   # PRE-STABLE PREVIEW WINDOW: pre-release versions are published too. Note
+#   # each preview opens a new upstream winget-pkgs PR and a permanent
+#   # published version (winget accumulates versions; it does not overwrite).
+#   # Restore the pre-release guard at first stable by uncommenting the `if`.
+#   publish-winget:
+#     needs: [prepare-release, github-release]
+#     # if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
+#     uses: ./.github/workflows/publish-winget.yml
+#     with:
+#       version: ${{ needs.prepare-release.outputs.version }}
+#       dry_run: ${{ inputs.dry_run }}
+#     permissions:
+#       contents: read
+#     secrets: inherit
 
   # ------------------------------------------------------------------
   # Announce a successful release to #core-releases. Skipped on dry
@@ -894,22 +899,10 @@ jobs:
   # (repo/branch/commit only) and can't carry the version or release
   # URL — the whole point of this notification.
   # ------------------------------------------------------------------
+  # TEMP TEST MODE: if/needs stripped so this runs unconditionally
+  # alongside slack-failure-notification in the same run. Restore before merging.
   slack-notification:
     name: Slack Notification
-    if: ${{ success() && !inputs.dry_run }}
-    needs:
-      [
-        prepare-release,
-        build,
-        test,
-        pack,
-        tag,
-        publish-pypi,
-        github-release,
-        publish-homebrew,
-        publish-winget,
-        changelog-backport,
-      ]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -917,8 +910,8 @@ jobs:
       - name: Post release announcement to Slack
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_CORE_RELEASES }}
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare-release.outputs.tag }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ inputs.version }}
         run: |
           text=":tada: *dbt Core v${VERSION}* has been released! <${RELEASE_URL}|View Release>"
           payload="$(jq -n --arg text "$text" '{text: $text}')"
@@ -926,22 +919,10 @@ jobs:
 
   # Notify #dev-core-alerts if any release job failed. Skipped on dry
   # runs — those are build-only checks, not real releases.
+  # TEMP TEST MODE: if/needs stripped so this runs unconditionally
+  # alongside slack-notification in the same run. Restore before merging.
   slack-failure-notification:
     name: Slack Failure Notification
-    if: ${{ failure() && !inputs.dry_run }}
-    needs:
-      [
-        prepare-release,
-        build,
-        test,
-        pack,
-        tag,
-        publish-pypi,
-        github-release,
-        publish-homebrew,
-        publish-winget,
-        changelog-backport,
-      ]
     uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
     with:
       status: "failure"
