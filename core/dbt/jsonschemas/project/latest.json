@@ -2327,6 +2327,16 @@
             }
           ]
         },
+        "state-org-id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tenant_hostname": {
           "type": [
             "string",
