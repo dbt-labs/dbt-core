@@ -63,13 +63,21 @@ class BuildTask(RunTask):
         self.model_to_unit_test_map: Dict[str, List] = {}
 
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
+        self._maybe_show_reuse_relations_hint()
+        return super().before_run(adapter, selected_uids)
+
+    def _maybe_show_reuse_relations_hint(self) -> None:
+        # This hint nudges users building a lot *from scratch*. If they've already
+        # opted into state/deferral (--state / --defer / --defer-state), they're
+        # not building from scratch, so stay quiet.
+        if self.args.state or self.args.defer or self.args.defer_state:
+            return
+
         model_count = sum(
             1 for node in (self._flattened_nodes or []) if node.resource_type == NodeType.Model
         )
         if model_count > self.REUSE_RELATIONS_HINT_MODEL_THRESHOLD:
             show_hint(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
-
-        return super().before_run(adapter, selected_uids)
 
     def resource_types(self, no_unit_tests: bool = False) -> List[NodeType]:
         resource_types = resource_types_from_args(

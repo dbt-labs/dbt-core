@@ -1,3 +1,6 @@
+import os
+import shutil
+
 import pytest
 from pytest_mock import MockerFixture
 
@@ -55,6 +58,59 @@ class TestReuseRelationsHint:
     def test_silent_when_hints_disabled(self, project, mocker, catcher):
         mocker.patch("dbt.task.build.BuildTask.REUSE_RELATIONS_HINT_MODEL_THRESHOLD", 0)
         run_dbt(["build", "--no-hints-enabled"], callbacks=[catcher.catch])
+        assert hint_events(catcher, REUSE_RELATIONS_ON_TOO_MANY_MODELS) == []
+
+
+class TestReuseRelationsHintSkippedWithState:
+    # Users on state/deferral aren't building from scratch, so the reuse hint
+    # should stay silent even when the model count is over the threshold.
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model_a.sql": model_sql, "model_b.sql": model_sql}
+
+    def _make_state(self, project) -> str:
+        # `parse` produces a manifest without triggering the reuse hint, so no
+        # hint_ts.json is written and the cooldown can't mask the state guard.
+        run_dbt(["parse"])
+        state = os.path.join(project.project_root, "state")
+        os.makedirs(state, exist_ok=True)
+        shutil.copyfile(
+            os.path.join(project.project_root, "target", "manifest.json"),
+            os.path.join(state, "manifest.json"),
+        )
+        return "state"
+
+    @pytest.mark.parametrize(
+        "extra_args",
+        [
+            ["--state", "state"],
+            ["--defer", "--state", "state"],
+            ["--defer-state", "state"],
+        ],
+    )
+    def test_silent_when_state_or_defer_in_use(self, project, mocker, extra_args):
+        mocker.patch("dbt.task.build.BuildTask.REUSE_RELATIONS_HINT_MODEL_THRESHOLD", 0)
+        self._make_state(project)
+
+        catcher = EventCatcher(event_to_catch=Note)
+        run_dbt(["build"] + extra_args, callbacks=[catcher.catch])
+        assert hint_events(catcher, REUSE_RELATIONS_ON_TOO_MANY_MODELS) == []
+
+
+class TestHintsDisabledViaProjectFlag:
+    # `hints_enabled: false` under `flags:` in dbt_project.yml must suppress hints.
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model_a.sql": model_sql, "model_b.sql": model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"flags": {"hints_enabled": False}}
+
+    def test_project_flag_disables_hint(self, project, mocker):
+        mocker.patch("dbt.task.build.BuildTask.REUSE_RELATIONS_HINT_MODEL_THRESHOLD", 0)
+        catcher = EventCatcher(event_to_catch=Note)
+        run_dbt(["build"], callbacks=[catcher.catch])
         assert hint_events(catcher, REUSE_RELATIONS_ON_TOO_MANY_MODELS) == []
 
 

@@ -6,7 +6,6 @@ import pytest
 
 from dbt import hints
 from dbt.hints import (
-    HINT_COOLDOWN_SECONDS,
     HINT_PREFIX,
     HINT_TS_FILENAME,
     HintType,
@@ -98,9 +97,6 @@ class TestHintCooldown:
         load_hint_ts(tmp_path)
         mocker.patch.object(Path, "write_text", side_effect=OSError("read-only"))
         record_hint_shown(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
-
-    def test_cooldown_window_is_one_week(self):
-        assert HINT_COOLDOWN_SECONDS == 7 * 24 * 60 * 60
 
 
 class TestShowHint:

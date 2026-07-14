@@ -20,6 +20,8 @@ class TestBuildReuseRelationsHint:
     def _run_before_run(self, flattened_nodes):
         task = BuildTask.__new__(BuildTask)
         task._flattened_nodes = flattened_nodes
+        # No state/deferral in play, so the hint is eligible on count alone.
+        task.args = mock.Mock(state=None, defer=False, defer_state=None)
         with mock.patch("dbt.task.build.show_hint") as mock_show_hint:
             # Skip the real (adapter-driven) before_run body.
             with mock.patch(
