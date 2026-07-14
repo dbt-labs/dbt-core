@@ -466,7 +466,7 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
             // It is not possible to resolve the module here.
         } else if !&args[1].is_none() {
             listener.warn(&format!(
-                "Expected a optional argument argument for try_or_compiler_error function, got {:?}",
+                "Expected an optional argument for try_or_compiler_error function, got {:?}",
                 args[1]
             ));
             return Ok(Type::Any { hard: false });
