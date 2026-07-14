@@ -152,7 +152,7 @@ from dbt_common.ui import error_tag
 PERF_INFO_FILE_NAME = "perf_info.json"
 
 # Parses slower than this (in seconds) are slow enough to suggest the v2 parser.
-LONG_PARSING_THRESHOLD_SECONDS = 5 * 60
+LONG_PARSING_THRESHOLD_SECONDS = 30
 
 
 def _maybe_show_long_parsing_hint(load_all_elapsed: Optional[float]) -> None:
