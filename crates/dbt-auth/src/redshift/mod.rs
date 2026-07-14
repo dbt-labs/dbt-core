@@ -16,7 +16,7 @@ use dbt_adbc::{
     Backend, database,
     redshift::{
         AWS_ACCESS_KEY_ID, AWS_PROFILE, AWS_REGION, AWS_SECRET_ACCESS_KEY, CLUSTER_IDENTIFIER,
-        CLUSTER_TYPE,
+        CLUSTER_TYPE, WORK_GROUP_NAME,
         cluster_type::{REDSHIFT, SERVERLESS},
     },
 };
@@ -79,22 +79,10 @@ impl Auth for RedshiftAuth {
                 builder.with_parse_uri(connection_str)?;
             }
             "iam" => {
-                let user = config.require_string("user")?;
-                // XXX: We can only tell serverless vs cluster from the host input
-                let is_serverless = host.contains("redshift-serverless");
-
-                // cluster_id doesn't exist for serverless
-                if is_serverless {
-                    builder.with_named_option(CLUSTER_TYPE, SERVERLESS)?;
-                } else {
-                    builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
-                    let cluster_id = config.require_string("cluster_id")?;
-                    builder.with_named_option(CLUSTER_IDENTIFIER, cluster_id)?;
-                }
+                configure_iam_cluster(&mut builder, config, &host)?;
 
                 let region = config.require_string("region")?;
                 builder.with_named_option(AWS_REGION, region)?;
-                builder.with_named_option(ADBC_OPTION_USERNAME, user)?;
 
                 // Either both access_key_id + secret_access_key, or fall back to iam_profile.
                 // Mirrors dbt-redshift's __iam_user_kwargs in connections.py.
@@ -203,6 +191,47 @@ impl Auth for RedshiftAuth {
             warnings: vec![],
         })
     }
+}
+
+/// Sets the IAM options that differ between Redshift Serverless and a
+/// provisioned cluster: cluster type, endpoint identifier, and the DB user.
+fn configure_iam_cluster(
+    builder: &mut database::Builder,
+    config: &AdapterConfig,
+    host: &str,
+) -> Result<(), AuthError> {
+    // Serverless is detected from the host, or from an explicit
+    // `is_serverless` flag for hosts that don't reveal it (e.g. a
+    // tunnel). The flag may be a native bool or a "true" string.
+    let is_serverless = host.contains("redshift-serverless")
+        || config
+            .get_string("is_serverless")
+            .is_some_and(|v| v.eq_ignore_ascii_case("true"));
+
+    // cluster_id doesn't exist for serverless
+    if is_serverless {
+        builder.with_named_option(CLUSTER_TYPE, SERVERLESS)?;
+        if let Some(work_group) = config.get_string("serverless_work_group") {
+            builder.with_named_option(WORK_GROUP_NAME, work_group)?;
+        }
+        // The serverless GetCredentials API has no DbUser parameter
+        // (the DB user is derived from the IAM identity), so `user`
+        // is not required and an empty username is sent, matching
+        // dbt-redshift.
+        builder.with_named_option(ADBC_OPTION_USERNAME, "")?;
+    } else {
+        builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
+        let cluster_id = config.require_string("cluster_id").map_err(|_| {
+            AuthError::config(
+                "'cluster_id' is required for IAM auth against a provisioned \
+                 cluster. For Redshift Serverless, set 'is_serverless: true' \
+                 and 'serverless_work_group' instead.",
+            )
+        })?;
+        builder.with_named_option(CLUSTER_IDENTIFIER, cluster_id)?;
+        builder.with_named_option(ADBC_OPTION_USERNAME, config.require_string("user")?)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -348,6 +377,43 @@ mod tests_adbc {
 
         assert_eq!(other_option_value(&builder, CLUSTER_TYPE), Some(SERVERLESS));
         assert_eq!(other_option_value(&builder, CLUSTER_IDENTIFIER), None);
+    }
+
+    #[test]
+    fn test_iam_serverless_via_flag_without_serverless_host() {
+        // #14621: a tunneled host doesn't reveal serverless, so the explicit
+        // flag must select serverless, skip cluster_id, forward the workgroup,
+        // and not require `user` (the driver receives an empty username).
+        let mut config = iam_base_config();
+        config.insert("host".into(), "127.0.0.1".into());
+        config.remove("cluster_id");
+        config.remove("user");
+        config.insert("iam_profile".into(), "sandbox-admin".into());
+        config.insert("is_serverless".into(), dbt_yaml::Value::bool(true));
+        config.insert("serverless_work_group".into(), "my-workgroup".into());
+
+        let builder = configure(config).expect("configure");
+
+        assert_eq!(other_option_value(&builder, CLUSTER_TYPE), Some(SERVERLESS));
+        assert_eq!(other_option_value(&builder, CLUSTER_IDENTIFIER), None);
+        assert_eq!(
+            other_option_value(&builder, WORK_GROUP_NAME),
+            Some("my-workgroup")
+        );
+        assert_eq!(other_option_value(&builder, ADBC_OPTION_USERNAME), Some(""));
+    }
+
+    #[test]
+    fn test_iam_serverless_flag_as_string() {
+        // The flag must be honored as a native bool or a "true" string.
+        let mut config = iam_base_config();
+        config.insert("host".into(), "127.0.0.1".into());
+        config.remove("cluster_id");
+        config.insert("iam_profile".into(), "sandbox-admin".into());
+        config.insert("is_serverless".into(), "true".into());
+
+        let builder = configure(config).expect("configure");
+        assert_eq!(other_option_value(&builder, CLUSTER_TYPE), Some(SERVERLESS));
     }
 
     #[test]

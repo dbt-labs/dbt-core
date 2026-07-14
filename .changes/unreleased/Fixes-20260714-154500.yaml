@@ -1,0 +1,8 @@
+kind: Fixes
+body: Fix IAM authentication for Redshift Serverless by honoring the is_serverless
+  and serverless_work_group profile fields
+time: 2026-07-14T15:45:00.000000+09:00
+custom:
+    author: hytfjwr
+    issue: "14621"
+    project: dbt-fusion
