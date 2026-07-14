@@ -914,7 +914,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Non-blocking: a Slack/webhook outage shouldn't turn an otherwise
+      # successful release run red.
       - name: Post release announcement to Slack
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_CORE_RELEASES }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
