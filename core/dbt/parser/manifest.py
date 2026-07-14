@@ -104,6 +104,7 @@ from dbt.exceptions import (
     scrub_secrets,
 )
 from dbt.flags import get_flags
+from dbt.hints import HintType, show_hint
 from dbt.mp_context import get_mp_context
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
@@ -149,6 +150,18 @@ from dbt_common.helper_types import PathSet
 from dbt_common.ui import error_tag
 
 PERF_INFO_FILE_NAME = "perf_info.json"
+
+# Parses slower than this (in seconds) are slow enough to suggest the v2 parser.
+LONG_PARSING_THRESHOLD_SECONDS = 30
+
+
+def _maybe_show_long_parsing_hint(load_all_elapsed: Optional[float]) -> None:
+    if (
+        load_all_elapsed is not None
+        and load_all_elapsed > LONG_PARSING_THRESHOLD_SECONDS
+        and not get_flags().USE_V2_PARSER
+    ):
+        show_hint(HintType.LONG_PARSING_WITHOUT_V2_PARSER)
 
 
 def extended_mashumaro_encoder(data):
@@ -344,6 +357,10 @@ class ManifestLoader:
         # Save performance info
         loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
         loader.track_project_load()
+
+        # If parsing was slow and we're still on the legacy parser, nudge the user
+        # toward the v2 parser.
+        _maybe_show_long_parsing_hint(loader._perf_info.load_all_elapsed)
 
         if write_perf_info:
             loader.write_perf_info(config.project_target_path)
