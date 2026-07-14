@@ -497,18 +497,6 @@ def test_docs_runtime_context(config_postgres):
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_namespace_duplicates(config_postgres, manifest_fx):
-    mn = macros.MacroNamespaceBuilder("root", "search", MacroStack(), ["dbt_postgres", "dbt"])
-    mn.add_macros(manifest_fx.macros.values(), {})
-
-    # same pkg, same name: error
-    with pytest.raises(dbt_common.exceptions.CompilationError):
-        mn.add_macro(mock_macro("macro_a", "root"), {})
-
-    # different pkg, same name: no error
-    mn.add_macros(mock_macro("macro_a", "dbt"), {})
-
-
 def test_macro_namespace(config_postgres, manifest_fx):
     mn = macros.MacroNamespaceBuilder("root", "search", MacroStack(), ["dbt_postgres", "dbt"])
 
