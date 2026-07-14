@@ -89,6 +89,28 @@ class TestTracking:
         assert dbt.tracking.active_user.do_not_track != send_anonymous_usage_stats
 
 
+class TestTrackHintView:
+    def test_track_hint_view_no_active_user(self, active_user_none):
+        # Should be a no-op (and not raise) when there is no active user.
+        with mock.patch("dbt.tracking.track") as mock_track:
+            dbt.tracking.track_hint_view("some_hint")
+        mock_track.assert_not_called()
+
+    def test_track_hint_view_sends_event(self):
+        mock_user = mock.Mock(do_not_track=False)
+        with mock.patch("dbt.tracking.active_user", mock_user):
+            with mock.patch("dbt.tracking.track") as mock_track:
+                dbt.tracking.track_hint_view("some_hint")
+
+        mock_track.assert_called_once()
+        assert mock_track.call_args.kwargs["action"] == "hint_view"
+        context = mock_track.call_args.kwargs["context"]
+        assert len(context) == 1
+        self_describing = context[0].to_json()
+        assert self_describing["schema"] == dbt.tracking.HINT_VIEW_SPEC
+        assert self_describing["data"] == {"hint_type": "some_hint"}
+
+
 class TestCompileStatsTracking:
     def test_generate_stats_includes_catalog_count(self) -> None:
         mock_manifest = mock.MagicMock()
