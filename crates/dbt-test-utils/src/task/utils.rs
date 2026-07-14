@@ -343,7 +343,7 @@ pub fn strip_leading_relative(path: &Path) -> &Path {
 
 // Util function to execute fusion commands in tests
 #[allow(clippy::too_many_arguments)]
-pub fn exec_fs<'a, Fut>(
+pub fn exec_fs<'a, T, Fut>(
     feature_stack_factory: Arc<FeatureStackFactory>,
     parser: &CliParser,
     cmd_vec: Vec<String>,
@@ -356,7 +356,10 @@ pub fn exec_fs<'a, Fut>(
     tracing_handle: TracingReloadHandle,
 ) -> Pin<Box<dyn Future<Output = FsResult<()>> + Send + 'a>>
 where
-    Fut: Future<Output = FsResult<()>> + Send + 'a,
+    // Generic over the success payload: callers may pass either the CLI's
+    // `execute_fs` (returns `CommandExecutionResult`) or a `()`-returning fn;
+    // the captured value is discarded (`exec_cli` maps it away).
+    Fut: Future<Output = FsResult<T>> + Send + 'a,
 {
     // Check if project_dir has a .env.conformance file
     // NOTE: this has to be done before we parse Cli
@@ -390,7 +393,7 @@ where
 // before argv parsing, which by definition is already done by the time a `Cli`
 // exists. Callers that need it must load it before parsing.
 #[allow(clippy::too_many_arguments)]
-pub fn exec_cli<'a, Fut>(
+pub fn exec_cli<'a, T, Fut>(
     feature_stack_factory: Arc<FeatureStackFactory>,
     cli: Box<Cli>,
     project_dir: PathBuf,
@@ -402,7 +405,10 @@ pub fn exec_cli<'a, Fut>(
     tracing_handle: TracingReloadHandle,
 ) -> Pin<Box<dyn Future<Output = FsResult<()>> + Send + 'a>>
 where
-    Fut: Future<Output = FsResult<()>> + Send + 'a,
+    // Generic over the success payload; the captured value is discarded below
+    // (`exec_fut.await.map(|_| ())`), so callers can pass a `CommandExecutionResult`-
+    // or `()`-returning `execute_fs`.
+    Fut: Future<Output = FsResult<T>> + Send + 'a,
 {
     let arg = from_lib(&cli);
     // Equivalent to `CliParser::warn_error_options(&cli)`, computed directly so
@@ -432,7 +438,10 @@ where
     let fail_fast = feature_stack.cli.fail_fast.clone();
     let token = cst.token();
 
-    let future = Box::pin(execute_fs(arg, cli, feature_stack, token));
+    // Call the closure outside the async block so only the (Send) future is
+    // captured, not the closure itself, then drop the captured artifacts.
+    let exec_fut = execute_fs(arg, cli, feature_stack, token);
+    let future = Box::pin(async move { exec_fut.await.map(|_| ()) });
     Box::pin(async move {
         // Redirect stdout and stderr for the duration of the future.
         let _stdout = with_redirected_stdout(stdout_file);

@@ -136,9 +136,9 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
     }
 }
 
-pub fn build_result_string(result: &FsResult<()>) -> String {
+pub fn build_result_string<T>(result: &FsResult<T>) -> String {
     match result {
-        Ok(()) => "ok",
+        Ok(_) => "ok",
         Err(err) => match err.exit_status() {
             Some(0) => "ok",
             Some(_) => "error",

@@ -1,0 +1,8 @@
+  dbt-core [version]
+   Loading profiles.yml
+   Parsing models/hello_world.sql
+=======================Selected nodes=======================
+hello_world.hello_world
+
+==================== Execution Summary =====================
+Finished 'list' successfully for target 'snowflake_local' [[duration]]

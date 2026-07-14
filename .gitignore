@@ -34,3 +34,16 @@ scratch/
 
 #redis
 dump.rdb
+
+# python (dbt-python crate: maturin/pyo3 binding)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+wheelhouse/
+*.whl

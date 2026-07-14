@@ -64,7 +64,7 @@
 # `release/dry-run/v…-<run_id>` so the matrix has something to check
 # out; clean these up periodically.
 
-name: Release dbt Core V2
+name: Release dbt Core V2 (Test PyPI)
 run-name: >-
   ${{
     inputs.dry_run && format('Test-PyPI release v{0} (dry run — build only)', inputs.version)
@@ -369,20 +369,10 @@ jobs:
           else
             PY=python3
           fi
-          # Install maturin into an isolated venv rather than the base
-          # interpreter: the mac/windows runners' system Python is PEP 668
-          # "externally managed", so `pip install` into it fails. The venv's
-          # bin dir is bin/ on POSIX, Scripts/ on Windows.
-          "$PY" -m venv "$RUNNER_TEMP/maturin-venv"
-          if [ -x "$RUNNER_TEMP/maturin-venv/bin/python" ]; then
-            VENV="$RUNNER_TEMP/maturin-venv/bin"
-          else
-            VENV="$RUNNER_TEMP/maturin-venv/Scripts"
-          fi
-          "$VENV/python" -m pip install --upgrade maturin
-          "$VENV/python" -m maturin build --release --locked \
+          "$PY" -m pip install --upgrade maturin
+          "$PY" -m maturin build --release --locked \
             --target "$TARGET" \
-            --interpreter "$VENV/python" \
+            --interpreter "$PY" \
             -m crates/dbt-python/Cargo.toml \
             --out target/wheels
           ls -la target/wheels/

@@ -1,0 +1,230 @@
+# **what?**
+# Lint and test the `dbt-python` crate — the PyO3/maturin abi3 binding that
+# ships the `dbt` CLI and programmatic `dbtRunner` as the `dbt-core` wheel.
+#
+#   check-py  → ruff + mypy over the pure-Python sources (python/, tests/).
+#               No Rust build, so it's fast and gates first.
+#   test-py   → `maturin develop` builds the extension, then pytest runs the
+#               golden-file integration suite against the real binding.
+#
+# **why?**
+# dbt-core has no `cargo xtask`, so these reproduce the upstream Fusion
+# `cargo xtask check-py` / `test-py` steps directly. Without this, a compile
+# break in the binding (e.g. an extern-crate rename drift on Copybara sync)
+# is only caught at release time by `release-v2.yml`'s wheel build — never on
+# the PR that introduced it.
+#
+# **when?**
+# On PRs that touch the dbt-python crate, and on manual dispatch. Note the
+# binding compiles the whole workspace, so a break in an upstream crate it
+# depends on won't trip this filter — that class of failure is still caught by
+# the release wheel build (and can be run here via workflow_dispatch).
+#
+# **protoc gotcha**
+# `maturin develop` compiles the full dependency tree, including `dbt-state`
+# whose build script runs `protoc`. Unlike the containerized release jobs,
+# test-py runs on bare runners (it needs `actions/setup-python` per matrix
+# version), which don't ship protoc — so we install pinned protoc 29.4 the
+# same way `release-v2.yml` does.
+
+name: Test dbt-python
+
+on:
+  pull_request:
+    paths:
+      - "crates/dbt-python/**"
+      - ".github/workflows/test-dbt-python.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: test-dbt-python-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  # ------------------------------------------------------------------
+  # ruff + mypy over the pure-Python sources. The compiled extension is
+  # not needed: mypy treats `dbt._core` as ignore_missing_imports (see
+  # pyproject.toml), so this job skips the Rust build entirely.
+  # 3.10 is both our minimum supported version and mypy's floor.
+  # ------------------------------------------------------------------
+  check-py:
+    name: check-py (ruff + mypy)
+    runs-on: ${{ vars.UBUNTU_LATEST }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Install lint tools
+        working-directory: crates/dbt-python
+        run: python -m pip install --upgrade "ruff>=0.6" "mypy>=1.11"
+
+      - name: ruff
+        working-directory: crates/dbt-python
+        run: ruff check .
+
+      - name: mypy
+        working-directory: crates/dbt-python
+        run: mypy python tests
+
+  # ------------------------------------------------------------------
+  # Build the extension with maturin and run the pytest golden suite.
+  #
+  # The wheel is abi3-py310: the compiled extension is a single artifact,
+  # byte-identical regardless of which CPython loads it, so the Rust/PyO3/FFI
+  # layer is not Python-version-sensitive. That makes a full version matrix
+  # mostly wasted. Instead we test the abi3 floor (3.10) on every platform —
+  # each has a distinct .so/.dylib/.pyd and its own maturin/protoc behavior,
+  # which is where real bugs hide. The pure-Python shim's floor is already
+  # enforced by ruff+mypy in check-py. requires_warehouse tests are deselected
+  # by pyproject addopts (hermetic).
+  # ------------------------------------------------------------------
+  test-py:
+    name: test-py (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.runner }}
+    env:
+      CARGO_INCREMENTAL: 0
+      RUST_BACKTRACE: 1
+      RUSTC_WRAPPER: sccache
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # `venv` is the venv's executables dir — bin/ on POSIX, Scripts/ on
+          # Windows — so the maturin/pytest steps below stay OS-agnostic.
+          - os: linux
+            runner: ${{ vars.UBUNTU_LATEST }}
+            python-version: "3.10"
+            venv: .venv/bin
+          - os: macos
+            runner: ${{ vars.MACOS_RUNNER }}
+            python-version: "3.10"
+            venv: .venv/bin
+          - os: windows
+            runner: ${{ vars.WINDOWS_RUNNER_32 }}
+            python-version: "3.10"
+            venv: .venv/Scripts
+    steps:
+      # Windows: disable CRLF conversion (corrupts fixtures / trips Cargo.lock
+      # hash checks) and enable long paths (Rust target dirs blow past MAX_PATH).
+      - name: Fixup Git (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --system core.longpaths true
+
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          key: dbt-python-${{ matrix.os }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+
+      # dbt-state's build script needs protoc; bare runners don't ship it.
+      - name: Install Protocol Buffer Compiler (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          if command -v protoc &> /dev/null; then
+            echo "protoc already installed: $(protoc --version)"
+            echo "PROTOC_INCLUDE=$(dirname "$(dirname "$(command -v protoc)")")/include" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          PB_VERSION="29.4"
+          case "$(uname -m)" in
+            x86_64) PB_ARCH="x86_64" ;;
+            aarch64|arm64) PB_ARCH="aarch_64" ;;
+            *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
+          curl -LsSf "$PB_URL" -o /tmp/protoc.zip
+          rm -rf /tmp/protoc
+          unzip -o /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
+          # prost-build reads PROTOC_INCLUDE and passes it as -I so bundled
+          # well-known types (google/protobuf/*.proto) resolve.
+          echo "PROTOC_INCLUDE=/tmp/protoc/include" >> "$GITHUB_ENV"
+          /tmp/protoc/bin/protoc --version
+          rm /tmp/protoc.zip
+
+      - name: Install Protocol Buffer Compiler (macOS)
+        if: ${{ runner.os == 'macOS' }}
+        run: |
+          if command -v protoc &> /dev/null; then
+            echo "protoc already installed: $(protoc --version)"
+            echo "PROTOC_INCLUDE=$(dirname "$(dirname "$(command -v protoc)")")/include" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          PB_VERSION="29.4"
+          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-osx-universal_binary.zip"
+          curl -LsSf "$PB_URL" -o /tmp/protoc.zip
+          rm -rf /tmp/protoc
+          unzip -o /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
+          echo "PROTOC_INCLUDE=/tmp/protoc/include" >> "$GITHUB_ENV"
+          /tmp/protoc/bin/protoc --version
+          rm /tmp/protoc.zip
+
+      # pwsh, not bash: Git Bash on the Windows runner has no `unzip`, so we use
+      # Expand-Archive (mirrors release-v2.yml's Windows protoc step).
+      - name: Install Protocol Buffer Compiler (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          if (Get-Command protoc -ErrorAction SilentlyContinue) {
+            Write-Host "protoc already installed: $(protoc --version)"
+            exit 0
+          }
+          $PB_VERSION = "29.4"
+          $PB_URL = "https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-win64.zip"
+          $extractPath = "$env:TEMP\protoc"
+          Invoke-WebRequest -OutFile "$env:TEMP\protoc.zip" $PB_URL
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath $extractPath -Force
+          echo "$extractPath\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "PROTOC_INCLUDE=$extractPath\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & "$extractPath\bin\protoc.exe" --version
+
+      - name: Create venv and install maturin + pytest
+        working-directory: crates/dbt-python
+        run: |
+          python -m venv .venv
+          ${{ matrix.venv }}/python -m pip install --upgrade pip "maturin>=1.0,<2.0" "pytest>=8"
+
+      # No --locked: a pull_request build compiles the PR head merged into a
+      # moving main, so a committed Cargo.lock routinely goes stale on merge.
+      # This is a test job, not a reproducible release build (release-v2.yml
+      # keeps --locked because it checks out a pinned ref), so let cargo
+      # reconcile the lock rather than fail the run on dependency bookkeeping.
+      - name: Build extension (maturin develop)
+        working-directory: crates/dbt-python
+        run: ${{ matrix.venv }}/maturin develop
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true
+
+      - name: pytest
+        working-directory: crates/dbt-python
+        run: ${{ matrix.venv }}/pytest
