@@ -46,7 +46,13 @@ from dbt.clients.jinja import (
 from dbt.clients.jinja_static import statically_parse_unrendered_config
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
-from dbt.context.base import Var, _get_env_var, contextmember, contextproperty
+from dbt.context.base import (
+    BaseContext,
+    Var,
+    _get_env_var,
+    contextmember,
+    contextproperty,
+)
 from dbt.context.configured import FQNLookup
 from dbt.context.context_config import ContextConfig
 from dbt.context.exceptions_jinja import wrapped_exports
@@ -929,7 +935,7 @@ class RuntimeMetricResolver(BaseMetricResolver):
 class ModelConfiguredVar(Var):
     def __init__(
         self,
-        context: Dict[str, Any],
+        context: BaseContext,
         config: RuntimeConfig,
         node: Resource,
     ) -> None:
@@ -975,7 +981,7 @@ class RuntimeVar(ModelConfiguredVar):
 class UnitTestVar(RuntimeVar):
     def __init__(
         self,
-        context: Dict[str, Any],
+        context: BaseContext,
         config: RuntimeConfig,
         node: Resource,
     ) -> None:
@@ -1554,7 +1560,7 @@ class ProviderContext(ManifestContext):
     @contextproperty()
     def var(self) -> ModelConfiguredVar:
         return self.provider.Var(
-            context=self._ctx,
+            context=self,
             config=self.config,
             node=self.model,
         )
