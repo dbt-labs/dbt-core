@@ -11,6 +11,7 @@ from typing import (
     Dict,
     FrozenSet,
     Generic,
+    Iterator,
     List,
     Mapping,
     MutableMapping,
@@ -938,6 +939,42 @@ NodeClassT = TypeVar("NodeClassT", bound="BaseNode")
 ResourceClassT = TypeVar("ResourceClassT", bound="BaseResource")
 
 
+class FlatGraphMapping(Mapping[str, Dict]):
+    """Provides a no-copy view of one of the node dictionaries that make up the
+    'flat_graph' data structure, with values converted to dictionaries on demand."""
+
+    def __init__(self, inner_dict: Mapping[str, BaseNode]) -> None:
+        self.inner_dict = inner_dict
+
+    def __getitem__(self, key: str) -> Dict:
+        return self.inner_dict.__getitem__(key).to_dict(omit_none=False)
+
+    def __len__(self) -> int:
+        return len(self.inner_dict)
+
+    def __iter__(self) -> Iterator[str]:
+        return self.inner_dict.__iter__()
+
+
+class ResourceMapping(Mapping[str, ResourceClassT]):
+    """Provides a no-copy view over a node dictionary, converting each node to
+    its resource representation on demand."""
+
+    def __init__(self, node_mapping: Mapping[str, BaseNode]) -> None:
+        self.node_mapping = node_mapping
+
+    def __getitem__(self, node_id: str) -> ResourceClassT:
+        # to_resource() is typed as returning the base resource; each node
+        # returns its own concrete resource type at runtime.
+        return self.node_mapping[node_id].to_resource()  # type: ignore[return-value]
+
+    def __len__(self) -> int:
+        return self.node_mapping.__len__()
+
+    def __iter__(self) -> Iterator[str]:
+        return self.node_mapping.__iter__()
+
+
 @dataclass
 class Manifest(MacroMethods, dbtClassMixin):
     """The manifest for the full graph, after parsing and during compilation."""
@@ -956,7 +993,9 @@ class Manifest(MacroMethods, dbtClassMixin):
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
     files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
-    flat_graph: Dict[str, Any] = field(default_factory=dict)
+    flat_graph: Dict[str, Any] = field(
+        default_factory=dict, metadata={"serialize": lambda x: None, "deserialize": lambda x: {}}
+    )
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
@@ -1025,6 +1064,9 @@ class Manifest(MacroMethods, dbtClassMixin):
     @classmethod
     def __post_deserialize__(cls, obj: "Manifest") -> "Manifest":
         obj._lock = get_mp_context().Lock()
+        # flat_graph is not serialized (see the field metadata above), so rebuild
+        # its no-copy views here after deserialization.
+        obj.build_flat_graph()
         return obj
 
     def build_flat_graph(self) -> None:
@@ -1034,19 +1076,15 @@ class Manifest(MacroMethods, dbtClassMixin):
         manifest!
         """
         self.flat_graph = {
-            "exposures": {k: v.to_dict(omit_none=False) for k, v in self.exposures.items()},
-            "functions": {k: v.to_dict(omit_none=False) for k, v in self.functions.items()},
-            "groups": {k: v.to_dict(omit_none=False) for k, v in self.groups.items()},
-            "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
-            "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
-            "sources": {k: v.to_dict(omit_none=False) for k, v in self.sources.items()},
-            "semantic_models": {
-                k: v.to_dict(omit_none=False) for k, v in self.semantic_models.items()
-            },
-            "saved_queries": {
-                k: v.to_dict(omit_none=False) for k, v in self.saved_queries.items()
-            },
-            "unit_tests": {k: v.to_dict(omit_none=False) for k, v in self.unit_tests.items()},
+            "exposures": FlatGraphMapping(self.exposures),
+            "functions": FlatGraphMapping(self.functions),
+            "groups": FlatGraphMapping(self.groups),
+            "metrics": FlatGraphMapping(self.metrics),
+            "nodes": FlatGraphMapping(self.nodes),
+            "sources": FlatGraphMapping(self.sources),
+            "semantic_models": FlatGraphMapping(self.semantic_models),
+            "saved_queries": FlatGraphMapping(self.saved_queries),
+            "unit_tests": FlatGraphMapping(self.unit_tests),
         }
 
     def build_disabled_by_file_id(self) -> Dict[str, GraphMemberNode]:
@@ -1302,23 +1340,23 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.fill_tracking_metadata()
 
         return WritableManifest(
-            nodes=self._map_nodes_to_map_resources(self.nodes),
-            sources=self._map_nodes_to_map_resources(self.sources),
-            macros=self._map_nodes_to_map_resources(self.macros),
-            docs=self._map_nodes_to_map_resources(self.docs),
-            exposures=self._map_nodes_to_map_resources(self.exposures),
-            functions=self._map_nodes_to_map_resources(self.functions),
-            metrics=self._map_nodes_to_map_resources(self.metrics),
-            groups=self._map_nodes_to_map_resources(self.groups),
+            nodes=ResourceMapping(self.nodes),
+            sources=ResourceMapping(self.sources),
+            macros=ResourceMapping(self.macros),
+            docs=ResourceMapping(self.docs),
+            exposures=ResourceMapping(self.exposures),
+            functions=ResourceMapping(self.functions),
+            metrics=ResourceMapping(self.metrics),
+            groups=ResourceMapping(self.groups),
             selectors=self.selectors,
             metadata=self.metadata,
             disabled=self._map_list_nodes_to_map_list_resources(self.disabled),
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
-            semantic_models=self._map_nodes_to_map_resources(self.semantic_models),
-            unit_tests=self._map_nodes_to_map_resources(self.unit_tests),
-            saved_queries=self._map_nodes_to_map_resources(self.saved_queries),
+            semantic_models=ResourceMapping(self.semantic_models),
+            unit_tests=ResourceMapping(self.unit_tests),
+            saved_queries=ResourceMapping(self.saved_queries),
         )
 
     def write(self, path: str) -> None:

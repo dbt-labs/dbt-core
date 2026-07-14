@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Reduce parse-time memory and macro-generation overhead by virtualizing macros and switching flat_graph/WritableManifest to lazy no-copy views
+time: 2026-07-13T20:56:28.287883+05:30
+custom:
+    Author: peterallenwebb ash2shukla
+    Issue: '15524'

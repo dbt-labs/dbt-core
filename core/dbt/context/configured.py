@@ -2,7 +2,13 @@ from typing import Any, Dict, Optional
 
 from dbt.adapters.contracts.connection import AdapterRequiredConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
-from dbt.context.base import Var, _get_env_var, contextmember, contextproperty
+from dbt.context.base import (
+    BaseContext,
+    Var,
+    _get_env_var,
+    contextmember,
+    contextproperty,
+)
 from dbt.context.target import TargetContext
 from dbt.exceptions import EnvVarMissingError, SecretEnvVarLocationError
 from dbt.node_types import NodeType
@@ -34,10 +40,10 @@ class FQNLookup:
 class ConfiguredVar(Var):
     def __init__(
         self,
-        context: Dict[str, Any],
+        context: BaseContext,
         config: AdapterRequiredConfig,
         project_name: str,
-    ):
+    ) -> None:
         super().__init__(context, config.cli_vars)
         self._config = config
         self._project_name = project_name
@@ -82,7 +88,7 @@ class SchemaYamlContext(ConfiguredContext):
 
     @contextproperty()
     def var(self) -> ConfiguredVar:
-        return ConfiguredVar(self._ctx, self.config, self._project_name)
+        return ConfiguredVar(self, self.config, self._project_name)
 
     @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
@@ -115,7 +121,7 @@ class MacroResolvingContext(ConfiguredContext):
 
     @contextproperty()
     def var(self) -> ConfiguredVar:
-        return ConfiguredVar(self._ctx, self.config, self.config.project_name)
+        return ConfiguredVar(self, self.config, self.config.project_name)
 
 
 def generate_schema_yml_context(
