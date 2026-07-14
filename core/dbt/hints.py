@@ -22,7 +22,7 @@ HINT_TS_FILENAME = "hint_ts.json"
 
 # Hint message text shown to the user. Keep these actionable and point at docs.
 REUSE_RELATIONS_ON_TOO_MANY_MODELS = (
-    "You're rebuilding a lot from scratch. You can use state to save time and money by reusing or skipping existing objects: "
+    "You're rebuilding a lot from scratch. You can use state to skip models that haven't changed: "
     "https://docs.getdbt.com/docs/optimize-builds?utm_source=dbt-cli"
 )
 
