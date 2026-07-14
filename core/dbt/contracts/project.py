@@ -342,6 +342,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
+    hints_enabled: Optional[bool] = None
     indirect_selection: Optional[str] = None
     log_format: Optional[str] = None
     log_format_file: Optional[str] = None

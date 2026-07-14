@@ -306,6 +306,13 @@ full_refresh = _create_option_and_track_env_var(
     is_flag=True,
 )
 
+hints_enabled = _create_option_and_track_env_var(
+    "--hints-enabled/--no-hints-enabled",
+    envvar="DBT_ENGINE_HINTS_ENABLED",
+    help="If set, dbt will surface occasional hints suggesting ways to speed up or improve your project.",
+    default=True,
+)
+
 host = _create_option_and_track_env_var(
     "--host",
     envvar="DBT_HOST",

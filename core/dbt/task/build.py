@@ -1,13 +1,14 @@
-from typing import Dict, Iterable, List, Optional, Set, Type
+from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Type
 
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.artifacts.resources import Catalog
-from dbt.artifacts.schemas.results import NodeResult, NodeStatus
+from dbt.artifacts.schemas.results import NodeResult, NodeStatus, RunStatus
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtInternalError
 from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
+from dbt.hints import HintType, show_hint
 from dbt.node_types import NodeType
 from dbt.runners import ExposureRunner as exposure_runner
 from dbt.runners import SavedQueryRunner as saved_query_runner
@@ -48,6 +49,7 @@ class BuildTask(RunTask):
         NodeType.Function: function_runner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
+    REUSE_RELATIONS_HINT_MODEL_THRESHOLD = 100
 
     def __init__(
         self,
@@ -59,6 +61,23 @@ class BuildTask(RunTask):
         super().__init__(args, config, manifest, catalogs=catalogs)
         self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
+
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
+        self._maybe_show_reuse_relations_hint()
+        return super().before_run(adapter, selected_uids)
+
+    def _maybe_show_reuse_relations_hint(self) -> None:
+        # This hint nudges users building a lot *from scratch*. If they've already
+        # opted into state/deferral (--state / --defer / --defer-state), they're
+        # not building from scratch, so stay quiet.
+        if self.args.state or self.args.defer or self.args.defer_state:
+            return
+
+        model_count = sum(
+            1 for node in (self._flattened_nodes or []) if node.resource_type == NodeType.Model
+        )
+        if model_count > self.REUSE_RELATIONS_HINT_MODEL_THRESHOLD:
+            show_hint(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
 
     def resource_types(self, no_unit_tests: bool = False) -> List[NodeType]:
         resource_types = resource_types_from_args(
