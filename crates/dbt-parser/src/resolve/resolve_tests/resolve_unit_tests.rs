@@ -288,9 +288,11 @@ pub fn resolve_unit_tests(
                 compute: properties_config.compute,
                 columns: vec![],
                 metrics: vec![],
-                // TODO: populate unrendered_config for unit tests. dbt-core never does this
-                // (unit_tests.py has no reference to unrendered_config), so empty matches
-                // Core parity today, but it is an omission there too.
+                // In future: populate unrendered_config for unit tests -- after dbt-core starts
+                // comparing unit-test config.
+                // For now, it is intentionally left empty to match dbt-core's current behavior:
+                // unit_tests.py never populates it, unit tests are compared Structurally/by
+                // checksum, and check_configs_modified treats NodeType::UnitTest as a non-trigger.
                 unrendered_config: Default::default(),
             },
             __unit_test_attr__: DbtUnitTestAttr {

@@ -20,9 +20,7 @@ use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serializ
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{grants_equal, tags_eq_vec};
-use crate::schemas::project::{
-    WarehouseSpecificNodeConfig, same_warehouse_config, same_warehouse_config_with_unrendered,
-};
+use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
@@ -1931,6 +1929,8 @@ impl InternalDbtNode for DbtUnitTest {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
+    // Retained only for the `InternalDbtNode` trait; no longer consulted for state:modified
+    // selection, since config is a non-trigger for unit tests (see `check_configs_modified`).
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
             let self_config = &self.deprecated_config;
@@ -1947,14 +1947,8 @@ impl InternalDbtNode for DbtUnitTest {
                     (None, Some(v)) | (Some(v), None) => **v == default_sa,
                     (Some(a), Some(b)) => a == b,
                 };
-            let warehouse_config_eq = same_warehouse_config_with_unrendered(
-                &self_config.__warehouse_specific_config__,
-                &other_config.__warehouse_specific_config__,
-                &self.__base_attr__.unrendered_config,
-                &other.__base_attr__.unrendered_config,
-            );
 
-            let result = enabled_eq && static_analysis_eq && warehouse_config_eq;
+            let result = enabled_eq && static_analysis_eq;
 
             if !result {
                 log_state_mod_diff(
@@ -1977,7 +1971,6 @@ impl InternalDbtNode for DbtUnitTest {
                                 format!("{:?}", &other_config.static_analysis),
                             )),
                         ),
-                        ("warehouse_config", warehouse_config_eq, None),
                     ],
                 );
             }
@@ -1991,8 +1984,10 @@ impl InternalDbtNode for DbtUnitTest {
     fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_unit_test) = other.as_any().downcast_ref::<DbtUnitTest>() {
             let same_fqn_result = self.common().fqn == other_unit_test.common().fqn;
+            // TODO: replace the dummy implementation of same_unit_test_definition with a real comparison
+            let same_definition_result = same_unit_test_definition(self, other_unit_test);
 
-            let result = same_fqn_result;
+            let result = same_fqn_result && same_definition_result;
 
             if !result {
                 log_state_mod_diff(
@@ -2017,6 +2012,18 @@ impl InternalDbtNode for DbtUnitTest {
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtUnitTest does not support setting detected_unsafe");
     }
+}
+
+fn same_unit_test_definition(_self_ut: &DbtUnitTest, _other_ut: &DbtUnitTest) -> bool {
+    // This dummy implementation makes explicit Fusion's current unit-test content under-selection:
+    true
+    // TODO: Implement parity with dbt-core's flagging a unit test on a checksum over
+    // model/versions/given/expect/overrides (+ fixture rows) — build_unit_test_checksum,
+    // dbt-mantle core/dbt/contracts/graph/nodes.py:1226.
+    // HAZARD when fixing: do NOT naively compare `checksum`. dbt-core manifests carry a real
+    // unit-test checksum while Fusion emits DbtChecksum::default(); comparing them directly would
+    // over-select every unit test against a dbt-core state manifest. The fix must populate Fusion's
+    // unit-test checksum consistently first, then compare.
 }
 
 impl InternalDbtNodeAttributes for DbtUnitTest {

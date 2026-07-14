@@ -562,50 +562,75 @@ impl StateArtifacts {
         };
 
         let rt = current_node.resource_type(); // also the type of previous_node
-        if matches!(
-            rt,
-            NodeType::Model
-                | NodeType::Source
-                | NodeType::Seed
-                | NodeType::Snapshot
-                | NodeType::Test
-        ) {
-            // Approach A — full `unrendered_config`  comparison (models, sources, seeds, snapshots,
+
+        match rt {
+            // Unit tests are Structural/checksum, not a config-comparison type: dbt-core's
+            // UnitTestDefinition extends GraphNode (no same_config/same_body) and its same_contents
+            // is a checksum over model/given/expect/overrides only (dbt-mantle
+            // core/dbt/contracts/graph/nodes.py:1237). Config is never a state:modified trigger for
+            // unit tests, so return "not config-modified" and never consult has_same_config. (A
+            // *new* unit test is still selected via node presence / check_modified_content, not
+            // config.)
+            NodeType::UnitTest => false,
+
+            // Approach A — full `unrendered_config` comparison (models, sources, seeds, snapshots,
             // and data tests).
             //
             // For these node types, `unrendered_config` is populated with every authored key, so
             // comparing the raw Jinja strings is an authoritative authoring-intent check: identical
             // strings across targets means the author changed nothing, even if the rendered values
             // differ per target (e.g. `"{{ 'table' if target.name == 'prod' else 'view' }}"`).
-            //
-            // Stage 1: if every `unrendered_config` key that is relevant for the node type (see
-            // `UnrenderedKeyRelevance`) is equal, the node is not config-modified — return early
-            // without touching rendered values.
-            if unrendered_configs_eq(
-                rt,
-                &previous_node.base().unrendered_config,
-                &current_node.base().unrendered_config,
-                &current_node.common().unique_id,
-            ) {
-                return false;
+            NodeType::Model
+            | NodeType::Source
+            | NodeType::Seed
+            | NodeType::Snapshot
+            | NodeType::Test => {
+                // Stage 1: if every `unrendered_config` key that is relevant for the node type (see
+                // `UnrenderedKeyRelevance`) is equal, the node is not config-modified — return early
+                // without touching rendered values.
+                if unrendered_configs_eq(
+                    rt,
+                    &previous_node.base().unrendered_config,
+                    &current_node.base().unrendered_config,
+                    &current_node.common().unique_id,
+                ) {
+                    return false;
+                }
+                // Stage 2: if Stage 1 finds a difference, fall through to `has_same_config`
+                // (rendered comparison). This preserves backward-compatibility when the state
+                // manifest was produced by Mantle or an older Fusion with a sparse
+                // `unrendered_config`: Stage 1 would see keys only on the current side and report
+                // a spurious diff; Stage 2 resolves it via rendered values, matching the
+                // pre-existing behavior.
+                !current_node.has_same_config(previous_node, adapter_type)
             }
-            // Stage 2: if Stage 1 finds a difference, fall through to `has_same_config` (rendered
-            // comparison). This preserves backward-compatibility when the state manifest was
-            // produced by Mantle or an older Fusion with a sparse `unrendered_config`: Stage 1
-            // would see keys only on the current side and report a spurious diff; Stage 2 resolves
-            // it via rendered values, matching the pre-existing behavior.
-            return !current_node.has_same_config(previous_node, adapter_type);
-        }
 
-        // Approach B — surgical per-key unrendered comparisons (remaining node kinds: unit
-        // tests, exposures, functions, analyses, groups).
-        //
-        // For these node types, `unrendered_config` may be incomplete, so the full-`unrendered_config` shortcut
-        // above is unsound. Instead, each node type's `has_same_config` implementation contains
-        // targeted unrendered comparisons for the specific keys where env-aware Jinja is known to
-        // appear. A new false positive for those types requires a new per-key fix; the wholesale
-        // approach cannot yet be applied to them.
-        !current_node.has_same_config(previous_node, adapter_type)
+            // Approach B — surgical per-key unrendered comparisons (remaining node kinds:
+            // exposures, functions, analyses, macros, semantic models, metrics, and saved
+            // queries).
+            //
+            // For these node types, `unrendered_config` may be incomplete, so the full-
+            // `unrendered_config` shortcut above is unsound. Instead, each node type's
+            // `has_same_config` implementation contains targeted unrendered comparisons for the
+            // specific keys where env-aware Jinja is known to appear. A new false positive for
+            // those types requires a new per-key fix; the wholesale approach cannot yet be applied
+            // to them.
+            NodeType::Exposure
+            | NodeType::Function
+            | NodeType::Analysis
+            | NodeType::Macro
+            | NodeType::SemanticModel
+            | NodeType::Metric
+            | NodeType::SavedQuery => !current_node.has_same_config(previous_node, adapter_type),
+
+            // Never returned by any `InternalDbtNode::resource_type()` impl (see nodes.rs) —
+            // `DocsMacro`/`Operation` describe non-node telemetry concepts and `Unspecified` is a
+            // protobuf default. Listed only for match exhaustiveness; treated like Approach B if
+            // ever reached.
+            NodeType::DocsMacro | NodeType::Operation | NodeType::Unspecified => {
+                !current_node.has_same_config(previous_node, adapter_type)
+            }
+        }
     }
 
     fn check_relation_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
