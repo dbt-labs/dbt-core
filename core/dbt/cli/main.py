@@ -118,6 +118,7 @@ def global_flags(func):
     @p.deprecated_state
     @p.fail_fast
     @p.favor_state
+    @p.hints_enabled
     @p.indirect_selection
     @p.log_cache_events
     @p.log_file_max_bytes
