@@ -885,3 +885,65 @@ jobs:
     permissions:
       contents: read
     secrets: inherit
+
+  # ------------------------------------------------------------------
+  # Announce a successful release to #core-releases. Skipped on dry
+  # runs — those are build-only checks, not real releases. Posted
+  # directly (not via dbt-release's slack-post-notification.yml)
+  # because that reusable workflow's message format is generic
+  # (repo/branch/commit only) and can't carry the version or release
+  # URL — the whole point of this notification.
+  # ------------------------------------------------------------------
+  slack-notification:
+    name: Slack Notification
+    if: ${{ success() && !inputs.dry_run }}
+    needs:
+      [
+        prepare-release,
+        build,
+        test,
+        pack,
+        tag,
+        publish-pypi,
+        github-release,
+        publish-homebrew,
+        publish-winget,
+        changelog-backport,
+      ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Post release announcement to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_CORE_RELEASES }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare-release.outputs.tag }}
+        run: |
+          text=":tada: *dbt Core v${VERSION}* has been released! <${RELEASE_URL}|View Release>"
+          payload="$(jq -n --arg text "$text" '{text: $text}')"
+          curl -sf -X POST -H "Content-Type: application/json" -d "$payload" "$SLACK_WEBHOOK_URL"
+
+  # Notify #dev-core-alerts if any release job failed. Skipped on dry
+  # runs — those are build-only checks, not real releases.
+  slack-failure-notification:
+    name: Slack Failure Notification
+    if: ${{ failure() && !inputs.dry_run }}
+    needs:
+      [
+        prepare-release,
+        build,
+        test,
+        pack,
+        tag,
+        publish-pypi,
+        github-release,
+        publish-homebrew,
+        publish-winget,
+        changelog-backport,
+      ]
+    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
+    with:
+      status: "failure"
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
