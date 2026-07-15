@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix macro namespace resolution so a dbt project named after a macro no longer crashes with 'MacroGenerator' during dispatch
+time: 2026-07-15T11:37:46.319428+05:30
+custom:
+    Author: ash2shukla
+    Issue: "15556"
