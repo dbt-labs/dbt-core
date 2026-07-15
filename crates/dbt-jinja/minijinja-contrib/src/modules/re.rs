@@ -1332,155 +1332,83 @@ mod tests {
         assert_eq!(result, "a,b");
     }
 
-    #[test]
-    fn test_re_findall_flags_kwarg() {
+    fn run_re_template(template: &str) -> String {
         use minijinja::Environment;
         let mut env = Environment::new();
         env.add_global("re", Value::from(create_re_namespace()));
+        env.render_str(template, (), &[]).unwrap()
+    }
 
+    #[test]
+    fn test_re_findall_flags_kwarg() {
         // Without IGNORECASE: only lowercase matches
-        let result = env
-            .render_str(
-                r#"{{ re.findall('[a-z]+', 'Hello World')|length }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(r#"{{ re.findall('[a-z]+', 'Hello World')|length }}"#);
         assert_eq!(result, "2"); // "ello", "orld"
 
         // With IGNORECASE via kwarg: matches full words
-        let result = env
-            .render_str(
-                r#"{{ re.findall('[a-z]+', 'Hello World', flags=re.IGNORECASE)|join(',') }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(
+            r#"{{ re.findall('[a-z]+', 'Hello World', flags=re.IGNORECASE)|join(',') }}"#,
+        );
         assert_eq!(result, "Hello,World");
     }
 
     #[test]
     fn test_re_findall_dotall_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
         // The actual bug from #15508: DOTALL via kwarg for multi-line matching
-        let result = env
-            .render_str(
-                r#"{{ re.findall('begin(.*)end', 'begin\nfoo\nend', flags=re.DOTALL)|length }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(
+            r#"{{ re.findall('begin(.*)end', 'begin\nfoo\nend', flags=re.DOTALL)|length }}"#,
+        );
         assert_eq!(result, "1");
     }
 
     #[test]
     fn test_re_sub_count_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
-        let result = env
-            .render_str(r#"{{ re.sub('a', 'b', 'aaa', count=1) }}"#, (), &[])
-            .unwrap();
+        let result = run_re_template(r#"{{ re.sub('a', 'b', 'aaa', count=1) }}"#);
         assert_eq!(result, "baa");
     }
 
     #[test]
     fn test_re_split_maxsplit_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
-        let result = env
-            .render_str(
-                r#"{{ re.split(':', 'a:b:c', maxsplit=1)|join(',') }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(r#"{{ re.split(':', 'a:b:c', maxsplit=1)|join(',') }}"#);
         assert_eq!(result, "a,b:c");
     }
 
     #[test]
     fn test_re_compile_flags_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
-        let result = env
-            .render_str(
-                r#"{% set p = re.compile('[a-z]+', flags=re.IGNORECASE) %}{{ p.findall('Hello')|join(',') }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(
+            r#"{% set p = re.compile('[a-z]+', flags=re.IGNORECASE) %}{{ p.findall('Hello')|join(',') }}"#,
+        );
         assert_eq!(result, "Hello");
     }
 
     #[test]
     fn test_re_search_flags_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
-        let result = env
-            .render_str(
-                r#"{% set m = re.search('[a-z]+', 'HELLO', flags=re.IGNORECASE) %}{{ m.group(0) }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(
+            r#"{% set m = re.search('[a-z]+', 'HELLO', flags=re.IGNORECASE) %}{{ m.group(0) }}"#,
+        );
         assert_eq!(result, "HELLO");
     }
 
     #[test]
     fn test_re_match_flags_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
-        let result = env
-            .render_str(
-                r#"{% set m = re.match('[a-z]+', 'HELLO', flags=re.IGNORECASE) %}{{ m.group(0) }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(
+            r#"{% set m = re.match('[a-z]+', 'HELLO', flags=re.IGNORECASE) %}{{ m.group(0) }}"#,
+        );
         assert_eq!(result, "HELLO");
     }
 
     #[test]
     fn test_pattern_split_maxsplit_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
-        let result = env
-            .render_str(
-                r#"{% set p = re.compile(':') %}{{ p.split('a:b:c', maxsplit=1)|join(',') }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result = run_re_template(
+            r#"{% set p = re.compile(':') %}{{ p.split('a:b:c', maxsplit=1)|join(',') }}"#,
+        );
         assert_eq!(result, "a,b:c");
     }
 
     #[test]
     fn test_pattern_sub_count_kwarg() {
-        use minijinja::Environment;
-        let mut env = Environment::new();
-        env.add_global("re", Value::from(create_re_namespace()));
-
-        let result = env
-            .render_str(
-                r#"{% set p = re.compile('a') %}{{ p.sub('b', 'aaa', count=1) }}"#,
-                (),
-                &[],
-            )
-            .unwrap();
+        let result =
+            run_re_template(r#"{% set p = re.compile('a') %}{{ p.sub('b', 'aaa', count=1) }}"#);
         assert_eq!(result, "baa");
     }
 }
