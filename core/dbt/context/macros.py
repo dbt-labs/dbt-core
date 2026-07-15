@@ -36,8 +36,17 @@ class MacroNamespace(ChainMap):
     def get_from_package(self, package_name: Optional[str], name: str) -> Optional[MacroGenerator]:
         if package_name is None:
             return self.get(name)
-        elif package_name in self:
-            return self[package_name].get(name)
+
+        # A package name can collide with a macro name (e.g. a project named
+        # after a macro). Resolve the package to its sub-namespace directly,
+        # skipping any flat macro of the same name, rather than relying on
+        # __getitem__ resolution order (which would return a MacroGenerator for
+        # the colliding macro and blow up on `.get`).
+        for mapping in self.maps:
+            member = mapping.get(package_name)
+            if isinstance(member, MutableMapping):
+                sub_namespace = MacroNamespace(self.ctx, self.node, self.thread_ctx, [member])
+                return sub_namespace.get(name)
 
         raise PackageNotFoundForMacroError(package_name)
 

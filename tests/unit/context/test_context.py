@@ -18,6 +18,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestNode,
     UnitTestOverrides,
 )
+from dbt.exceptions import PackageNotFoundForMacroError
 from dbt.node_types import NodeType
 from dbt_common.events.functions import reset_metadata_vars
 from tests.unit.mock_adapter import adapter_factory
@@ -529,6 +530,39 @@ def test_macro_namespace(config_postgres, manifest_fx):
         assert result["dbt"]["some_macro"].macro is pg_macro
         assert result["root"]["some_macro"].macro is package_macro
         assert result["some_macro"].macro is package_macro
+
+
+def test_macro_namespace_package_name_collides_with_macro(config_postgres, manifest_fx):
+    # A dbt project can legitimately share its name with a macro. Package
+    # resolution must not return the colliding macro (a MacroGenerator), which
+    # would raise `AttributeError: 'MacroGenerator' object has no attribute 'get'`.
+    # Regression test for the macro-namespace collision surfaced by the
+    # get_catalog_for_single_relation test (project named after the macro).
+    mn = macros.MacroNamespaceBuilder("shared_name", "dbt", MacroStack(), ["dbt_postgres", "dbt"])
+
+    mbp = manifest_fx.get_macros_by_package()
+    # a global macro whose name collides with a project (package) name, plus a
+    # macro that is *only* a macro (no package of the same name)
+    mbp["dbt"] = {
+        "shared_name": mock_macro("shared_name", "dbt"),
+        "only_a_macro": mock_macro("only_a_macro", "dbt"),
+    }
+    # a project named "shared_name" that provides a macro
+    project_macro = mock_macro("some_macro", "shared_name")
+    mbp["shared_name"] = {"some_macro": project_macro}
+
+    namespace = mn.build_namespace(mbp, {})
+
+    # resolving the package must return the project's macro, not blow up on the
+    # colliding global macro of the same name
+    resolved = namespace.get_from_package("shared_name", "some_macro")
+    assert resolved is not None
+    assert resolved.macro is project_macro
+
+    # a name that is only a macro (no such package) raises cleanly rather than
+    # dereferencing a MacroGenerator
+    with pytest.raises(PackageNotFoundForMacroError):
+        namespace.get_from_package("only_a_macro", "some_macro")
 
 
 def test_dbt_metadata_envs(
