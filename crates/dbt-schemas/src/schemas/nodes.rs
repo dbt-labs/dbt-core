@@ -2105,69 +2105,14 @@ impl InternalDbtNode for DbtSource {
             let self_config = &self.deprecated_config;
             let other_config = &other_source.deprecated_config;
 
-            // Helper function to compare loaded_at_query where None equals Some("")
-            let loaded_at_eq = |a: &Option<String>, b: &Option<String>| -> bool {
-                match (a, b) {
-                    (None, None) => true,
-                    (None, Some(b_val)) => b_val.is_empty(),
-                    (Some(a_val), None) => a_val.is_empty(),
-                    (Some(a_val), Some(b_val)) => a_val == b_val,
-                }
-            };
             // Compare each field individually
             let enabled_eq = self.__base_attr__.enabled == other_source.__base_attr__.enabled;
 
             let event_time_eq = self_config.event_time == other_config.event_time;
 
-            // Helper function to compare freshness where None equals FreshnessDefinition with empty rules
-            let freshness_eq = {
-                use crate::schemas::common::FreshnessDefinition;
-
-                // Check if a FreshnessDefinition is essentially empty (all fields are None)
-                let is_empty_freshness = |f: &FreshnessDefinition| -> bool {
-                    match (&f.error_after, &f.warn_after, &f.filter) {
-                        (Some(error), Some(warn), None) => {
-                            error.count.is_none()
-                                && error.period.is_none()
-                                && warn.count.is_none()
-                                && warn.period.is_none()
-                        }
-                        (None, None, None) => true,
-                        _ => false,
-                    }
-                };
-
-                match (
-                    &self.__source_attr__.freshness,
-                    &other_source.__source_attr__.freshness,
-                ) {
-                    (None, None) => true,
-                    (None, Some(b_val)) => is_empty_freshness(b_val),
-                    (Some(a_val), None) => is_empty_freshness(a_val),
-                    (Some(a_val), Some(b_val)) => {
-                        let error_after_eq = match (&a_val.error_after, &b_val.error_after) {
-                            (None, None) => true,
-                            (None, Some(b_val)) => b_val.is_empty(),
-                            (Some(a_val), None) => a_val.is_empty(),
-                            (Some(a_val), Some(b_val)) => a_val == b_val,
-                        };
-                        let warn_after_eq = match (&a_val.warn_after, &b_val.warn_after) {
-                            (None, None) => true,
-                            (None, Some(b_val)) => b_val.is_empty(),
-                            (Some(a_val), None) => a_val.is_empty(),
-                            (Some(a_val), Some(b_val)) => a_val == b_val,
-                        };
-                        let filter_eq = match (&a_val.filter, &b_val.filter) {
-                            (None, None) => true,
-                            (None, Some(b_val)) => b_val.is_empty(),
-                            (Some(a_val), None) => a_val.is_empty(),
-                            (Some(a_val), Some(b_val)) => a_val == b_val,
-                        };
-
-                        error_after_eq && warn_after_eq && filter_eq
-                    }
-                }
-            };
+            // Rendered freshness equality (None ≈ empty-FreshnessDefinition). Shared with the
+            // `check_source_freshness_modified` state:modified sub-check via `same_freshness_value`.
+            let freshness_eq = self.same_freshness_value(other_source);
 
             let quoting_eq = quoting_equal(
                 &self.__source_attr__.user_quoting,
@@ -2175,12 +2120,12 @@ impl InternalDbtNode for DbtSource {
                 adapter_type,
             );
 
-            let loaded_at_field_eq = loaded_at_eq(
+            let loaded_at_field_eq = Self::loaded_at_str_eq(
                 &self.__source_attr__.loaded_at_field,
                 &other_source.__source_attr__.loaded_at_field,
             );
 
-            let loaded_at_query_result = loaded_at_eq(
+            let loaded_at_query_result = Self::loaded_at_str_eq(
                 &self.__source_attr__.loaded_at_query,
                 &other_source.__source_attr__.loaded_at_query,
             );
@@ -2286,8 +2231,28 @@ impl InternalDbtNode for DbtSource {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             // Sources have no SQL body. Config is owned by `check_configs_modified` and relation
             // identity by `check_relation_modified`; calling `has_same_config` here would
-            // double-count both. This check is therefore restricted to fields without a dedicated
-            // owner: table identifier (last segment of `relation_name`), fqn, and loader.
+            // double-count both. This check is therefore restricted to fields WITHOUT a dedicated
+            // owner: table identifier (last segment of `relation_name`), fqn, loader, and the
+            // RENDERED `freshness` (+ `loaded_at_field`).
+            //
+            // FRESHNESS is compared here — RENDERED — to mirror dbt-core's
+            // `SourceDefinition.same_freshness` (dbt-mantle `core/dbt/contracts/graph/nodes.py:1444`),
+            // which is a distinct conjunct of `same_contents` alongside `same_config`. #11463 routed
+            // source config through a wholesale UNRENDERED comparison (`check_configs_modified`),
+            // faithful to dbt-core for every key it also compares unrendered via `same_config` — but
+            // freshness is the lone exception dbt-core ALSO compares rendered, so the unrendered-only
+            // path stopped selecting an env-aware `freshness`/`loaded_at_field` that renders
+            // differently per target (a change dbt-core still selects under full `state:modified`).
+            // Comparing it here restores that fidelity while keeping the logic node-local: dbt-core
+            // reaches `same_freshness` only through full `same_contents`, and Fusion reaches
+            // `has_same_content` only through `check_modified_content` (the full-`state:modified`
+            // arm) — never under `state:modified.configs`, which routes to `check_configs_modified`
+            // and keeps freshness compared unrendered there, matching dbt-core's `same_config`.
+            //
+            // (This mirrors a dbt-core inconsistency: #10675 migrated database/schema to unrendered
+            // behind `state_modified_compare_more_unrendered_values`, but the older `same_freshness`
+            // was never gated. If dbt-core gates it on that flag, this comparison could be dropped
+            // and freshness left entirely to the unrendered `check_configs_modified` path.)
             let same_relation_name_result = same_relation_name(
                 &self.__base_attr__.relation_name,
                 &other_source.__base_attr__.relation_name,
@@ -2295,8 +2260,12 @@ impl InternalDbtNode for DbtSource {
             let same_fqn_result = self.__common_attr__.fqn == other_source.__common_attr__.fqn;
             let same_loader_result =
                 self.__source_attr__.loader == other_source.__source_attr__.loader;
+            let same_freshness_result = self.same_rendered_freshness(other_source);
 
-            let result = same_relation_name_result && same_fqn_result && same_loader_result;
+            let result = same_relation_name_result
+                && same_fqn_result
+                && same_loader_result
+                && same_freshness_result;
 
             if !result {
                 log_state_mod_diff(
@@ -2318,6 +2287,22 @@ impl InternalDbtNode for DbtSource {
                             Some((
                                 format!("{:?}", &self.__source_attr__.loader),
                                 format!("{:?}", &other_source.__source_attr__.loader),
+                            )),
+                        ),
+                        (
+                            "same_freshness",
+                            same_freshness_result,
+                            Some((
+                                format!(
+                                    "{:?} / loaded_at_field={:?}",
+                                    &self.__source_attr__.freshness,
+                                    &self.__source_attr__.loaded_at_field
+                                ),
+                                format!(
+                                    "{:?} / loaded_at_field={:?}",
+                                    &other_source.__source_attr__.freshness,
+                                    &other_source.__source_attr__.loaded_at_field
+                                ),
                             )),
                         ),
                     ],
@@ -4950,6 +4935,79 @@ pub struct DbtSourceAttr {
 }
 
 impl DbtSource {
+    /// `None ≈ Some("")` normalized string equality, used for the freshness string attributes
+    /// (`loaded_at_field`, `loaded_at_query`): old manifests may serialize an unset value as
+    /// either `null` or `""`.
+    fn loaded_at_str_eq(a: &Option<String>, b: &Option<String>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (None, Some(v)) | (Some(v), None) => v.is_empty(),
+            (Some(a), Some(b)) => a == b,
+        }
+    }
+
+    /// Rendered equality of the `freshness` attribute alone, treating `None` as equivalent to a
+    /// `FreshnessDefinition` whose rules are all empty (old manifests serialized either form).
+    fn same_freshness_value(&self, other: &DbtSource) -> bool {
+        use crate::schemas::common::FreshnessDefinition;
+
+        // A FreshnessDefinition is "empty" when it carries no rules (all fields None).
+        let is_empty_freshness = |f: &FreshnessDefinition| -> bool {
+            match (&f.error_after, &f.warn_after, &f.filter) {
+                (Some(error), Some(warn), None) => {
+                    error.count.is_none()
+                        && error.period.is_none()
+                        && warn.count.is_none()
+                        && warn.period.is_none()
+                }
+                (None, None, None) => true,
+                _ => false,
+            }
+        };
+
+        match (
+            &self.__source_attr__.freshness,
+            &other.__source_attr__.freshness,
+        ) {
+            (None, None) => true,
+            (None, Some(b_val)) => is_empty_freshness(b_val),
+            (Some(a_val), None) => is_empty_freshness(a_val),
+            (Some(a_val), Some(b_val)) => {
+                let error_after_eq = match (&a_val.error_after, &b_val.error_after) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => v.is_empty(),
+                    (Some(a), Some(b)) => a == b,
+                };
+                let warn_after_eq = match (&a_val.warn_after, &b_val.warn_after) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => v.is_empty(),
+                    (Some(a), Some(b)) => a == b,
+                };
+                let filter_eq = match (&a_val.filter, &b_val.filter) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => v.is_empty(),
+                    (Some(a), Some(b)) => a == b,
+                };
+
+                error_after_eq && warn_after_eq && filter_eq
+            }
+        }
+    }
+
+    /// Rendered `freshness` + `loaded_at_field` equality — mirrors dbt-core's
+    /// `SourceDefinition.same_freshness` (dbt-mantle `core/dbt/contracts/graph/nodes.py:1444`:
+    /// `self.freshness == other.freshness and self.loaded_at_field == other.loaded_at_field`).
+    ///
+    /// Consumed by `DbtSource::has_same_content`, the full-`state:modified` conjunct that restores
+    /// the rendered freshness comparison dropped for source freshness by #11463 (see its doc).
+    fn same_rendered_freshness(&self, other: &DbtSource) -> bool {
+        self.same_freshness_value(other)
+            && Self::loaded_at_str_eq(
+                &self.__source_attr__.loaded_at_field,
+                &other.__source_attr__.loaded_at_field,
+            )
+    }
+
     pub fn get_base_attr(&self) -> NodeBaseAttributes {
         self.__base_attr__.clone()
     }
