@@ -2321,6 +2321,30 @@ async fn refresh_last_modified_epochs(
     Ok(())
 }
 
+/// Groups relations by `(database, schema)` using each relation's *resolved*
+/// (normalized-if-unquoted) database/schema string, not the raw
+/// `dbt_project.yml` casing.
+///
+/// This matters because the resulting keys are threaded through
+/// `bulk_prefetch_last_modified_by_schema` into
+/// `MetadataAdapter::freshness_all_in_schema`, which builds a literal
+/// `WHERE table_schema = '{schema}'` clause. On Snowflake, unquoted
+/// identifiers are stored uppercase in `INFORMATION_SCHEMA.TABLES`, so a
+/// lowercase schema name from the project would silently fail to match and
+/// fall back to the slower per-relation path. Resolving here — once, at the
+/// grouping step — makes every downstream schema-dump query correct by
+/// construction, without needing a case-insensitive comparison at the SQL
+/// layer.
+///
+/// This mirrors the dbt-core plugin's `prefetch_last_modified_epochs`
+/// (`clients/dbt_state/src/dbt_state/adapters/snowflake.py`), which calls
+/// `self._to_fqn(raw_fqn)` — sqlglot's dialect-aware
+/// `normalize_identifiers()` + `quote_identifiers()` — before grouping
+/// schemas into `schemas_by_catalog`, so the `INFORMATION_SCHEMA.TABLES`
+/// filter built in `_fetch_last_modified_epochs_from_schemas_in_catalog`
+/// never sees an unresolved schema name. `schema_as_resolved_str()` /
+/// `database_as_resolved_str()` (`dbt-schemas/src/schemas/relations/base.rs`)
+/// are Fusion's native equivalent of that normalize-then-quote step.
 fn group_relations_by_database_and_schema(
     relations: &BTreeMap<String, Arc<dyn BaseRelation>>,
 ) -> BTreeMap<(Option<String>, Option<String>), BTreeMap<String, Arc<dyn BaseRelation>>> {
@@ -2328,8 +2352,8 @@ fn group_relations_by_database_and_schema(
     for (name, relation) in relations {
         grouped
             .entry((
-                relation.database().map(str::to_string),
-                relation.schema().map(str::to_string),
+                relation.database_as_resolved_str().ok(),
+                relation.schema_as_resolved_str().ok(),
             ))
             .or_insert_with(BTreeMap::new)
             .insert(name.clone(), Arc::clone(relation));
@@ -2994,6 +3018,61 @@ mod tests {
                 sao_guard: None
             }
         );
+    }
+
+    #[test]
+    fn groups_snowflake_relations_by_resolved_case_not_raw_case() {
+        // Two relations that dbt_project.yml would produce with different casing for
+        // the *same* physical Snowflake schema/database (unquoted identifiers, so
+        // Snowflake itself stores/reports them uppercase in INFORMATION_SCHEMA.TABLES).
+        // They must land in the same (database, schema) bucket, otherwise the
+        // schema-level freshness dump built from these groups uses a schema string
+        // that can't match INFORMATION_SCHEMA's stored casing (see
+        // dbt-state-snowflake-schema-case-bug.md).
+        let unquoted = ResolvedQuoting {
+            database: false,
+            schema: false,
+            identifier: false,
+        };
+
+        let relation_lower = create_relation(
+            AdapterType::Snowflake,
+            "analytics_dev".to_string(),
+            "c24_data_quality_prod".to_string(),
+            Some("orders".to_string()),
+            None,
+            unquoted,
+        )
+        .unwrap();
+        let relation_upper = create_relation(
+            AdapterType::Snowflake,
+            "ANALYTICS_DEV".to_string(),
+            "C24_DATA_QUALITY_PROD".to_string(),
+            Some("customers".to_string()),
+            None,
+            unquoted,
+        )
+        .unwrap();
+
+        let mut relations: BTreeMap<String, Arc<dyn BaseRelation>> = BTreeMap::new();
+        relations.insert("model.test.orders".to_string(), relation_lower.into());
+        relations.insert("model.test.customers".to_string(), relation_upper.into());
+
+        let grouped = group_relations_by_database_and_schema(&relations);
+
+        assert_eq!(
+            grouped.len(),
+            1,
+            "relations differing only by unquoted-identifier casing must be grouped \
+             together, since Snowflake resolves them to the same physical schema; \
+             mirrors the dbt-core plugin's prefetch_last_modified_epochs, which \
+             normalizes each raw_fqn via self._to_fqn() (sqlglot normalize_identifiers \
+             + quote_identifiers) before adding its schema to schemas_by_catalog"
+        );
+        let ((db, schema), group) = grouped.iter().next().unwrap();
+        assert_eq!(db.as_deref(), Some("ANALYTICS_DEV"));
+        assert_eq!(schema.as_deref(), Some("C24_DATA_QUALITY_PROD"));
+        assert_eq!(group.len(), 2);
     }
 
     #[test]
