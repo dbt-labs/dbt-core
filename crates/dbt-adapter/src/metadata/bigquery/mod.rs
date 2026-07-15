@@ -535,16 +535,36 @@ pub fn build_relation_clauses_bigquery(
 /// reference: https://discuss.google.dev/t/information-schema-tables-monitoring-last-modified-time/125698
 fn build_tables_freshness_query(database: &str, where_clauses: &[String]) -> String {
     let joined_where_clauses = where_clauses.join(" OR ");
+    build_external_table_freshness_query(
+        &format!("{database}.__TABLES__"),
+        &format!("{database}.INFORMATION_SCHEMA.TABLES"),
+        &format!("\n             WHERE {joined_where_clauses}"),
+    )
+}
+
+fn build_schema_freshness_query(database: &str, schema: &str) -> String {
+    build_external_table_freshness_query(
+        &format!("`{database}`.`{schema}`.__TABLES__"),
+        &format!("`{database}`.`{schema}`.INFORMATION_SCHEMA.TABLES"),
+        "",
+    )
+}
+
+fn build_external_table_freshness_query(
+    legacy_tables_fqn: &str,
+    info_schema_tables_fqn: &str,
+    where_clause: &str,
+) -> String {
     format!(
         "SELECT
-                 dataset_id AS table_schema,
-                 table_id AS table_name,
-                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
-                 (type = 2) AS is_view
-             FROM {db}.__TABLES__
-             WHERE {joined_where_clauses}",
-        db = database,
-        joined_where_clauses = joined_where_clauses,
+                 legacy.dataset_id AS table_schema,
+                 legacy.table_id AS table_name,
+                 IF(info.table_type = 'EXTERNAL', NULL, TIMESTAMP_MILLIS(legacy.last_modified_time)) AS last_altered,
+                 (legacy.type = 2) AS is_view
+             FROM {legacy_tables_fqn} legacy
+             LEFT JOIN {info_schema_tables_fqn} info
+               ON info.table_schema = legacy.dataset_id
+              AND info.table_name = legacy.table_id{where_clause}",
     )
 }
 
@@ -573,6 +593,9 @@ fn accumulate_tables_freshness_from_batch(
     let is_views = batch.column_values::<BooleanArray>("is_view")?;
     let relations = &relations_by_database[database];
     for i in 0..batch.num_rows() {
+        if timestamps.is_null(i) {
+            continue;
+        }
         let schema = schemas.value(i);
         let table = tables.value(i);
         let timestamp = timestamps.value(i);
@@ -705,6 +728,43 @@ impl BigqueryMetadataAdapter {
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(tasks), token)
+    }
+
+    fn freshness_with_overrides_impl<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness(relations, token);
+        }
+
+        let mut override_targets = Vec::new();
+        let mut bulk_relations = Vec::new();
+        for relation in relations {
+            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
+                override_targets.push((Arc::clone(relation), ovr.clone()));
+            } else {
+                bulk_relations.push(Arc::clone(relation));
+            }
+        }
+
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
+        if !bulk_relations.is_empty() {
+            match bulk_freshness_tasks_from_relations(&bulk_relations) {
+                Ok(bulk_tasks) => tasks.extend(bulk_tasks),
+                Err(e) => {
+                    let future = async move { Err(Cancellable::Error(e)) };
+                    return Box::pin(future);
+                }
+            }
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(FreshnessTask::Override(relation, ovr));
+        }
+
+        self.freshness_mapreduce(tasks, token)
     }
 }
 
@@ -1140,37 +1200,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         overrides: &'a BTreeMap<String, FreshnessOverride>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        if overrides.is_empty() {
-            return self.freshness(relations, token);
-        }
-
-        // Partition relations: those with overrides run their own targeted query;
-        // the rest go through the existing bulk `__TABLES__` path.
-        let mut override_targets = Vec::new();
-        let mut bulk_relations = Vec::new();
-        for relation in relations {
-            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
-                override_targets.push((Arc::clone(relation), ovr.clone()));
-            } else {
-                bulk_relations.push(Arc::clone(relation));
-            }
-        }
-
-        let mut tasks: Vec<FreshnessTask> = Vec::new();
-        if !bulk_relations.is_empty() {
-            match bulk_freshness_tasks_from_relations(&bulk_relations) {
-                Ok(bulk_tasks) => tasks.extend(bulk_tasks),
-                Err(e) => {
-                    let future = async move { Err(Cancellable::Error(e)) };
-                    return Box::pin(future);
-                }
-            }
-        }
-        for (relation, ovr) in override_targets {
-            tasks.push(FreshnessTask::Override(relation, ovr));
-        }
-
-        self.freshness_mapreduce(tasks, token)
+        self.freshness_with_overrides_impl(relations, overrides, token)
     }
 
     fn create_schemas_if_not_exists(
@@ -1365,14 +1395,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         // `RelationPath`. Quoting is only applied at render time via
         // `quote_policy`/`quote_part`, so these values are never pre-quoted
         // and the unconditional backticks here cannot double-quote them.
-        let sql = format!(
-            "SELECT
-                 dataset_id AS table_schema,
-                 table_id AS table_name,
-                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
-                 (type = 2) AS is_view
-             FROM `{database}`.`{schema}`.__TABLES__"
-        );
+        let sql = build_schema_freshness_query(database, schema);
         let relations = relations.to_vec();
         let adapter = self.adapter.clone();
         let factory = Box::new(AdapterConnectionFactory::new(
@@ -1399,6 +1422,9 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
             let is_views = batch.column_values::<BooleanArray>("is_view")?;
             for i in 0..batch.num_rows() {
+                if timestamps.is_null(i) {
+                    continue;
+                }
                 for fqn in find_matching_relation(schemas.value(i), tables.value(i), &relations)? {
                     acc.insert(
                         fqn,
@@ -1436,6 +1462,48 @@ fn is_bigquery_permission_error(e: &AdapterError) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bq_rel(project: &str, dataset: &str, table: &str) -> Arc<dyn BaseRelation> {
+        use crate::relation::Relation;
+        use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+        Arc::new(
+            Relation::new(
+                AdapterType::Bigquery,
+                project.to_string(),
+                dataset.to_string(),
+                table.to_string(),
+            )
+            .with_quoting(DEFAULT_RESOLVED_QUOTING),
+        )
+    }
+
+    fn freshness_batch(rows: &[(&str, &str, Option<i64>, bool)]) -> RecordBatch {
+        let schemas = rows.iter().map(|row| row.0).collect::<Vec<_>>();
+        let tables = rows.iter().map(|row| row.1).collect::<Vec<_>>();
+        let timestamps = rows.iter().map(|row| row.2).collect::<Vec<_>>();
+        let is_views = rows.iter().map(|row| row.3).collect::<Vec<_>>();
+
+        RecordBatch::try_new(
+            Arc::new(Schema::new(vec![
+                Field::new("table_schema", DataType::Utf8, false),
+                Field::new("table_name", DataType::Utf8, false),
+                Field::new(
+                    "last_altered",
+                    DataType::Timestamp(TimeUnit::Microsecond, None),
+                    true,
+                ),
+                Field::new("is_view", DataType::Boolean, false),
+            ])),
+            vec![
+                Arc::new(StringArray::from(schemas)),
+                Arc::new(StringArray::from(tables)),
+                Arc::new(TimestampMicrosecondArray::from(timestamps)),
+                Arc::new(BooleanArray::from(is_views)),
+            ],
+        )
+        .unwrap()
+    }
 
     #[test]
     fn test_generate_system_table_fqn_always_dataset_only() {
@@ -1610,18 +1678,7 @@ mod tests {
     /// split `semantic_fqn()` on `.`.
     #[test]
     fn build_relation_clauses_bigquery_handles_dotted_project_id() {
-        use crate::relation::Relation;
-        use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
-
-        let rel = Arc::new(
-            Relation::new(
-                AdapterType::Bigquery,
-                "mycompany.io".to_string(),
-                "analytics".to_string(),
-                "orders".to_string(),
-            )
-            .with_quoting(DEFAULT_RESOLVED_QUOTING),
-        ) as Arc<dyn BaseRelation>;
+        let rel = bq_rel("mycompany.io", "analytics", "orders");
 
         let (where_by_db, rels_by_db) =
             build_relation_clauses_bigquery(std::slice::from_ref(&rel)).unwrap();
@@ -1634,6 +1691,57 @@ mod tests {
         );
         assert_eq!(where_by_db[db_key], vec!["table_id = 'orders'"]);
         assert_eq!(rels_by_db[db_key].len(), 1);
+    }
+
+    #[test]
+    fn tables_freshness_query_nulls_external_last_altered() {
+        let sql =
+            build_tables_freshness_query("`my-project`.analytics", &["table_id = 'orders'".into()]);
+
+        assert!(sql.contains("INFORMATION_SCHEMA.TABLES"), "got: {sql}");
+        assert!(sql.contains("table_type = 'EXTERNAL'"), "got: {sql}");
+        assert!(sql.contains("WHERE table_id = 'orders'"), "got: {sql}");
+        assert!(
+            sql.contains("NULL") && sql.contains("TIMESTAMP_MILLIS(legacy.last_modified_time)"),
+            "got: {sql}"
+        );
+    }
+
+    #[test]
+    fn schema_freshness_query_nulls_external_last_altered() {
+        let sql = build_schema_freshness_query("my-project", "analytics");
+
+        assert!(
+            sql.contains("`my-project`.`analytics`.INFORMATION_SCHEMA.TABLES"),
+            "got: {sql}"
+        );
+        assert!(sql.contains("table_type = 'EXTERNAL'"), "got: {sql}");
+        assert!(
+            sql.contains("NULL") && sql.contains("TIMESTAMP_MILLIS(legacy.last_modified_time)"),
+            "got: {sql}"
+        );
+    }
+
+    #[test]
+    fn accumulate_tables_freshness_skips_null_last_altered() {
+        let normal = bq_rel("my-project", "analytics", "orders");
+        let external = bq_rel("my-project", "analytics", "sheet_orders");
+        let database = "`my-project`.analytics";
+        let relations_by_database = BTreeMap::from([(
+            database.to_string(),
+            vec![Arc::clone(&normal), Arc::clone(&external)],
+        )]);
+        let batch = freshness_batch(&[
+            ("analytics", "orders", Some(1_700_000_000_000_000), false),
+            ("analytics", "sheet_orders", None, false),
+        ]);
+
+        let mut acc = BTreeMap::new();
+        accumulate_tables_freshness_from_batch(&mut acc, &batch, database, &relations_by_database)
+            .unwrap();
+
+        assert!(acc.contains_key(&normal.semantic_fqn()));
+        assert!(!acc.contains_key(&external.semantic_fqn()));
     }
 
     /// IAM and VPC Service Controls denials are permission errors; not-found
