@@ -60,11 +60,11 @@ use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
+use dbt_schemas::schemas::common::{ConstraintType, normalize_quote};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
@@ -980,13 +980,90 @@ impl AdapterImpl {
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L299
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L205
     pub fn list_schemas(&self, state: &State, database: &str) -> AdapterResult<Vec<String>> {
-        use crate::macro_exec::execute_macro_wrapper;
-        use minijinja::value::{Kwargs, Value};
+        match self.adapter_type() {
+            Bigquery if self.mock_state().is_none() => {
+                // BigQuery lists datasets through the ADBC metadata API
+                // rather than a SQL query.
+                // See: https://github.com/dbt-labs/dbt-core/issues/14631
+                self.list_schemas_via_adbc(state, database)
+            }
+            Snowflake | Databricks | Redshift | Spark | DuckDB | Postgres | Salesforce | Fabric
+            | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle
+            | Fdcs | Bigquery => {
+                use crate::macro_exec::execute_macro_wrapper;
+                use minijinja::value::{Kwargs, Value};
 
-        let kwargs = Kwargs::from_iter([("database", Value::from(database))]);
-        let result = execute_macro_wrapper(state, &[Value::from(kwargs)], "list_schemas")?;
+                let kwargs = Kwargs::from_iter([("database", Value::from(database))]);
+                let result = execute_macro_wrapper(state, &[Value::from(kwargs)], "list_schemas")?;
 
-        self.list_schemas_inner(result)
+                self.list_schemas_inner(result)
+            }
+        }
+    }
+
+    pub fn list_schemas_via_adbc(
+        &self,
+        state: &State,
+        database: &str,
+    ) -> AdapterResult<Vec<String>> {
+        let conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        let (catalog, _) = normalize_quote(false, self.adapter_type(), database);
+
+        let reader = conn
+            .get_objects(
+                adbc_core::options::ObjectDepth::Schemas,
+                Some(&catalog),
+                None,
+                None,
+                None,
+                None,
+            )
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+
+        let schema = reader.schema();
+        let batches = reader
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+        let batch = arrow::compute::concat_batches(&schema, &batches)
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+
+        // The schema names are nested in the result of the get object call.
+        // The batch has the following shape at the top level:
+        // - catalog_name: utf8
+        // - catalog_db_schemas: list[struct]
+        //
+        // Each row of the column `catalog_db_schemas` is a list of elements
+        // with the shape:
+        //   - db_schema_name: utf8
+        //   - db_schema_tables: list
+        let catalog_db_schemas = batch
+            .column_by_name("catalog_db_schemas")
+            .and_then(|c| c.as_any().downcast_ref::<arrow::array::ListArray>())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    "Missing or invalid 'catalog_db_schemas' column",
+                )
+            })?;
+
+        let db_schema_names = catalog_db_schemas
+            .values()
+            .as_any()
+            .downcast_ref::<arrow::array::StructArray>()
+            .and_then(|s| s.column_by_name("db_schema_name"))
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    "Missing or invalid 'db_schema_name' column",
+                )
+            })?;
+
+        Ok(db_schema_names
+            .iter()
+            .flatten()
+            .map(|s| s.to_string())
+            .collect())
     }
 
     pub fn list_schemas_inner(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {

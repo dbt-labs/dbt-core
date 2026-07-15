@@ -9,7 +9,8 @@ use std::{
 };
 
 use arrow::array::{
-    Array, DictionaryArray, LargeStringArray, StringArray, StringViewArray, StructArray,
+    Array, AsArray, DictionaryArray, GenericListArray, LargeStringArray, StringArray,
+    StringViewArray, StructArray,
 };
 use arrow::datatypes::{
     DataType, Int8Type, Int16Type, Int32Type, Int64Type, UInt8Type, UInt16Type, UInt32Type,
@@ -296,6 +297,36 @@ pub fn rebuild_string_like_arrays(
                     array.clone()
                 }
                 _ => array.clone(),
+            }
+        }
+        DataType::List(field) => {
+            let list = array.as_list::<i32>();
+            let values = list.values();
+            let new_values = rebuild_string_like_arrays(values, replace_fn);
+            if Arc::ptr_eq(values, &new_values) {
+                array.clone()
+            } else {
+                Arc::new(GenericListArray::<i32>::new(
+                    field.clone(),
+                    list.offsets().clone(),
+                    new_values,
+                    list.nulls().cloned(),
+                ))
+            }
+        }
+        DataType::LargeList(field) => {
+            let list = array.as_list::<i64>();
+            let values = list.values();
+            let new_values = rebuild_string_like_arrays(values, replace_fn);
+            if Arc::ptr_eq(values, &new_values) {
+                array.clone()
+            } else {
+                Arc::new(GenericListArray::<i64>::new(
+                    field.clone(),
+                    list.offsets().clone(),
+                    new_values,
+                    list.nulls().cloned(),
+                ))
             }
         }
         // non-string-like type columns, keep as is
@@ -845,4 +876,51 @@ fn normalize_blank_lines(lines: &[&str]) -> Vec<String> {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::array::{ArrayRef, GenericListArray, StringArray, StructArray};
+    use arrow::buffer::OffsetBuffer;
+    use arrow::datatypes::{Field, Fields};
+    use std::sync::Arc;
+
+    #[test]
+    fn rebuild_rewrites_strings_nested_in_list() {
+        let inner = StringArray::from(vec![Some("REPLACE_ME")]);
+        let struct_fields: Fields = vec![Field::new("cool_struct", DataType::Utf8, true)].into();
+        let struct_arr = StructArray::new(
+            struct_fields.clone(),
+            vec![Arc::new(inner) as ArrayRef],
+            None,
+        );
+        let list_field = Arc::new(Field::new("item", DataType::Struct(struct_fields), true));
+        let offsets = OffsetBuffer::new(vec![0, 1].into());
+        let list = GenericListArray::<i32>::new(
+            list_field,
+            offsets,
+            Arc::new(struct_arr) as ArrayRef,
+            None,
+        );
+        let array: ArrayRef = Arc::new(list);
+
+        let out = rebuild_string_like_arrays(&array, &|s: &str| s.replace("REPLACE_ME", "DONE"));
+
+        let out_list = out
+            .as_any()
+            .downcast_ref::<GenericListArray<i32>>()
+            .unwrap();
+        let out_struct = out_list
+            .values()
+            .as_any()
+            .downcast_ref::<StructArray>()
+            .unwrap();
+        let out_str = out_struct
+            .column(0)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(out_str.value(0), "DONE");
+    }
 }

@@ -9,7 +9,9 @@ use std::path::PathBuf;
 
 use crate::RecordingContext;
 use crate::error::to_adbc_error;
-use crate::naming::{compute_file_name, compute_file_name_for_table_schema};
+use crate::naming::{
+    compute_file_name, compute_file_name_for_get_objects, compute_file_name_for_table_schema,
+};
 use crate::storage::sqlite::SqliteHandler;
 
 pub struct RecordConnection {
@@ -58,6 +60,62 @@ impl Connection for RecordConnection {
 
     fn rollback(&mut self) -> AdbcResult<()> {
         self.inner.rollback()
+    }
+
+    fn get_objects<'a>(
+        &'a self,
+        depth: adbc_core::options::ObjectDepth,
+        catalog: Option<&'a str>,
+        db_schema: Option<&'a str>,
+        table_name: Option<&'a str>,
+        table_type: Option<Vec<&'a str>>,
+        column_name: Option<&'a str>,
+    ) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
+        let result = self.inner.get_objects(
+            depth,
+            catalog,
+            db_schema,
+            table_name,
+            table_type.clone(),
+            column_name,
+        );
+        let path = self.recordings_path.clone();
+        create_dir_all(&path).map_err(|e| to_adbc_error(e.into(), Some(&path)))?;
+
+        let unique_id = compute_file_name_for_get_objects(
+            &path,
+            self.ctx.node_id.as_deref(),
+            catalog,
+            db_schema,
+            table_name,
+            table_type.as_deref(),
+            column_name,
+        );
+
+        let sqlite_handler = SqliteHandler::new(&path);
+
+        match result {
+            Ok(reader) => {
+                let schema = reader.schema();
+                let batches: Vec<RecordBatch> = reader.collect::<Result<_, _>>()?;
+                sqlite_handler
+                    .write_objects(&unique_id, &batches, schema.clone())
+                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
+                let batches_iter = batches
+                    .into_iter()
+                    .map(|batch| -> Result<RecordBatch, ArrowError> { Ok(batch) });
+                Ok(Box::new(RecordBatchIterator::new(batches_iter, schema)))
+            }
+            Err(err) => {
+                sqlite_handler
+                    .write_objects_error(&unique_id, &format!("{err}"))
+                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
+                Err(AdbcError::with_message_and_status(
+                    format!("{err}"),
+                    AdbcStatus::Internal,
+                ))
+            }
+        }
     }
 
     fn get_table_schema(

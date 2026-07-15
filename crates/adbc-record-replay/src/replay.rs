@@ -2,13 +2,15 @@ use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcS
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchReader};
 use arrow::record_batch::RecordBatchIterator;
-use arrow_schema::Schema;
+use arrow_schema::{ArrowError, Schema};
 use dbt_adbc::{Connection, Statement};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::error::{RecordReplayError, to_adbc_error};
-use crate::naming::{compute_file_name, compute_file_name_for_table_schema};
+use crate::naming::{
+    compute_file_name, compute_file_name_for_get_objects, compute_file_name_for_table_schema,
+};
 use crate::storage::StorageType;
 use crate::storage::sqlite::SqliteHandler;
 use crate::{RecordingContext, SharedConfig};
@@ -61,6 +63,63 @@ impl Connection for ReplayConnection {
 
     fn rollback(&mut self) -> AdbcResult<()> {
         unimplemented!("ADBC connection rollback in replay engine")
+    }
+
+    #[allow(deprecated)]
+    fn get_objects<'a>(
+        &'a self,
+        _depth: adbc_core::options::ObjectDepth,
+        catalog: Option<&'a str>,
+        db_schema: Option<&'a str>,
+        table_name: Option<&'a str>,
+        table_type: Option<Vec<&'a str>>,
+        column_name: Option<&'a str>,
+    ) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
+        let path = self.recordings_path.clone();
+        let unique_id = compute_file_name_for_get_objects(
+            &path,
+            self.ctx.node_id.as_deref(),
+            catalog,
+            db_schema,
+            table_name,
+            table_type.as_deref(),
+            column_name,
+        );
+
+        let storage_type = crate::storage::detect_storage_type(&path, &unique_id);
+
+        match storage_type {
+            StorageType::Sqlite => {
+                let sqlite_handler = SqliteHandler::new(&path);
+                let entry = sqlite_handler
+                    .read_objects(&unique_id)
+                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
+
+                if let Some(msg) = entry.error {
+                    return Err(AdbcError::with_message_and_status(
+                        msg,
+                        AdbcStatus::Internal,
+                    ));
+                }
+
+                let (schema, batches) = entry.data.ok_or_else(|| {
+                    to_adbc_error(
+                        RecordReplayError("Missing data in recording".to_string()),
+                        Some(&path),
+                    )
+                })?;
+                let batches_iter = batches
+                    .into_iter()
+                    .map(|batch| -> Result<RecordBatch, ArrowError> { Ok(batch) });
+                Ok(Box::new(RecordBatchIterator::new(batches_iter, schema)))
+            }
+            StorageType::FileArrowIpc | StorageType::FileParquet => {
+                Err(AdbcError::with_message_and_status(
+                    "get_objects replay is only supported with SQLite storage",
+                    AdbcStatus::Internal,
+                ))
+            }
+        }
     }
 
     #[allow(deprecated)]
