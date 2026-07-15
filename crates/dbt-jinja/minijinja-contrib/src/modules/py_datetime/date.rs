@@ -4,7 +4,10 @@ use std::sync::Arc;
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone, Weekday};
 use minijinja::arg_utils::{ArgParser, ArgsIter};
-use minijinja::{value::Object, Error, ErrorKind, Value};
+use minijinja::{
+    value::{DynObject, Object, ObjectRepr},
+    Error, ErrorKind, Value,
+};
 
 use super::timedelta::PyTimeDelta;
 
@@ -390,8 +393,18 @@ impl PyDate {
 }
 
 impl Object for PyDate {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
     fn is_true(self: &Arc<Self>) -> bool {
         true
+    }
+
+    fn custom_cmp(self: &Arc<Self>, other: &DynObject) -> Option<Ordering> {
+        other
+            .downcast_ref::<Self>()
+            .map(|other| self.date.cmp(&other.date))
     }
     // If someone does: {{ some_date.attribute }} in a template,
     // you can provide direct read access:
