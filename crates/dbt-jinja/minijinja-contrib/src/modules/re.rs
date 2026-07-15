@@ -229,9 +229,7 @@ impl Object for Pattern {
             "split" => {
                 let iter = ArgsIter::new("Pattern.split", &["string"], args);
                 let string: &Value = iter.next_arg()?;
-                let maxsplit = iter
-                    .next_kwarg::<Option<i64>>("maxsplit")?
-                    .unwrap_or(0);
+                let maxsplit = iter.next_kwarg::<Option<i64>>("maxsplit")?.unwrap_or(0);
                 iter.finish()?;
                 if maxsplit != 0 {
                     let a = [pattern_val, string.clone(), Value::from(maxsplit)];
@@ -245,12 +243,15 @@ impl Object for Pattern {
                 let iter = ArgsIter::new("Pattern.sub", &["repl", "string"], args);
                 let repl: &Value = iter.next_arg()?;
                 let string: &Value = iter.next_arg()?;
-                let count = iter
-                    .next_kwarg::<Option<i64>>("count")?
-                    .unwrap_or(0);
+                let count = iter.next_kwarg::<Option<i64>>("count")?.unwrap_or(0);
                 iter.finish()?;
                 if count != 0 {
-                    let a = [pattern_val, repl.clone(), string.clone(), Value::from(count)];
+                    let a = [
+                        pattern_val,
+                        repl.clone(),
+                        string.clone(),
+                        Value::from(count),
+                    ];
                     re_sub(&a)
                 } else {
                     let a = [pattern_val, repl.clone(), string.clone()];
@@ -438,9 +439,7 @@ fn re_split(args: &[Value]) -> Result<Value, Error> {
     let iter = ArgsIter::new("split", &["pattern", "string"], args);
     let pattern: &Value = iter.next_arg()?;
     let string: &Value = iter.next_arg()?;
-    let maxsplit = iter
-        .next_kwarg::<Option<i64>>("maxsplit")?
-        .unwrap_or(0) as usize;
+    let maxsplit = iter.next_kwarg::<Option<i64>>("maxsplit")?.unwrap_or(0) as usize;
     let flags = iter
         .next_kwarg::<Option<&Value>>("flags")?
         .map(extract_flags)
@@ -488,9 +487,7 @@ fn re_sub(args: &[Value]) -> Result<Value, Error> {
     let pattern: &Value = iter.next_arg()?;
     let repl: &Value = iter.next_arg()?;
     let string: &Value = iter.next_arg()?;
-    let count = iter
-        .next_kwarg::<Option<i64>>("count")?
-        .unwrap_or(0);
+    let count = iter.next_kwarg::<Option<i64>>("count")?.unwrap_or(0);
     let flags = iter
         .next_kwarg::<Option<&Value>>("flags")?
         .map(extract_flags)
@@ -1386,11 +1383,7 @@ mod tests {
         env.add_global("re", Value::from(create_re_namespace()));
 
         let result = env
-            .render_str(
-                r#"{{ re.sub('a', 'b', 'aaa', count=1) }}"#,
-                (),
-                &[],
-            )
+            .render_str(r#"{{ re.sub('a', 'b', 'aaa', count=1) }}"#, (), &[])
             .unwrap();
         assert_eq!(result, "baa");
     }
