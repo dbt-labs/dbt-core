@@ -29,6 +29,8 @@ use dbt_schemas::schemas::manifest::metric::{
     DbtMetric, DbtMetricAttr, MeasureAggregationParameters, MetricAggregationParameters,
     MetricTypeParams, NonAdditiveDimension,
 };
+use minijinja::constants::CURRENT_PATH;
+use std::path::Path;
 
 type ResolveMetricsResult = FsResult<(
     HashMap<String, Arc<DbtMetric>>,
@@ -45,10 +47,16 @@ fn render_jinja_description(
     description: &Option<String>,
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
+    relative_path: &Path,
 ) -> Option<String> {
     description.as_ref().map(|desc| {
         if desc.contains("{{") {
-            env.render_str(desc, base_ctx, &[])
+            let mut ctx = base_ctx.clone();
+            ctx.insert(
+                CURRENT_PATH.to_string(),
+                MinijinjaValue::from(relative_path.to_string_lossy().to_string()),
+            );
+            env.render_str(desc, &ctx, &[])
                 .unwrap_or_else(|_| desc.clone())
         } else {
             desc.clone()
@@ -270,6 +278,7 @@ pub fn resolve_nested_model_metrics(
                             &metric_props.description,
                             env,
                             base_ctx,
+                            &mpe.relative_path,
                         ),
                         checksum: DbtChecksum::default(),
                         raw_code: None,
@@ -545,7 +554,12 @@ pub fn resolve_top_level_metrics(
                 patch_path: Some(DbtPath::from(&mpe.relative_path)),
                 unique_id: metric_unique_id.clone(),
                 fqn: metric_fqn.clone(),
-                description: render_jinja_description(&metric_props.description, env, base_ctx),
+                description: render_jinja_description(
+                    &metric_props.description,
+                    env,
+                    base_ctx,
+                    &mpe.relative_path,
+                ),
                 checksum: DbtChecksum::default(),
                 raw_code: None,
                 language: None,

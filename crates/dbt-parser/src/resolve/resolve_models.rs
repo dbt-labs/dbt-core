@@ -78,6 +78,7 @@ use dbt_schemas::state::NodeResolverTracker;
 use dbt_schemas::state::ResourcePathKind;
 use dbt_yaml::Spanned;
 use minijinja::MacroSpans;
+use minijinja::constants::CURRENT_PATH;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -1251,14 +1252,19 @@ fn extract_model_properties(
         // Consume the schema_value by replacing it with null
         // This marks the entry as "used" to prevent unused warnings
         let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
+        let mut base_ctx = base_ctx.clone();
+        base_ctx.insert(
+            CURRENT_PATH.to_string(),
+            minijinja::Value::from(mpe.relative_path.to_string_lossy().to_string()),
+        );
         let properties = dbt_jinja_utils::serde::into_typed_with_jinja::<ModelProperties, _>(
             &arg.io,
             schema_value,
             false,
             env,
-            base_ctx,
+            &base_ctx,
             &[],
-            dependency_package_name_from_ctx(env, base_ctx),
+            dependency_package_name_from_ctx(env, &base_ctx),
             true,
         )?;
         return Ok((Some(properties), Some(mpe.relative_path.clone())));

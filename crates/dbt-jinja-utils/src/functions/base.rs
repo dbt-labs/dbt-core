@@ -250,13 +250,15 @@ impl Object for DocMacro {
                 let status_reporter = get_status_reporter(state.env());
                 let current_span = state.current_span_of_context();
                 let current_file_path = state.current_path().clone();
-                let location = CodeLocationWithFile::new(
-                    current_span.start_line,
-                    current_span.start_col,
-                    current_span.start_offset,
-                    current_file_path,
-                );
-                self.warn_missing_doc(&target_package, &doc_name, location, status_reporter);
+                if !current_file_path.as_os_str().is_empty() {
+                    let location = CodeLocationWithFile::new(
+                        current_span.start_line,
+                        current_span.start_col,
+                        current_span.start_offset,
+                        current_file_path,
+                    );
+                    self.warn_missing_doc(&target_package, &doc_name, location, status_reporter);
+                }
                 Ok(Value::from(Self::missing_doc_placeholder(
                     &target_package,
                     &doc_name,
