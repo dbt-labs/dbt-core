@@ -457,9 +457,14 @@ impl JsonCompatLayer {
             true,
         );
 
+        let code = log_msg
+            .dbt_core_event_code
+            .clone()
+            .or_else(|| log_msg.code.map(|c| c.to_string()));
+
         let info_json = serde_json::to_value(self.build_core_event_info(
-            None,
-            None,
+            code.as_deref(),
+            log_msg.code_name.as_deref(),
             &log_record.severity_text,
             formatted_message,
         ))
