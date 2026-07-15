@@ -2631,6 +2631,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
         },
         from_main: true,
+        exit_process_on_panic: true,
 
         target: common_args.target,
         num_threads: common_args.threads,
@@ -2673,6 +2674,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
         },
         from_main: false,
+        exit_process_on_panic: true,
         target: common_args.target,
         num_threads: common_args.threads,
         no_parallel: common_args.no_parallel,

@@ -138,7 +138,7 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
 
     // If execution panics, exit with a status 2 (but not if RUST_BACKTRACE is
     // set to 1, in which case we want to see the backtrace):
-    if std::env::var("RUST_BACKTRACE").unwrap_or_default() != "1" {
+    if arg.exit_process_on_panic && std::env::var("RUST_BACKTRACE").unwrap_or_default() != "1" {
         std::panic::set_hook(Box::new(|info| {
             eprintln!("{} {}", RED.apply_to(format!("{PANIC}:")), info);
             let _ = io::stdout().flush();

@@ -390,6 +390,7 @@ pub struct SystemArgs {
     pub command: FsCommand,
     pub io: IoArgs,
     pub from_main: bool,
+    pub exit_process_on_panic: bool,
     pub num_threads: Option<usize>,
     /// Request sequential task execution, decoupled from `num_threads`.
     /// Drives the binary entrypoint's single-worker tokio runtime and the
