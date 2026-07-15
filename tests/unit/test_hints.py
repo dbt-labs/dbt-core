@@ -11,19 +11,20 @@ from dbt.hints import (
     HintType,
     has_hint_cooldown,
     hint_to_msg_map,
-    load_hint_ts,
     record_hint_shown,
-    reset_hint_ts,
     show_hint,
 )
 
 
 @pytest.fixture(autouse=True)
-def fresh_hint_ts():
-    # The cooldown state is module-global; keep tests isolated from each other.
-    reset_hint_ts()
-    yield
-    reset_hint_ts()
+def dbt_home(monkeypatch, tmp_path):
+    # The hint file lives in the dbt home dir (~/.dbt); point HOME at a temp dir
+    # so tests read/write there instead of the real home. Returns the ~/.dbt dir.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    dbt_dir = tmp_path / ".dbt"
+    dbt_dir.mkdir()
+    return dbt_dir
 
 
 def test_hint_to_msg_map_covers_every_hint_type():
@@ -32,69 +33,48 @@ def test_hint_to_msg_map_covers_every_hint_type():
 
 
 class TestHintCooldown:
-    def test_load_is_empty_when_file_missing(self, tmp_path):
-        assert load_hint_ts(tmp_path) == {}
-
-    def test_load_reads_existing_file(self, tmp_path):
-        (tmp_path / HINT_TS_FILENAME).write_text(json.dumps({"some_hint": 123.0}))
-        assert load_hint_ts(tmp_path) == {"some_hint": 123.0}
-
-    def test_same_path_is_cached_not_reread(self, tmp_path):
-        hint_file = tmp_path / HINT_TS_FILENAME
-        hint_file.write_text(json.dumps({"some_hint": 1.0}))
-        assert load_hint_ts(tmp_path) == {"some_hint": 1.0}
-
-        # Overwrite on disk; a re-load of the same path returns the cached copy.
-        hint_file.write_text(json.dumps({"some_hint": 999.0}))
-        assert load_hint_ts(tmp_path) == {"some_hint": 1.0}
-
-    def test_different_paths_are_cached_separately(self, tmp_path):
-        (tmp_path / HINT_TS_FILENAME).write_text(json.dumps({"a": 1.0}))
-        other = tmp_path / "other"
-        other.mkdir()
-        (other / HINT_TS_FILENAME).write_text(json.dumps({"b": 2.0}))
-
-        assert load_hint_ts(tmp_path) == {"a": 1.0}
-        assert load_hint_ts(other) == {"b": 2.0}
-
-    def test_load_tolerates_corrupt_file(self, tmp_path):
-        (tmp_path / HINT_TS_FILENAME).write_text("{not valid json")
-        assert load_hint_ts(tmp_path) == {}
-
-    def test_no_cooldown_before_load(self):
-        # Never loaded -> nothing is on cooldown, so hints are free to show.
+    def test_no_cooldown_when_file_missing(self):
         assert has_hint_cooldown(HintType.LONG_PARSING_WITHOUT_V2_PARSER) is False
 
-    def test_recent_hint_is_on_cooldown(self, tmp_path):
-        load_hint_ts(tmp_path)
+    def test_recent_hint_is_on_cooldown(self):
         record_hint_shown(HintType.LONG_PARSING_WITHOUT_V2_PARSER)
         assert has_hint_cooldown(HintType.LONG_PARSING_WITHOUT_V2_PARSER) is True
 
-    def test_expired_hint_is_not_on_cooldown(self, tmp_path):
-        stale = {HintType.LONG_PARSING_WITHOUT_V2_PARSER: 0.0}  # epoch => long ago
-        (tmp_path / HINT_TS_FILENAME).write_text(json.dumps(stale))
-        load_hint_ts(tmp_path)
+    def test_expired_hint_is_not_on_cooldown(self, dbt_home):
+        stale = {HintType.LONG_PARSING_WITHOUT_V2_PARSER: 0}  # epoch => long ago
+        (dbt_home / HINT_TS_FILENAME).write_text(json.dumps(stale))
         assert has_hint_cooldown(HintType.LONG_PARSING_WITHOUT_V2_PARSER) is False
 
-    def test_record_persists_to_disk(self, tmp_path):
-        load_hint_ts(tmp_path)
+    def test_cooldown_tolerates_corrupt_file(self, dbt_home):
+        (dbt_home / HINT_TS_FILENAME).write_text("{not valid json")
+        assert has_hint_cooldown(HintType.LONG_PARSING_WITHOUT_V2_PARSER) is False
+
+    def test_cooldown_tolerates_unreadable_file(self, mocker):
+        # A read failure (e.g. permission denied) must not raise, just show hints.
+        mocker.patch.object(Path, "read_text", side_effect=PermissionError("denied"))
+        assert has_hint_cooldown(HintType.LONG_PARSING_WITHOUT_V2_PARSER) is False
+
+    def test_record_persists_to_disk(self, dbt_home):
         record_hint_shown(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
 
-        on_disk = json.loads((tmp_path / HINT_TS_FILENAME).read_text())
+        on_disk = json.loads((dbt_home / HINT_TS_FILENAME).read_text())
         assert HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS in on_disk
         stored = on_disk[HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS]
         # Persisted as an int (epoch seconds) for cross-compat with the Rust engine.
         assert isinstance(stored, int)
         assert stored > 0
 
-    def test_record_is_noop_without_target(self):
-        # Nothing loaded -> nowhere to write, and it must not raise.
-        record_hint_shown(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
-        assert has_hint_cooldown(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS) is False
+    def test_record_creates_home_dir_if_missing(self, tmp_path, monkeypatch):
+        # ~/.dbt may not exist yet; record_hint_shown should create it.
+        home = tmp_path / "fresh"
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
 
-    def test_record_swallows_write_errors(self, tmp_path, mocker):
+        record_hint_shown(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
+        assert (home / ".dbt" / HINT_TS_FILENAME).exists()
+
+    def test_record_swallows_write_errors(self, mocker):
         # A failed write (read-only dir, disk full, ...) must not raise.
-        load_hint_ts(tmp_path)
         mocker.patch.object(Path, "write_text", side_effect=OSError("read-only"))
         record_hint_shown(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
 
@@ -140,8 +120,7 @@ class TestShowHint:
         mock_fire_event.assert_called_once()
         mock_track_hint_view.assert_called_once()
 
-    def test_skips_when_within_cooldown(self, tmp_path, mock_fire_event, mock_track_hint_view):
-        load_hint_ts(tmp_path)
+    def test_skips_when_within_cooldown(self, mock_fire_event, mock_track_hint_view):
         record_hint_shown(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
         with self._mock_flags(hints_enabled=True):
             show_hint(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
@@ -150,12 +129,11 @@ class TestShowHint:
         mock_track_hint_view.assert_not_called()
 
     def test_shows_and_records_when_cooldown_expired(
-        self, tmp_path, mock_fire_event, mock_track_hint_view
+        self, dbt_home, mock_fire_event, mock_track_hint_view
     ):
-        # Load a stale timestamp so the hint is eligible again.
-        stale = {HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS: 0.0}
-        (tmp_path / HINT_TS_FILENAME).write_text(json.dumps(stale))
-        load_hint_ts(tmp_path)
+        # A stale timestamp so the hint is eligible again.
+        stale = {HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS: 0}
+        (dbt_home / HINT_TS_FILENAME).write_text(json.dumps(stale))
 
         with self._mock_flags(hints_enabled=True):
             show_hint(HintType.REUSE_RELATIONS_ON_TOO_MANY_MODELS)
