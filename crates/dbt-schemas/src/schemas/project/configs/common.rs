@@ -24,8 +24,8 @@ use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::QueryTag;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, bool_or_string_bool, f64_or_string_f64,
-    u64_or_string_u64,
+    IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool,
+    f64_or_string_f64, hours_to_expiration_or_string, u64_or_string_u64,
 };
 
 #[track_caller]
@@ -302,8 +302,8 @@ pub struct WarehouseSpecificNodeConfig {
 
     // BigQuery
     pub description: Option<String>,
-    #[serde(default, deserialize_with = "u64_or_string_u64")]
-    pub hours_to_expiration: Option<u64>,
+    #[serde(default, deserialize_with = "hours_to_expiration_or_string")]
+    pub hours_to_expiration: Option<StringOrInteger>,
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub job_execution_timeout_seconds: Option<u64>,
     pub reservation: Option<String>,
@@ -1964,7 +1964,7 @@ mod tests {
             cluster_by: Some(ClusterConfig::String("c".to_string())),
             adapter_properties: Some(Default::default()),
             description: Some("d".to_string()),
-            hours_to_expiration: Some(1),
+            hours_to_expiration: Some(StringOrInteger::Integer(1)),
             job_execution_timeout_seconds: Some(1),
             reservation: Some("r".to_string()),
             labels: Some(Default::default()),

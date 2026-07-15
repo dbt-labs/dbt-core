@@ -347,7 +347,13 @@ fn seed_config_semantic_extra_config(
 
 fn model_config_clone_table_properties(config: &ModelConfig) -> Option<TableProperties> {
     clone_table_properties_from_values(
-        config.__warehouse_specific_config__.hours_to_expiration,
+        // hours_to_expiration is loosely typed (may be a non-numeric string such
+        // as "null"); only a parseable integer drives the dev-clone expiration.
+        config
+            .__warehouse_specific_config__
+            .hours_to_expiration
+            .as_ref()
+            .and_then(|v| v.to_string().parse::<u64>().ok()),
         config
             .__warehouse_specific_config__
             .partition_expiration_days,
@@ -356,7 +362,13 @@ fn model_config_clone_table_properties(config: &ModelConfig) -> Option<TableProp
 
 fn snapshot_config_clone_table_properties(config: &SnapshotConfig) -> Option<TableProperties> {
     clone_table_properties_from_values(
-        config.__warehouse_specific_config__.hours_to_expiration,
+        // hours_to_expiration is loosely typed (may be a non-numeric string such
+        // as "null"); only a parseable integer drives the dev-clone expiration.
+        config
+            .__warehouse_specific_config__
+            .hours_to_expiration
+            .as_ref()
+            .and_then(|v| v.to_string().parse::<u64>().ok()),
         config
             .__warehouse_specific_config__
             .partition_expiration_days,
@@ -365,7 +377,13 @@ fn snapshot_config_clone_table_properties(config: &SnapshotConfig) -> Option<Tab
 
 fn seed_config_clone_table_properties(config: &SeedConfig) -> Option<TableProperties> {
     clone_table_properties_from_values(
-        config.__warehouse_specific_config__.hours_to_expiration,
+        // hours_to_expiration is loosely typed (may be a non-numeric string such
+        // as "null"); only a parseable integer drives the dev-clone expiration.
+        config
+            .__warehouse_specific_config__
+            .hours_to_expiration
+            .as_ref()
+            .and_then(|v| v.to_string().parse::<u64>().ok()),
         config
             .__warehouse_specific_config__
             .partition_expiration_days,

@@ -235,7 +235,9 @@ pub(crate) fn make_local_config(cfg: TestTableConfig) -> DbtModel {
         // NOTE: For simplicity, we are assuming that "now" is the unix epoch. Such that
         // expiration_ns = ns_to_expiration
         hours_to_expiration: if cfg.expiration_ns != 0 {
-            Some(TimeDelta::nanoseconds(cfg.expiration_ns as i64).num_hours() as u64)
+            Some(dbt_schemas::schemas::serde::StringOrInteger::Integer(
+                TimeDelta::nanoseconds(cfg.expiration_ns as i64).num_hours(),
+            ))
         } else {
             None
         },

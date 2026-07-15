@@ -755,7 +755,9 @@ mod tests {
                 )),
                 merge_update_columns: Some(StringOrArrayOfStrings::String("status".to_string())),
                 __warehouse_specific_config__: WarehouseSpecificNodeConfig {
-                    hours_to_expiration: Some(12),
+                    hours_to_expiration: Some(
+                        dbt_schemas::schemas::serde::StringOrInteger::Integer(12),
+                    ),
                     ..Default::default()
                 },
                 ..Default::default()

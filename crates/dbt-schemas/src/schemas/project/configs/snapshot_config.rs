@@ -39,7 +39,8 @@ use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, StringOrInteger, f64_or_string_f64,
+    hours_to_expiration_or_string, u64_or_string_u64,
 };
 use dbt_proc_macros::Resolvable;
 
@@ -199,9 +200,9 @@ pub struct ProjectSnapshotConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Option<StringOrInteger>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",

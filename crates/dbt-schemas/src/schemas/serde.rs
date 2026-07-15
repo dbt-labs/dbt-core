@@ -236,6 +236,33 @@ where
         .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok())))
 }
 
+/// Deserialize `hours_to_expiration`, preserving a present-but-non-numeric value
+/// (e.g. the string "null") instead of collapsing it to `None`.
+///
+/// dbt-core (`BigQueryAdapter.get_common_options`) includes the
+/// `expiration_timestamp` option whenever this config is present and not Python
+/// `None`, interpolating `str(value)` — so a value that renders to "null" yields
+/// `INTERVAL null hour`. Fusion must keep the rendered value to match; typing it
+/// as `Option<u64>` dropped it. See dbt-labs/fs#11681.
+pub fn hours_to_expiration_or_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<StringOrInteger>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
+    if let Some(i) = value.as_i64() {
+        Ok(Some(StringOrInteger::Integer(i)))
+    } else if let Some(s) = value.as_str() {
+        // Numeric strings become `Integer`; everything else (incl. "null") is
+        // preserved verbatim so the rendered SQL matches dbt-core.
+        Ok(Some(StringOrInteger::from(s.to_string())))
+    } else {
+        // Absent / YAML null -> omit the option, matching dbt-core's `is not None`.
+        Ok(None)
+    }
+}
+
 pub fn i64_or_string_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
 where
     D: Deserializer<'de>,
@@ -1292,5 +1319,36 @@ mod tests {
             NodeVersion::try_from(str_val).unwrap(),
             NodeVersion::String("2".to_string())
         );
+    }
+
+    // dbt-labs/fs#11681: a present-but-null `hours_to_expiration` must be
+    // preserved (not collapsed to None) so dbt-core parity is kept.
+    #[test]
+    fn hours_to_expiration_or_string_preserves_present_null() {
+        #[derive(Deserialize)]
+        struct W {
+            #[serde(default, deserialize_with = "hours_to_expiration_or_string")]
+            h: Option<StringOrInteger>,
+        }
+
+        // The reported case: env_var default renders to the string "null".
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{"h":"null"}"#).unwrap().h,
+            Some(StringOrInteger::String("null".to_string()))
+        );
+        // Integers stay integers.
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{"h":12}"#).unwrap().h,
+            Some(StringOrInteger::Integer(12))
+        );
+        // Numeric strings normalize to integer (identical rendered SQL).
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{"h":"12"}"#).unwrap().h,
+            Some(StringOrInteger::Integer(12))
+        );
+        // Actual null / absence -> None, so the option is omitted (matches
+        // dbt-core's `is not None`).
+        assert_eq!(serde_json::from_str::<W>(r#"{"h":null}"#).unwrap().h, None);
+        assert_eq!(serde_json::from_str::<W>(r#"{}"#).unwrap().h, None);
     }
 }

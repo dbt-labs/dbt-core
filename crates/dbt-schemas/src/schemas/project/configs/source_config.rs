@@ -21,8 +21,8 @@ use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
-    IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
-    f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, StringOrInteger,
+    bool_or_string_bool, f64_or_string_f64, hours_to_expiration_or_string, u64_or_string_u64,
 };
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -53,9 +53,9 @@ pub struct ProjectSourceConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Option<StringOrInteger>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",

@@ -1,9 +1,8 @@
-use std::collections::BTreeMap;
-
 use dbt_common::serde_utils::convert_yml_to_value_map;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeWrapper};
+use indexmap::IndexMap;
 use minijinja::Value;
 use minijinja::value::mutable_vec::MutableVec;
 
@@ -50,9 +49,12 @@ pub(crate) fn get_common_table_options_value(
     config: ModelConfig,
     common_attr: &CommonAttributes,
     temporary: bool,
-) -> BTreeMap<String, Value> {
+) -> IndexMap<String, Value> {
     let _ = state;
-    let mut result = BTreeMap::new();
+    // Insertion-ordered: BigQuery `OPTIONS(...)` are rendered in this order, and
+    // dbt-core emits them in insertion order (e.g. `expiration_timestamp` before
+    // `description`). A sorted map would reorder them and break parity.
+    let mut result = IndexMap::new();
 
     if let Some(hours) = config.__warehouse_specific_config__.hours_to_expiration
         && !temporary
@@ -133,7 +135,7 @@ pub(crate) fn get_table_options_value(
     node: &InternalDbtNodeWrapper,
     temporary: bool,
     adapter_type: AdapterType,
-) -> AdapterResult<BTreeMap<String, Value>> {
+) -> AdapterResult<IndexMap<String, Value>> {
     // Common options
     let common_attr = node.as_internal_node().common();
     let mut opts = get_common_table_options_value(state, config.clone(), common_attr, temporary);
@@ -224,6 +226,49 @@ pub(crate) fn get_table_options_value(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::schemas::serde::StringOrInteger;
+
+    fn expiration_for(hours: Option<StringOrInteger>, temporary: bool) -> Option<String> {
+        let env = minijinja::Environment::new();
+        let state = env.empty_state();
+        let mut config = ModelConfig::default();
+        config.__warehouse_specific_config__.hours_to_expiration = hours;
+        let common = CommonAttributes::default();
+        let opts = get_common_table_options_value(&state, config, &common, temporary);
+        opts.get("expiration_timestamp").map(|v| v.to_string())
+    }
+
+    // dbt-labs/fs#11681: dbt-core emits `expiration_timestamp` whenever
+    // `hours_to_expiration` is present and not null (interpolating str(value)),
+    // even when it renders to the string "null". Fusion must match.
+    #[test]
+    fn expiration_timestamp_present_null_string_is_emitted() {
+        assert_eq!(
+            expiration_for(Some(StringOrInteger::String("null".to_string())), false),
+            Some("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL null hour)".to_string())
+        );
+    }
+
+    #[test]
+    fn expiration_timestamp_integer_is_emitted() {
+        assert_eq!(
+            expiration_for(Some(StringOrInteger::Integer(12)), false),
+            Some("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)".to_string())
+        );
+    }
+
+    #[test]
+    fn expiration_timestamp_absent_is_omitted() {
+        assert_eq!(expiration_for(None, false), None);
+    }
+
+    #[test]
+    fn expiration_timestamp_omitted_for_temporary() {
+        assert_eq!(
+            expiration_for(Some(StringOrInteger::Integer(12)), true),
+            None
+        );
+    }
 
     #[test]
     fn test_sql_escape_ascii() {

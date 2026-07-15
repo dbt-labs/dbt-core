@@ -3509,7 +3509,7 @@ impl AdapterImpl {
         config: ModelConfig,
         node: &InternalDbtNodeWrapper,
         temporary: bool,
-    ) -> AdapterResult<BTreeMap<String, Value>> {
+    ) -> AdapterResult<IndexMap<String, Value>> {
         match self.adapter_type() {
             adapter_type @ Bigquery => metadata::bigquery::object_options::get_table_options_value(
                 state,
@@ -3532,7 +3532,7 @@ impl AdapterImpl {
         state: &State,
         config: ModelConfig,
         common_attr: &CommonAttributes,
-    ) -> AdapterResult<BTreeMap<String, Value>> {
+    ) -> AdapterResult<IndexMap<String, Value>> {
         match self.adapter_type() {
             Bigquery => Ok(
                 metadata::bigquery::object_options::get_common_table_options_value(
