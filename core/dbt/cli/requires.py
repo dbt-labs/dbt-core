@@ -36,7 +36,6 @@ from dbt.events.types import (
 )
 from dbt.exceptions import DbtProjectError, FailFastError
 from dbt.flags import get_flag_dict, get_flags, set_flags
-from dbt.hints import load_hint_ts
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
@@ -370,10 +369,6 @@ def runtime_config(func):
         )
 
         ctx.obj["runtime_config"] = config
-
-        # Prime the hint cooldown cache now that we know this project's target
-        # dir, so any hint surfaced later in the invocation honors the limit.
-        load_hint_ts(config.project_target_path)
 
         if dbt.tracking.active_user is not None:
             adapter_type = (
