@@ -1071,10 +1071,10 @@ mod tests {
     /// for the parity/ownership distinction.
     #[derive(Debug, Clone, Copy)]
     enum ExcludeKind {
-        /// Not excluded at Stage 1: Stage 2 MUST also observe a change on this key, else a
+        /// Not excluded at Stage 1: Stage 2 MUST also observe a change on this key, otherwise a
         /// genuine change is silently invisible on the sparse/fallback path (false negative).
         Relevant,
-        /// dbt-core checks this key nowhere: Stage 2 MUST NOT observe it either, else a
+        /// dbt-core checks this key nowhere: Stage 2 MUST NOT observe it either, otherwise a
         /// benign/env-aware change is wrongly selected on the fallback path (false positive).
         Parity,
         /// A real dbt-core modification trigger, but owned by the sibling `check_relation_modified`
