@@ -325,11 +325,11 @@ mod builtins {
                 "cannot create range with step of 0",
             )),
             positive if positive > 0 => to_result((lower..upper).step_by(positive as usize)),
-            negative => to_result(
-                (upper + 1..lower + 1)
-                    .step_by(negative.unsigned_abs() as usize)
-                    .rev(),
-            ),
+            negative => {
+                let abs_step = negative.unsigned_abs() as i32;
+                let start = upper + 1 + (lower - upper - 1) % abs_step;
+                to_result((start..lower + 1).step_by(abs_step as usize).rev())
+            }
         }
     }
 
