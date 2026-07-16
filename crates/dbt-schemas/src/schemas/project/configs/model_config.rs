@@ -505,6 +505,31 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+sync")]
     pub sync: Option<SyncConfig>,
 
+    // ClickHouse
+    // dictionary materialization
+    #[serde(rename = "+connection_overrides")]
+    pub connection_overrides: Option<BTreeMap<String, YmlValue>>,
+    #[serde(rename = "+fields")]
+    pub fields: Option<Vec<YmlValue>>,
+    #[serde(rename = "+source_type")]
+    pub source_type: Option<String>,
+    #[serde(rename = "+url")]
+    pub url: Option<String>,
+    #[serde(rename = "+format")]
+    pub format: Option<String>,
+    #[serde(rename = "+layout")]
+    pub layout: Option<String>,
+    #[serde(rename = "+lifetime")]
+    pub lifetime: Option<YmlValue>,
+    #[serde(rename = "+range")]
+    pub range: Option<YmlValue>,
+    #[serde(rename = "+table")]
+    pub table: Option<String>,
+    #[serde(rename = "+update_field")]
+    pub update_field: Option<String>,
+    #[serde(rename = "+update_lag")]
+    pub update_lag: Option<YmlValue>,
+
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -805,6 +830,18 @@ impl From<ProjectModelConfig> for ModelConfig {
 
                 primary_key: config.primary_key,
                 category: config.category,
+
+                connection_overrides: config.connection_overrides,
+                fields: config.fields,
+                source_type: config.source_type,
+                url: config.url,
+                format: config.format,
+                layout: config.layout,
+                lifetime: config.lifetime,
+                range: config.range,
+                table: config.table,
+                update_field: config.update_field,
+                update_lag: config.update_lag,
             },
             // Python-specific fields - initialized to None here, set during Python AST analysis
             config_keys_used: None,
@@ -993,6 +1030,17 @@ impl From<ModelConfig> for ProjectModelConfig {
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,
+            connection_overrides: config.__warehouse_specific_config__.connection_overrides,
+            fields: config.__warehouse_specific_config__.fields,
+            source_type: config.__warehouse_specific_config__.source_type,
+            url: config.__warehouse_specific_config__.url,
+            format: config.__warehouse_specific_config__.format,
+            layout: config.__warehouse_specific_config__.layout,
+            lifetime: config.__warehouse_specific_config__.lifetime,
+            range: config.__warehouse_specific_config__.range,
+            table: config.__warehouse_specific_config__.table,
+            update_field: config.__warehouse_specific_config__.update_field,
+            update_lag: config.__warehouse_specific_config__.update_lag,
             __additional_properties__: BTreeMap::new(),
         }
     }

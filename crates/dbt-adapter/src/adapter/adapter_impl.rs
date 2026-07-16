@@ -463,6 +463,75 @@ impl AdapterImpl {
         None
     }
 
+    /// ClickHouse `adapter.get_credentials(connection_overrides)` (impl.py):
+    /// connection parameters for dictionary SOURCE(CLICKHOUSE(...)) clauses.
+    /// Profile values merged with the model's `connection_overrides`; override
+    /// keys whose final value is falsy are removed.
+    pub fn get_credentials(&self, connection_overrides: &Value) -> Value {
+        let mut credentials: Vec<(String, Value)> = vec![
+            (
+                "user".to_string(),
+                Value::from(
+                    self.get_db_config("user")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_else(|| "default".to_string()),
+                ),
+            ),
+            (
+                "password".to_string(),
+                Value::from(
+                    self.get_db_config("password")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_default(),
+                ),
+            ),
+            (
+                "database".to_string(),
+                Value::from(
+                    self.get_db_config("database")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_default(),
+                ),
+            ),
+            (
+                "host".to_string(),
+                Value::from(
+                    self.get_db_config("host")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_else(|| "localhost".to_string()),
+                ),
+            ),
+            (
+                "port".to_string(),
+                Value::from(
+                    self.get_db_config("port")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_default(),
+                ),
+            ),
+        ];
+
+        let mut override_keys: Vec<String> = Vec::new();
+        if let Ok(keys) = connection_overrides.try_iter() {
+            for key in keys {
+                let Some(name) = key.as_str() else { continue };
+                let Ok(value) = connection_overrides.get_item(&key) else {
+                    continue;
+                };
+                override_keys.push(name.to_string());
+                if let Some(entry) = credentials.iter_mut().find(|(k, _)| k == name) {
+                    entry.1 = value;
+                } else {
+                    credentials.push((name.to_string(), value));
+                }
+            }
+        }
+        // Python: overridden keys with falsy final values are dropped.
+        credentials.retain(|(k, v)| !override_keys.contains(k) || v.is_true());
+
+        Value::from(credentials.into_iter().collect::<BTreeMap<String, Value>>())
+    }
+
     /// Returns the table format string for `database` (e.g. `"ducklake"`, `"iceberg"`, `"default"`).
     ///
     /// Mirrors the Python reference implementation in dbt-duckdb:
@@ -5316,6 +5385,88 @@ mod tests {
     fn test_quote_for_bigquery() {
         let adapter = AdapterImpl::new(engine(Bigquery), None);
         assert_eq!(adapter.quote("abc"), "`abc`");
+    }
+
+    fn clickhouse_adapter(config: Mapping) -> AdapterImpl {
+        AdapterImpl::new(build_engine(ClickHouse, config), None)
+    }
+
+    #[test]
+    fn test_get_credentials_profile_values_and_defaults() {
+        // user/host fall back to impl.py defaults when absent from the profile;
+        // password/database/port default to empty strings.
+        let adapter = clickhouse_adapter(Mapping::from_iter([
+            ("password".into(), "secret".into()),
+            ("database".into(), "analytics".into()),
+        ]));
+        let creds = adapter.get_credentials(&Value::UNDEFINED);
+
+        assert_eq!(creds.get_attr("user").unwrap().as_str(), Some("default"));
+        assert_eq!(creds.get_attr("host").unwrap().as_str(), Some("localhost"));
+        assert_eq!(creds.get_attr("password").unwrap().as_str(), Some("secret"));
+        assert_eq!(
+            creds.get_attr("database").unwrap().as_str(),
+            Some("analytics")
+        );
+        assert_eq!(creds.get_attr("port").unwrap().as_str(), Some(""));
+    }
+
+    #[test]
+    fn test_get_credentials_overrides_replace_and_add_keys() {
+        let adapter = clickhouse_adapter(Mapping::from_iter([
+            ("user".into(), "profile_user".into()),
+            ("password".into(), "profile_pass".into()),
+            ("host".into(), "ch.example.com".into()),
+            ("port".into(), 8123.into()),
+        ]));
+        let overrides = Value::from(BTreeMap::from([
+            ("user".to_string(), Value::from("override_user")),
+            ("cluster".to_string(), Value::from("test_shard")),
+        ]));
+        let creds = adapter.get_credentials(&overrides);
+
+        // Overridden key replaced; unknown override key added.
+        assert_eq!(
+            creds.get_attr("user").unwrap().as_str(),
+            Some("override_user")
+        );
+        assert_eq!(
+            creds.get_attr("cluster").unwrap().as_str(),
+            Some("test_shard")
+        );
+        // Non-overridden profile values untouched (port stringified from the profile int).
+        assert_eq!(
+            creds.get_attr("password").unwrap().as_str(),
+            Some("profile_pass")
+        );
+        assert_eq!(
+            creds.get_attr("host").unwrap().as_str(),
+            Some("ch.example.com")
+        );
+        assert_eq!(creds.get_attr("port").unwrap().as_str(), Some("8123"));
+    }
+
+    #[test]
+    fn test_get_credentials_drops_falsy_overridden_keys() {
+        // impl.py parity: keys explicitly overridden to a falsy value are removed,
+        // while non-overridden keys keep their (possibly empty) profile values.
+        let adapter = clickhouse_adapter(Mapping::from_iter([
+            ("user".into(), "profile_user".into()),
+            ("password".into(), "profile_pass".into()),
+        ]));
+        let overrides = Value::from(BTreeMap::from([(
+            "password".to_string(),
+            Value::from(""),
+        )]));
+        let creds = adapter.get_credentials(&overrides);
+
+        assert!(creds.get_attr("password").unwrap().is_undefined());
+        assert_eq!(
+            creds.get_attr("user").unwrap().as_str(),
+            Some("profile_user")
+        );
+        // database was never configured nor overridden: present as empty string.
+        assert_eq!(creds.get_attr("database").unwrap().as_str(), Some(""));
     }
 
     #[test]

@@ -31,6 +31,8 @@ pub enum RelationType {
     MetricView,
     /// An enum for a warehouse function
     Function,
+    /// An enum for a ClickHouse dictionary
+    Dictionary,
 }
 
 impl RelationType {
@@ -85,6 +87,7 @@ impl fmt::Display for RelationType {
             RelationType::StreamingTable => "streaming_table",
             RelationType::MetricView => "metric_view",
             RelationType::Function => "function",
+            RelationType::Dictionary => "dictionary",
         };
         write!(f, "{s}")
     }
@@ -104,6 +107,7 @@ impl From<&str> for RelationType {
             "streaming_table" => RelationType::StreamingTable,
             "metric_view" => RelationType::MetricView,
             "function" => RelationType::Function,
+            "dictionary" => RelationType::Dictionary,
             _ => panic!("Invalid relation type: {s}"),
         }
     }
@@ -112,6 +116,13 @@ impl From<&str> for RelationType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dictionary_relation_type_round_trips() {
+        let rt = RelationType::from("dictionary");
+        assert_eq!(rt, RelationType::Dictionary);
+        assert_eq!(rt.to_string(), "dictionary");
+    }
 
     #[test]
     fn spark_real_types_resolve_to_table_or_view() {
