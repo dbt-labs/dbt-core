@@ -1,6 +1,0 @@
-kind: Fixes
-body: Make the latest_version_pointer collision check quoting/case aware so an unquoted latest-version alias differing from the pointer name only by case is correctly detected on case-insensitive warehouses
-time: 2026-06-08T17:09:07.712495+05:30
-custom:
-    Author: aahel
-    Issue: "15210"

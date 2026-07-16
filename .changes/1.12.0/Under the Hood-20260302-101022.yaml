@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Unpin sqlparse dependency, and introduce --sqlparse CLI option for configuring sqlparse limits
-time: 2026-03-02T10:10:22.254214-05:00
-custom:
-    Author: michelleark
-    Issue: "12329"
