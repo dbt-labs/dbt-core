@@ -39,4 +39,20 @@ impl Connection for NoopConnection {
             adbc_core::error::Status::NotImplemented,
         ))
     }
+
+    fn get_objects<'a>(
+        &'a self,
+        _depth: adbc_core::options::ObjectDepth,
+        _catalog: Option<&'a str>,
+        _db_schema: Option<&'a str>,
+        _table_name: Option<&'a str>,
+        _table_type: Option<Vec<&'a str>>,
+        _column_name: Option<&'a str>,
+    ) -> adbc_core::error::Result<Box<dyn arrow_array::RecordBatchReader + Send + 'a>> {
+        // Return an error instead of panicking
+        Err(adbc_core::error::Error::with_message_and_status(
+            "NoopConnection does not support object retrieval",
+            adbc_core::error::Status::NotImplemented,
+        ))
+    }
 }
