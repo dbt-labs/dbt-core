@@ -1,0 +1,7 @@
+kind: Fixes
+body: Snowflake: resolve source columns for catalog-linked (Iceberg) databases during static analysis by falling back to SHOW OBJECTS + DESCRIBE TABLE when INFORMATION_SCHEMA.COLUMNS returns no rows, fixing dbt0214 TableNotFound under static_analysis: strict
+time: 2026-07-15T00:00:00.000000+00:00
+custom:
+    author: jairus-m
+    issue: "15577"
+    project: dbt-core

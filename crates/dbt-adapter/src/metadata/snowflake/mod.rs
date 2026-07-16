@@ -371,6 +371,277 @@ pub fn list_relations(
     Ok(relations)
 }
 
+/// List the schema names in a Snowflake database via `SHOW SCHEMAS`, paginating on the unique
+/// `name` column the same way [`list_relations`] paginates objects. Used by the
+/// catalog-linked-database fallback in
+/// [`SnowflakeMetadataAdapter::list_relations_schemas_by_patterns_inner`] to scope object
+/// enumeration to the schemas a source pattern could match.
+fn list_database_schemas(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    database: &str,
+    token: &CancellationToken,
+) -> AdapterResult<Vec<String>> {
+    let limit_size = 10000;
+    let mut from_name: Option<String> = None;
+    let mut schemas = Vec::new();
+    loop {
+        let sql = format!(
+            "SHOW SCHEMAS IN DATABASE {database} LIMIT {limit_size}{}",
+            from_name
+                .as_ref()
+                .map(|name| format!(" FROM '{name}'"))
+                .unwrap_or_default()
+        );
+        let ctx = QueryCtx::default().with_desc("List schemas for pattern fallback");
+        let (_, table) = adapter.query(&ctx, conn, &sql, None, token.clone())?;
+        let batch = table.original_record_batch();
+
+        let names = batch.column_values::<StringArray>("name")?;
+        let num_names = names.len();
+        let last_name = match num_names.checked_sub(1) {
+            Some(idx) => names.value(idx).to_string(),
+            None => break,
+        };
+        for i in 0..num_names {
+            schemas.push(names.value(i).to_string());
+        }
+        if num_names < limit_size {
+            break;
+        }
+        from_name = Some(last_name);
+    }
+    Ok(schemas)
+}
+
+/// Lists all relations in `database` whose schema names match at least one entry in `patterns`,
+/// using `SHOW SCHEMAS` + per-schema `SHOW OBJECTS`. Used by the Phase 2 fallback in
+/// [`SnowflakeMetadataAdapter::list_relations_schemas_by_patterns_inner`].
+fn list_pattern_relations(
+    adapter: &AdapterImpl,
+    engine: &dyn AdapterEngine,
+    conn: &mut dyn Connection,
+    database: &str,
+    patterns: &[RelationPattern],
+    quoting: ResolvedQuoting,
+    token: &CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let schemas = list_database_schemas(adapter, conn, database, token)?;
+    let mut relations = Vec::new();
+    for schema in schemas {
+        if !patterns
+            .iter()
+            .any(|pat| snowflake_ilike_match(&pat.schema_pattern, &schema))
+        {
+            continue;
+        }
+        let relation = crate::relation::do_create_relation(
+            AdapterType::Snowflake,
+            database.to_string(),
+            schema,
+            None,
+            None,
+            quoting,
+        )?;
+        let db_schema = CatalogAndSchema::from(relation.as_ref());
+        let ctx = QueryCtx::default().with_desc("List objects for pattern fallback");
+        relations.extend(list_relations(
+            engine,
+            &ctx,
+            conn,
+            &db_schema,
+            token.clone(),
+        )?);
+    }
+    Ok(relations)
+}
+
+fn build_info_schema_keys(
+    patterns_by_database: &BTreeMap<String, Vec<RelationPattern>>,
+) -> Vec<(String, String)> {
+    patterns_by_database
+        .iter()
+        .map(|(database, patterns)| {
+            let predicates = patterns
+                .iter()
+                .map(|pat| {
+                    format!(
+                        "(TABLE_SCHEMA ILIKE '{}' AND TABLE_NAME ILIKE '{}')",
+                        pat.schema_pattern, pat.table_pattern
+                    )
+                })
+                .collect::<Vec<_>>();
+            let predicates_union = predicates.join(" OR ");
+            let sql = format!(
+                "SELECT
+    TABLE_CATALOG,
+    TABLE_SCHEMA,
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    IS_NULLABLE,
+    CHARACTER_MAXIMUM_LENGTH,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE,
+    COMMENT
+FROM {database}.INFORMATION_SCHEMA.COLUMNS
+WHERE {predicates_union}
+ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
+            );
+            (database.clone(), sql)
+        })
+        .collect()
+}
+
+async fn run_info_schema_phase(
+    engine: Arc<dyn AdapterEngine>,
+    adapter: AdapterImpl,
+    quoting: ResolvedQuoting,
+    info_schema_keys: Vec<(String, String)>,
+    token: CancellationToken,
+) -> Result<
+    (
+        Vec<(String, AdapterResult<RelationSchemaPair>)>,
+        BTreeSet<String>,
+    ),
+    Cancellable<AdapterError>,
+> {
+    type Phase1Acc = (
+        Vec<(String, AdapterResult<RelationSchemaPair>)>,
+        BTreeSet<String>,
+    );
+    let threads = engine.threads();
+    let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+    let p1_adapter = adapter.clone();
+    let p1_token = token.clone();
+    let map_f = move |conn: &'_ mut dyn Connection,
+                      key: &(String, String)|
+          -> AdapterResult<Arc<RecordBatch>> {
+        let ctx = QueryCtx::default().with_desc("Get schema by pattern");
+        let (_, table) = p1_adapter.query(&ctx, conn, &key.1, None, p1_token.clone())?;
+        Ok(table.original_record_batch())
+    };
+    let p1_reduce_adapter = adapter;
+    let reduce_f = move |acc: &mut Phase1Acc,
+                         key: (String, String),
+                         batch_res: AdapterResult<Arc<RecordBatch>>|
+          -> Result<(), Cancellable<AdapterError>> {
+        let batch = batch_res?;
+        if batch.num_rows() == 0 {
+            acc.1.insert(key.0);
+        } else {
+            let mut schemas_from_batch = build_schemas_from_information_schema(
+                batch,
+                quoting,
+                p1_reduce_adapter.engine().type_ops().as_ref(),
+            )?;
+            acc.0.append(&mut schemas_from_batch);
+        }
+        Ok(())
+    };
+    let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+    map_reduce.run(Arc::new(info_schema_keys), token).await
+}
+
+async fn run_show_objects_phase(
+    engine: Arc<dyn AdapterEngine>,
+    adapter: AdapterImpl,
+    quoting: ResolvedQuoting,
+    patterns_by_database: BTreeMap<String, Vec<RelationPattern>>,
+    empty_databases: Vec<String>,
+    token: CancellationToken,
+) -> Result<Vec<DescribeTarget>, Cancellable<AdapterError>> {
+    let threads = engine.threads();
+    let factory = Box::new(AdapterConnectionFactory::new(engine.clone(), threads));
+    let p2_adapter = adapter.clone();
+    let p2_engine = engine;
+    let p2_token = token.clone();
+    let p2_map_patterns = patterns_by_database.clone();
+    let map_f = move |conn: &'_ mut dyn Connection,
+                      database: &String|
+          -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+        let Some(patterns) = p2_map_patterns.get(database) else {
+            return Ok(Vec::new());
+        };
+        list_pattern_relations(
+            &p2_adapter,
+            p2_engine.as_ref(),
+            conn,
+            database,
+            patterns,
+            quoting,
+            &p2_token,
+        )
+    };
+    let reduce_f = move |acc: &mut Vec<DescribeTarget>,
+                         database: String,
+                         relations_res: AdapterResult<Vec<Arc<dyn BaseRelation>>>|
+          -> Result<(), Cancellable<AdapterError>> {
+        let relations = relations_res?;
+        let Some(patterns) = patterns_by_database.get(&database) else {
+            return Ok(());
+        };
+        acc.extend(
+            relations
+                .into_iter()
+                .filter(|r| {
+                    let schema = r.schema().unwrap_or_default();
+                    let identifier = r.identifier().unwrap_or_default();
+                    patterns.iter().any(|pat| {
+                        snowflake_ilike_match(&pat.schema_pattern, schema)
+                            && snowflake_ilike_match(&pat.table_pattern, identifier)
+                    })
+                })
+                .map(|r| DescribeTarget::from_relation(&r)),
+        );
+        Ok(())
+    };
+    let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+    map_reduce.run(Arc::new(empty_databases), token).await
+}
+
+async fn run_describe_table_phase(
+    engine: Arc<dyn AdapterEngine>,
+    adapter: AdapterImpl,
+    quoting: ResolvedQuoting,
+    targets: Vec<DescribeTarget>,
+    token: CancellationToken,
+) -> Result<Vec<(String, AdapterResult<RelationSchemaPair>)>, Cancellable<AdapterError>> {
+    let threads = engine.threads();
+    let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+    let p3_adapter = adapter.clone();
+    let p3_token = token.clone();
+    let map_f = move |conn: &'_ mut dyn Connection,
+                      target: &DescribeTarget|
+          -> AdapterResult<Arc<Schema>> {
+        let ctx = QueryCtx::new_metadata().with_desc("Get table schema (pattern fallback)");
+        let (_, table) =
+            p3_adapter.query(&ctx, conn, &target.describe_sql, None, p3_token.clone())?;
+        let batch = table.original_record_batch();
+        build_schema_from_desc_table(batch, p3_adapter.engine().type_ops().as_ref())
+    };
+    let reduce_f = move |acc: &mut Vec<(String, AdapterResult<RelationSchemaPair>)>,
+                         target: DescribeTarget,
+                         schema_res: AdapterResult<Arc<Schema>>|
+          -> Result<(), Cancellable<AdapterError>> {
+        let pair = schema_res.and_then(|schema| {
+            let relation = crate::relation::do_create_relation(
+                AdapterType::Snowflake,
+                target.database.clone(),
+                target.schema.clone(),
+                Some(target.identifier.clone()),
+                None,
+                quoting,
+            )?;
+            Ok((relation.into(), schema))
+        });
+        acc.push((target.key, pair));
+        Ok(())
+    };
+    let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+    map_reduce.run(Arc::new(targets), token).await
+}
+
 pub struct SnowflakeMetadataAdapter {
     pub adapter: AdapterImpl,
 }
@@ -1041,91 +1312,68 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         map_reduce.run(Arc::new(table_names), token)
     }
 
-    /// List relations schemas by patterns (use information schema query)
+    /// List relations schemas by patterns (use information schema query).
+    ///
+    /// The primary path bulk-fetches columns from `INFORMATION_SCHEMA.COLUMNS`, one query per
+    /// database. For Iceberg tables in Snowflake **catalog-linked databases (CLDs)**,
+    /// `INFORMATION_SCHEMA.COLUMNS` returns zero rows even though the tables are fully queryable
+    /// (see dbt-labs/dbt-core#15577). When a database's `INFORMATION_SCHEMA` query comes back
+    /// empty, we fall back to enumerating its tables — `SHOW SCHEMAS` to find the schemas a
+    /// pattern could match, then `SHOW OBJECTS IN SCHEMA` for each — and resolving each table's
+    /// columns with `DESCRIBE TABLE`, all of which do work for CLDs.
     fn list_relations_schemas_by_patterns_inner(
         &self,
         relations_pattern: &[RelationPattern],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
-        // All results are accumulated in a Vec of pairs
-        type Acc = Vec<(String, AdapterResult<RelationSchemaPair>)>;
-
-        // Group patterns by database to minimize queries needed
-        let mut patterns_by_database = BTreeMap::new();
+        // Group patterns by database to minimize queries needed. Owned so it can be reused by the
+        // fallback phases below.
+        let mut patterns_by_database: BTreeMap<String, Vec<RelationPattern>> = BTreeMap::new();
         for pat in relations_pattern {
             patterns_by_database
                 .entry(pat.database.clone())
-                .or_insert_with(Vec::new)
-                .push(pat);
+                .or_default()
+                .push(pat.clone());
         }
-
-        let queries = patterns_by_database
-            .into_iter()
-            .map(|(database, patterns)| {
-                // Build the query for all relations in this database
-                let predicates = patterns
-                    .iter()
-                    .map(|pat| {
-                        format!(
-                            "(TABLE_SCHEMA ILIKE '{}' AND TABLE_NAME ILIKE '{}')",
-                            pat.schema_pattern, pat.table_pattern
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                let predicates_union = predicates.join(" OR ");
-                format!(
-                    "SELECT
-    TABLE_CATALOG,
-    TABLE_SCHEMA,
-    TABLE_NAME,
-    COLUMN_NAME,
-    DATA_TYPE,
-    IS_NULLABLE,
-    CHARACTER_MAXIMUM_LENGTH,
-    NUMERIC_PRECISION,
-    NUMERIC_SCALE,
-    COMMENT
-FROM {database}.INFORMATION_SCHEMA.COLUMNS
-WHERE {predicates_union}
-ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
-                )
-            });
-
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
-
-        // map_f runs the queries, reduce_f decodes the result set and builds the schemas
+        let info_schema_keys = build_info_schema_keys(&patterns_by_database);
+        let engine = self.adapter.engine().clone();
         let adapter = self.adapter.clone();
-        let token_clone = token.clone();
-        let map_f =
-            move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
-                let ctx = QueryCtx::default().with_desc("Get schema by pattern");
-                let (_, table) = adapter.query(&ctx, conn, sql, None, token_clone.clone())?;
-                let batch = table.original_record_batch();
-                Ok(batch)
-            };
-
         let quoting = self.adapter.quoting();
 
-        let adapter = self.adapter.clone();
-        let reduce_f = move |acc: &mut Acc,
-                             _sql: String,
-                             batch_res: AdapterResult<Arc<RecordBatch>>|
-              -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
-            let mut schemas_from_batch = build_schemas_from_information_schema(
-                batch,
+        Box::pin(async move {
+            let (mut resolved, empty_databases) = run_info_schema_phase(
+                engine.clone(),
+                adapter.clone(),
                 quoting,
-                adapter.engine().type_ops().as_ref(),
-            )?;
-            acc.append(&mut schemas_from_batch);
-            Ok(())
-        };
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        let keys = queries.collect::<Vec<_>>();
-        map_reduce.run(Arc::new(keys), token)
+                info_schema_keys,
+                token.clone(),
+            )
+            .await?;
+
+            if empty_databases.is_empty() {
+                return Ok(resolved);
+            }
+
+            let empty_databases = empty_databases.into_iter().collect::<Vec<String>>();
+            let targets = run_show_objects_phase(
+                engine.clone(),
+                adapter.clone(),
+                quoting,
+                patterns_by_database,
+                empty_databases,
+                token.clone(),
+            )
+            .await?;
+
+            if targets.is_empty() {
+                return Ok(resolved);
+            }
+
+            let mut fallback_pairs =
+                run_describe_table_phase(engine, adapter, quoting, targets, token).await?;
+            resolved.append(&mut fallback_pairs);
+            Ok(resolved)
+        })
     }
 
     fn create_schemas_if_not_exists(
@@ -1410,6 +1658,87 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(vec![script]), token)
+    }
+}
+
+/// Match a Snowflake `ILIKE` pattern against a value, mirroring the semantics of the
+/// `TABLE_SCHEMA ILIKE '...' AND TABLE_NAME ILIKE '...'` predicates used by the
+/// `INFORMATION_SCHEMA.COLUMNS` query in [`SnowflakeMetadataAdapter::list_relations_schemas_by_patterns_inner`].
+///
+/// Returns true when `p_char` is a single-character wildcard or matches `v_char` exactly.
+fn ilike_char_matches(p_char: char, v_char: char) -> bool {
+    p_char == '_' || p_char == v_char
+}
+
+/// `%` matches any (possibly empty) run of characters, `_` matches exactly one character, and
+/// matching is case-insensitive. Used by the catalog-linked-database fallback to filter the
+/// results of `SHOW OBJECTS` down to the tables a pattern would have selected.
+fn snowflake_ilike_match(pattern: &str, value: &str) -> bool {
+    let p: Vec<char> = pattern.to_lowercase().chars().collect();
+    let v: Vec<char> = value.to_lowercase().chars().collect();
+
+    // Classic linear wildcard match with backtracking on the last seen `%`.
+    let (mut pi, mut vi) = (0usize, 0usize);
+    let mut star_pi: Option<usize> = None;
+    let mut star_vi = 0usize;
+
+    while vi < v.len() {
+        if pi < p.len() {
+            if p[pi] == '%' {
+                star_pi = Some(pi);
+                star_vi = vi;
+                pi += 1;
+            } else if ilike_char_matches(p[pi], v[vi]) {
+                pi += 1;
+                vi += 1;
+            } else if let Some(sp) = star_pi {
+                pi = sp + 1;
+                star_vi += 1;
+                vi = star_vi;
+            } else {
+                return false;
+            }
+        } else if let Some(sp) = star_pi {
+            pi = sp + 1;
+            star_vi += 1;
+            vi = star_vi;
+        } else {
+            return false;
+        }
+    }
+
+    while p.get(pi) == Some(&'%') {
+        pi += 1;
+    }
+    pi == p.len()
+}
+
+/// A single table to introspect via `DESCRIBE TABLE` in the catalog-linked-database fallback of
+/// [`SnowflakeMetadataAdapter::list_relations_schemas_by_patterns_inner`].
+#[derive(Clone, Debug)]
+struct DescribeTarget {
+    /// Unquoted `"{catalog}.{schema}.{table}"` result key, matching the key format produced by
+    /// [`build_schemas_from_information_schema`] so downstream lookups are identical.
+    key: String,
+    /// The fully-rendered `describe table <fqn>` statement (fqn quoted per the relation's policy).
+    describe_sql: String,
+    database: String,
+    schema: String,
+    identifier: String,
+}
+
+impl DescribeTarget {
+    fn from_relation(relation: &Arc<dyn BaseRelation>) -> Self {
+        let database = relation.database().unwrap_or_default().to_string();
+        let schema = relation.schema().unwrap_or_default().to_string();
+        let identifier = relation.identifier().unwrap_or_default().to_string();
+        Self {
+            key: format!("{database}.{schema}.{identifier}"),
+            describe_sql: format!("describe table {}", relation.semantic_fqn()),
+            database,
+            schema,
+            identifier,
+        }
     }
 }
 
@@ -1822,22 +2151,221 @@ mod tests {
         );
     }
 
-    #[test]
-    fn build_view_definition_script_default_get_ddl() {
+    fn sample_view_definition_script() -> String {
         let fqns = vec![
             r#""DB"."S"."V1""#.to_string(),
             r#""DB"."S"."V2""#.to_string(),
         ];
-        let script = build_view_definition_script(&fqns);
+        build_view_definition_script(&fqns)
+    }
+
+    #[test]
+    fn build_view_definition_script_calls_get_ddl() {
+        let script = sample_view_definition_script();
         assert!(
             script.contains("get_ddl('VIEW', :obj_name)"),
             "got: {script}"
         );
-        assert!(script.contains(r#""DB"."S"."V1""#));
-        assert!(script.contains(r#""DB"."S"."V2""#));
         assert!(script.contains("array_construct"));
+    }
+
+    #[test]
+    fn build_view_definition_script_output_columns() {
+        let script = sample_view_definition_script();
         assert!(script.contains("OBJECT_NAME"));
         assert!(script.contains("DEFINITION"));
         assert!(script.contains("ERROR"));
+    }
+
+    #[test]
+    fn ilike_percent_wildcard_bare() {
+        assert!(snowflake_ilike_match("%", "ANYTHING"));
+        assert!(snowflake_ilike_match("%", ""));
+        assert!(snowflake_ilike_match("%_EVENTS", "RAW_EVENTS"));
+    }
+
+    #[test]
+    fn ilike_percent_wildcard_prefix() {
+        assert!(snowflake_ilike_match("STG_%", "STG_ORDERS"));
+        assert!(snowflake_ilike_match("STG_%", "STG_"));
+        assert!(!snowflake_ilike_match("STG_%", "DIM_ORDERS"));
+    }
+
+    #[test]
+    fn ilike_underscore_wildcard() {
+        assert!(snowflake_ilike_match("A_C", "ABC"));
+        assert!(!snowflake_ilike_match("A_C", "AC"));
+        assert!(!snowflake_ilike_match("A_C", "ABBC"));
+    }
+
+    #[test]
+    fn ilike_case_insensitive() {
+        assert!(snowflake_ilike_match("my_schema", "MY_SCHEMA"));
+        assert!(snowflake_ilike_match("CUSTOMERS", "customers"));
+    }
+
+    #[test]
+    fn ilike_anchored() {
+        assert!(!snowflake_ilike_match("ORDERS", "ORDERS_SNAPSHOT"));
+        assert!(!snowflake_ilike_match("ORDERS", "STG_ORDERS"));
+    }
+
+    #[test]
+    fn show_objects_batch_filters_by_pattern() {
+        use arrow_schema::{DataType, Field};
+
+        // A SHOW OBJECTS-shaped result for a catalog-linked database, all Iceberg tables.
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("name", DataType::Utf8, false),
+            Field::new("database_name", DataType::Utf8, false),
+            Field::new("schema_name", DataType::Utf8, false),
+            Field::new("kind", DataType::Utf8, false),
+            Field::new("is_dynamic", DataType::Utf8, false),
+            Field::new("is_iceberg", DataType::Utf8, false),
+        ]));
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringArray::from(vec!["CUSTOMERS", "ORDERS", "STG_EVENTS"])),
+                Arc::new(StringArray::from(vec![
+                    "MY_CLD_DB",
+                    "MY_CLD_DB",
+                    "MY_CLD_DB",
+                ])),
+                Arc::new(StringArray::from(vec![
+                    "MY_SCHEMA",
+                    "MY_SCHEMA",
+                    "OTHER_SCHEMA",
+                ])),
+                Arc::new(StringArray::from(vec!["TABLE", "TABLE", "TABLE"])),
+                Arc::new(StringArray::from(vec!["N", "N", "N"])),
+                Arc::new(StringArray::from(vec!["Y", "Y", "Y"])),
+            ],
+        )
+        .unwrap();
+
+        let relations =
+            build_relations_from_show_objects(&batch, ResolvedQuoting::trues()).unwrap();
+        assert_eq!(relations.len(), 3);
+
+        // Pattern: schema = MY_SCHEMA, table = % -> only the two MY_SCHEMA tables.
+        let matched = relations
+            .iter()
+            .filter(|r| {
+                snowflake_ilike_match("MY_SCHEMA", r.schema().unwrap_or_default())
+                    && snowflake_ilike_match("%", r.identifier().unwrap_or_default())
+            })
+            .map(|r| r.identifier().unwrap_or_default().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(matched, vec!["CUSTOMERS".to_string(), "ORDERS".to_string()]);
+    }
+
+    fn make_desc_table_batch() -> Arc<RecordBatch> {
+        use arrow_schema::{DataType, Field};
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("name", DataType::Utf8, false),
+            Field::new("type", DataType::Utf8, false),
+            Field::new("null?", DataType::Utf8, false),
+            Field::new("comment", DataType::Utf8, true),
+        ]));
+        Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["ID", "NAME"])),
+                    Arc::new(StringArray::from(vec!["NUMBER(38,0)", "VARCHAR(16777216)"])),
+                    Arc::new(StringArray::from(vec!["N", "Y"])),
+                    Arc::new(StringArray::from(vec!["", "the customer name"])),
+                ],
+            )
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn desc_table_batch_field_names() {
+        use crate::sql_types::DefaultTypeOps;
+        let batch = make_desc_table_batch();
+        let type_ops = DefaultTypeOps::new(AdapterType::Snowflake);
+        let arrow_schema = build_schema_from_desc_table(batch, &type_ops).unwrap();
+
+        assert_eq!(arrow_schema.fields().len(), 2);
+        assert_eq!(arrow_schema.field(0).name(), "ID");
+        assert_eq!(arrow_schema.field(1).name(), "NAME");
+    }
+
+    #[test]
+    fn desc_table_batch_field_nullability_and_key() {
+        use crate::sql_types::DefaultTypeOps;
+        let batch = make_desc_table_batch();
+        let type_ops = DefaultTypeOps::new(AdapterType::Snowflake);
+        let arrow_schema = build_schema_from_desc_table(batch, &type_ops).unwrap();
+
+        assert!(!arrow_schema.field(0).is_nullable());
+        assert!(arrow_schema.field(1).is_nullable());
+
+        // The fallback result key must match the info-schema path's unquoted
+        // "{catalog}.{schema}.{table}" format so downstream lookups are identical.
+        let relation = crate::relation::do_create_relation(
+            AdapterType::Snowflake,
+            "MY_CLD_DB".to_string(),
+            "MY_SCHEMA".to_string(),
+            Some("CUSTOMERS".to_string()),
+            None,
+            ResolvedQuoting::trues(),
+        )
+        .unwrap();
+        let key = format!(
+            "{}.{}.{}",
+            relation.database().unwrap_or_default(),
+            relation.schema().unwrap_or_default(),
+            relation.identifier().unwrap_or_default(),
+        );
+        assert_eq!(key, "MY_CLD_DB.MY_SCHEMA.CUSTOMERS");
+    }
+
+    #[test]
+    fn schema_scoping_exact_and_prefix_pattern() {
+        // Mirrors the schema-level filter in the CLD fallback's Phase 2: of the schemas returned
+        // by `SHOW SCHEMAS`, only those a pattern's `schema_pattern` matches are enumerated for
+        // objects. A pattern that matches nothing selects no schemas, so a non-matching or
+        // dropped-schema pattern costs a single `SHOW SCHEMAS` rather than a database-wide scan.
+        let schemas = ["MY_SCHEMA", "OTHER_SCHEMA", "STG_EVENTS", "STG_ORDERS"];
+        let select = |schema_pattern: &str| {
+            schemas
+                .iter()
+                .filter(|s| snowflake_ilike_match(schema_pattern, s))
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(select("MY_SCHEMA"), vec!["MY_SCHEMA".to_string()]);
+        assert_eq!(
+            select("STG_%"),
+            vec!["STG_EVENTS".to_string(), "STG_ORDERS".to_string()]
+        );
+    }
+
+    #[test]
+    fn schema_scoping_wildcard_and_nomatch() {
+        let schemas = ["MY_SCHEMA", "OTHER_SCHEMA", "STG_EVENTS", "STG_ORDERS"];
+        let select = |schema_pattern: &str| {
+            schemas
+                .iter()
+                .filter(|s| snowflake_ilike_match(schema_pattern, s))
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            select("%"),
+            vec![
+                "MY_SCHEMA".to_string(),
+                "OTHER_SCHEMA".to_string(),
+                "STG_EVENTS".to_string(),
+                "STG_ORDERS".to_string(),
+            ]
+        );
+        assert!(select("NONEXISTENT").is_empty());
     }
 }
