@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::{fmt, io};
 
 pub use run_tasks_args::RunTasksArgs;
-pub use stats_to_results::stats_to_results;
+pub use stats_to_results::{stat_to_result, stats_to_results};
 
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, IoArgs};
@@ -131,15 +131,7 @@ impl TaskRunnerStats {
         self.run
             .stats
             .iter()
-            .map(|stat| {
-                stats_to_results(
-                    stat,
-                    self.run
-                        .nodes
-                        .as_ref()
-                        .expect("run_stats should have nodes"),
-                )
-            })
+            .map(|stat| stats_to_results(stat, &self.run))
             .collect()
     }
 

@@ -29,8 +29,8 @@ use crate::schemas::serde::{bool_or_string_bool, string_or_number_to_string};
 type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::{
-    CommonAttributes, DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot,
-    DbtSource, DbtTest, DbtUnitTest, NodeBaseAttributes,
+    AbsorbedOverload, CommonAttributes, DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed,
+    DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, NodeBaseAttributes,
     common::{
         Access, ComputePlatform, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig, SyncConfig,
@@ -1468,6 +1468,8 @@ pub struct ManifestFunction {
     pub on_configuration_change: Option<String>,
     pub returns: Option<crate::schemas::properties::FunctionReturnType>,
     pub arguments: Option<Vec<crate::schemas::properties::FunctionArgument>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overloads: Vec<AbsorbedOverload>,
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
@@ -1488,6 +1490,8 @@ struct ManifestFunctionCompat {
     pub on_configuration_change: Option<String>,
     pub returns: Option<crate::schemas::properties::FunctionReturnType>,
     pub arguments: Option<Vec<crate::schemas::properties::FunctionArgument>>,
+    #[serde(default)]
+    pub overloads: Vec<AbsorbedOverload>,
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
@@ -1514,6 +1518,7 @@ impl<'de> Deserialize<'de> for ManifestFunction {
             on_configuration_change: function.on_configuration_change,
             returns: function.returns,
             arguments: function.arguments,
+            overloads: function.overloads,
             __other__: function.__other__,
         })
     }
@@ -1560,6 +1565,7 @@ impl From<DbtFunction> for ManifestFunction {
             on_configuration_change: function.__function_attr__.on_configuration_change,
             returns: function.__function_attr__.returns,
             arguments: function.__function_attr__.arguments,
+            overloads: function.__function_attr__.overloads,
             __other__: function.__other__,
         }
     }

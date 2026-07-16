@@ -3,7 +3,8 @@
 use dbt_clap_core::*;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{ErrorCode, FsResult, err};
-use dbt_schemas::schemas::RunResultsArtifact;
+use dbt_schemas::schemas::{BatchResults, RunResultsArtifact};
+use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -23,6 +24,8 @@ pub struct RetryState {
     pub retryable_node_ids: Vec<String>,
     /// The static analysis setting from the original run, if present
     pub original_static_analysis: Option<StaticAnalysisKind>,
+    /// Per-node batch results from the previous run (for overload retry skip)
+    pub previous_batch_results: HashMap<String, BatchResults>,
     /// Whether the original run was invoked with --full-refresh
     pub original_full_refresh: bool,
 }
@@ -74,10 +77,21 @@ impl RetryState {
             );
         }
 
+        let previous_batch_results: HashMap<String, BatchResults> = artifact
+            .results
+            .iter()
+            .filter_map(|r| {
+                r.batch_results
+                    .as_ref()
+                    .map(|br| (r.unique_id.clone(), br.clone()))
+            })
+            .collect();
+
         Ok(Self {
             original_command,
             retryable_node_ids,
             original_static_analysis,
+            previous_batch_results,
             original_full_refresh,
         })
     }
@@ -171,6 +185,7 @@ mod tests {
             original_command: original_cmd.into(),
             retryable_node_ids: vec!["some_node_id".to_string()],
             original_static_analysis: original_sa,
+            previous_batch_results: Default::default(),
             original_full_refresh: false,
         };
         let retry_args = RetryArgs {
@@ -223,6 +238,7 @@ expected_sa: {expected_sa:?}",
             original_command: original_cmd.into(),
             retryable_node_ids: vec!["some_node_id".to_string()],
             original_static_analysis: None,
+            previous_batch_results: Default::default(),
             original_full_refresh,
         };
         let retry_args = RetryArgs {

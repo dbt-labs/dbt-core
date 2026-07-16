@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_adapter_core::AdapterType;
@@ -8,20 +8,20 @@ use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
 };
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
-use dbt_common::{FsResult, error::AbstractLocation};
+use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
-use dbt_schemas::schemas::DbtFunctionAttr;
 use dbt_schemas::schemas::common::{Access, DbtQuoting};
 use dbt_schemas::schemas::project::FunctionConfig;
 use dbt_schemas::schemas::project::ResolvedConfig;
+use dbt_schemas::schemas::{AbsorbedOverload, DbtFunctionAttr};
 use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtFunction, NodeBaseAttributes,
         common::NodeDependsOn,
         properties::{
-            FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FunctionKind,
+            FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FunctionKind, FunctionOverload,
             FunctionProperties,
         },
         ref_and_source::{DbtRef, DbtSourceWrapper},
@@ -45,6 +45,18 @@ use crate::{
 use dbt_common::tokiofs::read_to_string;
 
 use super::resolve_properties::MinimalPropertiesEntry;
+
+/// Body + dependencies of an overload-only SQL file, captured during the build
+/// loop and merged into its root function during absorption. Overload SQL can
+/// contain its own `ref()`/`source()`/`function()` calls; those dependencies
+/// must be carried onto the root node so the DAG stays complete.
+struct CapturedOverload {
+    raw_body: String,
+    compiled_body: String,
+    refs: Vec<DbtRef>,
+    functions: Vec<DbtRef>,
+    sources: Vec<DbtSourceWrapper>,
+}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_functions(
@@ -153,6 +165,48 @@ pub async fn resolve_functions(
             .then(a.asset.path.cmp(&b.asset.path))
     });
 
+    let mut pending_overloads: Vec<(String, Vec<FunctionOverload>)> = Vec::new();
+
+    // Discovery pass: walk the parsed function properties once to learn, before
+    // any nodes are built:
+    //   - overload_stems: every file claimed via `defined_in`
+    //   - root_stems:     every file that declares an `overloads:` block
+    //   - pending_overloads: (root unique_id, overload defs) to absorb post-loop
+    // SQL files can be listed in any order, so we must know the full overload set
+    // up front — that way overload files never become standalone function nodes
+    // (no register-then-delete). Root files are always built, even if they
+    // (incorrectly) claim themselves, so the self-reference validation still fires.
+    let mut overload_stems: HashSet<String> = HashSet::new();
+    let mut root_stems: HashSet<String> = HashSet::new();
+    for render_result in &function_sql_resources_map {
+        let Some(overloads) = render_result
+            .properties
+            .as_ref()
+            .and_then(|p| p.overloads.as_ref())
+        else {
+            continue;
+        };
+        if overloads.is_empty() {
+            continue;
+        }
+        overload_stems.extend(overloads.iter().map(|o| o.defined_in.clone()));
+        if let Some(stem) = render_result
+            .asset
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+        {
+            root_stems.insert(stem.to_string());
+            let root_uid = get_unique_id(stem, package_name, None, "function");
+            pending_overloads.push((root_uid, overloads.clone()));
+        }
+    }
+
+    // Rendered bodies + dependencies of overload files, keyed by file stem,
+    // captured during the build loop and absorbed into their root function
+    // afterwards.
+    let mut overload_bodies: HashMap<String, CapturedOverload> = HashMap::new();
+
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
@@ -167,6 +221,56 @@ pub async fn resolve_functions(
     } in function_sql_resources_map.into_iter()
     {
         let function_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+
+        // Overload-only SQL files are absorbed into their root function below;
+        // they must never become standalone nodes in the manifest or node
+        // resolver. Capture the rendered body for absorption and skip node
+        // construction. Files that are themselves roots (even self-referencing
+        // ones) are still built so absorption validations can run.
+        if overload_stems.contains(function_name) && !root_stems.contains(function_name) {
+            // Overload SQL may contain its own ref()/source()/function() calls.
+            // Capture those dependencies (built the same way as for a standalone
+            // node) so they can be merged onto the root function during absorption.
+            let refs = sql_file_info
+                .refs
+                .iter()
+                .map(|(model, project, version, location)| DbtRef {
+                    name: model.to_owned(),
+                    package: project.to_owned(),
+                    version: version.clone(),
+                    location: Some(location.with_file(&dbt_asset.path)),
+                })
+                .collect();
+            let function_refs = sql_file_info
+                .functions
+                .iter()
+                .map(|(name, package, location)| DbtRef {
+                    name: name.to_owned(),
+                    package: package.to_owned(),
+                    version: None, // Functions don't have versions
+                    location: Some(location.with_file(&dbt_asset.path)),
+                })
+                .collect();
+            let sources = sql_file_info
+                .sources
+                .iter()
+                .map(|(source, table, location)| DbtSourceWrapper {
+                    source: vec![source.to_owned(), table.to_owned()],
+                    location: Some(location.with_file(&dbt_asset.path)),
+                })
+                .collect();
+            overload_bodies.insert(
+                function_name.to_string(),
+                CapturedOverload {
+                    raw_body: raw_code,
+                    compiled_body: rendered_sql,
+                    refs,
+                    functions: function_refs,
+                    sources,
+                },
+            );
+            continue;
+        }
 
         let original_file_path =
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
@@ -334,6 +438,7 @@ pub async fn resolve_functions(
                     .and_then(|c| c.on_configuration_change.clone()),
                 returns: properties.returns.clone(),
                 arguments: properties.arguments.clone(),
+                overloads: Vec::new(),
             },
             // TODO: can we just take model_config and apply function_kind default elsewhere?
             deprecated_config: FunctionConfig {
@@ -382,6 +487,91 @@ pub async fn resolve_functions(
         }
 
         functions.insert(unique_id, Arc::new(function));
+    }
+
+    // Post-loop: absorb overloads into root functions
+    let mut claimed_overloads: HashMap<String, String> = Default::default();
+    for (root_uid, overload_defs) in pending_overloads {
+        let mut absorbed = Vec::new();
+        let mut merged_refs: Vec<DbtRef> = Vec::new();
+        let mut merged_functions: Vec<DbtRef> = Vec::new();
+        let mut merged_sources: Vec<DbtSourceWrapper> = Vec::new();
+        let root_name = functions
+            .get(&root_uid)
+            .map(|f| f.__common_attr__.name.clone())
+            .unwrap_or_default();
+
+        for overload_def in &overload_defs {
+            let overload_name = &overload_def.defined_in;
+
+            if overload_name == &root_name {
+                return Err(fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Function '{}' cannot list itself in overloads",
+                    root_name
+                ));
+            }
+
+            if let Some(claimed_by) = claimed_overloads.get(overload_name) {
+                return Err(fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Function overload '{}' (defined_in) is already used by '{}'. \
+                     Each overload file can only belong to one root function.",
+                    overload_name,
+                    claimed_by
+                ));
+            }
+
+            // A file that is itself a root (declares its own `overloads:`) is
+            // built as a node and never captured into overload_bodies, so guard
+            // this case explicitly — otherwise it would surface as a misleading
+            // "file not found" below even though the file exists.
+            if root_stems.contains(overload_name) {
+                return Err(fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Function overload '{}' (defined_in) is itself a root function with its own \
+                     `overloads` block and cannot also be used as an overload of '{}'.",
+                    overload_name,
+                    root_name
+                ));
+            }
+
+            let captured = overload_bodies.get(overload_name).ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Function overload defined_in '{}' not found for root function '{}'. \
+                     Expected a SQL file at functions/{}.sql",
+                    overload_name,
+                    root_name,
+                    overload_name
+                )
+            })?;
+
+            claimed_overloads.insert(overload_name.clone(), root_uid.clone());
+
+            merged_refs.extend(captured.refs.iter().cloned());
+            merged_functions.extend(captured.functions.iter().cloned());
+            merged_sources.extend(captured.sources.iter().cloned());
+
+            absorbed.push(AbsorbedOverload {
+                defined_in: overload_def.defined_in.clone(),
+                arguments: overload_def.arguments.clone(),
+                returns: overload_def.returns.clone(),
+                description: overload_def.description.clone(),
+                raw_body: Some(captured.raw_body.clone()),
+                compiled_body: Some(captured.compiled_body.clone()),
+            });
+        }
+
+        // Add absorbed overloads to the root function, along with the deps their
+        // SQL pulls in. Those edges must live on the root so the DAG is complete;
+        // resolve_dependencies dedups against the root's own refs/sources later.
+        let root_func = functions.get_mut(&root_uid).unwrap();
+        let root_mut = Arc::make_mut(root_func);
+        root_mut.__function_attr__.overloads = absorbed;
+        root_mut.__base_attr__.refs.extend(merged_refs);
+        root_mut.__base_attr__.functions.extend(merged_functions);
+        root_mut.__base_attr__.sources.extend(merged_sources);
     }
 
     Ok((functions, rendering_results))

@@ -552,6 +552,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             })
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
+                        batch_results: Default::default(),
                     };
                     if self.arg.write_json {
                         write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
@@ -1502,6 +1503,7 @@ impl DbtProjectCompilation {
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
         task_runner_hooks_factory: &dyn TaskRunnerHooksFactory,
         token: &CancellationToken,
+        previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
     ) -> FsResult<DbtRunTasksResult> {
         token.check_cancellation()?;
 
@@ -1794,8 +1796,8 @@ impl DbtProjectCompilation {
             let mut run_task_args =
                 RunTasksArgs::from_eval_args(arg, feature_stack.cli.fail_fast.clone())
                     .with_resolved_profile(&self.resolved_state.dbt_profile);
-            // This actually affect running tests quite a lot
             run_task_args.sample_renaming = BTreeMap::new();
+            run_task_args.previous_batch_results = previous_batch_results;
             run_task_args.into()
         };
 
@@ -1985,6 +1987,7 @@ impl DbtProjectCompilation {
             let run_stats = Stats {
                 stats: vec![stat],
                 nodes: Some(resolved_state.nodes),
+                batch_results: Default::default(),
             };
             if arg.write_json {
                 write_run_results_json(&run_stats, arg)?;

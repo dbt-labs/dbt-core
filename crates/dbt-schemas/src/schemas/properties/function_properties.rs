@@ -35,7 +35,7 @@ pub enum Volatility {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct FunctionArgument {
     pub name: Option<String>,
     pub data_type: Option<String>,
@@ -44,7 +44,7 @@ pub struct FunctionArgument {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct FunctionReturnType {
     pub data_type: Option<String>,
     pub description: Option<String>,
@@ -66,7 +66,7 @@ fn default_language() -> Option<String> {
 /// Each overload references a separate SQL file (via `defined_in`) that
 /// contains the function body for this overload.
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct FunctionOverload {
     pub defined_in: String,
     pub arguments: Option<Vec<FunctionArgument>>,

@@ -502,6 +502,8 @@ struct AllPhasesExecutor<'a> {
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     version_check_handle: Option<tokio::task::JoinHandle<Option<String>>>,
+    /// Previous batch results from retry, to skip already-successful overloads
+    previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
 }
 
 impl<'a> AllPhasesExecutor<'a> {
@@ -525,6 +527,7 @@ impl<'a> AllPhasesExecutor<'a> {
             jinja_type_checking_event_listener_factory,
             task_runner_hooks_factory,
             version_check_handle: None,
+            previous_batch_results: Default::default(),
         }
     }
 
@@ -599,6 +602,8 @@ impl<'a> AllPhasesExecutor<'a> {
                 include_children: false,
             });
 
+            self.previous_batch_results = retry_state.previous_batch_results;
+
             let common_args = command_for_retry.common_args().clone();
             let cli_for_retry = Cli {
                 command: Command::Core(command_for_retry),
@@ -664,6 +669,7 @@ impl<'a> AllPhasesExecutor<'a> {
                     as Arc<dyn JinjaTypeCheckingEventListenerFactory>,
                 self.task_runner_hooks_factory.as_ref(),
                 token,
+                self.previous_batch_results.clone(),
             )
             .await
     }
@@ -1007,6 +1013,7 @@ impl<'a> AllPhasesExecutor<'a> {
                                     })
                                     .collect(),
                                 nodes: Some(compilation.nodes().clone()),
+                                batch_results: Default::default(),
                             };
                             write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
                             if self.arg.write_metadata {

@@ -22,7 +22,7 @@ use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::UpdatesOn;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes, Nodes};
+use dbt_schemas::schemas::{BatchResults, InternalDbtNode, InternalDbtNodeAttributes, Nodes};
 use dbt_schemas::state::{DbtProfile, DbtRuntimeConfig, NodeResolverTracker, ResolverState};
 use dbt_state::metadata_cache::RunCacheMetadataCache;
 use dbt_state::service_client::SharedRunCacheServiceClient;
@@ -69,6 +69,7 @@ pub struct TaskRunnerCtxInner {
     pub base_context: BTreeMap<String, Value>,
     pub analyze_stats: DashMap<String, Stat>,
     pub run_stats: DashMap<String, Stat>,
+    pub batch_results_map: DashMap<String, BatchResults>,
     pub node_hashes: DashMap<String, String>,
     pub rendered_sql: DashMap<String, RenderedNodeInfo>,
     pub freshness_seconds: SccHashMap<String, i64>,
@@ -132,6 +133,14 @@ impl TaskRunnerCtxInner {
             &resolver_state.root_project_name,
         );
 
+        let batch_results_map: DashMap<String, BatchResults> = {
+            let map = DashMap::default();
+            for (uid, br) in &arg.previous_batch_results {
+                map.insert(uid.clone(), br.clone());
+            }
+            map
+        };
+
         TaskRunnerCtxInner {
             arg,
             worker_id,
@@ -140,6 +149,7 @@ impl TaskRunnerCtxInner {
             base_context,
             analyze_stats: DashMap::default(),
             run_stats: DashMap::default(),
+            batch_results_map,
             node_hashes,
             rendered_sql: DashMap::default(),
             freshness_seconds: SccHashMap::default(),

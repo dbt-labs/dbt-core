@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::path::PathBuf;
 
@@ -105,6 +105,9 @@ pub struct RunTasksArgs {
     pub run_cache_service: bool,
     /// Per-invocation warn-error options resolved before task execution.
     pub warn_error_options: WarnErrorOptions,
+    /// Previous batch_results from run_results.json, populated during retry
+    /// so that already-successful overloads can be skipped.
+    pub previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
 }
 
 impl RunTasksArgs {
@@ -153,6 +156,7 @@ impl RunTasksArgs {
             run_cache_service: arg.run_cache_service,
             warn_error_options: arg.warn_error_options.clone(),
             empty: arg.empty,
+            previous_batch_results: Default::default(),
         };
         Box::new(run_tasks_args)
     }

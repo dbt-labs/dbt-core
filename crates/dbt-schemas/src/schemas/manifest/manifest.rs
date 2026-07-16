@@ -2074,6 +2074,7 @@ pub fn manifest_function_to_dbt_function(
             on_configuration_change: function.on_configuration_change,
             returns: function.returns,
             arguments: function.arguments,
+            overloads: function.overloads,
         },
         deprecated_config: function.config,
         __other__: function.__other__,

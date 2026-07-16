@@ -732,6 +732,22 @@ fn same_body(self_common: &CommonAttributes, other_common: &CommonAttributes) ->
     self_common.checksum == other_common.checksum
 }
 
+// Compare absorbed overloads for state:modified. Intentionally excludes
+// `compiled_body` — that is a rendering artifact (the Jinja-rendered SQL, which
+// can differ across runs even when the overload source is unchanged), so
+// comparing it would flag `state:modified` spuriously. The overload's source
+// (`raw_body`) and signature (`arguments`/`returns`) are what actually define it.
+fn overloads_have_same_content(a: &[AbsorbedOverload], b: &[AbsorbedOverload]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b.iter()).all(|(x, y)| {
+            x.defined_in == y.defined_in
+                && x.arguments == y.arguments
+                && x.returns == y.returns
+                && x.description == y.description
+                && x.raw_body == y.raw_body
+        })
+}
+
 // Helper function to normalize descriptions: treat None and Some("") as equal
 // and strip all whitespace for non-empty descriptions
 fn canonicalize_typographic_quotes(s: &str) -> String {
@@ -3612,21 +3628,38 @@ impl InternalDbtNode for DbtFunction {
             // dbt-core manifests carry — do not just fold them into the checksum.
             let same_checksum_result =
                 self.__common_attr__.checksum == other_function.__common_attr__.checksum;
+            let same_overloads = overloads_have_same_content(
+                &self.__function_attr__.overloads,
+                &other_function.__function_attr__.overloads,
+            );
 
-            let result = same_checksum_result;
+            let result = same_checksum_result && same_overloads;
 
             if !result {
                 log_state_mod_diff(
                     &self.__common_attr__.unique_id,
                     "function",
-                    [(
-                        "same_checksum",
-                        same_checksum_result,
-                        Some((
-                            format!("{:?}", &self.__common_attr__.checksum),
-                            format!("{:?}", &other_function.__common_attr__.checksum),
-                        )),
-                    )],
+                    [
+                        (
+                            "same_checksum",
+                            same_checksum_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.checksum),
+                                format!("{:?}", &other_function.__common_attr__.checksum),
+                            )),
+                        ),
+                        (
+                            "same_overloads",
+                            same_overloads,
+                            Some((
+                                format!("{} overloads", self.__function_attr__.overloads.len()),
+                                format!(
+                                    "{} overloads",
+                                    other_function.__function_attr__.overloads.len()
+                                ),
+                            )),
+                        ),
+                    ],
                 );
             }
 
@@ -5829,6 +5862,18 @@ pub struct DbtFunction {
 }
 
 #[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct AbsorbedOverload {
+    pub defined_in: String,
+    pub arguments: Option<Vec<FunctionArgument>>,
+    pub returns: Option<FunctionReturnType>,
+    pub description: Option<String>,
+    pub raw_body: Option<String>,
+    pub compiled_body: Option<String>,
+}
+
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtFunctionAttr {
@@ -5838,6 +5883,8 @@ pub struct DbtFunctionAttr {
     pub on_configuration_change: Option<String>,
     pub returns: Option<FunctionReturnType>,
     pub arguments: Option<Vec<FunctionArgument>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overloads: Vec<AbsorbedOverload>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -5865,9 +5912,9 @@ mod tests {
     use serde::Deserialize;
 
     use super::{
-        DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtSeed, DbtSnapshot, DbtSource,
-        InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind, hooks_equal,
-        normalize_description, persist_docs_configs_equal, quoting_equal,
+        AbsorbedOverload, DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtSeed, DbtSnapshot,
+        DbtSource, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind,
+        hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
     };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
     use crate::schemas::manifest::{DbtMetric, DbtOperation, DbtSavedQuery};
@@ -6001,6 +6048,40 @@ mod tests {
         assert!(
             path_separator_eq(&actual_run_path, expected_run_path),
             "left: {actual_run_path:?}\nright: {expected_run_path:?}"
+        );
+    }
+
+    #[test]
+    fn function_overload_state_modified_ignores_compiled_body() {
+        // Build two copies of the same function whose single overload differs only
+        // in `compiled_body` (the rendered artifact) — same source, same signature.
+        let make_function = |compiled_body: &str, raw_body: &str| {
+            let mut function = function_with_paths("null_if_empty", "functions/null_if_empty.sql");
+            function.__function_attr__.overloads = vec![AbsorbedOverload {
+                defined_in: "null_if_empty_int".to_string(),
+                arguments: None,
+                returns: None,
+                description: None,
+                raw_body: Some(raw_body.to_string()),
+                compiled_body: Some(compiled_body.to_string()),
+            }];
+            function
+        };
+
+        // compiled_body differs, everything else identical → NOT state:modified.
+        let a = make_function("SELECT 1 -- rendered A", "SELECT {{ x }}");
+        let b = make_function("SELECT 1 -- rendered B", "SELECT {{ x }}");
+        assert!(
+            a.has_same_content(&b, AdapterType::Snowflake),
+            "a compiled_body-only difference must not flag the function as state:modified"
+        );
+
+        // Overload source (raw_body) differs → state:modified.
+        let c = make_function("SELECT 1", "SELECT {{ x }}");
+        let d = make_function("SELECT 1", "SELECT {{ y }}");
+        assert!(
+            !c.has_same_content(&d, AdapterType::Snowflake),
+            "an overload raw_body change must flag the function as state:modified"
         );
     }
 

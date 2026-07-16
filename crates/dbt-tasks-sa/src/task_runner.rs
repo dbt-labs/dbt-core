@@ -50,10 +50,18 @@ pub fn summarize_task_runner_stats(
     let compile = Stats {
         stats: summarize_stats(schedule, &ctx.inner.analyze_stats),
         nodes: None,
+        batch_results: Default::default(),
     };
+    let batch_results = ctx
+        .inner
+        .batch_results_map
+        .iter()
+        .map(|entry| (entry.key().clone(), entry.value().clone()))
+        .collect();
     let run = Stats {
         stats: summarize_stats(schedule, &ctx.inner.run_stats),
         nodes: Some(resolved_state.nodes.clone()),
+        batch_results,
     };
     TaskRunnerStats { compile, run }
 }

@@ -19,16 +19,7 @@ fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsArtifa
     let results: Vec<RunResultOutput> = stats
         .stats
         .iter()
-        .map(|stat| {
-            stats_to_results(
-                stat,
-                stats
-                    .nodes
-                    .as_ref()
-                    .expect("stats should have nodes for results generation"),
-            )
-            .into()
-        })
+        .map(|stat| stats_to_results(stat, stats).into())
         .collect();
 
     let total_elapsed_time: f64 = stats
@@ -127,6 +118,7 @@ mod tests {
         let stats = Stats {
             stats: vec![],
             nodes: None,
+            batch_results: Default::default(),
         };
         write_run_results_json(&stats, &arg).unwrap();
 

@@ -110,6 +110,7 @@ impl TaskExecutionDriver for DbtTaskExecutionDriver {
                 jinja_type_checking_factory,
                 task_runner_hooks_factory,
                 token,
+                Default::default(),
             )
             .await?;
 

@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fmt;
 
+use crate::schemas::BatchResults;
 use crate::schemas::Nodes;
 use dbt_common::stats::Stat;
 use humantime::format_duration;
@@ -8,6 +10,7 @@ use humantime::format_duration;
 pub struct Stats {
     pub stats: Vec<Stat>,
     pub nodes: Option<Nodes>,
+    pub batch_results: HashMap<String, BatchResults>,
 }
 
 impl fmt::Display for Stats {

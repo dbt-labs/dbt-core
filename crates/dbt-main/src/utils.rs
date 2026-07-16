@@ -7,7 +7,7 @@ use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_schemas::schemas::RunResultOutput;
 use dbt_schemas::schemas::manifest::{DbtManifest, DbtNode};
 use dbt_schemas::stats::Stats;
-use dbt_tasks_core::stats_to_results;
+use dbt_tasks_core::stat_to_result;
 
 /// Minimal context captured before `SystemArgs` is moved into the async runtime.
 /// Passed back to `run_cli` so it can write the invocation record unconditionally at exit,
@@ -112,7 +112,7 @@ pub(crate) fn write_runtime_results_parquet(stats: &Stats, arg: &EvalArgs) {
         .stats
         .iter()
         .map(|stat| {
-            let result: RunResultOutput = stats_to_results(stat, nodes).into();
+            let result: RunResultOutput = stat_to_result(stat, nodes).into();
             RuntimeResultRow {
                 invocation_id: arg.io.invocation_id.to_string(),
                 unique_id: result.unique_id.clone(),

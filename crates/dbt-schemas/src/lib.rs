@@ -34,17 +34,17 @@ pub mod schemas {
     pub mod user_settings;
     pub use prev_state::{ModificationType, OnManifestLoadFailure, StateArtifacts};
     pub use run_results::{
-        ContextRunResult, RunResultOutput, RunResultsArgs, RunResultsArtifact, RunResultsMetadata,
-        TimingInfo,
+        BatchResults, ContextRunResult, RunResultOutput, RunResultsArgs, RunResultsArtifact,
+        RunResultsMetadata, TimingInfo,
     };
     pub use user_settings::UserSettings;
 
     pub mod nodes;
     pub use nodes::{
-        AdapterAttr, CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure, DbtExposureAttr,
-        DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
-        DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
-        DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
+        AbsorbedOverload, AdapterAttr, CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure,
+        DbtExposureAttr, DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed,
+        DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr,
+        DbtUnitTest, DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
         InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, NodePathKind, Nodes,
         TestMetadata, TimeSpine, TimeSpinePrimaryColumn, deserialize_empty_string_as_none,
         serialize_none_as_empty_string,
