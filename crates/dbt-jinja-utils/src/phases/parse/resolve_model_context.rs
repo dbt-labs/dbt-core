@@ -73,6 +73,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
     model_path: &Path,
     io_args: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
+    render_unqualified_function_calls: bool,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Create a relation for 'this' using config values
     let sql_resources_clone = sql_resources.clone();
@@ -129,6 +130,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         sql_resources: sql_resources.clone(),
         adapter_type,
         package_quoting,
+        render_unqualified_function_calls,
     };
     let function_value = MinijinjaValue::from_object(function_function);
     builtins.insert("function".to_string(), function_value.clone());
@@ -504,6 +506,7 @@ struct ResolveFunctionFunction<T: ResolvableConfig<T>> {
     adapter_type: AdapterType,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     package_quoting: DbtQuoting,
+    render_unqualified_function_calls: bool,
 }
 
 impl<T: ResolvableConfig<T>> Object for ResolveFunctionFunction<T> {
@@ -562,7 +565,7 @@ impl<T: ResolvableConfig<T>> Object for ResolveFunctionFunction<T> {
             self.adapter_type,
             self.database.clone(),
             self.schema.clone(),
-            Some(function_name),
+            Some(function_name.clone()),
             None,
             self.package_quoting
                 .try_into()
@@ -571,7 +574,11 @@ impl<T: ResolvableConfig<T>> Object for ResolveFunctionFunction<T> {
         .unwrap();
 
         // Create a FunctionObject instead of returning the relation directly
-        let qualified_name = relation.render_self_as_str();
+        let qualified_name = if self.render_unqualified_function_calls {
+            function_name
+        } else {
+            relation.render_self_as_str()
+        };
         let function_object = FunctionObject::new(qualified_name);
 
         Ok(function_object.into_value())

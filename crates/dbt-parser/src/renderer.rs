@@ -285,6 +285,7 @@ where
         config_resolver,
         resource_paths,
         package_quoting,
+        render_unqualified_function_calls,
     } = &**inner;
 
     token.check_cancellation()?;
@@ -384,6 +385,7 @@ where
         &model_path,
         &args.io,
         args.static_analysis,
+        *render_unqualified_function_calls,
     ));
 
     if let Some(status_reporter) = &args.io.status_reporter {
@@ -674,6 +676,8 @@ pub struct RenderCtxInner<T: ResolvableConfig<T>> {
     pub resource_paths: Vec<String>,
     /// The quoting for the package
     pub package_quoting: DbtQuoting,
+    /// Render function() calls as unqualified names for inline UDF bodies.
+    pub render_unqualified_function_calls: bool,
 }
 
 /// Outer context for rendering sql files

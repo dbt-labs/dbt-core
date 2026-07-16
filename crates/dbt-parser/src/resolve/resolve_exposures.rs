@@ -276,6 +276,7 @@ pub fn resolve_yaml_depends_on(
             &PathBuf::new(),
             io_args,
             global_static_analysis,
+            false,
         ));
 
         let sql_resource = render_extract_ref_or_source_expr(

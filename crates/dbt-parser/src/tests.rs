@@ -65,6 +65,7 @@ mod tests {
             &PathBuf::from("test"),
             &IoArgs::default(),
             Some(StaticAnalysisKind::Strict),
+            false,
         );
         context.insert(TARGET_PACKAGE_NAME.to_string(), Value::from("common"));
         context

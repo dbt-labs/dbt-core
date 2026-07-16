@@ -894,6 +894,8 @@ pub struct ManifestModelConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub imports: Option<StringOrArrayOfStrings>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub inline_udfs: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub secrets: Option<BTreeMap<String, YmlValue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_access_integrations: Option<StringOrArrayOfStrings>,
@@ -1137,6 +1139,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             packages: config.packages,
             python_version: config.python_version,
             imports: config.imports,
+            inline_udfs: config.inline_udfs,
             secrets: config.secrets,
             external_access_integrations: config.external_access_integrations,
             use_anonymous_sproc: config.use_anonymous_sproc,
@@ -1211,6 +1214,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             packages: config.packages,
             python_version: config.python_version,
             imports: config.imports,
+            inline_udfs: config.inline_udfs,
             secrets: config.secrets,
             external_access_integrations: config.external_access_integrations,
             use_anonymous_sproc: config.use_anonymous_sproc,

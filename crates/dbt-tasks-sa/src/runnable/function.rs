@@ -15,6 +15,10 @@ pub fn execute_function_remote(
         return Ok(NodeStatus::NoOp);
     }
 
+    if ctx.dbt_profile().db_config.trino_inline_udfs_enabled() {
+        return Ok(NodeStatus::NoOp);
+    }
+
     let mut base_context = ctx.inner.base_context.clone();
 
     add_task_context(&mut base_context, function.common(), &ctx.thread_id);

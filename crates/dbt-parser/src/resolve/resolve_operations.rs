@@ -179,6 +179,7 @@ fn new_operation(
                 &PathBuf::new(),
                 io,
                 global_static_analysis,
+                false,
             ));
 
             // Set TARGET_PACKAGE_NAME for var lookups

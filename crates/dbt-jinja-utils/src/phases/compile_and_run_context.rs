@@ -20,6 +20,7 @@ use dbt_telemetry::NodeType;
 use minijinja::arg_utils::ArgParser;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
+use minijinja::value::function_object::FunctionObject;
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value as MinijinjaValue,
 };
@@ -652,6 +653,7 @@ pub struct FunctionFunction {
     package_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
     validation_config: DependencyValidationConfig,
+    render_unqualified_function_calls: bool,
 }
 
 impl FunctionFunction {
@@ -666,6 +668,7 @@ impl FunctionFunction {
             package_name,
             runtime_config,
             validation_config: DependencyValidationConfig::default(),
+            render_unqualified_function_calls: false,
         }
     }
 
@@ -675,12 +678,14 @@ impl FunctionFunction {
         package_name: String,
         runtime_config: Arc<DbtRuntimeConfig>,
         validation_config: DependencyValidationConfig,
+        render_unqualified_function_calls: bool,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
             runtime_config,
             validation_config,
+            render_unqualified_function_calls,
         }
     }
 
@@ -762,7 +767,11 @@ impl Object for FunctionFunction {
             Ok((unique_id, function_call, _)) => {
                 // Validate that this function is allowed (only if validation is configured)
                 self.validate_dependency(&unique_id, &package_name, &function_name)?;
-                Ok(function_call)
+                if self.render_unqualified_function_calls {
+                    Ok(FunctionObject::new(function_name).into_value())
+                } else {
+                    Ok(function_call)
+                }
             }
             Err(_) => Err(MinijinjaError::new(
                 MinijinjaErrorKind::NonKey,
