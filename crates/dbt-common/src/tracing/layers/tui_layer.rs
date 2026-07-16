@@ -13,7 +13,8 @@ use dbt_telemetry::{
     DepsAllPackagesInstalled, DepsPackageInstalled, ExecutionPhase, GenericOpExecuted,
     GenericOpItemProcessed, HookProcessed, Invocation, ListItemOutput, LogMessage, NodeEvaluated,
     NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage,
-    QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, UserLogMessage,
+    QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, TestOutcome, UserLogMessage,
+    get_test_outcome,
 };
 use dbt_tracing::{
     AnyTelemetryEvent, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, SpanStatus,
@@ -188,6 +189,39 @@ fn emit_pending_skips(tui: &TuiLayer, data_provider: &mut DataProvider<'_>) {
                 .write_all(format!("{}\n", output).as_bytes())
                 .expect("failed to write to stdout");
         });
+    }
+}
+
+fn node_evaluated_progress_status(
+    span_status: Option<&SpanStatus>,
+    ne: &NodeEvaluated,
+) -> Option<&'static str> {
+    match ne.node_outcome() {
+        NodeOutcome::Success if get_test_outcome(ne.into()) == Some(TestOutcome::Failed) => {
+            Some("failed")
+        }
+        NodeOutcome::Success => Some("succeeded"),
+        NodeOutcome::Error => Some("failed"),
+        NodeOutcome::Canceled => Some("cancelled"),
+        NodeOutcome::Skipped => match ne.node_skip_reason() {
+            NodeSkipReason::Cached => Some("reused"),
+            NodeSkipReason::NoOp => Some("no-op"),
+            NodeSkipReason::Upstream
+            | NodeSkipReason::PhaseSkipped
+            | NodeSkipReason::PhaseDisabled
+            | NodeSkipReason::Unspecified => Some("skipped"),
+        },
+        NodeOutcome::Unspecified => {
+            if let Some(SpanStatus {
+                code: StatusCode::Error,
+                ..
+            }) = span_status
+            {
+                Some("failed")
+            } else {
+                Some("succeeded")
+            }
+        }
     }
 }
 
@@ -961,31 +995,7 @@ impl TuiLayer {
                 phase,
                 ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
             ) {
-                let status = match ne.node_outcome() {
-                    NodeOutcome::Success => Some("succeeded"),
-                    NodeOutcome::Error => Some("failed"),
-                    NodeOutcome::Canceled => Some("cancelled"),
-                    NodeOutcome::Skipped => match ne.node_skip_reason() {
-                        NodeSkipReason::Cached => Some("reused"),
-                        NodeSkipReason::NoOp => Some("no-op"),
-                        NodeSkipReason::Upstream
-                        | NodeSkipReason::PhaseSkipped
-                        | NodeSkipReason::PhaseDisabled
-                        | NodeSkipReason::Unspecified => Some("skipped"),
-                    },
-                    NodeOutcome::Unspecified => {
-                        if let Some(SpanStatus {
-                            code: StatusCode::Error,
-                            ..
-                        }) = &span.status
-                        {
-                            Some("failed")
-                        } else {
-                            Some("succeeded")
-                        }
-                    }
-                };
-
+                let status = node_evaluated_progress_status(span.status.as_ref(), ne);
                 let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
                 progress.finish_bar_context(&ProgressId::Phase(phase), &formatted_item, status);
             }
@@ -1831,5 +1841,51 @@ impl TuiLayer {
                 .write_all(format!("{}\n", formatted_message).as_bytes())
                 .expect("failed to write to stdout");
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_telemetry::{NodeOutcomeDetail, TestEvaluationDetail};
+
+    fn unit_test_evaluated_with_outcome(test_outcome: TestOutcome) -> NodeEvaluated {
+        let mut node = NodeEvaluated::start(
+            "unit_test.jaffle_shop.stg_locations.test_opened_at".to_string(),
+            "test_opened_at".to_string(),
+            None,
+            Some("dbt_test__audit".to_string()),
+            None,
+            None,
+            None,
+            NodeType::UnitTest,
+            ExecutionPhase::Run,
+            "models/staging/stg_locations.yml".to_string(),
+            Some(10),
+            Some(5),
+            "checksum".to_string(),
+        );
+        node.set_node_outcome(NodeOutcome::Success);
+        node.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+            TestEvaluationDetail::new(test_outcome, 1, None, None),
+        ));
+        node
+    }
+
+    #[test]
+    fn failed_unit_test_counts_as_failed_for_progress() {
+        let node = unit_test_evaluated_with_outcome(TestOutcome::Failed);
+
+        assert_eq!(node_evaluated_progress_status(None, &node), Some("failed"));
+    }
+
+    #[test]
+    fn passed_unit_test_counts_as_succeeded_for_progress() {
+        let node = unit_test_evaluated_with_outcome(TestOutcome::Passed);
+
+        assert_eq!(
+            node_evaluated_progress_status(None, &node),
+            Some("succeeded")
+        );
     }
 }
