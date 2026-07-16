@@ -2584,6 +2584,12 @@ impl InitArgs {
             favor_state: self.common_args.favor_state,
             phase: Phases::Debug,
             send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
+            // Propagate profile-resolution inputs so post-init validation reads the same
+            // profiles.yml the setup step used (e.g. --profiles-dir / DBT_PROFILES_DIR).
+            profiles_dir: self.common_args.profiles_dir.clone(),
+            profile: self.common_args.profile.clone(),
+            target: self.common_args.target.clone(),
+            vars: self.common_args.vars.clone().unwrap_or_default(),
             ..Default::default()
         }
     }

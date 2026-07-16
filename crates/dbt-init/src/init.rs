@@ -1,7 +1,7 @@
 // Allow disallowed methods for this module because RustEmbed generates calls to Path::canonicalize
 #![allow(clippy::disallowed_methods)]
 
-use crate::profile_setup::ProfileSetup;
+use crate::profile_setup::{ProfileAction, ProfileSetup};
 use dbt_common::pretty_string::{GREEN, YELLOW};
 use dbt_common::tracing::dbt_emit::emit_info_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
@@ -222,47 +222,15 @@ pub fn get_profile_name_from_project() -> FsResult<String> {
     Ok(profile_name)
 }
 
-/// Update dbt_project.yml to include the profile field
+/// Point dbt_project.yml at `profile_name`.
+///
+/// If a top-level `profile:` field already exists (the sample templates ship one), it is
+/// replaced in place so we never end up with two `profile:` entries. Otherwise a new field is
+/// inserted right after `name:`, or before the first other top-level field, or appended.
 fn update_dbt_project_profile(profile_name: &str) -> FsResult<()> {
     let content = fs::read_to_string("dbt_project.yml")?;
+    let updated_content = set_profile_in_project_yaml(&content, profile_name);
 
-    // Simple approach: find the first line that starts with a field name and add profile before it
-    // or add it after the 'name:' field if found
-    let lines: Vec<&str> = content.lines().collect();
-    let mut new_lines = Vec::new();
-    let mut profile_added = false;
-
-    for line in lines.iter() {
-        new_lines.push((*line).to_string());
-
-        // If we find the 'name:' field, add the profile field right after it
-        if !profile_added && line.trim_start().starts_with("name:") {
-            new_lines.push(format!("profile: {profile_name}"));
-            profile_added = true;
-        }
-        // If we find another top-level field (not name) and haven't added profile yet, add it before
-        else if !profile_added
-            && !line.trim().is_empty()
-            && !line.starts_with(' ')
-            && !line.starts_with('\t')
-            && !line.starts_with('#')
-            && !line.trim_start().starts_with("name:")
-            && line.contains(':')
-        {
-            // Insert profile before this line
-            new_lines.pop(); // Remove the current line
-            new_lines.push(format!("profile: {profile_name}"));
-            new_lines.push((*line).to_string());
-            profile_added = true;
-        }
-    }
-
-    // If we still haven't added it, add it at the end
-    if !profile_added {
-        new_lines.push(format!("profile: {profile_name}"));
-    }
-
-    let updated_content = new_lines.join("\n");
     if !updated_content.ends_with('\n') {
         fs::write("dbt_project.yml", updated_content + "\n")?;
     } else {
@@ -270,12 +238,56 @@ fn update_dbt_project_profile(profile_name: &str) -> FsResult<()> {
     }
 
     emit_info_log_message(format!(
-        "{} Added profile '{}' to dbt_project.yml",
+        "{} Set profile '{}' in dbt_project.yml",
         GREEN.apply_to("Success"),
         profile_name
     ));
 
     Ok(())
+}
+
+/// Return `content` with its top-level `profile:` field pointed at `profile_name`.
+///
+/// If a top-level `profile:` field already exists (the sample templates ship one), it is
+/// replaced in place so we never end up with two `profile:` entries. Otherwise a new field is
+/// inserted before the first other top-level field, or appended when there is none.
+fn set_profile_in_project_yaml(content: &str, profile_name: &str) -> String {
+    // A zero-indent, non-blank, non-comment `key: ...` line.
+    let is_top_level_field = |line: &str| {
+        !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && !line.trim().is_empty()
+            && !line.trim_start().starts_with('#')
+            && line.contains(':')
+    };
+
+    let lines: Vec<&str> = content.lines().collect();
+    let mut new_lines: Vec<String> = Vec::with_capacity(lines.len() + 1);
+    let mut profile_set = false;
+
+    for line in lines.iter() {
+        // Replace an existing top-level `profile:` field in place.
+        if !profile_set && is_top_level_field(line) && line.trim_start().starts_with("profile:") {
+            new_lines.push(format!("profile: {profile_name}"));
+            profile_set = true;
+            continue;
+        }
+
+        // Otherwise insert before the first top-level field that is not `name:`.
+        if !profile_set && is_top_level_field(line) && !line.trim_start().starts_with("name:") {
+            new_lines.push(format!("profile: {profile_name}"));
+            profile_set = true;
+        }
+
+        new_lines.push((*line).to_string());
+    }
+
+    // No suitable anchor found (e.g. only a `name:` field): append at the end.
+    if !profile_set {
+        new_lines.push(format!("profile: {profile_name}"));
+    }
+
+    new_lines.join("\n")
 }
 
 /// Check if a profile exists in profiles.yml
@@ -330,7 +342,27 @@ pub async fn run_init_workflow(
 
         if !skip_profile_setup {
             let profile_name = get_profile_name_from_project()?;
-            profile_setup.setup_profile(&profile_name).await?;
+            match profile_setup.prompt_profile_action()? {
+                ProfileAction::CreateNew => {
+                    profile_setup.setup_profile(&profile_name, false).await?;
+                }
+                ProfileAction::CreateFromCloud => {
+                    profile_setup.setup_profile(&profile_name, true).await?;
+                }
+                ProfileAction::UseExisting(chosen_name) => {
+                    emit_info_log_message(format!(
+                        "{} Using existing profile '{chosen_name}'",
+                        GREEN.apply_to("Info")
+                    ));
+                    update_dbt_project_profile(&chosen_name)?;
+                }
+                ProfileAction::Skip => {
+                    emit_info_log_message(format!(
+                        "{} Skipping profile setup.",
+                        GREEN.apply_to("Info")
+                    ));
+                }
+            }
         }
 
         return Ok(());
@@ -393,9 +425,34 @@ pub async fn run_init_workflow(
 
         // Setup profile if not skipped
         if !skip_profile_setup {
-            // Only run profile setup if we don't have an existing profile specified
-            if existing_profile.is_none() {
-                profile_setup.setup_profile(&profile_name).await?;
+            match existing_profile {
+                // --profile=<name> was explicitly supplied on the CLI: already validated above,
+                // just point dbt_project.yml at it.
+                Some(ref profile_name) => {
+                    update_dbt_project_profile(profile_name)?;
+                }
+                // No explicit profile supplied — ask the user what they'd like to do.
+                None => match profile_setup.prompt_profile_action()? {
+                    ProfileAction::CreateNew => {
+                        profile_setup.setup_profile(&project_name, false).await?;
+                    }
+                    ProfileAction::CreateFromCloud => {
+                        profile_setup.setup_profile(&project_name, true).await?;
+                    }
+                    ProfileAction::UseExisting(chosen_name) => {
+                        emit_info_log_message(format!(
+                            "{} Using existing profile '{chosen_name}'",
+                            GREEN.apply_to("Info")
+                        ));
+                        update_dbt_project_profile(&chosen_name)?;
+                    }
+                    ProfileAction::Skip => {
+                        emit_info_log_message(format!(
+                            "{} Skipping profile setup.",
+                            GREEN.apply_to("Info")
+                        ));
+                    }
+                },
             }
         }
     }
@@ -413,5 +470,61 @@ fn next_available_dir_name(base: &str) -> String {
             return candidate;
         }
         counter += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::set_profile_in_project_yaml;
+
+    #[test]
+    fn replaces_existing_profile_without_duplicating() {
+        // Mirrors the sample templates, which ship a `profile:` line substituted with the
+        // project name. Choosing an existing profile must replace it, not add a second one.
+        let content = "name: jaffle_shop_4\nprofile: jaffle_shop_4\n\nseed-paths: [\"seeds\"]\n";
+        let updated = set_profile_in_project_yaml(content, "snowflake_sandbox");
+
+        assert_eq!(updated.matches("profile:").count(), 1);
+        assert!(updated.contains("profile: snowflake_sandbox"));
+        assert!(!updated.contains("profile: jaffle_shop_4"));
+        // Other fields are left untouched.
+        assert!(updated.contains("name: jaffle_shop_4"));
+        assert!(updated.contains("seed-paths: [\"seeds\"]"));
+    }
+
+    #[test]
+    fn inserts_profile_when_absent() {
+        let content = "name: my_project\n\nseed-paths: [\"seeds\"]\n";
+        let updated = set_profile_in_project_yaml(content, "my_profile");
+
+        assert_eq!(updated.matches("profile:").count(), 1);
+        assert!(updated.contains("profile: my_profile"));
+        // Inserted before the first non-name top-level field, after `name:`.
+        let name_idx = updated.find("name: my_project").unwrap();
+        let profile_idx = updated.find("profile: my_profile").unwrap();
+        let seed_idx = updated.find("seed-paths").unwrap();
+        assert!(name_idx < profile_idx && profile_idx < seed_idx);
+    }
+
+    #[test]
+    fn appends_profile_when_only_name_present() {
+        let content = "name: my_project\n";
+        let updated = set_profile_in_project_yaml(content, "my_profile");
+
+        assert_eq!(updated.matches("profile:").count(), 1);
+        assert!(updated.contains("name: my_project"));
+        assert!(updated.contains("profile: my_profile"));
+    }
+
+    #[test]
+    fn ignores_indented_profile_key() {
+        // A nested `profile:` (e.g. under some other mapping) must not be treated as the
+        // top-level project profile; a real top-level field is inserted instead.
+        let content = "name: my_project\nmodels:\n  profile: not_this\n";
+        let updated = set_profile_in_project_yaml(content, "my_profile");
+
+        assert!(updated.contains("profile: my_profile"));
+        assert!(updated.contains("  profile: not_this"));
+        assert_eq!(updated.matches("profile: my_profile").count(), 1);
     }
 }

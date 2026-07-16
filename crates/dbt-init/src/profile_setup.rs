@@ -3,7 +3,9 @@ use crate::adapter_config::{
     setup_fabric_profile, setup_postgres_profile, setup_redshift_profile, setup_snowflake_profile,
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
-use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from_str};
+use crate::yaml_utils::{
+    has_top_level_key_parsed_file, list_top_level_keys_from_file, remove_top_level_key_from_str,
+};
 use dbt_adapter_core::AdapterType;
 use dbt_common::constants::DBT_PACKAGES_DIR_NAME;
 use dbt_common::pretty_string::GREEN;
@@ -139,6 +141,39 @@ impl ProjectStore {
     }
 }
 
+/// Extract the adapter type for `profile_name` from a parsed profiles.yml document.
+///
+/// Reads the `type` of the profile's selected `target` output (falling back to the first
+/// output when no `target` is set). Returns `None` when any part is missing.
+fn adapter_type_for_profile(parsed: &serde_json::Value, profile_name: &str) -> Option<String> {
+    let outputs = parsed.get(profile_name)?.get("outputs")?;
+    let output = match parsed
+        .get(profile_name)?
+        .get("target")
+        .and_then(|t| t.as_str())
+    {
+        Some(target) => outputs.get(target)?,
+        None => outputs.as_object()?.values().next()?,
+    };
+    output
+        .get("type")
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+}
+
+/// Outcome of the initial profile-action prompt shown to the user during `dbt init`.
+pub enum ProfileAction {
+    /// Create a brand-new profile from scratch using the interactive wizard,
+    /// without pulling any credentials from dbt_cloud.yml.
+    CreateNew,
+    /// Create a new profile pre-populated from dbt_cloud.yml credentials.
+    CreateFromCloud,
+    /// Re-use an existing profile already stored in profiles.yml.
+    UseExisting(String),
+    /// Skip profile setup entirely.
+    Skip,
+}
+
 pub struct ProfileSetup {
     pub profiles_dir: PathBuf,
     pub project_store: Option<ProjectStore>,
@@ -179,6 +214,116 @@ impl ProfileSetup {
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get adapter selection: {}", e))?;
 
         Ok(adapters[selection])
+    }
+
+    /// Resolve the active profiles.yml path.
+    ///
+    /// Mirrors the path-resolution logic used by `write_profile`: a local `./profiles.yml`
+    /// takes precedence over `<profiles_dir>/profiles.yml`.
+    fn active_profiles_path(&self) -> PathBuf {
+        let local = PathBuf::from("profiles.yml");
+        if local.exists() {
+            local
+        } else {
+            self.profiles_dir.join("profiles.yml")
+        }
+    }
+
+    /// Return the names of all profiles already stored in the active profiles.yml.
+    pub fn list_existing_profiles(&self) -> FsResult<Vec<String>> {
+        list_top_level_keys_from_file(&self.active_profiles_path())
+    }
+
+    /// Return `(profile_name, adapter_type)` for every profile in the active profiles.yml,
+    /// preserving document order. `adapter_type` is `None` when the type cannot be
+    /// determined (e.g. malformed profile or missing `outputs`).
+    pub fn list_existing_profiles_with_types(&self) -> FsResult<Vec<(String, Option<String>)>> {
+        let target = self.active_profiles_path();
+        let names = list_top_level_keys_from_file(&target)?;
+        if names.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Best-effort parse to read each profile's adapter type; fall back to `None` on any
+        // parse failure so a malformed file still lists the names.
+        let parsed = fs::read_to_string(&target)
+            .ok()
+            .and_then(|content| dbt_yaml::from_str::<serde_json::Value>(&content).ok());
+
+        Ok(names
+            .into_iter()
+            .map(|name| {
+                let adapter_type = parsed
+                    .as_ref()
+                    .and_then(|p| adapter_type_for_profile(p, &name));
+                (name, adapter_type)
+            })
+            .collect())
+    }
+
+    /// Ask the user how they would like to handle profiles when initialising a new project.
+    ///
+    /// Options are built dynamically: "Use an existing profile" only appears when profiles.yml
+    /// contains at least one profile, and "Create a new profile based on dbt_cloud.yml
+    /// credentials" only appears when a dbt_cloud.yml was found. When neither is available the
+    /// prompt is skipped and `ProfileAction::CreateNew` is returned.
+    pub fn prompt_profile_action(&self) -> FsResult<ProfileAction> {
+        let existing = self.list_existing_profiles_with_types()?;
+        let has_cloud = self.project_store.is_some();
+
+        // Nothing special to offer: behave exactly as before and go straight to the wizard.
+        if existing.is_empty() && !has_cloud {
+            return Ok(ProfileAction::CreateNew);
+        }
+
+        // Build the option list and a parallel list of the action each entry maps to.
+        let mut labels: Vec<String> = Vec::new();
+        let mut actions: Vec<ProfileAction> = Vec::new();
+
+        if !existing.is_empty() {
+            labels.push("Use an existing profile from profiles.yml".to_string());
+            actions.push(ProfileAction::UseExisting(String::new()));
+        }
+        if has_cloud {
+            labels.push("Create a new profile based on dbt_cloud.yml credentials".to_string());
+            actions.push(ProfileAction::CreateFromCloud);
+        }
+        labels.push("Set up a new profile from scratch".to_string());
+        actions.push(ProfileAction::CreateNew);
+        labels.push("Skip profile setup".to_string());
+        actions.push(ProfileAction::Skip);
+
+        let choice = Select::new()
+            .with_prompt("Which would you like to do?")
+            .items(&labels)
+            .default(0)
+            .interact()
+            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get selection: {}", e))?;
+
+        match &actions[choice] {
+            ProfileAction::UseExisting(_) => {
+                let profile_labels: Vec<String> = existing
+                    .iter()
+                    .map(|(name, adapter_type)| match adapter_type {
+                        Some(t) => format!("{name} ({t})"),
+                        None => name.clone(),
+                    })
+                    .collect();
+
+                let selection = Select::new()
+                    .with_prompt("Select a profile to use")
+                    .items(&profile_labels)
+                    .default(0)
+                    .interact()
+                    .map_err(|e| {
+                        fs_err!(ErrorCode::IoError, "Failed to get profile selection: {}", e)
+                    })?;
+                Ok(ProfileAction::UseExisting(existing[selection].0.clone()))
+            }
+            ProfileAction::CreateFromCloud => Ok(ProfileAction::CreateFromCloud),
+            ProfileAction::CreateNew => Ok(ProfileAction::CreateNew),
+            ProfileAction::Skip => Ok(ProfileAction::Skip),
+        }
     }
 
     #[allow(unreachable_patterns)]
@@ -450,7 +595,12 @@ impl ProfileSetup {
         }
     }
 
-    pub async fn setup_profile(&self, profile_name: &str) -> FsResult<()> {
+    /// Run the interactive profile wizard for `profile_name`.
+    ///
+    /// When `use_cloud` is true and a dbt_cloud.yml was found, a brand-new profile is
+    /// pre-populated from the selected cloud project's credentials. When false the wizard
+    /// never reaches out to dbt_cloud.yml (the "from scratch" path).
+    pub async fn setup_profile(&self, profile_name: &str, use_cloud: bool) -> FsResult<()> {
         emit_info_log_message(format!(
             "{} Setting up your profile...",
             GREEN.apply_to("Info")
@@ -513,7 +663,7 @@ impl ProfileSetup {
         let adapter_type = existing_config.as_ref().map(|d| d.adapter_type());
         let adapter = Self::ask_for_adapter_choice(adapter_type)?;
 
-        let cloud_config = if profile_action == 1 {
+        let cloud_config = if profile_action == 1 && use_cloud {
             if let Some(project_store) = &self.project_store {
                 emit_info_log_message("Found dbt_cloud.yml configuration");
                 let project_id = Self::handle_cloud_project_selection(project_store).await?;
@@ -531,6 +681,9 @@ impl ProfileSetup {
                 );
                 None
             }
+        } else if profile_action == 1 {
+            // "Set up a new profile from scratch": intentionally do not read dbt_cloud.yml.
+            None
         } else {
             emit_info_log_message("Editing existing profile - skipping cloud config fetch");
             None
@@ -565,5 +718,41 @@ impl ProfileSetup {
 
     pub fn cloud_client() -> &'static DbtCloudClient {
         &DbtCloudClient
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::adapter_type_for_profile;
+
+    fn parse(yaml: &str) -> serde_json::Value {
+        dbt_yaml::from_str(yaml).unwrap()
+    }
+
+    #[test]
+    fn reads_type_from_selected_target() {
+        let parsed = parse(
+            "my_profile:\n  target: prod\n  outputs:\n    dev:\n      type: postgres\n    prod:\n      type: snowflake\n",
+        );
+        assert_eq!(
+            adapter_type_for_profile(&parsed, "my_profile").as_deref(),
+            Some("snowflake")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_first_output_without_target() {
+        let parsed = parse("my_profile:\n  outputs:\n    dev:\n      type: bigquery\n");
+        assert_eq!(
+            adapter_type_for_profile(&parsed, "my_profile").as_deref(),
+            Some("bigquery")
+        );
+    }
+
+    #[test]
+    fn returns_none_when_type_missing() {
+        let parsed = parse("my_profile:\n  outputs:\n    dev:\n      host: localhost\n");
+        assert_eq!(adapter_type_for_profile(&parsed, "my_profile"), None);
+        assert_eq!(adapter_type_for_profile(&parsed, "unknown_profile"), None);
     }
 }
