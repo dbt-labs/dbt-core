@@ -27,7 +27,10 @@ use crate::metadata::duckdb::{CatalogSpecDuckDbExt, attaches_via_iceberg_rest};
 ///
 /// Errors when alias sanitization produces an empty alias or a duplicate
 /// alias across catalogs.
-pub fn compose_v2_catalog_attach_stmts(view: &DbtCatalogsV2View<'_>) -> AdapterResult<Vec<String>> {
+pub fn compose_v2_catalog_attach_stmts(
+    view: &DbtCatalogsV2View<'_>,
+    platform: &str,
+) -> AdapterResult<Vec<String>> {
     // INSTALL ducklake must lead all ATTACHes but we can't know it's needed until we've seen the catalogs
     let mut needs_ducklake = false;
     let mut stmts: Vec<String> = Vec::new();
@@ -41,8 +44,11 @@ pub fn compose_v2_catalog_attach_stmts(view: &DbtCatalogsV2View<'_>) -> AdapterR
                 || attaches_via_iceberg_rest(catalog.catalog_type)
         })
         .filter_map(|catalog| {
+            // Prefer the caller's platform block (e.g. `alt` for the compute
+            // engine), falling back to the `duckdb` block.
             catalog
-                .config_block("duckdb")
+                .config_block(platform)
+                .or_else(|| catalog.config_block("duckdb"))
                 .map(|duckdb| (catalog, duckdb))
         })
     {

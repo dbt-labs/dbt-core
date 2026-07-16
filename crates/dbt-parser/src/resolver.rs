@@ -21,13 +21,14 @@ use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
+use dbt_schemas::schemas::common::ComputePlatform;
 use dbt_schemas::schemas::common::{Access, DbtIncrementalStrategy};
 use dbt_schemas::schemas::macros::{DbtDocsMacro, build_macro_units};
 use dbt_schemas::schemas::properties::{
     FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL, FunctionKind,
     MetricsProperties, ModelProperties,
 };
-use dbt_schemas::schemas::{InternalDbtNode, Nodes};
+use dbt_schemas::schemas::{DbtModel, InternalDbtNode, Nodes};
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
@@ -373,6 +374,10 @@ pub async fn resolve(
         arg.skip_creating_generic_tests,
     )?;
 
+    // A model on a non-`default` compute platform requires each of its upstreams
+    // to be reachable through a catalog (see `check_compute_platform_upstreams`).
+    check_compute_platform_upstreams(&nodes)?;
+
     // Check access
     let nodes_with_access_errors = check_access(arg, &nodes, &all_runtime_configs);
 
@@ -606,7 +611,7 @@ fn check_node_access<F>(
     should_deny_private_access: F,
 ) -> bool
 where
-    F: Fn(&dbt_schemas::schemas::nodes::DbtModel, bool) -> bool,
+    F: Fn(&DbtModel, bool) -> bool,
 {
     let mut had_violation = false;
     for (target_unique_id, location) in node_dependencies {
@@ -1057,6 +1062,61 @@ pub async fn resolve_inner(
     ))
 }
 
+/// Returns `true` if `upstream` is reachable as an input for a node running on a
+/// non-`default` compute platform: it targets a catalog (`catalog_name` set), is
+/// Iceberg-formatted, or itself runs on a non-`default` compute platform (and so
+/// writes to a catalog).
+fn upstream_is_catalog_reachable(upstream: &DbtModel) -> bool {
+    let attr = &upstream.__model_attr__;
+    attr.alt_compute
+        .is_some_and(|c| c != ComputePlatform::Default)
+        || attr.catalog_name.is_some()
+        || attr
+            .table_format
+            .as_deref()
+            .is_some_and(|f| f.eq_ignore_ascii_case("iceberg"))
+}
+
+/// WS1 rule 5: every `ref`/`source` upstream of a model on a non-`default` compute
+/// platform must be reachable through a catalog. A plain warehouse-native upstream
+/// is rejected with a precise error naming both nodes, since the compute target
+/// reads its inputs through attached catalogs rather than the warehouse.
+///
+/// Sources are external tables whose catalog reachability is validated elsewhere,
+/// so they are skipped here.
+pub fn check_compute_platform_upstreams(nodes: &Nodes) -> FsResult<()> {
+    for (unique_id, model) in nodes.models.iter() {
+        let on_alt_compute = model
+            .__model_attr__
+            .alt_compute
+            .is_some_and(|c| c != ComputePlatform::Default);
+        if !on_alt_compute {
+            continue;
+        }
+        for upstream_id in &model.__base_attr__.depends_on.nodes {
+            if upstream_id.starts_with("source.") {
+                continue;
+            }
+            let reachable = nodes
+                .models
+                .get(upstream_id)
+                .is_some_and(|up| upstream_is_catalog_reachable(up));
+            if !reachable {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "Model '{}' runs on alt_compute: 'alt' but its upstream '{}' is not \
+                     reachable through a catalog. Materialize '{}' into a catalog (set \
+                     'catalog_name') or place it on alt_compute: 'alt'.",
+                    unique_id,
+                    upstream_id,
+                    upstream_id
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Function to check models, seeds, and snapshots for relation uniqueness
 pub fn check_relation_uniqueness(nodes: &Nodes) -> FsResult<()> {
     let mut alias_resources: HashMap<String, &dyn InternalDbtNode> = HashMap::new();
@@ -1476,5 +1536,108 @@ mod tests {
             .snapshots
             .insert(snapshot_uid.clone(), Arc::new(make_snapshot(None)));
         assert!(!has_event_time_input(&nodes, &model));
+    }
+
+    /// WS1 rule 5: an `alt_compute: alt` model requires each of its model
+    /// upstreams to be reachable through a catalog; a plain warehouse-native
+    /// upstream is rejected, while catalog-backed / Iceberg / alt upstreams pass.
+    #[test]
+    fn test_check_compute_platform_upstreams() {
+        use std::sync::Arc;
+
+        use dbt_schemas::schemas::CommonAttributes;
+        use dbt_schemas::schemas::common::ComputePlatform;
+        use dbt_schemas::schemas::{DbtModel, Nodes};
+
+        use super::check_compute_platform_upstreams;
+
+        // Build a model with the given placement and upstream config knobs.
+        let make_model = |uid: &str,
+                          alt_compute: Option<ComputePlatform>,
+                          catalog_name: Option<&str>,
+                          table_format: Option<&str>,
+                          upstreams: &[&str]| {
+            let mut model = DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: uid.to_string(),
+                    name: uid.rsplit('.').next().unwrap_or(uid).to_string(),
+                    package_name: "test".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            model.__model_attr__.alt_compute = alt_compute;
+            model.__model_attr__.catalog_name = catalog_name.map(str::to_string);
+            model.__model_attr__.table_format = table_format.map(str::to_string);
+            model.__base_attr__.depends_on.nodes =
+                upstreams.iter().map(|s| s.to_string()).collect();
+            model
+        };
+
+        let consumer_uid = "model.test.consumer";
+        let upstream_uid = "model.test.upstream";
+
+        // Helper: run the check with a `dbt` consumer reading `upstream`.
+        let run = |upstream: DbtModel| {
+            let consumer = make_model(
+                consumer_uid,
+                Some(ComputePlatform::Alt),
+                Some("horizon"),
+                None,
+                &[upstream_uid],
+            );
+            let mut nodes = Nodes::default();
+            nodes
+                .models
+                .insert(consumer_uid.to_string(), Arc::new(consumer));
+            nodes
+                .models
+                .insert(upstream_uid.to_string(), Arc::new(upstream));
+            check_compute_platform_upstreams(&nodes)
+        };
+
+        // Catalog-backed / Iceberg / dbt upstreams are reachable.
+        assert!(run(make_model(upstream_uid, None, Some("horizon"), None, &[])).is_ok());
+        assert!(run(make_model(upstream_uid, None, None, Some("iceberg"), &[])).is_ok());
+        assert!(
+            run(make_model(
+                upstream_uid,
+                Some(ComputePlatform::Alt),
+                Some("horizon"),
+                None,
+                &[]
+            ))
+            .is_ok()
+        );
+
+        // A plain warehouse-native upstream is rejected.
+        assert!(run(make_model(upstream_uid, None, None, None, &[])).is_err());
+
+        // A `default` consumer is unconstrained even with a warehouse-native upstream.
+        let consumer = make_model(consumer_uid, None, None, None, &[upstream_uid]);
+        let upstream = make_model(upstream_uid, None, None, None, &[]);
+        let mut nodes = Nodes::default();
+        nodes
+            .models
+            .insert(consumer_uid.to_string(), Arc::new(consumer));
+        nodes
+            .models
+            .insert(upstream_uid.to_string(), Arc::new(upstream));
+        assert!(check_compute_platform_upstreams(&nodes).is_ok());
+
+        // A `source.*` upstream is skipped (validated elsewhere), so no error even
+        // though it is not present in `nodes.models`.
+        let consumer = make_model(
+            consumer_uid,
+            Some(ComputePlatform::Alt),
+            Some("horizon"),
+            None,
+            &["source.test.raw"],
+        );
+        let mut nodes = Nodes::default();
+        nodes
+            .models
+            .insert(consumer_uid.to_string(), Arc::new(consumer));
+        assert!(check_compute_platform_upstreams(&nodes).is_ok());
     }
 }

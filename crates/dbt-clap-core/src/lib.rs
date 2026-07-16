@@ -1401,6 +1401,16 @@ pub struct CommonArgs {
     )]
     pub target: Option<String>,
 
+    /// The profile output to use for models on the alternate compute target
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_X_ALT_TARGET",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
+    pub x_alt_target: Option<String>,
+
     /// The directory to load the dbt project from
     #[arg(
         global = true,
@@ -2326,6 +2336,7 @@ impl CommonArgs {
             lock: false,       // comes from DepsArgs
             profile: self.profile.clone(),
             target: self.target.clone(),
+            x_alt_target: self.x_alt_target.clone(),
             update_deps: false,
             vars: self.vars.clone().unwrap_or_default(),
             phase: self.phase.clone().unwrap_or(Phases::All),

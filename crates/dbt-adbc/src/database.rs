@@ -368,7 +368,7 @@ impl InnerAdbcDatabase {
                     Err(e)
                 }
             }?;
-            Ok(AdbcConnection(self.backend, conn, semaphore))
+            Ok(AdbcConnection(self.backend, conn, semaphore, 0))
         };
 
         let conn = if db_opts.is_empty() {
@@ -491,6 +491,15 @@ impl Database for AdbcDatabase {
 pub struct Fingerprint {
     h1: u64,
     h2: u64,
+}
+
+impl Fingerprint {
+    /// A 64-bit projection of the fingerprint, suitable as a connection-pool
+    /// reuse key: two connection configurations with the same fingerprint share
+    /// this value.
+    pub fn as_u64(&self) -> u64 {
+        self.h1
+    }
 }
 
 impl Hash for Fingerprint {

@@ -421,6 +421,8 @@ pub struct EvalArgs {
     pub profile: Option<String>,
     // The target within the profile to use for the dbt run
     pub target: Option<String>,
+    // The output to use for models on the alternate compute target (--x-alt-target)
+    pub x_alt_target: Option<String>,
     // Vars to pass to the jinja environment
     pub vars: BTreeMap<String, Value>,
     // Stop as soon as this stage is reached

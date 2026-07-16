@@ -189,6 +189,10 @@ pub struct DbtProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub defer_to_target: Option<String>,
     pub db_config: DbConfig,
+    /// Connection config for the alternate compute target, from the profile's
+    /// `x_alt_target` output. `None` when the profile declares none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_target_db_config: Option<DbConfig>,
     pub schema: String,
     pub database: String,
     pub relative_profile_path: PathBuf,

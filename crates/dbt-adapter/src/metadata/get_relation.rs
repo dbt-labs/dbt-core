@@ -67,7 +67,7 @@ pub fn get_relation(
         AdapterType::DuckDB => duckdb_get_relation(
             adapter, state, ctx, conn, database, schema, identifier, token,
         ),
-        AdapterType::Fdcs => duckdb_get_relation(
+        AdapterType::Alt => duckdb_get_relation(
             adapter, state, ctx, conn, database, schema, identifier, token,
         ),
         AdapterType::Fabric => fabric_get_relation(

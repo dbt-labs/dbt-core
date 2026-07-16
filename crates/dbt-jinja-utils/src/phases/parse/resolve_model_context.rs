@@ -252,6 +252,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             contract: None,
             event_time: None,
             catalog_name: None,
+            alt_compute: None,
             table_format: None,
             sync: None,
         },

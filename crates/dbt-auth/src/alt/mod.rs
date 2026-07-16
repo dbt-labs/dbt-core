@@ -1,7 +1,7 @@
-//! Authentication for the FDCS (dbt Compute) backend.
+//! Authentication for the ALT backend.
 //!
-//! FDCS is reached through the `adbc_driver_dbt` ADBC driver, which is configured
-//! entirely via named database options (see [`dbt_adbc::fdcs`]). This module
+//! ALT is reached through the `adbc_driver_dbt` ADBC driver, which is configured
+//! entirely via named database options (see [`dbt_adbc::alt`]). This module
 //! translates a profile mapping into those options.
 //!
 //! Following the crate invariants, profile values are kept borrowed until the
@@ -11,11 +11,11 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 
-use dbt_adbc::{Backend, database, fdcs};
+use dbt_adbc::{Backend, alt, database};
 
-/// Distinct authentication contracts supported by FDCS.
+/// Distinct authentication contracts supported by ALT.
 #[derive(Debug)]
-enum FdcsAuthIR<'a> {
+enum AltAuthIR<'a> {
     /// Send an `X-API-Key` header.
     ApiKey { api_key: &'a str },
     /// Send a static bearer token.
@@ -32,31 +32,31 @@ enum FdcsAuthIR<'a> {
     Auto,
 }
 
-impl<'a> FdcsAuthIR<'a> {
+impl<'a> AltAuthIR<'a> {
     fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::ApiKey { api_key } => {
-                builder.with_named_option(fdcs::AUTH_TYPE, fdcs::auth_type::API_KEY)?;
-                builder.with_named_option(fdcs::AUTH_API_KEY, api_key)?;
+                builder.with_named_option(alt::AUTH_TYPE, alt::auth_type::API_KEY)?;
+                builder.with_named_option(alt::AUTH_API_KEY, api_key)?;
             }
             Self::Token { token } => {
-                builder.with_named_option(fdcs::AUTH_TYPE, fdcs::auth_type::TOKEN)?;
-                builder.with_named_option(fdcs::AUTH_TOKEN, token)?;
+                builder.with_named_option(alt::AUTH_TYPE, alt::auth_type::TOKEN)?;
+                builder.with_named_option(alt::AUTH_TOKEN, token)?;
             }
             Self::OktaBrowser {
                 auth_url,
                 token_url,
                 client_id,
             } => {
-                builder.with_named_option(fdcs::AUTH_TYPE, fdcs::auth_type::OKTA_BROWSER)?;
+                builder.with_named_option(alt::AUTH_TYPE, alt::auth_type::OKTA_BROWSER)?;
                 if let Some(v) = auth_url {
-                    builder.with_named_option(fdcs::OKTA_AUTH_URL, v)?;
+                    builder.with_named_option(alt::OKTA_AUTH_URL, v)?;
                 }
                 if let Some(v) = token_url {
-                    builder.with_named_option(fdcs::OKTA_TOKEN_URL, v)?;
+                    builder.with_named_option(alt::OKTA_TOKEN_URL, v)?;
                 }
                 if let Some(v) = client_id {
-                    builder.with_named_option(fdcs::OKTA_CLIENT_ID, v)?;
+                    builder.with_named_option(alt::OKTA_CLIENT_ID, v)?;
                 }
             }
             Self::Auto => {}
@@ -65,32 +65,32 @@ impl<'a> FdcsAuthIR<'a> {
     }
 }
 
-fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<FdcsAuthIR<'a>, AuthError> {
+fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<AltAuthIR<'a>, AuthError> {
     // The `method` field selects the authentication family. Absent `method`,
     // infer from which credential field is present, else defer to auto-discovery.
     let method = config.get_str("method");
     match method {
-        Some(fdcs::auth_type::API_KEY) => Ok(FdcsAuthIR::ApiKey {
+        Some(alt::auth_type::API_KEY) => Ok(AltAuthIR::ApiKey {
             api_key: config.require_str("api_key")?,
         }),
-        Some(fdcs::auth_type::TOKEN) => Ok(FdcsAuthIR::Token {
+        Some(alt::auth_type::TOKEN) => Ok(AltAuthIR::Token {
             token: config.require_str("token")?,
         }),
-        Some(fdcs::auth_type::OKTA_BROWSER) => Ok(FdcsAuthIR::OktaBrowser {
+        Some(alt::auth_type::OKTA_BROWSER) => Ok(AltAuthIR::OktaBrowser {
             auth_url: config.get_str("okta_auth_url"),
             token_url: config.get_str("okta_token_url"),
             client_id: config.get_str("okta_client_id"),
         }),
         Some(other) => Err(AuthError::config(format!(
-            "unknown FDCS auth method: {other}"
+            "unknown ALT auth method: {other}"
         ))),
         None => {
             if let Some(api_key) = config.get_str("api_key") {
-                Ok(FdcsAuthIR::ApiKey { api_key })
+                Ok(AltAuthIR::ApiKey { api_key })
             } else if let Some(token) = config.get_str("token") {
-                Ok(FdcsAuthIR::Token { token })
+                Ok(AltAuthIR::Token { token })
             } else {
-                Ok(FdcsAuthIR::Auto)
+                Ok(AltAuthIR::Auto)
             }
         }
     }
@@ -101,33 +101,33 @@ fn apply_connection_args(
     mut builder: DatabaseBuilder,
 ) -> Result<DatabaseBuilder, AuthError> {
     // base_url is required to reach the service.
-    builder.with_named_option(fdcs::BASE_URL, config.require_str("base_url")?)?;
+    builder.with_named_option(alt::BASE_URL, config.require_str("base_url")?)?;
 
     if let Some(org) = config.get_str("organization") {
-        builder.with_named_option(fdcs::ORGANIZATION, org)?;
+        builder.with_named_option(alt::ORGANIZATION, org)?;
     }
     if let Some(warehouse) = config.get_str("warehouse") {
-        builder.with_named_option(fdcs::WAREHOUSE, warehouse)?;
+        builder.with_named_option(alt::WAREHOUSE, warehouse)?;
     }
     if let Some(affinity) = config.get_str("affinity") {
-        builder.with_named_option(fdcs::AFFINITY, affinity)?;
+        builder.with_named_option(alt::AFFINITY, affinity)?;
     }
     if let Some(dialect) = config.get_str("dialect") {
-        builder.with_named_option(fdcs::DIALECT, dialect)?;
+        builder.with_named_option(alt::DIALECT, dialect)?;
     }
     // `timeout_seconds` is commonly a number in profiles; accept numeric or string.
     if let Some(timeout) = config.get_string("timeout_seconds") {
-        builder.with_named_option(fdcs::TIMEOUT_SECONDS, timeout.into_owned())?;
+        builder.with_named_option(alt::TIMEOUT_SECONDS, timeout.into_owned())?;
     }
 
     Ok(builder)
 }
 
-pub struct FdcsAuth;
+pub struct AltAuth;
 
-impl Auth for FdcsAuth {
+impl Auth for AltAuth {
     fn backend(&self) -> Backend {
-        Backend::Fdcs
+        Backend::Alt
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
@@ -142,7 +142,7 @@ mod tests {
     use dbt_yaml::Mapping;
 
     fn configure(config: Mapping) -> DatabaseBuilder {
-        FdcsAuth {}
+        AltAuth {}
             .configure(&AdapterConfig::new(config))
             .expect("configure")
             .builder
@@ -156,15 +156,15 @@ mod tests {
             ("api_key".into(), "secret-key".into()),
         ]));
         assert_eq!(
-            other_option_value(&builder, fdcs::BASE_URL),
+            other_option_value(&builder, alt::BASE_URL),
             Some("https://compute.example")
         );
         assert_eq!(
-            other_option_value(&builder, fdcs::AUTH_TYPE),
+            other_option_value(&builder, alt::AUTH_TYPE),
             Some("api_key")
         );
         assert_eq!(
-            other_option_value(&builder, fdcs::AUTH_API_KEY),
+            other_option_value(&builder, alt::AUTH_API_KEY),
             Some("secret-key")
         );
     }
@@ -177,11 +177,11 @@ mod tests {
             ("okta_client_id".into(), "client-123".into()),
         ]));
         assert_eq!(
-            other_option_value(&builder, fdcs::AUTH_TYPE),
+            other_option_value(&builder, alt::AUTH_TYPE),
             Some("okta_browser")
         );
         assert_eq!(
-            other_option_value(&builder, fdcs::OKTA_CLIENT_ID),
+            other_option_value(&builder, alt::OKTA_CLIENT_ID),
             Some("client-123")
         );
     }
@@ -197,7 +197,7 @@ timeout_seconds: 120
         .expect("parse yaml");
         let builder = configure(config);
         assert_eq!(
-            other_option_value(&builder, fdcs::TIMEOUT_SECONDS),
+            other_option_value(&builder, alt::TIMEOUT_SECONDS),
             Some("120")
         );
     }
@@ -205,7 +205,7 @@ timeout_seconds: 120
     #[test]
     fn missing_base_url_errors() {
         // A missing required field surfaces as a YAML deserialization error.
-        let err = FdcsAuth {}
+        let err = AltAuth {}
             .configure(&AdapterConfig::new(Mapping::new()))
             .expect_err("expected missing base_url error");
         assert!(matches!(err, AuthError::YAML(_)), "got {err:?}");

@@ -42,15 +42,19 @@ pub trait Connection: Send {
     /// Record/replay connections override this to update their recording context.
     fn update_node_id(&mut self, _node_id: Option<String>) {}
 
-    /// Returns a generation counter identifying which engine created this connection.
+    /// Returns the config fingerprint of the engine that created this connection.
     ///
-    /// Used by the connection pool to detect stale connections when the engine
-    /// configuration changes between sequential runs (e.g. different recording
-    /// directories). Connections whose generation doesn't match the current engine
-    /// are discarded rather than reused.
-    fn generation(&self) -> u64 {
+    /// Used by the connection pool to reuse a connection only among engines with
+    /// an identical connection configuration; a connection whose fingerprint does
+    /// not match the borrowing engine is discarded rather than reused.
+    fn fingerprint(&self) -> u64 {
         0
     }
+
+    /// Tags this connection with the config fingerprint of the engine that
+    /// created it. The default is a no-op for connection types that do not track
+    /// a fingerprint.
+    fn set_fingerprint(&mut self, _fingerprint: u64) {}
 
     /// Cancel the in-progress operation on a connection.
     fn cancel(&mut self) -> Result<()>;
@@ -383,6 +387,8 @@ pub(crate) struct AdbcConnection(
     pub(crate) Backend,
     pub(crate) ManagedAdbcConnection,
     pub(crate) Option<Arc<Semaphore>>,
+    /// Generation of the engine that created this connection (0 if untagged).
+    pub(crate) u64,
 );
 
 impl fmt::Debug for AdbcConnection {
@@ -401,6 +407,14 @@ impl Drop for AdbcConnection {
 }
 
 impl Connection for AdbcConnection {
+    fn fingerprint(&self) -> u64 {
+        self.3
+    }
+
+    fn set_fingerprint(&mut self, fingerprint: u64) {
+        self.3 = fingerprint;
+    }
+
     fn new_statement(&mut self) -> Result<Box<dyn Statement>> {
         let managed_adbc_stmt = self.1.new_statement()?;
         let adbc_stmt = AdbcStatement(self.0, managed_adbc_stmt);

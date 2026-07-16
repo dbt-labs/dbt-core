@@ -89,7 +89,7 @@ use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::resolve_tests::persist_generic_data_tests::{
     TestUnrenderedConfigs, extract_test_unrendered_configs,
 };
-use super::resolve_utils::validate_compute;
+use super::resolve_utils::{validate_compute, validate_compute_platform};
 use super::validate_models::validate_model;
 
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
@@ -518,6 +518,15 @@ pub async fn resolve_models(
 
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
         validate_compute(model_config.compute, &dbt_asset.path)?;
+        validate_compute_platform(
+            model_config.alt_compute,
+            &materialized,
+            model_config.catalog_name.as_deref(),
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            dbt_asset.is_python(),
+            &dbt_asset.path,
+        )?;
 
         if model_config.on_error == Some(OnError::Continue) {
             emit_warn_log_message(
@@ -765,6 +774,7 @@ pub async fn resolve_models(
                 state: model_config.state.clone(),
                 event_time: model_config.event_time.clone(),
                 catalog_name: model_config.catalog_name.clone(),
+                alt_compute: model_config.alt_compute,
                 table_format: model_config.table_format.clone(),
                 sync: model_config.sync.clone(),
             },

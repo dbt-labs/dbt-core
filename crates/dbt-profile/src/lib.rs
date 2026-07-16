@@ -23,5 +23,5 @@ mod resolve;
 pub use error::{ProfileError, Result};
 pub use resolve::{
     ProfileEnvironment, ResolveArgs, ResolvedProfile, find_profiles_path, render_target, resolve,
-    resolve_target, resolve_with_env,
+    resolve_target, resolve_with_env, resolve_with_env_ext,
 };

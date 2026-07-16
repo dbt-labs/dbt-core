@@ -286,7 +286,7 @@ impl AdapterImpl {
                         DuckDB => {
                             Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
-                        Fdcs => {
+                        Alt => {
                             Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
                         Fabric => {
@@ -516,7 +516,7 @@ impl AdapterImpl {
         use DbtIncrementalStrategy::*;
 
         match self.adapter_type() {
-            Postgres | DuckDB | Fdcs => &[Append, DeleteInsert, Merge, Microbatch],
+            Postgres | DuckDB | Alt => &[Append, DeleteInsert, Merge, Microbatch],
             Snowflake => &[Append, DeleteInsert, InsertOverwrite, Merge, Microbatch],
             Bigquery => &[Append],
             Databricks => &[Append, Merge, InsertOverwrite, ReplaceWhere],
@@ -949,13 +949,13 @@ impl AdapterImpl {
                 replay.replay_submit_python_job(ctx, conn, state, model, compiled_code)
             }
             Replay(
-                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | Fdcs | Spark | Fabric
+                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | Alt | Spark | Fabric
                 | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
                 | Dremio | Oracle),
                 _,
             )
             | Impl(
-                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | Fdcs | Spark | Fabric
+                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | Alt | Spark | Fabric
                 | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
                 | Dremio | Oracle),
                 _,
@@ -989,7 +989,7 @@ impl AdapterImpl {
             }
             Snowflake | Databricks | Redshift | Spark | DuckDB | Postgres | Salesforce | Fabric
             | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle
-            | Fdcs | Bigquery => {
+            | Alt | Bigquery => {
                 use crate::macro_exec::execute_macro_wrapper;
                 use minijinja::value::{Kwargs, Value};
 
@@ -1095,7 +1095,7 @@ impl AdapterImpl {
                 }
                 Postgres => "nspname",
                 DuckDB => "schema_name",
-                Fdcs => "schema_name",
+                Alt => "schema_name",
                 Fabric => "schema",
                 // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/include/clickhouse/macros/adapters.sql
                 ClickHouse => "name",
@@ -1380,7 +1380,7 @@ impl AdapterImpl {
                     Value::from_object(table),
                 )])))
             }
-            Postgres | Bigquery | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Bigquery | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 let err = format!(
@@ -1807,8 +1807,8 @@ impl AdapterImpl {
             // NOTE: This is the default behavior. If said adapter type does not
             // have a get_columns_in_relation() macro, it will fail with a
             // "macro does not exist" error
-            Athena | ClickHouse | Datafusion | Dremio | DuckDB | Fdcs | Exasol | Fabric
-            | Oracle | Postgres | Redshift | Salesforce | Snowflake | Spark | Starburst | Trino => {
+            Athena | ClickHouse | Datafusion | Dremio | DuckDB | Alt | Exasol | Fabric | Oracle
+            | Postgres | Redshift | Salesforce | Snowflake | Spark | Starburst | Trino => {
                 execute_macro(
                     state,
                     &[RelationObject::new(relation.to_owned()).into_value()],
@@ -2073,7 +2073,7 @@ impl AdapterImpl {
                 ))
             }
             Impl(
-                Snowflake | Databricks | Redshift | Salesforce | Postgres | Spark | DuckDB | Fdcs
+                Snowflake | Databricks | Redshift | Salesforce | Postgres | Spark | DuckDB | Alt
                 | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
                 | Oracle,
                 _,
@@ -2124,7 +2124,7 @@ impl AdapterImpl {
                 }
             }
             Impl(
-                Postgres | Bigquery | Databricks | Redshift | Spark | DuckDB | Fdcs | Fabric
+                Postgres | Bigquery | Databricks | Redshift | Spark | DuckDB | Alt | Fabric
                 | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle,
                 _,
             ) => {
@@ -2189,7 +2189,7 @@ impl AdapterImpl {
             Replay(_, replay) => {
                 replay.replay_expand_target_column_types(state, from_relation, to_relation)
             }
-            Impl(Bigquery, _) | Impl(DuckDB, _) | Impl(Fdcs, _) => {
+            Impl(Bigquery, _) | Impl(DuckDB, _) | Impl(Alt, _) => {
                 // This method is a noop for BigQuery and DuckDB.
                 // BigQuery: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L260-L261
                 // DuckDB: type widening (e.g. INT→BIGINT) is handled implicitly;
@@ -2328,7 +2328,7 @@ impl AdapterImpl {
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | Fabric | DuckDB
-            | Fdcs | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
+            | Alt | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
@@ -2343,7 +2343,7 @@ impl AdapterImpl {
         columns_map: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Vec<String>> {
         match self.adapter_type() {
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 let mut result = vec![];
@@ -2510,13 +2510,13 @@ impl AdapterImpl {
             (DuckDB, Check) => NotSupported,
             (DuckDB, Custom) => NotSupported,
 
-            // Fdcs - follows DuckDB
-            (Fdcs, NotNull) => Enforced,
-            (Fdcs, ForeignKey) => Enforced,
-            (Fdcs, Unique) => NotEnforced,
-            (Fdcs, PrimaryKey) => NotEnforced,
-            (Fdcs, Check) => NotSupported,
-            (Fdcs, Custom) => NotSupported,
+            // Alt - follows DuckDB
+            (Alt, NotNull) => Enforced,
+            (Alt, ForeignKey) => Enforced,
+            (Alt, Unique) => NotEnforced,
+            (Alt, PrimaryKey) => NotEnforced,
+            (Alt, Check) => NotSupported,
+            (Alt, Custom) => NotSupported,
 
             // Fabric
             (Fabric, Check) => NotSupported,
@@ -2636,7 +2636,7 @@ impl AdapterImpl {
         }
 
         match self.adapter_type() {
-            Postgres | Bigquery | DuckDB | Fdcs => {
+            Postgres | Bigquery | DuckDB | Alt => {
                 let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
                 let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
 
@@ -2796,7 +2796,7 @@ impl AdapterImpl {
                 )?;
                 Ok(AgateTable::from_record_batch(Arc::new(catalog)))
             }
-            Snowflake | Bigquery | Databricks | Spark | DuckDB | Fdcs | Postgres | Salesforce
+            Snowflake | Bigquery | Databricks | Spark | DuckDB | Alt | Postgres | Salesforce
             | Fabric | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio
             | Oracle => Err(AdapterError::new(
                 AdapterErrorKind::NotSupported,
@@ -2812,7 +2812,7 @@ impl AdapterImpl {
     ) -> AdapterResult<IndexMap<String, DbtColumn>> {
         match self.adapter_type() {
             Bigquery => nest_column_data_types(columns, constraints),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -2855,7 +2855,7 @@ impl AdapterImpl {
     ) -> Result<Value, minijinja::Error> {
         match self.adapter_type() {
             Bigquery => Ok(Value::from(render_struct_projection(col_name, data_type))),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -2953,7 +2953,7 @@ impl AdapterImpl {
                 )?;
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3007,7 +3007,7 @@ impl AdapterImpl {
 
                 Self::parse_dataset_location(&batch)
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3065,7 +3065,7 @@ impl AdapterImpl {
                 )?;
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3142,7 +3142,7 @@ impl AdapterImpl {
                 Ok(none_value())
             }
             Salesforce => todo!("load_dataframe() for the Salesforce adapter"),
-            Postgres | Snowflake | Databricks | Redshift | Spark | DuckDB | Fdcs | Fabric
+            Postgres | Snowflake | Databricks | Redshift | Spark | DuckDB | Alt | Fabric
             | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery or Salesforce adapter")
             }
@@ -3205,7 +3205,7 @@ impl AdapterImpl {
 
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3313,7 +3313,7 @@ impl AdapterImpl {
     pub fn verify_database(&self, database: String) -> AdapterResult<Value> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_verify_database(&database),
-            Impl(adapter_type @ (Postgres | DuckDB | Fdcs | ClickHouse), engine) => {
+            Impl(adapter_type @ (Postgres | DuckDB | Alt | ClickHouse), engine) => {
                 if let Some(configured_database) = engine.get_configured_database_name() {
                     if database == configured_database {
                         Ok(Value::from(()))
@@ -3430,7 +3430,7 @@ impl AdapterImpl {
                 }
             }
             adapter_type @ (Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark
-            | DuckDB | Fdcs | Fabric | ClickHouse | Exasol | Starburst | Athena
+            | DuckDB | Alt | Fabric | ClickHouse | Exasol | Starburst | Athena
             | Trino | Datafusion | Dremio | Oracle) => {
                 unimplemented!(
                     "is_replaceable is only available with BigQuery adapter, not {}",
@@ -3494,7 +3494,7 @@ impl AdapterImpl {
 
                 Ok(Value::from_object(validated_config))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3518,7 +3518,7 @@ impl AdapterImpl {
                 temporary,
                 adapter_type,
             ),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3542,7 +3542,7 @@ impl AdapterImpl {
                     false,
                 ),
             ),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3569,7 +3569,7 @@ impl AdapterImpl {
                 );
                 Ok(Value::from_serialize(options))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
@@ -3611,7 +3611,7 @@ impl AdapterImpl {
 
                 Ok(Value::from(result))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -3680,7 +3680,7 @@ impl AdapterImpl {
             Impl(DuckDB, engine) => {
                 duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
-            Impl(Fdcs, engine) => {
+            Impl(Alt, engine) => {
                 duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
             Impl(Fabric, engine) => {
@@ -3770,7 +3770,7 @@ impl AdapterImpl {
 
                 Ok(Value::from(result))
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with Databricksadapter")
@@ -3927,7 +3927,7 @@ impl AdapterImpl {
                 Ok(path)
             }
 
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with Databricks adapter")
@@ -4005,7 +4005,7 @@ impl AdapterImpl {
                 }
                 Ok(())
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with Databricks adapter")
@@ -4096,7 +4096,7 @@ impl AdapterImpl {
 
                 Ok(!use_managed_iceberg)
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with Databricks adapter")
@@ -4442,7 +4442,7 @@ impl AdapterImpl {
 
                 Ok(())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fdcs
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
             | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
@@ -4801,7 +4801,7 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
             );
             vec![flag]
         }
-        Postgres | Redshift | Salesforce | Spark | DuckDB | Fdcs | ClickHouse | Exasol
+        Postgres | Redshift | Salesforce | Spark | DuckDB | Alt | ClickHouse | Exasol
         | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => vec![],
     }
 }

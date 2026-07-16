@@ -4436,6 +4436,7 @@ mod tests {
                 target: "dev".to_string(),
                 defer_to_target: None,
                 db_config: DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default()),
+                alt_target_db_config: None,
                 schema: "dbt_test".to_string(),
                 database: "db".to_string(),
                 relative_profile_path: PathBuf::new(),

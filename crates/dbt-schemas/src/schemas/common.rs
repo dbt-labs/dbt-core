@@ -398,6 +398,23 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
     }
 }
 
+/// Selects the compute target a model's DML is executed against.
+///
+/// `Default` uses the profile's adapter. A run implementation may honor an
+/// alternate target for other variants; parse/compile/render and introspection
+/// are unaffected by this selection.
+#[derive(
+    Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputePlatform {
+    /// Execute on the profile's (default) adapter.
+    #[default]
+    Default,
+    /// Execute on the alternate compute target.
+    Alt,
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {

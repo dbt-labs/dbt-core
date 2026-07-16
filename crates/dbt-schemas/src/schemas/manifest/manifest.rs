@@ -1981,6 +1981,7 @@ pub fn manifest_model_to_dbt_model(
             time_spine,
             event_time: model.config.event_time.clone(),
             catalog_name: model.config.catalog_name.clone(),
+            alt_compute: model.config.alt_compute,
             table_format: model.config.table_format.clone(),
             sync: model.config.sync.clone(),
         },

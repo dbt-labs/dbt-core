@@ -25,7 +25,7 @@ use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
-        Access, ClusterConfig, DbtChecksum, DbtContract, DbtIncrementalStrategy,
+        Access, ClusterConfig, ComputePlatform, DbtChecksum, DbtContract, DbtIncrementalStrategy,
         DbtMaterialization, Expect, FreshnessDefinition, Given, IncludeExclude, NodeDependsOn,
         PartitionConfig, ResolvedQuoting, ScheduleConfig, SchemaOrigin, SchemaRefreshInterval,
         SyncConfig,
@@ -5806,6 +5806,7 @@ pub struct DbtModelAttr {
     pub event_time: Option<String>,
     // TODO(anna): See if we _need_ to put these here, or if they can somehow be added to AdapterAttr.
     pub catalog_name: Option<String>,
+    pub alt_compute: Option<ComputePlatform>,
     pub table_format: Option<String>,
     pub sync: Option<SyncConfig>,
 }

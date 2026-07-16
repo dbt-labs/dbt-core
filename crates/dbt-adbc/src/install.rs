@@ -312,7 +312,7 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
         Backend::Spark => ("spark", SPARK_DRIVER_VERSION),
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
         Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
-        Backend::Fdcs => ("fdcs", FDCS_DRIVER_VERSION),
+        Backend::Alt => ("alt", ALT_DRIVER_VERSION),
         Backend::DuckDBExtended => ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::ClickHouse => ("clickhouse", CLICKHOUSE_DRIVER_VERSION),

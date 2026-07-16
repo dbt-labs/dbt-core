@@ -34,7 +34,12 @@ pub fn adbc_error_to_adapter_error(err: adbc_core::error::Error) -> AdapterError
         // Transmute SQLSTATE to unsigned bytes. It was mistake to make this i8
         // in ADBC core [1].
         //
+        // `err.sqlstate` is `[i8; 5]` with adbc_core's default features but
+        // `[u8; 5]` without them, so under `--no-default-features` this transmute
+        // is a no-op; allow the lint rather than diverge the two feature configs.
+        //
         // [1] https://github.com/apache/arrow-adbc/pull/1725#discussion_r1567531539
+        #[allow(clippy::useless_transmute)]
         let unsigned: [u8; 5] = unsafe { std::mem::transmute(err.sqlstate) };
         if unsigned[0] == 0 {
             // If the string is full of '\0' bytes, we set it to "00000" (b'0' is 48).

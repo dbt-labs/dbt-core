@@ -134,7 +134,7 @@ impl AdapterEngine for RecordReplayEngine {
         matches!(self.mode, Mode::Replay)
     }
 
-    fn generation(&self) -> u64 {
+    fn fingerprint(&self) -> u64 {
         self.generation
     }
 

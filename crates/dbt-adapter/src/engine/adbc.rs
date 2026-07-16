@@ -83,6 +83,12 @@ pub struct AdbcEngine {
     mode: EngineMode,
     /// The `threads` configuration value from the dbt profile.
     threads: Option<usize>,
+    /// Config fingerprint identifying this engine's connections. Used by the
+    /// pool to reuse a connection only among engines with an identical
+    /// connection configuration (not merely the same engine instance). Lazily
+    /// set: `0` until the first real connection is created, then the config
+    /// fingerprint of that connection.
+    connection_fingerprint: std::sync::atomic::AtomicU64,
 }
 
 impl AdbcEngine {
@@ -121,6 +127,7 @@ impl AdbcEngine {
             behavior,
             mode,
             threads,
+            connection_fingerprint: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -190,7 +197,7 @@ impl AdbcEngine {
     fn load_driver_and_configure_database(
         &self,
         config: &AdapterConfig,
-    ) -> AdapterResult<Box<dyn Database>> {
+    ) -> AdapterResult<(Box<dyn Database>, database::Fingerprint)> {
         assert!(
             self.mode.has_real_connections(),
             "load_driver_and_configure_database called in {:?} mode",
@@ -241,24 +248,25 @@ impl AdbcEngine {
         {
             let read_guard = self.configured_databases.read();
             if let Some(database) = read_guard.inner.get(&fingerprint) {
-                return Ok(database.clone());
+                return Ok((database.clone(), fingerprint));
             }
         }
         {
             let mut write_guard = self.configured_databases.write();
             if let Some(database) = write_guard.inner.get(&fingerprint) {
                 let database: Box<dyn Database> = database.clone();
-                Ok(database)
+                Ok((database, fingerprint))
             } else {
                 let mut database = driver
                     .new_database_with_opts(opts)
                     .map_err(adbc_error_to_adapter_error)?;
-                // DuckDB: apply extensions, settings, secrets, and attachments
-                if self.adapter_type == AdapterType::DuckDB {
+                // DuckDB-backed adapters: apply extensions, settings, secrets, and
+                // catalog attachments.
+                if matches!(self.adapter_type, AdapterType::DuckDB | AdapterType::Alt) {
                     self.apply_duckdb_init_sql(&mut database, config)?;
                 }
                 write_guard.inner.insert(fingerprint, database.clone());
-                Ok(database)
+                Ok((database, fingerprint))
             }
         }
     }
@@ -337,7 +345,15 @@ impl AdbcEngine {
         let Ok(view) = catalogs.view_v2() else {
             return Ok(Vec::new());
         };
-        super::duckdb_attach::compose_v2_catalog_attach_stmts(&view)
+        // The compute engine (Alt) attaches via each catalog's `alt` block when
+        // present; the base DuckDB adapter uses the `duckdb` block. Both fall back
+        // to `duckdb`.
+        let platform = if self.adapter_type == AdapterType::Alt {
+            "alt"
+        } else {
+            "duckdb"
+        };
+        super::duckdb_attach::compose_v2_catalog_attach_stmts(&view, platform)
     }
 }
 
@@ -353,6 +369,11 @@ impl AdapterEngine for AdbcEngine {
 
     fn threads(&self) -> Option<usize> {
         self.threads
+    }
+
+    fn fingerprint(&self) -> u64 {
+        self.connection_fingerprint
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn is_mock(&self) -> bool {
@@ -450,12 +471,19 @@ impl AdapterEngine for AdbcEngine {
             });
             return Ok(Box::new(NoopConnection));
         }
-        let mut database = self.load_driver_and_configure_database(config)?;
+        let (mut database, fingerprint) = self.load_driver_and_configure_database(config)?;
         let connect = || connection::Builder::default().build(&mut database);
         let retry_policy = ConnectionRetryPolicy::new(self.adapter_type(), config);
-        let conn = retry_policy
+        let mut conn = retry_policy
             .execute(config, connect)
             .map_err(|e| enrich_connection_error(self.adapter_type(), e, config))?;
+        // Tag the connection with its config fingerprint and cache it on the
+        // engine, so the pool reuses a connection only among engines with an
+        // identical connection configuration.
+        let fp = fingerprint.as_u64();
+        conn.set_fingerprint(fp);
+        self.connection_fingerprint
+            .store(fp, std::sync::atomic::Ordering::Relaxed);
         emit_trace_event(|| {
             (
                 AdapterConnectionOpen {

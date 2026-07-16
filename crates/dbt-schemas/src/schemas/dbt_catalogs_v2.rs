@@ -19,7 +19,7 @@ use dbt_common::serde_utils::try_get_bool;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
-const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duckdb"];
+const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duckdb", "alt"];
 
 const TARGET_FILE_SIZES: &[&str] = &["AUTO", "16MB", "32MB", "64MB", "128MB"];
 const STORAGE_SERIALIZATION_POLICIES: &[&str] = &["COMPATIBLE", "OPTIMIZED"];
@@ -260,6 +260,8 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
+            // The alt adapter attaches this catalog the same way DuckDB does.
+            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -270,6 +272,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -280,6 +283,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -291,6 +295,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", UNITY_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -313,9 +318,12 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         type_name: "ducklake",
         table_format: "default",
-        description: "DuckLake metadata store catalog. DuckDB platform only.",
-        presence: ConfigPresence::AllRequired,
-        platforms: &[PlatformBlock::new("duckdb", DUCKLAKE_DUCKDB_FIELDS)],
+        description: "DuckLake metadata store catalog. Supports duckdb and/or alt connection blocks.",
+        presence: ConfigPresence::AtLeastOne,
+        platforms: &[
+            PlatformBlock::new("duckdb", DUCKLAKE_DUCKDB_FIELDS),
+            PlatformBlock::new("alt", DUCKLAKE_DUCKDB_FIELDS),
+        ],
     },
     CatalogTypeSchema {
         type_name: "local_filesystem",

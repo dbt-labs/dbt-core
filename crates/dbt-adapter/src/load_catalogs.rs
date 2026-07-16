@@ -30,6 +30,21 @@ pub fn fetch_use_catalogs_v2() -> bool {
     }
 }
 
+/// Record whether the `use_catalogs_v2` behavior flag is set. Must run even when
+/// there is no catalogs.yml, so callers can distinguish "flag set but no catalogs
+/// defined" from "flag not set" (otherwise both look the same and yield a
+/// misleading "set the flag" error).
+pub fn set_use_catalogs_v2_from_flags(project_flags: Option<&yml::Value>) {
+    let enabled = project_flags
+        .and_then(|f| project_flags_get_value(f, "use_catalogs_v2"))
+        .and_then(yml::Value::as_bool)
+        .unwrap_or(false);
+    *match USE_CATALOGS_V2.write() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    } = enabled;
+}
+
 /// Load <project_root>/catalogs.yml, validate, and return a validated mapping holder.
 pub fn load_catalogs(
     text_yml: yml::Value,
@@ -67,15 +82,8 @@ pub fn do_load_catalogs(
 
     let catalogs = DbtCatalogs::new(repr, span);
     // TODO: remove v1 after discussion/product alignment (see CATALOGS_V2_DISCUSSION_URL)
-    if project_flags
-        .and_then(|f| project_flags_get_value(f, "use_catalogs_v2"))
-        .and_then(yml::Value::as_bool)
-        .unwrap_or(false)
-    {
-        *match USE_CATALOGS_V2.write() {
-            Ok(g) => g,
-            Err(p) => p.into_inner(),
-        } = true;
+    set_use_catalogs_v2_from_flags(project_flags);
+    if fetch_use_catalogs_v2() {
         emit_warn_log_message(
             ErrorCode::NotYetSupportedOption,
             format!(

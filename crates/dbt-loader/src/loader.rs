@@ -624,6 +624,10 @@ pub async fn load_catalogs(
             minijinja::Value::from_object(Var::new(arg.vars.clone())),
         ),
     ]);
+    // Record the use_catalogs_v2 flag whether or not catalogs.yml exists, so
+    // downstream checks can tell "flag set but no catalogs.yml" from "flag unset".
+    load_catalogs::set_use_catalogs_v2_from_flags(project_flags);
+
     let catalogs_yml_path = arg.io.in_dir.join(DBT_CATALOGS_YML);
     match fs::read_to_string(&catalogs_yml_path) {
         Ok(raw_text) => {

@@ -57,6 +57,10 @@ impl TestEnvGuard {
         // Used to force vortex client into dev mode for testing
         "VORTEX_DEV_MODE",
         "VORTEX_DEV_MODE_OUTPUT_PATH",
+        // Opt-in capture of test OTEL files + rendered summaries for local
+        // debugging / comparing runs (see CompareConnectionBackpressureSummary).
+        "DBT_TEST_OTEL_CAPTURE_DIR",
+        "DBT_TEST_OTEL_LABEL",
     ];
 
     /// Windows-specific environment variables required for system operations and DNS resolution

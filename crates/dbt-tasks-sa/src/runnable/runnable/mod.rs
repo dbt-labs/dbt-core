@@ -59,6 +59,7 @@ use dbt_tasks_core::run_cache::run_cache_service::{
 pub enum RunExecutionPath {
     Remote,
     SideCar,
+    AltCompute,
 }
 
 pub struct RunTask {
@@ -450,6 +451,11 @@ impl Task for RunTask {
                         .run_alt_compute_sidecar(ctx, Arc::clone(&self.node), task_result.clone())
                         .await
                 }
+                RunExecutionPath::AltCompute => {
+                    self.task_hooks
+                        .run_on_alt_compute(ctx, Arc::clone(&self.node), task_result.clone())
+                        .await
+                }
             };
 
             if result.is_ok() {
@@ -514,7 +520,9 @@ impl Task for RunTask {
 
                     if matches!(
                         self.execution_path,
-                        RunExecutionPath::Remote | RunExecutionPath::SideCar
+                        RunExecutionPath::Remote
+                            | RunExecutionPath::SideCar
+                            | RunExecutionPath::AltCompute
                     ) {
                         emit_error_log_from_fs_error(
                             e.as_ref(),
@@ -949,7 +957,7 @@ fn emit_run_usage_stats(
 ) {
     let (maybe_incremental_strategy, is_contract_enforced, has_group, table_format, catalog_name) =
         match execution_path {
-            RunExecutionPath::Remote | RunExecutionPath::SideCar => {
+            RunExecutionPath::Remote | RunExecutionPath::SideCar | RunExecutionPath::AltCompute => {
                 if let Some(model) = node.as_any().downcast_ref::<DbtModel>() {
                     (
                         model

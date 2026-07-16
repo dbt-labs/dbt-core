@@ -2,7 +2,6 @@ use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 use crate::engine::AdbcEngine;
-use crate::engine::query_comment::QueryCommentConfig;
 use crate::errors::into_fs_error;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
@@ -207,20 +206,20 @@ impl Adapter {
             .try_into()
             .expect("Failed to convert quoting to resolved quoting");
         let stmt_splitter = Arc::new(DefaultStmtSplitter {});
-        // No cloud config needed — bridge adapter is used for internal operations, not user-facing queries.
-        let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false, None);
 
-        let engine = AdbcEngine::new(
+        // Parse adapters carry dependencies (quoting, type ops, relation
+        // creation) but never run SQL during parse — see the note on
+        // `ParseAdapterState::engine`. Build a mock engine so a parse adapter can
+        // never open a real warehouse connection.
+        let engine = AdbcEngine::new_mock(
             adapter_type,
             auth,
             adapter_config,
             quoting,
-            query_comment,
             type_ops,
             stmt_splitter,
             relation_cache,
             BTreeMap::new(),
-            None,
         );
 
         Box::new(ParseAdapterState::new(

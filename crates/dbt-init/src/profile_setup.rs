@@ -401,11 +401,11 @@ impl ProfileSetup {
                     "DuckDB profile setup not yet implemented. DuckDB runs locally without credentials."
                 ));
             }
-            AdapterType::Fdcs => {
-                // TODO: Create proper Fdcs profile setup
+            AdapterType::Alt => {
+                // TODO: Create proper Alt profile setup
                 return Err(fs_err!(
                     ErrorCode::Generic,
-                    "Fdcs profile setup not yet implemented."
+                    "Alt profile setup not yet implemented."
                 ));
             }
             AdapterType::ClickHouse => {

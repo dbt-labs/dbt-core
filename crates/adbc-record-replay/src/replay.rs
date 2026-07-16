@@ -174,7 +174,7 @@ impl Connection for ReplayConnection {
         self.ctx.node_id = node_id;
     }
 
-    fn generation(&self) -> u64 {
+    fn fingerprint(&self) -> u64 {
         self.generation
     }
 }

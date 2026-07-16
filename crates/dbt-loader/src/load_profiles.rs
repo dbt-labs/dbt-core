@@ -10,7 +10,7 @@ use dbt_yaml::{Span, Spanned};
 
 use dbt_jinja_utils::register_base_functions;
 use dbt_profile::{
-    ProfileEnvironment, ProfileError, ResolvedProfile, find_profiles_path, resolve_with_env,
+    ProfileEnvironment, ProfileError, ResolvedProfile, find_profiles_path, resolve_with_env_ext,
 };
 use dbt_schemas::schemas::profiles::DbConfig;
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
@@ -70,19 +70,23 @@ pub fn load_profiles(
     // functions as full dbt Jinja (`tojson`, `fromjson`, etc.) so profiles.yml matches dbt-core.
     let mut penv = ProfileEnvironment::new(arg.vars.clone());
     register_base_functions(&mut penv.env, arg.io.clone(), WarnErrorOptions::default());
-    let resolved: ResolvedProfile =
-        resolve_with_env(&penv, &profile_path, &profile_name, arg.target.as_deref()).map_err(
-            |e| match e {
-                ProfileError::Yaml { source, path } => yaml_to_fs_error(source, Some(&path)),
-                ProfileError::ProfileMissing { .. } => fs_err!(
-                    code => ErrorCode::IoError,
-                    loc => profile.span().clone(),
-                    "Profile '{}' not found in profiles.yml",
-                    profile_name
-                ),
-                _ => fs_err!(ErrorCode::InvalidConfig, "{}", e),
-            },
-        )?;
+    let resolved: ResolvedProfile = resolve_with_env_ext(
+        &penv,
+        &profile_path,
+        &profile_name,
+        arg.target.as_deref(),
+        arg.x_alt_target.as_deref(),
+    )
+    .map_err(|e| match e {
+        ProfileError::Yaml { source, path } => yaml_to_fs_error(source, Some(&path)),
+        ProfileError::ProfileMissing { .. } => fs_err!(
+            code => ErrorCode::IoError,
+            loc => profile.span().clone(),
+            "Profile '{}' not found in profiles.yml",
+            profile_name
+        ),
+        _ => fs_err!(ErrorCode::InvalidConfig, "{}", e),
+    })?;
 
     let defer_to_target = profile_defer_to_target(&resolved.credentials);
 
@@ -96,11 +100,26 @@ pub fn load_profiles(
         )
     })?;
 
-    {
-        let allow_experimental_adapters =
-            experimental_adapters_allowed(arg.io.status_reporter.as_ref());
-        enforce_adapter_gating(db_config.adapter_type(), allow_experimental_adapters)?;
-    }
+    let allow_experimental_adapters =
+        experimental_adapters_allowed(arg.io.status_reporter.as_ref());
+    enforce_adapter_gating(db_config.adapter_type(), allow_experimental_adapters)?;
+
+    // Parse the optional alternate compute target output.
+    let alt_target_db_config = match resolved.alt_target_credentials {
+        Some(credentials) => {
+            let value = dbt_yaml::Value::Mapping(credentials, Span::default());
+            let config: DbConfig = dbt_yaml::from_value(value).map_err(|e| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Failed to parse x_alt_target in profiles.yml: {}",
+                    e
+                )
+            })?;
+            enforce_adapter_gating(config.adapter_type(), allow_experimental_adapters)?;
+            Some(config)
+        }
+        None => None,
+    };
 
     if db_config.has_removed_execute_field() {
         emit_warn_log_message(
@@ -126,6 +145,7 @@ pub fn load_profiles(
         target: resolved.target_name,
         defer_to_target,
         db_config,
+        alt_target_db_config,
         relative_profile_path,
         threads: arg.threads,
     })

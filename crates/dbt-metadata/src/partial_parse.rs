@@ -1121,6 +1121,7 @@ mod tests {
                 schema: Some("public".into()),
                 execute: None,
             })),
+            alt_target_db_config: None,
             schema: "public".into(),
             database: "testdb".into(),
             relative_profile_path: PathBuf::from("profiles.yml"),

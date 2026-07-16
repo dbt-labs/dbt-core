@@ -49,7 +49,10 @@ pub enum DbConfig {
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
-    Fdcs(Box<DuckDbConfig>),
+    // `type: alt` — the alternate compute target. DuckDB-backed for the MVP, so
+    // it reuses the DuckDB config shape and maps to the `AdapterType::Alt`
+    // backend.
+    Alt(Box<DuckDbConfig>),
     // Hive,
     Exasol(Box<ExasolDbConfig>),
     // Oracle,
@@ -120,7 +123,7 @@ impl DbConfig {
             DbConfig::Salesforce(config) => config.client_id.as_deref(),
             // DuckDB `path` is optional — attach-only profiles default to `:memory:`.
             DbConfig::DuckDB(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
-            DbConfig::Fdcs(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
+            DbConfig::Alt(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
             DbConfig::Spark(config) => config.host.as_deref(),
             DbConfig::Fabric(config) => config.host.as_deref(),
             DbConfig::Exasol(config) => config.host.as_deref(),
@@ -242,7 +245,7 @@ impl DbConfig {
                 "attach",
                 "motherduck_token",
             ],
-            DbConfig::Fdcs(_) => &[
+            DbConfig::Alt(_) => &[
                 "path",
                 "database",
                 "schema",
@@ -342,7 +345,7 @@ impl DbConfig {
             DbConfig::Spark(config) => dbt_yaml::to_value(config),
             DbConfig::Fabric(config) => dbt_yaml::to_value(config),
             DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
-            DbConfig::Fdcs(config) => dbt_yaml::to_value(config),
+            DbConfig::Alt(config) => dbt_yaml::to_value(config),
             DbConfig::Exasol(config) => dbt_yaml::to_value(config),
             DbConfig::ClickHouse(config) => dbt_yaml::to_value(config),
         }
@@ -363,7 +366,7 @@ impl DbConfig {
             DbConfig::Fabric(..) => AdapterType::Fabric,
             DbConfig::Exasol(..) => AdapterType::Exasol,
             DbConfig::ClickHouse(..) => AdapterType::ClickHouse,
-            DbConfig::Fdcs(..) => AdapterType::Fdcs,
+            DbConfig::Alt(..) => AdapterType::Alt,
         }
     }
 
@@ -382,7 +385,7 @@ impl DbConfig {
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
             DbConfig::ClickHouse(config) => config.database.as_ref(),
-            DbConfig::Fdcs(config) => config.database.as_ref(),
+            DbConfig::Alt(config) => config.database.as_ref(),
         }
     }
 
@@ -418,7 +421,7 @@ impl DbConfig {
             DbConfig::Databricks(config) => config.schema.as_ref(),
             DbConfig::Spark(config) => config.schema.as_ref(),
             DbConfig::DuckDB(config) => config.schema.as_ref(),
-            DbConfig::Fdcs(config) => config.schema.as_ref(),
+            DbConfig::Alt(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
             DbConfig::Fabric(config) => config.schema.as_ref(),
             DbConfig::Exasol(config) => config.schema.as_ref(),
@@ -441,7 +444,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => None,
             DbConfig::Exasol(config) => config.threads.as_ref(),
             DbConfig::ClickHouse(config) => config.threads.as_ref(),
-            DbConfig::Fdcs(config) => config.threads.as_ref(),
+            DbConfig::Alt(config) => config.threads.as_ref(),
         }
     }
 
@@ -460,7 +463,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => (),
             DbConfig::Exasol(config) => config.threads = threads,
             DbConfig::ClickHouse(config) => config.threads = threads,
-            DbConfig::Fdcs(config) => config.threads = threads,
+            DbConfig::Alt(config) => config.threads = threads,
         }
     }
 
@@ -555,6 +558,10 @@ impl Execute {
 pub struct DbTargets {
     #[serde(rename = "target", default = "default_target")]
     pub default_target: DefaultTargetName,
+    /// Optional output used for models on the alternate compute target (a peer of
+    /// `target`). Overridable with the `--x-alt-target` flag.
+    #[serde(default)]
+    pub x_alt_target: Option<TargetName>,
     pub outputs: HashMap<TargetName, YmlValue>,
 }
 
@@ -2014,28 +2021,30 @@ impl TryFrom<DbConfig> for TargetContext {
                 },
             })),
 
-            DbConfig::Fdcs(config) => Ok(TargetContext::DuckDB(DuckDbTargetEnv {
-                path: config.path.clone(),
-                __common__: CommonTargetContext {
-                    // Derive database name from path if not explicitly set (same logic as get_database())
-                    database: config.database.clone().unwrap_or_else(|| {
-                        DuckDBPathInfo::parse_path(config.path.as_deref())
-                            .database
-                            .to_owned()
-                    }),
-                    schema: config.schema.unwrap_or_else(|| "main".to_string()),
-                    type_: adapter_type,
-                    threads: match config.threads {
-                        Some(StringOrInteger::String(threads)) => Some(
-                            threads
-                                .parse::<u16>()
-                                .map_err(|_| "threads must be a positive integer".to_string())?,
-                        ),
-                        Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
-                        None => None,
+            DbConfig::Alt(config) => {
+                Ok(TargetContext::DuckDB(DuckDbTargetEnv {
+                    path: config.path.clone(),
+                    __common__: CommonTargetContext {
+                        // Derive database name from path if not explicitly set (same logic as get_database())
+                        database: config.database.clone().unwrap_or_else(|| {
+                            DuckDBPathInfo::parse_path(config.path.as_deref())
+                                .database
+                                .to_owned()
+                        }),
+                        schema: config.schema.unwrap_or_else(|| "main".to_string()),
+                        type_: adapter_type,
+                        threads: match config.threads {
+                            Some(StringOrInteger::String(threads)) => {
+                                Some(threads.parse::<u16>().map_err(|_| {
+                                    "threads must be a positive integer".to_string()
+                                })?)
+                            }
+                            Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
+                            None => None,
+                        },
                     },
-                },
-            })),
+                }))
+            }
 
             DbConfig::Spark(config) => Ok(TargetContext::Spark(SparkTargetEnv {
                 method: config.method.ok_or_else(|| missing("method"))?,

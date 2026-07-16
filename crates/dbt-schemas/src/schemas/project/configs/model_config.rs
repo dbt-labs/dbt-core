@@ -19,6 +19,7 @@ use super::config_keys::ConfigKeys;
 use super::omissible_utils::handle_omissible_override;
 
 use crate::default_to;
+use crate::schemas::common::ComputePlatform;
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtContract;
 use crate::schemas::common::DbtIncrementalStrategy;
@@ -119,6 +120,8 @@ pub struct ProjectModelConfig {
     pub catalog: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+alt_compute")]
+    pub alt_compute: Option<ComputePlatform>,
     #[serde(rename = "+cluster_by")]
     pub cluster_by: Option<ClusterConfig>,
     #[serde(rename = "+clustered_by")]
@@ -555,6 +558,9 @@ pub struct ModelConfig {
     )]
     pub classifiers: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_compute: Option<ComputePlatform>,
     // need default to ensure None if field is not set
     // serialize_with ensures meta is always present (as {} when None) for Jinja macros
     // that access node.config.meta.get(...)
@@ -664,6 +670,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
             catalog_name: config.catalog_name.clone(),
+            alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -826,6 +833,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             begin: config.begin,
             bind: config.__warehouse_specific_config__.bind,
             catalog_name: config.catalog_name,
+            alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -1026,6 +1034,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
             schema,
             database,
             catalog_name,
+            alt_compute,
             compute,
             group,
             materialized,
@@ -1114,6 +1123,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
                 enabled,
                 alias,
                 catalog_name,
+                alt_compute,
                 compute,
                 group,
                 materialized,
@@ -1238,6 +1248,7 @@ impl ModelConfig {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
+        let alt_compute_eq = self.alt_compute == other.alt_compute;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let materialized_eq_result = materialized_eq(&self.materialized, &other.materialized);
         let incremental_strategy_eq = self.incremental_strategy == other.incremental_strategy;
@@ -1297,6 +1308,7 @@ impl ModelConfig {
 
         let result = enabled_eq
             && catalog_name_eq
+            && alt_compute_eq
             && meta_eq_result
             && materialized_eq_result
             && incremental_strategy_eq
@@ -1351,6 +1363,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.catalog_name),
                             format!("{:?}", &other.catalog_name),
+                        )),
+                    ),
+                    (
+                        "alt_compute",
+                        alt_compute_eq,
+                        Some((
+                            format!("{:?}", &self.alt_compute),
+                            format!("{:?}", &other.alt_compute),
                         )),
                     ),
                     (

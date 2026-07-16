@@ -56,10 +56,10 @@ pub mod duration;
 pub mod install;
 
 // Constants for different backends
+pub mod alt;
 pub mod athena;
 pub mod bigquery;
 pub mod databricks;
-pub mod fdcs;
 pub mod redshift;
 pub mod salesforce;
 pub mod snowflake;
@@ -89,7 +89,7 @@ pub const POSTGRES_DRIVER_VERSION: &str = "0.21.0+dbt0.21.0";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.11";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.4";
 pub const DUCKDB_DRIVER_VERSION: &str = "1.5.4";
-pub const FDCS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.1";
+pub const ALT_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.1";
 pub const DUCKDB_EXTENDED_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.28";
 pub const CLICKHOUSE_DRIVER_VERSION: &str = "0.1.0";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.22.1";

@@ -186,7 +186,7 @@ pub(crate) fn borrow_tlocal_connection<'a>(
         engine.adapter_type(),
         state,
         node_id,
-        engine.generation(),
+        engine.fingerprint(),
         |state, node_id| engine.new_connection(state, node_id),
     )
 }
@@ -195,23 +195,26 @@ pub(crate) fn borrow_tlocal_connection_impl<'a>(
     adapter_type: AdapterType,
     state: Option<&State>,
     node_id: Option<String>,
-    engine_generation: u64,
+    engine_fingerprint: u64,
     new_connection_fn: impl Fn(Option<&State>, Option<String>) -> AdapterResult<Box<dyn Connection>>,
 ) -> AdapterResult<ConnectionGuard<'a>> {
     let conn = match CONNECTION.with(|c| c.take()) {
         None => {
             // No connection in thread-local, try to get one from the recycling pool.
-            // If the pool is empty, create a new one.
+            // Only reuse a pooled connection whose config fingerprint matches this
+            // engine's; otherwise create a new one. The pool is shared across
+            // engines, so a non-matching connection belongs to an engine with a
+            // different connection configuration.
             match recycle_connection(node_id.as_ref()) {
-                Some(conn) => conn,
-                None => new_connection_fn(state, node_id)?,
+                Some(conn) if conn.fingerprint() == engine_fingerprint => conn,
+                _ => new_connection_fn(state, node_id)?,
             }
         }
         Some(mut c) => {
-            // Discard cached connections whose generation doesn't match the
-            // current engine. This prevents stale connections from being
-            // reused across sequential runs with different configurations.
-            if c.generation() != engine_generation {
+            // Discard a cached connection whose config fingerprint doesn't match
+            // the current engine, so connections are reused only among identical
+            // connection configurations.
+            if c.fingerprint() != engine_fingerprint {
                 new_connection_fn(state, node_id)?
             } else {
                 c.update_node_id(node_id);

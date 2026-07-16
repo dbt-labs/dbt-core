@@ -32,7 +32,7 @@ use crate::schemas::{
     CommonAttributes, DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot,
     DbtSource, DbtTest, DbtUnitTest, NodeBaseAttributes,
     common::{
-        Access, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
+        Access, ComputePlatform, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig, SyncConfig,
     },
     dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns},
@@ -840,6 +840,9 @@ pub struct ManifestModelConfig {
     pub classifiers: Option<StringOrArrayOfStrings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_name: Option<String>,
+    // Internal-only placement hint; never written to the manifest.
+    #[serde(skip_serializing, default)]
+    pub alt_compute: Option<ComputePlatform>,
     #[serde(
         default,
         deserialize_with = "crate::schemas::serde::default_type",
@@ -1109,6 +1112,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             tags: config.tags,
             classifiers: config.classifiers,
             catalog_name: config.catalog_name,
+            alt_compute: config.alt_compute,
             meta: config.meta,
             group: config.group,
             materialized: config.materialized,
@@ -1180,6 +1184,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             tags: config.tags,
             classifiers: config.classifiers,
             catalog_name: config.catalog_name,
+            alt_compute: config.alt_compute,
             compute: config.compute,
             meta: config.meta,
             group: config.group,

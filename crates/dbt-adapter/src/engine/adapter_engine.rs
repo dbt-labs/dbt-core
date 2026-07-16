@@ -155,13 +155,12 @@ pub trait AdapterEngine: Send + Sync {
         false
     }
 
-    /// Returns a generation counter identifying this engine instance.
+    /// Returns the config fingerprint of this engine's connections.
     ///
-    /// The connection pool uses this to detect stale connections when the
-    /// engine changes between sequential runs (e.g. different recording
-    /// directories). Override this in engines that create stateful
-    /// connections that become invalid across configuration changes.
-    fn generation(&self) -> u64 {
+    /// The connection pool uses this to reuse a connection only among engines
+    /// with an identical connection configuration. Override this in engines
+    /// that create real connections so different configurations are not reused.
+    fn fingerprint(&self) -> u64 {
         0
     }
 

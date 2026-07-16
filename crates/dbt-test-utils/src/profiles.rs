@@ -117,6 +117,7 @@ pub fn write_db_config_to_test_profile(
         TEST_PROFILE,
         DbTargets {
             default_target: adapter_type.to_string(),
+            x_alt_target: None,
             outputs: HashMap::from([(
                 adapter_type,
                 dbt_yaml::to_value(db_config).map_err(|e| {

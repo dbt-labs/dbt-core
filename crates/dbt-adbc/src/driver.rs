@@ -72,8 +72,8 @@ pub enum Backend {
     /// Bespoke dbt-built DuckDB driver with internal extensions.
     /// Lives at `fs/adbc/duckdb_extended/` on the CDN.
     DuckDBExtended,
-    /// dbt Compute driver implementation. Behaves like DuckDB.
-    Fdcs,
+    /// alt compute driver implementation. Behaves like DuckDB.
+    Alt,
     /// Microsoft SQL Server implementation (ADBC).
     SQLServer,
     /// Athena driver implementation (ADBC).
@@ -107,7 +107,7 @@ impl fmt::Display for Backend {
             Backend::Databricks => write!(f, "Databricks"),
             Backend::Redshift => write!(f, "Redshift"),
             Backend::DuckDB | Backend::DuckDBExtended => write!(f, "DuckDB"),
-            Backend::Fdcs => write!(f, "dbt Compute"),
+            Backend::Alt => write!(f, "Alt"),
             Backend::Salesforce => write!(f, "Salesforce"),
             Backend::Spark => write!(f, "Spark"),
             Backend::SQLServer => write!(f, "SQL Server"),
@@ -130,7 +130,7 @@ impl Backend {
             Backend::Spark => Some("adbc_driver_spark"),
             Backend::Redshift => Some("adbc_driver_redshift"),
             Backend::DuckDB | Backend::DuckDBExtended => Some("duckdb"),
-            Backend::Fdcs => Some("adbc_driver_dbt"),
+            Backend::Alt => Some("adbc_driver_dbt"),
             Backend::SQLServer => Some("adbc_driver_mssql"),
             Backend::Athena => Some("adbc_driver_athena"),
             Backend::ClickHouse => Some("adbc_clickhouse"),
@@ -143,7 +143,7 @@ impl Backend {
         match self {
             Backend::Snowflake => Some(b"SnowflakeDriverInit"),
             Backend::DuckDB | Backend::DuckDBExtended => Some(b"duckdb_adbc_init"),
-            Backend::Fdcs => Some(b"AdbcDriverDbtInit"),
+            Backend::Alt => Some(b"AdbcDriverDbtInit"),
             Backend::Generic {
                 library_name: _,
                 entrypoint,
@@ -377,7 +377,7 @@ impl AdbcDriver {
             (
                 load_strategy @ (CdnCache | SystemThenCdnCache),
                 Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
-                | DuckDBExtended | Fdcs | Salesforce | SQLServer | ClickHouse,
+                | DuckDBExtended | Alt | Salesforce | SQLServer | ClickHouse,
             ) => {
                 #[cfg(debug_assertions)]
                 {
@@ -417,7 +417,7 @@ impl AdbcDriver {
             (
                 load_strategy @ Remote,
                 Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
-                | DuckDBExtended | Fdcs | Salesforce | SQLServer | ClickHouse,
+                | DuckDBExtended | Alt | Salesforce | SQLServer | ClickHouse,
             ) => load_strategy,
         };
 
