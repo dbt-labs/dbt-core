@@ -1,6 +1,0 @@
-kind: Breaking Changes
-body: Flags introduced in 1.9 and 1.10 defaults to true
-time: 2026-07-09T12:00:00.000000+00:00
-custom:
-    Author: itsnamangoyal
-    Issue: "12713"

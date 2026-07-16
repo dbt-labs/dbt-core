@@ -1,6 +1,0 @@
-kind: Features
-body: Add catalog_database field to CatalogWriteIntegrationConfig (v1) so catalogs.yml can set a database-name override for any catalog type; works in conjunction with the dbt-adapters get_catalog_database_override method to give catalog_database highest priority in generate_database_name
-time: 2026-06-23T12:42:41.105597+05:30
-custom:
-    Author: aahel
-    Issue: "15156"

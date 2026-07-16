@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Bump dbt-adapters to 1.24.5 lowerbound
-time: 2026-07-15T21:12:54.678168+05:30
-custom:
-    Author: ash2shukla
-    Issue: ' '

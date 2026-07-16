@@ -1,6 +1,0 @@
-kind: Fixes
-body: Allow deferral for UDFs
-time: 2026-03-06T03:40:08.773781+05:30
-custom:
-    Author: ash2shukla
-    Issue: "12080"
