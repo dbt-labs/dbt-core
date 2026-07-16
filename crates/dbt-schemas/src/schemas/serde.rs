@@ -283,6 +283,19 @@ where
         .or_else(|| value.as_str().and_then(|s| s.parse::<f64>().ok())))
 }
 
+pub fn string_or_number_to_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
+    match value {
+        dbt_yaml::Value::String(s, _) => Ok(Some(s)),
+        dbt_yaml::Value::Number(n, _) => Ok(Some(n.to_string())),
+        dbt_yaml::Value::Null(_) => Ok(None),
+        _ => Err(de::Error::custom("expected a string, number, or null")),
+    }
+}
+
 pub fn default_true() -> Option<bool> {
     Some(true)
 }
@@ -600,6 +613,32 @@ impl From<StringOrArrayOfStrings> for Vec<String> {
             StringOrArrayOfStrings::String(s) => vec![s],
             StringOrArrayOfStrings::ArrayOfStrings(a) => a,
         }
+    }
+}
+
+pub fn string_or_number_or_array_to_string_array<'de, D>(
+    deserializer: D,
+) -> Result<Option<StringOrArrayOfStrings>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
+    match value {
+        dbt_yaml::Value::String(s, _) => Ok(Some(StringOrArrayOfStrings::String(s))),
+        dbt_yaml::Value::Number(n, _) => Ok(Some(StringOrArrayOfStrings::String(n.to_string()))),
+        dbt_yaml::Value::Sequence(values, _) => values
+            .into_iter()
+            .map(|value| match value {
+                dbt_yaml::Value::String(s, _) => Ok(s),
+                dbt_yaml::Value::Number(n, _) => Ok(n.to_string()),
+                _ => Err(de::Error::custom("expected a string or number")),
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|values| Some(StringOrArrayOfStrings::ArrayOfStrings(values))),
+        dbt_yaml::Value::Null(_) => Ok(None),
+        _ => Err(de::Error::custom(
+            "expected a string, number, array, or null",
+        )),
     }
 }
 

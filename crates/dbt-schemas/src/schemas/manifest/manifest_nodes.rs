@@ -23,7 +23,7 @@ use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::model_config::LatestVersionPointer;
 use crate::schemas::properties::{ModelFreshness, ModelState};
 
-use crate::schemas::serde::bool_or_string_bool;
+use crate::schemas::serde::{bool_or_string_bool, string_or_number_to_string};
 
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -893,6 +893,7 @@ pub struct ManifestModelConfig {
     )]
     pub packages: Option<StringOrArrayOfStrings>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, deserialize_with = "string_or_number_to_string")]
     pub python_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub imports: Option<StringOrArrayOfStrings>,

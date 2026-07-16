@@ -1117,7 +1117,15 @@ impl DbtChecksum {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct IncludeExclude {
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::string_or_number_or_array_to_string_array"
+    )]
     pub exclude: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::string_or_number_or_array_to_string_array"
+    )]
     pub include: Option<StringOrArrayOfStrings>,
 }
 
@@ -1893,6 +1901,29 @@ mod tests {
             DbtChecksum::Object(o) => (o.name.as_str(), o.checksum.as_str()),
             DbtChecksum::String(_) => panic!("expected object checksum"),
         }
+    }
+
+    #[test]
+    fn test_include_exclude_deserializes_number_versions() {
+        let config: IncludeExclude = dbt_yaml::from_str(
+            r#"
+include: [1, "2"]
+exclude: 3
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.include,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "1".to_string(),
+                "2".to_string(),
+            ]))
+        );
+        assert_eq!(
+            config.exclude,
+            Some(StringOrArrayOfStrings::String("3".to_string()))
+        );
     }
 
     #[test]

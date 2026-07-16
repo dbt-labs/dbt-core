@@ -1190,11 +1190,13 @@ pub enum Runtime {
 pub enum StaticAnalysisKind {
     #[value(hide = true)]
     Unsafe,
+    #[serde(alias = "False", alias = "false", alias = "FALSE")]
     Off,
     Strict,
     #[default]
     Baseline,
     #[value(hide = true)]
+    #[serde(alias = "True", alias = "true", alias = "TRUE")]
     On,
 }
 
@@ -1586,6 +1588,18 @@ mod tests {
         assert!(
             result.is_ok(),
             "check_selector(\"tag:foo\") must remain Ok, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_static_analysis_deserializes_legacy_bool_strings() {
+        assert_eq!(
+            dbt_yaml::from_str::<StaticAnalysisKind>("\"False\"").unwrap(),
+            StaticAnalysisKind::Off
+        );
+        assert_eq!(
+            dbt_yaml::from_str::<StaticAnalysisKind>("\"True\"").unwrap(),
+            StaticAnalysisKind::On
         );
     }
 }

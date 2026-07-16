@@ -50,7 +50,8 @@ use crate::schemas::properties::{ModelFreshness, ModelState};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, default_type,
-    f64_or_string_f64, hours_to_expiration_or_string, u64_or_string_u64,
+    f64_or_string_f64, hours_to_expiration_or_string, string_or_number_to_string,
+    u64_or_string_u64,
 };
 use dbt_proc_macros::Resolvable;
 use dbt_yaml::ShouldBe;
@@ -366,7 +367,12 @@ pub struct ProjectModelConfig {
     pub on_schema_change: Option<OnSchemaChange>,
     #[serde(rename = "+packages")]
     pub packages: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+python_version")]
+    #[serde(
+        rename = "+python_version",
+        default,
+        deserialize_with = "string_or_number_to_string"
+    )]
+    #[schemars(with = "Option<String>", skip_serializing_if = "Option::is_none")]
     pub python_version: Option<String>,
     #[serde(rename = "+imports")]
     pub imports: Option<StringOrArrayOfStrings>,
@@ -594,6 +600,8 @@ pub struct ModelConfig {
     pub on_error: Option<OnError>,
     pub grants: OmissibleGrantConfig,
     pub packages: Option<StringOrArrayOfStrings>,
+    #[serde(default, deserialize_with = "string_or_number_to_string")]
+    #[schemars(with = "Option<String>", skip_serializing_if = "Option::is_none")]
     pub python_version: Option<String>,
     pub docs: Option<DocsConfig>,
     pub imports: Option<StringOrArrayOfStrings>,
@@ -1779,6 +1787,7 @@ fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization
 mod tests {
     use super::ModelConfig;
     use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
+    use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
 
@@ -1894,6 +1903,36 @@ __additional_properties__: {}
         assert_eq!(state.evaluate_volatile_sql, Some(false));
         assert_eq!(state.pre_clone, Some(StatePreClone::Always));
         assert_eq!(state.execute_hooks_on_any_reuse, Some(false));
+    }
+
+    #[test]
+    fn test_python_version_deserializes_from_number() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++python_version: 3.10
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.python_version.as_deref(), Some("3.1"));
+
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+python_version: 3.10
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.python_version.as_deref(), Some("3.1"));
+
+        let config: ManifestModelConfig = dbt_yaml::from_str(
+            r#"
+python_version: 3.10
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.python_version.as_deref(), Some("3.1"));
     }
 
     #[test]
