@@ -574,7 +574,7 @@ impl StateArtifacts {
             NodeType::UnitTest => false,
 
             // Approach A — full `unrendered_config` comparison (models, sources, seeds, snapshots,
-            // and data tests).
+            // data tests, and functions).
             //
             // For these node types, `unrendered_config` is populated with every authored key, so
             // comparing the raw Jinja strings is an authoritative authoring-intent check: identical
@@ -584,7 +584,8 @@ impl StateArtifacts {
             | NodeType::Source
             | NodeType::Seed
             | NodeType::Snapshot
-            | NodeType::Test => {
+            | NodeType::Test
+            | NodeType::Function => {
                 // Stage 1: if every `unrendered_config` key that is relevant for the node type (see
                 // `UnrenderedKeyRelevance`) is equal, the node is not config-modified — return early
                 // without touching rendered values.
@@ -606,8 +607,7 @@ impl StateArtifacts {
             }
 
             // Approach B — surgical per-key unrendered comparisons (remaining node kinds:
-            // exposures, functions, analyses, macros, semantic models, metrics, and saved
-            // queries).
+            // exposures, analyses, macros, semantic models, metrics, and saved queries).
             //
             // For these node types, `unrendered_config` may be incomplete, so the full-
             // `unrendered_config` shortcut above is unsound. Instead, each node type's
@@ -616,7 +616,6 @@ impl StateArtifacts {
             // those types requires a new per-key fix; the wholesale approach cannot yet be applied
             // to them.
             NodeType::Exposure
-            | NodeType::Function
             | NodeType::Analysis
             | NodeType::Macro
             | NodeType::SemanticModel
@@ -939,11 +938,11 @@ impl UnrenderedKeyRelevance {
     ///   comparison.
     fn base_config_excluded_keys(node_type: NodeType) -> &'static [&'static str] {
         match node_type {
-            // Models, seeds, and snapshots use dbt-core's `BaseConfig.same_contents`, whose set of
-            // non-modification keys is exactly the `CompareBehavior.Exclude` fields of
+            // Models, seeds, snapshots, and functions use dbt-core's `BaseConfig.same_contents`,
+            // whose set of non-modification keys is exactly the `CompareBehavior.Exclude` fields of
             // `NodeAndTestConfig` — the five below (core/dbt/artifacts/resources/v1/config.py @
-            // v1.10.0; `ModelConfig`/`SeedConfig`/`SnapshotConfig` add no further `Exclude` fields).
-            NodeType::Model | NodeType::Seed | NodeType::Snapshot => {
+            // v1.10.0).
+            NodeType::Model | NodeType::Seed | NodeType::Snapshot | NodeType::Function => {
                 &[
                     "tags", "group", // parity-excludes
                     "schema", "database",

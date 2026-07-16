@@ -145,10 +145,7 @@ pub mod schemas {
         pub use configs::analysis_config::{
             AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,
         };
-        pub use configs::common::{
-            WarehouseSpecificNodeConfig, same_warehouse_config,
-            same_warehouse_config_with_unrendered,
-        };
+        pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
         pub use configs::config_keys::ConfigKeys;
         pub use configs::data_test_config::{
             DEFAULT_DATA_TEST_ERROR_IF, DEFAULT_DATA_TEST_FAIL_CALC, DEFAULT_DATA_TEST_SEVERITY,

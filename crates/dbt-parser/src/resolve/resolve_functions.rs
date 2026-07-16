@@ -32,12 +32,17 @@ use minijinja::MacroSpans;
 
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::renderer::{RenderCtx, RenderCtxInner};
-use crate::utils::{RelationComponents, update_node_relation_components};
+use crate::resolve::resolve_utils::{build_unrendered_config, extract_config_map};
+use crate::utils::{
+    RelationComponents, extract_resource_config_from_raw_project, parse_unrendered_config,
+    update_node_relation_components,
+};
 use crate::{
     args::ResolveArgs,
     renderer::{SqlFileRenderResult, render_unresolved_sql_files},
     utils::{get_node_fqn, get_original_file_path, get_unique_id},
 };
+use dbt_common::tokiofs::read_to_string;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 
@@ -101,6 +106,34 @@ pub async fn resolve_functions(
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
     };
+
+    // Raw config sources for `unrendered_config`, mirroring resolve_models.rs. These preserve
+    // Jinja as raw strings so that env-aware configs (identical authored Jinja that renders
+    // differently per target) are not flagged as `state:modified` (Approach A soundness
+    // prerequisite — the Stage-1 wholesale comparison requires a fully populated
+    // `unrendered_config`).
+    let is_dependency = dependency_package_name.is_some();
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "functions");
+    let raw_root_project_functions_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "functions",
+        ))
+    } else {
+        None
+    };
+
+    // Snapshot raw schema.yml `config:` blocks before render_unresolved_sql_files nulls out
+    // schema_value entries via std::mem::replace. Keyed by function name.
+    let raw_schema_yml_configs: BTreeMap<String, BTreeMap<String, dbt_yaml::Value>> =
+        function_properties
+            .iter()
+            .filter_map(|(key, mpe)| {
+                let config_map = extract_config_map(&mpe.schema_value)?;
+                Some((key.clone(), config_map))
+            })
+            .collect();
 
     let mut function_sql_resources_map =
         render_unresolved_sql_files::<FunctionConfig, FunctionProperties>(
@@ -170,6 +203,24 @@ pub async fn resolve_functions(
                 .function_paths
                 .as_ref()
                 .unwrap_or(&vec![]),
+        );
+
+        // Capture inline `{{ config(...) }}` overrides from the function SQL file, Jinja preserved.
+        let raw_config_call_dict = read_to_string(dbt_asset.base_path.join(&dbt_asset.path))
+            .await
+            .ok()
+            .and_then(|sql| parse_unrendered_config(&sql, false));
+
+        // Merge the four raw sources (project < root < schema.yml < inline) into the node's
+        // `unrendered_config`. Functions do not support pre_hook/post_hook, so hook-name
+        // normalization is disabled.
+        let unrendered_config = build_unrendered_config(
+            &fqn,
+            &raw_local_project_config,
+            raw_root_project_functions_cfg.as_ref(),
+            raw_schema_yml_configs.get(function_name),
+            raw_config_call_dict.as_ref(),
+            false,
         );
 
         let properties = if let Some(properties) = maybe_properties {
@@ -261,7 +312,7 @@ pub async fn resolve_functions(
                     })
                     .collect(),
                 metrics: vec![],
-                unrendered_config: Default::default(),
+                unrendered_config,
             },
             __function_attr__: DbtFunctionAttr {
                 access: properties

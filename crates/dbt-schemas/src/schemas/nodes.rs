@@ -3582,11 +3582,9 @@ impl InternalDbtNode for DbtFunction {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
-            let deprecated_config_eq = self.deprecated_config.same_config(
-                &other_function.deprecated_config,
-                &self.__base_attr__.unrendered_config,
-                &other_function.__base_attr__.unrendered_config,
-            );
+            let deprecated_config_eq = self
+                .deprecated_config
+                .same_config(&other_function.deprecated_config);
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -3604,6 +3602,14 @@ impl InternalDbtNode for DbtFunction {
 
     fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
+            // TODO: checksum-only under-selects relative to dbt-core.
+            // `FunctionNode.same_contents` also ANDs `same_arguments`/`same_returns`/`same_overloads`
+            // (dbt-mantle core/dbt/contracts/graph/nodes.py:1764-1783), so a signature-only change
+            // in schema.yml (arguments/returns/overloads) that leaves the SQL body checksum
+            // unchanged is not selected. See the ignored marker test
+            // `test_function_signature_change_not_selected_content_gap`.
+            // HAZARD when fixing: compare arguments/returns/overloads *structurally* against what
+            // dbt-core manifests carry — do not just fold them into the checksum.
             let same_checksum_result =
                 self.__common_attr__.checksum == other_function.__common_attr__.checksum;
 

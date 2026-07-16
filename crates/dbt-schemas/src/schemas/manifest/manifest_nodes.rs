@@ -1544,6 +1544,7 @@ impl From<DbtFunction> for ManifestFunction {
                 checksum: function.__common_attr__.checksum,
                 compiled: None,
                 static_analysis_off_reason: function.__base_attr__.static_analysis_off_reason,
+                unrendered_config: function.__base_attr__.unrendered_config,
                 ..Default::default()
             },
             config: function.deprecated_config,
