@@ -1307,16 +1307,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -3355,16 +3349,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -5461,16 +5449,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -7676,16 +7658,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -8860,16 +8836,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -10070,16 +10040,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -10822,6 +10786,21 @@
         }
       ]
     },
+    "StringOrInteger": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "int64"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
     "StringOrMetricPropertiesMetricInput": {
       "anyOf": [
         {
@@ -11426,16 +11405,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
