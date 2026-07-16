@@ -371,14 +371,13 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
 
 impl FunctionConfig {
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
+    ///
     pub fn same_config(&self, other: &FunctionConfig) -> bool {
         // Compare all fields individually
         let enabled_eq = self.enabled == other.enabled;
         let alias_eq = self.alias == other.alias;
         let schema_eq = omissible_option_eq(&self.schema, &other.schema); // Custom comparison for Omissible
-        let tags_eq = self.tags == other.tags;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
-        let group_eq = self.group == other.group;
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
         let grants_eq = grants_equal(&self.grants, &other.grants); // Custom comparison for grants
         let quoting_eq = self.quoting == other.quoting;
@@ -394,13 +393,14 @@ impl FunctionConfig {
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
         );
+        // `tags` and `group` are intentionally NOT compared here: they are dbt-core `CompareBehavior.Exclude`
+        // fields (see `base_config_excluded_keys` in prev_state/mod.rs) and dbt-core does not treat them
+        // as a config modification anywhere, so this rendered fallback comparator must not either.
 
         let result = enabled_eq
             && alias_eq
             && schema_eq
-            && tags_eq
             && meta_eq_result
-            && group_eq
             && docs_eq_result
             && grants_eq
             && quoting_eq
@@ -440,19 +440,9 @@ impl FunctionConfig {
                         )),
                     ),
                     (
-                        "tags",
-                        tags_eq,
-                        Some((format!("{:?}", &self.tags), format!("{:?}", &other.tags))),
-                    ),
-                    (
                         "meta",
                         meta_eq_result,
                         Some((format!("{:?}", &self.meta), format!("{:?}", &other.meta))),
-                    ),
-                    (
-                        "group",
-                        group_eq,
-                        Some((format!("{:?}", &self.group), format!("{:?}", &other.group))),
                     ),
                     ("docs", docs_eq_result, None),
                     (

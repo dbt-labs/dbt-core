@@ -1065,4 +1065,979 @@ mod tests {
             3 * N,
         );
     }
+
+    /// How a single `base_config_excluded_keys` key is expected to relate to its type's
+    /// Stage 2 (`has_same_config`) comparator — see `base_config_excluded_keys`'s own doc comment
+    /// for the parity/ownership distinction.
+    #[derive(Debug, Clone, Copy)]
+    enum ExcludeKind {
+        /// Not excluded at Stage 1: Stage 2 MUST also observe a change on this key, else a
+        /// genuine change is silently invisible on the sparse/fallback path (false negative).
+        Relevant,
+        /// dbt-core checks this key nowhere: Stage 2 MUST NOT observe it either, else a
+        /// benign/env-aware change is wrongly selected on the fallback path (false positive).
+        Parity,
+        /// A real dbt-core modification trigger, but owned by the sibling `check_relation_modified`
+        /// sub-check. Stage 2 may harmlessly compare it too (redundant, not wrong) or not — either
+        /// is fine, so there is no Stage1-vs-Stage2 assertion for it.
+        Ownership,
+    }
+
+    /// Shared body for the five Denylist-type drift-guard tests below: for every key `Stage 1`
+    /// (`base_config_excluded_keys`) treats as excluded, and for every key case supplied, assert
+    /// that Stage 1's classification agrees with what `T`'s actual rendered `has_same_config`
+    /// does. Generalizes `data_test_modifier_set_agrees_across_stage1_and_stage2` (nodes.rs) to
+    /// the Denylist rule (see the `state-modified-config-drift-guard` plan).
+    #[allow(clippy::type_complexity)]
+    fn assert_denylist_keys_agree_across_stage1_and_stage2<T>(
+        node_type: NodeType,
+        comparator_name: &str,
+        cases: &[(&str, ExcludeKind, Box<dyn Fn(&mut T)>)],
+    ) where
+        T: InternalDbtNode + Clone + Default,
+    {
+        let excluded = UnrenderedKeyRelevance::base_config_excluded_keys(node_type);
+
+        // Coverage: every excluded key must be exercised, else a modifier could drift untested.
+        for key in excluded {
+            assert!(
+                cases.iter().any(|(k, _, _)| k == key),
+                "{node_type:?}: base_config_excluded_keys key `{key}` is not exercised by this \
+                 test; add a case."
+            );
+        }
+
+        let base = T::default();
+        for (key, kind, mutate) in cases {
+            let mut mutated = base.clone();
+            mutate(&mut mutated);
+
+            // `has_same_config` returns false when Stage 2 considers the config changed.
+            let stage2_sensitive =
+                !base.has_same_config(&mutated as &dyn InternalDbtNode, AdapterType::DuckDB);
+            let stage1_relevant = !excluded.contains(key);
+
+            match kind {
+                ExcludeKind::Relevant => assert!(
+                    stage1_relevant && stage2_sensitive,
+                    "{node_type:?} config key `{key}` disagrees between the two \
+                     `state:modified` config comparisons: Stage 1 \
+                     (`base_config_excluded_keys`, unrendered) says relevant={stage1_relevant}, \
+                     but Stage 2 (`{comparator_name}`, rendered) says \
+                     sensitive={stage2_sensitive}. A genuine change on `{key}` would otherwise be \
+                     silently invisible on the sparse/fallback path. To reconcile: make sure \
+                     `{key}` is compared in `{comparator_name}` AND is absent from \
+                     `base_config_excluded_keys(NodeType::{node_type:?})` \
+                     (prev_state/mod.rs)."
+                ),
+                ExcludeKind::Parity => assert!(
+                    !stage1_relevant && !stage2_sensitive,
+                    "{node_type:?} config key `{key}` is a dbt-core parity-exclude (dbt-core \
+                     checks it nowhere), but Stage 2 (`{comparator_name}`, rendered) still \
+                     observes it (sensitive={stage2_sensitive}). This over-selects on the \
+                     sparse/fallback path (the dbt-core-mantle#15286 class of bug). To \
+                     reconcile: stop comparing `{key}` in `{comparator_name}`."
+                ),
+                ExcludeKind::Ownership => assert!(
+                    !stage1_relevant,
+                    "{node_type:?}: ownership-exclude key `{key}` is unexpectedly \
+                     Stage-1-relevant; it should be listed in \
+                     `base_config_excluded_keys(NodeType::{node_type:?})` (prev_state/mod.rs)."
+                ),
+            }
+        }
+
+        // Once per type (not per key): confirm the sibling sub-check that's supposed to own the
+        // ownership-excludes (schema/database/alias) actually runs for this node type.
+        assert!(
+            !is_invalid_for_relation_comparison(&base as &dyn InternalDbtNode),
+            "{node_type:?}: `check_relation_modified` does not run for this node type (see \
+             `is_invalid_for_relation_comparison`), so nothing checks its ownership-exclude keys \
+             at all."
+        );
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn source_config_keys_agree_across_stage1_and_stage2() {
+        use crate::schemas::serde::StringOrArrayOfStrings;
+        use dbt_common::io_args::StaticAnalysisKind;
+        use dbt_yaml::Spanned;
+
+        let cases: Vec<(&str, ExcludeKind, Box<dyn Fn(&mut DbtSource)>)> = vec![
+            // --- fields DbtSource::has_same_config actually compares ---
+            (
+                "enabled",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.__base_attr__.enabled = true),
+            ),
+            (
+                "event_time",
+                ExcludeKind::Relevant,
+                Box::new(|n: &mut DbtSource| {
+                    n.deprecated_config.event_time = Some("updated_at".to_string())
+                }),
+            ),
+            (
+                "quoting",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.__source_attr__.user_quoting = Some(DbtQuoting {
+                        database: None,
+                        schema: None,
+                        identifier: Some(false),
+                        snowflake_ignore_case: None,
+                    })
+                }),
+            ),
+            (
+                "loaded_at_field",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.__source_attr__.loaded_at_field = Some("loaded_at".to_string())),
+            ),
+            (
+                "loaded_at_query",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.__source_attr__.loaded_at_query = Some("select 1".to_string())),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(StaticAnalysisKind::Off))
+                }),
+            ),
+            // --- parity-exclude: dbt-core's `SourceDefinition.same_contents` ignores tags ---
+            (
+                "tags",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.tags =
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                }),
+            ),
+            // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
+            (
+                "schema",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.__base_attr__.schema = "a_schema".to_string()),
+            ),
+            (
+                "database",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.__base_attr__.database = "a_db".to_string()),
+            ),
+            (
+                "alias",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.__base_attr__.alias = "an_alias".to_string()),
+            ),
+        ];
+
+        // Not exercised above: `freshness` is compared via `same_freshness_value`, a deliberately
+        // separate axis outside `UnrenderedKeyRelevance` (see `has_same_content`'s doc comment on
+        // rendered freshness) — out of scope for this drift guard. `warehouse_config` is nested
+        // adapter-specific config with its own dedicated test coverage.
+        assert_denylist_keys_agree_across_stage1_and_stage2::<DbtSource>(
+            NodeType::Source,
+            "DbtSource::has_same_config",
+            &cases,
+        );
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn seed_config_keys_agree_across_stage1_and_stage2() {
+        use crate::schemas::common::{DbtMaterialization, DocsConfig, Hooks};
+        use crate::schemas::nodes::DbtSeed;
+        use crate::schemas::serde::{GrantConfig, OmissibleGrantConfig, StringOrArrayOfStrings};
+        use dbt_common::serde_utils::Omissible;
+        use dbt_yaml::{Spanned, Verbatim};
+
+        let cases: Vec<(&str, ExcludeKind, Box<dyn Fn(&mut DbtSeed)>)> = vec![
+            // --- fields `seed_configs_equal` actually compares ---
+            (
+                "column_types",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.column_types = Some(BTreeMap::from([(
+                        Spanned::new("id".to_string()),
+                        "int".to_string(),
+                    )]))
+                }),
+            ),
+            (
+                "docs",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.docs = Some(DocsConfig {
+                        show: false,
+                        node_color: None,
+                    })
+                }),
+            ),
+            (
+                "enabled",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.enabled = Some(false)),
+            ),
+            (
+                "grants",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.grants = OmissibleGrantConfig(Omissible::Present(
+                        GrantConfig(indexmap::IndexMap::from([(
+                            "select".to_string(),
+                            StringOrArrayOfStrings::String("role1".to_string()),
+                        )])),
+                    ))
+                }),
+            ),
+            (
+                "quote_columns",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.quote_columns = Some(true)),
+            ),
+            (
+                "event_time",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.event_time = Some("updated_at".to_string())),
+            ),
+            (
+                "full_refresh",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.full_refresh = Some(true)),
+            ),
+            (
+                "meta",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    let mut m = indexmap::IndexMap::new();
+                    m.insert("owner".to_string(), dbt_yaml::to_value("bob").unwrap());
+                    n.deprecated_config.meta = Some(m);
+                }),
+            ),
+            (
+                "persist_docs",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.persist_docs =
+                        Some(crate::schemas::common::PersistDocsConfig {
+                            columns: Some(true),
+                            relation: Some(true),
+                        })
+                }),
+            ),
+            (
+                "post_hook",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.post_hook =
+                        Verbatim::from(Some(Hooks::ArrayOfStrings(vec!["select 1".to_string()])))
+                }),
+            ),
+            (
+                "pre_hook",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.pre_hook =
+                        Verbatim::from(Some(Hooks::ArrayOfStrings(vec!["select 1".to_string()])))
+                }),
+            ),
+            (
+                "materialized",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.materialized = Some(DbtMaterialization::View)),
+            ),
+            // --- parity-excludes: dbt-core's `CompareBehavior.Exclude` on `NodeAndTestConfig` ---
+            (
+                "tags",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.tags =
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                }),
+            ),
+            (
+                "group",
+                ExcludeKind::Parity,
+                Box::new(|n| n.deprecated_config.group = Some("a_group".to_string())),
+            ),
+            // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
+            (
+                "schema",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.schema = Some("a_schema".to_string())),
+            ),
+            (
+                "database",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.database = Some("a_db".to_string())),
+            ),
+            (
+                "alias",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.alias = Some("an_alias".to_string())),
+            ),
+        ];
+
+        // Not exercised above: `warehouse_config` is nested adapter-specific config with its own
+        // dedicated test coverage.
+        assert_denylist_keys_agree_across_stage1_and_stage2::<DbtSeed>(
+            NodeType::Seed,
+            "seed_configs_equal (DbtSeed::has_same_config)",
+            &cases,
+        );
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn function_config_keys_agree_across_stage1_and_stage2() {
+        use crate::schemas::common::{Access, DbtQuoting, DocsConfig};
+        use crate::schemas::nodes::DbtFunction;
+        use crate::schemas::project::configs::function_config::FunctionSnowflakeConfig;
+        use crate::schemas::properties::{FunctionKind, Volatility};
+        use crate::schemas::serde::{GrantConfig, OmissibleGrantConfig, StringOrArrayOfStrings};
+        use dbt_common::io_args::StaticAnalysisKind;
+        use dbt_common::serde_utils::Omissible;
+        use dbt_yaml::Spanned;
+
+        let cases: Vec<(&str, ExcludeKind, Box<dyn Fn(&mut DbtFunction)>)> = vec![
+            // --- fields `FunctionConfig::same_config` actually compares ---
+            (
+                "access",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.access = Some(Access::Public)),
+            ),
+            (
+                "enabled",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.enabled = Some(false)),
+            ),
+            (
+                "meta",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    let mut m = indexmap::IndexMap::new();
+                    m.insert("owner".to_string(), dbt_yaml::to_value("bob").unwrap());
+                    n.deprecated_config.meta = Some(m);
+                }),
+            ),
+            (
+                "docs",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.docs = Some(DocsConfig {
+                        show: false,
+                        node_color: None,
+                    })
+                }),
+            ),
+            (
+                "grants",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.grants = OmissibleGrantConfig(Omissible::Present(
+                        GrantConfig(indexmap::IndexMap::from([(
+                            "select".to_string(),
+                            StringOrArrayOfStrings::String("role1".to_string()),
+                        )])),
+                    ))
+                }),
+            ),
+            (
+                "quoting",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.quoting = Some(DbtQuoting::default())),
+            ),
+            (
+                "on_configuration_change",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.on_configuration_change = Some("skip".to_string())
+                }),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(StaticAnalysisKind::Off))
+                }),
+            ),
+            (
+                "function_kind",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.function_kind = Some(FunctionKind::Aggregate)),
+            ),
+            (
+                "volatility",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.volatility = Some(Volatility::Deterministic)),
+            ),
+            (
+                "packages",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.packages =
+                        Some(StringOrArrayOfStrings::String("pkg1".to_string()))
+                }),
+            ),
+            (
+                "snowflake",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.snowflake = Some(FunctionSnowflakeConfig {
+                        quote_args: Some(true),
+                    })
+                }),
+            ),
+            // --- parity-excludes: dbt-core's `CompareBehavior.Exclude` on `NodeAndTestConfig` ---
+            (
+                "tags",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.tags =
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                }),
+            ),
+            (
+                "group",
+                ExcludeKind::Parity,
+                Box::new(|n| n.deprecated_config.group = Some("a_group".to_string())),
+            ),
+            // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
+            (
+                "schema",
+                ExcludeKind::Ownership,
+                Box::new(|n| {
+                    n.deprecated_config.schema = Omissible::Present(Some("a_schema".to_string()))
+                }),
+            ),
+            (
+                "database",
+                ExcludeKind::Ownership,
+                Box::new(|n| {
+                    n.deprecated_config.database = Omissible::Present(Some("a_db".to_string()))
+                }),
+            ),
+            (
+                "alias",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.alias = Some("an_alias".to_string())),
+            ),
+        ];
+
+        // Not exercised above: `runtime_version`/`entry_point` are not compared by
+        // `FunctionConfig::same_config` at all (outside this drift guard's scope — see the plan's
+        // non-goals on completeness beyond the existing comparator). `warehouse_config` is nested
+        // adapter-specific config with its own dedicated test coverage.
+        assert_denylist_keys_agree_across_stage1_and_stage2::<DbtFunction>(
+            NodeType::Function,
+            "FunctionConfig::same_config",
+            &cases,
+        );
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn snapshot_config_keys_agree_across_stage1_and_stage2() {
+        use crate::schemas::common::{
+            DbtMaterialization, DbtQuoting, HardDeletes, Hooks, PersistDocsConfig,
+        };
+        use crate::schemas::nodes::DbtSnapshot;
+        use crate::schemas::project::configs::snapshot_config::SnapshotMetaColumnNames;
+        use crate::schemas::serde::{GrantConfig, OmissibleGrantConfig, StringOrArrayOfStrings};
+        use dbt_common::io_args::StaticAnalysisKind;
+        use dbt_common::serde_utils::Omissible;
+        use dbt_yaml::{Spanned, Verbatim};
+
+        let cases: Vec<(&str, ExcludeKind, Box<dyn Fn(&mut DbtSnapshot)>)> = vec![
+            // --- fields `DbtSnapshot::has_same_config` actually compares ---
+            (
+                "materialized",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.materialized = Some(DbtMaterialization::View)),
+            ),
+            (
+                "strategy",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.strategy = Some("timestamp".to_string())),
+            ),
+            (
+                "unique_key",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.unique_key =
+                        Some(StringOrArrayOfStrings::String("id".to_string()))
+                }),
+            ),
+            (
+                "check_cols",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.check_cols =
+                        Some(StringOrArrayOfStrings::String("all".to_string()))
+                }),
+            ),
+            (
+                "updated_at",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.updated_at = Some("updated_at".to_string())),
+            ),
+            (
+                "dbt_valid_to_current",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.dbt_valid_to_current = Some("NULL".to_string())),
+            ),
+            (
+                "snapshot_meta_column_names",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.snapshot_meta_column_names = Some(SnapshotMetaColumnNames {
+                        dbt_scd_id: Some("scd_id".to_string()),
+                        ..Default::default()
+                    })
+                }),
+            ),
+            (
+                "hard_deletes",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.hard_deletes = Some(HardDeletes::Invalidate)),
+            ),
+            (
+                "target_database",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.target_database = Some("a_db".to_string())),
+            ),
+            (
+                "target_schema",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.target_schema = Some("a_schema".to_string())),
+            ),
+            (
+                "enabled",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.enabled = Some(false)),
+            ),
+            (
+                "pre_hook",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.pre_hook =
+                        Verbatim::from(Some(Hooks::ArrayOfStrings(vec!["select 1".to_string()])))
+                }),
+            ),
+            (
+                "post_hook",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.post_hook =
+                        Verbatim::from(Some(Hooks::ArrayOfStrings(vec!["select 1".to_string()])))
+                }),
+            ),
+            (
+                "persist_docs",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.persist_docs = Some(PersistDocsConfig {
+                        columns: Some(true),
+                        relation: Some(true),
+                    })
+                }),
+            ),
+            (
+                "meta",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    let mut m = indexmap::IndexMap::new();
+                    m.insert("owner".to_string(), dbt_yaml::to_value("bob").unwrap());
+                    n.deprecated_config.meta = Some(m);
+                }),
+            ),
+            (
+                "grants",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.grants = OmissibleGrantConfig(Omissible::Present(
+                        GrantConfig(indexmap::IndexMap::from([(
+                            "select".to_string(),
+                            StringOrArrayOfStrings::String("role1".to_string()),
+                        )])),
+                    ))
+                }),
+            ),
+            (
+                "event_time",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.event_time = Some("updated_at".to_string())),
+            ),
+            (
+                "quoting",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.quoting = Some(DbtQuoting {
+                        database: None,
+                        schema: None,
+                        identifier: Some(false),
+                        snowflake_ignore_case: None,
+                    })
+                }),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(StaticAnalysisKind::Off))
+                }),
+            ),
+            (
+                "quote_columns",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.quote_columns = Some(true)),
+            ),
+            (
+                "invalidate_hard_deletes",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.invalidate_hard_deletes = Some(true)),
+            ),
+            // --- parity-excludes: dbt-core's `CompareBehavior.Exclude` on `NodeAndTestConfig` ---
+            (
+                "tags",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.tags =
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                }),
+            ),
+            (
+                "group",
+                ExcludeKind::Parity,
+                Box::new(|n| n.deprecated_config.group = Some("a_group".to_string())),
+            ),
+            // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
+            (
+                "schema",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.schema = Some("a_schema".to_string())),
+            ),
+            (
+                "database",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.database = Some("a_db".to_string())),
+            ),
+            (
+                "alias",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.alias = Some("an_alias".to_string())),
+            ),
+        ];
+
+        // Not exercised above: `full_refresh`/`compute`/`docs`/`sync` are not compared by
+        // `DbtSnapshot::has_same_config` at all (outside this drift guard's scope). `warehouse_config`
+        // is nested adapter-specific config with its own dedicated test coverage.
+        assert_denylist_keys_agree_across_stage1_and_stage2::<DbtSnapshot>(
+            NodeType::Snapshot,
+            "DbtSnapshot::has_same_config",
+            &cases,
+        );
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn model_config_keys_agree_across_stage1_and_stage2() {
+        use crate::schemas::common::{
+            Access, DbtBatchSize, DbtIncrementalStrategy, DbtMaterialization, DbtUniqueKey,
+            DocsConfig, Hooks, OnError, OnSchemaChange, PersistDocsConfig,
+        };
+        use crate::schemas::project::configs::model_config::LatestVersionPointer;
+        use crate::schemas::properties::{ModelFreshness, ModelState};
+        use crate::schemas::serde::{GrantConfig, OmissibleGrantConfig, StringOrArrayOfStrings};
+        use dbt_common::serde_utils::Omissible;
+        use dbt_yaml::{Spanned, Verbatim};
+
+        let cases: Vec<(&str, ExcludeKind, Box<dyn Fn(&mut DbtModel)>)> = vec![
+            // --- fields `ModelConfig::same_config` actually compares ---
+            (
+                "enabled",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.enabled = Some(false)),
+            ),
+            (
+                "catalog_name",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.catalog_name = Some("a_catalog".to_string())),
+            ),
+            (
+                "meta",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    let mut m = indexmap::IndexMap::new();
+                    m.insert("owner".to_string(), dbt_yaml::to_value("bob").unwrap());
+                    n.deprecated_config.meta = Some(m);
+                }),
+            ),
+            (
+                "materialized",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.materialized = Some(DbtMaterialization::Table)),
+            ),
+            (
+                "incremental_strategy",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.incremental_strategy = Some(DbtIncrementalStrategy::Merge)
+                }),
+            ),
+            (
+                "batch_size",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.batch_size = Some(DbtBatchSize::Day)),
+            ),
+            (
+                "lookback",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.lookback = Some(2)),
+            ),
+            (
+                "begin",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.begin = Some("2024-01-01".to_string())),
+            ),
+            (
+                "persist_docs",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.persist_docs = Some(PersistDocsConfig {
+                        columns: Some(true),
+                        relation: Some(true),
+                    })
+                }),
+            ),
+            (
+                "post_hook",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.post_hook =
+                        Verbatim::from(Some(Hooks::ArrayOfStrings(vec!["select 1".to_string()])))
+                }),
+            ),
+            (
+                "pre_hook",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.pre_hook =
+                        Verbatim::from(Some(Hooks::ArrayOfStrings(vec!["select 1".to_string()])))
+                }),
+            ),
+            (
+                "column_types",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.column_types = Some(BTreeMap::from([(
+                        Spanned::new("id".to_string()),
+                        "int".to_string(),
+                    )]))
+                }),
+            ),
+            (
+                "full_refresh",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.full_refresh = Some(true)),
+            ),
+            (
+                "unique_key",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.unique_key = Some(DbtUniqueKey::Single("id".to_string()))
+                }),
+            ),
+            (
+                "on_schema_change",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.on_schema_change = Some(OnSchemaChange::AppendNewColumns)
+                }),
+            ),
+            (
+                "on_configuration_change",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.on_configuration_change =
+                        Some(crate::schemas::common::OnConfigurationChange::Continue)
+                }),
+            ),
+            (
+                "on_error",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.on_error = Some(OnError::Continue)),
+            ),
+            (
+                "grants",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.grants = OmissibleGrantConfig(Omissible::Present(
+                        GrantConfig(indexmap::IndexMap::from([(
+                            "select".to_string(),
+                            StringOrArrayOfStrings::String("role1".to_string()),
+                        )])),
+                    ))
+                }),
+            ),
+            (
+                "packages",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.packages =
+                        Some(StringOrArrayOfStrings::String("pkg1".to_string()))
+                }),
+            ),
+            (
+                "imports",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.imports =
+                        Some(StringOrArrayOfStrings::String("import1".to_string()))
+                }),
+            ),
+            (
+                "python_version",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.python_version = Some("3.11".to_string())),
+            ),
+            (
+                "docs",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.docs = Some(DocsConfig {
+                        show: false,
+                        node_color: None,
+                    })
+                }),
+            ),
+            (
+                "concurrent_batches",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.concurrent_batches = Some(true)),
+            ),
+            (
+                "merge_update_columns",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.merge_update_columns =
+                        Some(StringOrArrayOfStrings::String("col1".to_string()))
+                }),
+            ),
+            (
+                "merge_exclude_columns",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.merge_exclude_columns =
+                        Some(StringOrArrayOfStrings::String("col2".to_string()))
+                }),
+            ),
+            (
+                "access",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.access = Some(Access::Public)),
+            ),
+            (
+                "table_format",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.table_format = Some("iceberg".to_string())),
+            ),
+            (
+                "freshness",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.freshness = Some(ModelFreshness { build_after: None })
+                }),
+            ),
+            (
+                "state",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.state = Some(ModelState {
+                        lag_tolerance: None,
+                        require_fresh_data_from: None,
+                        evaluate_volatile_sql: Some(true),
+                        pre_clone: None,
+                        execute_hooks_on_any_reuse: None,
+                    })
+                }),
+            ),
+            (
+                "latest_version_pointer",
+                ExcludeKind::Relevant,
+                Box::new(|n| {
+                    n.deprecated_config.latest_version_pointer = Some(LatestVersionPointer {
+                        enabled: Some(true),
+                        alias: None,
+                    })
+                }),
+            ),
+            (
+                "sql_header",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.sql_header = Some("set x = 1".to_string())),
+            ),
+            (
+                "location",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.location = Some("s3://bucket/path".to_string())),
+            ),
+            (
+                "predicates",
+                ExcludeKind::Relevant,
+                Box::new(|n| n.deprecated_config.predicates = Some(vec!["1=1".to_string()])),
+            ),
+            // --- parity-excludes: dbt-core's `CompareBehavior.Exclude` on `NodeAndTestConfig` ---
+            (
+                "tags",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.tags =
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                }),
+            ),
+            (
+                "group",
+                ExcludeKind::Parity,
+                Box::new(|n| n.deprecated_config.group = Some("a_group".to_string())),
+            ),
+            // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
+            (
+                "schema",
+                ExcludeKind::Ownership,
+                Box::new(|n| {
+                    n.deprecated_config.schema = Omissible::Present(Some("a_schema".to_string()))
+                }),
+            ),
+            (
+                "database",
+                ExcludeKind::Ownership,
+                Box::new(|n| {
+                    n.deprecated_config.database = Omissible::Present(Some("a_db".to_string()))
+                }),
+            ),
+            (
+                "alias",
+                ExcludeKind::Ownership,
+                Box::new(|n| n.deprecated_config.alias = Some("an_alias".to_string())),
+            ),
+        ];
+
+        // Not exercised above: `quoting` and `event_time` are declared on `ModelConfig` but their
+        // comparisons are commented out in `ModelConfig::same_config` (env-aware / project-level,
+        // deliberately not compared there) — outside this drift guard's scope, which only
+        // transcribes the comparator's actual active field list. `warehouse_config` is nested
+        // adapter-specific config with its own dedicated test coverage.
+        assert_denylist_keys_agree_across_stage1_and_stage2::<DbtModel>(
+            NodeType::Model,
+            "ModelConfig::same_config",
+            &cases,
+        );
+    }
 }
