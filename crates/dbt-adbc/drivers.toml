@@ -36,6 +36,7 @@ drivers = [
   "redshift-0.18.0+dbt0.18.2",
   "redshift-0.18.0+dbt0.18.3",
   "redshift-0.18.0+dbt0.18.4",
+  "redshift-0.21.0.dev+dbt0.18.5",
   "salesforce-0.18.0+dbt0.0.4",
   "salesforce-0.21.0+dbt0.21.1",
   "salesforce-0.21.0.dev+dbt0.21.2",
