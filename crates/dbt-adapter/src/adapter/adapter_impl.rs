@@ -76,7 +76,7 @@ use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, Internal
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
-use minijinja::value::{Object, ValueMap};
+use minijinja::value::{Object, ValueKind, ValueMap};
 use minijinja::{self, invalid_argument, invalid_argument_inner};
 use minijinja::{State, Value, args};
 use once_cell::sync::Lazy;
@@ -222,6 +222,18 @@ pub fn database_schema_alias_from_state(state: &State) -> Option<(String, String
     let schema = model.get_attr("schema").ok()?.as_str()?.to_string();
     let alias = model.get_attr("alias").ok()?.as_str()?.to_string();
     Some((database, schema, alias))
+}
+
+/// Read the current model's `config.contract.alias_types` from Jinja state, defaulting
+/// to `true` (dbt's default) when unavailable.
+pub fn alias_types_from_state(state: &State) -> bool {
+    state
+        .lookup("model", &[])
+        .and_then(|m| m.get_attr("config").ok())
+        .and_then(|c| c.get_attr("contract").ok())
+        .and_then(|c| c.get_attr("alias_types").ok())
+        .and_then(|v| (v.kind() == ValueKind::Bool).then(|| v.is_true()))
+        .unwrap_or(true)
 }
 
 /// Checks if the given [BaseRelation] matches the node currently being rendered
@@ -2821,11 +2833,7 @@ impl AdapterImpl {
     }
 
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L323
-    pub fn nest_column_data_types(
-        &self,
-        _state: &State,
-        columns: &Value,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn nest_column_data_types(&self, columns: &Value) -> Result<Value, minijinja::Error> {
         // TODO: 'constraints' arg are ignored; didn't find an usage example, implement later
         let columns =
             minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns.clone())

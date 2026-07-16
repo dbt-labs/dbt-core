@@ -55,7 +55,7 @@ use std::sync::Arc;
 pub mod adapter_factory;
 pub mod adapter_impl;
 pub use adapter_factory::*;
-pub use adapter_impl::{AdapterImpl, quote_component, quote_ident};
+pub use adapter_impl::{AdapterImpl, alias_types_from_state, quote_component, quote_ident};
 #[cfg(test)]
 mod tests;
 
@@ -1839,19 +1839,15 @@ impl Adapter {
     ///
     /// Converts flat column definitions into nested structures.
     /// Only available with BigQuery adapter.
-    #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn nest_column_data_types(
-        &self,
-        state: &State,
-        args: &[Value],
-    ) -> Result<Value, minijinja::Error> {
+    #[tracing::instrument(skip(self), level = "trace")]
+    pub fn nest_column_data_types(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new("nest_column_data_types", &["columns"], args);
                 let columns = iter.next_arg::<&Value>()?;
                 iter.finish()?;
 
-                adapter.nest_column_data_types(state, columns)
+                adapter.nest_column_data_types(columns)
             }
             Parse(_) => Ok(empty_map_value()),
         }
@@ -3796,7 +3792,7 @@ impl Adapter {
             }
             // only available for BigQuery
             // columns: dict
-            "nest_column_data_types" => self.nest_column_data_types(state, args),
+            "nest_column_data_types" => self.nest_column_data_types(args),
             // partition_by: dict, columns: List[Column]
             // only available for BigQuery
             "get_struct_select_expression" => {

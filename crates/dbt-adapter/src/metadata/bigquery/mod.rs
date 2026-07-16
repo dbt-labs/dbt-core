@@ -1641,6 +1641,37 @@ mod tests {
     }
 
     #[test]
+    fn test_format_top_level_columns_data_types_preserves_type_strings() {
+        // Test case 7: Type strings are preserved verbatim
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("float_col", Some(&"FLOAT".to_string()));
+            nested.insert("integer_col", Some(&"INTEGER".to_string()));
+            nested.insert("text_col", Some(&"TEXT".to_string()));
+            nested.insert("string_col", Some(&"STRING".to_string()));
+            nested.insert("int64_col", Some(&"INT64".to_string()));
+            nested.insert("numeric_col", Some(&"NUMERIC".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(result.get("float_col").unwrap(), "FLOAT");
+            assert_eq!(result.get("integer_col").unwrap(), "INTEGER");
+            assert_eq!(result.get("text_col").unwrap(), "TEXT");
+            assert_eq!(result.get("string_col").unwrap(), "STRING");
+            assert_eq!(result.get("int64_col").unwrap(), "INT64");
+            assert_eq!(result.get("numeric_col").unwrap(), "NUMERIC");
+        }
+
+        // Test case 8: Nested struct leaves preserve provided type strings
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("s.x", Some(&"FLOAT".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(result.get("s").unwrap(), "struct<x FLOAT>");
+        }
+    }
+
+    #[test]
     fn build_views_query_renders_basic_select() {
         let sql = build_views_query(
             "my-project",
