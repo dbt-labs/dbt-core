@@ -439,7 +439,10 @@ impl SnowflakeMetadataAdapter {
                              database_and_where_clauses: (String, Vec<String>),
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
+            let Ok(batch) = batch_res else {
+                // Keep successful database batches; missing relations fall back downstream.
+                return Ok(());
+            };
             let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
             let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
             let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
@@ -534,13 +537,16 @@ impl SnowflakeMetadataAdapter {
                                 .expect("metadata query plan always includes metadata SQL");
                             let ctx = QueryCtx::default()
                                 .with_desc("Extracting freshness from information schema");
-                            let (_resp, agate_table) = adapter_for_map.query(
+                            let Ok((_resp, agate_table)) = adapter_for_map.query(
                                 &ctx,
                                 conn,
                                 metadata_sql,
                                 None,
                                 token_clone.clone(),
-                            )?;
+                            ) else {
+                                // Keep successful database batches; missing relations fall back downstream.
+                                continue;
+                            };
                             let batch = agate_table.original_record_batch();
                             let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
                             let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
