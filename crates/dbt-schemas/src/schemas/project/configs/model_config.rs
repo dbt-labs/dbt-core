@@ -505,6 +505,21 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+sync")]
     pub sync: Option<SyncConfig>,
 
+    // ClickHouse
+    // materialized-view materialization
+    #[serde(rename = "+refreshable")]
+    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    #[serde(default, rename = "+catchup", deserialize_with = "bool_or_string_bool")]
+    pub catchup: Option<bool>,
+    #[serde(rename = "+mv_on_schema_change")]
+    pub mv_on_schema_change: Option<String>,
+    #[serde(
+        default,
+        rename = "+repopulate_from_mvs_on_full_refresh",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub repopulate_from_mvs_on_full_refresh: Option<bool>,
+
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -805,6 +820,11 @@ impl From<ProjectModelConfig> for ModelConfig {
 
                 primary_key: config.primary_key,
                 category: config.category,
+
+                refreshable: config.refreshable,
+                catchup: config.catchup,
+                mv_on_schema_change: config.mv_on_schema_change,
+                repopulate_from_mvs_on_full_refresh: config.repopulate_from_mvs_on_full_refresh,
             },
             // Python-specific fields - initialized to None here, set during Python AST analysis
             config_keys_used: None,
@@ -993,6 +1013,12 @@ impl From<ModelConfig> for ProjectModelConfig {
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,
+            refreshable: config.__warehouse_specific_config__.refreshable,
+            catchup: config.__warehouse_specific_config__.catchup,
+            mv_on_schema_change: config.__warehouse_specific_config__.mv_on_schema_change,
+            repopulate_from_mvs_on_full_refresh: config
+                .__warehouse_specific_config__
+                .repopulate_from_mvs_on_full_refresh,
             __additional_properties__: BTreeMap::new(),
         }
     }

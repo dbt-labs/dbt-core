@@ -440,6 +440,15 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default)]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // ClickHouse 
+    // materialized-view materialization
+    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub catchup: Option<bool>,
+    pub mv_on_schema_change: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub repopulate_from_mvs_on_full_refresh: Option<bool>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -576,6 +585,13 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
             // Salesforce
             primary_key,
             category,
+
+            // ClickHouse
+            // materialized-view materialization
+            refreshable,
+            catchup,
+            mv_on_schema_change,
+            repopulate_from_mvs_on_full_refresh,
         } = self;
 
         default_to!(
@@ -680,6 +696,12 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
                 // Salesforce
                 primary_key,
                 category,
+                // ClickHouse
+                // materialized-view materialization
+                refreshable,
+                catchup,
+                mv_on_schema_change,
+                repopulate_from_mvs_on_full_refresh,
             ]
         );
     }
@@ -892,6 +914,11 @@ pub fn same_warehouse_config(
     let indexes_eq = self_wh.indexes == other_wh.indexes;
     let primary_key_eq = self_wh.primary_key == other_wh.primary_key;
     let category_eq = self_wh.category == other_wh.category;
+    let refreshable_eq = self_wh.refreshable == other_wh.refreshable;
+    let catchup_eq = self_wh.catchup == other_wh.catchup;
+    let mv_on_schema_change_eq = self_wh.mv_on_schema_change == other_wh.mv_on_schema_change;
+    let repopulate_from_mvs_on_full_refresh_eq =
+        self_wh.repopulate_from_mvs_on_full_refresh == other_wh.repopulate_from_mvs_on_full_refresh;
 
     let result = partition_by_eq
         && cluster_by_eq
@@ -962,7 +989,11 @@ pub fn same_warehouse_config(
         && table_type_eq
         && indexes_eq
         && primary_key_eq
-        && category_eq;
+        && category_eq
+        && refreshable_eq
+        && catchup_eq
+        && mv_on_schema_change_eq
+        && repopulate_from_mvs_on_full_refresh_eq;
 
     if !result {
         log_state_mod_diff(
@@ -1643,6 +1674,12 @@ pub const WAREHOUSE_SPECIFIC_CONFIG_KEYS: &[&str] = &[
     // Salesforce
     "primary_key",
     "category",
+    // ClickHouse
+    // materialized-view materialization
+    "refreshable",
+    "catchup",
+    "mv_on_schema_change",
+    "repopulate_from_mvs_on_full_refresh",
 ];
 
 /// Compare two `unrendered_config` values, treating absent/`null`/empty as equivalent and
@@ -2050,6 +2087,10 @@ mod tests {
             indexes: Default::default(),
             primary_key: Default::default(),
             category: Some(DataLakeObjectCategory::Other),
+            refreshable: Some(Default::default()),
+            catchup: Some(true),
+            mv_on_schema_change: Some("fail".to_string()),
+            repopulate_from_mvs_on_full_refresh: Some(false),
         };
 
         let value = dbt_yaml::to_value(&cfg).expect("serialize warehouse config");
