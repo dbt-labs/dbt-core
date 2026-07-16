@@ -1,7 +1,11 @@
 {% macro redshift__get_show_grant_sql(relation) %}
-  {#- DIVERGENCE BEGIN: upstream uses redshift__use_show_apis(); Fusion uses adapter.has_feature("datasharing") -#}
-  {% if adapter.has_feature("datasharing") %}
-  {#- DIVERGENCE END -#}
+  {% if redshift__use_show_apis() %}
+{#-
+    Use SHOW GRANTS for cross-database support (required for RA3/datasharing).
+    Note: SHOW GRANTS conflates groups and roles — groups appear with a '/'
+    prefix on identity_name and identity_type='role'. The standardize_grants_dict
+    method in RedshiftAdapter handles this translation.
+-#}
     SHOW GRANTS ON TABLE {{ adapter.quote(relation.database) }}.{{ adapter.quote(relation.schema) }}.{{ adapter.quote(relation.identifier) }}
   {% else %}
     with privileges as (

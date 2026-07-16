@@ -1,3 +1,4 @@
+{# FIXME: The macros in this file diverge from v1, https://github.com/dbt-labs/fs/issues/11679 #}
 {%- macro redshift__create_or_replace_view_as(relation, sql) -%}
   {%- set binding = config.get('bind', default=True) -%}
   {%- set bind_qualifier = '' if binding else 'with no schema binding' -%}

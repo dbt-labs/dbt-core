@@ -35,6 +35,28 @@ use std::io::Cursor;
 use crate::task::utils::iter_files_recursively;
 use crate::task::{ProjectEnv, Task, TestEnv, TestResult};
 
+/// Canonicalize non-deterministic dbt temp-table identifiers to stable forms,
+/// so recorded SQL is byte-stable across re-record runs.
+///
+/// Mirrors `dbt_adapter::sql::normalize::normalize_dbt_tmp_name` — keep the two
+/// patterns in sync (this crate cannot depend on `dbt-adapter`). Two producers:
+/// - `adapter.generate_unique_temporary_table_suffix` (base) →
+///   `dbt_tmp_<UUIDv4-with-underscores>` → collapse to `dbt_tmp_`.
+/// - `postgres__make_relation_with_suffix` (Postgres/Redshift) and
+///   `bigquery__make_relation_with_suffix` (BigQuery) →
+///   `<base>__dbt_tmp<digits>` from `strftime("%H%M%S%f")` → collapse to
+///   `<base>__dbt_tmp`.
+pub(crate) fn canonicalize_dbt_tmp_identifiers(content: &str) -> String {
+    use std::sync::LazyLock;
+    static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
+    });
+    static TIMESTAMP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__dbt_tmp\d+").unwrap());
+
+    let step1 = UUID_RE.replace_all(content, "dbt_tmp_");
+    TIMESTAMP_RE.replace_all(&step1, "__dbt_tmp").to_string()
+}
+
 pub struct FileWriteTask {
     file_path: String,
     content: String,
@@ -567,6 +589,10 @@ impl Task for SedTask {
                         .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
                 };
                 update_sqlite_recordings_sql_only(path, &warehouse_replace)?;
+
+                let tmp_name_replace =
+                    |content: &str| -> String { canonicalize_dbt_tmp_identifiers(content) };
+                update_sqlite_recordings_sql_only(path, &tmp_name_replace)?;
 
                 // Apply Time Elapsed regex removal
                 let re_time_elapsed = Regex::new(r"Time Elapsed:.*").unwrap();

@@ -4801,8 +4801,21 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
             );
             vec![flag]
         }
-        Postgres | Redshift | Salesforce | Spark | DuckDB | Alt | ClickHouse | Exasol
-        | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => vec![],
+        Redshift => {
+            // TODO: https://github.com/dbt-labs/fs/issues/11871
+            let flag = BehaviorFlag::new(
+                "redshift_skip_autocommit_transaction_statements",
+                false,
+                Some(
+                    "When enabled, skip BEGIN/COMMIT wrapping so statements that cannot run in a transaction block (e.g. ALTER COLUMN TYPE for VARCHAR/VARBYTE size changes) can be issued.",
+                ),
+                None,
+                None,
+            );
+            vec![flag]
+        }
+        Postgres | Salesforce | Spark | DuckDB | Alt | ClickHouse | Exasol | Starburst | Athena
+        | Trino | Datafusion | Dremio | Oracle => vec![],
     }
 }
 
