@@ -667,6 +667,12 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 // snapshot is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
             },
         }
     }

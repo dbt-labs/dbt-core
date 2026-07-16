@@ -382,6 +382,12 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 // sources doesn't need this field
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
             },
         }
     }
