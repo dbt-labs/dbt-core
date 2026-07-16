@@ -502,6 +502,25 @@
         }
       ]
     },
+    "ComputePlatform": {
+      "description": "Selects the compute target a model's DML is executed against.\n\n`Default` uses the profile's adapter. A run implementation may honor an alternate target for other variants; parse/compile/render and introspection are unaffected by this selection.",
+      "oneOf": [
+        {
+          "description": "Execute on the profile's (default) adapter.",
+          "type": "string",
+          "enum": [
+            "default"
+          ]
+        },
+        {
+          "description": "Execute on the alternate compute target.",
+          "type": "string",
+          "enum": [
+            "alt"
+          ]
+        }
+      ]
+    },
     "DataLakeObjectCategory": {
       "description": "See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject",
       "type": "string",
@@ -1709,19 +1728,13 @@
           ]
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -2644,6 +2657,16 @@
             "null"
           ]
         },
+        "+alt_compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputePlatform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+as_columnstore": {
           "anyOf": [
             {
@@ -3128,19 +3151,13 @@
           ]
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -4452,16 +4469,10 @@
         "+hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -5357,19 +5368,13 @@
           ]
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -6179,19 +6184,13 @@
           }
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -6832,19 +6831,13 @@
           }
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
