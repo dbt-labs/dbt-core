@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Test change to README (test PR, no review needed).
+time: 2026-07-17T16:11:18.727845+05:30
+custom:
+    author: '@tauhidanjum'
+    issue: ""
+    project: dbt-core
