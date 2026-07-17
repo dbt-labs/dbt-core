@@ -453,23 +453,24 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ${{ vars.UBUNTU_RUNNER_32 }}
+            os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
-            os: ${{ vars.UBUNTU_RUNNER_ARM_32 }}
+            os: ubuntu-24.04-arm
           - target: x86_64-apple-darwin
-            os: ${{ vars.MACOS_RUNNER }}
+            os: macos-15-intel
           - target: aarch64-apple-darwin
-            os: ${{ vars.MACOS_RUNNER }}
+            os: macos-latest
           - target: x86_64-pc-windows-msvc
-            os: ${{ vars.WINDOWS_RUNNER_32 }}
+            os: windows-latest
     steps:
-      # always-sunny is private; FISHTOWN_BOT_PAT has cross-repo read access.
+      # always-sunny is private; FS_SERVICE_PAT (already provisioned in this
+      # repo) carries the cross-repo read access needed to check it out.
       - name: Check out always-sunny (E2E runner + project)
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           repository: dbt-labs/always-sunny
           ref: ${{ env.ALWAYS_SUNNY_REF }}
-          token: ${{ secrets.FISHTOWN_BOT_PAT }}
+          token: ${{ secrets.FS_SERVICE_PAT }}
           path: always-sunny
 
       - name: Set up Python
