@@ -299,6 +299,10 @@ fn build_relations_from_show_objects(
             Some(relation_type_from_table_flags(is_dynamic)?)
         } else if table_kind.eq_ignore_ascii_case("view") {
             Some(RelationType::View)
+        } else if table_kind.eq_ignore_ascii_case("temporary") {
+            // Session-scoped temporary tables/views behave like regular tables for
+            // all supported dbt operations (SELECT *, DROP TABLE, etc.).
+            Some(RelationType::Table)
         } else {
             Some(RelationType::from(table_kind))
         };
