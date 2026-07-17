@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::microbatch::BatchContext;
+use chrono_tz::Tz;
 use dbt_adapter::cast_util::downcast_value_to_dyn_base_relation;
 use dbt_adapter::formatter::SqlLiteralFormatter;
 use dbt_adapter::relation::create_relation_from_node;
@@ -16,11 +17,14 @@ use dbt_common::FsResult;
 use dbt_common::constants::DBT_EPHEMERAL_DIR_NAME;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::compile::DependencyValidationConfig;
+use dbt_jinja_utils::phases::run::RunConfig;
 use dbt_jinja_utils::phases::{MicrobatchRefContext, RefFunction, SourceFunction};
 use dbt_jinja_utils::utils::inject_and_persist_ephemeral_models;
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode};
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use minijinja::Value;
+use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
+use minijinja_contrib::modules::pytz::PytzTimezone;
 use tracing::warn;
 
 /// Extend the Jinja context with microbatch-specific overrides.
@@ -108,15 +112,30 @@ pub fn extend_microbatch_node_context(
 
     // Add model.batch for the Snowflake incremental macro to use
     // The macro checks model.batch.event_time_start and model.batch.event_time_end
+    // These must be PyDateTime objects (not strings) so that datetime methods
+    // like .strftime() work in Jinja, matching dbt-core's Python datetime objects.
+    let utc = PytzTimezone::new(Tz::UTC);
+    let event_time_start = Value::from_object(PyDateTime::new_aware(
+        batch_ctx.event_time_start.with_timezone(&Tz::UTC),
+        Some(utc.clone()),
+    ));
+    let event_time_end = Value::from_object(PyDateTime::new_aware(
+        batch_ctx.event_time_end.with_timezone(&Tz::UTC),
+        Some(utc),
+    ));
+    let config_updates = BTreeMap::from([
+        (
+            "__dbt_internal_microbatch_event_time_start".to_string(),
+            event_time_start.clone(),
+        ),
+        (
+            "__dbt_internal_microbatch_event_time_end".to_string(),
+            event_time_end.clone(),
+        ),
+    ]);
     let mut batch_info = BTreeMap::new();
-    batch_info.insert(
-        "event_time_start".to_string(),
-        Value::from(formatter.format_timestamp(batch_ctx.event_time_start)),
-    );
-    batch_info.insert(
-        "event_time_end".to_string(),
-        Value::from(formatter.format_timestamp(batch_ctx.event_time_end)),
-    );
+    batch_info.insert("event_time_start".to_string(), event_time_start);
+    batch_info.insert("event_time_end".to_string(), event_time_end);
     batch_info.insert("id".to_string(), Value::from(batch_ctx.id.clone()));
 
     // Update the model in context to include batch info
@@ -136,8 +155,15 @@ pub fn extend_microbatch_node_context(
                 }
             }
 
-            // Add batch info
-            model_map.insert("batch".to_string(), Value::from_serialize(&batch_info));
+            // Add batch info — use iterator collect so PyDateTime objects retain their
+            // object identity (from_serialize would lose it by calling Serialize on Value).
+            model_map.insert(
+                "batch".to_string(),
+                batch_info
+                    .iter()
+                    .map(|(k, v)| (Value::from(k.as_str()), v.clone()))
+                    .collect::<Value>(),
+            );
 
             // Update config with microbatch timestamps
             if let Some(config_val) = model_map.get("config").cloned() {
@@ -155,21 +181,51 @@ pub fn extend_microbatch_node_context(
                         }
                     }
 
-                    // Add microbatch timestamps to config
-                    config_map.insert(
-                        "__dbt_internal_microbatch_event_time_start".to_string(),
-                        Value::from(formatter.format_timestamp(batch_ctx.event_time_start)),
-                    );
-                    config_map.insert(
-                        "__dbt_internal_microbatch_event_time_end".to_string(),
-                        Value::from(formatter.format_timestamp(batch_ctx.event_time_end)),
-                    );
+                    // Add microbatch timestamps to config as PyDateTime objects so that
+                    // datetime methods like .strftime() work in adapter macros.
+                    config_map.extend(config_updates.clone());
 
-                    model_map.insert("config".to_string(), Value::from_serialize(&config_map));
+                    model_map.insert(
+                        "config".to_string(),
+                        config_map
+                            .iter()
+                            .map(|(k, v)| (Value::from(k.as_str()), v.clone()))
+                            .collect::<Value>(),
+                    );
                 }
             }
 
-            jinja_context.insert("model".to_string(), Value::from_serialize(&model_map));
+            jinja_context.insert(
+                "model".to_string(),
+                model_map
+                    .iter()
+                    .map(|(k, v)| (Value::from(k.as_str()), v.clone()))
+                    .collect::<Value>(),
+            );
+
+            let update_run_config = |config: &Value| {
+                // Values are Arc-backed and the base run context may be shared across
+                // batches, so create a batch-local config instead of mutating shared state.
+                let mut config = config.as_object()?.downcast_ref::<RunConfig>()?.clone();
+                config.model_config.extend(config_updates.clone());
+                Some(Value::from_object(config))
+            };
+
+            if let Some(config) = jinja_context.get("config").and_then(&update_run_config) {
+                jinja_context.insert("config".to_string(), config);
+            }
+
+            if let Some(mut builtins) = jinja_context.get("builtins").and_then(|builtins| {
+                builtins
+                    .as_object()?
+                    .downcast_ref::<BTreeMap<String, Value>>()
+                    .cloned()
+            }) {
+                if let Some(config) = builtins.get("config").and_then(update_run_config) {
+                    builtins.insert("config".to_string(), config);
+                    jinja_context.insert("builtins".to_string(), Value::from_object(builtins));
+                }
+            }
         }
     }
 
