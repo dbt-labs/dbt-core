@@ -173,6 +173,13 @@ split-debuginfo = "unpacked"
 # speeds up test times, with no loss of debuggability.
 opt-level = 1
 
+[profile.dev.package.sdf-frontend]
+# This is a quick workaround to reign in the compiled size of sdf-frontend, which
+# as of e522a37f2a7e56c6ba3479dcb2de957f3561eb7e exceeded the 4GB file limit
+# making the whole unbuidable on Windows.
+# FIXME: remove this once sdf-frontend is broken up
+debug = 1
+
 [profile.dev.build-override]
 # Some libraries (e.g. syn, proc-macro2 and all their dependencies) are compiled
 # *for* the build, and also dependend by tests (because we have proc-macro crates).
