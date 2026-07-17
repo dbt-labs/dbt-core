@@ -53,6 +53,7 @@ use dbt_tasks_core::run_cache::run_cache_service::{
     execute_run_cache_service_clone, insert_compiled_view_definition,
     record_run_cache_service_execution, refresh_final_last_modified_epoch_for_node,
     run_cache_service_before_execution, should_execute_hooks_for_skip_reuse,
+    stamp_final_last_modified_epoch_for_node_heuristic,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -779,6 +780,14 @@ async fn run_cache_after_success_action(
 ) {
     match after_success {
         RunCacheAfterSuccess::None => {
+            if ctx.inner.run_cache_ctx.run_cache_service_requested
+                && stamp_final_last_modified_epoch_for_node_heuristic(ctx, node).is_some()
+            {
+                // Avoid metadata query fanout for no-confirmation successes when
+                // a heuristic timestamp can keep downstream cache entries usable.
+                return;
+            }
+
             // The dbt State submission path (`submit_seed` / `submit_*`) probes
             // `last_modified_epoch_for_node` before deciding whether to
             // submit. When the target table doesn't exist on the warehouse

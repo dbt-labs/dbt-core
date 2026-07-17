@@ -962,6 +962,12 @@ pub async fn confirm_run_cache_service_execution(
     confirmation: Option<RunCacheExecutionConfirmation>,
     execution_runtime_ms: Option<i64>,
 ) {
+    // Without a confirmation token there is nothing to report, so avoid the
+    // final metadata refresh for reused/skipped nodes.
+    let Some(confirmation) = confirmation else {
+        return;
+    };
+
     let is_test = node.unique_id().starts_with("test.");
     // Data tests submit with `target_table=None`. The service's DB CHECK
     // `execution_last_modified_epoch_target_table_check` requires
@@ -972,22 +978,8 @@ pub async fn confirm_run_cache_service_execution(
     // where there is no audit relation to query.
     let final_last_modified_epoch = if is_test {
         None
-    } else if let Some(clock) = ctx.inner.run_cache_ctx.heuristic_clock.get() {
-        let h = clock.now_ms();
-        // Mirror the plugin's `clear_cache` + `cache_last_modified_epoch(table, H)`:
-        // replace the stale prefetch value (often None for newly-created tables) with H
-        // so downstream submissions in the same run have metadata_complete=true.
-        if let Ok((name, _)) = relation_for_node(ctx, node) {
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .remove_last_modified_epoch(&name);
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .insert_last_modified_epoch(&name, Some(h));
-        }
-        Some(h)
+    } else if let Some(epoch) = stamp_final_last_modified_epoch_for_node_heuristic(ctx, node) {
+        Some(epoch)
     } else {
         match refresh_final_last_modified_epoch_for_node(ctx, node).await {
             Ok(epoch) => epoch,
@@ -1003,10 +995,6 @@ pub async fn confirm_run_cache_service_execution(
                 return;
             }
         }
-    };
-
-    let Some(confirmation) = confirmation else {
-        return;
     };
 
     let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
@@ -2130,6 +2118,28 @@ pub async fn refresh_final_last_modified_epoch_for_node(
         .run_cache_metadata
         .remove_last_modified_epoch(&name);
     refresh_last_modified_epoch_for_relation(ctx, &name, relation).await
+}
+
+pub fn stamp_final_last_modified_epoch_for_node_heuristic(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+) -> Option<i64> {
+    let clock = ctx.inner.run_cache_ctx.heuristic_clock.get()?;
+    let epoch = clock.now_ms();
+    // Mirror the plugin's `clear_cache` + `cache_last_modified_epoch(table, H)`:
+    // replace the stale prefetch value (often None for newly-created tables) with H
+    // so downstream submissions in the same run have metadata_complete=true.
+    if let Ok((name, _)) = relation_for_node(ctx, node) {
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .remove_last_modified_epoch(&name);
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&name, Some(epoch));
+    }
+    Some(epoch)
 }
 
 async fn last_modified_epoch_for_relation(
@@ -3587,6 +3597,77 @@ mod tests {
                 sao_guard: None,
             }
         ));
+    }
+
+    #[tokio::test]
+    async fn confirm_without_confirmation_does_not_refresh_final_metadata() {
+        let ctx = test_task_runner_ctx(None);
+        let model = make_model(
+            "model.test.user_name_model",
+            "db",
+            "dbt_test",
+            "user_name_model",
+            DbtMaterialization::Table,
+        );
+        let target_fqn = fqn_of("db", "dbt_test", "user_name_model");
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&target_fqn, Some(7));
+        ctx.inner
+            .run_cache_ctx
+            .heuristic_clock
+            .set(HeuristicClock {
+                start_ts_ms: 1_700_000_000_000,
+                start_instant: std::time::Instant::now(),
+            })
+            .unwrap();
+
+        confirm_run_cache_service_execution(&ctx, model.as_ref(), None, None).await;
+
+        assert_eq!(
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .last_modified_epoch(&target_fqn),
+            Some(Some(7))
+        );
+    }
+
+    #[test]
+    fn heuristic_stamp_replaces_stale_final_metadata() {
+        let ctx = test_task_runner_ctx(None);
+        let model = make_model(
+            "model.test.user_name_model",
+            "db",
+            "dbt_test",
+            "user_name_model",
+            DbtMaterialization::Table,
+        );
+        let target_fqn = fqn_of("db", "dbt_test", "user_name_model");
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&target_fqn, None);
+        ctx.inner
+            .run_cache_ctx
+            .heuristic_clock
+            .set(HeuristicClock {
+                start_ts_ms: 1_700_000_000_000,
+                start_instant: std::time::Instant::now(),
+            })
+            .unwrap();
+
+        let epoch = stamp_final_last_modified_epoch_for_node_heuristic(&ctx, model.as_ref());
+
+        assert!(epoch.is_some());
+        assert_eq!(
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .last_modified_epoch(&target_fqn),
+            epoch.map(Some)
+        );
     }
 
     #[tokio::test]
