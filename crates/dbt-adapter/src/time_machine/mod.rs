@@ -110,8 +110,7 @@ pub use metadata::{
 };
 pub use semantic::SemanticCategory;
 pub use serde::{
-    ReplayContext, json_to_value, json_to_value_with_context, serialize_args, serialize_value,
-    values_match,
+    ReplayContext, json_to_value_with_context, serialize_args, serialize_value, values_match,
 };
 pub use serializable::{
     DeserializeFn, JsonExtractor, TimeMachineSerializable, TypeEntry, deserialize_object, registry,

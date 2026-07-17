@@ -256,6 +256,14 @@ impl RelationConfig {
             requires_full_refresh_fn,
         }
     }
+
+    pub(crate) fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
+    }
+
+    pub(crate) fn components(&self) -> IndexMapIter<'_, &'static str, Box<dyn ComponentConfig>> {
+        self.components.iter()
+    }
 }
 
 impl RelationConfig {

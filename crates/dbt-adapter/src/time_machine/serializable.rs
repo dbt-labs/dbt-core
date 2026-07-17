@@ -9,10 +9,10 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::relation::RelationObject;
+use crate::relation::{RelationConfig, RelationObject};
 use crate::{catalog_relation, column, response};
 
-use super::serde::ReplayContext;
+use super::serde::ReplayCallContext;
 
 /// Trait for types that can be serialized/deserialized for time machine recording.
 pub trait TimeMachineSerializable: Send + Sync {
@@ -26,13 +26,13 @@ pub trait TimeMachineSerializable: Send + Sync {
     /// Reconstruct from JSON. The `json` includes the `__type__` field.
     fn from_time_machine_json(
         json: &serde_json::Value,
-        ctx: &ReplayContext,
+        ctx: &ReplayCallContext,
     ) -> Option<minijinja::Value>
     where
         Self: Sized;
 }
 
-pub type DeserializeFn = fn(&serde_json::Value, &ReplayContext) -> Option<minijinja::Value>;
+pub type DeserializeFn = fn(&serde_json::Value, &ReplayCallContext) -> Option<minijinja::Value>;
 
 #[derive(Clone)]
 pub struct TypeEntry {
@@ -53,6 +53,7 @@ fn build_registry() -> HashMap<&'static str, TypeEntry> {
     register::<RelationObject>(&mut registry);
     register::<catalog_relation::CatalogRelation>(&mut registry);
     register::<column::Column>(&mut registry);
+    register::<RelationConfig>(&mut registry);
     registry
 }
 
@@ -89,6 +90,11 @@ pub fn serialize_object(value: &minijinja::Value) -> Option<serde_json::Value> {
     if let Some(obj) = value.downcast_object_ref::<column::Column>() {
         return Some(wrap_with_type::<column::Column>(obj.to_time_machine_json()));
     }
+    if let Some(obj) = value.downcast_object_ref::<RelationConfig>()
+        && obj.adapter_type() == dbt_adapter_core::AdapterType::Databricks
+    {
+        return Some(wrap_with_type::<RelationConfig>(obj.to_time_machine_json()));
+    }
     None
 }
 
@@ -111,7 +117,7 @@ fn wrap_with_type<T: TimeMachineSerializable>(mut json: serde_json::Value) -> se
 pub fn deserialize_object(
     type_id: &str,
     json: &serde_json::Value,
-    ctx: &ReplayContext,
+    ctx: &ReplayCallContext,
 ) -> Option<minijinja::Value> {
     registry()
         .get(type_id)
@@ -195,7 +201,7 @@ mod tests {
         }
         fn from_time_machine_json(
             _: &serde_json::Value,
-            _: &ReplayContext,
+            _: &ReplayCallContext,
         ) -> Option<minijinja::Value> {
             None
         }

@@ -9,15 +9,17 @@ use std::sync::Arc;
 use minijinja::Value;
 
 use dbt_adapter_core::AdapterType;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 
+use crate::relation::RelationObject;
 use crate::time_machine::AdapterCallEvent;
 
 use super::event::{MetadataCallArgs, SaoEvent};
 use super::event_recorder::EventRecorder;
 use super::event_replay::{Recording, ReplayError, ReplayMode};
 use super::semantic::SemanticCategory;
-use super::serde::{ReplayContext, json_to_value_with_context};
+use super::serde::{ReplayCallContext, ReplayContext, json_to_value_with_context};
 use super::validation::{IncomingEvent, TimeMachineEventValidationEngine, ValidationResult};
 
 /// Unified time machine for recording or replaying adapter calls.
@@ -307,7 +309,8 @@ impl EventReplayer {
         }
 
         // Convert the recorded result back to a Value
-        let value = json_to_value_with_context(&event.result, &self.replay_ctx);
+        let call_ctx = build_replay_call_context(&self.replay_ctx, event);
+        let value = json_to_value_with_context(&event.result, &call_ctx);
         Ok(value)
     }
 
@@ -550,6 +553,42 @@ impl EventReplayer {
             node_count: self.recording.node_ids().count(),
             metadata_caller_count: self.recording.metadata_caller_ids().count(),
         }
+    }
+}
+
+/// Extends replay context with additional per-call context extracted from arguments for events
+/// that require it.
+fn build_replay_call_context(
+    replay_ctx: &ReplayContext,
+    event: &AdapterCallEvent,
+) -> ReplayCallContext {
+    let call_ctx = replay_ctx.clone().into();
+    let relation_type = match event.method.as_str() {
+        "get_relation_config" => GetRelationConfig::try_from((&event.args, &call_ctx))
+            .ok()
+            .and_then(|args| args.relation_type),
+        _ => None,
+    };
+    call_ctx.with_relation_type(relation_type)
+}
+
+struct GetRelationConfig {
+    relation_type: Option<RelationType>,
+}
+
+impl TryFrom<(&serde_json::Value, &ReplayCallContext)> for GetRelationConfig {
+    type Error = ();
+
+    fn try_from(
+        (args, ctx): (&serde_json::Value, &ReplayCallContext),
+    ) -> Result<Self, Self::Error> {
+        let relation = args.as_array().and_then(|args| args.first()).ok_or(())?;
+        let relation = json_to_value_with_context(relation, ctx)
+            .downcast_object::<RelationObject>()
+            .ok_or(())?;
+        Ok(Self {
+            relation_type: relation.relation_type(),
+        })
     }
 }
 

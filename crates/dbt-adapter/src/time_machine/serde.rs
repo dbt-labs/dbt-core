@@ -1,6 +1,7 @@
 //! Conversion between minijinja::Value and serde_json::Value for time-machine recordings.
 
 use dbt_adapter_core::AdapterType;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 
 use super::serializable::{deserialize_object, serialize_object};
@@ -70,6 +71,41 @@ pub struct ReplayContext {
     pub quoting: ResolvedQuoting,
 }
 
+/// Context that applies only while reconstructing one recorded adapter call.
+#[derive(Clone)]
+pub struct ReplayCallContext {
+    replay: ReplayContext,
+    relation_type: Option<RelationType>,
+}
+
+impl ReplayCallContext {
+    fn new(replay: ReplayContext) -> Self {
+        Self {
+            replay,
+            relation_type: None,
+        }
+    }
+
+    pub(crate) fn with_relation_type(mut self, relation_type: Option<RelationType>) -> Self {
+        self.relation_type = relation_type;
+        self
+    }
+
+    pub(crate) fn replay_context(&self) -> &ReplayContext {
+        &self.replay
+    }
+
+    pub(crate) fn relation_type(&self) -> Option<RelationType> {
+        self.relation_type
+    }
+}
+
+impl From<ReplayContext> for ReplayCallContext {
+    fn from(replay: ReplayContext) -> Self {
+        Self::new(replay)
+    }
+}
+
 impl Default for ReplayContext {
     fn default() -> Self {
         Self {
@@ -84,7 +120,7 @@ impl Default for ReplayContext {
 /// This allows proper reconstruction of RelationObjects.
 pub fn json_to_value_with_context(
     json: &serde_json::Value,
-    ctx: &ReplayContext,
+    ctx: &ReplayCallContext,
 ) -> minijinja::Value {
     match json {
         serde_json::Value::Null => minijinja::Value::from(()),
@@ -129,17 +165,9 @@ pub fn json_to_value_with_context(
 fn reconstruct_typed_object(
     type_name: &str,
     json: &serde_json::Value,
-    ctx: &ReplayContext,
+    ctx: &ReplayCallContext,
 ) -> Option<minijinja::Value> {
     deserialize_object(type_name, json, ctx)
-}
-
-/// Convenience function to deserialize JSON to a minijinja::Value using default context.
-///
-/// This is useful when you don't need adapter-specific reconstruction (i.e., when
-/// all serialized objects include their own adapter_type and don't need the fallback).
-pub fn json_to_value(json: &serde_json::Value) -> minijinja::Value {
-    json_to_value_with_context(json, &ReplayContext::default())
 }
 
 /// Check if a JSON value is a "zero value" (false, null, 0, "", [], {}).
@@ -216,6 +244,10 @@ pub fn values_match(expected: &serde_json::Value, actual: &serde_json::Value) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn json_to_value(json: &serde_json::Value) -> minijinja::Value {
+        json_to_value_with_context(json, &ReplayContext::default().into())
+    }
 
     #[test]
     fn test_serialize_args() {

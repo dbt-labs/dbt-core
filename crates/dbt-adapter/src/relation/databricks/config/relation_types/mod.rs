@@ -56,6 +56,7 @@ fn component_from_recorded(
         components::column_tags::TYPE_NAME => {
             let tags: IndexMap<String, IndexMap<String, String>> = val
                 .get("set_column_tags")
+                .or_else(|| val.get("tags"))
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
             Some(components::ColumnTagsLoader::new_component_type_erased(
@@ -91,9 +92,10 @@ fn component_from_recorded(
         }
         // {"partition_by": [str]}
         // TYPE_NAME is `partitioned_by`, but Core records it as `partition_by`
-        "partition_by" => {
+        "partition_by" | components::partition_by::TYPE_NAME => {
             let partition_by: Vec<String> = val
                 .get("partition_by")
+                .or_else(|| val.get("partitioned_by"))
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
             Some(components::PartitionByLoader::new_component_type_erased(
@@ -172,16 +174,18 @@ fn component_from_recorded(
     }
 }
 
-/// Reconstruct a `RelationConfig` from a recorded `get_relation_config` payload
-/// (`{"config": {<component>: {...}}}`) for the given relation type.
+/// Reconstruct a `RelationConfig` from a recorded `get_relation_config` payload.
+///
+/// Conformance replay wraps components in `{"config": {...}}`, while Time Machine
+/// recordings store the component map directly.
 pub(crate) fn relation_config_from_recorded(
     adapter_type: AdapterType,
     relation_type: RelationType,
     recorded: &serde_json::Value,
 ) -> AdapterResult<RelationConfig> {
-    let components: Vec<Box<dyn ComponentConfig>> = recorded
-        .get("config")
-        .and_then(|c| c.as_object())
+    let recorded_components = recorded.get("config").unwrap_or(recorded);
+    let components: Vec<Box<dyn ComponentConfig>> = recorded_components
+        .as_object()
         .into_iter()
         .flatten()
         .filter_map(|(name, val)| component_from_recorded(name, val))

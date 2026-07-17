@@ -5,9 +5,9 @@ use std::sync::Arc;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::TableFormat;
 
-use crate::relation::{RelationObject, do_create_relation};
+use crate::relation::{RelationConfig, RelationObject, do_create_relation};
 
-use super::serde::ReplayContext;
+use super::serde::ReplayCallContext;
 use super::serializable::{JsonExtractor, TimeMachineSerializable};
 
 /// Defensively strip `__type__` field before passing to serde deserializer.
@@ -45,7 +45,7 @@ impl TimeMachineSerializable for dbt_agate::AgateTable {
 
     fn from_time_machine_json(
         json: &serde_json::Value,
-        _ctx: &ReplayContext,
+        _ctx: &ReplayCallContext,
     ) -> Option<minijinja::Value> {
         let ext = JsonExtractor::new(json)?;
         if ext.opt_str("__format__")? != "arrow_ipc_base64" {
@@ -119,7 +119,7 @@ impl TimeMachineSerializable for crate::response::AdapterResponse {
 
     fn from_time_machine_json(
         json: &serde_json::Value,
-        _ctx: &ReplayContext,
+        _ctx: &ReplayCallContext,
     ) -> Option<minijinja::Value> {
         let response: crate::response::AdapterResponse =
             serde_json::from_value(strip_type_field(json)).ok()?;
@@ -154,7 +154,7 @@ impl TimeMachineSerializable for RelationObject {
 
     fn from_time_machine_json(
         json: &serde_json::Value,
-        ctx: &ReplayContext,
+        ctx: &ReplayCallContext,
     ) -> Option<minijinja::Value> {
         use dbt_adapter_core::AdapterType;
         use dbt_schemas::schemas::common::ResolvedQuoting;
@@ -168,7 +168,7 @@ impl TimeMachineSerializable for RelationObject {
         let adapter_type = ext
             .opt_str("adapter_type")
             .and_then(|s| s.parse::<AdapterType>().ok())
-            .unwrap_or(ctx.adapter_type);
+            .unwrap_or_else(|| ctx.replay_context().adapter_type);
 
         // Get quote_policy from serialized data, falling back to adapter-specific defaults.
         let default_quoting = match adapter_type {
@@ -235,14 +235,14 @@ impl TimeMachineSerializable for crate::catalog_relation::CatalogRelation {
 
     fn from_time_machine_json(
         json: &serde_json::Value,
-        ctx: &ReplayContext,
+        ctx: &ReplayCallContext,
     ) -> Option<minijinja::Value> {
         let ext = JsonExtractor::new(json)?;
 
         let adapter_type = ext
             .opt_str("adapter_type")
             .and_then(|s| s.parse().ok())
-            .unwrap_or(ctx.adapter_type);
+            .unwrap_or_else(|| ctx.replay_context().adapter_type);
 
         let adapter_properties = ext
             .opt_object("adapter_properties")
@@ -289,39 +289,108 @@ impl TimeMachineSerializable for crate::column::Column {
             "char_size": self.char_size(),
             "numeric_precision": self.numeric_precision(),
             "numeric_scale": self.numeric_scale(),
+            "comment": self.comment(),
         })
     }
 
     fn from_time_machine_json(
         json: &serde_json::Value,
-        ctx: &ReplayContext,
+        ctx: &ReplayCallContext,
     ) -> Option<minijinja::Value> {
         let ext = JsonExtractor::new(json)?;
+        let comment = ext.opt_str("comment");
         let column = crate::column::Column::new(
-            ctx.adapter_type,
+            ctx.replay_context().adapter_type,
             ext.opt_str("name")?,
             ext.str_or("dtype", ""),
             ext.opt_u32("char_size"),
             ext.opt_u64("numeric_precision"),
             ext.opt_u64("numeric_scale"),
-        );
+        )
+        .with_comment(comment);
         Some(minijinja::Value::from_object(column))
+    }
+}
+
+impl TimeMachineSerializable for RelationConfig {
+    const TYPE_ID: &'static str = "RelationConfig";
+
+    fn to_time_machine_json(&self) -> serde_json::Value {
+        let components = self
+            .components()
+            .filter_map(|(name, component)| {
+                serde_json::to_value(component.to_jinja())
+                    .ok()
+                    .map(|value| ((*name).to_string(), value))
+            })
+            .collect();
+        serde_json::Value::Object(components)
+    }
+
+    fn from_time_machine_json(
+        json: &serde_json::Value,
+        ctx: &ReplayCallContext,
+    ) -> Option<minijinja::Value> {
+        match ctx.replay_context().adapter_type {
+            dbt_adapter_core::AdapterType::Databricks => {
+                let relation_type = ctx.relation_type()?;
+                let config = crate::relation::databricks::config::relation_types::relation_config_from_recorded(
+                    ctx.replay_context().adapter_type,
+                    relation_type,
+                    json,
+                )
+                .ok()?;
+                Some(minijinja::Value::from_object(config))
+            }
+            // TODO: Add typed reconstruction as adapter-specific recorded formats are supported.
+            _ => None,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::relation::RelationObject;
+    use crate::relation::{RelationConfig, RelationObject};
+    use crate::time_machine::serde::{ReplayContext, json_to_value_with_context};
+    use crate::time_machine::serializable::serialize_object;
 
     use super::*;
     use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::common::ResolvedQuoting;
 
-    fn ctx() -> ReplayContext {
+    fn ctx() -> ReplayCallContext {
         ReplayContext {
             adapter_type: AdapterType::Snowflake,
             quoting: ResolvedQuoting::default(),
         }
+        .into()
+    }
+
+    fn databricks_ctx(relation_type: RelationType) -> ReplayCallContext {
+        let ctx: ReplayCallContext = ReplayContext {
+            adapter_type: AdapterType::Databricks,
+            quoting: ResolvedQuoting::default(),
+        }
+        .into();
+        ctx.with_relation_type(Some(relation_type))
+    }
+
+    fn relation_config_payload() -> serde_json::Value {
+        serde_json::json!({
+            "column_comments": {
+                "comments": {"event_id": "A UUID for this event."},
+                "persist": true
+            },
+            "column_tags": {"tags": {"event_id": {"sensitivity": "internal"}}},
+            "comment": {"comment": "An event sent when a purchase occurs.", "persist": true},
+            "tags": {
+                "set_tags": {
+                    "asset_owner": "Warehouse Analytics",
+                    "asset_state": "ACTIVE"
+                }
+            },
+            "tblproperties": {"tblproperties": {"delta.parquet.compression.codec": "zstd"}}
+        })
     }
 
     #[test]
@@ -334,6 +403,89 @@ mod tests {
             "CatalogRelation"
         );
         assert_eq!(crate::column::Column::TYPE_ID, "Column");
+        assert_eq!(RelationConfig::TYPE_ID, "RelationConfig");
+    }
+
+    #[test]
+    fn test_relation_config_roundtrip() {
+        let cases = [
+            (RelationType::Table, relation_config_payload()),
+            (
+                RelationType::View,
+                serde_json::json!({
+                    "column_tags": {"tags": {"id": {"sensitivity": "internal"}}}
+                }),
+            ),
+            (
+                RelationType::MaterializedView,
+                serde_json::json!({
+                    "partitioned_by": {"partition_by": ["event_date"]}
+                }),
+            ),
+            (
+                RelationType::StreamingTable,
+                serde_json::json!({
+                    "comment": {"comment": "streaming events", "persist": true},
+                    "partitioned_by": {"partition_by": ["event_date"]}
+                }),
+            ),
+        ];
+
+        for (relation_type, payload) in cases {
+            let ctx = databricks_ctx(relation_type);
+            let original = RelationConfig::from_time_machine_json(&payload, &ctx)
+                .expect("RelationConfig should deserialize");
+            let recorded = serialize_object(&original).expect("RelationConfig should serialize");
+            let restored = json_to_value_with_context(&recorded, &ctx);
+            assert_eq!(
+                serialize_object(&restored),
+                Some(recorded),
+                "RelationConfig should roundtrip for {relation_type:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_relation_config_non_databricks_context_falls_back_to_map() {
+        let payload = serde_json::json!({
+            "__type__": "RelationConfig",
+            "tags": {"set_tags": {"owner": "analytics"}}
+        });
+        let replay_ctx = ReplayContext {
+            adapter_type: AdapterType::Snowflake,
+            quoting: ResolvedQuoting::default(),
+        };
+        let ctx: ReplayCallContext = replay_ctx.into();
+        let ctx = ctx.with_relation_type(Some(RelationType::Table));
+
+        assert!(RelationConfig::from_time_machine_json(&payload, &ctx).is_none());
+        let value = json_to_value_with_context(&payload, &ctx);
+        assert!(value.downcast_object::<RelationConfig>().is_none());
+        assert_eq!(
+            value
+                .get_attr("tags")
+                .unwrap()
+                .get_attr("set_tags")
+                .unwrap()
+                .get_attr("owner")
+                .unwrap()
+                .as_str(),
+            Some("analytics")
+        );
+    }
+
+    #[test]
+    fn test_relation_config_requires_supported_relation_type_context() {
+        let payload = relation_config_payload();
+        let ctx: ReplayCallContext = ReplayContext {
+            adapter_type: AdapterType::Databricks,
+            quoting: ResolvedQuoting::default(),
+        }
+        .into();
+        assert!(RelationConfig::from_time_machine_json(&payload, &ctx).is_none());
+
+        let ctx = ctx.with_relation_type(Some(RelationType::CTE));
+        assert!(RelationConfig::from_time_machine_json(&payload, &ctx).is_none());
     }
 
     #[test]
@@ -398,16 +550,19 @@ mod tests {
             Some(255),
             None,
             None,
-        );
+        )
+        .with_comment(Some("A useful column".to_string()));
 
         let json = original.to_time_machine_json();
         assert_eq!(json["name"], "my_column");
         assert_eq!(json["dtype"], "VARCHAR");
+        assert_eq!(json["comment"], "A useful column");
 
         let value = crate::column::Column::from_time_machine_json(&json, &ctx()).unwrap();
         let column = value.downcast_object::<crate::column::Column>().unwrap();
         assert_eq!(column.name(), original.name());
         assert_eq!(column.dtype(), original.dtype());
+        assert_eq!(column.comment(), original.comment());
     }
 
     #[test]
@@ -442,14 +597,15 @@ mod tests {
         assert_eq!(json["adapter_type"], "snowflake");
 
         // Deserialize with a DIFFERENT context quoting - should use serialized quoting
-        let different_ctx = ReplayContext {
+        let different_ctx: ReplayCallContext = ReplayContext {
             adapter_type: AdapterType::Snowflake,
             quoting: ResolvedQuoting {
                 database: true, // Different quoting
                 schema: true,
                 identifier: false,
             },
-        };
+        }
+        .into();
 
         let value = RelationObject::from_time_machine_json(&json, &different_ctx).unwrap();
         let restored = value.downcast_object::<RelationObject>().unwrap();
@@ -491,10 +647,11 @@ mod tests {
         let json = original.to_time_machine_json();
         assert_eq!(json["is_delta"], true, "is_delta should be serialized");
 
-        let databricks_ctx = ReplayContext {
+        let databricks_ctx: ReplayCallContext = ReplayContext {
             adapter_type: AdapterType::Databricks,
             quoting: custom_quoting,
-        };
+        }
+        .into();
 
         let value = RelationObject::from_time_machine_json(&json, &databricks_ctx).unwrap();
         let restored = value.downcast_object::<RelationObject>().unwrap();
@@ -516,10 +673,11 @@ mod tests {
             "is_table": true,
         });
 
-        let databricks_ctx = ReplayContext {
+        let databricks_ctx: ReplayCallContext = ReplayContext {
             adapter_type: AdapterType::Databricks,
             quoting: ResolvedQuoting::default(),
-        };
+        }
+        .into();
 
         let value =
             RelationObject::from_time_machine_json(&old_format_json, &databricks_ctx).unwrap();
@@ -541,14 +699,15 @@ mod tests {
             "is_table": true,
         });
 
-        let ctx = ReplayContext {
+        let ctx: ReplayCallContext = ReplayContext {
             adapter_type: AdapterType::Postgres,
             quoting: ResolvedQuoting {
                 database: false, // Context has different quoting
                 schema: false,
                 identifier: false,
             },
-        };
+        }
+        .into();
 
         let value = RelationObject::from_time_machine_json(&old_format_json, &ctx).unwrap();
         let restored = value.downcast_object::<RelationObject>().unwrap();
