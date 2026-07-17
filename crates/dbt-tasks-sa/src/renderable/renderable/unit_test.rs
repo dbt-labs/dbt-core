@@ -12,6 +12,7 @@ use std::sync::Arc;
 use dbt_adapter::Column;
 use dbt_adapter::errors::into_fs_error;
 use dbt_adapter::formatter::SqlLiteralFormatter;
+use dbt_adapter::metadata::BIGQUERY_PSEUDOCOLUMNS;
 use dbt_adapter::relation::{RelationObject, create_relation_from_node};
 use dbt_adapter::sql_types::DefaultTypeOps;
 use dbt_adapter::sql_types::{TypeOps, make_arrow_field};
@@ -43,7 +44,7 @@ use dbt_telemetry::{ExecutionPhase as TelemetryExecutionPhase, NodeType};
 use crate::renderable::unit_test_typing::{BigqueryTyping, SnowflakeTyping};
 use dbt_tasks_core::task::TaskResult;
 
-use arrow_schema::{DataType, Schema, SchemaRef};
+use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use csv::ReaderBuilder;
 use itertools::Itertools;
 use minijinja::listener::RenderingEventListener;
@@ -775,6 +776,7 @@ fn extract_expect_values<'a>(
                 type_ops,
                 None,
                 &unit_test.__unit_test_attr__.model,
+                false,
             )?,
             row_column_names_or_default(rows, column_names, expect_schema),
         )),
@@ -802,6 +804,7 @@ fn extract_expect_values<'a>(
                     type_ops,
                     None,
                     &unit_test.__unit_test_attr__.model,
+                    false,
                 )?,
                 row_column_names_or_default(&rows, column_names, expect_schema),
             ))
@@ -835,6 +838,7 @@ fn extract_expect_values<'a>(
                     type_ops,
                     None,
                     &unit_test.__unit_test_attr__.model,
+                    false,
                 )?,
                 row_column_names_or_default(&rows, column_names, expect_schema),
             ))
@@ -1108,6 +1112,7 @@ fn render_unit_test(
                         type_ops,
                         None,
                         given.input.as_str(),
+                        true,
                     )?
                 } else {
                     return Err(fs_err!(
@@ -1143,6 +1148,7 @@ fn render_unit_test(
                         type_ops,
                         None,
                         given.input.as_str(),
+                        true,
                     )?
                 } else if let Some(fixture) = &given.fixture {
                     let rows = get_fixture_rows(fixture, &given.format, ctx)?;
@@ -1153,6 +1159,7 @@ fn render_unit_test(
                         type_ops,
                         None,
                         given.input.as_str(),
+                        true,
                     )?
                 } else {
                     return Err(fs_err!(
@@ -1695,6 +1702,85 @@ fn columns_to_formatted_types<'a>(
         .collect::<FsResult<Vec<_>>>()
 }
 
+/// Queryable pseudocolumns per adapter that are not reported by the information
+/// schema, and therefore never appear in a relation's fetched schema.
+///
+/// Pseudocolumns are system-generated columns that can be queried but are absent
+/// from `INFORMATION_SCHEMA` (e.g. BigQuery's `_FILE_NAME` on external tables).
+/// The BigQuery set is sourced from [`dbt_adapter::metadata::BIGQUERY_PSEUDOCOLUMNS`]
+/// so there is a single source of truth. Names are compared case-insensitively.
+fn known_pseudocolumns(adapter_type: AdapterType) -> &'static [&'static str] {
+    match adapter_type {
+        AdapterType::Bigquery => &BIGQUERY_PSEUDOCOLUMNS,
+        _ => &[],
+    }
+}
+
+/// Return `ref_schema` extended with any recognized pseudocolumns (see
+/// [`known_pseudocolumns`]) that a fixture row references but that are missing
+/// from the fetched schema. This lets unit tests provide values for queryable
+/// columns like BigQuery's `_FILE_NAME` without raising a spurious "invalid
+/// column name" warning. Pseudocolumns are only appended when actually
+/// referenced, so fixtures that don't use them produce identical SQL.
+///
+/// This is intended for `given`/upstream input relations only — see the
+/// `allow_pseudocolumns` argument of [`create_values`].
+///
+/// Note: the dbt Core v1 (Python `dbt-adapters`) implementation only exposes
+/// `_FILE_NAME` for tables it has verified are `EXTERNAL`. Here we accept the
+/// pseudocolumn purely on the strength of the fixture referencing it, because
+/// Fusion's schema cache carries columns but not table type. A fixture that
+/// references `_FILE_NAME` against a non-external table is therefore allowed
+/// here and only fails later at the warehouse (with a raw SQL error rather
+/// than dbt's friendlier column-name message).
+fn append_referenced_pseudocolumns(
+    ref_schema: &SchemaRef,
+    rows: &[BTreeMap<String, YmlValue>],
+    adapter_type: AdapterType,
+) -> SchemaRef {
+    let pseudocolumns = known_pseudocolumns(adapter_type);
+    if pseudocolumns.is_empty() {
+        return ref_schema.clone();
+    }
+
+    let existing: HashSet<String> = ref_schema
+        .fields()
+        .iter()
+        .map(|f| f.name().to_ascii_lowercase())
+        .collect();
+
+    let mut extra_fields = Vec::new();
+    for pseudocolumn in pseudocolumns {
+        let pseudocolumn_lower = pseudocolumn.to_ascii_lowercase();
+        if existing.contains(&pseudocolumn_lower) {
+            continue;
+        }
+        let referenced = rows.iter().any(|row| {
+            row.keys()
+                .any(|k| k.to_ascii_lowercase() == pseudocolumn_lower)
+        });
+        if referenced {
+            // Pseudocolumns are typed as strings here; the fixture supplies a
+            // literal that `create_values` casts to this type. This matches the
+            // string-valued pseudocolumns (`_FILE_NAME`, `_TABLE_SUFFIX`, …); the
+            // few timestamp/date ones would need a richer mapping if used.
+            extra_fields.push(Field::new(*pseudocolumn, DataType::Utf8, true));
+        }
+    }
+
+    if extra_fields.is_empty() {
+        return ref_schema.clone();
+    }
+
+    let mut fields: Vec<Field> = ref_schema
+        .fields()
+        .iter()
+        .map(|f| f.as_ref().clone())
+        .collect();
+    fields.extend(extra_fields);
+    Arc::new(Schema::new(fields))
+}
+
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/60fc903f705f447a7b58d0df6b33d7be7cd00690/dbt-adapters/src/dbt/include/global_project/macros/unit_test_sql/get_fixture_sql.sql#L51
 fn create_values(
     ref_schema: &SchemaRef,
@@ -1703,7 +1789,19 @@ fn create_values(
     type_ops: &dyn TypeOps,
     named_column: Option<(String, YmlValue)>,
     relation_name: &str,
+    allow_pseudocolumns: bool,
 ) -> FsResult<String> {
+    // Accept queryable pseudocolumns (e.g. BigQuery's `_FILE_NAME`) that a
+    // fixture references but the information schema does not report. This only
+    // applies to `given`/input relations; `expect` fixtures describe the
+    // model's own output and must never gain synthetic columns.
+    let augmented_schema = if allow_pseudocolumns {
+        append_referenced_pseudocolumns(ref_schema, rows, adapter_type)
+    } else {
+        ref_schema.clone()
+    };
+    let ref_schema = &augmented_schema;
+
     let columns = columns_to_formatted_types(ref_schema, type_ops)?;
 
     let mut enriched_rows = vec![];
@@ -2810,5 +2908,93 @@ mod tests {
             "CAST('hello' AS string) AS name",
             "plain string values must remain quoted"
         );
+    }
+
+    fn row(pairs: &[(&str, i64)]) -> BTreeMap<String, YmlValue> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), YmlValue::number((*v).into())))
+            .collect()
+    }
+
+    /// A fixture row with a numeric `id` and a string-valued `_FILE_NAME`
+    /// pseudocolumn (`file_name_key` lets tests vary the casing), mirroring how
+    /// a real BigQuery external-table fixture supplies `_FILE_NAME`.
+    fn row_with_file_name(
+        id: i64,
+        file_name_key: &str,
+        file_name: &str,
+    ) -> BTreeMap<String, YmlValue> {
+        BTreeMap::from([
+            ("id".to_string(), YmlValue::number(id.into())),
+            (
+                file_name_key.to_string(),
+                YmlValue::string(file_name.to_string()),
+            ),
+        ])
+    }
+
+    fn schema_id_name() -> SchemaRef {
+        Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, true),
+        ]))
+    }
+
+    #[test]
+    fn test_pseudocolumn_appended_when_referenced_bigquery() {
+        let schema = schema_id_name();
+        let rows = vec![row_with_file_name(1, "_FILE_NAME", "gs://bucket/file1.csv")];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        let names: Vec<&str> = result.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["id", "name", "_FILE_NAME"]);
+        let file_name = result.field_with_name("_FILE_NAME").unwrap();
+        assert_eq!(file_name.data_type(), &DataType::Utf8);
+    }
+
+    #[test]
+    fn test_pseudocolumn_matching_is_case_insensitive() {
+        let schema = schema_id_name();
+        let rows = vec![row_with_file_name(1, "_file_name", "gs://bucket/file1.csv")];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        // The canonical pseudocolumn name is appended regardless of the fixture casing.
+        assert!(result.field_with_name("_FILE_NAME").is_ok());
+    }
+
+    #[test]
+    fn test_pseudocolumn_not_appended_when_unreferenced() {
+        let schema = schema_id_name();
+        let rows = vec![row(&[("id", 1), ("name", 2)])];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        let names: Vec<&str> = result.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["id", "name"]);
+    }
+
+    #[test]
+    fn test_pseudocolumn_not_appended_for_other_adapters() {
+        let schema = schema_id_name();
+        let rows = vec![row_with_file_name(1, "_FILE_NAME", "gs://bucket/file1.csv")];
+        // Only BigQuery exposes pseudocolumns today; other adapters leave the fixture
+        // to raise the usual "invalid column" warning.
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Postgres);
+        let names: Vec<&str> = result.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["id", "name"]);
+    }
+
+    #[test]
+    fn test_pseudocolumn_not_duplicated_when_already_present() {
+        // A relation that already reports `_FILE_NAME` as a native column must not gain a duplicate.
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("_FILE_NAME", DataType::Utf8, true),
+        ]));
+        let rows = vec![row_with_file_name(1, "_FILE_NAME", "gs://bucket/file1.csv")];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        let count = result
+            .fields()
+            .iter()
+            .filter(|f| f.name().eq_ignore_ascii_case("_FILE_NAME"))
+            .count();
+        assert_eq!(count, 1);
     }
 }

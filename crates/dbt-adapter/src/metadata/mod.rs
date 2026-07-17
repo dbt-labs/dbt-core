@@ -35,6 +35,10 @@ pub(crate) mod view_definition;
 pub use metadata_adapter::*;
 pub use view_definition::ViewDefinition;
 
+/// The canonical list of BigQuery pseudocolumns (queryable columns absent from
+/// `INFORMATION_SCHEMA`). Re-exported so other crates can share the source of truth.
+pub use bigquery::BIGQUERY_PSEUDOCOLUMNS;
+
 /// Implementation of the `get_relation` function for all adapters.
 pub(crate) mod get_relation;
 pub(crate) mod list_objects;

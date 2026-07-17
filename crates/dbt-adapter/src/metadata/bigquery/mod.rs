@@ -35,7 +35,7 @@ pub mod nested_projection;
 // See: https://docs.cloud.google.com/bigquery/docs/information-schema-intro#region_qualifier
 pub(crate) const BIGQUERY_REGION_PREFIX: &str = "region-";
 
-pub(crate) const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
+pub const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
     "_PARTITIONTIME",
     "_PARTITIONDATE",
     "_FILE_NAME",
