@@ -79,7 +79,6 @@ async fn load_phase(
         .map(|x| x.dbt_state.clone())
     {
         load_args.prev_dbt_state = Some(prev_dbt_state);
-        load_args.install_deps = false;
     }
 
     // Load dbt project
@@ -334,7 +333,7 @@ async fn compute_file_changeset(
                     let package_root = &current_dbt_state.packages[0].package_root_path;
                     let relative_path = current
                         .0
-                        .get_relative_path(&DbtPath::from(package_root))
+                        .get_relative_path(package_root)
                         .map(|p| p.to_str().unwrap_or_default().to_string())
                         .unwrap_or_else(|| current.0.to_str().unwrap_or_default().to_string());
                     changed.push(relative_path);
@@ -387,6 +386,13 @@ async fn load_cache(
     token: &CancellationToken,
 ) -> FsResult<Option<CacheState>> {
     if let Some((prev_loaded_project, prev_resolved_state)) = prev_resolved_state {
+        if !io.out_dir.exists() {
+            return Err(fs_err!(
+                ErrorCode::CacheError,
+                "Target directory does not exist",
+            ));
+        }
+
         let prev_dbt_state = prev_loaded_project.dbt_state();
         if let Some(cache_state) = try_load_cache_state_and_changeset_by_last_write(
             io,

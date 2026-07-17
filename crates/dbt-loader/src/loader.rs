@@ -311,10 +311,25 @@ pub async fn load(
         dbt_state.catalogs.clone(),
     )?;
 
+    // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
+    let (packages_install_path, internal_packages_install_path) = get_packages_install_path(
+        &arg.io.in_dir,
+        &arg.packages_install_path,
+        &arg.internal_packages_install_path,
+        &simplified_dbt_project,
+    );
+
     let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
     let arg_ref = &arg;
     if let Some(prev_dbt_state) = arg.prev_dbt_state.clone() {
         let prev_root_package = prev_dbt_state.root_package();
+
+        if !prev_root_package.dependencies.is_empty() && !packages_install_path.exists() {
+            return Err(fs_err!(
+                ErrorCode::CacheError,
+                "Packages directory does not exist",
+            ));
+        }
 
         // --inline warm path: skip the full WalkDir (load_inner) and reconstruct the
         // root package file lists directly from prev_root_package.all_paths.
@@ -434,14 +449,6 @@ pub async fn load(
 
         return Ok(dbt_state);
     }
-
-    // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
-    let (packages_install_path, internal_packages_install_path) = get_packages_install_path(
-        &arg.io.in_dir,
-        &arg.packages_install_path,
-        &arg.internal_packages_install_path,
-        &simplified_dbt_project,
-    );
 
     if arg.internal_package_mode == InternalPackageMode::ForceWrite {
         persist_internal_packages(

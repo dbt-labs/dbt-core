@@ -55,6 +55,10 @@ pathdiff = { workspace = true }
 dbt-tui-progress = { workspace = true }
 rust-embed = { workspace = true }
 
+dirs = { workspace = true }
+
+sha2 = { workspace = true }
+
 # Tracing
 proto-rust = { workspace = true }
 tracing = { workspace = true }

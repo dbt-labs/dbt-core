@@ -18,13 +18,14 @@ pub mod utils;
 
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_PACKAGES_LOCK_FILE, DBT_PROJECT_YML};
-use dbt_common::create_info_span;
 use dbt_common::io_args::{FsCommand, IoArgs, ReplayMode, TimeMachineMode};
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_info_progress_message};
 use dbt_common::tracing::span_info::{
     SpanStatusRecorder as _, record_span_status, record_span_status_with_attrs,
 };
 use dbt_common::{ErrorCode, FsResult, err, stdfs};
+use dbt_common::{create_info_span, fs_err, lease};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
 use dbt_telemetry::{DepsAllPackagesInstalled, GenericOpExecuted};
@@ -55,6 +56,17 @@ pub async fn get_or_install_packages(
     token: &CancellationToken,
     use_v2_compatible_package_downloads: bool,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
+    let Some(packages_relative_dir) =
+        DbtPath::from(packages_install_path).get_relative_path(&io.in_dir)
+    else {
+        return Err(fs_err!(
+            ErrorCode::InvalidPath,
+            "Unable to get packages relative path for: {}",
+            packages_install_path.display(),
+        ));
+    };
+    let _lease_guard = lease::acquire_lease(&io.in_dir, &packages_relative_dir).await?;
+
     // In Time Machine replay mode, skip all package fetching/installation
     // We should only load the existing package-lock.yml from disk
     let is_time_machine_replay = matches!(

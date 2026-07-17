@@ -179,6 +179,11 @@ impl DbtPath {
         Self(PathBuf::new())
     }
 
+    /// See [std::path::absolute] for documentation.
+    pub fn absolute<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        Ok(Self::normalize(&std::path::absolute(path)?))
+    }
+
     /// See [PathBuf::as_path] for documentation.
     pub fn as_path(&self) -> &Path {
         self.0.as_path()
@@ -235,10 +240,10 @@ impl DbtPath {
     }
 
     /// Case-sensitivity based on the OS.
-    pub fn get_relative_path(&self, base_path: &DbtPath) -> Option<Self> {
+    pub fn get_relative_path<P: AsRef<Path>>(&self, base_path: P) -> Option<Self> {
         Some(Self::normalize(&diff_paths_os_ascii_case(
             &self.0,
-            &base_path.0,
+            &Self::normalize(base_path.as_ref()).0,
         )?))
     }
 

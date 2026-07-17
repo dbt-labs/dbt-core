@@ -3,15 +3,19 @@ use crate::{
     dbt_project_yml_loader::{collect_protected_paths, load_project_yml},
     load_for_clean,
 };
-use std::{collections::BTreeMap, path::Path, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::Path,
+};
 
 use dbt_common::{
     ErrorCode, FsResult,
     cancellation::CancellationToken,
-    constants::DBT_PROJECT_YML,
+    constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
     err, fs_err,
     io_args::{EvalArgs, EvalArgsBuilder, IoArgs},
-    lease::{self, Lease},
+    lease,
+    path::DbtPath,
     stdfs,
     tracing::{
         dbt_emit::{
@@ -24,6 +28,7 @@ use dbt_common::{
 use dbt_jinja_utils::{
     invocation_args::InvocationArgs, phases::load::init::initialize_load_jinja_environment,
 };
+use dbt_schemas::schemas::project::DbtProject;
 use dbt_telemetry::{ExecutionPhase, PhaseExecuted, ProgressMessage};
 
 #[tracing::instrument(
@@ -62,16 +67,31 @@ pub async fn execute_clean_command(
     let (dbt_project, _) =
         load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())?;
 
-    let protected_paths = collect_protected_paths(&dbt_project)
+    clean_project(&arg, files, &dbt_project, /* clean_targets */ true).await?;
+
+    error_count_checkpoint()
+}
+
+pub async fn clean_project(
+    arg: &EvalArgs,
+    files: &[String],
+    dbt_project: &DbtProject,
+    clean_targets: bool,
+) -> FsResult<()> {
+    let target_guard = lease::acquire_lease(&arg.io.in_dir, Path::new(DBT_TARGET_DIR_NAME)).await?;
+
+    let protected_paths = collect_protected_paths(dbt_project)
         .iter()
-        .map(|p| std::path::absolute(arg.io.in_dir.join(p)))
+        .map(|p| DbtPath::absolute(arg.io.in_dir.join(p)))
         .collect::<Result<Vec<_>, _>>()?;
 
+    let default_relative_target_dir = DbtPath::from(DBT_TARGET_DIR_NAME);
     let mut paths_to_delete = dbt_project
         .clean_targets
         .as_ref()
         .unwrap()
         .iter()
+        .filter(|_| clean_targets)
         .chain(files.iter())
         .map(|path| {
             let path = Path::new(path);
@@ -82,12 +102,12 @@ pub async fn execute_clean_command(
                     path.display()
                 )
             } else {
-                std::path::absolute(arg.io.in_dir.join(path)).map_err(Into::into)
+                DbtPath::absolute(arg.io.in_dir.join(path)).map_err(Into::into)
             }
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<HashSet<_>, _>>()?;
 
-    paths_to_delete.push(arg.io.out_dir.clone());
+    paths_to_delete.insert(DbtPath::from(&arg.io.out_dir));
 
     let all_safe = paths_to_delete.iter().all(|path_to_delete| {
         // The clean command does not delete anything outside of the project directory
@@ -99,34 +119,72 @@ pub async fn execute_clean_command(
     });
 
     if all_safe {
+        let default_target_dir = DbtPath::from(&arg.io.in_dir).join(&default_relative_target_dir);
+
+        let mut lease_guards = vec![];
+
         for path in &paths_to_delete {
             if path.exists() {
-                if let Some(lease_dir_name) = lease::dir_name_for_file_lease(&arg.io.in_dir, path) {
-                    let mut lease = {
-                        let target_lease_path =
-                            lease::lease_file_path(&arg.io.in_dir, &lease_dir_name);
-                        Lease::new(target_lease_path, lease_dir_name, Duration::ZERO)
+                if path.eq(&default_target_dir) {
+                    // We have already acquired the lease for this directory at this point.
+                    lease_guards.push((
+                        path,
+                        default_relative_target_dir.display().to_string(),
+                        None,
+                    ));
+                } else {
+                    let Some(relative_path) = path.get_relative_path(&arg.io.in_dir) else {
+                        return Err(fs_err!(
+                            ErrorCode::InvalidPath,
+                            "Unable to get relative path for: {}",
+                            path.display(),
+                        ));
                     };
-                    lease.acquire(Duration::from_millis(1000)).await?;
+                    let lease_guard = lease::acquire_lease(&arg.io.in_dir, &relative_path).await?;
+                    lease_guards.push((
+                        path,
+                        relative_path.display().to_string(),
+                        Some(lease_guard),
+                    ));
                 }
-
-                emit_info_progress_message(
-                    ProgressMessage::new_from_action_and_target(
-                        "Removing".to_string(),
-                        arg.io.format_display_path(path),
-                    ),
-                    arg.io.status_reporter.as_ref(),
-                );
-                stdfs::remove_dir_all(path)?;
             } else {
                 emit_trace_log_message(|| {
                     format!("The target directory does not exist: {}", path.display())
                 });
             }
         }
+
+        // Sort lease guards by the display path we show in the terminal
+        // for deterministic output.
+        let lease_guards = {
+            let mut lease_guards = lease_guards.into_iter().collect::<Vec<_>>();
+            lease_guards.sort_by(|a, b| a.1.cmp(&b.1));
+            lease_guards
+        };
+
+        for (path, display_path_string, _) in &lease_guards {
+            emit_info_progress_message(
+                ProgressMessage::new_from_action_and_target(
+                    "Removing".to_string(),
+                    display_path_string.to_string(),
+                ),
+                arg.io.status_reporter.as_ref(),
+            );
+            stdfs::remove_dir_all(path)?;
+        }
+
+        for (_, _, lease_guard) in lease_guards {
+            if let Some(lease_guard) = lease_guard {
+                // Explicitly release to predictably wait for the lease internally to drop.
+                lease_guard.release().await;
+            }
+        }
     }
 
-    error_count_checkpoint()
+    // Explicitly release to predictably wait for the lease internally to drop.
+    target_guard.release().await;
+
+    Ok(())
 }
 
 fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(io: &IoArgs, to: P, from: Q) -> bool {
