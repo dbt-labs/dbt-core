@@ -75,3 +75,6 @@ Everyone interacting in the dbt project's codebases, issue trackers, chat rooms,
 ## License
 
 dbt Core is licensed under the [Apache License 2.0](LICENSE).
+
+<!-- test change: no-op edit for a test PR -->
+
