@@ -32,6 +32,10 @@ pub struct MetadataQueryOptions {
     pub warehouse: Option<String>,
 }
 
+/// `(parent, child)` pair for the relation cache dependency graph.
+/// If a `parent` relation is `DROP ... CASCADE`, `child` would be dropped too.
+pub type ParentChildPair = (Arc<dyn BaseRelation>, Arc<dyn BaseRelation>);
+
 /// Adapter that supports metadata query.
 ///
 /// # Recording Pattern
@@ -516,6 +520,16 @@ pub trait MetadataAdapter: Send + Sync {
             args_fetch_view_definitions(relations.iter().map(|r| r.semantic_fqn())),
             self.fetch_view_definitions_inner(relations, token),
         )
+    }
+
+    /// Returns `(referenced, dependent)` edges for the relation-cache
+    /// dependency graph. Default: empty (no native pg_depend-style query).
+    fn fetch_relation_dependency_links_inner<'a>(
+        &'a self,
+        _db_schemas: &'a [CatalogAndSchema],
+        _token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ParentChildPair>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 }
 

@@ -269,19 +269,22 @@ mod redshift {
     #[test]
     fn no_existing_relation() {
         let h = run_no_existing(ADAPTER);
-        assert_executed_contains(h.mock(), "create or replace");
+        h.mock().observed_calls().assert_called("rename_relation");
+        assert_executed_contains(h.mock(), "create");
     }
 
     #[test]
     fn existing_view_swapped_via_rename() {
         let h = run_existing_view(ADAPTER);
-        assert_executed_contains(h.mock(), "create or replace");
+        h.mock().observed_calls().assert_called("rename_relation");
+        assert_executed_contains(h.mock(), "create");
     }
 
     #[test]
     fn existing_table_swapped_via_rename() {
         let h = run_existing_table(ADAPTER);
-        assert_executed_contains(h.mock(), "create or replace");
+        h.mock().observed_calls().assert_called("rename_relation");
+        assert_executed_contains(h.mock(), "create");
     }
 }
 

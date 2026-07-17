@@ -444,7 +444,7 @@ impl AdapterImpl {
         let _ = self
             .engine()
             .relation_cache()
-            .evict_relation(relation.as_ref());
+            .drop_relation_cascade(relation.as_ref());
         Ok(none_value())
     }
 
@@ -3707,6 +3707,31 @@ impl AdapterImpl {
                 );
                 Err(err)
             }
+        }
+    }
+
+    /// Per-adapter dependency-graph discovery for the relation cache. Adapters
+    /// without a native pg_depend-style query return an empty vec.
+    pub fn list_relation_dependency_links(
+        &self,
+        query_ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        db_schema: &CatalogAndSchema,
+        token: CancellationToken,
+    ) -> AdapterResult<Vec<metadata::ParentChildPair>> {
+        if self.mock_state().is_some() {
+            return Ok(Vec::new());
+        }
+        use crate::metadata::*;
+        match self.inner_adapter() {
+            Impl(Redshift, engine) => redshift::list_relation_dependencies(
+                engine.as_ref(),
+                query_ctx,
+                conn,
+                db_schema,
+                token,
+            ),
+            _ => Ok(Vec::new()),
         }
     }
 

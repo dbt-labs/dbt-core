@@ -28,6 +28,103 @@ use std::sync::Arc;
 
 use crate::metadata::list_objects::*;
 
+/// Inline reproduction of the `redshift__get_relations` macro
+/// (`dbt-loader/src/dbt_macro_assets/dbt-redshift/macros/relations.sql`).
+/// Inlined because the async hydration path in `dbt-precompile` has no Jinja
+/// `&State` to drive `execute_macro`.
+const REDSHIFT_GET_RELATIONS_SQL: &str = r#"
+with relation as (
+    select
+        pg_class.oid as relation_id,
+        pg_class.relname as relation_name,
+        pg_class.relnamespace as schema_id,
+        pg_namespace.nspname as schema_name
+    from pg_class
+    join pg_namespace
+      on pg_class.relnamespace = pg_namespace.oid
+    where pg_namespace.nspname != 'information_schema'
+      and pg_namespace.nspname not like 'pg\_%'
+),
+dependency as (
+    select distinct
+        coalesce(pg_rewrite.ev_class, pg_depend.objid) as dep_relation_id,
+        pg_depend.refobjid as ref_relation_id
+    from pg_depend
+    left join pg_rewrite
+      on pg_depend.objid = pg_rewrite.oid
+    where coalesce(pg_rewrite.ev_class, pg_depend.objid) != pg_depend.refobjid
+)
+select distinct
+    dep.schema_name as dependent_schema,
+    dep.relation_name as dependent_name,
+    ref.schema_name as referenced_schema,
+    ref.relation_name as referenced_name
+from dependency
+join relation ref
+    on dependency.ref_relation_id = ref.relation_id
+join relation dep
+    on dependency.dep_relation_id = dep.relation_id
+"#;
+
+fn parse_relation_dependencies(
+    batch: &RecordBatch,
+    catalog: &str,
+    schema_matches: impl Fn(&str) -> bool,
+    quoting: ResolvedQuoting,
+) -> AdapterResult<Vec<ParentChildPair>> {
+    if batch.num_rows() == 0 {
+        return Ok(Vec::new());
+    }
+    let dep_schemas = batch.column_values::<StringArray>("dependent_schema")?;
+    let dep_names = batch.column_values::<StringArray>("dependent_name")?;
+    let ref_schemas = batch.column_values::<StringArray>("referenced_schema")?;
+    let ref_names = batch.column_values::<StringArray>("referenced_name")?;
+
+    let mut links: Vec<ParentChildPair> = Vec::new();
+    for i in 0..batch.num_rows() {
+        let ref_schema = ref_schemas.value(i).to_string();
+        if !schema_matches(&ref_schema) {
+            continue;
+        }
+        links.push((
+            build_redshift_relation(
+                catalog.to_string(),
+                ref_schema,
+                ref_names.value(i).to_string(),
+                RelationType::View,
+                quoting,
+            )?,
+            build_redshift_relation(
+                catalog.to_string(),
+                dep_schemas.value(i).to_string(),
+                dep_names.value(i).to_string(),
+                RelationType::View,
+                quoting,
+            )?,
+        ));
+    }
+    Ok(links)
+}
+
+/// Per-schema variant for the cache-miss path. Scans pg_depend and filters
+/// to rows whose referenced schema matches `db_schema`.
+pub fn list_relation_dependencies(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<ParentChildPair>> {
+    let batch = engine.execute(None, conn, ctx, REDSHIFT_GET_RELATIONS_SQL, token)?;
+    let want = db_schema.resolved_schema.to_lowercase();
+    parse_relation_dependencies(
+        &batch,
+        &db_schema.resolved_catalog,
+        |schema| schema.to_lowercase() == want,
+        engine.quoting(),
+    )
+}
+
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/87e81a47baa11c312003377091a9efc0ab72d88e/dbt-redshift/src/dbt/include/redshift/macros/adapters.sql#L226
 pub fn list_relations(
     engine: &dyn AdapterEngine,
@@ -1446,6 +1543,71 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
+    }
+
+    /// Groups schemas by catalog and runs the pg_depend query once per catalog
+    /// (not per schema) — the SQL is unfiltered, so per-schema runs would
+    /// re-scan the same pg_catalog tables N times.
+    fn fetch_relation_dependency_links_inner<'a>(
+        &'a self,
+        db_schemas: &'a [CatalogAndSchema],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ParentChildPair>> {
+        use std::collections::{BTreeMap, BTreeSet};
+
+        let mut jobs: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for s in db_schemas {
+            jobs.entry(s.resolved_catalog.clone())
+                .or_default()
+                .insert(s.resolved_schema.to_lowercase());
+        }
+        let jobs: Vec<(String, BTreeSet<String>)> = jobs.into_iter().collect();
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          job: &(String, BTreeSet<String>)|
+              -> AdapterResult<Vec<ParentChildPair>> {
+            let (catalog, schemas) = job;
+            let ctx = QueryCtx::default().with_desc("redshift__get_relations");
+            let engine = adapter.engine();
+            let batch = engine.execute(
+                None,
+                conn,
+                &ctx,
+                REDSHIFT_GET_RELATIONS_SQL,
+                token_clone.clone(),
+            )?;
+            parse_relation_dependencies(
+                &batch,
+                catalog,
+                |schema| schemas.contains(&schema.to_lowercase()),
+                engine.quoting(),
+            )
+        };
+
+        let reduce_f = move |acc: &mut Vec<ParentChildPair>,
+                             _job: (String, BTreeSet<String>),
+                             res: AdapterResult<Vec<ParentChildPair>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            match res {
+                Ok(links) => acc.extend(links),
+                Err(e) => {
+                    // Best-effort: cascade just won't evict cross-relation
+                    // dependents until the next hydration.
+                    tracing::warn!("fetch_relation_dependency_links: pg_depend query failed: {e}");
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(jobs), token)
     }
 }
 

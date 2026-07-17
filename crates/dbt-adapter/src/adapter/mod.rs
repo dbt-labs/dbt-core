@@ -355,31 +355,42 @@ impl Adapter {
     }
 
     pub async fn hydrate_relation_cache(&self, db_schemas: &[CatalogAndSchema]) -> FsResult<()> {
-        let collected_relations = if let Some(metadata_adapter) = self.metadata_adapter() {
-            metadata_adapter
-                .list_relations_in_parallel(db_schemas, self.cancellation_token())
-                .await
-                .map_err(into_fs_error)
-                .map(|r| {
-                    r.into_iter()
-                        .filter_map(|(k, v)| {
-                            if let Ok(relations) = v {
-                                Some((k, relations))
-                            } else {
-                                // XXX: Warnings are not shown right now since this is purely for performance
-                                None
-                            }
-                        })
-                        .collect::<BTreeMap<CatalogAndSchema, Vec<Arc<dyn BaseRelation>>>>()
-                })?
-        } else {
-            // No metadata adapter available
-            Default::default()
+        let Some(metadata_adapter) = self.metadata_adapter() else {
+            return Ok(());
         };
+        let collected_relations = metadata_adapter
+            .list_relations_in_parallel(db_schemas, self.cancellation_token())
+            .await
+            .map_err(into_fs_error)
+            .map(|r| {
+                r.into_iter()
+                    .filter_map(|(k, v)| {
+                        if let Ok(relations) = v {
+                            Some((k, relations))
+                        } else {
+                            // XXX: Warnings are not shown right now since this is purely for performance
+                            None
+                        }
+                    })
+                    .collect::<BTreeMap<CatalogAndSchema, Vec<Arc<dyn BaseRelation>>>>()
+            })?;
 
-        self.engine()
-            .relation_cache()
-            .insert_many(collected_relations);
+        let cache = self.engine().relation_cache();
+        cache.insert_many(collected_relations);
+
+        // Pull cross-relation dependency edges so cascade-drop can evict
+        // dependents (e.g. Redshift view rename-swap → `drop ... cascade`).
+        // Adapters without a pg_depend-style query return Ok(empty).
+        match metadata_adapter
+            .fetch_relation_dependency_links_inner(db_schemas, self.cancellation_token())
+            .await
+        {
+            Ok(links) => cache.add_links(links),
+            Err(e) => tracing::warn!(
+                "relation_cache: failed to fetch dependency links \
+                 (cascade evictions may miss dependents): {e:?}"
+            ),
+        }
         Ok(())
     }
 
@@ -1009,7 +1020,7 @@ impl Adapter {
                 adapter
                     .engine()
                     .relation_cache()
-                    .evict_relation(relation.as_ref() as &dyn BaseRelation);
+                    .drop_relation_cascade(relation.as_ref() as &dyn BaseRelation);
                 Ok(adapter.drop_relation(state, &relation)?)
             }
             Parse(_) => Ok(none_value()),
@@ -1455,11 +1466,20 @@ impl Adapter {
                             );
 
                             if let Ok(relations_list) = maybe_relations_list {
-                                let to_insert = Vec::from([(db_schema, relations_list)]);
-                                adapter
-                                    .engine()
-                                    .relation_cache()
-                                    .insert_many(to_insert.into_iter());
+                                let to_insert = Vec::from([(db_schema.clone(), relations_list)]);
+                                let cache = adapter.engine().relation_cache();
+                                cache.insert_many(to_insert.into_iter());
+                                match adapter.list_relation_dependency_links(
+                                    &query_ctx,
+                                    conn.as_mut(),
+                                    &db_schema,
+                                    self.cancellation_token.clone(),
+                                ) {
+                                    Ok(links) => cache.add_links(links),
+                                    Err(e) => tracing::warn!(
+                                        "relation_cache: list_relation_dependency_links failed: {e}"
+                                    ),
+                                }
 
                                 self.get_relation_value_from_cache(temp_relation.as_ref())
                                     .or(Some(none_value()))
