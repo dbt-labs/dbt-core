@@ -86,6 +86,7 @@ pub enum ErrorCode {
     NullComparison = 174,
     JinjaPadding = 175,
     QuotedLiteralStyleMismatch = 176,
+    RequireImportCte = 177,
 
     /// Generic catch-all error for all errors originating from the PySpark LP
     /// binder. The PySpark LP binder is different in that its input is a
