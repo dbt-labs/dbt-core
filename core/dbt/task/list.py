@@ -8,6 +8,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
+    ModelNode,
     SavedQuery,
     SemanticModel,
     SourceDefinition,
@@ -48,6 +49,7 @@ class ListTask(GraphRunnableTask):
             "name",
             "package_name",
             "depends_on",
+            "direct_parents",
             "tags",
             "config",
             "resource_type",
@@ -156,6 +158,13 @@ class ListTask(GraphRunnableTask):
     def generate_json(self):
         for node in self._iterate_selected_nodes():
             node_dict = node.to_dict(omit_none=False)
+
+            # direct_parents is stripped from ModelNode serialization (see
+            # ModelNode.__post_serialize__) so it doesn't leak into
+            # manifest.json. Reinstate it here so lineage consumers can read
+            # nearest-public-ancestor edges from `dbt ls --output=json`.
+            if isinstance(node, ModelNode):
+                node_dict["direct_parents"] = list(node.direct_parents)
 
             if self.args.output_keys:
                 # Handle both nested and regular keys

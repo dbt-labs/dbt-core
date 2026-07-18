@@ -9,6 +9,7 @@ from tests.functional.metrics.fixtures import (
     enabled_metric_level_schema_yml,
     invalid_config_metric_yml,
     metricflow_time_spine_sql,
+    metricflow_time_spine_yml,
     models_people_metrics_meta_top_yml,
     models_people_metrics_sql,
     models_people_metrics_yml,
@@ -32,6 +33,7 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": models_people_metrics_yml,
         }
@@ -76,6 +78,7 @@ class TestConfigYamlMetricLevel(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": disabled_metric_level_schema_yml,
         }
@@ -94,6 +97,7 @@ class TestMetricConfigsInheritence(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": enabled_metric_level_schema_yml,
         }
@@ -123,6 +127,7 @@ class TestDisabledMetricRef(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "people_metrics.sql": models_people_metrics_sql,
             "schema.yml": models_people_metrics_yml,
@@ -165,6 +170,7 @@ class TestInvalidMetric(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": invalid_config_metric_yml,
         }
@@ -182,6 +188,7 @@ class TestDisabledMetric(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": models_people_metrics_yml,
         }
@@ -215,6 +222,7 @@ class TestMetricMetaConfigProjectLevel(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": models_people_metrics_yml,
         }
@@ -251,6 +259,7 @@ class TestMetricMetaConfigLevel(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": models_people_metrics_yml,
         }
@@ -274,6 +283,7 @@ class TestMetricMetaTopLevel(MetricConfigTests):
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": models_people_metrics_meta_top_yml,
         }

@@ -502,6 +502,25 @@
         }
       ]
     },
+    "ComputePlatform": {
+      "description": "Selects the compute target a model's DML is executed against.\n\n`Default` uses the profile's adapter. A run implementation may honor an alternate target for other variants; parse/compile/render and introspection are unaffected by this selection.",
+      "oneOf": [
+        {
+          "description": "Execute on the profile's (default) adapter.",
+          "type": "string",
+          "enum": [
+            "default"
+          ]
+        },
+        {
+          "description": "Execute on the alternate compute target.",
+          "type": "string",
+          "enum": [
+            "alt"
+          ]
+        }
+      ]
+    },
     "DataLakeObjectCategory": {
       "description": "See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject",
       "type": "string",
@@ -837,6 +856,7 @@
     "FreshnessPeriod": {
       "type": "string",
       "enum": [
+        "second",
         "minute",
         "hour",
         "day"
@@ -883,6 +903,27 @@
         "aggregate",
         "table"
       ]
+    },
+    "FunctionSnowflakeConfig": {
+      "description": "Snowflake-specific configuration for functions. Nested under the `snowflake` key inside `config:` in schema YAML (or `+snowflake:` under `functions:` in `dbt_project.yml`).",
+      "type": "object",
+      "properties": {
+        "quote_args": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "GrantAccessToTarget": {
       "type": "object",
@@ -1092,7 +1133,7 @@
             }
           ]
         },
-        "execute_hooks_on_reuse": {
+        "execute_hooks_on_any_reuse": {
           "anyOf": [
             {
               "type": [
@@ -1687,19 +1728,13 @@
           ]
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -1968,6 +2003,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+row_access_policy": {
@@ -2299,6 +2340,16 @@
             }
           ]
         },
+        "state-org-id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tenant_hostname": {
           "type": [
             "string",
@@ -2467,6 +2518,16 @@
             "null"
           ]
         },
+        "+snowflake": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionSnowflakeConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+static_analysis": {
           "anyOf": [
             {
@@ -2594,6 +2655,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+alt_compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputePlatform"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+as_columnstore": {
@@ -2771,6 +2842,9 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "+classifiers": {
+          "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         "+cluster_by": {
           "anyOf": [
@@ -3077,19 +3151,13 @@
           ]
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -3133,6 +3201,21 @@
           ]
         },
         "+include_full_name_in_path": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+incremental_apply_config_changes": {
           "anyOf": [
             {
               "default": null,
@@ -3621,6 +3704,12 @@
             }
           ]
         },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+resource_tags": {
           "type": [
             "object",
@@ -3914,6 +4003,21 @@
             }
           ]
         },
+        "+use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+use_uniform": {
           "anyOf": [
             {
@@ -3930,6 +4034,21 @@
           ]
         },
         "+user_folder_for_python": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+view_update_via_alter": {
           "anyOf": [
             {
               "default": null,
@@ -4350,16 +4469,10 @@
         "+hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -4651,6 +4764,21 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "+row_access_policy": {
           "type": [
@@ -5240,19 +5368,13 @@
           ]
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -5577,6 +5699,21 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "+row_access_policy": {
           "type": [
@@ -6047,19 +6184,13 @@
           }
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -6252,16 +6383,6 @@
             }
           ]
         },
-        "+quoting": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DbtQuoting"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "+refresh_interval_minutes": {
           "anyOf": [
             {
@@ -6291,6 +6412,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+schedule": {
@@ -6704,19 +6831,13 @@
           }
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
-              "default": null,
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -6960,6 +7081,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "+reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+row_access_policy": {

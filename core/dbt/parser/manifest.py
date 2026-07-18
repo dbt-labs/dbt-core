@@ -104,6 +104,7 @@ from dbt.exceptions import (
     scrub_secrets,
 )
 from dbt.flags import get_flags
+from dbt.hints import HintType, show_hint
 from dbt.mp_context import get_mp_context
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
@@ -149,6 +150,18 @@ from dbt_common.helper_types import PathSet
 from dbt_common.ui import error_tag
 
 PERF_INFO_FILE_NAME = "perf_info.json"
+
+# Parses slower than this (in seconds) are slow enough to suggest the v2 parser.
+LONG_PARSING_THRESHOLD_SECONDS = 30
+
+
+def _maybe_show_long_parsing_hint(load_all_elapsed: Optional[float]) -> None:
+    if (
+        load_all_elapsed is not None
+        and load_all_elapsed > LONG_PARSING_THRESHOLD_SECONDS
+        and not get_flags().USE_V2_PARSER
+    ):
+        show_hint(HintType.LONG_PARSING_WITHOUT_V2_PARSER)
 
 
 def extended_mashumaro_encoder(data):
@@ -345,6 +358,10 @@ class ManifestLoader:
         loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
         loader.track_project_load()
 
+        # If parsing was slow and we're still on the legacy parser, nudge the user
+        # toward the v2 parser.
+        _maybe_show_long_parsing_hint(loader._perf_info.load_all_elapsed)
+
         if write_perf_info:
             loader.write_perf_info(config.project_target_path)
 
@@ -489,6 +506,7 @@ class ManifestLoader:
                 self.root_project.project_root,
                 self.root_project.project_name,
                 self.manifest,
+                self.root_project.osi_paths,
             )
 
             # update the refs, sources, docs and metrics depends_on.nodes
@@ -548,7 +566,41 @@ class ManifestLoader:
         self.check_microbatch_model_has_a_filtered_input()
         self.check_function_default_arguments_ordering()
 
+        self._backfill_direct_parents()
+
         return self.manifest
+
+    def _backfill_direct_parents(self) -> None:
+        """Ensure every in-project model has its `direct_parents` populated.
+
+        Why this exists
+        ---------------
+        `direct_parents` is the lineage field that DAG-drawing consumers
+        (the dbt IDE, anything parsing `dbt ls --output=json`) read. We
+        want one authoritative field per model so consumers don't have to
+        branch on "is this an external node? use direct_parents. is it
+        in-project? fall back to depends_on.nodes."
+
+        For external nodes (nodes supplied by plugins via `ModelNodeArgs`,
+        e.g. from publication artifacts) the plugin already sets
+        `direct_parents` at construction time to the *nearest public
+        ancestors* — a proper subset of `depends_on.nodes`, which for these
+        nodes carries the full transitive public-ancestor closure so cycle
+        detection still works across plugin boundaries.
+
+        For in-project models, nothing populates `direct_parents` during
+        parsing — the parser only sets `depends_on.nodes` from the
+        `{{ ref(...) }}` calls it sees in the SQL. Note that
+        `depends_on.nodes` on an in-project node is ALREADY just the
+        direct refs — parsing is not transitive. Transitive closure across
+        in-project models only emerges when the graph is walked at compile
+        time (in the Linker). So for in-project models the two fields hold
+        the same set; this method copies one into the other so consumers
+        have a single field to read.
+        """
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode) and not node.direct_parents:
+                node.direct_parents = list(node.depends_on.nodes)
 
     def safe_update_project_parser_files_partially(self, project_parser_files: Dict) -> Dict:
         if self.saved_manifest is None:

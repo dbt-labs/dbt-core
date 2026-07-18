@@ -14,6 +14,7 @@ class CatalogWriteIntegrationConfig(CatalogIntegrationConfig):
     table_format: Optional[str] = None
     catalog_name: Optional[str] = None
     file_format: Optional[str] = None
+    catalog_database: Optional[str] = None
     adapter_properties: Dict[str, Any] = field(default_factory=dict)
 
 

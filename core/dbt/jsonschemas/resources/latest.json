@@ -428,6 +428,15 @@
         "name"
       ],
       "properties": {
+        "classifiers": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "column_mask": {
           "anyOf": [
             {
@@ -677,6 +686,25 @@
           "type": "string",
           "enum": [
             "service"
+          ]
+        }
+      ]
+    },
+    "ComputePlatform": {
+      "description": "Selects the compute target a model's DML is executed against.\n\n`Default` uses the profile's adapter. A run implementation may honor an alternate target for other variants; parse/compile/render and introspection are unaffected by this selection.",
+      "oneOf": [
+        {
+          "description": "Execute on the profile's (default) adapter.",
+          "type": "string",
+          "enum": [
+            "default"
+          ]
+        },
+        {
+          "description": "Execute on the alternate compute target.",
+          "type": "string",
+          "enum": [
+            "alt"
           ]
         }
       ]
@@ -1298,16 +1326,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -1334,6 +1356,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -1649,6 +1685,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -1911,7 +1953,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -2689,6 +2759,86 @@
         "application"
       ]
     },
+    "ExternalPartition": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/ExternalPartitionConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
+    "ExternalPartitionConfig": {
+      "description": "Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L36",
+      "type": "object",
+      "properties": {
+        "data_type": {
+          "default": "",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "type": "string"
+        },
+        "meta": {
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExternalTable": {
+      "description": "Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L48 These always get serialized, even if none.",
+      "type": "object",
+      "properties": {
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ExternalPartition"
+          }
+        },
+        "row_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tbl_properties": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "FloatOrString": {
       "anyOf": [
         {
@@ -2767,6 +2917,7 @@
     "FreshnessPeriod": {
       "type": "string",
       "enum": [
+        "second",
         "minute",
         "hour",
         "day"
@@ -3217,16 +3368,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -3253,6 +3398,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -3559,6 +3718,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -3641,6 +3806,16 @@
             {
               "type": "string",
               "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionSnowflakeConfig"
+            },
+            {
+              "type": "null"
             }
           ]
         },
@@ -3796,7 +3971,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -3981,6 +4184,27 @@
           "type": [
             "string",
             "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FunctionSnowflakeConfig": {
+      "description": "Snowflake-specific configuration for functions. Nested under the `snowflake` key inside `config:` in schema YAML (or `+snowflake:` under `functions:` in `dbt_project.yml`).",
+      "type": "object",
+      "properties": {
+        "quote_args": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4764,6 +4988,16 @@
             "null"
           ]
         },
+        "alt_compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputePlatform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "as_columnstore": {
           "anyOf": [
             {
@@ -4930,6 +5164,17 @@
             {
               "type": "string",
               "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "classifiers": {
+          "default": [],
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
             }
           ]
         },
@@ -5233,16 +5478,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -5285,6 +5524,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -5765,6 +6018,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -6059,6 +6318,20 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
           "anyOf": [
             {
@@ -6074,6 +6347,20 @@
           ]
         },
         "user_folder_for_python": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -6464,7 +6751,7 @@
             }
           ]
         },
-        "execute_hooks_on_reuse": {
+        "execute_hooks_on_any_reuse": {
           "anyOf": [
             {
               "type": [
@@ -7400,16 +7687,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -7436,6 +7717,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -7781,6 +8076,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -8002,7 +8303,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -8536,16 +8865,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -8572,6 +8895,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -8932,6 +9269,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -9208,7 +9551,35 @@
             "null"
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -9698,16 +10069,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -9734,6 +10099,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -9985,16 +10364,6 @@
             }
           ]
         },
-        "quoting": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DbtQuoting"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "refresh_interval_minutes": {
           "anyOf": [
             {
@@ -10034,6 +10403,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "resource_tags": {
@@ -10273,7 +10648,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -10412,6 +10815,21 @@
         }
       ]
     },
+    "StringOrInteger": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "int64"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
     "StringOrMetricPropertiesMetricInput": {
       "anyOf": [
         {
@@ -10487,7 +10905,7 @@
         "external": {
           "anyOf": [
             {
-              "$ref": "#/definitions/AnyValue"
+              "$ref": "#/definitions/ExternalTable"
             },
             {
               "type": "null"
@@ -11016,16 +11434,10 @@
         "hours_to_expiration": {
           "anyOf": [
             {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/definitions/StringOrInteger"
             },
             {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
+              "type": "null"
             }
           ]
         },
@@ -11052,6 +11464,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -11332,6 +11758,12 @@
             }
           ]
         },
+        "reservation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "resource_tags": {
           "type": [
             "object",
@@ -11546,7 +11978,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [

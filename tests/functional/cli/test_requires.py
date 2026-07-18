@@ -146,6 +146,7 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_STATE_API_URL",
             "DBT_ENGINE_MANAGE_STATE",
             "DBT_ENGINE_SKIP_BROWSER_AUTH",
+            "DBT_ENGINE_HINTS_ENABLED",
         }
         from dbt.env_vars import _ALLOWED_ENV_VARS
 

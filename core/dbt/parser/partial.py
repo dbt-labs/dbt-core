@@ -1046,6 +1046,12 @@ class PartialParsing:
         for test_unique_id in tests:
             if test_unique_id in self.saved_manifest.nodes:
                 self.saved_manifest.nodes.pop(test_unique_id)
+            elif test_unique_id in self.saved_manifest.disabled:
+                # Generic tests are tracked in data_tests for BOTH enabled and
+                # disabled states. Mirror the disabled cleanup the other
+                # delete_* helpers already do below, otherwise ghost copies
+                # accumulate across partial parses (CORE-725).
+                self.delete_disabled(test_unique_id, schema_file.file_id)
         schema_file.remove_tests(dict_key, name)
         # We also need to remove tests in other schema files that
         # reference this node.
@@ -1122,6 +1128,13 @@ class PartialParsing:
             if file_id in self.new_files:
                 self.saved_files[file_id] = deepcopy(self.new_files[file_id])
                 self.add_to_pp_files(self.saved_files[file_id])
+        elif data_test_unique_id and data_test_unique_id in self.saved_manifest.disabled:
+            # A disabled singular data test lives in saved_manifest.disabled
+            # rather than saved_manifest.nodes; remove the stale copy there too
+            # so it does not accumulate across partial parses (CORE-725). The
+            # node's file_id is the .sql test file, not the schema_file, so
+            # pop by unique_id rather than filtering on schema_file.file_id.
+            self.saved_manifest.disabled.pop(data_test_unique_id)
 
     # exposures are created only from schema files, so just delete
     # the exposure or the disabled exposure.
@@ -1211,7 +1224,7 @@ class PartialParsing:
         if not sm_names_to_clean:
             return
 
-        # Clean up create_metric-style auto-generated metrics (stored in metrics_from_measures).
+        # Clean up simple inline metrics (stored in metrics_from_measures, keyed by sm name).
         if schema_file.generated_metrics:
             schema_file.fix_metrics_from_measures()
         for sm_name in sm_names_to_clean:
@@ -1222,6 +1235,28 @@ class PartialParsing:
                     elif unique_id in self.saved_manifest.disabled:
                         self.delete_disabled(unique_id, schema_file.file_id)
                 del schema_file.metrics_from_measures[sm_name]
+
+        # Clean up non-simple inline metrics (cumulative, derived, ratio, conversion).
+        # These are stored in schema_file.metrics (add_metric is called with generated_from=None).
+        # dict_from_yaml still holds the OLD yaml at this point (dfy is updated after cleanup),
+        # so we can read the old model entry to find which metric unique_ids to remove.
+        models = schema_file.dict_from_yaml.get("models", [])
+        old_model = next((m for m in models if m.get("name") == model_name), None)
+        if old_model is not None:
+            pkg = schema_file.project_name
+            for old_metric in old_model.get("metrics", []):
+                metric_name = old_metric.get("name")
+                if not metric_name:
+                    continue
+                uid = f"metric.{pkg}.{metric_name}"
+                if uid in schema_file.metrics:
+                    schema_file.metrics.remove(uid)
+                if uid in self.saved_manifest.metrics:
+                    if uid in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[uid])
+                    self.saved_manifest.metrics.pop(uid)
+                elif uid in self.saved_manifest.disabled:
+                    self.delete_disabled(uid, schema_file.file_id)
 
     def delete_schema_semantic_model(self, schema_file, semantic_model_dict):
         semantic_model_name = semantic_model_dict["name"]

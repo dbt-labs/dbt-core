@@ -10,7 +10,7 @@ from dbt.exceptions import ParsingError
 from dbt.parser.osi import (
     _build_model_lookup,
     _clear_osi_attributed_nodes,
-    _scan_osi_directory,
+    _scan_osi_directories,
     load_osi_into_manifest,
 )
 from dbt_common.events.event_catcher import EventCatcher
@@ -41,13 +41,13 @@ def _orders_model():
     return make_model(PKG, "orders", "select 1 as id")
 
 
-class TestScanOsiDirectory:
+class TestScanOsiDirectories:
     def test_no_directory_returns_empty(self, tmp_path):
-        assert _scan_osi_directory(str(tmp_path)) == []
+        assert _scan_osi_directories(str(tmp_path), ["OSI"]) == []
 
     def test_empty_directory_returns_empty(self, tmp_path):
         (tmp_path / "OSI").mkdir()
-        assert _scan_osi_directory(str(tmp_path)) == []
+        assert _scan_osi_directories(str(tmp_path), ["OSI"]) == []
 
     def test_returns_only_json_files(self, tmp_path):
         osi_dir = tmp_path / "OSI"
@@ -55,7 +55,7 @@ class TestScanOsiDirectory:
         (osi_dir / "a.json").write_text("{}")
         (osi_dir / "b.yaml").write_text("{}")
         (osi_dir / "c.json").write_text("{}")
-        result = _scan_osi_directory(str(tmp_path))
+        result = _scan_osi_directories(str(tmp_path), ["OSI"])
         assert [p.name for p in result] == ["a.json", "c.json"]
 
     def test_results_are_sorted(self, tmp_path):
@@ -63,7 +63,7 @@ class TestScanOsiDirectory:
         osi_dir.mkdir()
         for name in ["z.json", "a.json", "m.json"]:
             (osi_dir / name).write_text("{}")
-        result = _scan_osi_directory(str(tmp_path))
+        result = _scan_osi_directories(str(tmp_path), ["OSI"])
         assert [p.name for p in result] == ["a.json", "m.json", "z.json"]
 
     def test_recurses_into_subdirectories(self, tmp_path):
@@ -72,8 +72,69 @@ class TestScanOsiDirectory:
         (osi_dir / "top.json").write_text("{}")
         (osi_dir / "subdir" / "nested.json").write_text("{}")
         (osi_dir / "subdir" / "ignored.yaml").write_text("{}")
-        result = _scan_osi_directory(str(tmp_path))
+        result = _scan_osi_directories(str(tmp_path), ["OSI"])
         assert {p.name for p in result} == {"top.json", "nested.json"}
+
+    def test_custom_path_is_used(self, tmp_path):
+        custom_dir = tmp_path / "custom_osi"
+        custom_dir.mkdir()
+        (custom_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["custom_osi"])
+        assert [p.name for p in result] == ["orders.json"]
+
+    def test_multiple_paths_all_scanned(self, tmp_path):
+        (tmp_path / "osi_a").mkdir()
+        (tmp_path / "osi_b").mkdir()
+        (tmp_path / "osi_a" / "a.json").write_text("{}")
+        (tmp_path / "osi_b" / "b.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi_a", "osi_b"])
+        assert {p.name for p in result} == {"a.json", "b.json"}
+
+    def test_missing_path_is_skipped(self, tmp_path):
+        (tmp_path / "osi_a").mkdir()
+        (tmp_path / "osi_a" / "a.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi_a", "nonexistent"])
+        assert [p.name for p in result] == ["a.json"]
+
+    def test_lowercase_osi_directory_is_recognized(self, tmp_path):
+        osi_dir = tmp_path / "osi"
+        osi_dir.mkdir()
+        (osi_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi"])
+        assert [p.name for p in result] == ["orders.json"]
+
+    def test_uppercase_osi_directory_still_recognized(self, tmp_path):
+        osi_dir = tmp_path / "OSI"
+        osi_dir.mkdir()
+        (osi_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["OSI"])
+        assert [p.name for p in result] == ["orders.json"]
+
+    # This test requires a case-sensitive filesystem: it creates osi/ and OSI/
+    # as two distinct directories, which is impossible on macOS where they map
+    # to the same physical directory and the second mkdir() raises FileExistsError.
+    # The case where one physical directory is reachable via both names is covered
+    # by test_duplicate_resolved_path_is_scanned_once.
+    @pytest.mark.skipif(
+        __import__("sys").platform == "darwin",
+        reason="macOS uses a case-insensitive filesystem by default",
+    )
+    def test_both_osi_directories_scanned_when_present(self, tmp_path):
+        (tmp_path / "osi").mkdir()
+        (tmp_path / "OSI").mkdir()
+        (tmp_path / "osi" / "lower.json").write_text("{}")
+        (tmp_path / "OSI" / "upper.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi", "OSI"])
+        assert {p.name for p in result} == {"lower.json", "upper.json"}
+
+    def test_duplicate_resolved_path_is_scanned_once(self, tmp_path):
+        # On case-insensitive filesystems "osi" and "OSI" resolve to the same
+        # directory; deduplication must prevent files from appearing twice.
+        osi_dir = tmp_path / "osi"
+        osi_dir.mkdir(exist_ok=True)
+        (osi_dir / "orders.json").write_text("{}")
+        result = _scan_osi_directories(str(tmp_path), ["osi", "OSI"])
+        assert [p.name for p in result] == ["orders.json"]
 
 
 class TestBuildModelLookup:
@@ -111,17 +172,20 @@ class TestBuildModelLookup:
         assert ("orders", model.schema.lower(), (model.database or "").lower()) in lookup
 
 
+OSI_PATHS = ["OSI"]
+
+
 class TestLoadOsiIntoManifest:
     def test_no_osi_directory_is_noop(self, tmp_path):
         manifest = make_manifest(nodes=[_orders_model()])
-        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
         assert manifest.semantic_models == {}
         assert manifest.metrics == {}
 
     def test_empty_osi_directory_is_noop(self, tmp_path):
         (tmp_path / "OSI").mkdir()
         manifest = make_manifest(nodes=[_orders_model()])
-        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
         assert manifest.semantic_models == {}
         assert manifest.metrics == {}
 
@@ -129,7 +193,7 @@ class TestLoadOsiIntoManifest:
         (tmp_path / "OSI").mkdir()
         (tmp_path / "OSI" / "orders.json").write_text(_osi_json())
         manifest = make_manifest(nodes=[_orders_model()])
-        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
         uid = f"semantic_model.{PKG}.orders"
         assert uid in manifest.semantic_models
         sm = manifest.semantic_models[uid]
@@ -141,7 +205,7 @@ class TestLoadOsiIntoManifest:
         (tmp_path / "OSI").mkdir()
         (tmp_path / "OSI" / "orders.json").write_text(_osi_json())
         manifest = make_manifest(nodes=[_orders_model()])
-        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
         from dbt.artifacts.resources import RefArgs
 
         sm = manifest.semantic_models[f"semantic_model.{PKG}.orders"]
@@ -154,7 +218,7 @@ class TestLoadOsiIntoManifest:
         (osi_dir / "orders.json").write_text(_osi_json("orders", "dbt.dbt_schema.orders"))
         (osi_dir / "customers.json").write_text(_osi_json("customers", "dbt.dbt_schema.customers"))
         manifest = make_manifest(nodes=[_orders_model(), customers_model])
-        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
         assert f"semantic_model.{PKG}.orders" in manifest.semantic_models
         assert f"semantic_model.{PKG}.customers" in manifest.semantic_models
 
@@ -163,14 +227,14 @@ class TestLoadOsiIntoManifest:
         (tmp_path / "OSI" / "bad.json").write_text("{not valid json")
         manifest = make_manifest(nodes=[_orders_model()])
         with pytest.raises(ParsingError, match="Failed to parse OSI file"):
-            load_osi_into_manifest(str(tmp_path), PKG, manifest)
+            load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
     def test_unsupported_version_raises_parsing_error(self, tmp_path):
         (tmp_path / "OSI").mkdir()
         (tmp_path / "OSI" / "v99.json").write_text(_osi_json(version="9.9.9"))
         manifest = make_manifest(nodes=[_orders_model()])
         with pytest.raises(ParsingError, match="unsupported version"):
-            load_osi_into_manifest(str(tmp_path), PKG, manifest)
+            load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
     def test_no_matching_model_raises_parsing_error(self, tmp_path):
         (tmp_path / "OSI").mkdir()
@@ -180,7 +244,7 @@ class TestLoadOsiIntoManifest:
         )
         manifest = make_manifest(nodes=[_orders_model()])
         with pytest.raises(ParsingError, match="does not match any dbt model"):
-            load_osi_into_manifest(str(tmp_path), PKG, manifest)
+            load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
     def test_duplicate_semantic_model_raises_parsing_error(self, tmp_path):
         from tests.unit.utils.manifest import make_semantic_model
@@ -195,7 +259,7 @@ class TestLoadOsiIntoManifest:
         )
         manifest = make_manifest(nodes=[model], semantic_models=[existing_sm])
         with pytest.raises(ParsingError, match="conflicts with an existing semantic model"):
-            load_osi_into_manifest(str(tmp_path), PKG, manifest)
+            load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
     def test_duplicate_metric_raises_parsing_error(self, tmp_path):
         osi_dir = tmp_path / "OSI"
@@ -232,7 +296,7 @@ class TestLoadOsiIntoManifest:
         with patch("dbt.parser.osi.OSIToMSIConverter") as MockConverter:
             MockConverter.return_value.convert.return_value = fake_result
             with pytest.raises(ParsingError, match="conflicts with an existing metric"):
-                load_osi_into_manifest(str(tmp_path), PKG, manifest)
+                load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
     def test_converter_issues_fire_events(self, tmp_path):
         from metricflow.converters.converter_issues import (
@@ -262,13 +326,24 @@ class TestLoadOsiIntoManifest:
         add_callback_to_manager(catcher.catch)
         with patch("dbt.parser.osi.OSIToMSIConverter") as MockConverter:
             MockConverter.return_value.convert.return_value = fake_result
-            load_osi_into_manifest(str(tmp_path), PKG, manifest)
+            load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
         assert len(catcher.caught_events) == 1
         event_data = catcher.caught_events[0].data
         assert event_data.element_name == "revenue"
         assert event_data.converter_name == "OSIToMSIConverter"
         assert event_data.issue_type == ConverterIssueType.CONVERSION_METRIC_DROPPED.value
+
+    def test_custom_osi_path_is_used(self, tmp_path):
+        custom_dir = tmp_path / "custom_osi"
+        custom_dir.mkdir()
+        (custom_dir / "orders.json").write_text(_osi_json())
+        manifest = make_manifest(nodes=[_orders_model()])
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, ["custom_osi"])
+        uid = f"semantic_model.{PKG}.orders"
+        assert uid in manifest.semantic_models
+        sm = manifest.semantic_models[uid]
+        assert sm.path == os.path.join("custom_osi", "orders.json")
 
 
 def _make_osi_source_file(project_root: str, rel_path: str, pkg: str) -> OsiSourceFile:
@@ -296,7 +371,7 @@ class TestOsiAttribution:
         file_id = osi_sf.file_id
         manifest.files[file_id] = osi_sf
 
-        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
         sf = manifest.files[file_id]
         assert isinstance(sf, OsiSourceFile)
@@ -311,12 +386,12 @@ class TestOsiAttribution:
         from tests.unit.utils.manifest import make_semantic_model
 
         sm = make_semantic_model(PKG, "orders", model=_orders_model())
-        # OSI-sourced nodes always have original_file_path under OSI/
+        # OSI-sourced nodes always have original_file_path under the OSI directory
         sm = sm.__class__(**{**sm.__dict__, "original_file_path": "OSI/orders.json"})
         manifest.semantic_models[uid] = sm
         manifest.files[osi_sf.file_id] = osi_sf
 
-        _clear_osi_attributed_nodes(manifest)
+        _clear_osi_attributed_nodes(manifest, OSI_PATHS)
 
         assert uid not in manifest.semantic_models
         assert osi_sf.semantic_models == []
@@ -328,7 +403,7 @@ class TestOsiAttribution:
         osi_sf.metrics.append("metric.pkg.y")
         manifest.files[osi_sf.file_id] = osi_sf
 
-        _clear_osi_attributed_nodes(manifest)
+        _clear_osi_attributed_nodes(manifest, OSI_PATHS)
 
         assert osi_sf.semantic_models == []
         assert osi_sf.metrics == []
@@ -344,7 +419,7 @@ class TestOsiAttribution:
         manifest.semantic_models[uid] = sm
         manifest.files["pkg://models/foo.yml"] = MagicMock(spec=SchemaSourceFile)
 
-        _clear_osi_attributed_nodes(manifest)
+        _clear_osi_attributed_nodes(manifest, OSI_PATHS)
 
         assert uid in manifest.semantic_models
 
@@ -370,7 +445,7 @@ class TestOsiAttribution:
         osi_sf.semantic_models.append(uid)
         manifest.files[osi_sf.file_id] = osi_sf
 
-        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+        load_osi_into_manifest(str(tmp_path), PKG, manifest, OSI_PATHS)
 
         assert uid in manifest.semantic_models
         assert manifest.files[osi_sf.file_id].semantic_models == [uid]

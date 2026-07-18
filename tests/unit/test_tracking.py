@@ -89,6 +89,28 @@ class TestTracking:
         assert dbt.tracking.active_user.do_not_track != send_anonymous_usage_stats
 
 
+class TestTrackHintView:
+    def test_track_hint_view_no_active_user(self, active_user_none):
+        # Should be a no-op (and not raise) when there is no active user.
+        with mock.patch("dbt.tracking.track") as mock_track:
+            dbt.tracking.track_hint_view("some_hint")
+        mock_track.assert_not_called()
+
+    def test_track_hint_view_sends_event(self):
+        mock_user = mock.Mock(do_not_track=False)
+        with mock.patch("dbt.tracking.active_user", mock_user):
+            with mock.patch("dbt.tracking.track") as mock_track:
+                dbt.tracking.track_hint_view("some_hint")
+
+        mock_track.assert_called_once()
+        assert mock_track.call_args.kwargs["action"] == "hint_view"
+        context = mock_track.call_args.kwargs["context"]
+        assert len(context) == 1
+        self_describing = context[0].to_json()
+        assert self_describing["schema"] == dbt.tracking.HINT_VIEW_SPEC
+        assert self_describing["data"] == {"hint_type": "some_hint"}
+
+
 class TestCompileStatsTracking:
     def test_generate_stats_includes_catalog_count(self) -> None:
         mock_manifest = mock.MagicMock()
@@ -109,6 +131,36 @@ class TestCompileStatsTracking:
         resource_counts = mock_track.call_args[0][0]
         assert resource_counts["catalogs"] == 3
         assert resource_counts["models"] == 1
+
+
+class TestTrackManageState:
+    def test_emits_manage_state_event(self) -> None:
+        mock_user = mock.Mock(do_not_track=False)
+        with mock.patch("dbt.tracking.active_user", mock_user):
+            with mock.patch("dbt.tracking.tracker") as mock_tracker:
+                with mock.patch("dbt.tracking.fire_event"):
+                    dbt.tracking.track_manage_state({"manage_state": True, "source": "cli_flag"})
+
+        mock_tracker.track.assert_called_once()
+        event = mock_tracker.track.call_args[0][0]
+        assert event.action == "manage_state"
+        context = event.context
+        assert len(context) == 1
+        payload = context[0].to_json()["data"]
+        assert payload == {"manage_state": True, "source": "cli_flag"}
+        assert context[0].to_json()["schema"] == dbt.tracking.MANAGE_STATE_SPEC
+
+    def test_does_not_track_when_user_opted_out(self) -> None:
+        mock_user = mock.Mock(do_not_track=True)
+        with mock.patch("dbt.tracking.active_user", mock_user):
+            with mock.patch("dbt.tracking.tracker") as mock_tracker:
+                with mock.patch("dbt.tracking.fire_event"):
+                    dbt.tracking.track_manage_state({"manage_state": True, "source": "env_var"})
+        mock_tracker.track.assert_not_called()
+
+    def test_raises_without_active_user(self, active_user_none) -> None:
+        with pytest.raises(AssertionError, match="active user is None"):
+            dbt.tracking.track_manage_state({"manage_state": True, "source": "cli_flag"})
 
 
 class TestTrackModelRun:

@@ -53,6 +53,8 @@ RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-1-1"
 PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
 ARTIFACT_UPLOAD = "iglu:com.dbt/artifact_upload/jsonschema/1-0-0"
+MANAGE_STATE_SPEC = "iglu:com.dbt/manage_state/jsonschema/1-0-0"
+HINT_VIEW_SPEC = "iglu:com.dbt/hint_view/jsonschema/1-0-0"
 
 SNOWPLOW_TRACKER_VERSION = Version(snowplow_version)
 
@@ -368,6 +370,21 @@ def track_deprecation_warn(options):
     )
 
 
+def track_hint_view(hint_type: str) -> None:
+    if active_user is None:
+        return
+
+    context = [SelfDescribingJson(HINT_VIEW_SPEC, {"hint_type": hint_type})]
+
+    track(
+        active_user,
+        category="dbt",
+        action="hint_view",
+        label=get_invocation_id(),
+        context=context,
+    )
+
+
 def track_behavior_change_warn(msg: EventMsg) -> None:
     if msg.info.name != "BehaviorChangeEvent" or active_user is None:
         return
@@ -448,6 +465,32 @@ def track_plugin_get_nodes(options):
         action="plugin_get_nodes",
         label=get_invocation_id(),
         context=context,
+    )
+
+
+def _track_context_event(spec: str, action: str, options, error_msg: str) -> None:
+    """Emit a single-context structured tracking event.
+
+    Most track_* helpers in this module inline this same assert-then-track
+    pattern; this is the canonical form that the rest are intended to adopt.
+    For now only track_manage_state uses it (a full migration is deferred to a
+    follow-up to keep this change scoped)."""
+    assert active_user is not None, error_msg
+    track(
+        active_user,
+        category="dbt",
+        action=action,
+        label=get_invocation_id(),
+        context=[SelfDescribingJson(spec, options)],
+    )
+
+
+def track_manage_state(options):
+    _track_context_event(
+        MANAGE_STATE_SPEC,
+        "manage_state",
+        options,
+        "Cannot track manage_state when active user is None",
     )
 
 
