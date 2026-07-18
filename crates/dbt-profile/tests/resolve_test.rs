@@ -384,13 +384,86 @@ proj:
 
     let result = resolve(&args).unwrap();
     let port = result.credentials.get("port").unwrap();
-    // The rendered value should be parsed back as a number
-    assert!(
-        port.as_i64().is_some() || (port.as_str() == Some("5432")),
-        "port should be a number or '5432', got: {port:?}"
-    );
+    assert_eq!(port.as_i64(), Some(5432));
 
     unsafe { std::env::remove_var("DBT_PROFILE_TEST_PORT2") };
+}
+
+#[test]
+fn test_numeric_env_var_without_filter_remains_a_string() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    unsafe { std::env::set_var("DBT_PROFILE_TEST_ACCOUNT_ID", "5432") };
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+proj:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('DBT_PROFILE_TEST_ACCOUNT_ID') }}"
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("proj".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    assert_eq!(result.get_str("account"), Some("5432"));
+
+    unsafe { std::env::remove_var("DBT_PROFILE_TEST_ACCOUNT_ID") };
+}
+
+#[test]
+fn test_rendered_connection_string_remains_a_string() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    unsafe { std::env::set_var("DBT_PROFILE_TEST_HOST", "db.example") };
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+proj:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ":memory:"
+      attach:
+        - path: "ducklake:postgres: host={{ env_var('DBT_PROFILE_TEST_HOST') }} port=5432"
+          alias: lake
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("proj".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    let attach = result
+        .credentials
+        .get("attach")
+        .and_then(|value| value.as_sequence())
+        .expect("attach should be a sequence");
+    let path = attach[0]
+        .as_mapping()
+        .and_then(|attachment| attachment.get("path"))
+        .and_then(|value| value.as_str());
+
+    assert_eq!(path, Some("ducklake:postgres: host=db.example port=5432"));
+
+    unsafe { std::env::remove_var("DBT_PROFILE_TEST_HOST") };
 }
 
 #[test]
