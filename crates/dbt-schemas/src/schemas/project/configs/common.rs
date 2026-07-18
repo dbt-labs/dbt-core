@@ -14,6 +14,7 @@ use dbt_telemetry::StateModifiedDiff;
 use crate::default_to;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PartitionConfig;
+use crate::schemas::common::append_vec;
 use crate::schemas::common::merge_meta;
 use crate::schemas::common::merge_vec;
 use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
@@ -103,11 +104,14 @@ pub fn default_meta_and_tags(
     // Handle meta using existing merge function
     *child_meta = merge_meta(parent_meta.clone(), child_meta.take());
 
-    // Handle tags using existing merge function
+    // Tags append parent values before child values (parent first, then
+    // child), preserving declaration order and duplicates -- matches
+    // dbt-core's `MergeBehavior.Append` for the `tags` field. See
+    // `default_packages` below for the same pattern.
     let child_tags_vec = child_tags.take().map(|tags| tags.into());
     let parent_tags_vec = parent_tags.clone().map(|tags| tags.into());
     *child_tags =
-        merge_vec(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
+        append_vec(parent_tags_vec, child_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
 }
 
 /// Helper function to handle default_to logic for classifiers.
@@ -124,7 +128,8 @@ pub fn default_classifiers(
 
 /// Helper function to handle default_to logic for packages
 /// Packages should append parent values to child values (parent first, then child)
-/// Note: Unlike tags, packages are NOT deduplicated or sorted, matching dbt-core behavior
+/// Note: like tags (see `default_meta_and_tags`), packages are NOT deduplicated
+/// or sorted, matching dbt-core's `MergeBehavior.Append` behavior
 pub fn default_packages(
     child_packages: &mut Option<StringOrArrayOfStrings>,
     parent_packages: &Option<StringOrArrayOfStrings>,
@@ -133,16 +138,7 @@ pub fn default_packages(
     let child_vec: Option<Vec<String>> = child_packages.take().map(|packages| packages.into());
     let parent_vec: Option<Vec<String>> = parent_packages.clone().map(|packages| packages.into());
 
-    // Simple append without deduplication or sorting (matches dbt-core)
-    let merged = match (parent_vec, child_vec) {
-        (None, None) => None,
-        (Some(mut parent), Some(child)) => {
-            parent.extend(child);
-            Some(parent)
-        }
-        (Some(parent), None) => Some(parent),
-        (None, Some(child)) => Some(child),
-    };
+    let merged = append_vec(parent_vec, child_vec);
 
     *child_packages = merged.map(StringOrArrayOfStrings::ArrayOfStrings);
 }
@@ -1530,6 +1526,57 @@ pub(crate) fn unrendered_value_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression test for https://github.com/dbt-labs/dbt-core/issues/15590:
+    /// given `intermediate: {+tags: [INTERMEDIATE]}` with a nested
+    /// `someIdea: {+tags: [DAILY]}`, the merged tag list must be
+    /// `[INTERMEDIATE, DAILY]` (parent first, declaration order preserved),
+    /// not alphabetically sorted (which put `DAILY` first and made Fusion
+    /// disagree with dbt Core on the resulting schema name).
+    #[test]
+    fn test_default_meta_and_tags_preserves_parent_then_child_tag_order() {
+        let mut child_meta = None;
+        let parent_meta = None;
+        let mut child_tags = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "DAILY".to_string(),
+        ]));
+        let parent_tags = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "INTERMEDIATE".to_string(),
+        ]));
+
+        default_meta_and_tags(&mut child_meta, &parent_meta, &mut child_tags, &parent_tags);
+
+        assert_eq!(
+            child_tags,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "INTERMEDIATE".to_string(),
+                "DAILY".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_default_meta_and_tags_does_not_deduplicate_tags() {
+        let mut child_meta = None;
+        let parent_meta = None;
+        let mut child_tags = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "pii".to_string(),
+        ]));
+        let parent_tags = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "pii".to_string(),
+        ]));
+
+        default_meta_and_tags(&mut child_meta, &parent_meta, &mut child_tags, &parent_tags);
+
+        // dbt-core's `MergeBehavior.Append` does not deduplicate `tags`.
+        assert_eq!(
+            child_tags,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pii".to_string(),
+                "pii".to_string(),
+            ]))
+        );
+    }
 
     #[test]
     fn test_array_of_strings_eq_none_and_empty_array() {
