@@ -97,6 +97,10 @@ pub struct RunTasksArgs {
     pub event_time_start: Option<String>,
     /// Per-invocation fail-fast signal.
     pub fail_fast: FailFast,
+    /// Whether the user passed `--fail-fast`. The signal above is triggered on
+    /// any error regardless of this flag; this records whether the flag itself
+    /// was set so downstream policy can react (e.g. ignore `on_error: continue`).
+    pub fail_fast_flag: bool,
     /// Whether to skip running post hook operations.
     pub skip_post_hooks: bool,
     /// Hidden test optimization flags.
@@ -151,6 +155,7 @@ impl RunTasksArgs {
             event_time_start: arg.event_time_start.clone(),
             event_time_end: arg.event_time_end.clone(),
             fail_fast,
+            fail_fast_flag: arg.fail_fast,
             skip_post_hooks: arg.skip_post_hooks,
             optimize_tests: arg.optimize_tests.clone(),
             run_cache_service: arg.run_cache_service,

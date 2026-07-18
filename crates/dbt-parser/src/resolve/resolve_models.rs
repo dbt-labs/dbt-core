@@ -55,7 +55,6 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
-use dbt_schemas::schemas::common::OnError;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
@@ -527,14 +526,6 @@ pub async fn resolve_models(
             dbt_asset.is_python(),
             &dbt_asset.path,
         )?;
-
-        if model_config.on_error == Some(OnError::Continue) {
-            emit_warn_log_message(
-                ErrorCode::NotYetSupportedOption,
-                "The 'continue' option for on_error is not yet supported in dbt Fusion.",
-                arg.io.status_reporter.as_ref(),
-            );
-        }
 
         if let Some(freshness) = &model_config.freshness {
             ModelFreshnessRules::validate(freshness.build_after.as_ref())?;

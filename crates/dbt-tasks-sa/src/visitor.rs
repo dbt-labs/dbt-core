@@ -18,7 +18,8 @@ use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_trace_log_message};
 use dbt_common::{ErrorCode, FsError, fs_err, status_reporter::report_completed};
 use dbt_common::{FsResult, io_args::IoArgs, unexpected_err};
-use dbt_schemas::schemas::{InternalDbtNodeAttributes, NodePathKind};
+use dbt_schemas::schemas::common::OnError;
+use dbt_schemas::schemas::{DbtModel, InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::task::TP;
 use dbt_tasks_core::task::Task;
@@ -223,8 +224,16 @@ impl SkipSet {
         task_idx: NodeIndex,
         dependents: &[HashSet<NodeIndex>],
         schedule: &DiGraph<Arc<dyn Task>, ()>,
+        fail_fast_flag: bool,
         reuse_downstream_tests: bool,
     ) -> (SkippedNodes, SkippedNodes) {
+        // `on_error: continue` — skip failure propagation so downstreams
+        // keep running. Handles both `Ok(Errored)` (normal run failure) and
+        // `Err(_)` (e.g. microbatch failures before normalization).
+        let is_failure = matches!(&result, Err(_) | Ok(NodeStatus::Errored));
+        if is_failure && !fail_fast_flag && model_should_continue_on_error(task_idx, schedule) {
+            return (Vec::new(), Vec::new());
+        }
         match result {
             Ok(node_status) => match node_status {
                 NodeStatus::Errored => (
@@ -261,6 +270,37 @@ impl SkipSet {
             ),
         }
     }
+}
+
+// Returns true when the failing task is a model with `on_error: continue`.
+//
+// Phase gating: honored for Render and Run failures, but **not** Analyze.
+// Analyze produces the type/binding facts that `--static-analysis strict`
+// downstreams consume, so upstream Analyze failures must still propagate.
+//
+// TODO: The correct rule is per-downstream — propagate Render/Analyze
+// failure only to downstreams whose `static_analysis` is `strict`. The
+// current phase-level guard is a pragmatic approximation.
+//
+// `--fail-fast` overrides this: callers gate with `!fail_fast_flag`.
+fn model_should_continue_on_error(
+    task_idx: NodeIndex,
+    schedule: &DiGraph<Arc<dyn Task>, ()>,
+) -> bool {
+    let Some(task) = schedule.node_weight(task_idx) else {
+        return false;
+    };
+    if !matches!(task.resource_type(), NodeType::Model) {
+        return false;
+    }
+    if matches!(task.task_phase(), Some(TP::Analyze)) {
+        return false;
+    }
+    task.dbt_nodes().iter().any(|node| {
+        node.as_any()
+            .downcast_ref::<DbtModel>()
+            .is_some_and(|m| matches!(m.deprecated_config.on_error, Some(OnError::Continue)))
+    })
 }
 
 fn record_skipped_stats(
@@ -418,6 +458,7 @@ pub async fn visit_sequential(
                 node_idx,
                 &dependents,
                 schedule,
+                ctx.inner.arg.fail_fast_flag,
                 should_reuse_downstream_tests(ctx),
             );
             report_skipped_node_evaluations(ctx, node.as_ref(), &failed_nodes);
@@ -626,6 +667,7 @@ pub async fn visit_parallel(
                 node_idx,
                 &dependents,
                 schedule,
+                ctx.inner.arg.fail_fast_flag,
                 should_reuse_downstream_tests(ctx),
             );
             if let Some(node) = maybe_node {
@@ -860,6 +902,7 @@ mod tests {
             &dependents,
             &schedule,
             false,
+            false,
         );
 
         assert!(reused_nodes.is_empty());
@@ -878,6 +921,7 @@ mod tests {
             model_idx,
             &dependents,
             &schedule,
+            false,
             true,
         );
 
