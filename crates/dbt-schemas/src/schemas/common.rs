@@ -1581,33 +1581,6 @@ pub fn merge_meta(
     }
 }
 
-/// Merge two lists into a deduplicated, sorted union. Used for fields like
-/// classifiers where set-like union semantics are wanted.
-///
-/// Do *not* use this for `tags`: dbt-core's `MergeBehavior.Append` (the
-/// merge behavior the `tags` field actually declares in `dbt_common`) is a
-/// plain, order-preserving, non-deduplicating concatenation. Use
-/// [`append_vec`] for that.
-pub fn merge_vec(
-    base_vec: Option<Vec<String>>,
-    update_vec: Option<Vec<String>>,
-) -> Option<Vec<String>> {
-    match (base_vec, update_vec) {
-        // If both are None, result is None
-        (None, None) => None,
-        // If either has a value (even empty), we preserve that semantic meaning
-        (Some(mut base), Some(update)) => {
-            base.extend(update);
-            base.sort();
-            base.dedup();
-            Some(base)
-        }
-        // If only one side has a value, use it
-        (Some(base), None) => Some(base),
-        (None, Some(update)) => Some(update),
-    }
-}
-
 /// Append `update_vec` after `base_vec`, preserving declaration order and
 /// duplicates. Matches dbt-core's `MergeBehavior.Append` semantics (plain
 /// concatenation: `self_value + other_value`, no dedup, no sort) used for
@@ -1627,6 +1600,29 @@ pub fn append_vec(
         (Some(base), None) => Some(base),
         (None, Some(update)) => Some(update),
     }
+}
+
+/// Merge two lists into a deduplicated, sorted union. Used for fields like
+/// classifiers where set-like union semantics are wanted.
+///
+/// Do *not* use this for `tags`: dbt-core's `MergeBehavior.Append` (the
+/// merge behavior the `tags` field actually declares in `dbt_common`) is a
+/// plain, order-preserving, non-deduplicating concatenation. Use
+/// [`append_vec`] for that.
+pub fn merge_vec(
+    base_vec: Option<Vec<String>>,
+    update_vec: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    // Only sort/dedup when both sides actually contributed values, matching
+    // this function's original behavior: a single-sided result is returned
+    // as-is, unsorted and undeduplicated.
+    let both_present = base_vec.is_some() && update_vec.is_some();
+    let mut merged = append_vec(base_vec, update_vec)?;
+    if both_present {
+        merged.sort();
+        merged.dedup();
+    }
+    Some(merged)
 }
 
 pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &str) -> String {
