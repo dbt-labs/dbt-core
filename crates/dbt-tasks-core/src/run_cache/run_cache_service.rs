@@ -542,6 +542,36 @@ fn heuristic_clock_enabled_for_adapter(adapter_type: AdapterType) -> bool {
     )
 }
 
+/// Whether an empty `freshness_all_in_schema` result for `adapter_type`
+/// should trigger the slower per-node `freshness_with_overrides_and_options`
+/// fallback (and its `StateServiceWarn`).
+///
+/// An empty schema-level dump is ambiguous in general: it can mean the
+/// underlying metadata catalog hasn't caught up yet (a real race), or it can
+/// mean every relation in the group genuinely doesn't exist yet. Which one
+/// applies depends on how the adapter implements `freshness_all_in_schema`:
+///
+/// - Snowflake and BigQuery each issue a single `INFORMATION_SCHEMA`-style
+///   bulk query (`snowflake/mod.rs`, `bigquery/mod.rs`) against a metadata
+///   view that is documented to lag behind DDL by a few seconds -- the
+///   fallback exists specifically to work around that lag, so it must fire.
+/// - Any adapter that hasn't overridden the trait method at all gets the
+///   default implementation (`metadata_adapter.rs`), which *deliberately*
+///   returns an empty map to signal "fall back" (see its doc comment) -- the
+///   fallback is the only way those adapters get real freshness data, so it
+///   must fire there too.
+/// - Databricks (`databricks/mod.rs`) is the one exception: it issues a real
+///   per-relation `DESCRIBE HISTORY` (or `INFORMATION_SCHEMA.last_altered`
+///   for views) lookup directly, with no intermediate eventually-consistent
+///   catalog snapshot to lag behind. An empty result there means every
+///   relation in the group genuinely doesn't exist yet -- the normal state
+///   for a freshly created CI schema before any model has run. Falling back
+///   in that case only repeats the same (still-empty) per-relation lookups
+///   at higher cost while emitting a misleading warning on every CI run.
+fn schema_dump_empty_requires_fallback(adapter_type: AdapterType, dump_is_empty: bool) -> bool {
+    dump_is_empty && !matches!(adapter_type, AdapterType::Databricks)
+}
+
 /// Collect every relation and source freshness override needed for the run's
 /// metadata prefetch.
 ///
@@ -727,7 +757,7 @@ async fn bulk_prefetch_last_modified_by_schema(
             .await
             .map_err(into_fs_error)?;
 
-        if dump.is_empty() {
+        if schema_dump_empty_requires_fallback(ctx.adapter_type(), dump.is_empty()) {
             // Empty result from the schema dump. This is typically caused by
             // INFORMATION_SCHEMA eventual consistency: Fusion's global prefetch
             // fires eagerly at run start (before any node executes), whereas the
@@ -4876,5 +4906,66 @@ mod tests {
         .unwrap();
         let clock = lock.get().expect("clock should be set");
         assert_eq!(clock.now_ms(), 42_000);
+    }
+
+    /// Regression tests for https://github.com/dbt-labs/dbt-core/issues/15594:
+    /// Databricks issues a real per-relation `DESCRIBE HISTORY` lookup in
+    /// `freshness_all_in_schema` (no eventually-consistent catalog snapshot to
+    /// lag behind), so an empty result there is authoritative and must not
+    /// trigger the per-node eventual-consistency fallback + warning.
+    #[test]
+    fn schema_dump_empty_does_not_require_fallback_on_databricks() {
+        assert!(!schema_dump_empty_requires_fallback(
+            AdapterType::Databricks,
+            true
+        ));
+    }
+
+    /// Snowflake's `freshness_all_in_schema` is a single `INFORMATION_SCHEMA`
+    /// bulk query that can genuinely lag behind a just-created table -- this
+    /// is the original, still-valid reason the fallback exists, and must be
+    /// preserved.
+    #[test]
+    fn schema_dump_empty_still_requires_fallback_on_snowflake() {
+        assert!(schema_dump_empty_requires_fallback(
+            AdapterType::Snowflake,
+            true
+        ));
+    }
+
+    /// BigQuery's `freshness_all_in_schema` is likewise a single bulk query
+    /// against a metadata view, so it needs the same fallback as Snowflake.
+    #[test]
+    fn schema_dump_empty_still_requires_fallback_on_bigquery() {
+        assert!(schema_dump_empty_requires_fallback(
+            AdapterType::Bigquery,
+            true
+        ));
+    }
+
+    /// Adapters that haven't overridden `freshness_all_in_schema` get the
+    /// trait's default implementation, which deliberately returns an empty
+    /// map to signal "fall back" (see `MetadataAdapter::freshness_all_in_schema`'s
+    /// doc comment) -- the fallback is the only way those adapters get real
+    /// freshness data, so an empty result must still trigger it.
+    #[test]
+    fn schema_dump_empty_still_requires_fallback_for_unimplemented_adapters() {
+        assert!(schema_dump_empty_requires_fallback(
+            AdapterType::Postgres,
+            true
+        ));
+    }
+
+    /// A non-empty dump never needs the fallback, regardless of adapter.
+    #[test]
+    fn schema_dump_non_empty_never_requires_fallback() {
+        assert!(!schema_dump_empty_requires_fallback(
+            AdapterType::Snowflake,
+            false
+        ));
+        assert!(!schema_dump_empty_requires_fallback(
+            AdapterType::Databricks,
+            false
+        ));
     }
 }
