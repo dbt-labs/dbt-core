@@ -866,6 +866,32 @@ jobs:
           EOF
           )"
 
+  # Tell dbt-labs/fs to bump its `# COPYBARA-DBTCORE-VERSION` marker to the
+  # released version via the `bump-dbt-core-version` repository_dispatch fs
+  # listens for. Fire-and-forget: fs opens its own PR (no-op if unchanged).
+  bump-fs-dbt-core-version:
+    name: Bump dbt-core version in fs
+    needs: [prepare-release, publish-pypi, github-release]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.prepare-release.outputs.version }}
+    steps:
+      - name: Trigger dbt-core version bump in fs
+        run: |
+          # jq-build the body so the version can't break out of the JSON.
+          payload="$(jq -n --arg version "$VERSION" \
+            '{event_type: "bump-dbt-core-version", client_payload: {version: $version}}')"
+          curl -sS --fail-with-body -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.FS_SERVICE_PAT }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/dbt-labs/fs/dispatches \
+            -d "$payload"
+
   # Submits an updated dbtLabs.dbt-core manifest to microsoft/winget-pkgs
   # via `wingetcreate update` using the Windows installer archive from the
   # `github-release` job. Runs in parallel with `publish-homebrew`; both
