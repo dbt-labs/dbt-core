@@ -908,12 +908,10 @@ pub async fn load_inner(
         } else {
             BTreeMap::new()
         };
-        // Only set the dispatch config on first load of the project (mainly impacts testing)
-        if DISPATCH_CONFIG.get().is_none() {
-            DISPATCH_CONFIG
-                .set(RwLock::new(dispatch_config_map))
-                .unwrap();
-        }
+        // Only set the dispatch config on first load of the project (mainly impacts testing).
+        // get_or_init synchronizes internally, so concurrent loads can't race between the
+        // check and the set.
+        DISPATCH_CONFIG.get_or_init(|| RwLock::new(dispatch_config_map));
     }
 
     let session_files = find_session_files(package_path)?;
