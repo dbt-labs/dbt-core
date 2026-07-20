@@ -119,6 +119,25 @@ pub trait TypeOps: Send + Sync {
         Ok(true)
     }
 
+    /// Return whether this adapter cannot cast a quoted string literal to the
+    /// given type.
+    fn cast_from_string_unsupported_for(&self, data_type: &DataType) -> bool {
+        use AdapterType::*;
+
+        match self.adapter_type() {
+            Bigquery => {
+                let is_struct = matches!(data_type, DataType::Struct(_));
+                let is_geography = matches!(
+                    data_type,
+                    DataType::FixedSizeList(field, 1) if field.name() == "geography"
+                );
+
+                is_struct || is_geography
+            }
+            _ => false,
+        }
+    }
+
     /// Format a SQL identifier, quoting it if necessary for this dialect.
     fn format_ident(&self, id: &str) -> String {
         crate::format_ident::format_ident(id, self.adapter_type())

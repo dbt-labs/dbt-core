@@ -1652,17 +1652,10 @@ fn yml_value_to_sql_literal(
         YmlValue::Null(_) => Ok(literal_formatter.none_value()),
         YmlValue::Bool(b, _) => Ok(literal_formatter.format_bool(b)),
         YmlValue::Number(n, _) => Ok(n.to_string()),
-        // For BigQuery, a string fixture for a STRUCT or GEOGRAPHY column is a
-        // SQL expression (e.g. `STRUCT("A" AS f1)`, `ST_GEOGPOINT(1, 2)`) that
-        // must be injected verbatim: these types cannot be produced by CASTing
-        // a string literal. See dbt-labs/dbt-core#14625.
-        YmlValue::String(s, _)
-            if adapter_type == AdapterType::Bigquery
-                && (matches!(data_type, DataType::Struct(_))
-                    || BigqueryTyping::is_geography(data_type)) =>
-        {
-            Ok(s)
-        }
+        // A string fixture for a type that cannot be produced by casting a
+        // string literal (e.g. BigQuery STRUCT/GEOGRAPHY) is a SQL expression
+        // that must be injected verbatim. See dbt-labs/dbt-core#14625.
+        YmlValue::String(s, _) if type_ops.cast_from_string_unsupported_for(data_type) => Ok(s),
         YmlValue::String(s, _) => Ok(literal_formatter.format_str(&s)),
         // Mappings/sequences have per-dialect customizations
         YmlValue::Mapping(m, _) => {
@@ -2907,6 +2900,81 @@ mod tests {
             result,
             "CAST('hello' AS string) AS name",
             "plain string values must remain quoted"
+        );
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_string_expr_for_geography() {
+        let geography_type =
+            DataType::FixedSizeList(Arc::new(Field::new("geography", DataType::Binary, true)), 1);
+        let nested_struct_type = DataType::Struct(
+            vec![Arc::new(Field::new(
+                "nested_point",
+                geography_type.clone(),
+                true,
+            ))]
+            .into(),
+        );
+        let geography_array_type =
+            DataType::List(Arc::new(Field::new("item", geography_type.clone(), true)));
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("some_point", geography_type, true),
+            Field::new("nested_struct", nested_struct_type, true),
+            Field::new("geography_array", geography_array_type, true),
+        ]));
+
+        let columns =
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Bigquery))
+                .expect("Must format column types");
+
+        let mut nested_struct_map = dbt_yaml::mapping::Mapping::new();
+        nested_struct_map.insert(
+            YmlValue::string("nested_point".to_string()),
+            YmlValue::string("ST_GEOGPOINT(101, -38)".to_string()),
+        );
+
+        let yml_rows = vec![vec![
+            YmlValue::string("ST_GEOGPOINT(100, -37)".to_string()),
+            YmlValue::Mapping(nested_struct_map, Default::default()),
+            YmlValue::Sequence(
+                vec![YmlValue::string("ST_GEOGPOINT(102, -39)".to_string())],
+                Default::default(),
+            ),
+        ]];
+
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            yml_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+
+        assert_contains!(
+            result,
+            "CAST(ST_GEOGPOINT(100, -37) AS GEOGRAPHY) AS some_point"
+        );
+        assert_contains!(
+            result,
+            "ST_GEOGPOINT(101, -38) AS nested_point",
+            "nested GEOGRAPHY expression should stay raw inside STRUCT"
+        );
+        assert_contains!(
+            result,
+            "ST_GEOGPOINT(102, -39)",
+            "array GEOGRAPHY expression should stay raw inside ARRAY"
+        );
+        assert!(
+            !result.contains("CAST('ST_GEOGPOINT(100, -37)' AS"),
+            "GEOGRAPHY expression should not be quoted as a string literal: {result}"
+        );
+        assert!(
+            !result.contains("'ST_GEOGPOINT(101, -38)'"),
+            "nested GEOGRAPHY expression should not be quoted as a string literal: {result}"
+        );
+        assert!(
+            !result.contains("'ST_GEOGPOINT(102, -39)'"),
+            "array GEOGRAPHY expression should not be quoted as a string literal: {result}"
         );
     }
 
