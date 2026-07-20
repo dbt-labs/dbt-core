@@ -106,6 +106,7 @@ const KNOWN_UNUSED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_UPLOAD_TO_ARTIFACTS_INGEST_API",
     "DBT_ENGINE_USE_EXPERIMENTAL_JOB_HEALTH_MONITOR",
     "DBT_ENGINE_USE_EXPERIMENTAL_SKIP_NODES_SYNCHRONOUSLY",
+    "DBT_ENGINE_USE_V2_PARSER",
     "DBT_ENGINE_VORTEX_EVENT_FORWARDING_ENABLED",
     "DBT_ENGINE_WRITE_SQL_QUERY_DATA",
 ];
@@ -393,6 +394,42 @@ mod tests {
             #[allow(clippy::disallowed_methods)]
             std::env::remove_var("DBT_ENGINE_SQLPARSE");
         }
+    }
+
+    #[test]
+    fn use_v2_parser_is_a_recognized_no_op() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        // Clean up first
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_USE_V2_PARSER");
+        }
+
+        // Set the no-op engine env var
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("DBT_ENGINE_USE_V2_PARSER", "1");
+        }
+
+        // It must be recognized (not rejected as an unknown reserved-prefix var)...
+        let validate = validate_engine_env_vars();
+        // ...and reported as unused (it is a no-op in fusion).
+        let unused = warn_unused_engine_env_vars();
+
+        // Clean up before asserting so a failure doesn't leak the var
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_USE_V2_PARSER");
+        }
+
+        assert!(
+            validate.is_ok(),
+            "DBT_ENGINE_USE_V2_PARSER should be a recognized engine env var"
+        );
+        assert!(
+            unused.contains(&"DBT_ENGINE_USE_V2_PARSER".to_string()),
+            "DBT_ENGINE_USE_V2_PARSER should be treated as a no-op (unused) var"
+        );
     }
 
     #[test]
