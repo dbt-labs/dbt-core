@@ -796,9 +796,14 @@ jobs:
           # 2. Remove the unreleased entries the release batched away, but only
           #    those still present — main may never have had them, or a prior
           #    backport already removed them (--ignore-unmatch, not an error).
-          DELETED="$(git diff --diff-filter=D --name-only "${REL}~1" "$REL" -- .changes/unreleased)"
-          if [ -n "$DELETED" ]; then
-            printf '%s\n' "$DELETED" | xargs git rm -q --ignore-unmatch --
+          #    Stay NUL-delimited end to end: changie names each entry after its
+          #    kind, so multi-word kinds ("Under the Hood", "Breaking Changes",
+          #    ...) yield paths with spaces that word-split under plain xargs and
+          #    would then be silently skipped by --ignore-unmatch.
+          DELETED_LIST="$(mktemp)"
+          git diff -z --diff-filter=D --name-only "${REL}~1" "$REL" -- .changes/unreleased > "$DELETED_LIST"
+          if [ -s "$DELETED_LIST" ]; then
+            git rm -q --ignore-unmatch --pathspec-from-file="$DELETED_LIST" --pathspec-file-nul
           fi
 
           # 3. Regenerated CHANGELOG.md, applied as a patch (not a copy) so
