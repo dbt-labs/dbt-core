@@ -1651,21 +1651,36 @@ impl DbtProjectCompilation {
 
         let execute_mode = Execute::from_compute_flag(arg.local_execution_backend);
 
-        // FEATURES: sidecar service
-        // For sidecar/service mode, clear stale schema cache to ensure we use
-        // fresh schemas from the sample data. The schema store's sourced_remote
-        // directory may contain schemas from a different target/run.
-        if matches!(execute_mode, Execute::Sidecar | Execute::Service) {
-            let sourced_remote_dir = arg.metadata_dir().join("warehouse").join("schemas");
-            if sourced_remote_dir.exists() {
-                if let Err(e) = std::fs::remove_dir_all(&sourced_remote_dir) {
+        let clear_schema_cache_dir = |cache_dir: PathBuf| {
+            if cache_dir.exists() {
+                if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
                     tracing::warn!(
                         "Failed to clear stale schema cache at {}: {}",
-                        sourced_remote_dir.display(),
+                        cache_dir.display(),
                         e
                     );
                 }
             }
+        };
+
+        let is_duckdb_adapter = self.adapter_type() == AdapterType::DuckDB;
+
+        // Sidecar/service schemas and all remote entries in the epoch cache share
+        // this directory, so clear it before loading schemas from the current run.
+        if matches!(execute_mode, Execute::Sidecar | Execute::Service) || is_duckdb_adapter {
+            clear_schema_cache_dir(arg.metadata_dir().join("warehouse").join("schemas"));
+        }
+
+        // DuckDB `run` does not mirror updated schemas to the legacy frontier cache.
+        // Clear only internal entries so deferred and external caches remain intact.
+        if is_duckdb_adapter {
+            clear_schema_cache_dir(
+                arg.io
+                    .out_dir
+                    .join("schemas")
+                    .join("sourced_remote")
+                    .join("internal"),
+            );
         }
 
         // FEATURES: schema_hydration build_cache
