@@ -10,6 +10,9 @@
 For information on prior major and minor releases, see their changelogs:
 
 
+* [1.13](https://github.com/dbt-labs/dbt-core/blob/1.13.latest/CHANGELOG.md)
+* [1.12](https://github.com/dbt-labs/dbt-core/blob/1.12.latest/CHANGELOG.md)
+* [1.11](https://github.com/dbt-labs/dbt-core/blob/1.11.latest/CHANGELOG.md)
 * [1.10](https://github.com/dbt-labs/dbt-core/blob/1.10.latest/CHANGELOG.md)
 * [1.9](https://github.com/dbt-labs/dbt-core/blob/1.9.latest/CHANGELOG.md)
 * [1.8](https://github.com/dbt-labs/dbt-core/blob/1.8.latest/CHANGELOG.md)
