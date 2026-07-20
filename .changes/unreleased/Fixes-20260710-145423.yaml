@@ -1,0 +1,7 @@
+kind: Fixes
+body: Use BigQuery backticks when quoting generated identifiers
+time: 2026-07-10T14:54:23.972337+01:00
+custom:
+    author: danmawdsleyoaknorth
+    issue: "10345"
+    project: dbt-core
