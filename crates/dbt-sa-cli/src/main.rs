@@ -1,4 +1,5 @@
 use dbt_clap_core::{CliParserFactory as _, from_main};
+use dbt_common::pretty_string::apply_color_env_overrides;
 use dbt_common::tracing::{FsTraceConfig, dbt_init::init_tracing};
 use dbt_features::cli::DefaultCliParserFactory;
 use dbt_features::feature_stack::FeatureStack;
@@ -9,6 +10,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 fn main() -> ExitCode {
+    apply_color_env_overrides();
     let version = env!("CARGO_PKG_VERSION");
     let cli_parser = DefaultCliParserFactory.create("dbt-core", version);
     let cli = dbt_main::prepare_cli_or_exit(&cli_parser);

@@ -1,6 +1,8 @@
 use crate::{
     LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
-    data_provider::DataProvider, layer::TelemetryConsumer, shared_writer::SharedWriter,
+    data_provider::DataProvider,
+    layer::TelemetryConsumer,
+    shared_writer::{SharedWriter, resolve_is_terminal, resolve_use_color},
 };
 
 pub type TelemetryRecordPrettyFormatter =
@@ -14,7 +16,7 @@ pub type TelemetryRecordPrettyFormatter =
 pub struct TelemetryPrettyWriterLayer {
     writer: Box<dyn SharedWriter>,
     formatter: TelemetryRecordPrettyFormatter,
-    is_tty: bool,
+    use_color: bool,
     filter_flag: TelemetryOutputFlags,
 }
 
@@ -24,12 +26,16 @@ impl TelemetryPrettyWriterLayer {
         W: SharedWriter + 'static,
         F: Fn(TelemetryRecordRef, bool) -> Option<String> + Send + Sync + 'static,
     {
-        let is_tty = writer.is_terminal();
+        // Routing is based on terminal-ness alone (respecting FORCE_COLOR
+        // but not NO_COLOR, so setting NO_COLOR on a real TTY doesn't drop
+        // console-only records); styling additionally honors NO_COLOR.
+        let is_tty = resolve_is_terminal(&writer);
+        let use_color = resolve_use_color(&writer);
 
         Self {
             writer: Box::new(writer),
             formatter: Box::new(formatter),
-            is_tty,
+            use_color,
             filter_flag: if is_tty {
                 TelemetryOutputFlags::OUTPUT_CONSOLE
             } else {
@@ -52,19 +58,20 @@ impl TelemetryConsumer for TelemetryPrettyWriterLayer {
     }
 
     fn on_span_start(&self, span: &SpanStartInfo, _: &mut DataProvider<'_>) {
-        if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanStart(span), self.is_tty) {
+        if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanStart(span), self.use_color) {
             self.writer.writeln(&line);
         }
     }
 
     fn on_span_end(&self, span: &SpanEndInfo, _: &mut DataProvider<'_>) {
-        if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanEnd(span), self.is_tty) {
+        if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanEnd(span), self.use_color) {
             self.writer.writeln(&line);
         }
     }
 
     fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
-        if let Some(line) = (self.formatter)(TelemetryRecordRef::LogRecord(record), self.is_tty) {
+        if let Some(line) = (self.formatter)(TelemetryRecordRef::LogRecord(record), self.use_color)
+        {
             self.writer.writeln(&line);
         }
     }
