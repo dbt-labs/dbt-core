@@ -866,13 +866,13 @@ jobs:
           EOF
           )"
 
-  # Tell dbt-labs/fs to bump its `# COPYBARA-DBTCORE-VERSION` marker to the
-  # released version via the `bump-dbt-core-version` repository_dispatch fs
-  # listens for. On success fs opens its own PR; a failed dispatch (API blip,
-  # expired PAT) fails the job so slack-failure-notification pages oncall to
-  # raise the bump PR by hand.
-  bump-fs-dbt-core-version:
-    name: Bump dbt-core version in fs
+  # Tell the internal mirror repo to bump its dbt-core version marker to the
+  # released version via the `bump-dbt-core-version` repository_dispatch it
+  # listens for. On success the mirror opens its own PR; a failed dispatch
+  # (API blip, expired PAT) fails the job so slack-failure-notification pages
+  # oncall to raise the bump PR by hand.
+  bump-mirror-dbt-core-version:
+    name: Bump dbt-core version in mirror
     needs: [prepare-release, publish-pypi, github-release]
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
@@ -881,7 +881,7 @@ jobs:
     env:
       VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
-      - name: Trigger dbt-core version bump in fs
+      - name: Trigger dbt-core version bump in mirror
         run: |
           # jq-build the body so the version can't break out of the JSON.
           payload="$(jq -n --arg version "$VERSION" \
@@ -972,7 +972,7 @@ jobs:
         publish-homebrew,
         publish-winget,
         changelog-backport,
-        bump-fs-dbt-core-version,
+        bump-mirror-dbt-core-version,
       ]
     uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
     with:
