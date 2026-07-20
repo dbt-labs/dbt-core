@@ -1,7 +1,0 @@
-kind: Fixes
-body: Reduce dbt State auth token request timeout to 15 seconds and retry transient auth service failures.
-time: 2026-06-29T10:50:44.783421-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: ""

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Support context-backed Jinja map caches that use get and update.
-time: 2026-07-08T10:13:31.31892-04:00
-custom:
-    author: mach-kernel
-    issue: "11790"
-    project: ""

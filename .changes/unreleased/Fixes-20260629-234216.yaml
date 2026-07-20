@@ -1,7 +1,0 @@
-kind: Fixes
-body: state:modified no longer flags models whose persist_docs config is set as environment-aware Jinja.
-time: 2026-06-29T23:42:16.004464-07:00
-custom:
-    author: ""
-    issue: "15286"
-    project: ""

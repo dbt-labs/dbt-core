@@ -1,7 +1,0 @@
-kind: Fixes
-body: Populate defer_relation on graph.nodes entries (models, snapshots, seeds) so node.defer_relation works in Jinja, matching dbt-core
-time: 2026-05-04T08:44:17.643979-07:00
-custom:
-    author: akbog
-    issue: "1366"
-    project: ""

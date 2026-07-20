@@ -1,7 +1,0 @@
-kind: Fixes
-body: Add graceful shutdown/drain to dbt docs server so rollout restarts don't reset in-flight readers
-time: 2026-06-29T13:27:37.312636-04:00
-custom:
-    author: jcserv
-    issue: ""
-    project: ""

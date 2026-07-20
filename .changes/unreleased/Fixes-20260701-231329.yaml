@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix a client-cancellation panic in the Snowflake ADBC driver on long-running queries.
-time: 2026-07-01T23:13:29.532908+05:30
-custom:
-    author: ragesh-g
-    issue: ""
-    project: ""

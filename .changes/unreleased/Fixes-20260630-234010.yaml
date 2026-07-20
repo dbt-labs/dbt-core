@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'BigQuery: treat 403 access-control failures (missing bigquery.datasets.create IAM permission or VPC Service Controls policy violations) as ignorable permission errors during schema creation, matching dbt-core; runs against centrally-provisioned datasets in governed/VPC-SC environments no longer fail on the eager CREATE SCHEMA step'
-time: 2026-06-30T23:40:10.086456-04:00
-custom:
-    author: "dataders claude"
-    issue: "14631"
-    project: ""

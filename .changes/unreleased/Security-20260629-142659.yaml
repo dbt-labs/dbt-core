@@ -1,7 +1,0 @@
-kind: Security
-body: Remove unused ad-hoc SQL query endpoints (POST /api/v1/query, GET /api/v1/tables) from dbt docs server
-time: 2026-06-29T14:26:59.968054-04:00
-custom:
-    author: jcserv
-    issue: ""
-    project: ""

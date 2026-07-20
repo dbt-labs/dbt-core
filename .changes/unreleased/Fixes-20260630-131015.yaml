@@ -1,7 +1,0 @@
-kind: Fixes
-body: Match Python re.sub behavior for empty regex matches in dbt Jinja modules.re.
-time: 2026-06-30T13:10:15.966007-05:00
-custom:
-    author: kczimm
-    issue: "7538"
-    project: ""
