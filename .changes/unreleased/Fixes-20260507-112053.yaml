@@ -1,7 +1,0 @@
-kind: Fixes
-body: Correct defer_relation wire shape on graph.nodes to match dbt-core's DeferRelation dataclass (drop unique_id, add description/compiled_code/meta/tags/config)
-time: 2026-05-07T11:20:53.064069-07:00
-custom:
-    author: akbog
-    issue: "1366"
-    project: ""

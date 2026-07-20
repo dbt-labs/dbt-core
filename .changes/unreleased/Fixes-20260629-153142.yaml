@@ -1,7 +1,0 @@
-kind: Fixes
-body: Implement `normalize()` on pytz timezone objects so unit-test fixtures using `modules.pytz.timezone(...).normalize(...)` parse instead of failing with an opaque `dbt1013` deserialization error
-time: 2026-06-29T15:31:42.306891083-07:00
-custom:
-    author: lottaquestions
-    issue: ""
-    project: ""

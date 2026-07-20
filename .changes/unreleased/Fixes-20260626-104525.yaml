@@ -1,7 +1,0 @@
-kind: Fixes
-body: Improve the Snowflake dbt State metadata error when database or schema is empty.
-time: 2026-06-26T10:45:25.687811-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: ""

@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'state:modified no longer flags seeds or snapshots whose config uses environment-aware Jinja (e.g. persist_docs, quote_columns, grants, meta), and now correctly detects genuine changes to a snapshot''s meta while no longer over-selecting snapshot group-only changes: seeds and snapshots join the wholesale unrendered_config comparison (dbt-core#15286).'
-time: 2026-07-07T00:37:43.060466-07:00
-custom:
-    author: ""
-    issue: "15286"
-    project: ""

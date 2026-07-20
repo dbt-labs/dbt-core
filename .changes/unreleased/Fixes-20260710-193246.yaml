@@ -1,7 +1,0 @@
-kind: Fixes
-body: Bump BigQuery ADBC driver to 0.21.0.dev+dbt0.21.13, wiring HTTPS_PROXY/NO_PROXY support into the OAuth token-exchange transport
-time: 2026-07-10T19:32:46.718688-07:00
-custom:
-    author: VersusFacit dataders
-    issue: "14470"
-    project: ""

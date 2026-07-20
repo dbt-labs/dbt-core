@@ -1,7 +1,0 @@
-kind: Fixes
-body: dbt State view reuse during full-refresh runs
-time: 2026-06-17T10:07:22.846172-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: ""

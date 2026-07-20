@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Generic and column data tests now include their schema.yml config (where, severity, limit, tags, meta, ...) in unrendered_config, matching models/seeds/snapshots. Preparatory for correct state:modified comparison of data tests.
-time: 2026-06-30T21:03:37.373143-07:00
-custom:
-    author: ""
-    issue: "15286"
-    project: ""

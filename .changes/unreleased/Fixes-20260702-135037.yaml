@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'state:modified no longer flags data tests whose schema.yml config uses environment-aware Jinja (where/severity/tags/meta), and now correctly detects genuine changes to a test''s where/limit/severity: data tests join the wholesale unrendered_config comparison (dbt-core#15286).'
-time: 2026-07-02T13:50:37.681886-07:00
-custom:
-    author: ""
-    issue: "15286"
-    project: ""

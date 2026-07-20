@@ -1,7 +1,0 @@
-kind: Fixes
-body: Replace panic with a user-facing error when an exposure depends_on entry does not resolve to a ref(), source(), or metric() call
-time: 2026-06-26T10:53:10.880801+02:00
-custom:
-    author: b-per
-    issue: ""
-    project: ""

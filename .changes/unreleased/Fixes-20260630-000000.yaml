@@ -1,7 +1,0 @@
-kind: Fixes
-body: Treat an empty or zero-byte selectors.yml as no selector definitions, matching dbt Core behavior instead of raising SelectorError dbt1600
-time: 2026-06-30T00:00:00.000000000Z
-custom:
-    author: ""
-    issue: "10985"
-    project: ""

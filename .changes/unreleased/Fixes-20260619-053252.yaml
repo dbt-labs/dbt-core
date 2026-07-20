@@ -1,7 +1,0 @@
-kind: Fixes
-body: Generic test nodes with long names no longer have empty depends_on.macros in the manifest
-time: 2026-06-19T05:32:52.644141215-07:00
-custom:
-    author: b-per
-    issue: "15308"
-    project: ""

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Filter synthetic snapshot macro uids (snapshot.<pkg>.snapshot_<name>) from depends_on.macros in snapshot nodes; these Fusion-internal uids never appear in manifest.macros and caused a dangling reference.
-time: 2026-07-06T15:50:37.892772-06:00
-custom:
-    author: aiguofer
-    issue: ""
-    project: ""

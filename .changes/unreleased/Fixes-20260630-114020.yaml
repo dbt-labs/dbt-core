@@ -1,7 +1,0 @@
-kind: Fixes
-body: LSP fix deferral for show (preview CTE) and compile file
-time: 2026-06-30T11:40:20.3877-05:00
-custom:
-    author: j-clemons
-    issue: "14542"
-    project: dbt-core

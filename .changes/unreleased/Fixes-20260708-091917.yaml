@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'state:modified for data tests now follow dbt-core `TestConfig` key allowlist'
-time: 2026-07-08T09:19:17.81611-07:00
-custom:
-    author: ""
-    issue: "15286"
-    project: ""

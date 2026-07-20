@@ -1,7 +1,0 @@
-kind: Fixes
-body: Implement symbolic linter
-time: 2026-06-24T12:01:14.538594681-07:00
-custom:
-    author: ""
-    issue: ""
-    project: dbt-core
