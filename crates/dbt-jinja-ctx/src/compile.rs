@@ -141,9 +141,15 @@ pub struct OperationCtx {
 /// overlays a `CompileNodeCtx` on top. Several keys (`config`, `ref`,
 /// `source`, `function`, `builtins`, `context`) are intentionally
 /// re-emitted on the overlay — they shadow the base entries with validated
-/// per-node variants. Today's code uses `BTreeMap::insert(...)` to overlay;
-/// after migration, callers `.extend(...)` the typed overlay onto the typed
-/// base before rendering.
+/// per-node variants.
+///
+/// The `base` field is the typed composition seam: when `Some`, the full
+/// context (base + per-node overlay) can be passed directly to
+/// `render_named_str<S: Serialize>` without a `BTreeMap` intermediate —
+/// per-node fields shadow the flattened base keys because they appear later
+/// in serde's field order. When `None` (today's path), the overlay is
+/// serialized alone via `to_jinja_btreemap` and `.extend()`-ed onto the
+/// caller's `base_context.clone()`.
 ///
 /// All Object-typed slots are typed [`MinijinjaValue`] for the same reasons
 /// as [`crate::ResolveModelCtx`]: their concrete impls live in
@@ -152,6 +158,13 @@ pub struct OperationCtx {
 /// which downstream code downcasts.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct CompileNodeCtx {
+    /// Typed base context. `None` on today's BTreeMap-overlay path; `Some`
+    /// on the future typed-throughout path where this struct is passed
+    /// directly to `render_named_str`. Flattened so base keys appear at the
+    /// top level; per-node fields declared below shadow any shared keys.
+    #[serde(flatten)]
+    pub base: Option<CompileBaseCtx>,
+
     /// `{{ this }}` — `RelationObject` Object (or deferred-relation
     /// `RelationObject` for unsafe nodes with deferred state available).
     #[schemars(with = "serde_json::Value")]

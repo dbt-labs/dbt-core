@@ -395,6 +395,7 @@ pub fn build_run_node_context<S: Serialize>(
         .unwrap_or(abs_current_path);
 
     let overlay = RunNodeCtx {
+        base: None,
         this: model_fields.this,
         database: model_fields.database,
         schema: model_fields.schema,

@@ -341,6 +341,7 @@ where
     // into a `MutableMap<Value, Value>` and silently break the downcast —
     // same shape trap PR 3 hit with `MACRO_DISPATCH_ORDER`'s `Vec<String>`.
     let overlay = CompileNodeCtx {
+        base: None,
         this: this_relation,
         database: model.base().database.to_string(),
         schema: model.base().schema.to_string(),

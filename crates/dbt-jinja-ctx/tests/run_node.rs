@@ -36,6 +36,7 @@ fn fixture_run_node_ctx(
     builtins_inner.insert("config".to_string(), MinijinjaValue::from("config-stub"));
 
     RunNodeCtx {
+        base: None,
         this: MinijinjaValue::from("this-stub"),
         database: "analytics".to_string(),
         schema: "public".to_string(),

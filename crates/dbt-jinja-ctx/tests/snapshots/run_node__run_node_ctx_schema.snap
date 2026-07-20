@@ -1,6 +1,5 @@
 ---
 source: fs/sa/crates/dbt-jinja-ctx/tests/run_node.rs
-assertion_line: 134
 expression: schema
 ---
 {
@@ -29,8 +28,18 @@ expression: schema
     "write"
   ],
   "properties": {
+    "MACRO_DISPATCH_ORDER": {
+      "description": "`{{ MACRO_DISPATCH_ORDER }}` — per-package dispatch order map. Same downcast contract as [`crate::ResolveBaseCtx::macro_dispatch_order`]: each value MUST be `MinijinjaValue::from(Vec<String>)` constructed at the call site, NOT a serde-serialized `Vec<String>`.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
     "TARGET_PACKAGE_NAME": {
-      "description": "`{{ TARGET_PACKAGE_NAME }}` — node's package_name (overlays the base, which is the local project's name at base-build time).",
+      "description": "`{{ TARGET_PACKAGE_NAME }}` — local project name. Key string matches `minijinja::constants::TARGET_PACKAGE_NAME`.",
       "type": "string"
     },
     "__minijinja_current_path": {
@@ -41,17 +50,17 @@ expression: schema
       "description": "`{{ __minijinja_current_span }}` — span at the start of rendering. Key string matches `minijinja::constants::CURRENT_SPAN`."
     },
     "builtins": {
-      "description": "`{{ builtins.* }}` — overlay map carrying the per-node `RunConfig` alongside the base's ref/source/function. Same downcast contract as [`crate::CompileNodeCtx::builtins`]."
+      "description": "`{{ builtins.* }}` — `BTreeMap<String, MinijinjaValue>` Object holding `ref` / `source` / `function`. Compile-node-context code downcasts this back to `BTreeMap<String, MinijinjaValue>` when overlaying validated variants per-node, so the underlying Object type must be exactly that."
     },
     "config": {
       "description": "`{{ config(...) }}` — `RunConfig` Object backed by the node's merged config map. Shadows [`crate::CompileBaseCtx::config`]."
     },
     "connection_name": {
-      "description": "`{{ connection_name }}` — empty string at run scope (overlays).",
+      "description": "`{{ connection_name }}` — empty string at base scope.",
       "type": "string"
     },
     "context": {
-      "description": "`{{ context }}` — `MacroLookupContext` keyed by the node's package_name (NOT root project's; this differs from [`crate::CompileBaseCtx::context`]).",
+      "description": "`{{ context }}` — `MacroLookupContext` Object for `context['name']` macro dispatch.",
       "allOf": [
         {
           "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>"
@@ -61,6 +70,19 @@ expression: schema
     "database": {
       "description": "`{{ database }}` — node's adapter database.",
       "type": "string"
+    },
+    "dbt_metadata_envs": {
+      "description": "`{{ dbt_metadata_envs }}` — `BTreeMap<String, MinijinjaValue>` Object (string-valued) populated from the OS `DBT_ENV_CUSTOM_ENV_*` vars."
+    },
+    "execute": {
+      "description": "`{{ execute }}` — `true` at compile/run (flipped from `false` at parse).",
+      "type": "boolean"
+    },
+    "function": {
+      "description": "`{{ function(...) }}` — unvalidated `FunctionFunction` Object."
+    },
+    "graph": {
+      "description": "`{{ graph }}` — `LazyFlatGraph` Object that builds the flat graph on first attribute access; lives in `dbt-jinja-utils` for now."
     },
     "identifier": {
       "description": "`{{ identifier }}` — node's adapter alias (note: run uses `name`, not `alias`; alias is the truncated form for path-length safety on Linux. See the comment in `build_run_node_context`.)",
@@ -81,12 +103,7 @@ expression: schema
       ]
     },
     "node": {
-      "description": "`{{ node.* }}` — same `LazyModelWrapper` content as `model` (run phase aliases them; compile-node does not). Shadows [`crate::CompileBaseCtx::node`] (`Value::NONE`).",
-      "allOf": [
-        {
-          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::run::LazyModelWrapper>"
-        }
-      ]
+      "description": "`{{ node }}` — `Value::NONE` at base scope; populated per-node."
     },
     "post_hooks": {
       "description": "`{{ post_hooks }}` — sequence of `HookConfig` Objects, only emitted when the node's config contains a `post_hook` entry."
@@ -94,9 +111,15 @@ expression: schema
     "pre_hooks": {
       "description": "`{{ pre_hooks }}` — sequence of `HookConfig` Objects, only emitted when the node's config contains a `pre_hook` entry."
     },
+    "ref": {
+      "description": "`{{ ref(...) }}` — unvalidated `RefFunction` Object (validated variant overlaid per-node)."
+    },
     "schema": {
       "description": "`{{ schema }}` — node's adapter schema.",
       "type": "string"
+    },
+    "source": {
+      "description": "`{{ source(...) }}` — unvalidated `SourceFunction` Object."
     },
     "store_raw_result": {
       "description": "`{{ store_raw_result(...) }}` — `ResultStore`-backed closure."
@@ -114,6 +137,7 @@ expression: schema
       "description": "`{{ write(...) }}` — `WriteConfig` Object closure that writes a payload to the target run directory."
     }
   },
+  "additionalProperties": true,
   "definitions": {
     "JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>": {
       "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::lookup::MacroLookupContext`.",
