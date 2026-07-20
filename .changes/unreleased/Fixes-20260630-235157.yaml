@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'BigQuery unit tests: fixture values that are SQL expressions for STRUCT or GEOGRAPHY columns (e.g. STRUCT(...), ST_GEOGPOINT(...)) are now injected verbatim instead of being single-quoted as string literals, so BigQuery can CAST them to the target type; matches dbt-core'
-time: 2026-06-30T23:51:57.234848-04:00
-custom:
-    author: "dataders claude"
-    issue: "14625"
-    project: ""

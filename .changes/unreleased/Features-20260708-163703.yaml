@@ -1,7 +1,0 @@
-kind: Features
-body: 'docs analytics: add distribution field and hydrate server-authoritative fields (distribution, dbt_version, is_logged_in, dbt Cloud IDs) on POST /api/v1/analytics/events'
-time: 2026-07-08T16:37:03.209211-04:00
-custom:
-    author: jcserv
-    issue: ""
-    project: ""

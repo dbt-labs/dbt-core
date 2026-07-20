@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix microbatch lookback off-by-one so a lookback of N produces N+1 batches (current batch plus N previous), matching dbt-core and the microbatch docs
-time: 2026-07-08T15:11:16.793889-07:00
-custom:
-    author: akbog
-    issue: "15477"
-    project: dbt-core

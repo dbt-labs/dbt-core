@@ -1,7 +1,0 @@
-kind: Fixes
-body: model.original_file_path now resolves to the correct path in Jinja macro context during parse phase instead of returning '.'.
-time: 2026-06-26T22:46:11.633081536+00:00
-custom:
-    author: ""
-    issue: "11534"
-    project: ""

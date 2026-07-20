@@ -1,7 +1,0 @@
-kind: Features
-body: Migrate Redshift catalog macros to SHOW TABLES and SVV_REDSHIFT_COLUMNS when datasharing is enabled, so catalog generation works for cross-database relation
-time: 2026-06-11T14:48:42.773028+05:30
-custom:
-    author: ragesh-g
-    issue: ""
-    project: ""

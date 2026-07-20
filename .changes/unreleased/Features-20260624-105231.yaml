@@ -1,7 +1,0 @@
-kind: Features
-body: 'Add catalog_database support to v2 catalogs.yml: when set, catalog_database takes highest priority in generate_database_name over model database config and target.database. Uses the existing build_catalog_relation pattern — no new adapter method. Supported for Snowflake (all types), BigQuery (biglake_metastore), and Databricks (unity, optional, falls back to catalog_name).'
-time: 2026-06-24T10:52:31.311659+05:30
-custom:
-    author: aahel
-    issue: '11437'
-    project: ""

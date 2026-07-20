@@ -1,7 +1,0 @@
-kind: Fixes
-body: state:modified — retire the per-key unrendered config grafts for models and sources
-time: 2026-07-07T15:03:03.319469-07:00
-custom:
-    author: ""
-    issue: "15286"
-    project: ""

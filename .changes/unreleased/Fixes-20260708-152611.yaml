@@ -1,7 +1,0 @@
-kind: Fixes
-body: dbt retry now preserves --full-refresh from the original run, so incremental models retried after a failed full-refresh build use full-refresh (drop + recreate) semantics instead of incremental merge semantics
-time: 2026-07-08T15:26:11.735682263-07:00
-custom:
-    author: alexander-bogdanowicz
-    issue: "15480"
-    project: ""

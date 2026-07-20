@@ -1,7 +1,0 @@
-kind: Fixes
-body: Translate legacy BigQuery seed `+column_types` aliases (e.g. `float`, `integer`, `text`) to their canonical types (FLOAT64/INT64/STRING) instead of failing with 'Invalid column description', matching dbt Core
-time: 2026-07-10T05:33:27.015985465-07:00
-custom:
-    author: lottaquestions
-    issue: "14149"
-    project: ""

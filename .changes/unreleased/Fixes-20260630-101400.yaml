@@ -1,7 +1,0 @@
-kind: Fixes
-body: Snapshots no longer appear in their own depends_on.macros; fixed by skipping self-referential macro dep recording in the DAG listener
-time: 2026-06-30T10:14:00.585345-06:00
-custom:
-    author: aiguofer
-    issue: ""
-    project: ""
