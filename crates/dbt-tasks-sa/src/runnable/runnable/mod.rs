@@ -49,11 +49,10 @@ use crate::runnable::seed::{execute_seed_remote, maybe_resolve_remote_seed_colum
 use crate::runnable::unit_test::execute_unit_test_remote;
 use dbt_tasks_core::run_cache::run_cache_service::{
     RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError, RunCacheReuseHookExecutor,
-    RunCacheReuseHookPhase, RunCacheServiceDecision, confirm_run_cache_service_execution,
-    execute_run_cache_service_clone, insert_compiled_view_definition,
-    record_run_cache_service_execution, refresh_final_last_modified_epoch_for_node,
+    RunCacheReuseHookPhase, RunCacheServiceDecision, clear_final_last_modified_epoch_for_node,
+    confirm_run_cache_service_execution, execute_run_cache_service_clone,
+    insert_compiled_view_definition, record_run_cache_service_execution,
     run_cache_service_before_execution, should_execute_hooks_for_skip_reuse,
-    stamp_final_last_modified_epoch_for_node_heuristic,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -780,14 +779,6 @@ async fn run_cache_after_success_action(
 ) {
     match after_success {
         RunCacheAfterSuccess::None => {
-            if ctx.inner.run_cache_ctx.run_cache_service_requested
-                && stamp_final_last_modified_epoch_for_node_heuristic(ctx, node).is_some()
-            {
-                // Avoid metadata query fanout for no-confirmation successes when
-                // a heuristic timestamp can keep downstream cache entries usable.
-                return;
-            }
-
             // The dbt State submission path (`submit_seed` / `submit_*`) probes
             // `last_modified_epoch_for_node` before deciding whether to
             // submit. When the target table doesn't exist on the warehouse
@@ -797,26 +788,11 @@ async fn run_cache_after_success_action(
             // the current invocation invalidates the cached `None`. The
             // prefetch miss-filter in `prefetch_last_modified_epochs` treats
             // `Some(None)` as a hit (not a miss), so downstream models
-            // never re-query and see the upstream as missing — tripping
-            // their own `metadata_complete = false` and submit-skipping
-            // them too. Re-fetching the just-executed node's epoch here
-            // replaces that stale `None` with the real value so downstream
-            // consumers see the relation correctly.
-            // The `Confirm` arm gets the same refresh as the first step of
-            // `confirm_run_cache_service_execution`; we mirror it here for
-            // the no-confirmation case so the cache stays coherent
-            // regardless of which path the submit took.
-            if ctx.inner.run_cache_ctx.run_cache_service_requested
-                && let Err(err) = refresh_final_last_modified_epoch_for_node(ctx, node).await
-            {
-                emit_warn_log_message(
-                    ErrorCode::StateServiceWarn,
-                    format!(
-                        "dbt State post-execution metadata refresh failed for node {}: {err}; command remains successful",
-                        node.unique_id()
-                    ),
-                    None,
-                );
+            // never re-query. Clear the stale value after successful execution;
+            // the next downstream submit sees a real miss and uses the normal
+            // planned prefetch path.
+            if ctx.inner.run_cache_ctx.run_cache_service_requested {
+                clear_final_last_modified_epoch_for_node(ctx, node);
             }
         }
         RunCacheAfterSuccess::Confirm(mut confirmation) => {

@@ -963,7 +963,7 @@ pub async fn confirm_run_cache_service_execution(
     execution_runtime_ms: Option<i64>,
 ) {
     // Without a confirmation token there is nothing to report, so avoid the
-    // final metadata refresh for reused/skipped nodes.
+    // final metadata refresh.
     let Some(confirmation) = confirmation else {
         return;
     };
@@ -2120,7 +2120,19 @@ pub async fn refresh_final_last_modified_epoch_for_node(
     refresh_last_modified_epoch_for_relation(ctx, &name, relation).await
 }
 
-pub fn stamp_final_last_modified_epoch_for_node_heuristic(
+pub fn clear_final_last_modified_epoch_for_node(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+) {
+    if let Ok((name, _)) = relation_for_node(ctx, node) {
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .remove_last_modified_epoch(&name);
+    }
+}
+
+fn stamp_final_last_modified_epoch_for_node_heuristic(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
 ) -> Option<i64> {
@@ -2129,16 +2141,17 @@ pub fn stamp_final_last_modified_epoch_for_node_heuristic(
     // Mirror the plugin's `clear_cache` + `cache_last_modified_epoch(table, H)`:
     // replace the stale prefetch value (often None for newly-created tables) with H
     // so downstream submissions in the same run have metadata_complete=true.
-    if let Ok((name, _)) = relation_for_node(ctx, node) {
-        ctx.inner
-            .run_cache_ctx
-            .run_cache_metadata
-            .remove_last_modified_epoch(&name);
-        ctx.inner
-            .run_cache_ctx
-            .run_cache_metadata
-            .insert_last_modified_epoch(&name, Some(epoch));
-    }
+    let Ok((name, _)) = relation_for_node(ctx, node) else {
+        return None;
+    };
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_metadata
+        .remove_last_modified_epoch(&name);
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_metadata
+        .insert_last_modified_epoch(&name, Some(epoch));
     Some(epoch)
 }
 
@@ -2163,8 +2176,10 @@ async fn refresh_last_modified_epoch_for_relation(
     let mut relations = BTreeMap::new();
     relations.insert(name.to_string(), relation);
     // Per-relation refreshes aren't used for sources (sources are populated
-    // upfront via the bulk prefetch), so no overrides apply here.
-    refresh_last_modified_epochs(ctx, &relations, &BTreeMap::new()).await?;
+    // upfront via the bulk prefetch), so no overrides apply here. Still route
+    // through the adapter-specific planner so BigQuery can use schema prefetch.
+    refresh_planned_last_modified_misses(ctx, &relations, &BTreeMap::new(), ctx.adapter_type())
+        .await?;
     Ok(ctx
         .inner
         .run_cache_ctx
@@ -2237,8 +2252,10 @@ struct LastModifiedMissRefreshPlan {
 }
 
 /// BigQuery normal misses use the schema prefetch path to avoid high fanout
-/// per-table `__TABLES__` queries. Overrides stay targeted because their
-/// freshness comes from custom `loaded_at_*` logic.
+/// per-table `__TABLES__` queries. A singleton miss can still trigger one
+/// schema scan; that is an intentional fix-forward tradeoff for correctness.
+/// Overrides stay targeted because their freshness comes from custom
+/// `loaded_at_*` logic.
 fn plan_last_modified_miss_refresh(
     adapter_type: AdapterType,
     misses: &BTreeMap<String, Arc<dyn BaseRelation>>,
@@ -3670,6 +3687,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn clear_final_metadata_removes_stale_missing_value() {
+        let ctx = test_task_runner_ctx(None);
+        let model = make_model(
+            "model.test.user_name_model",
+            "db",
+            "dbt_test",
+            "user_name_model",
+            DbtMaterialization::Table,
+        );
+        let target_fqn = fqn_of("db", "dbt_test", "user_name_model");
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&target_fqn, None);
+
+        clear_final_last_modified_epoch_for_node(&ctx, model.as_ref());
+
+        assert_eq!(
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .last_modified_epoch(&target_fqn),
+            None
+        );
+    }
+
     #[tokio::test]
     async fn table_materialization_submits_rendered_sql_before_materialization() {
         let client = Arc::new(RecordingRunCacheClient::default());
@@ -4654,6 +4698,33 @@ mod tests {
                 .targeted_relations
                 .contains_key(&override_name)
         );
+    }
+
+    #[test]
+    fn final_refresh_uses_bigquery_schema_prefetch_plan() {
+        let relation: Arc<dyn BaseRelation> = create_relation(
+            AdapterType::Bigquery,
+            "db".to_string(),
+            "analytics".to_string(),
+            Some("orders".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap()
+        .into();
+        let name = relation.semantic_fqn();
+        let relations = BTreeMap::from([(name.clone(), relation)]);
+        let overrides = BTreeMap::new();
+
+        let bigquery_plan =
+            plan_last_modified_miss_refresh(AdapterType::Bigquery, &relations, &overrides);
+        assert!(bigquery_plan.targeted_relations.is_empty());
+        assert!(bigquery_plan.schema_prefetch_relations.contains_key(&name));
+
+        let snowflake_plan =
+            plan_last_modified_miss_refresh(AdapterType::Snowflake, &relations, &overrides);
+        assert!(snowflake_plan.schema_prefetch_relations.is_empty());
+        assert!(snowflake_plan.targeted_relations.contains_key(&name));
     }
 
     #[test]
