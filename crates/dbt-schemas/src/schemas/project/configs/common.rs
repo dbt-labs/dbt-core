@@ -1676,6 +1676,7 @@ pub const WAREHOUSE_SPECIFIC_CONFIG_KEYS: &[&str] = &[
     // Salesforce
     "primary_key",
     "category",
+    // ClickHouse
     "engine",
     "order_by",
     "ttl",
