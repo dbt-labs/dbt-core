@@ -21,9 +21,9 @@ custom:
     type: string
     required: false
 
-# Change format: project prefix + optional issue links. Issue links are only
-# rendered for dbt-core changes (resolving to the dbt-core repo) and only when
-# an issue number is present.
+# Change format: optional issue links only. The project field is retained in the
+# change files (for the internal changelog) but not rendered here. Issue links
+# are only rendered for dbt-core changes and only when an issue number is present.
 changeFormat: |-
   {{- $IssueList := list }}
   {{- if eq $.Custom.project "dbt-core" }}
@@ -34,7 +34,7 @@ changeFormat: |-
     {{- end -}}
   {{- end -}}
   {{- end -}}
-  - [{{.Custom.project}}] {{.Body}}{{if $IssueList}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}}){{end}}
+  - {{.Body}}{{if $IssueList}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}}){{end}}
 
 kinds:
   - label: Breaking Changes
