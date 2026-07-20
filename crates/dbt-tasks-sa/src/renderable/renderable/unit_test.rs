@@ -2171,6 +2171,18 @@ mod tests {
     }
 
     #[test]
+    fn test_create_cte_name_from_fqn_with_bigquery_quoted_fqn() {
+        let adapter_type = AdapterType::Bigquery;
+        let fqn = "`my-gcp-project`.`my_schema`.`na_unit_test__my_model_expect`";
+        let result =
+            create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
+        assert_eq!(
+            result,
+            "`my-gcp-project_my_schema_na_unit_test__my_model_expect`"
+        );
+    }
+
+    #[test]
     fn test_create_cte_name_from_fqn_with_snowflake_quotes() {
         let adapter_type = AdapterType::Snowflake;
         let fqn = "database.schema.table";
