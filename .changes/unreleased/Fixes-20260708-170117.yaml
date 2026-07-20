@@ -1,0 +1,7 @@
+kind: Fixes
+body: Hide the internal --write-metadata flag in favor of --write-index, fix 'dbt parse --write-index' to generate the index instead of failing with a save_artifact_meta IO error, and make the dbt-index warnings reference --write-index and respect warn_error_options
+time: 2026-07-08T17:01:17.404824-07:00
+custom:
+    author: eliasdefaria
+    issue: ""
+    project: ""

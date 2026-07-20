@@ -1,0 +1,7 @@
+kind: Fixes
+body: Support non-ASCII Jinja macro names in Fusion parsing.
+time: 2026-07-09T16:41:14.74351-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: ""

@@ -1,0 +1,7 @@
+kind: Fixes
+body: stop using schema cache (prefetch at parse time) for adapter.get_columns_in_relation if it's using in a selected node without using strict static analysis.
+time: 2026-06-08T16:44:11.443118008-07:00
+custom:
+    author: xuliangs
+    issue: "14638"
+    project: ""

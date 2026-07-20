@@ -1,0 +1,7 @@
+kind: Fixes
+body: Analysis nodes now have compiled, compiled_code, and compiled_path populated in the manifest after dbt compile
+time: 2026-06-29T22:43:30.3172-06:00
+custom:
+    author: aiguofer
+    issue: "10980"
+    project: ""

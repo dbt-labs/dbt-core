@@ -1,0 +1,7 @@
+kind: Fixes
+body: Remove synthetic materialization macro call coordinates from runtime error locations.
+time: 2026-07-02T17:42:03.340436658-07:00
+custom:
+    author: ""
+    issue: "11053"
+    project: ""

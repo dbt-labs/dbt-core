@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix `show --inline` broken when root package is disabled
+time: 2026-07-02T02:25:56.000376195-04:00
+custom:
+    author: sadboy
+    issue: ""
+    project: ""

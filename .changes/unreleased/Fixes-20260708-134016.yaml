@@ -1,0 +1,7 @@
+kind: Fixes
+body: Expose `model.path` relative to the resource root (e.g. `staging/orders.sql`) in both the `config()` block and the model body, matching dbt-core; previously it was empty inside `config()` and carried the `models/` prefix in the body
+time: 2026-07-08T13:40:16.684841163-07:00
+custom:
+    author: lottaquestions
+    issue: "14142"
+    project: ""

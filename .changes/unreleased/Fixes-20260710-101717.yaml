@@ -1,0 +1,7 @@
+kind: Fixes
+body: Allow dbt State submissions to include upstream dependencies whose last modified timestamp could not be resolved, instead of bypassing state for the model.
+time: 2026-07-10T10:17:17.091051-05:00
+custom:
+    author: kczimm
+    issue: "11819"
+    project: ""

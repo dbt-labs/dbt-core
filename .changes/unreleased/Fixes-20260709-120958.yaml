@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Jinja parser now accepts keyword-argument names spelled like literal keywords (none, true, false), e.g. namespace(gold=0, unknown=0, none=0), matching dbt Core. Previously these raised MacroSyntaxInvalid (dbt1502): non-keyword arg after keyword arg.'
+time: 2026-07-09T12:09:58.788788212-07:00
+custom:
+    author: lottaquestions
+    issue: "11538"
+    project: ""

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Stop raising a false `dbt1159` "Test cannot have the same key '<key>' at the top-level and in config" when a data test has a top-level config key (e.g. `where`) and a `config:` block that does not set that key
+time: 2026-07-02T13:45:30.857672981-07:00
+custom:
+    author: lottaquestions
+    issue: ""
+    project: ""

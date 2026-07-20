@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Spark: fix schema existence and listing on the Hive metastore. `check_schema_exists` now resolves via `show databases` instead of the nonexistent `information_schema.schemata` (fixing snapshots and other guard-then-create paths), and `list_schemas` reads the `show databases` result column name-agnostically (`namespace` on OSS Spark, `databaseName` on Databricks). Databricks behavior is unchanged.'
+time: 2026-06-23T14:34:25.278811+05:30
+custom:
+    author: debrin-og
+    issue: ""
+    project: ""

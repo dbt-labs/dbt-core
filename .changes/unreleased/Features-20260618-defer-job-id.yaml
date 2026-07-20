@@ -1,0 +1,7 @@
+kind: Features
+body: Adds `defer_job_id` support via `DBT_CLOUD_DEFER_JOB_ID` env var. When set alongside `defer_env_id`, appends `?job_id=` to the manifest download URL for job-specific deferral.
+time: 2026-06-18T00:00:00.000000+00:00
+custom:
+    author: ashtonwalden
+    issue: ""
+    project: ""

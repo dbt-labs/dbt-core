@@ -1,0 +1,7 @@
+kind: Fixes
+body: Resolve project flags case-insensitively in the Jinja flags context so a flag set in dbt_project.yml is reachable whether a macro reads it lower-case or upper-case, matching dbt Core
+time: 2026-07-01T15:32:50.541563-07:00
+custom:
+    author: akbog
+    issue: "8413"
+    project: ""

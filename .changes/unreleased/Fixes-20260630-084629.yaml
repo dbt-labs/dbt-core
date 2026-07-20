@@ -1,0 +1,7 @@
+kind: Fixes
+body: Restore the Snowflake warehouse using its canonical upper-cased name (matching dbt Core's `current_warehouse()`-based restore), so per-model `snowflake_warehouse` overrides no longer cause record/replay SQL mismatches
+time: 2026-06-30T08:46:29.731895126-07:00
+custom:
+    author: lottaquestions
+    issue: ""
+    project: ""

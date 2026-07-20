@@ -1,0 +1,7 @@
+kind: Fixes
+body: Bump pyo3 workspace dependency from 0.27 to 0.29 to support Python 3.15 in CI runner images
+time: 2026-07-01T09:20:19.914983-06:00
+custom:
+    author: aiguofer
+    issue: ""
+    project: ""

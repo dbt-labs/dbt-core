@@ -1,0 +1,7 @@
+kind: Fixes
+body: Redshift POSIX regex-negation operators `!~` and `!~*` no longer raise a false-positive dbt0101 SyntaxInvalid diagnostic
+time: 2026-07-02T16:04:24+05:30
+custom:
+    author: r-jais
+    issue: "15249"
+    project: dbt-core

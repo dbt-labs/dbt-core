@@ -1,0 +1,7 @@
+kind: Fixes
+body: Report cached dbt State data tests attached to unchanged views as no-change reuse.
+time: 2026-07-02T12:47:00.739486-05:00
+custom:
+    author: kczimm
+    issue: "11108"
+    project: ""

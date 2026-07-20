@@ -1,0 +1,7 @@
+kind: Fixes
+body: Resolve event_time from seed and snapshot inputs for microbatch models (matches core v1)
+time: 2026-06-15T09:58:04.613889+05:30
+custom:
+    author: debrin-og
+    issue: ""
+    project: ""

@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Quote grantees when revoking grants, so revoking a grant whose name contains special characters no longer fails with a syntax error.'
+time: 2026-07-09T19:30:52.482193+05:30
+custom:
+    author: ragesh-g
+    issue: "14422"
+    project: ""

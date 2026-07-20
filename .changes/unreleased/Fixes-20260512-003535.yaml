@@ -1,0 +1,7 @@
+kind: Fixes
+body: Prevent panic when calling `insert()` on a mutable list with an out-of-bounds index; return a proper template error instead. This was the primary panic causing cascading `lock poisoned` panics in minijinja's `MutableVec`.
+time: 2026-05-12T00:35:35.988766+05:30
+custom:
+    author: ajnovice
+    issue: ""
+    project: ""

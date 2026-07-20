@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'persist_docs: warn about and skip columns documented in YAML that are not present in the database, instead of failing the model build or silently mis-applying column comments (ports dbt-labs/dbt-adapters#1690)'
+time: 2026-06-28T19:55:24.049464+05:30
+custom:
+    author: "r-jais"
+    issue: "9917"
+    project: ""

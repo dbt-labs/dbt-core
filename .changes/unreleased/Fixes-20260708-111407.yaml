@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Report an accurate, path-normalized error when a local: package cannot be resolved: distinguish a missing package directory ("Package directory not found") from a directory that lacks a dbt_project.yml, resolve `..` segments in the reported path, and add dbt Core-style guidance'
+time: 2026-07-08T11:14:07.294828101-07:00
+custom:
+    author: lottaquestions
+    issue: "11685"
+    project: ""

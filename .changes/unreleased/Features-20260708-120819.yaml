@@ -1,0 +1,7 @@
+kind: Features
+body: Add POST /api/v1/analytics/events relay endpoint (docs v2 → Vortex)
+time: 2026-07-08T12:08:19.606809-04:00
+custom:
+    author: jcserv
+    issue: ""
+    project: ""

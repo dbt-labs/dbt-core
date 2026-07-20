@@ -1,0 +1,7 @@
+kind: Fixes
+body: Include YAML-supplied generic test config in manifest raw_code.
+time: 2026-06-30T10:19:06.330254-05:00
+custom:
+    author: kczimm
+    issue: "10653"
+    project: ""

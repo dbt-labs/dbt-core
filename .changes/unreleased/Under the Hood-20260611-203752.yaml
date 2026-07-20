@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: remove unused calculate_freshness_from_metadata_batch method
+time: 2026-06-11T20:37:52.957126-07:00
+custom:
+    author: vgapeyev
+    issue: ""
+    project: ""

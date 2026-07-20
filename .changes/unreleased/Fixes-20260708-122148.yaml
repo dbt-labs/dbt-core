@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Tolerate a partially-migrated package-lock.yml that mixes the name/no-name entry forms: the deprecated lock parser now accepts (and ignores) a `name` key instead of failing the build with UnusedConfigKey (dbt1060) errors, matching dbt Core'
+time: 2026-07-08T12:21:48.567798218-07:00
+custom:
+    author: lottaquestions
+    issue: "11678"
+    project: ""

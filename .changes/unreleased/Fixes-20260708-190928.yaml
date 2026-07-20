@@ -1,0 +1,7 @@
+kind: Fixes
+body: Reduce BigQuery dbt State freshness fanout by using schema-level metadata refreshes for non-override submit-time misses.
+time: 2026-07-08T19:09:28.28361-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: ""

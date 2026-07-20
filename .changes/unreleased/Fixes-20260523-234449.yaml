@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Parse-time `config.get(name)` now matches dbt-core''s `ParseConfigObject.get` (`core/dbt/context/providers.py:554`) by returning `""` for every key except `meta`. The `meta` key keeps a permissive chainable stub (`ParseConfigValue`) so dbt-autofix''s recommended `config.get(''meta'').custom_key` migration pattern (see `dbt-autofix/manual_fixes/custom_configuration.md`) keeps working during Fusion''s static-analysis compile of materialization bodies. Separately, `adapter.get_relation` now coerces `None`/`Undefined` args to `""` at the strict `&str` unwrap so the compile-phase `CompileConfig.get(''database'')` → `None` path (mirroring Python''s `RuntimeConfigObject.get`) flows through without crashing the prefetch-recording call. Together this unblocks the Anisi customer project (account 303 / project 3580) whose `snowflake_external_table` materialization in `dbt_external_tables` calls `adapter.get_relation(database=config.get(''database''), ...)`. Broader audit of where the same `None`-tolerance coercion belongs across other adapter methods is a follow-up dbt-core ↔ dbt-fusion parity investigation.'
+time: 2026-05-23T23:44:49.916132-07:00
+custom:
+    author: akbog
+    issue: ""
+    project: ""

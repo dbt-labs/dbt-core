@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix unit tests on Redshift failing with an internal error (SQLSTATE XX000) when the tested model uses QUALIFY
+time: 2026-07-07T11:30:30.562646+05:30
+custom:
+    author: ragesh-g
+    issue: "14549"
+    project: ""

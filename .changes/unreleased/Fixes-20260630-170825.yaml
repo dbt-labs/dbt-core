@@ -1,0 +1,7 @@
+kind: Fixes
+body: Bump Snowflake Driver to 0.21.14 to fix Timestamp Freshness
+time: 2026-06-30T17:08:25.897503704-07:00
+custom:
+  author: jasonlin45
+  issue: "15379"
+  project: ""

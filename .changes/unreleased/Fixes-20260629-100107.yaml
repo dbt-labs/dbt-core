@@ -1,0 +1,7 @@
+kind: Fixes
+body: Stop /api/v1/health from leaking the absolute index_dir path; replace with project_loaded + generation (snapshot timestamp) and an X-Docs-Generation header
+time: 2026-06-29T10:01:07.298016-04:00
+custom:
+    author: jcserv
+    issue: "7868"
+    project: ""

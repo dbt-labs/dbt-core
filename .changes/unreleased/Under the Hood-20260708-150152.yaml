@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add clickhouse-0.1.0 ADBC driver to CDN checksums
+time: 2026-07-08T15:01:52.879778-04:00
+custom:
+    author: "dataders claude"
+    issue: ""
+    project: dbt-core

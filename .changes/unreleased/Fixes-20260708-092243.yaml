@@ -1,0 +1,7 @@
+kind: Fixes
+body: Support meta_get on Jinja map values that represent dbt node configs.
+time: 2026-07-08T09:22:43.34334-04:00
+custom:
+    author: mach-kernel
+    issue: "11788"
+    project: ""

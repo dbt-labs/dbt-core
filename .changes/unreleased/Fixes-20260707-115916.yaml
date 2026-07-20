@@ -1,0 +1,7 @@
+kind: Fixes
+body: Normalized back-slashes to forward-slashes for path, original_file_path and patch_path
+time: 2026-07-07T11:59:16.542464-07:00
+custom:
+    author: ""
+    issue: "11720"
+    project: ""

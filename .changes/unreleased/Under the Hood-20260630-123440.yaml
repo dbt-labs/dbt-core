@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add live Snowflake ADBC client cancellation regression test
+time: 2026-06-30T12:34:40.427677+05:30
+custom:
+    author: ragesh-g
+    issue: ""
+    project: ""
