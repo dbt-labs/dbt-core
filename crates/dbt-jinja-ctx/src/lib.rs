@@ -41,7 +41,7 @@ pub mod register;
 pub mod resolve;
 pub mod run;
 
-pub use compile::{CompileBaseCtx, CompileNodeCtx};
+pub use compile::{CompileBaseCtx, CompileNodeCtx, OperationCtx};
 pub use core::{GlobalCore, ResolveCore};
 pub use dbt_handles::AdapterHandle;
 pub use jinja_object::JinjaObject;

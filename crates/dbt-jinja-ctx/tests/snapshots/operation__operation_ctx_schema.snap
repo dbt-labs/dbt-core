@@ -1,16 +1,17 @@
 ---
-source: fs/sa/crates/dbt-jinja-ctx/tests/compile_base.rs
+source: fs/sa/crates/dbt-jinja-ctx/tests/operation.rs
 expression: schema
 ---
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "CompileBaseCtx",
-  "description": "Per-render compile-base context. Today's `build_compile_base_ctx` populates this 1:1 — same field names, same key constants (`MACRO_DISPATCH_ORDER`, `TARGET_PACKAGE_NAME`).\n\nUsed as the base for per-node compile contexts; the calling renderer `.clone()`s it and overlays per-node validations.",
+  "title": "OperationCtx",
+  "description": "Operation-scope render context (REPL, `run-operation`, pre-compile macro evaluation): a [`CompileBaseCtx`] plus a no-op `DummyConfig` to absorb `config(...)` calls where there is no node config. Node contexts carry their own validated `config`, so it lives here rather than on the base.",
   "type": "object",
   "required": [
     "MACRO_DISPATCH_ORDER",
     "TARGET_PACKAGE_NAME",
     "builtins",
+    "config",
     "connection_name",
     "context",
     "dbt_metadata_envs",
@@ -40,6 +41,14 @@ expression: schema
     },
     "builtins": {
       "description": "`{{ builtins.* }}` — `BTreeMap<String, MinijinjaValue>` Object holding `ref` / `source` / `function`. Compile-node-context code downcasts this back to `BTreeMap<String, MinijinjaValue>` when overlaying validated variants per-node, so the underlying Object type must be exactly that."
+    },
+    "config": {
+      "description": "`{{ config(...) }}` — no-op for macro renders without a current node. Calling `config(...)` returns `\"\"`; `config.get(...)` returns `None`.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::compile::DummyConfig>"
+        }
+      ]
     },
     "connection_name": {
       "description": "`{{ connection_name }}` — empty string at base scope.",
@@ -84,6 +93,12 @@ expression: schema
   },
   "additionalProperties": true,
   "definitions": {
+    "JinjaObject<dbt_jinja_ctx::objects::compile::DummyConfig>": {
+      "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::compile::DummyConfig`.",
+      "type": "object",
+      "x-jinja-object": true,
+      "x-jinja-object-type": "dbt_jinja_ctx::objects::compile::DummyConfig"
+    },
     "JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>": {
       "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::lookup::MacroLookupContext`.",
       "type": "object",

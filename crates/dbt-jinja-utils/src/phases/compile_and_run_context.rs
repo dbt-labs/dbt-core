@@ -26,7 +26,7 @@ use minijinja::{
 use minijinja::{State, UndefinedBehavior};
 use std::rc::Rc;
 
-use dbt_jinja_ctx::{CompileBaseCtx, JinjaObject, to_jinja_btreemap};
+use dbt_jinja_ctx::{CompileBaseCtx, DummyConfig, JinjaObject, OperationCtx, to_jinja_btreemap};
 
 /// Configure the Jinja environment for the compile phase.
 pub fn configure_compile_and_run_jinja_environment(env: &mut JinjaEnv, adapter: Arc<Adapter>) {
@@ -34,24 +34,21 @@ pub fn configure_compile_and_run_jinja_environment(env: &mut JinjaEnv, adapter: 
     env.set_undefined_behavior(UndefinedBehavior::Lenient);
 }
 
-// `DummyConfig` moved to `dbt_jinja_ctx::objects::compile`. Re-exported
-// here so existing call sites that imported it from this crate keep
-// working unchanged. Removed once every consumer migrates to
-// `dbt-jinja-ctx` directly.
-pub use dbt_jinja_ctx::DummyConfig;
-
-/// Configure the Jinja environment for the compile phase.
+/// Build the truly-shared compile/run base ctx — values that are identical
+/// across REPL, `run-operation`, per-node compile, and per-node run renders.
+/// Leaf ctxs ([`OperationCtx`], `CompileNodeCtx`, `RunNodeCtx`) hold this via
+/// `#[serde(flatten)]` and add their scope-specific overlay.
 ///
 /// `defer_nodes`, when supplied (compile/run with `--defer --state`), drives
 /// the `defer_relation` field on each deferrable graph node. (#1366)
-pub fn build_compile_and_run_base_context(
+pub fn build_compile_base_ctx(
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: &str,
     nodes: &Nodes,
     defer_nodes: Option<&Nodes>,
     runtime_config: Arc<DbtRuntimeConfig>,
     namespace_keys: Vec<String>,
-) -> BTreeMap<String, MinijinjaValue> {
+) -> CompileBaseCtx {
     // Wrap each per-namespace search order as `Value::from(Vec<String>)` —
     // dispatch lookup downcasts to `Vec<String>` so the underlying Object
     // type must be exactly that, not the `MutableVec<Value>` that
@@ -117,8 +114,7 @@ pub fn build_compile_and_run_base_context(
         })
         .collect();
 
-    let ctx = CompileBaseCtx {
-        config: JinjaObject::new(DummyConfig {}),
+    CompileBaseCtx {
         macro_dispatch_order,
         ref_fn: ref_value,
         source: source_value,
@@ -140,14 +136,66 @@ pub fn build_compile_and_run_base_context(
         node: MinijinjaValue::NONE,
         connection_name: String::new(),
         dbt_namespaces,
-    };
+    }
+}
 
-    to_jinja_btreemap(&ctx)
+/// Build the operation-scope ctx (REPL / `run-operation` / pre-compile macro
+/// evaluation): the shared base values plus a no-op [`DummyConfig`] for
+/// `{{ config(...) }}` calls in macros that aren't tied to a specific node.
+pub fn build_operation_context(
+    node_resolver: Arc<dyn NodeResolverTracker>,
+    package_name: &str,
+    nodes: &Nodes,
+    defer_nodes: Option<&Nodes>,
+    runtime_config: Arc<DbtRuntimeConfig>,
+    namespace_keys: Vec<String>,
+    base_ctx: Option<CompileBaseCtx>,
+) -> OperationCtx {
+    let base = base_ctx.unwrap_or_else(|| {
+        build_compile_base_ctx(
+            node_resolver,
+            package_name,
+            nodes,
+            defer_nodes,
+            runtime_config,
+            namespace_keys,
+        )
+    });
+    OperationCtx {
+        base,
+        config: JinjaObject::new(DummyConfig {}),
+    }
+}
+
+/// Backward-compat shim: today's callers consume the operation-scope context
+/// as a `BTreeMap<String, MinijinjaValue>`. Wraps [`build_operation_context`]
+/// + [`to_jinja_btreemap`] so call-site migration can land separately.
+///
+/// New callers should use [`build_operation_context`] or
+/// [`build_compile_base_ctx`] directly.
+pub fn build_operation_context_btreemap(
+    node_resolver: Arc<dyn NodeResolverTracker>,
+    package_name: &str,
+    nodes: &Nodes,
+    defer_nodes: Option<&Nodes>,
+    runtime_config: Arc<DbtRuntimeConfig>,
+    namespace_keys: Vec<String>,
+    base_ctx: Option<CompileBaseCtx>,
+) -> BTreeMap<String, MinijinjaValue> {
+    to_jinja_btreemap(&build_operation_context(
+        node_resolver,
+        package_name,
+        nodes,
+        defer_nodes,
+        runtime_config,
+        namespace_keys,
+        base_ctx,
+    ))
 }
 
 // `DbtNamespace` moved to `dbt_jinja_ctx::objects::lookup`. Re-exported here
 // so existing call sites in this crate (`build_resolve_context`,
-// `build_compile_and_run_base_context`, etc.) keep importing the type from
+// `build_operation_context_btreemap`, etc.) keep importing the type from
 // the path they always have. The transitional re-export is removed once
 // every call site has been migrated to consume `dbt-jinja-ctx` directly.
 pub use dbt_jinja_ctx::DbtNamespace;
@@ -820,7 +868,7 @@ impl Object for FunctionFunction {
 }
 
 // `MacroLookupContext` moved to `dbt_jinja_ctx::objects::lookup`. Re-exported
-// here so existing call sites in this crate (`build_compile_and_run_base_context`,
+// here so existing call sites in this crate (`build_operation_context_btreemap`,
 // the parse-phase resolve-model context, etc.) keep importing from the path
 // they always have. The transitional re-export is removed once every call
 // site has been migrated to consume `dbt-jinja-ctx` directly.
@@ -939,7 +987,7 @@ mod tests {
         let runtime_config = Arc::new(DbtRuntimeConfig::default());
 
         // Act
-        let ctx = build_compile_and_run_base_context(
+        let ctx = build_compile_base_ctx(
             node_resolver,
             "test_pkg",
             &nodes,
@@ -955,9 +1003,7 @@ mod tests {
         }
 
         // Assert
-        let meta = ctx
-            .get("dbt_metadata_envs")
-            .expect("dbt_metadata_envs should be set");
+        let meta = ctx.dbt_metadata_envs;
         let map = meta
             .as_object()
             .and_then(|o| o.downcast_ref::<BTreeMap<String, MinijinjaValue>>())
@@ -967,6 +1013,35 @@ mod tests {
             map.get("FOO").and_then(|v| v.as_str()),
             Some("bar"),
             "Expected dbt_metadata_envs['FOO']='bar'"
+        );
+    }
+
+    #[test]
+    fn build_operation_context_includes_config_as_dummy_config() {
+        let node_resolver = Arc::new(DummyNodeResolverTracker);
+        let nodes = Nodes::default();
+        let runtime_config = Arc::new(DbtRuntimeConfig::default());
+
+        let ctx = build_operation_context(
+            node_resolver,
+            "test_pkg",
+            &nodes,
+            None,
+            runtime_config,
+            vec![],
+            None,
+        );
+
+        let registered = to_jinja_btreemap(&ctx);
+        let config = registered
+            .get("config")
+            .expect("config must be present in OperationCtx");
+        let downcast = config
+            .as_object()
+            .and_then(|obj| obj.downcast::<DummyConfig>());
+        assert!(
+            downcast.is_some(),
+            "OperationCtx.config must be a DummyConfig Object"
         );
     }
 }

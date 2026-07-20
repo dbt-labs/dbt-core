@@ -19,7 +19,7 @@ use dbt_jinja_utils::listener::{
     JinjaTypeCheckingEventListenerFactory, RenderingEventListenerFactory,
 };
 use dbt_jinja_utils::node_resolver::NodeResolver;
-use dbt_jinja_utils::phases::build_compile_and_run_base_context;
+use dbt_jinja_utils::phases::build_operation_context_btreemap;
 use dbt_jinja_utils::phases::compile::{
     DependencyValidationConfig, build_compile_node_context_inner,
 };
@@ -871,13 +871,14 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
         .get_macro_namespace_registry()
         .map(|r| r.keys().map(|k| k.to_string()).collect())
         .unwrap_or_default();
-    let mut render_base_context = build_compile_and_run_base_context(
+    let mut render_base_context = build_operation_context_btreemap(
         node_resolver.clone(),
         &package_name,
         &Nodes::default(),
         None,
         runtime_config.clone(),
         namespace_keys,
+        None,
     );
     silence_base_context(&mut render_base_context);
 

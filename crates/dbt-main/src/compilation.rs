@@ -28,7 +28,7 @@ use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     listener::JinjaTypeCheckingEventListenerFactory,
     node_resolver::NodeResolver,
-    phases::{build_compile_and_run_base_context, configure_compile_and_run_jinja_environment},
+    phases::{build_operation_context_btreemap, configure_compile_and_run_jinja_environment},
 };
 use dbt_loader::args::*;
 use dbt_parser::args::ResolveArgs;
@@ -2387,13 +2387,14 @@ async fn write_catalog(
         .get_macro_namespace_registry()
         .map(|r| r.keys().map(|k| k.to_string()).collect())
         .unwrap_or_default();
-    let base_context = build_compile_and_run_base_context(
+    let base_context = build_operation_context_btreemap(
         resolved_state.node_resolver.clone(),
         &resolved_state.root_project_name,
         &resolved_state.nodes,
         resolved_state.defer_nodes.as_ref(),
         resolved_state.runtime_config.clone(),
         namespace_keys,
+        None,
     );
 
     let relations = resolved_state

@@ -7,9 +7,8 @@
 //!
 //! Two flavours:
 //! * [`CompileBaseCtx`] — the compile-time base, returned by
-//!   `build_compile_and_run_base_context`. Used as the foundation for every
-//!   per-node compile context (today's caller `.clone()`s it onto a per-node
-//!   overlay).
+//!   `build_compile_base_ctx`. Used as the foundation for every per-node
+//!   compile context (today's caller `.clone()`s it onto a per-node overlay).
 //! * [`CompileNodeCtx`] — the per-node overlay layered on top of
 //!   `CompileBaseCtx` when rendering each node's SQL. Adds `this`, the
 //!   per-node `model` map, the validated `ref`/`source`/`function`/`config`
@@ -34,7 +33,7 @@ use serde::Serialize;
 use crate::JinjaObject;
 use crate::objects::{DbtNamespace, DummyConfig, MacroLookupContext};
 
-/// Per-render compile-base context. Today's `build_compile_and_run_base_context`
+/// Per-render compile-base context. Today's `build_compile_base_ctx`
 /// populates this 1:1 — same field names, same key constants
 /// (`MACRO_DISPATCH_ORDER`, `TARGET_PACKAGE_NAME`).
 ///
@@ -42,11 +41,6 @@ use crate::objects::{DbtNamespace, DummyConfig, MacroLookupContext};
 /// `.clone()`s it and overlays per-node validations.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct CompileBaseCtx {
-    /// `{{ config(...) }}` — base-scope `DummyConfig` Object that absorbs
-    /// macro-time `config(...)` calls (overlaid per-node by
-    /// [`CompileNodeCtx::config`]).
-    pub config: JinjaObject<DummyConfig>,
-
     /// `{{ MACRO_DISPATCH_ORDER }}` — per-package dispatch order map. Same
     /// downcast contract as [`crate::ResolveBaseCtx::macro_dispatch_order`]:
     /// each value MUST be `MinijinjaValue::from(Vec<String>)` constructed at
@@ -120,6 +114,21 @@ pub struct CompileBaseCtx {
     #[serde(flatten)]
     #[schemars(with = "BTreeMap<String, serde_json::Value>")]
     pub dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>>,
+}
+
+/// Operation-scope render context (REPL, `run-operation`, pre-compile macro
+/// evaluation): a [`CompileBaseCtx`] plus a no-op `DummyConfig` to absorb
+/// `config(...)` calls where there is no node config. Node contexts carry
+/// their own validated `config`, so it lives here rather than on the base.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct OperationCtx {
+    #[serde(flatten)]
+    pub base: CompileBaseCtx,
+
+    /// `{{ config(...) }}` — no-op for macro renders without a current
+    /// node. Calling `config(...)` returns `""`; `config.get(...)` returns
+    /// `None`.
+    pub config: JinjaObject<DummyConfig>,
 }
 
 /// Per-node compile-time overlay layered onto [`CompileBaseCtx`] for each

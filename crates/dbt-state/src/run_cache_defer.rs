@@ -16,8 +16,7 @@ use dbt_common::{
     warn_error_options::WarnErrorOptions,
 };
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv, phases::build_compile_and_run_base_context,
-    register_base_functions,
+    jinja_environment::JinjaEnv, phases::build_operation_context_btreemap, register_base_functions,
 };
 use dbt_parser::utils::{RelationComponents, update_node_relation_components};
 use dbt_profile::{
@@ -265,13 +264,14 @@ fn run_cache_defer_base_context(
         .map(|registry| registry.keys().map(|key| key.to_string()).collect())
         .unwrap_or_default();
 
-    build_compile_and_run_base_context(
+    build_operation_context_btreemap(
         resolved_state.node_resolver.clone(),
         &resolved_state.root_project_name,
         &resolved_state.nodes,
         resolved_state.defer_nodes.as_ref(),
         resolved_state.runtime_config.clone(),
         namespace_keys,
+        None,
     )
 }
 
