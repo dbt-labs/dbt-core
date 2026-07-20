@@ -1013,11 +1013,7 @@ impl AdapterImpl {
         }
     }
 
-    pub fn list_schemas_via_adbc(
-        &self,
-        state: &State,
-        database: &str,
-    ) -> AdapterResult<Vec<String>> {
+    fn list_schemas_via_adbc(&self, state: &State, database: &str) -> AdapterResult<Vec<String>> {
         let conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let (catalog, _) = normalize_quote(false, self.adapter_type(), database);
 

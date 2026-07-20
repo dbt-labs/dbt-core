@@ -45,6 +45,18 @@ pub const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
     "_CHANGE_SEQUENCE_NUMBER",
 ];
 
+// TODO: When the schema is a hidden dataset, this will throw an error.
+//
+// The intuitive solution is to implement `list_relations_via_adbc` and delegate
+// to the driver via GetObjects. But GetObjects ignores hidden datasets, which
+// actually makes things worse.
+//
+// When `get_relation` sees a cache miss, it calls `list_relations` and uses
+// that as the cache result. Listing any relations in a hidden dataset will
+// return an empty result, leading to a false early return (see adapter/mod.rs:1476).
+//
+// `list_relations` throwing an error over hidden datasets at least bypasses
+// the early return from the cache.
 pub fn list_relations(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
@@ -1440,7 +1452,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     }
 }
 
-fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
+pub fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
     e.message().contains("Error 404: Not found:")
 }
 
