@@ -868,7 +868,9 @@ jobs:
 
   # Tell dbt-labs/fs to bump its `# COPYBARA-DBTCORE-VERSION` marker to the
   # released version via the `bump-dbt-core-version` repository_dispatch fs
-  # listens for. Fire-and-forget: fs opens its own PR (no-op if unchanged).
+  # listens for. On success fs opens its own PR; a failed dispatch (API blip,
+  # expired PAT) fails the job so slack-failure-notification pages oncall to
+  # raise the bump PR by hand.
   bump-fs-dbt-core-version:
     name: Bump dbt-core version in fs
     needs: [prepare-release, publish-pypi, github-release]
@@ -970,6 +972,7 @@ jobs:
         publish-homebrew,
         publish-winget,
         changelog-backport,
+        bump-fs-dbt-core-version,
       ]
     uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
     with:
