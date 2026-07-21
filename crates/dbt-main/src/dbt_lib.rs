@@ -100,7 +100,7 @@ use crate::{
     },
     retry::{RETRIABLE_COMMANDS, RetryState},
     utils::{InvocationContext, write_catalog_stats_parquet, write_runtime_results_parquet},
-    vars::validate_engine_env_vars,
+    vars::{validate_engine_env_vars, warn_unused_engine_env_vars},
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -239,6 +239,9 @@ async fn do_execute_fs(
     token: &CancellationToken,
 ) -> FsResult<()> {
     use CoreCommand::*;
+
+    warn_unused_engine_env_vars(eval_arg.io.status_reporter.as_ref());
+
     // Current versions of rustls require us to explicitly install a default provider.
     // The default provider can only be installed once per process, so
     // be defensive here (tests may use the same process)

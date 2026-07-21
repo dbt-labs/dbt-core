@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use crate::dbt_lib::execute_fs_and_shutdown;
 use crate::vars::apply_engine_env_var_aliases;
-use crate::vars::warn_unused_engine_env_vars;
 
 const FS_DEFAULT_STACK_SIZE: usize = 8 * 1024 * 1024;
 
@@ -54,9 +53,6 @@ fn init_env_before_parse() {
     // Apply DBT_ENGINE_* -> DBT_* aliases before CLI parsing.
     // This allows users to use DBT_ENGINE_FAIL_FAST instead of DBT_FAIL_FAST.
     apply_engine_env_var_aliases();
-
-    // Warn about env vars that are recognized but not supported by fusion.
-    warn_unused_engine_env_vars();
 }
 
 fn parse_cli_or_exit(cli_parser: &CliParser) -> Box<Cli> {

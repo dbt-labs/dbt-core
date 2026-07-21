@@ -1,4 +1,6 @@
+use dbt_common::{io_utils::StatusReporter, tracing::dbt_emit::emit_warn_log_message};
 use dbt_init::{ErrorCode, FsResult, fs_err};
+use std::sync::Arc;
 
 const ENGINE_ENV_PREFIX: &str = "DBT_ENGINE_";
 
@@ -197,16 +199,19 @@ pub fn apply_engine_env_var_aliases() {
 ///
 /// These are typically dbt-core specific variables that have no effect in fusion.
 /// Returns a list of the unused variables that were set (for testing purposes).
-pub fn warn_unused_engine_env_vars() -> Vec<String> {
+pub fn warn_unused_engine_env_vars(
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) -> Vec<String> {
     let unused: Vec<String> = std::env::vars()
         .map(|(k, _)| k)
         .filter(|k| KNOWN_UNUSED_ENGINE_ENV_VARS.contains(&k.as_str()))
         .collect();
 
     for var in &unused {
-        eprintln!(
-            "Warning: {} is not supported by fusion and will have no effect.",
-            var
+        emit_warn_log_message(
+            ErrorCode::UnsupportedFusionFeature,
+            format!("{var} is not supported by fusion and will have no effect."),
+            status_reporter,
         );
     }
 
@@ -383,7 +388,7 @@ mod tests {
         }
 
         // Check that the warning function detects it
-        let unused = warn_unused_engine_env_vars();
+        let unused = warn_unused_engine_env_vars(None);
         assert!(
             unused.contains(&"DBT_ENGINE_SQLPARSE".to_string()),
             "should detect DBT_ENGINE_SQLPARSE as unused"
@@ -414,7 +419,7 @@ mod tests {
         // It must be recognized (not rejected as an unknown reserved-prefix var)...
         let validate = validate_engine_env_vars();
         // ...and reported as unused (it is a no-op in fusion).
-        let unused = warn_unused_engine_env_vars();
+        let unused = warn_unused_engine_env_vars(None);
 
         // Clean up before asserting so a failure doesn't leak the var
         unsafe {
@@ -448,7 +453,7 @@ mod tests {
         }
 
         // Check that the warning function does NOT include it
-        let unused = warn_unused_engine_env_vars();
+        let unused = warn_unused_engine_env_vars(None);
         assert!(
             !unused.contains(&"DBT_ENGINE_FAIL_FAST".to_string()),
             "should NOT report DBT_ENGINE_FAIL_FAST as unused (it's aliased)"

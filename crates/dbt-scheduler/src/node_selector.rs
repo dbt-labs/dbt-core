@@ -7,6 +7,7 @@ use dbt_common::{
     constants::DBT_GENERIC_TESTS_DIR_NAME,
     err,
     node_selector::{MethodName, SelectExpression, SelectionCriteria},
+    tracing::dbt_emit::emit_warn_log_message,
 };
 use dbt_frontend_common::Dialect;
 use dbt_schemas::schemas::{
@@ -766,8 +767,10 @@ fn match_source_status(
 
     let Some(prev_sources_results) = &prev_state.source_freshness_results else {
         // No sources.json in state directory - selector cannot be used
-        eprintln!(
-            "Warning: source_status selector requires a sources.json with freshness results in the state directory."
+        emit_warn_log_message(
+            ErrorCode::SelectorError,
+            "source_status selector requires a sources.json with freshness results in the state directory.",
+            None,
         );
         return Ok(false);
     };
@@ -814,7 +817,11 @@ fn match_source_status(
 
             // Check if current sources.json has any results
             if current_sources_results.results.is_empty() {
-                eprintln!("Warning: The current sources.json file contains no freshness results.");
+                emit_warn_log_message(
+                    ErrorCode::SelectorError,
+                    "The current sources.json file contains no freshness results.",
+                    None,
+                );
                 return Ok(false);
             }
 
