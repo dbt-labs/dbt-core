@@ -42,8 +42,6 @@ use minijinja::Value as MinijinjaValue;
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use parking_lot::Mutex;
 
-use tracing::error;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TestExecutionStatus {
     Passed,
@@ -562,8 +560,11 @@ fn execute_test_remote_inner(
     sql_instruction: &SqlInstruction,
     base_context: &BTreeMap<String, MinijinjaValue>,
 ) -> FsResult<TestReportedResult> {
-    let unique_id = &test.common().unique_id;
-
+    // Any render/execution error (including database errors) surfaces as a
+    // hard error, independent of severity — matching dbt Core and the sidecar
+    // path. The runner framework turns the returned Err into NodeStatus::Errored
+    // and records it. Severity is only consulted for successfully-returned
+    // results below.
     let (test_results, failing_rows_opt) = materialize_test(
         &sql_instruction.sql,
         test,
@@ -574,26 +575,7 @@ fn execute_test_remote_inner(
         ctx.env.clone(),
         base_context,
         &ctx.inner.arg.io,
-    )
-    .map_err(|e| {
-        if e.code.is_database_error() {
-            error!("Error materializing test {}. Treating as failing test.", e);
-        } else {
-            error!(
-                "Error materializing test {}: {}. Treating as failing test.",
-                unique_id, e
-            );
-        }
-    })
-    .unwrap_or((
-        vec![crate::materialize::TestResult {
-            column_name: None,
-            failures: 1,
-            should_warn: false,
-            should_error: true,
-        }],
-        None,
-    ));
+    )?;
     let test_result = test_results
         .into_iter()
         .next()
