@@ -22,7 +22,7 @@ pub const TIMEOUT_SECONDS: &str = "adbc.dbt.timeout_seconds";
 pub const DIALECT: &str = "adbc.dbt.dialect";
 
 /// Authentication method: one of [`auth_type`].
-pub const AUTH_TYPE: &str = "adbc.dbt.auth.type";
+pub const AUTH_TYPE: &str = "adbc.dbt.auth.method";
 /// API key, sent as `X-API-Key`.
 pub const AUTH_API_KEY: &str = "adbc.dbt.auth.api_key";
 /// Static bearer token.

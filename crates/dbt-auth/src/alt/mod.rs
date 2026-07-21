@@ -1,35 +1,22 @@
-//! Authentication for the ALT backend.
-//!
-//! ALT is reached through the `adbc_driver_dbt` ADBC driver, which is configured
-//! entirely via named database options (see [`dbt_adbc::alt`]). This module
-//! translates a profile mapping into those options.
-//!
-//! Following the crate invariants, profile values are kept borrowed until the
-//! final `with_named_option` boundary (which requires `Into<String>`), and the
-//! authentication families are modeled as distinct top-level IR variants.
-
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 
 use dbt_adbc::{Backend, alt, database};
 
-/// Distinct authentication contracts supported by ALT.
 #[derive(Debug)]
 enum AltAuthIR<'a> {
-    /// Send an `X-API-Key` header.
-    ApiKey { api_key: &'a str },
-    /// Send a static bearer token.
-    Token { token: &'a str },
-    /// Interactive Okta PKCE browser login. Endpoint configuration is optional
-    /// here because the driver also reads it from the environment.
+    Token {
+        token: &'a str,
+    },
+    // not yet verified
+    ApiKey {
+        api_key: &'a str,
+    },
     OktaBrowser {
         auth_url: Option<&'a str>,
         token_url: Option<&'a str>,
         client_id: Option<&'a str>,
     },
-    /// No explicit credentials in the profile; defer to the driver/SDK's own
-    /// auto-discovery (environment variables / CLI token file).
-    Auto,
 }
 
 impl<'a> AltAuthIR<'a> {
@@ -59,40 +46,31 @@ impl<'a> AltAuthIR<'a> {
                     builder.with_named_option(alt::OKTA_CLIENT_ID, v)?;
                 }
             }
-            Self::Auto => {}
         }
         Ok(builder)
     }
 }
 
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<AltAuthIR<'a>, AuthError> {
-    // The `method` field selects the authentication family. Absent `method`,
-    // infer from which credential field is present, else defer to auto-discovery.
-    let method = config.get_str("method");
+    let method = config.require_str("method")?;
     match method {
-        Some(alt::auth_type::API_KEY) => Ok(AltAuthIR::ApiKey {
+        alt::auth_type::API_KEY => Ok(AltAuthIR::ApiKey {
             api_key: config.require_str("api_key")?,
         }),
-        Some(alt::auth_type::TOKEN) => Ok(AltAuthIR::Token {
+        alt::auth_type::TOKEN => Ok(AltAuthIR::Token {
             token: config.require_str("token")?,
         }),
-        Some(alt::auth_type::OKTA_BROWSER) => Ok(AltAuthIR::OktaBrowser {
+        alt::auth_type::OKTA_BROWSER => Ok(AltAuthIR::OktaBrowser {
             auth_url: config.get_str("okta_auth_url"),
             token_url: config.get_str("okta_token_url"),
             client_id: config.get_str("okta_client_id"),
         }),
-        Some(other) => Err(AuthError::config(format!(
-            "unknown ALT auth method: {other}"
+        other => Err(AuthError::config(format!(
+            "unknown ALT auth method '{other}'; expected one of: '{}', '{}', '{}'",
+            alt::auth_type::API_KEY,
+            alt::auth_type::TOKEN,
+            alt::auth_type::OKTA_BROWSER
         ))),
-        None => {
-            if let Some(api_key) = config.get_str("api_key") {
-                Ok(AltAuthIR::ApiKey { api_key })
-            } else if let Some(token) = config.get_str("token") {
-                Ok(AltAuthIR::Token { token })
-            } else {
-                Ok(AltAuthIR::Auto)
-            }
-        }
     }
 }
 
@@ -100,24 +78,10 @@ fn apply_connection_args(
     config: &AdapterConfig,
     mut builder: DatabaseBuilder,
 ) -> Result<DatabaseBuilder, AuthError> {
-    // base_url is required to reach the service.
     builder.with_named_option(alt::BASE_URL, config.require_str("base_url")?)?;
 
     if let Some(org) = config.get_str("organization") {
         builder.with_named_option(alt::ORGANIZATION, org)?;
-    }
-    if let Some(warehouse) = config.get_str("warehouse") {
-        builder.with_named_option(alt::WAREHOUSE, warehouse)?;
-    }
-    if let Some(affinity) = config.get_str("affinity") {
-        builder.with_named_option(alt::AFFINITY, affinity)?;
-    }
-    if let Some(dialect) = config.get_str("dialect") {
-        builder.with_named_option(alt::DIALECT, dialect)?;
-    }
-    // `timeout_seconds` is commonly a number in profiles; accept numeric or string.
-    if let Some(timeout) = config.get_string("timeout_seconds") {
-        builder.with_named_option(alt::TIMEOUT_SECONDS, timeout.into_owned())?;
     }
 
     Ok(builder)
@@ -187,24 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn timeout_accepts_integer() {
-        let config: Mapping = dbt_yaml::from_str(
-            r#"
-base_url: https://compute.example
-timeout_seconds: 120
-"#,
-        )
-        .expect("parse yaml");
-        let builder = configure(config);
-        assert_eq!(
-            other_option_value(&builder, alt::TIMEOUT_SECONDS),
-            Some("120")
-        );
-    }
-
-    #[test]
     fn missing_base_url_errors() {
-        // A missing required field surfaces as a YAML deserialization error.
         let err = AltAuth {}
             .configure(&AdapterConfig::new(Mapping::new()))
             .expect_err("expected missing base_url error");

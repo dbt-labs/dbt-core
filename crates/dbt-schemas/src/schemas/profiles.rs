@@ -1051,6 +1051,23 @@ pub struct DuckDbConfig {
     /// Root path for external materializations (defaults to ".")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_root: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub okta_auth_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub okta_token_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub okta_client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub organization: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
