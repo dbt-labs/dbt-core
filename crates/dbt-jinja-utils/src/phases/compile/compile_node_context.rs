@@ -8,7 +8,7 @@ use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_common::{dashmap::DashMap, serde_utils::convert_yml_to_value_map};
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::{
-    schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
+    schemas::{InternalDbtNodeAttributes, common::DbtMaterialization, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
 use minijinja::constants::{CURRENT_EXECUTION_PHASE, CURRENT_PATH, CURRENT_SPAN};
@@ -200,6 +200,27 @@ where
             let ref_name = model.common().name.clone();
             // for repl, we use the just create a relation on spot using model passed in.
             if ref_name == REPL_MODEL_NAME {
+                dbt_adapter::relation::RelationObject::new(Arc::from(
+                    dbt_adapter::relation::do_create_relation(
+                        adapter_type,
+                        model.base().database.clone(),
+                        model.base().schema.clone(),
+                        Some(model.base().alias.clone()),
+                        None,
+                        model.base().quoting,
+                    )
+                    .unwrap(),
+                ))
+                .into_value()
+            } else if matches!(model.materialized(), DbtMaterialization::Ephemeral) {
+                // Build `this` directly as the physical relation
+                // (database.schema.identifier) rather than using the relation the
+                // resolver stores for this node. The stored relation is typed so
+                // that `ref()` to this node inlines it as a `__dbt__cte__<name>`
+                // CTE; reusing it here would make bare `{{ this }}` render as that
+                // same self-referential CTE. Constructing a fresh relation with no
+                // type keeps `ref()` untouched and mirrors how the run phase builds
+                // `this`.
                 dbt_adapter::relation::RelationObject::new(Arc::from(
                     dbt_adapter::relation::do_create_relation(
                         adapter_type,
