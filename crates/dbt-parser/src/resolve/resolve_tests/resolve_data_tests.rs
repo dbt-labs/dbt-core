@@ -749,6 +749,18 @@ pub async fn resolve_data_tests(
             adapter_type,
         )?;
 
+        // Mirror dbt-core behavior: when the synthesized name was truncated and the user
+        // provided no explicit alias, backfill both config representations with the short
+        // name so manifest config.alias and unrendered_config.alias match core.
+        if test_config.alias.is_none() && test_name != fqn_name {
+            dbt_test.deprecated_config.alias = Some(test_name.clone());
+            dbt_test
+                .__base_attr__
+                .unrendered_config
+                .entry("alias".to_string())
+                .or_insert_with(|| YmlValue::from(test_name.as_str()));
+        }
+
         dbt_test.__common_attr__.raw_code = if is_singular_data_test {
             get_original_file_contents(&arg.io.in_dir, &manifest_original_file_path)
         } else {
