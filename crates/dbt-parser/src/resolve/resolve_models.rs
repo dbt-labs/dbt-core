@@ -531,7 +531,12 @@ pub async fn resolve_models(
             ModelFreshnessRules::validate(freshness.build_after.as_ref())?;
         }
 
-        let static_analysis = model_config.static_analysis.clone();
+        let is_custom_materialization = matches!(materialized, DbtMaterialization::Unknown(_));
+        let static_analysis = if is_custom_materialization {
+            Spanned::new(StaticAnalysisKind::Off)
+        } else {
+            model_config.static_analysis.clone()
+        };
         check_node_static_analysis(
             &model_config,
             arg.static_analysis,
@@ -736,8 +741,12 @@ pub async fn resolve_models(
                     .try_into()
                     .expect("DbtQuoting -> QuotingConfig conversion"),
                 quoting_ignore_case: model_config.quoting.snowflake_ignore_case.unwrap_or(false),
-                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
-                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis_off_reason: if is_custom_materialization {
+                    Some(StaticAnalysisOffReason::CustomMaterialization)
+                } else {
+                    (*static_analysis == StaticAnalysisKind::Off)
+                        .then_some(StaticAnalysisOffReason::ConfiguredOff)
+                },
                 static_analysis,
                 unrendered_config,
             },

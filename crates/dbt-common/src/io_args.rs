@@ -1220,6 +1220,7 @@ pub enum StaticAnalysisOffReason {
     ConfiguredOff,
     UnableToFetchSchema,
     NoDownstream,
+    CustomMaterialization,
 }
 
 impl FromStr for StaticAnalysisKind {
