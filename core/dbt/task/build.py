@@ -53,6 +53,7 @@ class BuildTask(RunTask):
         super().__init__(args, config, manifest)
         self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
+        self._unit_test_count_added: bool = False
 
     def resource_types(self, no_unit_tests: bool = False) -> List[NodeType]:
         resource_types = resource_types_from_args(
@@ -110,8 +111,12 @@ class BuildTask(RunTask):
 
     # overrides handle_job_queue in runnable.py
     def handle_job_queue(self, pool, callback):
-        if self.run_count == 0:
+        # Unit tests run alongside their model, not as queue nodes, so add their
+        # count to num_nodes exactly once (run_count is an unreliable guard: the
+        # async workers may leave it at 0 across several dequeues).
+        if not self._unit_test_count_added:
             self.num_nodes = self.num_nodes + len(self.selected_unit_tests)
+            self._unit_test_count_added = True
         node = self.job_queue.get()
         if (
             node.resource_type == NodeType.Model
