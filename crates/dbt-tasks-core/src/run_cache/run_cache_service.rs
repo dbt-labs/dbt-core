@@ -664,7 +664,7 @@ async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) -> FsResult<(
 ///
 /// An empty result from `freshness_all_in_schema` (adapter not implemented)
 /// leaves the cache empty for that group; per-node lookups handle the misses.
-/// Any error is propagated — the prefetch is mandatory.
+/// Schema dump errors are treated as unknown freshness for that schema group.
 async fn bulk_prefetch_last_modified_by_schema(
     ctx: &TaskRunnerCtx,
     relations: &BTreeMap<String, Arc<dyn BaseRelation>>,
@@ -716,7 +716,7 @@ async fn bulk_prefetch_last_modified_by_schema(
         let db = database.as_deref().unwrap_or("");
         let sch = schema.as_deref().unwrap_or("");
 
-        let dump = metadata_adapter
+        let dump = match metadata_adapter
             .freshness_all_in_schema(
                 db,
                 sch,
@@ -725,7 +725,31 @@ async fn bulk_prefetch_last_modified_by_schema(
                 adapter.cancellation_token(),
             )
             .await
-            .map_err(into_fs_error)?;
+        {
+            Ok(dump) => dump,
+            Err(err) => {
+                let err = into_fs_error(err);
+                // Matches the Python plugin: broad metadata prefetch failures
+                // should not disable dbt State; unknown freshness keeps
+                // downstream decisions conservative.
+                emit_warn_log_message(
+                    ErrorCode::StateServiceWarn,
+                    format!(
+                        "dbt State schema-level freshness dump failed for {db}.{sch}: {err}; \
+                         caching unknown freshness for {} relations",
+                        semantic_to_name.len()
+                    ),
+                    None,
+                );
+                for name in semantic_to_name.values() {
+                    ctx.inner
+                        .run_cache_ctx
+                        .run_cache_metadata
+                        .insert_last_modified_epoch(name, None);
+                }
+                continue;
+            }
+        };
 
         if dump.is_empty() {
             // Empty result from the schema dump. This is typically caused by
