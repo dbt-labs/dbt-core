@@ -1,0 +1,8 @@
+kind: Fixes
+body: Stop resolving a unit test's tested model eagerly at parse time; resolve it
+  only in the single deterministic post-parse pass so resolution no longer depends
+  on filesystem parse order at all (deeper fix for #11139)
+time: 2026-07-21T14:00:00.000000000Z
+custom:
+    Author: itsnamangoyal
+    Issue: "11139"
