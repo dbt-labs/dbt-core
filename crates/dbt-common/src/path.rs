@@ -369,6 +369,13 @@ impl std::fmt::Display for DbtPath {
     }
 }
 
+/// Is the given character a file-system reserved character?
+/// We are pessimistic and consider any character is a
+/// file-system reserved character if it is reserved on Windows.
+pub fn is_file_system_reserved_character(c: char) -> bool {
+    matches!(c, '<' | '>' | ':' | '\"' | '/' | '\\' | '|' | '?' | '*')
+}
+
 /// Equality is determined by the OS.
 fn component_eq_os_ascii_case(component1: &Component<'_>, component2: &Component<'_>) -> bool {
     match (component1, component2) {
