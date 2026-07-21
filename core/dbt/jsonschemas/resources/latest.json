@@ -10787,7 +10787,8 @@
       "enum": [
         "configuredoff",
         "unabletofetchschema",
-        "nodownstream"
+        "nodownstream",
+        "custommaterialization"
       ]
     },
     "StoreFailuresAs": {
