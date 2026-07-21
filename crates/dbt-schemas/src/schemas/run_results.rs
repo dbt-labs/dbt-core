@@ -60,7 +60,12 @@ where
 }
 
 /// Result object for a single node execution.
-#[skip_serializing_none]
+///
+/// Note: this struct intentionally does *not* use `#[skip_serializing_none]`. dbt Core always
+/// emits every per-node result key (with a `null` value when empty), and the `dbt-artifacts`
+/// package (among other consumers) relies on keys such as `failures` always being present. The
+/// only exception is `static_analysis_off_reason`, a Fusion-only field with no Core counterpart,
+/// which we keep omitted when `None`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ContextRunResult {
@@ -86,7 +91,8 @@ pub struct ContextRunResult {
     /// Results specific to batch processing, if applicable.
     #[serde(default)]
     pub batch_results: Option<BatchResults>,
-    /// Reason why static analysis was disabled for this node.
+    /// Reason why static analysis was disabled for this node (Fusion-only; omitted when absent).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
 }
 
@@ -122,7 +128,13 @@ impl From<ContextRunResult> for RunResultOutput {
 }
 
 /// Result object for a single node execution.
-#[skip_serializing_none]
+///
+/// Note: this struct intentionally does *not* use `#[skip_serializing_none]`. dbt Core always
+/// emits every per-node result key (with a `null` value when empty), and the `dbt-artifacts`
+/// package (among other consumers) relies on keys such as `failures` always being present. The
+/// only exception is `static_analysis_off_reason`, a Fusion-only field with no Core counterpart,
+/// which we keep omitted when `None`. The `#[serde(default)]` on the optional fields keeps
+/// deserialization tolerant of older/partial artifacts that may omit a key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RunResultOutput {
@@ -137,21 +149,27 @@ pub struct RunResultOutput {
     /// Adapter-specific response information.
     pub adapter_response: BTreeMap<String, YmlValue>,
     /// Execution message (e.g., error message).
+    #[serde(default)]
     pub message: Option<String>,
     /// Information about failures (often used for tests).
+    #[serde(default)]
     pub failures: Option<i64>,
     /// Unique identifier for the dbt node.
     pub unique_id: String,
     /// Indicates if the node was compiled.
+    #[serde(default)]
     pub compiled: Option<bool>,
     /// Compiled SQL code for the node.
+    #[serde(default)]
     pub compiled_code: Option<String>,
     /// Fully qualified relation name in the database.
+    #[serde(default)]
     pub relation_name: Option<String>,
     /// Results specific to batch processing, if applicable.
     #[serde(default)]
     pub batch_results: Option<BatchResults>,
-    /// Reason why static analysis was disabled for this node.
+    /// Reason why static analysis was disabled for this node (Fusion-only; omitted when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
 }
 
@@ -186,5 +204,129 @@ pub struct RunResultsArtifact {
 impl RunResultsArtifact {
     pub fn from_file(path: &Path) -> FsResult<Self> {
         typed_struct_from_json_file(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    /// Build a `RunResultOutput` representing a skipped node: every optional per-node field is
+    /// `None`, mirroring what Fusion produces for a skipped test/model (e.g. during Selective
+    /// Apply Optimization model reuse).
+    fn skipped_run_result_output() -> RunResultOutput {
+        RunResultOutput {
+            status: "skipped".to_string(),
+            timing: vec![],
+            thread_id: "Thread-1".to_string(),
+            execution_time: 0.0,
+            adapter_response: BTreeMap::new(),
+            message: None,
+            failures: None,
+            unique_id: "test.test.not_null_view_model_id.c9346154f2".to_string(),
+            compiled: None,
+            compiled_code: None,
+            relation_name: None,
+            batch_results: None,
+            static_analysis_off_reason: None,
+        }
+    }
+
+    /// Regression for dbt-core#14554: a skipped node's `run_results.json` entry must include the
+    /// full set of per-node keys that dbt Core emits, each present with a `null` value when
+    /// empty (rather than being dropped by `#[skip_serializing_none]`). Downstream consumers such
+    /// as the `dbt-artifacts` package rely on keys like `failures` always being present.
+    #[test]
+    fn test_run_result_output_serializes_core_keys_as_null_for_skipped_node() {
+        let value = serde_json::to_value(skipped_run_result_output()).unwrap();
+        let obj = value.as_object().expect("expected a JSON object");
+
+        for key in [
+            "message",
+            "failures",
+            "compiled",
+            "compiled_code",
+            "relation_name",
+            "batch_results",
+        ] {
+            assert!(obj.contains_key(key), "key `{key}` should be present");
+            assert_eq!(
+                obj[key],
+                Value::Null,
+                "key `{key}` should serialize as null"
+            );
+        }
+
+        // Fusion-only field with no Core counterpart stays omitted when absent.
+        assert!(
+            !obj.contains_key("static_analysis_off_reason"),
+            "Fusion-only `static_analysis_off_reason` should be omitted when None",
+        );
+    }
+
+    /// The Jinja-facing `ContextRunResult` (surfaced to the `on-run-end` `results` collection,
+    /// which `dbt-artifacts` consumes) must expose the same keys as `null`.
+    #[test]
+    fn test_context_run_result_serializes_failures_as_null_for_skipped_node() {
+        let context_result = ContextRunResult {
+            status: "skipped".to_string(),
+            timing: vec![],
+            thread_id: "Thread-1".to_string(),
+            execution_time: 0.0,
+            adapter_response: BTreeMap::new(),
+            message: None,
+            failures: None,
+            node: None,
+            unique_id: "test.test.not_null_view_model_id.c9346154f2".to_string(),
+            batch_results: None,
+            static_analysis_off_reason: None,
+        };
+
+        let value = serde_json::to_value(&context_result).unwrap();
+        let obj = value.as_object().expect("expected a JSON object");
+
+        assert!(
+            obj.contains_key("failures"),
+            "`failures` key should be present"
+        );
+        assert_eq!(
+            obj["failures"],
+            Value::Null,
+            "`failures` should serialize as null"
+        );
+        assert_eq!(
+            obj["message"],
+            Value::Null,
+            "`message` should serialize as null"
+        );
+        assert!(
+            !obj.contains_key("static_analysis_off_reason"),
+            "Fusion-only `static_analysis_off_reason` should be omitted when None",
+        );
+    }
+
+    /// Deserialization must remain tolerant of artifacts that omit the now-always-serialized
+    /// optional keys (e.g. artifacts produced before this fix), thanks to `#[serde(default)]`.
+    #[test]
+    fn test_run_result_output_deserializes_with_missing_optional_keys() {
+        let json = serde_json::json!({
+            "status": "skipped",
+            "timing": [],
+            "thread_id": "Thread-1",
+            "execution_time": 0.0,
+            "adapter_response": {},
+            "unique_id": "test.test.not_null_view_model_id.c9346154f2"
+        });
+
+        let result: RunResultOutput = serde_json::from_value(json).unwrap();
+        assert_eq!(result.status, "skipped");
+        assert_eq!(result.failures, None);
+        assert_eq!(result.message, None);
+        assert_eq!(result.compiled, None);
+        assert_eq!(result.compiled_code, None);
+        assert_eq!(result.relation_name, None);
+        assert!(result.batch_results.is_none());
+        assert!(result.static_analysis_off_reason.is_none());
     }
 }
