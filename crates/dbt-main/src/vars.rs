@@ -5,8 +5,8 @@ use std::sync::Arc;
 const ENGINE_ENV_PREFIX: &str = "DBT_ENGINE_";
 
 /// Environment variables from dbt-clap-core that can be aliased with DBT_ENGINE_ prefix.
-/// For each entry, if DBT_ENGINE_<SUFFIX> is set and DBT_<SUFFIX> is not,
-/// we copy the value to DBT_<SUFFIX> before CLI parsing.
+/// For each entry, if DBT_ENGINE_<SUFFIX> is set, we copy the value to
+/// DBT_<SUFFIX> before CLI parsing.
 const ALIASABLE_ENV_VARS: &[&str] = &[
     "DBT_BETA_USE_QUERY_CACHE",
     "DBT_BUILD_CACHE_CAS_URL",
@@ -163,8 +163,8 @@ static KNOWN_ENGINE_ENV_VARS: std::sync::LazyLock<std::collections::HashSet<Stri
 
 /// Applies DBT_ENGINE_* environment variable aliases.
 ///
-/// For each variable in `ALIASABLE_ENV_VARS`, if `DBT_ENGINE_<SUFFIX>` is set
-/// and `DBT_<SUFFIX>` is not, copies the value to `DBT_<SUFFIX>`.
+/// For each variable in `ALIASABLE_ENV_VARS`, if `DBT_ENGINE_<SUFFIX>` is set,
+/// copies the value to `DBT_<SUFFIX>`, overriding the legacy variable.
 ///
 /// This allows users to use `DBT_ENGINE_FAIL_FAST=true` instead of `DBT_FAIL_FAST=true`,
 /// which is useful in environments where the `DBT_` prefix conflicts with dbt-core.
@@ -182,14 +182,11 @@ pub fn apply_engine_env_var_aliases() {
 
         let engine_var = format!("DBT_ENGINE_{}", suffix);
 
-        // Only set DBT_* if DBT_ENGINE_* is set and DBT_* is not
-        if std::env::var(dbt_var).is_err() {
-            if let Ok(value) = std::env::var(&engine_var) {
-                // SAFETY: Called before any threads are spawned
-                #[allow(clippy::disallowed_methods)]
-                unsafe {
-                    std::env::set_var(dbt_var, value);
-                }
+        if let Ok(value) = std::env::var(&engine_var) {
+            // SAFETY: Called before any threads are spawned
+            #[allow(clippy::disallowed_methods)]
+            unsafe {
+                std::env::set_var(dbt_var, value);
             }
         }
     }
@@ -338,37 +335,37 @@ mod tests {
     }
 
     #[test]
-    fn apply_engine_env_var_aliases_does_not_override_existing() {
+    fn apply_engine_env_var_aliases_prefers_engine_var() {
         let _lock = ENV_MUTEX.lock().unwrap();
         // Clean up any existing vars first
         unsafe {
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_QUIET");
+            std::env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS");
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_ENGINE_QUIET");
+            std::env::remove_var("DBT_ENGINE_SEND_ANONYMOUS_USAGE_STATS");
         }
 
-        // Set both variants - DBT_ should take precedence
+        // Set both variants - DBT_ENGINE_ should take precedence
         unsafe {
             #[allow(clippy::disallowed_methods)]
-            std::env::set_var("DBT_QUIET", "original");
+            std::env::set_var("DBT_SEND_ANONYMOUS_USAGE_STATS", "true");
             #[allow(clippy::disallowed_methods)]
-            std::env::set_var("DBT_ENGINE_QUIET", "should_not_override");
+            std::env::set_var("DBT_ENGINE_SEND_ANONYMOUS_USAGE_STATS", "false");
         }
 
         // Apply aliases
         apply_engine_env_var_aliases();
 
-        // Verify DBT_QUIET retains original value
-        let result = std::env::var("DBT_QUIET");
-        assert_eq!(result.ok(), Some("original".to_string()));
+        // Verify the engine-prefixed value overrides the legacy value
+        let result = std::env::var("DBT_SEND_ANONYMOUS_USAGE_STATS");
+        assert_eq!(result.ok(), Some("false".to_string()));
 
         // Clean up
         unsafe {
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_QUIET");
+            std::env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS");
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_ENGINE_QUIET");
+            std::env::remove_var("DBT_ENGINE_SEND_ANONYMOUS_USAGE_STATS");
         }
     }
 
