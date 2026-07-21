@@ -204,9 +204,7 @@ class TestDatabricksConfigKeys:
             "name": "my_project",
             "version": "1.0.0",
             "profile": "my_project",
-            "models": {
-                "my_project": {f"+{k}": v for k, v in self.DATABRICKS_CONFIG_KEYS.items()}
-            },
+            "models": {"my_project": {f"+{k}": v for k, v in self.DATABRICKS_CONFIG_KEYS.items()}},
         }
         jsonschema_validate(project_schema(), project_dict, "dbt_project.yml")
         assert active_deprecations == {}
