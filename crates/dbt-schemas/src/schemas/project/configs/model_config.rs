@@ -34,6 +34,7 @@ use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::default_classifiers;
 use crate::schemas::project::configs::common::default_column_types;
+use crate::schemas::project::configs::common::default_docs;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_packages;
@@ -1120,6 +1121,8 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
         let grants = default_to_grants(grants, &parent.grants);
         #[allow(unused, clippy::let_unit_value)]
         let packages = default_packages(packages, &parent.packages);
+        #[allow(unused, clippy::let_unit_value)]
+        let docs = default_docs(docs, &parent.docs);
 
         // Handle Omissible fields for hierarchical overrides
         handle_omissible_override(schema, &parent.schema);
@@ -1151,7 +1154,6 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
                 secrets,
                 external_access_integrations,
                 imports,
-                docs,
                 contract,
                 event_time,
                 concurrent_batches,

@@ -28,7 +28,7 @@ use super::common::{
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{
-    default_meta_and_tags, default_packages, default_quoting, default_to_grants,
+    default_docs, default_meta_and_tags, default_packages, default_quoting, default_to_grants,
 };
 use crate::schemas::project::dbt_project::{
     ResolvableConfig, ResolvedConfig, TypedRecursiveConfig,
@@ -183,6 +183,7 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
         handle_omissible_override(schema, &parent.schema);
         #[allow(unused, clippy::let_unit_value)]
         let packages = default_packages(packages, &parent.packages);
+        default_docs(docs, &parent.docs);
 
         default_to!(
             parent,
@@ -190,7 +191,6 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
                 access,
                 alias,
                 description,
-                docs,
                 enabled,
                 group,
                 on_configuration_change,
@@ -318,6 +318,7 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
         default_to_grants(grants, &parent.grants);
         #[allow(unused, clippy::let_unit_value)]
         let packages = default_packages(packages, &parent.packages);
+        default_docs(docs, &parent.docs);
 
         default_to!(
             parent,
@@ -328,7 +329,6 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
                 tags,
                 meta,
                 group,
-                docs,
                 quoting,
                 on_configuration_change,
                 static_analysis,

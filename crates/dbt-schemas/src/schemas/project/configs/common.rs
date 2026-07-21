@@ -92,6 +92,21 @@ pub fn default_quoting(
     }
 }
 
+/// Helper function to handle default_to logic for docs configs.
+/// Field-level merge: child wins for `show` (bool has no sentinel for "unset"),
+/// but `node_color` falls back to parent when child leaves it unset.
+pub fn default_docs(child: &mut Option<DocsConfig>, parent: &Option<DocsConfig>) {
+    if let Some(docs) = child {
+        if let Some(parent_docs) = parent {
+            if docs.node_color.is_none() {
+                docs.node_color = parent_docs.node_color.clone();
+            }
+        }
+    } else {
+        *child = parent.clone();
+    }
+}
+
 /// Helper function to handle default_to logic for meta and tags
 /// Uses the existing merge functions for proper merging behavior
 pub fn default_meta_and_tags(

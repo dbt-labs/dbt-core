@@ -29,6 +29,7 @@ use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
+use crate::schemas::project::configs::common::default_docs;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
@@ -666,6 +667,8 @@ impl ResolvableConfig<SeedConfig> for SeedConfig {
         let column_types = default_column_types(column_types, &parent.column_types);
         #[allow(unused, clippy::let_unit_value)]
         let grants = default_to_grants(grants, &parent.grants);
+        #[allow(unused, clippy::let_unit_value)]
+        let docs = default_docs(docs, &parent.docs);
 
         default_to!(
             parent,
@@ -674,7 +677,6 @@ impl ResolvableConfig<SeedConfig> for SeedConfig {
                 schema,
                 alias,
                 catalog_name,
-                docs,
                 enabled,
                 quote_columns,
                 delimiter,

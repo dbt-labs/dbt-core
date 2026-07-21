@@ -31,6 +31,7 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
+use crate::schemas::project::configs::common::default_docs;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
@@ -894,6 +895,8 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
         let tags = ();
         #[allow(unused, clippy::let_unit_value)]
         let grants = default_to_grants(grants, &parent.grants);
+        #[allow(unused, clippy::let_unit_value)]
+        let docs = default_docs(docs, &parent.docs);
 
         // Use the improved default_to macro for simple fields
         default_to!(
@@ -911,7 +914,6 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
                 group,
                 persist_docs,
                 unique_key,
-                docs,
                 event_time,
                 quote_columns,
                 invalidate_hard_deletes,

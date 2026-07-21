@@ -1485,9 +1485,6 @@ pub struct Versions {
     // &[VersionColumnProperties] instead of &YmlValue.
     #[serde(skip_deserializing, default)]
     pub columns: Option<Vec<crate::schemas::dbt_column::VersionColumnProperties>>,
-    // TODO: promote `docs` to a typed field once we settle on the right struct (dbt-core uses
-    // Docs { show: bool, node_color: Optional[str] } but we only have DocsConfig which may
-    // not match exactly).
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
 

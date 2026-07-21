@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::common::DocsConfig;
+use crate::schemas::project::configs::common::default_docs;
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool};
 use dbt_common::io_args::StaticAnalysisKind;
@@ -115,6 +116,7 @@ impl ResolvableConfig<AnalysesConfig> for AnalysesConfig {
         if self.group.is_none() {
             self.group = other.group.clone();
         }
+        default_docs(&mut self.docs, &other.docs);
     }
 
     fn get_enabled_with_default(&self) -> bool {

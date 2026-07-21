@@ -964,8 +964,7 @@ pub async fn resolve_models(
 ///   - `columns` -> `process_versioned_columns` (include/exclude merge)
 ///   - `config`  -> `VersionInfo.version_config` (deep merge)
 ///   - `meta`    -> top-level only, no per-version semantics
-///   - `docs`, `data_tests` -> not yet wired (flow through other pipelines;
-///     see follow-up issues)
+///   - `data_tests` -> not yet wired (flow through other pipelines)
 struct ResolvedVersionedFields {
     description: String,
     constraints: Vec<ModelConstraint>,
