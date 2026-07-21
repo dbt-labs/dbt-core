@@ -12,7 +12,7 @@ use petgraph::{
 use tokio::sync::mpsc;
 use tracing::Instrument;
 
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{CancellationToken, CancelledError};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_trace_log_message};
@@ -519,6 +519,22 @@ pub async fn visit_parallel(
         pending.push(node_index);
     }
 
+    let handle_cancellation = |ctx: &mut TaskRunnerCtx,
+                               e: CancelledError,
+                               waiting: HashMap<NodeIndex, _>|
+     -> FsResult<()> {
+        // Any tasks that are running and waiting need to be reported as failed.
+        for (node_idx, task_span) in waiting {
+            let maybe_node = schedule.node_weight(node_idx);
+            if let Some(node) = maybe_node {
+                report_node_evaluation(ctx, node.as_ref(), Some(&NodeStatus::Errored));
+            }
+            // Record span result
+            span_manager.handle_task_finished(task_span, &Ok(NodeStatus::Errored));
+        }
+        return Err(e.into());
+    };
+
     // Termination proof for the loop below
     // ======================================
     // Measure: M = N - processed, where N = node count and "processed" means a node
@@ -554,7 +570,9 @@ pub async fn visit_parallel(
     // hang. This is why `propagate_reuse_to_downstream_tests` must mark ALL phases
     // of a reused test, not just the direct dependent. See #8439.
     loop {
-        token.check_cancellation()?;
+        if let Err(e) = token.check_cancellation() {
+            return handle_cancellation(ctx, e, waiting);
+        }
 
         while let Some(node_index) = pending.pop() {
             if let Some(node) = schedule.node_weight(node_index) {
@@ -628,7 +646,9 @@ pub async fn visit_parallel(
 
         // Process the next completed task
         if !waiting.is_empty() {
-            token.check_cancellation()?;
+            if let Err(e) = token.check_cancellation() {
+                return handle_cancellation(ctx, e, waiting);
+            }
 
             let (result, node_idx, thread_id) = match receiver.recv().await {
                 Some((res, node_idx, thread_id)) => (res, node_idx, thread_id),
