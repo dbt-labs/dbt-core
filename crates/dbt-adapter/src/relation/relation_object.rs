@@ -63,9 +63,13 @@ impl RelationObject {
     ///
     /// This is used for microbatch execution to filter refs by event_time.
     pub fn with_filter(&self, run_filter: RunFilter, event_time: Option<String>) -> Self {
+        let empty = run_filter.empty || self.run_filter.as_ref().is_some_and(|f| f.empty);
         Self {
             relation: self.relation.clone(),
-            run_filter: Some(run_filter),
+            run_filter: Some(RunFilter {
+                empty,
+                ..run_filter
+            }),
             event_time,
         }
     }
