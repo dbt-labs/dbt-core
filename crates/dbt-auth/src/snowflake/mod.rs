@@ -618,7 +618,9 @@ fn apply_connection_args(
             }?;
         }
     }
-    builder.with_named_option(snowflake::APPLICATION_NAME, APP_NAME)?;
+
+    let application_name = config.get_str("application_name").unwrap_or(APP_NAME);
+    builder.with_named_option(snowflake::APPLICATION_NAME, application_name)?;
 
     // LOGIN_TIMEOUT defaults to 300s,
     // see https://github.com/dbt-labs/gosnowflake/blob/c1d9c4ea1fde32184cbce1f728a4db2ea0cec048/dsn.go         = 300 * time.Second // Timeout for retry for login EXCLUDING clientTimeout
@@ -802,6 +804,24 @@ mod tests {
         ];
         run_config_test(config, &expected);
     }
+
+    #[test]
+    fn test_application_name_override() {
+        let mut config = base_config();
+        config.insert("application_name".into(), "custom_app".into());
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, "custom_app"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
 
     #[test]
     fn test_simple_pass_with_driver_log_level_override() {

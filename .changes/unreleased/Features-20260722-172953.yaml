@@ -1,0 +1,7 @@
+kind: Features
+body: Add config key for snowflake auth to customize application name
+time: 2026-07-22T17:29:53.619351357+02:00
+custom:
+    author: lgirault
+    issue: ""
+    project: dbt-core
