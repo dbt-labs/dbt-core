@@ -134,6 +134,20 @@ fn groups_eq(left: &[String], right: &[String]) -> bool {
             .all(|(left_group, right_group)| path_component_eq(left_group, right_group))
 }
 
+/// Matches the middle path segment of a URL template against a package definition.
+///
+/// A URL whose joined middle segment is exactly `{project}` (or `{group}`) is a
+/// wildcard that matches any non-empty definition segment. Otherwise the concrete
+/// segments must be equal (case-insensitive). This ensures the correct configuration
+/// is selected when several entries share an org but target different projects.
+fn ado_group_matches(url_groups: &[String], def_groups: &[String]) -> bool {
+    let url_group = url_groups.join("/");
+    if url_group == "{project}" || url_group == "{group}" {
+        return !def_groups.is_empty();
+    }
+    groups_eq(url_groups, def_groups)
+}
+
 fn extract_path_from_url(url: String) -> String {
     // 1) parse
     let parsed =
@@ -251,9 +265,14 @@ impl ADOGitURL {
 
         let url_def = self.get_definition();
 
-        // The project in private_def is informational — the URL template contains the actual project.
-        // We only match on org and repo.
         if !path_component_eq(&url_def.org_name, &private_def.org_name) {
+            return false;
+        }
+
+        // Match the project segment: a `{project}` template accepts any project,
+        // while a concrete project must match the one requested. This selects the
+        // right entry when several share an org but target different projects.
+        if !ado_group_matches(&url_def.groups, &private_def.groups) {
             return false;
         }
 
