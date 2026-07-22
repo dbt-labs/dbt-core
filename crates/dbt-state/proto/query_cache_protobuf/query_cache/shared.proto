@@ -42,6 +42,7 @@ enum RejectionReason {
   TARGET_TABLE_MATCH = 7;
   LATEST_QUERY_HASH_NOT_MATCH = 8;
   OUTSIDE_TIME_TRAVEL_WINDOW = 9;
+  CLONE_CHAIN_LIMIT_EXCEEDED = 10;
 }
 
 enum SubmitSQLResultType {
@@ -67,4 +68,21 @@ message ExplainedDecision {
 
 message NodeFuncMapping {
   map<string, string> node_to_func = 1;
+}
+
+message DbtNodeState {
+  reserved 8;
+
+  string node_unique_id = 1;
+  string target_name = 2;
+  string project_name = 3;
+  string resource_type = 4;
+  string node_hash = 5;
+  optional string node_body_hash = 6;
+  optional string node_configs_hash = 7;
+  optional string node_persisted_descriptions_hash = 9;
+  optional string node_macros_hash = 10;
+  optional string node_contract_hash = 11;
+  string profile_name = 12;
+  optional string project_id = 13;
 }

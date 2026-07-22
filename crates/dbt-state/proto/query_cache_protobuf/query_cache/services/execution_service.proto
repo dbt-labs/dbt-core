@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package com.fivetran.query_cache;
 
-import "query_cache_protobuf/query_cache/struct.proto";
 import "query_cache_protobuf/query_cache/shared.proto";
+import "query_cache_protobuf/query_cache/struct.proto";
 
 service Execution {
   rpc ConfirmExecution(ConfirmExecutionRequest) returns (ConfirmExecutionResponse);
@@ -33,7 +33,7 @@ message ConfirmExecutionResponse {
 // Records the outcome of one or more already-executed queries directly into
 // the cache state, bypassing cache-candidate lookup and the Submit/Confirm
 // round-trip. Used to hydrate state with historical execution data. The
-// whole batch is processed atomically -- any failure rolls back all records.
+// whole batch is processed atomically — any failure rolls back all records.
 message RecordExecutionsRequest {
   repeated ExecutionRecord records = 1;
 }
@@ -58,6 +58,8 @@ message SQLExecution {
   repeated QueryDependency query_dependencies = 7;
   map<string, string> semantic_extras = 8;
   map<string, string> labels = 9;
+  optional DbtNodeState dbt_node_state = 10;
+  optional string default_schema = 11;
 }
 
 // Mirrors SubmitValuesRequest minus cache-decision-only fields. Note that

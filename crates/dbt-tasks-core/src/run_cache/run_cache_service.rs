@@ -235,8 +235,8 @@ pub struct RunCachePendingExecutionRecord {
 
 #[derive(Clone, Debug, PartialEq)]
 enum RunCachePendingExecutionInput {
-    Sql(SubmitEnrichedSqlRequest),
-    Values(SubmitValuesRequest),
+    Sql(Box<SubmitEnrichedSqlRequest>),
+    Values(Box<SubmitValuesRequest>),
 }
 
 impl RunCacheExecutionConfirmation {
@@ -1297,13 +1297,13 @@ impl RunCacheExecutionConfirmation {
 impl RunCachePendingExecutionRecord {
     fn sql(request: SubmitEnrichedSqlRequest) -> Self {
         Self {
-            input: RunCachePendingExecutionInput::Sql(request),
+            input: RunCachePendingExecutionInput::Sql(Box::new(request)),
         }
     }
 
     fn values(request: SubmitValuesRequest) -> Self {
         Self {
-            input: RunCachePendingExecutionInput::Values(request),
+            input: RunCachePendingExecutionInput::Values(Box::new(request)),
         }
     }
 
@@ -1331,10 +1331,10 @@ impl RunCachePendingExecutionRecord {
         };
         let record = match self.input {
             RunCachePendingExecutionInput::Sql(request) => {
-                sql_execution_record_from_submit_request(request, outcome)
+                sql_execution_record_from_submit_request(*request, outcome)
             }
             RunCachePendingExecutionInput::Values(request) => {
-                values_execution_record_from_submit_request(request, outcome)
+                values_execution_record_from_submit_request(*request, outcome)
             }
         };
 

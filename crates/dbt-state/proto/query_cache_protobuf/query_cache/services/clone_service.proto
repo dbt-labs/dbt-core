@@ -24,10 +24,12 @@ message CloneRequest {
   map<string, string> labels = 7;
   optional string clone_source_table_type = 8;
   optional TableProperties table_properties = 9;
+  optional int64 clone_chain_depth_limit = 10;
 }
 
 message CloneResponse {
   ReadyToCloneResponse ready_to_clone = 3;
+  UnableToCloneResponse unable_to_clone = 4;
 
   oneof response {
     ReadyToCloneResponse ready_to_clone_v1 = 1 [deprecated = true];
@@ -59,4 +61,10 @@ message UntrackableCloneResponse {
   string clone_target = 3;
   ExplainedDecision explained_decision = 4;
   map<string, NodeFuncMapping> transformed_nodes_by_query = 5;
+}
+
+message UnableToCloneResponse {
+  string clone_source = 1;
+  string clone_target = 2;
+  ExplainedDecision explained_decision = 3;
 }

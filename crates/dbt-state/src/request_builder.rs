@@ -182,6 +182,10 @@ impl SubmitEnrichedSqlRequestInput {
             clone_time_travel_limit: self.clone_time_travel_limit,
             clone_table_properties: self.clone_table_properties,
             stale_upstream_policy: self.stale_upstream_policy as i32,
+            clone_chain_depth_limit: None,  //todo: implement
+            dbt_node_state: None,           //todo: implement
+            default_schema: None,           //todo: implement
+            compare_unrendered_code: false, //todo: implement
         }
     }
 }
@@ -211,6 +215,7 @@ impl SubmitValuesRequestInput {
             labels: self.labels,
             clone_time_travel_limit: self.clone_time_travel_limit,
             clone_table_properties: self.clone_table_properties,
+            clone_chain_depth_limit: None, //todo: implement
         }
     }
 }
@@ -239,7 +244,7 @@ pub fn sql_execution_record_from_submit_request(
 ) -> ExecutionRecord {
     ExecutionRecord {
         outcome: Some(outcome.into_proto()),
-        input: Some(execution_record::Input::EnrichedSql(
+        input: Some(execution_record::Input::EnrichedSql(Box::new(
             crate::proto::query_cache::SqlExecution {
                 target_table: request.target_table,
                 dialect: request.dialect,
@@ -250,8 +255,10 @@ pub fn sql_execution_record_from_submit_request(
                 query_dependencies: request.query_dependencies,
                 semantic_extras: request.semantic_extras,
                 labels: request.labels,
+                default_schema: None, //todo: implement
+                dbt_node_state: None, //todo: implement
             },
-        )),
+        ))),
     }
 }
 
@@ -261,14 +268,14 @@ pub fn values_execution_record_from_submit_request(
 ) -> ExecutionRecord {
     ExecutionRecord {
         outcome: Some(outcome.into_proto()),
-        input: Some(execution_record::Input::Values(ValuesExecution {
+        input: Some(execution_record::Input::Values(Box::new(ValuesExecution {
             target_table: request.target_table,
             dialect: request.dialect,
             default_catalog: request.default_catalog,
             values_hash: request.values_hash,
             semantic_extras: request.semantic_extras,
             labels: request.labels,
-        })),
+        }))),
     }
 }
 
@@ -297,6 +304,7 @@ impl CloneRequestInput {
             labels: self.labels,
             clone_source_table_type: self.clone_source_table_type,
             table_properties: self.table_properties,
+            clone_chain_depth_limit: None, //todo: implement
         }
     }
 }

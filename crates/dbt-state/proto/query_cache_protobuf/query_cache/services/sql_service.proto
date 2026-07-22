@@ -9,6 +9,7 @@ import "query_cache_protobuf/query_cache/services/clone_service.proto";
 service SQL {
   rpc SubmitEnrichedSQL(SubmitEnrichedSQLRequest) returns (SubmitSQLResponse);
   rpc SubmitValues(SubmitValuesRequest) returns (SubmitSQLResponse);
+  rpc SubmitEnrichedSQLSpeculative(SubmitEnrichedSQLRequest) returns (SubmitSQLSpeculativeResponse);
 }
 
 message SubmitEnrichedSQLRequest {
@@ -28,14 +29,11 @@ message SubmitEnrichedSQLRequest {
   map<string, string> labels = 14;
   optional int64 clone_time_travel_limit = 15;
   optional TableProperties clone_table_properties = 16;
-  // Selects how the service should aggregate per-dependency freshness checks.
-  // ANY (default): every upstream must be within tolerance for a candidate to
-  // be admitted (matches dbt's `updates_on=any`). ALL: at least one upstream
-  // must be within tolerance — i.e. skip while at least one upstream hasn't
-  // drifted yet (matches dbt's `freshness.build_after.updates_on=all`).
-  // Service-side wire field already exists; this entry restores Fusion's
-  // ability to set it.
   StaleUpstreamPolicy stale_upstream_policy = 17;
+  optional int64 clone_chain_depth_limit = 18;
+  optional DbtNodeState dbt_node_state = 19;
+  optional string default_schema = 20;
+  bool compare_unrendered_code = 21;
 }
 
 message SubmitValuesRequest {
@@ -48,6 +46,7 @@ message SubmitValuesRequest {
   map<string, string> labels = 7;
   optional int64 clone_time_travel_limit = 8;
   optional TableProperties clone_table_properties = 9;
+  optional int64 clone_chain_depth_limit = 10;
 }
 
 message SubmitSQLResponse {
@@ -82,4 +81,17 @@ message SkipExecutionResponse {
   Struct execution_results = 4;
   optional int64 execution_runtime_ms = 5;
   optional string execution_decision_id = 6;
+}
+
+message ReadyToExecuteUntrackedResponse {}
+
+message UndecidedResponse {}
+
+message SubmitSQLSpeculativeResponse {
+  oneof response {
+    ReadyToExecuteUntrackedResponse ready_to_execute_untracked = 1;
+    SkipExecutionResponse skip_execution = 2;
+    ReadyToCloneResponse ready_to_clone = 3;
+    UndecidedResponse undecided = 4;
+  }
 }

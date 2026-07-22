@@ -22,6 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tonic_prost_build::configure()
         .build_server(false)
+        .boxed(".com.fivetran.query_cache.ExecutionRecord.input") // avoids a clippy warning about large enum variants
         .compile_protos(&proto_files, &[proto_root])?;
 
     Ok(())

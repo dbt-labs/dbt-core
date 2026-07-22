@@ -598,6 +598,7 @@ mod tests {
                 request_id: "current".to_string(),
                 ..Default::default()
             }),
+            unable_to_clone: None,
             response: Some(clone_response::Response::ReadyToCloneV1(
                 ReadyToCloneResponse {
                     request_id: "legacy".to_string(),
@@ -619,6 +620,7 @@ mod tests {
     fn ready_to_clone_supports_legacy_oneof_response() {
         let response = CloneResponse {
             ready_to_clone: None,
+            unable_to_clone: None,
             response: Some(clone_response::Response::ReadyToCloneV1(
                 ReadyToCloneResponse {
                     request_id: "legacy".to_string(),
