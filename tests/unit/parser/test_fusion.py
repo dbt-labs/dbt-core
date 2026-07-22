@@ -425,6 +425,15 @@ class TestRediscoverAdapterMacros:
         m.package_name = package_name
         return m
 
+    def _patch_adapter_deps(self, source_file_return):
+        return mock.patch("dbt.adapters.factory.load_plugin"), mock.patch(
+            "dbt.adapters.factory.get_adapter_package_names", return_value=["dbt_postgres"]
+        ), mock.patch(
+            "dbt.parser.macros.MacroParser"
+        ), mock.patch(
+            "dbt.parser.read_files.load_source_file", return_value=source_file_return
+        )
+
     def test_replaces_stale_macros(self):
         stale_macro = self._make_macro("macro.dbt_postgres.stale", "dbt_postgres")
         root_macro = self._make_macro("macro.my_project.custom", "my_project")
@@ -445,20 +454,10 @@ class TestRediscoverAdapterMacros:
             "dbt_postgres": fake_project,
         }
 
-        fake_path = mock.MagicMock()
-        fake_source_file = mock.MagicMock()
-
-        with mock.patch(
-            "dbt.adapters.factory.load_plugin"
-        ), mock.patch(
-            "dbt.adapters.factory.get_adapter_package_names", return_value=["dbt_postgres"]
-        ), mock.patch(
-            "dbt.parser.macros.MacroParser"
-        ) as MockMacroParser, mock.patch(
-            "dbt.parser.read_files.load_source_file", return_value=fake_source_file
-        ):
-            mock_parser_instance = MockMacroParser.return_value
-            mock_parser_instance.get_paths.return_value = [fake_path]
+        p_load, p_names, MockMacroParser, p_source = self._patch_adapter_deps(mock.MagicMock())
+        with p_load, p_names, MockMacroParser as MockParser, p_source:
+            mock_parser_instance = MockParser.return_value
+            mock_parser_instance.get_paths.return_value = [mock.MagicMock()]
 
             rediscover_adapter_macros(manifest, runtime_config)
 
@@ -479,16 +478,9 @@ class TestRediscoverAdapterMacros:
         runtime_config.credentials.type = "postgres"
         runtime_config.load_dependencies.return_value = {"dbt_postgres": fake_project}
 
-        with mock.patch(
-            "dbt.adapters.factory.load_plugin"
-        ), mock.patch(
-            "dbt.adapters.factory.get_adapter_package_names", return_value=["dbt_postgres"]
-        ), mock.patch(
-            "dbt.parser.macros.MacroParser"
-        ) as MockMacroParser, mock.patch(
-            "dbt.parser.read_files.load_source_file", return_value=None
-        ):
-            mock_parser_instance = MockMacroParser.return_value
+        p_load, p_names, MockMacroParser, p_source = self._patch_adapter_deps(None)
+        with p_load, p_names, MockMacroParser as MockParser, p_source:
+            mock_parser_instance = MockParser.return_value
             mock_parser_instance.get_paths.return_value = [mock.MagicMock()]
 
             rediscover_adapter_macros(manifest, runtime_config)
