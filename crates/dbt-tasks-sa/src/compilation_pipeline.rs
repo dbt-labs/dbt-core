@@ -208,6 +208,7 @@ pub async fn schedule_with_select(
     let resolved_selectors = dbt_schemas::schemas::selectors::ResolvedSelector {
         include: Some(select_expr),
         exclude: exclude_expr,
+        ..Default::default()
     };
 
     // Call build_schedule directly with the overridden selectors

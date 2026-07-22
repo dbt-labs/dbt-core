@@ -899,6 +899,10 @@ fn predicate_include_identifier_node(
         MethodName::Group => match_group(pattern, node.get_group()),
         MethodName::Tag => match_tag(pattern, node.tags()),
         MethodName::SourceStatus => match_source_status(pattern, node, previous_state),
+        MethodName::Selector => err!(
+            ErrorCode::SelectorError,
+            "selector: method cannot be evaluated per-node; it requires graph context"
+        ),
     }
 }
 
@@ -1091,7 +1095,7 @@ fn has_special_chars(pattern: &str) -> bool {
     const SPECIAL_CHARS: [char; 4] = ['*', '?', '[', ']'];
     pattern.chars().any(|c| SPECIAL_CHARS.contains(&c))
 }
-fn fnmatch(pattern: &str, text: &str) -> bool {
+pub(crate) fn fnmatch(pattern: &str, text: &str) -> bool {
     if has_special_chars(pattern) {
         match Pattern::new(pattern) {
             Ok(p) => p.matches(text),

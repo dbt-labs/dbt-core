@@ -107,12 +107,14 @@ pub fn resolve_final_selectors(
         Ok(ResolvedSelector {
             include: Some(include),
             exclude,
+            selector_definitions: resolved_selectors,
         })
     } else {
         // No selector chosen → use CLI flags and apply CLI indirect selection
         let mut resolved = ResolvedSelector {
             include: arg.select.clone(),
             exclude: arg.exclude.clone(),
+            selector_definitions: resolved_selectors,
         };
 
         let default_mode = arg.indirect_selection.unwrap_or_default();
@@ -197,7 +199,7 @@ fn resolve_selector_definitions(
         .iter()
         .map(|d| (d.name.clone(), d.clone()))
         .collect::<BTreeMap<_, _>>();
-    let parser = SelectorParser::new(defs, &arg.io);
+    let parser = SelectorParser::new(defs);
     let mut resolved_selectors = HashMap::new();
 
     // The selector `default:` expression is only consulted when the user

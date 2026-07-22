@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
@@ -356,6 +356,7 @@ pub enum AtomExpr {
 pub struct ResolvedSelector {
     pub include: Option<SelectExpression>,
     pub exclude: Option<SelectExpression>,
+    pub selector_definitions: HashMap<String, SelectorEntry>,
 }
 
 /// What we really need at runtime for each selector.
