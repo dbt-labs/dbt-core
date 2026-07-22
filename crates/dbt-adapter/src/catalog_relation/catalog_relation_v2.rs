@@ -578,12 +578,12 @@ impl CatalogRelation {
         catalog: &CatalogSpecV2View<'_>,
         catalog_name: &str,
     ) -> AdapterResult<CatalogRelation> {
-        if Self::get_model_config_value(model, FIELD_TRANSIENT, AdapterType::Snowflake).is_some() {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "transient may not be specified for ICEBERG catalogs. Snowflake built-in catalog DDL does not support transient ICEBERG tables.",
-            ));
-        }
+        // FIXME(versusfacit): we just swallow transient here for now instead of
+        // honoring it. Snowflake actually supports transient iceberg tables when the
+        // location is Snowflake managed storage aka SNOWFLAKE_MANAGED. We need to
+        // detect that case and stop dropping the value on the floor. See
+        // dbt-labs/dbt-core#15427 and
+        // https://docs.snowflake.com/en/user-guide/tables-iceberg-internal-storage
 
         let snowflake = require_platform_block(catalog, catalog_name, "snowflake")?;
 

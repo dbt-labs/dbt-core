@@ -900,12 +900,12 @@ impl CatalogRelation {
             // table_format='iceberg' (legacy path)
             // ====================================
             Some(table_format) if table_format.eq_ignore_ascii_case(ICEBERG_TABLE_FORMAT) => {
-                if transient_spec.is_some() {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::Configuration,
-                        "transient may not be specified for ICEBERG catalogs. Snowflake built-in catalog DDL does not support transient ICEBERG tables.",
-                    ));
-                }
+                // FIXME(versusfacit): we just swallow transient here for now instead of
+                // honoring it. Snowflake actually supports transient iceberg tables when the
+                // location is Snowflake managed storage aka SNOWFLAKE_MANAGED. We need to
+                // detect that case and stop dropping the value on the floor. See
+                // dbt-labs/dbt-core#15427 and
+                // https://docs.snowflake.com/en/user-guide/tables-iceberg-internal-storage
 
                 let external_volume =
                     Self::get_model_config_value(model, "external_volume", AdapterType::Snowflake);
@@ -1114,15 +1114,9 @@ impl CatalogRelation {
         }
 
         // 5) transient handling
-        let transient_spec =
-            Self::get_model_config_value(model, "transient", AdapterType::Snowflake);
-
-        if table_format.is_iceberg() && transient_spec.is_some() {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "transient may not be specified for ICEBERG catalogs. Snowflake built-in catalog DDL does not support transient ICEBERG tables.",
-            ));
-        }
+        //
+        // FIXME(versusfacit): same swallowed transient case as in build_without_catalogs_yml
+        // above.
 
         Ok(CatalogRelation {
             adapter_type: AdapterType::Snowflake,
@@ -2333,15 +2327,28 @@ mod tests {
     }
 
     #[test]
-    fn legacy_iceberg_any_transient_specified_is_error() {
+    fn legacy_iceberg_transient_false_is_ignored() {
         let conf = json!({ "table_format": "ICEBERG", "transient": false });
         let ms = [
             model(AdapterType::Snowflake, conf.clone()),
             model_deprecated_config(conf),
         ];
         for m in ms {
-            let err = CatalogRelation::build_without_catalogs_yml(&m).unwrap_err();
-            assert!(format!("{err}").contains("transient may not be specified for ICEBERG"));
+            let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
+            assert!(!r.is_transient.unwrap());
+        }
+    }
+
+    #[test]
+    fn legacy_iceberg_transient_true_is_ignored() {
+        let conf = json!({ "table_format": "ICEBERG", "transient": true });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
+            assert!(!r.is_transient.unwrap());
         }
     }
 
@@ -2373,7 +2380,7 @@ mod tests {
     }
 
     #[test]
-    fn catalogs_iceberg_any_transient_specified_is_error() {
+    fn catalogs_iceberg_transient_true_is_ignored() {
         let cats = catalogs_yaml_one("CAT", "WIN", "BUILT_IN", "ICEBERG", &[]);
         let conf = json!({ "catalog_name": "CAT", "transient": true });
         let ms = [
@@ -2381,8 +2388,46 @@ mod tests {
             model_deprecated_config(conf),
         ];
         for m in ms {
-            let err = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap_err();
-            assert!(format!("{err}").contains("transient may not be specified for ICEBERG"));
+            let r = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap();
+            assert!(!r.is_transient.unwrap());
+        }
+    }
+
+    #[test]
+    fn catalogs_iceberg_transient_false_is_ignored() {
+        let cats = catalogs_yaml_one("CAT", "WIN", "BUILT_IN", "ICEBERG", &[]);
+        let conf = json!({ "catalog_name": "CAT", "transient": false });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap();
+            assert!(!r.is_transient.unwrap());
+        }
+    }
+
+    // FIXME(versusfacit): this write integration uses an external volume, not Snowflake managed
+    // storage, so Snowflake would reject transient here. We currently swallow it and pass
+    // anyway instead of erroring. See the FIXME in build_with_catalogs.
+    #[test]
+    fn catalogs_iceberg_transient_true_with_external_volume_incorrectly_passes() {
+        let cats = catalogs_yaml_one(
+            "CAT",
+            "WIN",
+            "BUILT_IN",
+            "ICEBERG",
+            &[("external_volume", s("ext_vol"))],
+        );
+        let conf = json!({ "catalog_name": "CAT", "transient": true });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap();
+            assert!(!r.is_transient.unwrap());
+            assert_eq!(r.external_volume.as_deref(), Some("ext_vol"));
         }
     }
 
