@@ -1435,6 +1435,22 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
         Value::from("sources"),
         Value::from_serialize(sources_insert),
     );
+    let unit_tests_insert: BTreeMap<String, Value> = nodes
+        .unit_tests
+        .iter()
+        .map(|(unique_id, unit_test)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize(
+                    (Arc::as_ref(unit_test) as &dyn InternalDbtNode).serialize_keep_none(),
+                ),
+            )
+        })
+        .collect();
+    graph.insert(
+        Value::from("unit_tests"),
+        Value::from_serialize(unit_tests_insert),
+    );
     let exposures_insert: BTreeMap<String, Value> = nodes
         .exposures
         .iter()
@@ -1772,9 +1788,9 @@ mod tests {
     }
 
     #[test]
-    fn build_flat_graph_populates_semantic_models_metrics_saved_queries_and_groups() {
+    fn build_flat_graph_populates_semantic_models_metrics_saved_queries_groups_and_unit_tests() {
         use dbt_schemas::schemas::manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel};
-        use dbt_schemas::schemas::nodes::DbtGroup;
+        use dbt_schemas::schemas::nodes::{DbtGroup, DbtUnitTest};
 
         let mut nodes = Nodes::default();
 
@@ -1782,6 +1798,10 @@ mod tests {
         nodes.semantic_models.insert(
             "semantic_model.pkg.sm1".to_string(),
             Arc::new(DbtSemanticModel::default()),
+        );
+        nodes.unit_tests.insert(
+            "unit_test.pkg.ut1".to_string(),
+            Arc::new(DbtUnitTest::default()),
         );
         nodes.metrics.insert(
             "metric.pkg.m1".to_string(),
@@ -1811,7 +1831,13 @@ mod tests {
         let graph_val = Value::from_object(graph);
 
         // Each key should contain exactly one entry
-        for key in &["semantic_models", "metrics", "saved_queries", "groups"] {
+        for key in &[
+            "semantic_models",
+            "metrics",
+            "saved_queries",
+            "groups",
+            "unit_tests",
+        ] {
             let collection = graph_val.get_attr(key).unwrap();
             assert_ne!(
                 collection.len(),
