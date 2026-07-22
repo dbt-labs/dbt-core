@@ -161,7 +161,7 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
             continue
         macro_parser = MacroParser(project, manifest)
         for path in macro_parser.get_paths():
-            source_file = load_source_file(path, ParseFileType.Macro, project_name, {})
+            source_file = load_source_file(path, ParseFileType.Macro, project.project_name, {})
             if source_file:
                 macro_parser.parse_file(FileBlock(source_file))
 
