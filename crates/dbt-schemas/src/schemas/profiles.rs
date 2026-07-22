@@ -630,6 +630,12 @@ pub struct RedshiftDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_serverless: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serverless_work_group: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serverless_acct_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
@@ -1993,9 +1999,9 @@ impl TryFrom<DbConfig> for TargetContext {
                     },
                     retry_all: false,
                     access_key_id: config.access_key_id,
-                    is_serverless: None,
-                    serverless_work_group: None,
-                    serverless_acct_id: None,
+                    is_serverless: config.is_serverless,
+                    serverless_work_group: config.serverless_work_group,
+                    serverless_acct_id: config.serverless_acct_id,
                     token_endpoint: config.token_endpoint,
                     idc_region: config.idc_region,
                     idc_client_display_name: config.idc_client_display_name,
@@ -2457,6 +2463,48 @@ extensions:
             .get(dbt_yaml::Value::from("drop_without_cascade"))
             .expect("drop_without_cascade should be present in connection mapping");
         assert_eq!(value.as_bool(), Some(true));
+    }
+
+    #[test]
+    fn test_redshift_serverless_fields_reach_connection_mapping() {
+        // #14621: is_serverless / serverless_work_group must survive into the
+        // connection mapping, since that is what the auth layer reads to select
+        // the serverless path. They used to be dropped on deserialization.
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: redshift\n\
+             method: iam\n\
+             host: 127.0.0.1\n\
+             port: 5439\n\
+             database: mydb\n\
+             schema: public\n\
+             region: us-east-1\n\
+             is_serverless: true\n\
+             serverless_work_group: my-workgroup",
+        )
+        .unwrap();
+
+        let DbConfig::Redshift(ref redshift_config) = config else {
+            panic!("Expected DbConfig::Redshift, got {config:?}");
+        };
+        assert_eq!(redshift_config.is_serverless, Some(true));
+        assert_eq!(
+            redshift_config.serverless_work_group.as_deref(),
+            Some("my-workgroup")
+        );
+
+        let mapping = config.to_connection_mapping().unwrap();
+        assert_eq!(
+            mapping
+                .get(dbt_yaml::Value::from("is_serverless"))
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            mapping
+                .get(dbt_yaml::Value::from("serverless_work_group"))
+                .and_then(|v| v.as_str()),
+            Some("my-workgroup")
+        );
     }
 
     #[test]
