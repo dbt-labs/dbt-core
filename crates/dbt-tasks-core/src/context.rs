@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::run_cache::run_cache_service::HeuristicClock;
+use crate::run_cache::run_cache_service::{CachedTestExecutionResult, HeuristicClock};
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
 use dbt_adapter::relation::create_relation_from_node;
@@ -69,6 +69,7 @@ pub struct TaskRunnerCtxInner {
     pub base_context: BTreeMap<String, Value>,
     pub analyze_stats: DashMap<String, Stat>,
     pub run_stats: DashMap<String, Stat>,
+    pub data_test_execution_results: DashMap<String, CachedTestExecutionResult>,
     pub batch_results_map: DashMap<String, BatchResults>,
     pub node_hashes: DashMap<String, String>,
     pub rendered_sql: DashMap<String, RenderedNodeInfo>,
@@ -149,6 +150,7 @@ impl TaskRunnerCtxInner {
             base_context,
             analyze_stats: DashMap::default(),
             run_stats: DashMap::default(),
+            data_test_execution_results: DashMap::default(),
             batch_results_map,
             node_hashes,
             rendered_sql: DashMap::default(),

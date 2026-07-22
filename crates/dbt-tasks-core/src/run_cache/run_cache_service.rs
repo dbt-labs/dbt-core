@@ -43,7 +43,8 @@ use dbt_state::node_session::ExecutionGuard;
 use dbt_state::proto::query_cache::{
     ConfirmExecutionRequest, ExplainedDecision, NodeFuncMapping, QueryDependency,
     RecordExecutionsRequest, SkipExecutionResponse, Struct, SubmitEnrichedSqlRequest,
-    SubmitSqlResponse, SubmitValuesRequest, TableModifiedInfo, submit_sql_response,
+    SubmitSqlResponse, SubmitValuesRequest, TableModifiedInfo, Value, submit_sql_response,
+    value::Kind,
 };
 use dbt_state::request_builder::{
     ExecutionOutcomeInput, sql_execution_record_from_submit_request,
@@ -87,11 +88,11 @@ pub enum RunCacheServiceDecision {
     Skip {
         status: NodeStatus,
         sao_stored_hash: Option<String>,
-        /// Cached test verdict (failures count) when the skipped node is a
-        /// data test. The dispatcher in `runnable/mod.rs` uses it to replace
-        /// the generic `ReusedNoChanges` status with a test-shaped status
-        /// (TestPassed/Errored) and a NO-OP-marked stat.
-        cached_test_failures: Option<i64>,
+        /// Cached data-test result when the skipped node is a data test. The
+        /// dispatcher in `runnable/mod.rs` uses it to replace the generic
+        /// `ReusedNoChanges` status with a test-shaped status and a
+        /// NO-OP-marked stat.
+        cached_test_result: Option<CachedTestExecutionResult>,
     },
     Disabled,
 }
@@ -175,14 +176,14 @@ impl PartialEq for RunCacheServiceDecision {
                 RunCacheServiceDecision::Skip {
                     status: s1,
                     sao_stored_hash: h1,
-                    cached_test_failures: f1,
+                    cached_test_result: r1,
                 },
                 RunCacheServiceDecision::Skip {
                     status: s2,
                     sao_stored_hash: h2,
-                    cached_test_failures: f2,
+                    cached_test_result: r2,
                 },
-            ) => s1 == s2 && h1 == h2 && f1 == f2,
+            ) => s1 == s2 && h1 == h2 && r1 == r2,
             (RunCacheServiceDecision::Disabled, RunCacheServiceDecision::Disabled) => true,
             _ => false,
         }
@@ -203,12 +204,12 @@ impl std::fmt::Debug for RunCacheServiceDecision {
             RunCacheServiceDecision::Skip {
                 status,
                 sao_stored_hash,
-                cached_test_failures,
+                cached_test_result,
             } => f
                 .debug_struct("RunCacheServiceDecision::Skip")
                 .field("status", status)
                 .field("sao_stored_hash", sao_stored_hash)
-                .field("cached_test_failures", cached_test_failures)
+                .field("cached_test_result", cached_test_result)
                 .finish(),
             RunCacheServiceDecision::Disabled => write!(f, "RunCacheServiceDecision::Disabled"),
         }
@@ -270,46 +271,68 @@ impl RunCacheExecutionConfirmation {
 
     /// Attach a `{failures, should_warn, should_error}` payload to this
     /// confirmation. Used by the data-test Confirm path so subsequent runs
-    /// can replay the cached verdict via `parse_cached_test_skip`.
-    pub fn set_test_execution_results(&mut self, failures: i64) {
+    /// can replay the cached verdict.
+    pub fn set_test_execution_results(&mut self, result: CachedTestExecutionResult) {
         if self.execution_results.is_none() {
-            self.execution_results = Some(build_test_execution_results_struct(failures));
+            self.execution_results = Some(build_test_execution_results_struct(result));
         }
     }
 }
 
-/// Build the `{failures, should_warn, should_error}` payload Fusion sends
-/// in `ConfirmExecutionRequest.execution_results` so subsequent runs can
-/// replay the cached verdict. Mirrors dbt-core's
-/// `_DataTestAdapterProxy.execute`, which lower-cases the agate row before
-/// confirming. `should_warn` and `should_error` both come from
-/// `count(*) != 0` in the templated test SQL, so they are simply
-/// `failures > 0`.
-pub fn build_test_execution_results_struct(failures: i64) -> Struct {
-    use dbt_state::proto::query_cache::{Value, value::Kind};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CachedTestExecutionResult {
+    pub failures: i64,
+    pub should_warn: bool,
+    pub should_error: bool,
+}
+
+/// Build the data-test result payload sent in
+/// `ConfirmExecutionRequest.execution_results` so subsequent runs can replay
+/// the cached verdict.
+pub fn build_test_execution_results_struct(result: CachedTestExecutionResult) -> Struct {
     let fail_value = Value {
-        kind: Some(Kind::IntValue(failures)),
-    };
-    let bool_value = Value {
-        kind: Some(Kind::BoolValue(failures > 0)),
+        kind: Some(Kind::IntValue(result.failures)),
     };
     let mut fields = HashMap::new();
     fields.insert("failures".to_string(), fail_value);
-    fields.insert("should_warn".to_string(), bool_value.clone());
-    fields.insert("should_error".to_string(), bool_value);
+    fields.insert(
+        "should_warn".to_string(),
+        Value {
+            kind: Some(Kind::BoolValue(result.should_warn)),
+        },
+    );
+    fields.insert(
+        "should_error".to_string(),
+        Value {
+            kind: Some(Kind::BoolValue(result.should_error)),
+        },
+    );
     Struct { fields }
 }
 
-/// Decode the cached `{failures, ...}` payload from a
-/// `SkipExecutionResponse`. Returns the failures count if the field is
-/// present and decodable.
-pub fn parse_cached_test_failures(response: &SkipExecutionResponse) -> Option<i64> {
-    use dbt_state::proto::query_cache::value::Kind;
+/// Decode the cached data-test result payload from a `SkipExecutionResponse`.
+pub fn parse_cached_test_execution_result(
+    response: &SkipExecutionResponse,
+) -> Option<CachedTestExecutionResult> {
     let results = response.execution_results.as_ref()?;
-    let value = results.fields.get("failures")?;
+    Some(CachedTestExecutionResult {
+        failures: parse_execution_result_int(results.fields.get("failures")?)?,
+        should_warn: parse_execution_result_bool(results.fields.get("should_warn")?)?,
+        should_error: parse_execution_result_bool(results.fields.get("should_error")?)?,
+    })
+}
+
+fn parse_execution_result_int(value: &Value) -> Option<i64> {
     match value.kind.as_ref()? {
         Kind::IntValue(i) => Some(*i),
         Kind::DoubleValue(d) => Some(*d as i64),
+        _ => None,
+    }
+}
+
+fn parse_execution_result_bool(value: &Value) -> Option<bool> {
+    match value.kind.as_ref()? {
+        Kind::BoolValue(value) => Some(*value),
         _ => None,
     }
 }
@@ -1692,8 +1715,8 @@ async fn submit_seed(
 /// data test's count(*) SQL with `execution_type=DbtDataTest`. The cached
 /// `{failures, should_warn, should_error}` payload flows back through
 /// `SkipExecutionResponse.execution_results` and is decoded by
-/// `parse_cached_test_failures`. On `ReadyToExecute`, the dispatcher confirms
-/// after the test runs (see `set_test_execution_results`).
+/// `parse_cached_test_execution_result`. On `ReadyToExecute`, the dispatcher
+/// confirms after the test runs (see `set_test_execution_results`).
 async fn submit_test(
     ctx: &TaskRunnerCtx,
     test: &DbtTest,
@@ -2878,17 +2901,17 @@ fn record_service_decision(
             emit_trace_log_message(|| {
                 format!("dbt State service decision: skip execution for node {unique_id}")
             });
-            // For data tests, parse the cached `failures` count out of the
-            // service's `execution_results` so the dispatcher in
-            // `runnable/mod.rs` can replace the generic `ReusedNoChanges`
-            // status with a test-shaped verdict and a NO-OP-marked stat.
+            // For data tests, parse the cached result out of the service's
+            // `execution_results` so the dispatcher in `runnable/mod.rs` can
+            // replace the generic `ReusedNoChanges` status with a test-shaped
+            // verdict and a NO-OP-marked stat.
             let is_test = unique_id.starts_with("test.");
-            let cached_test_failures = if is_test {
-                parse_cached_test_failures(response)
+            let cached_test_result = if is_test {
+                parse_cached_test_execution_result(response)
             } else {
                 None
             };
-            if is_test && cached_test_failures.is_none() {
+            if is_test && cached_test_result.is_none() {
                 emit_trace_log_message(|| {
                     format!(
                         "dbt State service data test skip ignored because no cached test result was returned for node {unique_id}; executing normally"
@@ -2904,7 +2927,7 @@ fn record_service_decision(
             RunCacheServiceDecision::Skip {
                 status,
                 sao_stored_hash: None,
-                cached_test_failures,
+                cached_test_result,
             }
         }
         Some(submit_sql_response::Response::ReadyToClone(response)) => {
@@ -2989,7 +3012,7 @@ fn relabel_skip_for_dev_cloned_node(
     let RunCacheServiceDecision::Skip {
         status,
         sao_stored_hash,
-        cached_test_failures,
+        cached_test_result,
     } = decision
     else {
         return decision;
@@ -2998,7 +3021,7 @@ fn relabel_skip_for_dev_cloned_node(
         return RunCacheServiceDecision::Skip {
             status,
             sao_stored_hash,
-            cached_test_failures,
+            cached_test_result,
         };
     }
     let relabelled = match status {
@@ -3011,7 +3034,7 @@ fn relabel_skip_for_dev_cloned_node(
     RunCacheServiceDecision::Skip {
         status: relabelled,
         sao_stored_hash,
-        cached_test_failures,
+        cached_test_result,
     }
 }
 
@@ -3160,13 +3183,13 @@ mod tests {
             RunCacheServiceDecision::Skip {
                 status: NodeStatus::ReusedNoChanges(_),
                 sao_stored_hash: None,
-                cached_test_failures: None,
+                cached_test_result: None,
             }
         ));
     }
 
     #[test]
-    fn data_test_skip_without_cached_failures_executes() {
+    fn data_test_skip_without_cached_result_executes() {
         assert_eq!(
             record_service_decision(
                 "test.test.not_null_orders_order_date.abc123",
@@ -3182,24 +3205,57 @@ mod tests {
     }
 
     #[test]
-    fn data_test_skip_with_cached_failures_is_honored() {
-        assert!(matches!(
-            record_service_decision(
-                "test.test.not_null_orders_order_date.abc123",
-                &skip_execution_response_with_test_failures(0),
-                0,
-                true,
-            ),
+    fn data_test_skip_with_cached_result_is_honored() {
+        match record_service_decision(
+            "test.test.not_null_orders_order_date.abc123",
+            &skip_execution_response_with_test_result(CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            }),
+            0,
+            true,
+        ) {
             RunCacheServiceDecision::Skip {
                 status: NodeStatus::ReusedNoChanges(_),
                 sao_stored_hash: None,
-                cached_test_failures: Some(0),
+                cached_test_result: Some(result),
+            } => {
+                assert_eq!(result.failures, 2);
+                assert!(result.should_warn);
+                assert!(!result.should_error);
             }
-        ));
+            other => panic!("expected cached data-test skip, got {other:?}"),
+        }
     }
 
     #[test]
-    fn stale_data_test_skip_with_cached_failures_reports_no_changes() {
+    fn data_test_skip_with_incomplete_cached_result_executes() {
+        let response = SubmitSqlResponse {
+            response: Some(submit_sql_response::Response::SkipExecution(
+                SkipExecutionResponse {
+                    execution_results: Some(test_execution_results_with_failures_only(0)),
+                    ..Default::default()
+                },
+            )),
+        };
+
+        assert_eq!(
+            record_service_decision(
+                "test.test.not_null_orders_order_date.abc123",
+                &response,
+                0,
+                true,
+            ),
+            RunCacheServiceDecision::Execute {
+                after_success: RunCacheAfterSuccess::None,
+                sao_guard: None,
+            }
+        );
+    }
+
+    #[test]
+    fn stale_data_test_skip_with_cached_result_reports_no_changes() {
         let response = SubmitSqlResponse {
             response: Some(submit_sql_response::Response::SkipExecution(
                 SkipExecutionResponse {
@@ -3207,7 +3263,13 @@ mod tests {
                         is_stale: true,
                         ..Default::default()
                     }),
-                    execution_results: Some(build_test_execution_results_struct(0)),
+                    execution_results: Some(build_test_execution_results_struct(
+                        CachedTestExecutionResult {
+                            failures: 0,
+                            should_warn: false,
+                            should_error: false,
+                        },
+                    )),
                     ..Default::default()
                 },
             )),
@@ -3223,7 +3285,11 @@ mod tests {
             RunCacheServiceDecision::Skip {
                 status: NodeStatus::ReusedNoChanges(_),
                 sao_stored_hash: None,
-                cached_test_failures: Some(0),
+                cached_test_result: Some(CachedTestExecutionResult {
+                    failures: 0,
+                    should_warn: false,
+                    should_error: false,
+                }),
             }
         ));
     }
@@ -3245,7 +3311,7 @@ mod tests {
             RunCacheServiceDecision::Skip {
                 status: NodeStatus::ReusedStillFresh(message, tolerance, _),
                 sao_stored_hash: None,
-                cached_test_failures: None,
+                cached_test_result: None,
             } => {
                 assert!(
                     message.contains("New changes detected"),
@@ -3266,7 +3332,7 @@ mod tests {
                 42,
             ),
             sao_stored_hash: None,
-            cached_test_failures: None,
+            cached_test_result: None,
         };
 
         match relabel_skip_for_dev_cloned_node(true, original) {
@@ -3285,7 +3351,7 @@ mod tests {
         let original = RunCacheServiceDecision::Skip {
             status: NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string()),
             sao_stored_hash: None,
-            cached_test_failures: None,
+            cached_test_result: None,
         };
 
         match relabel_skip_for_dev_cloned_node(true, original) {
@@ -3302,7 +3368,7 @@ mod tests {
         let make = || RunCacheServiceDecision::Skip {
             status: NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string()),
             sao_stored_hash: None,
-            cached_test_failures: None,
+            cached_test_result: None,
         };
         let relabelled = relabel_skip_for_dev_cloned_node(false, make());
         assert_eq!(relabelled, make());
@@ -4201,15 +4267,28 @@ mod tests {
         }
     }
 
-    fn skip_execution_response_with_test_failures(failures: i64) -> SubmitSqlResponse {
+    fn skip_execution_response_with_test_result(
+        result: CachedTestExecutionResult,
+    ) -> SubmitSqlResponse {
         SubmitSqlResponse {
             response: Some(submit_sql_response::Response::SkipExecution(
                 SkipExecutionResponse {
-                    execution_results: Some(build_test_execution_results_struct(failures)),
+                    execution_results: Some(build_test_execution_results_struct(result)),
                     ..Default::default()
                 },
             )),
         }
+    }
+
+    fn test_execution_results_with_failures_only(failures: i64) -> Struct {
+        let mut fields = HashMap::new();
+        fields.insert(
+            "failures".to_string(),
+            Value {
+                kind: Some(Kind::IntValue(failures)),
+            },
+        );
+        Struct { fields }
     }
 
     fn ready_to_clone_response() -> SubmitSqlResponse {

@@ -27,6 +27,7 @@ use dbt_schemas::schemas::common::Severity;
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::pretty_table::from_pretty_table_error;
+use dbt_tasks_core::run_cache::run_cache_service::CachedTestExecutionResult;
 use dbt_tasks_core::span_manager::SpanTreeRequest;
 use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task, TaskOp};
@@ -80,6 +81,7 @@ pub struct TestReportedResult {
     pub failures: usize,
     pub status: TestExecutionStatus,
     pub diff: Option<String>,
+    pub execution_result: Option<CachedTestExecutionResult>,
 }
 
 impl TestReportedResult {
@@ -108,18 +110,30 @@ pub fn status_with_warn_error_overrides(
     }
 }
 
-fn reported_test_verdict_from_materialize_result(
+pub fn reported_test_verdict_from_components(
     severity: Option<&Severity>,
-    test_result: &crate::materialize::TestResult,
+    should_warn: bool,
+    should_error: bool,
 ) -> TestExecutionStatus {
     let severity = severity.cloned().unwrap_or_default();
-    if matches!(severity, Severity::Error) && test_result.should_error {
+    if matches!(severity, Severity::Error) && should_error {
         TestExecutionStatus::Failed
-    } else if test_result.should_warn {
+    } else if should_warn {
         TestExecutionStatus::Warned
     } else {
         TestExecutionStatus::Passed
     }
+}
+
+fn reported_test_verdict_from_materialize_result(
+    severity: Option<&Severity>,
+    test_result: &crate::materialize::TestResult,
+) -> TestExecutionStatus {
+    reported_test_verdict_from_components(
+        severity,
+        test_result.should_warn,
+        test_result.should_error,
+    )
 }
 
 pub fn record_test_metric(status: TestExecutionStatus) {
@@ -316,6 +330,15 @@ impl AggregatedTestRunRemoteTask {
                     failures,
                     status,
                     diff: None,
+                    execution_result: Some(CachedTestExecutionResult {
+                        failures: failures as i64,
+                        should_warn: column_result
+                            .map(|result| result.should_warn)
+                            .unwrap_or(false),
+                        should_error: column_result
+                            .map(|result| result.should_error)
+                            .unwrap_or(false),
+                    }),
                 },
             );
         }
@@ -448,6 +471,11 @@ impl AggregatedTestRunRemoteTask {
             result.failures,
             result.status,
         );
+        if let Some(execution_result) = result.execution_result {
+            ctx.inner
+                .data_test_execution_results
+                .insert(unique_id.to_string(), execution_result);
+        }
 
         ctx.inner
             .span_manager()
@@ -615,6 +643,11 @@ fn execute_test_remote_inner(
         failures: test_result.failures as usize,
         status: status_with_warn_error_overrides(status, &ctx.inner.arg.warn_error_options),
         diff,
+        execution_result: Some(CachedTestExecutionResult {
+            failures: test_result.failures,
+            should_warn: test_result.should_warn,
+            should_error: test_result.should_error,
+        }),
     })
 }
 
@@ -639,6 +672,11 @@ pub fn process_test_result(
         result.failures,
         result.status,
     );
+    if let Some(execution_result) = result.execution_result {
+        ctx.inner
+            .data_test_execution_results
+            .insert(unique_id.clone(), execution_result);
+    }
 
     Ok(node_status)
 }

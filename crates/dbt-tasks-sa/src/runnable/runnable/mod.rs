@@ -9,7 +9,7 @@ use crate::runnable::function::execute_function_remote;
 use crate::runnable::snapshot::execute_snapshot_remote;
 use crate::runnable::test::{
     TestExecutionStatus, TestReportedResult, execute_test_remote, record_cached_test_span,
-    record_test_metric, status_with_warn_error_overrides,
+    record_test_metric, reported_test_verdict_from_components, status_with_warn_error_overrides,
 };
 use dbt_adapter::time_machine::{SaoStatus, global_recorder, global_replayer};
 use dbt_adapter_core::AdapterType;
@@ -48,11 +48,12 @@ use crate::runnable::model::{
 use crate::runnable::seed::{execute_seed_remote, maybe_resolve_remote_seed_column_hint};
 use crate::runnable::unit_test::execute_unit_test_remote;
 use dbt_tasks_core::run_cache::run_cache_service::{
-    RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError, RunCacheReuseHookExecutor,
-    RunCacheReuseHookPhase, RunCacheServiceDecision, clear_final_last_modified_epoch_for_node,
-    confirm_run_cache_service_execution, execute_run_cache_service_clone,
-    insert_compiled_view_definition, record_run_cache_service_execution,
-    run_cache_service_before_execution, should_execute_hooks_for_skip_reuse,
+    CachedTestExecutionResult, RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError,
+    RunCacheReuseHookExecutor, RunCacheReuseHookPhase, RunCacheServiceDecision,
+    clear_final_last_modified_epoch_for_node, confirm_run_cache_service_execution,
+    execute_run_cache_service_clone, insert_compiled_view_definition,
+    record_run_cache_service_execution, run_cache_service_before_execution,
+    should_execute_hooks_for_skip_reuse,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -209,25 +210,24 @@ impl Task for RunTask {
                     if let RunCacheServiceDecision::Skip {
                         status,
                         sao_stored_hash,
-                        cached_test_failures,
+                        cached_test_result,
                     } = &decision
                     {
                         let source = sao_stored_hash.as_deref().unwrap_or("run-cache-service");
                         // For data tests, override the generic
                         // ReusedNoChanges status with a test-shaped verdict
-                        // and insert a Stat carrying the cached failures
-                        // count plus a NO-OP marker, so run_results.json
-                        // looks like dbt-core's _DataTestAdapterProxy
-                        // produces.
-                        let final_status = if let (Some(failures), Some(test)) = (
-                            cached_test_failures,
+                        // and insert a Stat carrying the cached failures plus
+                        // a NO-OP marker, so run_results.json looks like
+                        // dbt-core's _DataTestAdapterProxy produces.
+                        let final_status = if let (Some(cached_result), Some(test)) = (
+                            cached_test_result,
                             self.node.as_any().downcast_ref::<DbtTest>(),
                         ) {
                             let severity =
                                 test.deprecated_config.severity.clone().unwrap_or_default();
                             let cached_status = cached_data_test_status(
                                 status,
-                                *failures,
+                                *cached_result,
                                 severity,
                                 &ctx.inner.arg.warn_error_options,
                             );
@@ -822,15 +822,15 @@ async fn run_cache_after_success_action(
             }
         }
         RunCacheAfterSuccess::Confirm(mut confirmation) => {
-            // Data tests: lift the just-executed failures count from
-            // run_stats into the confirmation so future runs can replay it.
-            // process_test_result inserts the stat before this hook fires,
-            // so the value is available here.
+            // Data tests: lift the just-executed result into the confirmation
+            // so future runs can replay it.
             if node.as_any().is::<DbtTest>() {
-                if let Some(stat) = ctx.inner.run_stats.get(node.unique_id().as_str()) {
-                    if let Some(failures) = stat.num_rows {
-                        confirmation.set_test_execution_results(failures as i64);
-                    }
+                if let Some(result) = ctx
+                    .inner
+                    .data_test_execution_results
+                    .get(node.unique_id().as_str())
+                {
+                    confirmation.set_test_execution_results(*result);
                 }
             }
             confirm_run_cache_service_execution(
@@ -865,6 +865,7 @@ impl CachedDataTestStatus {
             failures: self.failures,
             status: self.status,
             diff: None,
+            execution_result: None,
         }
     }
 }
@@ -872,23 +873,21 @@ impl CachedDataTestStatus {
 /// Converts a cached data test result into the statuses and metrics needed for reuse reporting.
 ///
 /// Cached passing tests keep the run-cache reuse status as the task's final status while recording
-/// a passing test stat. Cached failures use the data test severity to report warn/error stats and
-/// increment the matching invocation metric so command status matches a normally executed test.
+/// a passing test stat. Cached failures use the cached threshold booleans plus data test severity
+/// to report warn/error stats and increment the matching invocation metric so command status
+/// matches a normally executed test.
 fn cached_data_test_status(
     reused_status: &NodeStatus,
-    failures: i64,
+    result: CachedTestExecutionResult,
     severity: Severity,
     warn_error_options: &WarnErrorOptions,
 ) -> CachedDataTestStatus {
-    let failures = failures.max(0) as usize;
-    let status = if failures == 0 {
-        TestExecutionStatus::Passed
-    } else {
-        match severity {
-            Severity::Warn => TestExecutionStatus::Warned,
-            Severity::Error => TestExecutionStatus::Failed,
-        }
-    };
+    let failures = result.failures.max(0) as usize;
+    let status = reported_test_verdict_from_components(
+        Some(&severity),
+        result.should_warn,
+        result.should_error,
+    );
     let status = status_with_warn_error_overrides(status, warn_error_options);
     let stat_status = status.node_status();
 
@@ -1186,7 +1185,11 @@ mod tests {
 
         let status = cached_data_test_status(
             &reused_status,
-            0,
+            CachedTestExecutionResult {
+                failures: 0,
+                should_warn: false,
+                should_error: false,
+            },
             Severity::Error,
             &WarnErrorOptions::default(),
         );
@@ -1205,7 +1208,11 @@ mod tests {
 
         let status = cached_data_test_status(
             &reused_status,
-            2,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: true,
+            },
             Severity::Error,
             &WarnErrorOptions::default(),
         );
@@ -1227,8 +1234,38 @@ mod tests {
 
         let status = cached_data_test_status(
             &reused_status,
-            2,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
             Severity::Warn,
+            &WarnErrorOptions::default(),
+        );
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.status, TestExecutionStatus::Warned);
+        assert_eq!(status.stat_status, NodeStatus::TestWarned);
+        assert_eq!(status.final_status, NodeStatus::TestWarned);
+        assert_eq!(
+            status.status.metric_key(),
+            Some(InvocationMetricKey::TotalWarnings)
+        );
+    }
+
+    #[test]
+    fn cached_error_severity_data_test_uses_cached_warning_threshold() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
+            Severity::Error,
             &WarnErrorOptions::default(),
         );
 
@@ -1251,8 +1288,16 @@ mod tests {
             ..Default::default()
         };
 
-        let status =
-            cached_data_test_status(&reused_status, 2, Severity::Warn, &warn_error_options);
+        let status = cached_data_test_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
+            Severity::Warn,
+            &warn_error_options,
+        );
 
         assert_eq!(status.failures, 2);
         assert_eq!(status.status, TestExecutionStatus::Failed);
@@ -1273,8 +1318,16 @@ mod tests {
             ..Default::default()
         };
 
-        let status =
-            cached_data_test_status(&reused_status, 2, Severity::Warn, &warn_error_options);
+        let status = cached_data_test_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
+            Severity::Warn,
+            &warn_error_options,
+        );
 
         assert_eq!(status.failures, 2);
         assert_eq!(status.status, TestExecutionStatus::Passed);
