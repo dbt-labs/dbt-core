@@ -35,7 +35,7 @@ use crate::relation::Relation;
 use crate::relation::RelationObject;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
 use crate::relation::databricks::config::DatabricksRelationMetadata;
-use crate::render_constraint::render_column_constraint;
+use crate::render_constraint::{render_column_constraint, warn_constraint_support};
 use crate::response::AdapterResponse;
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
@@ -2380,6 +2380,13 @@ impl AdapterImpl {
                 let mut rendered_constraints: BTreeMap<String, String> = BTreeMap::new();
                 for (_, column) in columns_map.iter() {
                     for constraint in &column.constraints {
+                        warn_constraint_support(
+                            adapter_type,
+                            constraint.type_,
+                            self.get_constraint_support(constraint.type_),
+                            constraint.warn_unsupported,
+                            constraint.warn_unenforced,
+                        );
                         if let Some(rendered) =
                             render_column_constraint(adapter_type, constraint.clone())
                         {
@@ -2420,8 +2427,14 @@ impl AdapterImpl {
         // short-circuits enforcement for custom and passes the expression verbatim.
         // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1908-L1909
         if constraint.type_ != ConstraintType::Custom {
-            // TODO: revisit to support warn_supported, warn_unenforced
             let constraint_support = self.get_constraint_support(constraint.type_);
+            warn_constraint_support(
+                self.adapter_type(),
+                constraint.type_,
+                constraint_support,
+                constraint.warn_unsupported,
+                constraint.warn_unenforced,
+            );
             if constraint_support == ConstraintSupport::NotSupported {
                 return None;
             }

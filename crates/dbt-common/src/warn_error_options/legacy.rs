@@ -48,6 +48,8 @@ pub enum SupportedLegacyWarnError {
     UnversionedBreakingChange,
     UnsupportedConstraintMaterialization,
     UnusedResourceConfigPath,
+    ConstraintNotEnforced,
+    ConstraintNotSupported,
 }
 
 /// Legacy dbt-core event names that Fusion will eventually support in `warn-error-options` configuration, but does not yet support. These may have a corresponding fusion-native error code providing similar functionality.
@@ -106,8 +108,6 @@ pub enum NotYetSupportedLegacyWarnError {
     ConnectionLeftOpenInCleanup,
     ConnectionReused,
     ConnectionUsed,
-    ConstraintNotEnforced,
-    ConstraintNotSupported,
     CustomKeyInObjectDeprecation,
     CustomOutputPathInSourceFreshnessDeprecation,
     DatabaseErrorRunningHook,

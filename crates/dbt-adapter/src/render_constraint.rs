@@ -1,7 +1,71 @@
-use dbt_schemas::schemas::common::{Constraint, ConstraintType};
+use dbt_common::ErrorCode;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_schemas::schemas::common::{Constraint, ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::properties::ModelConstraint;
 
 use dbt_adapter_core::AdapterType;
+
+/// Emits `ConstraintNotEnforced`/`ConstraintNotSupported` warnings matching dbt-core's
+/// `BaseAdapter.process_parsed_constraint`, gated by the constraint's own
+/// `warn_unenforced`/`warn_unsupported` overrides (both default to warning).
+///
+/// This only emits a warning; it does not affect whether the constraint is rendered — callers
+/// decide that independently based on `constraint_support`.
+/// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1939-L1963
+pub fn warn_constraint_support(
+    adapter_type: AdapterType,
+    constraint_type: ConstraintType,
+    constraint_support: ConstraintSupport,
+    warn_unsupported: Option<bool>,
+    warn_unenforced: Option<bool>,
+) {
+    let Some(code) = constraint_support_warning(
+        constraint_type,
+        constraint_support,
+        warn_unsupported,
+        warn_unenforced,
+    ) else {
+        return;
+    };
+
+    let message = match code {
+        ErrorCode::ConstraintNotSupported => format!(
+            "The constraint type {} is not supported by {adapter_type}, and will be ignored. Set 'warn_unsupported: false' on this constraint to ignore this warning.",
+            constraint_type.as_str()
+        ),
+        ErrorCode::ConstraintNotEnforced => format!(
+            "The constraint type {} is not enforced by {adapter_type}. The constraint will be included in this model's DDL statement, but it will not guarantee anything about the underlying data. Set 'warn_unenforced: false' on this constraint to ignore this warning.",
+            constraint_type.as_str()
+        ),
+        _ => unreachable!("constraint_support_warning only returns constraint-support codes"),
+    };
+    emit_warn_log_message(code, message, None);
+}
+
+/// Decides which constraint-support warning (if any) applies, per dbt-core's
+/// `BaseAdapter.process_parsed_constraint` gating logic. Custom constraints bypass the support
+/// check entirely in dbt-core, and each warning is independently gated by its own
+/// `warn_unsupported`/`warn_unenforced` override (both default to warning).
+fn constraint_support_warning(
+    constraint_type: ConstraintType,
+    constraint_support: ConstraintSupport,
+    warn_unsupported: Option<bool>,
+    warn_unenforced: Option<bool>,
+) -> Option<ErrorCode> {
+    if constraint_type == ConstraintType::Custom {
+        return None;
+    }
+
+    match constraint_support {
+        ConstraintSupport::NotSupported if warn_unsupported.unwrap_or(true) => {
+            Some(ErrorCode::ConstraintNotSupported)
+        }
+        ConstraintSupport::NotEnforced if warn_unenforced.unwrap_or(true) => {
+            Some(ErrorCode::ConstraintNotEnforced)
+        }
+        _ => None,
+    }
+}
 
 /// Render the given constraint as DDL text. Should be overridden by adapters which need custom constraint
 /// default: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1849-L1850
@@ -109,4 +173,103 @@ pub fn render_column_constraint(
             _ => Some(r.trim().to_string()),
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn not_supported_warns_by_default() {
+        assert_eq!(
+            constraint_support_warning(
+                ConstraintType::Check,
+                ConstraintSupport::NotSupported,
+                None,
+                None
+            ),
+            Some(ErrorCode::ConstraintNotSupported)
+        );
+    }
+
+    #[test]
+    fn not_supported_silenced_via_warn_unsupported_false() {
+        assert_eq!(
+            constraint_support_warning(
+                ConstraintType::Check,
+                ConstraintSupport::NotSupported,
+                Some(false),
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn not_enforced_warns_by_default() {
+        assert_eq!(
+            constraint_support_warning(
+                ConstraintType::PrimaryKey,
+                ConstraintSupport::NotEnforced,
+                None,
+                None
+            ),
+            Some(ErrorCode::ConstraintNotEnforced)
+        );
+    }
+
+    #[test]
+    fn not_enforced_silenced_via_warn_unenforced_false() {
+        assert_eq!(
+            constraint_support_warning(
+                ConstraintType::PrimaryKey,
+                ConstraintSupport::NotEnforced,
+                None,
+                Some(false)
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn enforced_never_warns() {
+        assert_eq!(
+            constraint_support_warning(
+                ConstraintType::NotNull,
+                ConstraintSupport::Enforced,
+                None,
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn custom_never_warns_regardless_of_support() {
+        for support in [
+            ConstraintSupport::Enforced,
+            ConstraintSupport::NotEnforced,
+            ConstraintSupport::NotSupported,
+        ] {
+            assert_eq!(
+                constraint_support_warning(ConstraintType::Custom, support, None, None),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn not_enforced_ignores_warn_unsupported_flag() {
+        // warn_unsupported only gates NotSupported; a NotEnforced constraint still warns
+        // even if warn_unsupported is explicitly false.
+        assert_eq!(
+            constraint_support_warning(
+                ConstraintType::PrimaryKey,
+                ConstraintSupport::NotEnforced,
+                Some(false),
+                None
+            ),
+            Some(ErrorCode::ConstraintNotEnforced)
+        );
+    }
 }

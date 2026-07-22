@@ -10,7 +10,7 @@ use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::relation::factory::create_static_relation;
 use crate::relation::spark::DEFAULT_SPARK_DATABASE;
 use crate::relation::{Relation, RelationObject};
-use crate::render_constraint::render_model_constraint;
+use crate::render_constraint::{render_model_constraint, warn_constraint_support};
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::DefaultStmtSplitter;
@@ -779,6 +779,13 @@ impl Adapter {
                 }
                 let mut result = vec![];
                 for constraint in &raw_constraints {
+                    warn_constraint_support(
+                        adapter.adapter_type(),
+                        constraint.type_,
+                        adapter.get_constraint_support(constraint.type_),
+                        constraint.warn_unsupported,
+                        constraint.warn_unenforced,
+                    );
                     let rendered =
                         render_model_constraint(adapter.adapter_type(), constraint.clone());
                     if let Some(rendered) = rendered {

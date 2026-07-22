@@ -950,6 +950,20 @@ pub enum ConstraintType {
     Custom,
 }
 
+impl ConstraintType {
+    /// The dbt-core `ConstraintType` enum value, e.g. for use in warning messages.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConstraintType::NotNull => "not_null",
+            ConstraintType::Unique => "unique",
+            ConstraintType::PrimaryKey => "primary_key",
+            ConstraintType::ForeignKey => "foreign_key",
+            ConstraintType::Check => "check",
+            ConstraintType::Custom => "custom",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize)]
 #[serde(untagged)]
 pub enum DbtChecksum {

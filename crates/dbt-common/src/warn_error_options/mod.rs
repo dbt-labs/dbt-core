@@ -707,6 +707,12 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::UnusedResourceConfigPath => {
             error_code == ErrorCode::UnusedResourceConfigPath
         }
+        SupportedLegacyWarnError::ConstraintNotEnforced => {
+            error_code == ErrorCode::ConstraintNotEnforced
+        }
+        SupportedLegacyWarnError::ConstraintNotSupported => {
+            error_code == ErrorCode::ConstraintNotSupported
+        }
     }
 }
 
@@ -1112,6 +1118,14 @@ mod tests {
         use strum::IntoEnumIterator;
 
         let expected_overlaps = BTreeMap::from([
+            (
+                "ConstraintNotEnforced".to_string(),
+                ErrorCode::ConstraintNotEnforced,
+            ),
+            (
+                "ConstraintNotSupported".to_string(),
+                ErrorCode::ConstraintNotSupported,
+            ),
             ("DeprecatedModel".to_string(), ErrorCode::DeprecatedModel),
             (
                 "DeprecatedReference".to_string(),
