@@ -1008,6 +1008,8 @@ class RunTask(CompileTask):
         self.batch_map = batch_map
         self.overload_map: Optional[Dict[str, OverloadResults]] = None
         self.original_invocation_started_at: Optional[datetime] = None
+        # Tracer handle is created unconditionally; it is inert (creates no spans)
+        # until the --snowflake-projects-otel gate opens a span via _maybe_span.
         self.dbt_tracer = trace.get_tracer("dbt.runner")
 
     def raise_on_first_error(self) -> bool:
@@ -1173,12 +1175,12 @@ class RunTask(CompileTask):
         failed = False
         num_hooks = len(ordered_hooks)
 
-        with self.dbt_tracer.start_as_current_span(hook_type) as hook_span:
+        with self._maybe_span(hook_type) as hook_span:
             hook_span.set_attribute("hook_type", hook_type.value)
             for idx, hook in enumerate(ordered_hooks, 1):
-                with log_contextvars(
-                    node_info=hook.node_info
-                ), self.dbt_tracer.start_as_current_span(hook.unique_id) as hook_node_span:
+                with log_contextvars(node_info=hook.node_info), self._maybe_span(
+                    hook.unique_id
+                ) as hook_node_span:
                     hook.index = idx
                     hook_name = f"{hook.package_name}.{hook_type}.{hook.index - 1}"
                     execution_time = 0.0
@@ -1306,7 +1308,7 @@ class RunTask(CompileTask):
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
-            with self.dbt_tracer.start_as_current_span("metadata.setup"):
+            with self._maybe_span("metadata.setup"):
                 self.create_schemas(adapter, required_schemas)
                 self.populate_adapter_cache(adapter, required_schemas)
             self.populate_microbatch_batches(selected_uids)

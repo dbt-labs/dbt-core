@@ -96,6 +96,9 @@ def preflight(func):
         flags = Flags(ctx)
         ctx.obj["flags"] = flags
         set_flags(flags)
+        get_invocation_context().enable_snowflake_projects_otel = getattr(
+            flags, "SNOWFLAKE_PROJECTS_OTEL", False
+        )
         get_event_manager().require_warn_or_error_handling = (
             flags.require_all_warnings_handled_by_warn_error
         )

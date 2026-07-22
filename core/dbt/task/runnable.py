@@ -2,6 +2,7 @@ import os
 import time
 from abc import abstractmethod
 from concurrent.futures import as_completed
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
@@ -10,6 +11,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Set,
@@ -81,6 +83,10 @@ from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
 
 
+def _otel_enabled() -> bool:
+    return getattr(get_flags(), "SNOWFLAKE_PROJECTS_OTEL", False)
+
+
 def _set_span_attr(span: Span, key: str, value: Any) -> None:
     if value is not None:
         span.set_attribute(key, value)
@@ -122,6 +128,8 @@ class GraphRunnableTask(ConfiguredTask):
         self.run_count: int = 0
         self.started_at: float = 0
         self._node_span_context_mapping: Dict[str, SpanContext] = {}
+        # Tracer handle is created unconditionally; it is inert (creates no spans)
+        # until the --snowflake-projects-otel gate opens a span via _node_span/_maybe_span.
         self.dbt_tracer = trace.get_tracer("dbt.runner")
 
         if self.args.state:
@@ -265,12 +273,43 @@ class GraphRunnableTask(ConfiguredTask):
         runner.compiler.selected_node_ids = self.compiler.selected_node_ids
         return runner
 
+    @contextmanager
+    def _node_span(
+        self, node_info: Dict[str, Any], parent_context: Optional[Context], links: List[Link]
+    ) -> Iterator[Span]:
+        # When OTel is disabled, yield the no-op INVALID_SPAN so the instrumented
+        # body's set_status/set_attribute calls are harmless no-ops and no span or
+        # context-mapping entry is created.
+        if _otel_enabled():
+            with self.dbt_tracer.start_as_current_span(
+                node_info["unique_id"], context=parent_context, links=links
+            ) as node_span:
+                self._node_span_context_mapping[node_info["unique_id"]] = (
+                    node_span.get_span_context()
+                )
+                yield node_span
+        else:
+            yield trace.INVALID_SPAN
+
+    @contextmanager
+    def _maybe_span(self, name: str) -> Iterator[Span]:
+        # A named span that becomes a no-op INVALID_SPAN when OTel is disabled.
+        if _otel_enabled():
+            with self.dbt_tracer.start_as_current_span(name) as span:
+                yield span
+        else:
+            yield trace.INVALID_SPAN
+
     def call_runner(
         self, runner: BaseRunner, parent_context: Optional[Context] = None
     ) -> NodeResult:
         node_info = runner.node.node_info
         links = []
-        if hasattr(runner.node, "depends_on") and hasattr(runner.node.depends_on, "nodes"):
+        if (
+            _otel_enabled()
+            and hasattr(runner.node, "depends_on")
+            and hasattr(runner.node.depends_on, "nodes")
+        ):
             for parent_node in runner.node.depends_on.nodes:
                 if parent_node in self._node_span_context_mapping:
                     links.append(
@@ -280,12 +319,9 @@ class GraphRunnableTask(ConfiguredTask):
                         ),
                     )
 
-        with log_contextvars(
-            node_info=runner.node.node_info
-        ), self.dbt_tracer.start_as_current_span(
-            node_info["unique_id"], context=parent_context, links=links
+        with log_contextvars(node_info=runner.node.node_info), self._node_span(
+            node_info, parent_context, links
         ) as node_span:
-            self._node_span_context_mapping[node_info["unique_id"]] = node_span.get_span_context()
             runner.node.update_event_status(
                 started_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 node_status=RunningStatus.Started,
@@ -378,7 +414,8 @@ class GraphRunnableTask(ConfiguredTask):
 
         This does still go through the callback path for result collection.
         """
-        args.append(context.get_current())
+        if _otel_enabled():
+            args.append(context.get_current())
         if self.config.args.single_threaded:
             callback(self.call_runner(*args))
         else:
@@ -614,7 +651,7 @@ class GraphRunnableTask(ConfiguredTask):
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
-            with self.dbt_tracer.start_as_current_span("metadata.setup"):
+            with self._maybe_span("metadata.setup"):
                 self.populate_adapter_cache(adapter)
             return RunStatus.Success
 

@@ -1,5 +1,6 @@
 kind: Features
-body: Add OpenTelemetry span instrumentation for node and hook execution
+body: Add OpenTelemetry span instrumentation for node and hook execution, gated behind
+    the --snowflake-projects-otel flag (off by default)
 time: 2026-07-08T12:00:00.000000-07:00
 custom:
     Author: sfc-gh-vguttha sfc-gh-ppruett

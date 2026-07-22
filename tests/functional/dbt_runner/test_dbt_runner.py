@@ -204,7 +204,7 @@ class TestDbtRunnerHooks:
         trace.set_tracer_provider(tracer_provider)
         trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
         dbt = dbtRunner()
-        dbt.invoke(["run", "--select", "models", "model2"])
+        dbt.invoke(["--snowflake-projects-otel", "run", "--select", "models", "model2"])
         assert get_node_info() == {}
         exported_spans = span_exporter.get_finished_spans()
         assert len(exported_spans) == 11
@@ -256,3 +256,13 @@ class TestDbtRunnerHooks:
         assert model2_span.links[0].attributes["upstream.name"] == "model.test.models"
         assert model2_span.links[0].context.span_id == models_span.context.span_id
         assert model2_span.links[0].context.trace_id == models_span.context.trace_id
+
+    def test_dbt_runner_no_spans_when_flag_off(self, project):
+        # With the default (--no-snowflake-projects-otel), no spans are emitted.
+        tracer_provider = TracerProvider(resource=Resource.get_empty())
+        span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+        dbt = dbtRunner()
+        dbt.invoke(["run", "--select", "models", "model2"])
+        assert len(span_exporter.get_finished_spans()) == 0

@@ -771,8 +771,11 @@ class TestRunTask:
         trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(self.span_exporter))
 
     @pytest.fixture(autouse=True)
-    def before_each(self):
+    def before_each(self, monkeypatch):
         self.span_exporter.clear()
+        # Instrumentation is gated behind --snowflake-projects-otel; enable it so
+        # these span-emitting tests exercise the instrumented path.
+        monkeypatch.setattr("dbt.task.runnable._otel_enabled", lambda: True)
         yield
 
     @pytest.fixture
@@ -915,6 +918,36 @@ class TestRunTask:
         )
         exported_spans = self.span_exporter.get_finished_spans()
         assert len(exported_spans) == 0
+
+    def test_safe_run_hooks_no_spans_when_otel_disabled(
+        self,
+        monkeypatch,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        hook_node: HookNode,
+    ):
+        # With the gate off, safe_run_hooks must emit no spans even when hooks run.
+        monkeypatch.setattr("dbt.task.runnable._otel_enabled", lambda: False)
+        mocker.patch("dbt.task.run.RunTask.get_hooks_by_type").return_value = [hook_node]
+        mocker.patch("dbt.task.run.RunTask.get_hook_sql").return_value = hook_node.raw_code
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        adapter = mock.Mock()
+        adapter.execute = mock.Mock(return_value=(AdapterResponse(_message="Success"), None))
+
+        result = run_task.safe_run_hooks(
+            adapter=adapter,
+            hook_type=RunHookType.End,
+            extra_context={},
+        )
+        assert result == RunStatus.Success
+        assert len(self.span_exporter.get_finished_spans()) == 0
 
     def test_call_runner(
         self,
