@@ -10,10 +10,11 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::Path;
 
+use chrono::{DateTime, Utc};
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_schemas::schemas::common::{DbtMaterialization, OnSchemaChange};
+use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtMaterialization, OnSchemaChange};
 use dbt_schemas::schemas::project::{ModelConfig, SeedConfig, SnapshotConfig};
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
@@ -30,6 +31,14 @@ use dbt_state::request_builder::{
 use dbt_telemetry::NodeType;
 use serde::Serialize;
 use serde_json::Value;
+
+/// Semantic-extras keys mirroring the dbt-core plugin (run_cache.py). They fold a
+/// microbatch model run's resolved event-time window into the model-level cache
+/// key so an unchanged window no-ops and a different window executes. The values
+/// are stored as raw ISO-8601 strings (not JSON-encoded, unlike the config-derived
+/// extras) so both engines produce the same semantic hash for the same window.
+const MICROBATCH_EVENT_TIME_START_KEY: &str = "__microbatch_event_time_start";
+const MICROBATCH_EVENT_TIME_END_KEY: &str = "__microbatch_event_time_end";
 
 #[derive(Clone, Debug)]
 /// Execution-time SQL request inputs assembled by `dbt-tasks`.
@@ -53,6 +62,10 @@ pub struct SqlRunCacheRequestContext {
     /// this request. Derived from the model's
     /// `freshness.build_after.updates_on` config (defaults to ANY).
     pub stale_upstream_policy: StaleUpstreamPolicy,
+    /// Resolved `(start, end)` event-time window for a microbatch model's whole
+    /// run. Folded into the model-level cache key so an unchanged window no-ops
+    /// and a different window executes. `None` for non-microbatch nodes.
+    pub microbatch_window: Option<(DateTime<Utc>, DateTime<Utc>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -76,11 +89,44 @@ pub fn build_model_sql_request(
     let execution_type =
         execution_type_from_input(&model_execution_type_input(model, context.full_refresh))
             .map_err(request_build_error)?;
-    let semantic_extras =
+    let mut semantic_extras =
         sql_semantic_extras(&model_sql_semantic_extra_config(model).map_err(request_build_error)?)
             .map_err(request_build_error)?;
 
+    // Fold the resolved microbatch event-time window into the model-level cache
+    // key. Mirrors the dbt-core plugin: the raw ISO-8601 bounds are stored under
+    // the same keys so both engines hash the same window identically.
+    if let Some((start, end)) = context.microbatch_window {
+        semantic_extras.insert(
+            MICROBATCH_EVENT_TIME_START_KEY.to_string(),
+            microbatch_window_isoformat(start),
+        );
+        semantic_extras.insert(
+            MICROBATCH_EVENT_TIME_END_KEY.to_string(),
+            microbatch_window_isoformat(end),
+        );
+    }
+
     Ok(build_sql_request_input(model, context, execution_type, semantic_extras)?.into_proto())
+}
+
+/// Whether a model executes as microbatch. Kept identical to the SA-side
+/// `try_get_microbatch_model`, which is the authoritative gate governing actual
+/// batch execution and window resolution: an incremental materialization whose
+/// resolved `incremental_strategy` is `microbatch`. Matching it exactly ensures
+/// the run-cache guard treats a node as microbatch iff it will actually run as
+/// one, so the window requirement and the batch execution never disagree.
+pub fn is_microbatch_model(model: &DbtModel) -> bool {
+    model.base().materialized == DbtMaterialization::Incremental
+        && model.__model_attr__.incremental_strategy == Some(DbtIncrementalStrategy::Microbatch)
+}
+
+/// Format a microbatch window bound to match Python's `datetime.isoformat()` for
+/// the timezone-aware UTC datetimes dbt uses (e.g. `2020-01-01T00:00:00+00:00`).
+/// Microbatch windows are always aligned to batch boundaries, so there is never a
+/// sub-second component to reconcile between the two formatters.
+fn microbatch_window_isoformat(dt: DateTime<Utc>) -> String {
+    dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
 }
 
 pub fn build_snapshot_sql_request(
@@ -556,6 +602,7 @@ mod tests {
             clone_time_travel_limit: None,
             clone_table_properties: None,
             stale_upstream_policy: StaleUpstreamPolicy::Any,
+            microbatch_window: None,
         }
     }
 
@@ -594,6 +641,58 @@ mod tests {
             "[\"status\",\"updated_at\"]"
         );
         assert!(!request.semantic_extras.contains_key("unique_key"));
+    }
+
+    #[test]
+    fn microbatch_window_folds_raw_iso_bounds_into_semantic_extras() {
+        use chrono::TimeZone;
+
+        // A microbatch model, so the test stays valid if the window fold is ever
+        // gated on `is_microbatch_model`.
+        let mut model = make_model(DbtMaterialization::Incremental);
+        model.__model_attr__.incremental_strategy = Some(DbtIncrementalStrategy::Microbatch);
+        model.deprecated_config.incremental_strategy = Some(DbtIncrementalStrategy::Microbatch);
+        let start = Utc.with_ymd_and_hms(2020, 1, 2, 0, 0, 0).unwrap();
+        let end = Utc.with_ymd_and_hms(2020, 1, 4, 0, 0, 0).unwrap();
+
+        let mut context = sql_context(false);
+        context.microbatch_window = Some((start, end));
+
+        let request = build_model_sql_request(&model, context).unwrap();
+
+        // Raw ISO-8601 strings (not JSON-encoded, so no surrounding quotes),
+        // matching the dbt-core plugin so both engines hash the window the same.
+        assert_eq!(
+            request
+                .semantic_extras
+                .get("__microbatch_event_time_start")
+                .unwrap(),
+            "2020-01-02T00:00:00+00:00"
+        );
+        assert_eq!(
+            request
+                .semantic_extras
+                .get("__microbatch_event_time_end")
+                .unwrap(),
+            "2020-01-04T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn non_microbatch_request_omits_microbatch_window_extras() {
+        let model = make_model(DbtMaterialization::Incremental);
+        let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+
+        assert!(
+            !request
+                .semantic_extras
+                .contains_key("__microbatch_event_time_start")
+        );
+        assert!(
+            !request
+                .semantic_extras
+                .contains_key("__microbatch_event_time_end")
+        );
     }
 
     #[test]

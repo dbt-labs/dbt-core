@@ -53,8 +53,10 @@ use dbt_telemetry::NodeType;
 
 use crate::run_cache::run_cache_request::{
     SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
-    build_seed_values_request, build_snapshot_sql_request, build_test_sql_request, node_identity,
+    build_seed_values_request, build_snapshot_sql_request, build_test_sql_request,
+    is_microbatch_model, node_identity,
 };
+use chrono::{DateTime, Utc};
 
 pub fn collect_upstream_hashes(ctx: &TaskRunnerCtx, unique_id: &str) -> HashMap<String, String> {
     ctx.inner
@@ -856,6 +858,7 @@ pub async fn run_cache_service_before_execution(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
     task_result: &TaskResult,
+    microbatch_window: Option<(DateTime<Utc>, DateTime<Utc>)>,
 ) -> RunCacheServiceDecision {
     if !ctx.inner.run_cache_ctx.run_cache_service_requested {
         emit_warn_log_message(
@@ -882,7 +885,8 @@ pub async fn run_cache_service_before_execution(
     };
 
     if !should_honor_service_skip(ctx) {
-        let result = prepare_write_only_execution_record(ctx, node, task_result).await;
+        let result =
+            prepare_write_only_execution_record(ctx, node, task_result, microbatch_window).await;
         return match result {
             Ok(Some(record)) => RunCacheServiceDecision::execute_with_record(record),
             Ok(None) => {
@@ -923,7 +927,7 @@ pub async fn run_cache_service_before_execution(
             record_unsupported_node(node, "non-SQL model");
             return RunCacheServiceDecision::execute_without_confirmation();
         }
-        submit_model(ctx, model, task_result, client).await
+        submit_model(ctx, model, task_result, client, microbatch_window).await
     } else if let Some(snapshot) = node.as_any().downcast_ref::<DbtSnapshot>() {
         submit_snapshot(ctx, snapshot, task_result, client).await
     } else if let Some(seed) = node.as_any().downcast_ref::<DbtSeed>() {
@@ -1458,6 +1462,7 @@ async fn submit_model(
     model: &DbtModel,
     task_result: &TaskResult,
     client: &dbt_state::service_client::SharedRunCacheServiceClient,
+    microbatch_window: Option<(DateTime<Utc>, DateTime<Utc>)>,
 ) -> FsResult<Option<RunCacheSubmitOutcome>> {
     let full_refresh = effective_full_refresh(
         ctx.inner.arg.full_refresh,
@@ -1468,7 +1473,17 @@ async fn submit_model(
         return Ok(None);
     }
 
-    let context = build_sql_context(
+    // A microbatch model's cache key is only sound with its event-time window
+    // folded in (every batch shares one target table and query hash). If the
+    // window could not be resolved, fail open and execute rather than risk a
+    // window-independent skip. Mirrors the plugin's `_resolve_microbatch_window`
+    // bypass.
+    if is_microbatch_model(model) && microbatch_window.is_none() {
+        record_submit_skipped(model, "unresolved microbatch window");
+        return Ok(None);
+    }
+
+    let mut context = build_sql_context(
         ctx,
         model,
         task_result.sql_instruction.sql.clone(),
@@ -1480,6 +1495,7 @@ async fn submit_model(
         record_submit_skipped(model, "missing metadata");
         return Ok(None);
     }
+    context.request.microbatch_window = microbatch_window;
     let freshness_tolerance_seconds = context.request.freshness_tolerance_seconds;
     let request = build_model_sql_request(model, context.request)?;
 
@@ -1507,6 +1523,7 @@ async fn prepare_write_only_execution_record(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
     task_result: &TaskResult,
+    microbatch_window: Option<(DateTime<Utc>, DateTime<Utc>)>,
 ) -> FsResult<Option<RunCachePendingExecutionRecord>> {
     if let Some(model) = node.as_any().downcast_ref::<DbtModel>() {
         if is_no_op_model_materialization(model.materialized()) {
@@ -1515,6 +1532,12 @@ async fn prepare_write_only_execution_record(
         }
         if model.common().language.as_deref() != Some("sql") {
             record_unsupported_node(node, "non-SQL model");
+            return Ok(None);
+        }
+        // See `submit_model`: a microbatch model can only be recorded soundly with
+        // its resolved window folded into the key (kept even under --full-refresh).
+        if is_microbatch_model(model) && microbatch_window.is_none() {
+            record_submit_skipped(model, "unresolved microbatch window");
             return Ok(None);
         }
         let full_refresh = effective_full_refresh(
@@ -1533,6 +1556,7 @@ async fn prepare_write_only_execution_record(
             record_submit_skipped(model, "missing metadata");
             return Ok(None);
         }
+        context.request.microbatch_window = microbatch_window;
         remove_cache_decision_fields(&mut context.request);
         Ok(Some(RunCachePendingExecutionRecord::sql(
             build_model_sql_request(model, context.request)?,
@@ -1763,6 +1787,9 @@ async fn build_sql_context(
             clone_time_travel_limit: config.clone_time_travel_limit_seconds,
             clone_table_properties: None,
             stale_upstream_policy,
+            // Populated by the model submit paths for microbatch models; other
+            // node types never carry a window.
+            microbatch_window: None,
         },
         metadata_complete,
     })
@@ -3342,6 +3369,7 @@ mod tests {
             &ctx,
             model.as_ref(),
             &task_result_with_sql("'alice'"),
+            None,
         )
         .await;
 
@@ -3384,6 +3412,7 @@ mod tests {
             &ctx,
             model.as_ref(),
             &task_result_with_sql("'alice'"),
+            None,
         )
         .await;
 
@@ -3591,6 +3620,7 @@ mod tests {
             &ctx,
             model.as_ref(),
             &task_result_with_sql("'alice'"),
+            None,
         )
         .await;
 
@@ -3623,6 +3653,7 @@ mod tests {
             &ctx,
             model.as_ref(),
             &task_result_with_sql("'alice'"),
+            None,
         )
         .await;
 
@@ -3757,6 +3788,7 @@ mod tests {
                 &ctx,
                 model.as_ref(),
                 &task_result_with_sql("select 'alice' as first_name"),
+                None,
             )
             .await,
             RunCacheServiceDecision::Execute {
@@ -4597,7 +4629,7 @@ mod tests {
             get_relation_calls: Default::default(),
             get_columns_in_relation_calls: Default::default(),
             patterned_dangling_sources: Default::default(),
-            run_started_at: chrono::Utc::now().with_timezone(&chrono_tz::UTC),
+            run_started_at: Utc::now().with_timezone(&chrono_tz::UTC),
             runtime_config: Arc::new(DbtRuntimeConfig::default()),
             manifest_path_configs: BTreeMap::new(),
             manifest_selectors: BTreeMap::new(),

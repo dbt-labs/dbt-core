@@ -7,6 +7,7 @@ use crate::materialize::{
 use crate::microbatch::{BatchContext, MicrobatchBuilder};
 use crate::runnable::cache::cache_materialization_return_value;
 use crate::runnable::microbatch::{build_event_time_mapping, is_incremental};
+use chrono::{DateTime, Utc};
 use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
@@ -102,6 +103,8 @@ pub fn prepare_microbatch_batches(
         .unwrap_or(ctx.inner.arg.full_refresh);
     let is_incremental = is_incremental(model, full_refresh, ctx.adapter_type(), ctx.env.clone());
 
+    // Keep this window derivation in sync with `resolve_microbatch_window`, which
+    // recomputes the same `(start, end)` for the run-cache key in the submit path.
     let end_time = batch_builder.build_end_time(ctx.inner.arg.event_time_end.clone())?;
     let start_time = batch_builder.build_start_time(
         Some(end_time),
@@ -160,6 +163,45 @@ pub fn prepare_microbatch_batches(
         .collect();
 
     Ok(groups)
+}
+
+/// Resolve the run-level event-time window `(start, end)` for a microbatch model.
+///
+/// This is the same window `prepare_microbatch_batches` uses to compute the batch
+/// set: `end` comes from `--event-time-end` (else `now`), and `start` from
+/// `--event-time-start`, or — for an incremental run — by offsetting back from
+/// `end` by the model's `lookback` batches (bounded below by `begin`), all keyed
+/// off the model's `batch_size`. The run cache folds it into the model-level cache
+/// key so re-running an unchanged window is a whole-model no-op while a different
+/// window executes. Mirrors the dbt-core plugin's `_resolve_microbatch_window`.
+///
+/// Keep the window derivation here in sync with `prepare_microbatch_batches`.
+pub fn resolve_microbatch_window(
+    model: &DbtModel,
+    ctx: &TaskRunnerCtx,
+) -> FsResult<(DateTime<Utc>, DateTime<Utc>)> {
+    let batch_builder = MicrobatchBuilder::from_config(
+        model.deprecated_config.batch_size.clone(),
+        model.deprecated_config.begin.as_deref(),
+        model.deprecated_config.lookback,
+    )?;
+
+    // Model-level `full_refresh` config overrides the CLI `--full-refresh` flag,
+    // matching dbt-core's `_is_incremental`.
+    let full_refresh = model
+        .deprecated_config
+        .full_refresh
+        .unwrap_or(ctx.inner.arg.full_refresh);
+    let is_incremental = is_incremental(model, full_refresh, ctx.adapter_type(), ctx.env.clone());
+
+    let end_time = batch_builder.build_end_time(ctx.inner.arg.event_time_end.clone())?;
+    let start_time = batch_builder.build_start_time(
+        Some(end_time),
+        ctx.inner.arg.event_time_start.clone(),
+        is_incremental,
+    )?;
+
+    Ok((start_time, end_time))
 }
 
 /// Execute a single microbatch task.

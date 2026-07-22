@@ -43,7 +43,7 @@ use crate::materialize::{
 use crate::runnable::cache::cache_materialization_return_value;
 use crate::runnable::model::{
     execute_microbatch_batch, execute_model_remote, prepare_microbatch_batches,
-    try_get_microbatch_model,
+    resolve_microbatch_window, try_get_microbatch_model,
 };
 use crate::runnable::seed::{execute_seed_remote, maybe_resolve_remote_seed_column_hint};
 use crate::runnable::unit_test::execute_unit_test_remote;
@@ -161,8 +161,34 @@ impl Task for RunTask {
                         ctx.inner.run_cache_ctx.run_cache_service_requested;
                     let decision = if run_cache_service_requested {
                         insert_compiled_view_definition(ctx, self.node.as_ref(), &task_result);
-                        run_cache_service_before_execution(ctx, self.node.as_ref(), &task_result)
-                            .await
+                        // Microbatch models make one per-model cache decision keyed to
+                        // the run's event-time window. Resolve it here (fail open: a
+                        // resolution error yields None and the service submit executes
+                        // normally rather than risk a window-independent skip).
+                        let microbatch_window = match try_get_microbatch_model(self.node.as_ref()) {
+                            Some(model) => match resolve_microbatch_window(model, ctx) {
+                                Ok(window) => Some(window),
+                                Err(e) => {
+                                    emit_warn_log_message(
+                                        ErrorCode::StateServiceWarn,
+                                        format!(
+                                            "Failed to resolve microbatch window for node {}: {e}; executing without dbt State",
+                                            self.node.unique_id()
+                                        ),
+                                        None,
+                                    );
+                                    None
+                                }
+                            },
+                            None => None,
+                        };
+                        run_cache_service_before_execution(
+                            ctx,
+                            self.node.as_ref(),
+                            &task_result,
+                            microbatch_window,
+                        )
+                        .await
                     } else if cache_enabled {
                         TaskOp::r#async(self.task_hooks.check_sao_cache(
                             ctx,
