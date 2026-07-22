@@ -1,0 +1,6 @@
+kind: Fixes
+body: Re-parse adapter macros from the installed adapter package after loading a Fusion-generated manifest, ensuring the user's installed dbt-<adapter> version is used instead of Fusion's compile-time bundled copy
+time: 2026-07-22T13:04:12.345766-06:00
+custom:
+    Author: aiguofer
+    Issue: "15527"
