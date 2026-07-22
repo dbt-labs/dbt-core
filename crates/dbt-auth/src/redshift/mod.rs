@@ -1,9 +1,7 @@
 mod token_service;
 
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
-use std::borrow::Cow;
-use tokio::runtime::Runtime;
-use tokio::task;
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
+use database::Builder as DatabaseBuilder;
 
 use crate::redshift::token_service::{TokenEndpoint, create_token_service_client};
 use adbc_core::constants::ADBC_OPTION_USERNAME;
@@ -22,6 +20,343 @@ use dbt_adbc::{
 };
 use percent_encoding::utf8_percent_encode;
 
+// Reference: https://docs.aws.amazon.com/redshift/latest/dg/r_names.html
+const CONN_ARG_SET: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'.')
+    .remove(b'-')
+    .remove(b'_')
+    .add(b' ');
+
+fn encode_conn_arg(value: &str) -> String {
+    utf8_percent_encode(value, CONN_ARG_SET).to_string()
+}
+
+fn build_connection_uri(
+    host: &str,
+    port: &str,
+    database: &str,
+    credentials: Option<(&str, &str)>,
+) -> String {
+    let host = encode_conn_arg(host);
+    let port = encode_conn_arg(port);
+    let database = encode_conn_arg(database);
+
+    match credentials {
+        Some((user, password)) => {
+            let user = encode_conn_arg(user);
+            let password = encode_conn_arg(password);
+            format!("postgresql://{user}:{password}@{host}:{port}/{database}")
+        }
+        None => format!("postgresql://{host}:{port}/{database}"),
+    }
+}
+
+#[derive(Debug)]
+enum RedshiftIamTarget<'a> {
+    Serverless,
+    Provisioned { cluster_id: &'a str },
+}
+
+#[derive(Debug)]
+enum RedshiftIamCredentials<'a> {
+    AccessKeys {
+        access_key_id: &'a str,
+        secret_access_key: &'a str,
+    },
+    Profile {
+        iam_profile: &'a str,
+    },
+}
+
+#[derive(Debug)]
+enum RedshiftAuthIR<'a> {
+    Database {
+        user: &'a str,
+        password: &'a str,
+        host: &'a str,
+        // `port` is normalized (rather than borrowed) because it's the one field
+        // that legitimately arrives as a YAML int (e.g. `port: 5439`).
+        port: String,
+        database: &'a str,
+    },
+    Iam {
+        user: &'a str,
+        region: &'a str,
+        target: RedshiftIamTarget<'a>,
+        credentials: RedshiftIamCredentials<'a>,
+        host: &'a str,
+        port: String,
+        database: &'a str,
+    },
+    BrowserIdentityCenter {
+        idc_region: &'a str,
+        issuer_url: &'a str,
+        idp_listen_port: String,
+        idc_client_display_name: &'a str,
+        idp_response_timeout: String,
+        host: &'a str,
+        port: String,
+        database: &'a str,
+    },
+    OAuthTokenIdentityCenter {
+        token_endpoint: TokenEndpoint,
+        host: &'a str,
+        port: String,
+        database: &'a str,
+    },
+}
+
+impl<'a> RedshiftAuthIR<'a> {
+    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+        match self {
+            Self::Database {
+                user,
+                password,
+                host,
+                port,
+                database,
+            } => {
+                builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
+
+                let connection_str =
+                    build_connection_uri(host, &port, database, Some((user, password)));
+                builder.with_parse_uri(connection_str)?;
+            }
+            Self::Iam {
+                user,
+                region,
+                target,
+                credentials,
+                host,
+                port,
+                database,
+            } => {
+                match target {
+                    RedshiftIamTarget::Serverless => {
+                        builder.with_named_option(CLUSTER_TYPE, SERVERLESS)?;
+                    }
+                    RedshiftIamTarget::Provisioned { cluster_id } => {
+                        builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
+                        builder.with_named_option(CLUSTER_IDENTIFIER, cluster_id)?;
+                    }
+                }
+
+                builder.with_named_option(AWS_REGION, region)?;
+                builder.with_named_option(ADBC_OPTION_USERNAME, user)?;
+
+                // Either both access_key_id + secret_access_key, or fall back to iam_profile.
+                // Mirrors dbt-redshift's __iam_user_kwargs in connections.py.
+                // https://github.com/dbt-labs/dbt-adapters/blob/b43adf91c22bc91e7935014a687e37aa22115689/dbt-redshift/src/dbt/adapters/redshift/connections.py#L347-L348
+                match credentials {
+                    RedshiftIamCredentials::AccessKeys {
+                        access_key_id,
+                        secret_access_key,
+                    } => {
+                        builder.with_named_option(AWS_ACCESS_KEY_ID, access_key_id)?;
+                        builder.with_named_option(AWS_SECRET_ACCESS_KEY, secret_access_key)?;
+                    }
+                    RedshiftIamCredentials::Profile { iam_profile } => {
+                        builder.with_named_option(AWS_PROFILE, iam_profile)?;
+                    }
+                }
+
+                let connection_str = build_connection_uri(host, &port, database, None);
+                builder.with_parse_uri(connection_str)?;
+            }
+            Self::BrowserIdentityCenter {
+                idc_region,
+                issuer_url,
+                idp_listen_port,
+                idc_client_display_name,
+                idp_response_timeout,
+                host,
+                port,
+                database,
+            } => {
+                builder.with_named_option(AUTH_PROVIDER, AUTH_PROVIDER_BROWSER_IDC)?;
+                builder.with_named_option(AUTH_IDC_REGION, idc_region)?;
+                builder.with_named_option(AUTH_ISSUER_URL, issuer_url)?;
+                builder.with_named_option(AUTH_IDP_LISTEN_PORT, idp_listen_port)?;
+                builder.with_named_option(AUTH_IDC_CLIENT_DISPLAY_NAME, idc_client_display_name)?;
+                builder.with_named_option(AUTH_IDP_RESPONSE_TIMEOUT, idp_response_timeout)?;
+
+                let connection_str = build_connection_uri(host, &port, database, None);
+                builder.with_parse_uri(connection_str)?;
+            }
+            Self::OAuthTokenIdentityCenter {
+                token_endpoint,
+                host,
+                port,
+                database,
+            } => {
+                builder.with_named_option(AUTH_PROVIDER, AUTH_PROVIDER_IDP_TOKEN)?;
+
+                let client = create_token_service_client(token_endpoint).map_err(|e| {
+                    AuthError::config(format!("Failed to create token service: {e}"))
+                })?;
+                let access_token = client.handle_request().map_err(|e| match e {
+                    token_service::TokenServiceError::MissingToken => AuthError::config(
+                        "access_token missing from IdP token request. \
+Please confirm correct configuration of the token_endpoint \
+field in profiles.yml and that your IdP can use a refresh token \
+to obtain an OIDC-compliant access token.",
+                    ),
+                    e => AuthError::config(format!(
+                        "Failed to fetch token service access token: {e}"
+                    )),
+                })?;
+                builder.with_named_option(AUTH_TOKEN, access_token)?;
+                builder.with_named_option(AUTH_TOKEN_TYPE, "EXT_JWT")?;
+
+                let connection_str = build_connection_uri(host, &port, database, None);
+                builder.with_parse_uri(connection_str)?;
+            }
+        }
+
+        Ok(builder)
+    }
+}
+
+fn parse_auth(config: &AdapterConfig) -> Result<RedshiftAuthIR<'_>, AuthError> {
+    // todo: update with Redshift specific configs once available
+    let method = config
+        .get("method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("database");
+
+    // Shared required configs. `port` defaults to Redshift's standard 5439,
+    // matching the `dbt init` wizard and profile_template.yml. It's the one
+    // field normalized to an owned String rather than borrowed, since it
+    // legitimately arrives as a YAML int (e.g. `port: 5439`).
+    let host = config.require_str("host")?;
+    let port = config
+        .get_string("port")
+        .map(|v| v.into_owned())
+        .unwrap_or_else(|| "5439".to_string());
+    let database = config
+        .get_str("database")
+        .or_else(|| config.get_str("dbname"))
+        .ok_or_else(|| AuthError::config("missing required field 'database' (or 'dbname')"))?;
+
+    match method {
+        "database" => {
+            let user = config.require_str("user")?;
+            for key in ["iam_profile", "cluster_id"].iter() {
+                if config.contains_key(key) {
+                    return Err(AuthError::config(format!(
+                        "Cannot set '{key}' when 'method' is set to 'database'"
+                    )));
+                };
+            }
+
+            let password = config.require_str("password")?;
+
+            Ok(RedshiftAuthIR::Database {
+                user,
+                password,
+                host,
+                port,
+                database,
+            })
+        }
+        "iam" => {
+            let user = config.require_str("user")?;
+            // XXX: We can only tell serverless vs cluster from the host input
+            let is_serverless = host.contains("redshift-serverless");
+
+            let target = if is_serverless {
+                RedshiftIamTarget::Serverless
+            } else {
+                RedshiftIamTarget::Provisioned {
+                    cluster_id: config.require_str("cluster_id")?,
+                }
+            };
+
+            let region = config.require_str("region")?;
+
+            // Either both access_key_id + secret_access_key, or fall back to iam_profile.
+            let access_key_id = config.get_str("access_key_id");
+            let secret_access_key = config.get_str("secret_access_key");
+            let credentials = match (access_key_id, secret_access_key) {
+                (Some(access_key_id), Some(secret_access_key)) => {
+                    RedshiftIamCredentials::AccessKeys {
+                        access_key_id,
+                        secret_access_key,
+                    }
+                }
+                (Some(_), None) | (None, Some(_)) => {
+                    return Err(AuthError::config(
+                        "'access_key_id' and 'secret_access_key' are both needed if providing explicit credentials",
+                    ));
+                }
+                (None, None) => RedshiftIamCredentials::Profile {
+                    iam_profile: config.require_str("iam_profile")?,
+                },
+            };
+
+            Ok(RedshiftAuthIR::Iam {
+                user,
+                region,
+                target,
+                credentials,
+                host,
+                port,
+                database,
+            })
+        }
+        "browser_identity_center" => {
+            let idc_region = config.require_str("idc_region")?;
+            let issuer_url = config.require_str("issuer_url")?;
+            let idp_listen_port = config
+                .get_string("idp_listen_port")
+                .map(|v| v.into_owned())
+                .unwrap_or_else(|| "7890".to_string());
+            let idc_client_display_name = config
+                .get_str("idc_client_display_name")
+                .unwrap_or("Amazon Redshift driver");
+            let idp_response_timeout = config
+                .get_string("idp_response_timeout")
+                .map(|v| v.into_owned())
+                .unwrap_or_else(|| "60".to_string());
+
+            Ok(RedshiftAuthIR::BrowserIdentityCenter {
+                idc_region,
+                issuer_url,
+                idp_listen_port,
+                idc_client_display_name,
+                idp_response_timeout,
+                host,
+                port,
+                database,
+            })
+        }
+        "oauth_token_identity_center" => {
+            let token_endpoint_value = config.require("token_endpoint")?;
+            let token_endpoint: TokenEndpoint = dbt_yaml::from_value::<TokenEndpoint>(
+                token_endpoint_value.clone(),
+            )
+            .map_err(|e| AuthError::config(format!("Invalid token_endpoint structure: {e}")))?;
+
+            Ok(RedshiftAuthIR::OAuthTokenIdentityCenter {
+                token_endpoint,
+                host,
+                port,
+                database,
+            })
+        }
+        method => Err(AuthError::config(format!(
+            "Unsupported auth method '{method}' for Redshift. Try 'database' or 'iam' instead."
+        ))),
+    }
+}
+
+fn apply_connection_args(
+    _config: &AdapterConfig,
+    builder: DatabaseBuilder,
+) -> Result<DatabaseBuilder, AuthError> {
+    Ok(builder)
+}
+
 pub struct RedshiftAuth;
 
 impl Auth for RedshiftAuth {
@@ -30,178 +365,7 @@ impl Auth for RedshiftAuth {
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
-        // Reference: https://docs.aws.amazon.com/redshift/latest/dg/r_names.html
-        const SET: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
-            .remove(b'.')
-            .remove(b'-')
-            .remove(b'_')
-            .add(b' ');
-
-        let mut builder = database::Builder::new(self.backend());
-
-        // todo: update with Redshift specific configs once available
-        let method = config
-            .get("method")
-            .and_then(|v| v.as_str())
-            .unwrap_or("database");
-
-        // Shared required configs and encoding
-        let host = config.require_string("host")?;
-        let port = config.require_string("port")?;
-        let dbname = config
-            .get_string("database")
-            .or_else(|| config.get_string("dbname"))
-            .ok_or_else(|| AuthError::config("missing required field 'database' (or 'dbname')"))?;
-        let host = utf8_percent_encode(&host, SET).to_string();
-        let port = utf8_percent_encode(&port, SET).to_string();
-        let dbname = utf8_percent_encode(&dbname, SET).to_string();
-
-        match method {
-            "database" => {
-                let user = config.require_string("user")?;
-                for key in ["iam_profile", "cluster_id"].iter() {
-                    if config.contains_key(key) {
-                        return Err(AuthError::config(format!(
-                            "Cannot set '{key}' when 'method' is set to 'database'"
-                        )));
-                    };
-                }
-
-                builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
-
-                let password = config.require_string("password")?;
-
-                let user = utf8_percent_encode(&user, SET).to_string();
-                let password = utf8_percent_encode(&password, SET).to_string();
-
-                let connection_str =
-                    format!("postgresql://{user}:{password}@{host}:{port}/{dbname}");
-                builder.with_parse_uri(connection_str)?;
-            }
-            "iam" => {
-                let user = config.require_string("user")?;
-                // XXX: We can only tell serverless vs cluster from the host input
-                let is_serverless = host.contains("redshift-serverless");
-
-                // cluster_id doesn't exist for serverless
-                if is_serverless {
-                    builder.with_named_option(CLUSTER_TYPE, SERVERLESS)?;
-                } else {
-                    builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
-                    let cluster_id = config.require_string("cluster_id")?;
-                    builder.with_named_option(CLUSTER_IDENTIFIER, cluster_id)?;
-                }
-
-                let region = config.require_string("region")?;
-                builder.with_named_option(AWS_REGION, region)?;
-                builder.with_named_option(ADBC_OPTION_USERNAME, user)?;
-
-                // Either both access_key_id + secret_access_key, or fall back to iam_profile.
-                // Mirrors dbt-redshift's __iam_user_kwargs in connections.py.
-                // https://github.com/dbt-labs/dbt-adapters/blob/b43adf91c22bc91e7935014a687e37aa22115689/dbt-redshift/src/dbt/adapters/redshift/connections.py#L347-L348
-                let access_key_id = config.get_string("access_key_id");
-                let secret_access_key = config.get_string("secret_access_key");
-                match (access_key_id, secret_access_key) {
-                    (Some(access_key_id), Some(secret_access_key)) => {
-                        builder.with_named_option(AWS_ACCESS_KEY_ID, access_key_id)?;
-                        builder.with_named_option(AWS_SECRET_ACCESS_KEY, secret_access_key)?;
-                    }
-                    (Some(_), None) | (None, Some(_)) => {
-                        return Err(AuthError::config(
-                            "'access_key_id' and 'secret_access_key' are both needed if providing explicit credentials",
-                        ));
-                    }
-                    (None, None) => {
-                        let iam_profile = config.require_string("iam_profile")?;
-                        builder.with_named_option(AWS_PROFILE, iam_profile)?;
-                    }
-                }
-
-                let connection_str = format!("postgresql://{host}:{port}/{dbname}");
-                builder.with_parse_uri(connection_str)?;
-            }
-            "browser_identity_center" => {
-                builder.with_named_option(AUTH_PROVIDER, AUTH_PROVIDER_BROWSER_IDC)?;
-
-                let idc_region = config.require_string("idc_region")?;
-                let idc_issuer_url = config.require_string("issuer_url")?;
-
-                builder.with_named_option(AUTH_IDC_REGION, idc_region)?;
-                builder.with_named_option(AUTH_ISSUER_URL, idc_issuer_url)?;
-
-                builder.with_named_option(
-                    AUTH_IDP_LISTEN_PORT,
-                    config
-                        .get_string("idp_listen_port")
-                        .unwrap_or(Cow::Borrowed("7890")),
-                )?;
-
-                builder.with_named_option(
-                    AUTH_IDC_CLIENT_DISPLAY_NAME,
-                    config
-                        .get_string("idc_client_display_name")
-                        .unwrap_or(Cow::Borrowed("Amazon Redshift driver")),
-                )?;
-
-                builder.with_named_option(
-                    AUTH_IDP_RESPONSE_TIMEOUT,
-                    config
-                        .get_string("idp_response_timeout")
-                        .unwrap_or(Cow::Borrowed("60")),
-                )?;
-
-                let connection_str = format!("postgresql://{host}:{port}/{dbname}");
-                builder.with_parse_uri(connection_str)?;
-            }
-            "oauth_token_identity_center" => {
-                builder.with_named_option(AUTH_PROVIDER, AUTH_PROVIDER_IDP_TOKEN)?;
-
-                let token_endpoint_value = config.require("token_endpoint")?;
-                let token_endpoint: TokenEndpoint = dbt_yaml::from_value::<TokenEndpoint>(
-                    token_endpoint_value.clone(),
-                )
-                .map_err(|e| AuthError::config(format!("Invalid token_endpoint structure: {e}")))?;
-
-                let access_token = task::block_in_place(|| {
-                    let rt = Runtime::new().map_err(|e| {
-                        AuthError::config(format!("Failed to create Tokio runtime: {e}"))
-                    })?;
-
-                    let client = create_token_service_client(token_endpoint).map_err(|e| {
-                        AuthError::config(format!("Failed to create token service: {e}"))
-                    })?;
-
-                    rt.block_on(async {
-                        client.handle_request().await.map_err(|_e| {
-                            AuthError::config(
-                                "access_token missing from IdP token request. \
-     Please confirm correct configuration of the token_endpoint \
-     field in profiles.yml and that your IdP can use a refresh token \
-     to obtain an OIDC-compliant access token.",
-                            )
-                        })
-                    })
-                })?;
-
-                // Apply the token to Redshift builder
-                builder.with_named_option(AUTH_PROVIDER, AUTH_PROVIDER_IDP_TOKEN)?;
-                builder.with_named_option(AUTH_TOKEN, access_token)?;
-                builder.with_named_option(AUTH_TOKEN_TYPE, "EXT_JWT")?;
-
-                let connection_str = format!("postgresql://{host}:{port}/{dbname}");
-                builder.with_parse_uri(connection_str)?;
-            }
-            method => {
-                return Err(AuthError::config(format!(
-                    "Unsupported auth method '{method}' for Redshift. Try 'database' or 'iam' instead."
-                )));
-            }
-        }
-
-        Ok(AuthOutcome {
-            builder,
-            warnings: vec![],
-        })
+        auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }
 
@@ -339,7 +503,7 @@ mod tests_adbc {
     fn test_iam_serverless_skips_cluster_id() {
         let mut config = iam_base_config();
         // The "redshift-serverless" substring is what triggers serverless detection
-        // in `configure()`.
+        // in `parse_auth()`.
         config.insert("host".into(), "example.redshift-serverless.host".into());
         config.remove("cluster_id");
         config.insert("iam_profile".into(), "sandbox-admin".into());
@@ -402,5 +566,151 @@ mod tests_adbc {
             ("iam_profile".into(), "default".into()),
         ]);
         assert_error_contains(config, "iam_profile");
+    }
+
+    #[test]
+    fn test_database_auth_uri_contents() {
+        let config = Mapping::from_iter([
+            ("method".into(), "database".into()),
+            ("host".into(), "redshift-cluster.aws.com".into()),
+            ("port".into(), "5439".into()),
+            ("database".into(), "dev".into()),
+            ("user".into(), "admin".into()),
+            ("password".into(), "secretpass".into()),
+        ]);
+
+        let builder = configure(config).expect("configure");
+
+        let uri = uri_value(&builder);
+        assert!(
+            uri.starts_with("postgresql://admin:secretpass@redshift-cluster.aws.com:5439/dev"),
+            "unexpected URI: {uri}"
+        );
+    }
+
+    #[test]
+    fn test_database_auth_accepts_integer_port() {
+        let config: Mapping = dbt_yaml::from_str(
+            r#"
+method: database
+host: redshift-cluster.aws.com
+port: 5439
+database: dev
+user: admin
+password: secretpass
+"#,
+        )
+        .expect("parse yaml");
+
+        let builder = configure(config).expect("configure");
+
+        let uri = uri_value(&builder);
+        assert!(
+            uri.starts_with("postgresql://admin:secretpass@redshift-cluster.aws.com:5439/dev"),
+            "unexpected URI: {uri}"
+        );
+    }
+
+    #[test]
+    fn test_database_auth_defaults_missing_port() {
+        let config = Mapping::from_iter([
+            ("method".into(), "database".into()),
+            ("host".into(), "redshift-cluster.aws.com".into()),
+            ("database".into(), "dev".into()),
+            ("user".into(), "admin".into()),
+            ("password".into(), "secretpass".into()),
+        ]);
+
+        let builder = configure(config).expect("configure");
+
+        let uri = uri_value(&builder);
+        assert!(
+            uri.starts_with("postgresql://admin:secretpass@redshift-cluster.aws.com:5439/dev"),
+            "unexpected URI: {uri}"
+        );
+    }
+
+    #[test]
+    fn test_browser_identity_center_defaults() {
+        let config = Mapping::from_iter([
+            ("method".into(), "browser_identity_center".into()),
+            ("host".into(), "redshift-cluster.aws.com".into()),
+            ("port".into(), "5439".into()),
+            ("database".into(), "dev".into()),
+            ("idc_region".into(), "us-east-1".into()),
+            ("issuer_url".into(), "https://issuer.example.com".into()),
+        ]);
+
+        let builder = configure(config).expect("configure");
+
+        assert_eq!(
+            other_option_value(&builder, AUTH_PROVIDER),
+            Some(AUTH_PROVIDER_BROWSER_IDC)
+        );
+        assert_eq!(
+            other_option_value(&builder, AUTH_IDC_REGION),
+            Some("us-east-1")
+        );
+        assert_eq!(
+            other_option_value(&builder, AUTH_ISSUER_URL),
+            Some("https://issuer.example.com")
+        );
+        assert_eq!(
+            other_option_value(&builder, AUTH_IDP_LISTEN_PORT),
+            Some("7890")
+        );
+        assert_eq!(
+            other_option_value(&builder, AUTH_IDC_CLIENT_DISPLAY_NAME),
+            Some("Amazon Redshift driver")
+        );
+        assert_eq!(
+            other_option_value(&builder, AUTH_IDP_RESPONSE_TIMEOUT),
+            Some("60")
+        );
+        let uri = uri_value(&builder);
+        assert!(
+            uri.starts_with("postgresql://redshift-cluster.aws.com:5439/dev"),
+            "unexpected URI: {uri}"
+        );
+    }
+
+    #[test]
+    fn test_browser_identity_center_accepts_integer_ports() {
+        let config: Mapping = dbt_yaml::from_str(
+            r#"
+method: browser_identity_center
+host: redshift-cluster.aws.com
+port: 5439
+database: dev
+idc_region: us-east-1
+issuer_url: https://issuer.example.com
+idp_listen_port: 8080
+idp_response_timeout: 90
+"#,
+        )
+        .expect("parse yaml");
+
+        let builder = configure(config).expect("configure");
+
+        assert_eq!(
+            other_option_value(&builder, AUTH_IDP_LISTEN_PORT),
+            Some("8080")
+        );
+        assert_eq!(
+            other_option_value(&builder, AUTH_IDP_RESPONSE_TIMEOUT),
+            Some("90")
+        );
+    }
+
+    #[test]
+    fn test_oauth_token_identity_center_invalid_token_endpoint() {
+        let config = Mapping::from_iter([
+            ("method".into(), "oauth_token_identity_center".into()),
+            ("host".into(), "redshift-cluster.aws.com".into()),
+            ("port".into(), "5439".into()),
+            ("database".into(), "dev".into()),
+            ("token_endpoint".into(), "invalid".into()),
+        ]);
+        assert_error_contains(config, "Invalid token_endpoint structure:");
     }
 }
