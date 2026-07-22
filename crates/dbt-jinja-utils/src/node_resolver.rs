@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{NaiveDate, Utc};
+use chrono::Utc;
 use dbt_adapter::relation::{
     RelationObject, create_relation, create_relation_from_node, create_relation_from_source,
 };
@@ -23,7 +23,7 @@ use dbt_schemas::{
     filter::RunFilter,
     schemas::{
         DbtFunction, DbtSource, InternalDbtNodeAttributes, IntrospectionKind, Nodes,
-        common::{DbtMaterialization, DbtQuoting},
+        common::{DbtMaterialization, DbtQuoting, parse_deprecation_date},
         ref_and_source::{DbtRef, DbtSourceWrapper},
         telemetry::NodeType,
     },
@@ -1172,11 +1172,8 @@ pub fn check_for_model_deprecations(io: &IoArgs, nodes: &Nodes) {
 
     for (uid, model) in &nodes.models {
         if let Some(dep_date_str) = &model.__model_attr__.deprecation_date {
-            let is_past = if let Ok(date) = NaiveDate::parse_from_str(dep_date_str, "%Y-%m-%d") {
-                date.and_hms_opt(0, 0, 0).unwrap() < Utc::now().naive_utc()
-            } else {
-                false
-            };
+            let is_past = parse_deprecation_date(dep_date_str)
+                .is_some_and(|deprecation_date| deprecation_date < Utc::now());
             deprecated_models.insert(
                 uid.clone(),
                 DeprecatedModelInfo {

@@ -5397,16 +5397,12 @@ impl DbtModel {
             return true;
         }
         // Removed node is past its deprecation_date, so deletion does not constitute a contract change
-        if let Some(deprecation_date_str) = &old.__model_attr__.deprecation_date {
-            // Parse the deprecation date string using common formats
-            if let Ok(deprecation_date) =
-                chrono::NaiveDate::parse_from_str(deprecation_date_str, "%Y-%m-%d")
-            {
-                let deprecation_datetime = deprecation_date.and_hms_opt(0, 0, 0).unwrap();
-                if deprecation_datetime < Utc::now().naive_utc() {
-                    return true;
-                }
-            }
+        if let Some(deprecation_date_str) = &old.__model_attr__.deprecation_date
+            && let Some(deprecation_date) =
+                crate::schemas::common::parse_deprecation_date(deprecation_date_str)
+            && deprecation_date < Utc::now()
+        {
+            return true;
         }
 
         // Disabled, deleted, or renamed node with previously enforced contract.

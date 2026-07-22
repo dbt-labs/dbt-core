@@ -1013,7 +1013,8 @@ fn resolve_versioned_fields(
         version_match.and_then(|v| v.deprecation_date.clone())
     } else {
         properties.deprecation_date.clone()
-    };
+    }
+    .map(|raw| dbt_schemas::schemas::common::normalize_deprecation_date(&raw));
 
     // dbt-core: `unparsed_version.access or target.access`. Empty string is
     // falsy in Python -> fall through to the top-level (config) value.
