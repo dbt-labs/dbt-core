@@ -22,10 +22,27 @@ fn to_jinja(v: &Vec<String>) -> Value {
     }
 }
 
+// BigQuery limits the number of `cluster_by` columns to 4, so efficiency isn't
+// really a huge concern here.
+#[allow(clippy::ptr_arg)]
+fn diff_cluster_by(desired: &Vec<String>, current: &Vec<String>) -> Option<Vec<String>> {
+    if desired.len() != current.len() {
+        return Some(desired.clone());
+    }
+
+    let mut desired_sorted = desired.iter().collect::<Vec<&String>>();
+    let mut current_sorted = current.iter().collect::<Vec<&String>>();
+
+    desired_sorted.sort_unstable();
+    current_sorted.sort_unstable();
+
+    (desired_sorted != current_sorted).then(|| desired.clone())
+}
+
 fn new_component(columns: Vec<String>) -> ClusterBy {
     ClusterBy {
         type_name: TYPE_NAME,
-        diff_fn: diff::desired_state,
+        diff_fn: diff_cluster_by,
         to_jinja_fn: to_jinja,
         value: columns,
     }
@@ -121,5 +138,48 @@ mod tests {
         assert_eq!(loaded.value[0], "a");
         assert_eq!(loaded.value[1], "b");
         assert_eq!(loaded.value[2], "c");
+    }
+
+    #[test]
+    fn same_fields_different_order_no_change() {
+        let desired = vec![
+            "portal".to_string(),
+            "cu_name".to_string(),
+            "rt_name".to_string(),
+        ];
+        let current = vec![
+            "rt_name".to_string(),
+            "portal".to_string(),
+            "cu_name".to_string(),
+        ];
+        assert!(diff_cluster_by(&desired, &current).is_none());
+    }
+
+    #[test]
+    fn different_fields_detected_as_change() {
+        let desired = vec!["id".to_string(), "value".to_string()];
+        let current = vec!["id".to_string(), "name".to_string()];
+        assert!(diff_cluster_by(&desired, &current).is_some());
+    }
+
+    #[test]
+    fn cluster_added_detected_as_change() {
+        let desired = vec!["id".to_string()];
+        let current = vec![];
+        assert!(diff_cluster_by(&desired, &current).is_some());
+    }
+
+    #[test]
+    fn cluster_removed_detected_as_change() {
+        let desired = vec![];
+        let current = vec!["id".to_string()];
+        assert!(diff_cluster_by(&desired, &current).is_some());
+    }
+
+    #[test]
+    fn both_none_no_change() {
+        let desired = vec![];
+        let current = vec![];
+        assert!(diff_cluster_by(&desired, &current).is_none());
     }
 }
