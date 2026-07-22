@@ -160,9 +160,7 @@ def _patch_fusion_deps():
     """
     with mock.patch("dbt.parser.fusion.get_flags", return_value=_flags()), mock.patch(
         "dbt.parser.manifest.assert_no_get_nodes_plugins"
-    ), mock.patch(
-        "dbt.parser.manifest.enrich_manifest_with_plugin_artifacts"
-    ), mock.patch(
+    ), mock.patch("dbt.parser.manifest.enrich_manifest_with_plugin_artifacts"), mock.patch(
         "dbt.parser.fusion.rediscover_adapter_macros"
     ):
         yield
@@ -426,12 +424,13 @@ class TestRediscoverAdapterMacros:
         return m
 
     def _patch_adapter_deps(self, source_file_return):
-        return mock.patch("dbt.adapters.factory.load_plugin"), mock.patch(
-            "dbt.adapters.factory.get_adapter_package_names", return_value=["dbt_postgres"]
-        ), mock.patch(
-            "dbt.parser.macros.MacroParser"
-        ), mock.patch(
-            "dbt.parser.read_files.load_source_file", return_value=source_file_return
+        return (
+            mock.patch("dbt.adapters.factory.load_plugin"),
+            mock.patch(
+                "dbt.adapters.factory.get_adapter_package_names", return_value=["dbt_postgres"]
+            ),
+            mock.patch("dbt.parser.macros.MacroParser"),
+            mock.patch("dbt.parser.read_files.load_source_file", return_value=source_file_return),
         )
 
     def test_replaces_stale_macros(self):
