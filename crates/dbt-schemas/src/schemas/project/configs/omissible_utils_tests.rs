@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parent_none_overrides_child_some() {
+    fn test_parent_none_does_not_override_child_some() {
         let mut child = TestConfig {
             name: Omissible::Present(Some("child_name".to_string())),
             value: Omissible::Present(Some(100)),
@@ -144,9 +144,9 @@ mod tests {
 
         child.default_to(&parent);
 
-        // Parent's explicit None overrides child's Some value
-        assert_eq!(child.name(), None);
-        assert_eq!(child.value(), None);
+        // Child's explicit Some value overrides parent's None
+        assert_eq!(child.name(), Some("child_name".to_string()));
+        assert_eq!(child.value(), Some(100));
         assert_eq!(child.enabled, Some(true)); // Regular field keeps child value
     }
 

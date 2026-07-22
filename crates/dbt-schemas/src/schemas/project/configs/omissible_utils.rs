@@ -20,11 +20,6 @@ pub fn handle_omissible_override<T: Clone>(
             // Self explicitly sets field to null, this overrides parent's value
             // (keep self's None value - do nothing)
         }
-        (Omissible::Present(Some(_)), Omissible::Present(None)) => {
-            // Parent explicitly sets field to null, this should override self's value
-            // This handles the case where parent config has +field: null
-            *self_field = parent_field.clone();
-        }
         (Omissible::Present(Some(_)), Omissible::Omitted) => {
             // Self explicitly sets field to a value, parent doesn't override
             // (keep self's value - do nothing)
