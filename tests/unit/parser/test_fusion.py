@@ -19,6 +19,7 @@ from dbt.parser.fusion import (
     _delete_stale_partial_parse,
     _serialize_vars,
     parse_with_fusion,
+    rediscover_adapter_macros,
 )
 
 
@@ -159,7 +160,9 @@ def _patch_fusion_deps():
     """
     with mock.patch("dbt.parser.fusion.get_flags", return_value=_flags()), mock.patch(
         "dbt.parser.manifest.assert_no_get_nodes_plugins"
-    ), mock.patch("dbt.parser.manifest.enrich_manifest_with_plugin_artifacts"):
+    ), mock.patch("dbt.parser.manifest.enrich_manifest_with_plugin_artifacts"), mock.patch(
+        "dbt.parser.fusion.rediscover_adapter_macros"
+    ):
         yield
 
 
@@ -410,3 +413,73 @@ class TestParseWithFusionTelemetry:
         assert end.status == "failure"
         assert end.error_class == "FusionParserVersionError"
         assert end.exit_code == -1
+
+
+class TestRediscoverAdapterMacros:
+    def _make_macro(self, unique_id, package_name):
+        m = mock.MagicMock()
+        m.package_name = package_name
+        return m
+
+    def _patch_adapter_deps(self, source_file_return):
+        return (
+            mock.patch("dbt.adapters.factory.load_plugin"),
+            mock.patch(
+                "dbt.adapters.factory.get_adapter_package_names", return_value=["dbt_postgres"]
+            ),
+            mock.patch("dbt.parser.macros.MacroParser"),
+            mock.patch("dbt.parser.read_files.load_source_file", return_value=source_file_return),
+        )
+
+    def test_replaces_stale_macros(self):
+        stale_macro = self._make_macro("macro.dbt_postgres.stale", "dbt_postgres")
+        root_macro = self._make_macro("macro.my_project.custom", "my_project")
+
+        manifest = mock.MagicMock()
+        manifest.macros = {
+            "macro.dbt_postgres.stale": stale_macro,
+            "macro.my_project.custom": root_macro,
+        }
+
+        fake_project = mock.MagicMock()
+        fake_project.project_name = "dbt_postgres"
+
+        runtime_config = mock.MagicMock()
+        runtime_config.credentials.type = "postgres"
+        runtime_config.load_dependencies.return_value = {
+            "my_project": mock.MagicMock(),
+            "dbt_postgres": fake_project,
+        }
+
+        p_load, p_names, MockMacroParser, p_source = self._patch_adapter_deps(mock.MagicMock())
+        with p_load, p_names, MockMacroParser as MockParser, p_source:
+            mock_parser_instance = MockParser.return_value
+            mock_parser_instance.get_paths.return_value = [mock.MagicMock()]
+
+            rediscover_adapter_macros(manifest, runtime_config)
+
+        assert "macro.dbt_postgres.stale" not in manifest.macros
+        assert "macro.my_project.custom" in manifest.macros
+        assert manifest._macros_by_name is None
+        assert manifest._macros_by_package is None
+        mock_parser_instance.parse_file.assert_called_once()
+
+    def test_skips_none_source_file(self):
+        manifest = mock.MagicMock()
+        manifest.macros = {}
+
+        fake_project = mock.MagicMock()
+        fake_project.project_name = "dbt_postgres"
+
+        runtime_config = mock.MagicMock()
+        runtime_config.credentials.type = "postgres"
+        runtime_config.load_dependencies.return_value = {"dbt_postgres": fake_project}
+
+        p_load, p_names, MockMacroParser, p_source = self._patch_adapter_deps(None)
+        with p_load, p_names, MockMacroParser as MockParser, p_source:
+            mock_parser_instance = MockParser.return_value
+            mock_parser_instance.get_paths.return_value = [mock.MagicMock()]
+
+            rediscover_adapter_macros(manifest, runtime_config)
+
+        mock_parser_instance.parse_file.assert_not_called()
