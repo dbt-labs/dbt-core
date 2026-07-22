@@ -160,7 +160,11 @@ def _patch_fusion_deps():
     """
     with mock.patch("dbt.parser.fusion.get_flags", return_value=_flags()), mock.patch(
         "dbt.parser.manifest.assert_no_get_nodes_plugins"
-    ), mock.patch("dbt.parser.manifest.enrich_manifest_with_plugin_artifacts"):
+    ), mock.patch(
+        "dbt.parser.manifest.enrich_manifest_with_plugin_artifacts"
+    ), mock.patch(
+        "dbt.parser.fusion.rediscover_adapter_macros"
+    ):
         yield
 
 
