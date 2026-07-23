@@ -1,30 +1,71 @@
 {% macro postgres__create_table_as(temporary, relation, sql) -%}
   {%- set unlogged = config.get('unlogged', default=false) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
+  {%- set partition_config = adapter.parse_partition_by(config.get('partition_by')) -%}
 
-  {{ sql_header if sql_header is not none }}
+  {%- if partition_config is not none and not temporary -%}
+    {{ postgres__create_partitioned_table_as(temporary, relation, sql, partition_config) }}
+  {%- else -%}
 
-  create {% if temporary -%}
-    temporary
-  {%- elif unlogged -%}
-    unlogged
-  {%- endif %} table {{ relation }}
-  {% set contract_config = config.get('contract') %}
-  {% if contract_config.enforced %}
-    {{ get_assert_columns_equivalent(sql) }}
-  {% endif -%}
-  {% if contract_config.enforced and (not temporary) -%}
-      {{ get_table_columns_and_constraints() }} ;
-    insert into {{ relation }} (
-      {{ adapter.dispatch('get_column_names', 'dbt')() }}
-    )
-    {%- set sql = get_select_subquery(sql) %}
-  {% else %}
-    as
-  {% endif %}
-  (
-    {{ sql }}
-  );
+    {{ sql_header if sql_header is not none }}
+
+    create {% if temporary -%}
+      temporary
+    {%- elif unlogged -%}
+      unlogged
+    {%- endif %} table {{ relation }}
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {% endif -%}
+    {% if contract_config.enforced and (not temporary) -%}
+        {{ get_table_columns_and_constraints() }} ;
+      insert into {{ relation }} (
+        {{ adapter.dispatch('get_column_names', 'dbt')() }}
+      )
+      {%- set sql = get_select_subquery(sql) %}
+    {% else %}
+      as
+    {% endif %}
+    (
+      {{ sql }}
+    );
+
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro postgres__rename_relation(from_relation, to_relation) -%}
+  {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
+  {% call statement('rename_relation') -%}
+    alter table {{ from_relation.render() }} rename to {{ target_name }}
+  {%- endcall %}
+  {#--
+    Keep child partition names in sync with the renamed parent (issue #679).
+    Gate on the model's partition_by config first: this short-circuits before any
+    metadata query for every non-partitioned rename, so adapters that inherit this
+    macro but don't support partitioning (e.g. Redshift) never issue the pg_inherits
+    query, and plain Postgres pays no extra round-trip on ordinary table builds.
+  --#}
+  {%- if to_relation.is_table and postgres__is_partitioned_relation(to_relation) -%}
+    {%- set children = postgres__get_partition_children(to_relation) -%}
+    {%- set prefix = from_relation.identifier ~ '__' -%}
+    {%- for row in children.rows -%}
+      {%- set old_name = row['name'] -%}
+      {%- if old_name.startswith(prefix) -%}
+        {%- set new_name = to_relation.identifier ~ '__' ~ old_name[prefix | length:] -%}
+        {%- if new_name | length > to_relation.relation_max_name_length() -%}
+          {%- do exceptions.raise_compiler_error(
+            "Renamed partition '" ~ new_name ~ "' exceeds the "
+            ~ to_relation.relation_max_name_length()
+            ~ " character limit. Shorten the model name or the partition names.") -%}
+        {%- endif -%}
+        {% call statement('rename_partition') -%}
+          alter table {{ adapter.quote(to_relation.schema) }}.{{ adapter.quote(old_name) }}
+            rename to {{ adapter.quote(new_name) }}
+        {%- endcall %}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro postgres__get_create_index_sql(relation, index_dict) -%}

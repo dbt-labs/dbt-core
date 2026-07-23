@@ -1928,6 +1928,14 @@ pub enum PartitionConfig {
     String(String),
     List(Vec<String>),
     BigqueryPartitionConfig(BigqueryPartitionConfig),
+    /// Native PostgreSQL declarative partitioning (dbt-postgres issue #679).
+    ///
+    /// Distinguished from `BigqueryPartitionConfig` by the mandatory `fields`
+    /// key (BigQuery uses the singular `field`), so the untagged deserialization
+    /// is unambiguous. Validation happens later in `adapter.parse_partition_by`,
+    /// mirroring the dbt-postgres adapter behavior; here we just pass it through
+    /// so `config.get('partition_by')` round-trips the raw config.
+    PostgresPartitionConfig(PostgresPartitionConfig),
 }
 
 impl PartitionConfig {
@@ -1944,6 +1952,45 @@ impl PartitionConfig {
             _ => None,
         }
     }
+}
+
+/// Native PostgreSQL declarative partitioning config (dbt-postgres issue #679).
+///
+/// Mirrors `dbt.adapters.postgres.partitioning.PostgresPartitionConfig`. This is a
+/// pass-through carrier only: it is deserialized from the model config and re-serialized
+/// so `config.get('partition_by')` returns the raw dict; the actual validation and
+/// rendering live in `adapter.parse_partition_by`.
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+pub struct PostgresPartitionConfig {
+    /// One or more columns/expressions that make up the partition key.
+    pub fields: Vec<String>,
+    /// `range`, `list`, or `hash`.
+    pub method: Option<String>,
+    /// For `range`, drives auto-management of partitions (bounds + names):
+    /// one of `hour`, `day`, `week`, `month`, `year`.
+    pub granularity: Option<String>,
+    /// Create a DEFAULT partition to catch rows outside every declared partition.
+    pub default_partition: Option<bool>,
+    /// Explicit static partition definitions.
+    pub partitions: Option<Vec<PostgresPartitionSpec>>,
+}
+
+/// A single explicit partition definition for [`PostgresPartitionConfig`].
+///
+/// The relevant fields depend on the partition method:
+/// - range: `name`, `from`, `to`
+/// - list:  `name`, `values`
+/// - hash:  `name`, `modulus`, `remainder`
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+pub struct PostgresPartitionSpec {
+    pub name: String,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub values: Option<Vec<String>>,
+    pub modulus: Option<i64>,
+    pub remainder: Option<i64>,
 }
 
 #[cfg(test)]

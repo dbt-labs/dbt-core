@@ -23,6 +23,7 @@ pub mod formatter;
 pub mod load_catalogs;
 pub mod metadata;
 pub mod need_quotes;
+pub mod postgres_partition;
 pub(crate) mod python;
 pub mod query_ctx;
 pub mod relation;

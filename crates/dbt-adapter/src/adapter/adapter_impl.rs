@@ -64,7 +64,7 @@ use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
-use dbt_schemas::schemas::common::{ConstraintType, normalize_quote};
+use dbt_schemas::schemas::common::{ConstraintType, PostgresPartitionConfig, normalize_quote};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
@@ -92,6 +92,36 @@ use std::sync::{Arc, LazyLock};
 
 use AdapterType::*;
 use InnerAdapter::*;
+
+/// Coerce a minijinja value produced by `run_query(...)` (a `PyDateTime`, `PyDate`, or an
+/// ISO-8601 string) into a `chrono::NaiveDateTime`. Returns `None` for null/unparseable
+/// values, which `compute_partition_bounds` treats as "no partitions to create".
+fn value_to_naive_datetime(value: &Value) -> Option<chrono::NaiveDateTime> {
+    use minijinja_contrib::modules::py_datetime::{date::PyDate, datetime::PyDateTime};
+
+    if value.is_none() {
+        return None;
+    }
+    if let Some(dt) = value.downcast_object_ref::<PyDateTime>() {
+        return Some(dt.chrono_dt());
+    }
+    if let Some(d) = value.downcast_object_ref::<PyDate>() {
+        return d.date.and_hms_opt(0, 0, 0);
+    }
+    if let Some(s) = value.as_str() {
+        let s = s.trim();
+        return chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f")
+            .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f"))
+            .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))
+            .ok()
+            .or_else(|| {
+                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                    .ok()
+                    .and_then(|d| d.and_hms_opt(0, 0, 0))
+            });
+    }
+    None
+}
 
 static CREDENTIAL_IN_COPY_INTO_REGEX: Lazy<Regex> = Lazy::new(|| {
     // This is NOT the same as the Python regex used in dbt-databricks. Rust lacks lookaround.
@@ -3511,12 +3541,100 @@ impl AdapterImpl {
 
                 Ok(Value::from_object(validated_config))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
-                unimplemented!("only available with BigQuery adapter")
+            // Native PostgreSQL declarative partitioning (dbt-postgres issue #679).
+            // Port of dbt.adapters.postgres.partitioning.PostgresPartitionConfig.parse.
+            Postgres => {
+                let raw_partition_by = partition_by;
+                if raw_partition_by.is_none() {
+                    return Ok(none_value());
+                }
+
+                let cfg = minijinja_value_to_typed_struct::<PostgresPartitionConfig>(
+                    raw_partition_by.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        format!(
+                            "partition_by must be a dict with a `fields` list, but got: \
+                             {raw_partition_by:?} ({e})"
+                        ),
+                    )
+                })?;
+
+                let method = cfg.method.clone().unwrap_or_else(|| "range".to_string());
+                let granularity = cfg.granularity.clone();
+                let default_partition = cfg.default_partition.unwrap_or(true);
+
+                crate::postgres_partition::validate_partition_config(
+                    &cfg.fields,
+                    &method,
+                    granularity.as_deref(),
+                )
+                .map_err(|msg| {
+                    minijinja::Error::new(minijinja::ErrorKind::InvalidArgument, msg)
+                })?;
+
+                // `render` is the `PARTITION BY ...` key clause, e.g. `range (created_at)`.
+                let render = format!("{} ({})", method, cfg.fields.join(", "));
+                let granularity_value = match &granularity {
+                    Some(g) => Value::from(g.clone()),
+                    None => none_value(),
+                };
+                let partitions_value = match &cfg.partitions {
+                    Some(parts) => Value::from_serialize(parts),
+                    None => none_value(),
+                };
+
+                Ok(Value::from(ValueMap::from([
+                    (Value::from("fields"), Value::from_serialize(&cfg.fields)),
+                    (Value::from("method"), Value::from(method)),
+                    (Value::from("granularity"), granularity_value),
+                    (
+                        Value::from("default_partition"),
+                        Value::from(default_partition),
+                    ),
+                    (Value::from("partitions"), partitions_value),
+                    (Value::from("render"), Value::from(render)),
+                ])))
+            }
+            Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt | Fabric
+            | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
+                unimplemented!("only available with BigQuery and Postgres adapters")
             }
         }
+    }
+
+    /// PostgresAdapter (dbt-postgres issue #679): compute the range partitions needed to
+    /// cover `[minimum, maximum]` at the given granularity. Returns a list of dicts
+    /// `{"name": suffix, "from": literal, "to": literal}`, where the literals are quoted
+    /// SQL timestamps for a `FOR VALUES FROM (..) TO (..)` clause.
+    pub fn get_partition_bounds(
+        &self,
+        minimum: &Value,
+        maximum: &Value,
+        granularity: &str,
+    ) -> Result<Value, minijinja::Error> {
+        let bounds = crate::postgres_partition::compute_partition_bounds(
+            value_to_naive_datetime(minimum),
+            value_to_naive_datetime(maximum),
+            granularity,
+        )
+        .map_err(|msg| {
+            minijinja::Error::new(minijinja::ErrorKind::InvalidOperation, msg)
+        })?;
+
+        let list: Vec<Value> = bounds
+            .into_iter()
+            .map(|b| {
+                Value::from(ValueMap::from([
+                    (Value::from("name"), Value::from(b.name)),
+                    (Value::from("from"), Value::from(b.from)),
+                    (Value::from("to"), Value::from(b.to)),
+                ]))
+            })
+            .collect();
+        Ok(Value::from(list))
     }
 
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1139

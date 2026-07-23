@@ -108,6 +108,7 @@ impl SemanticCategory {
             | "get_struct_select_expression"
             | "add_time_ingestion_partition_column"
             | "parse_partition_by"
+            | "get_partition_bounds"
             | "valid_incremental_strategies"
             | "get_persist_doc_columns"
             | "get_column_tags_from_model"
