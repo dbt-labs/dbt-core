@@ -9,6 +9,7 @@ from dbt.deprecations import (
 )
 from dbt.jsonschemas.jsonschemas import (
     jsonschema_validate,
+    project_schema,
     resources_schema,
     validate_model_config,
 )
@@ -166,3 +167,44 @@ class TestSourceBigQueryAliases:
 
         jsonschema_validate(resources_schema(), source_with_dataset, "test.yml")
         assert active_deprecations == {"custom-key-in-object-deprecation": 1}
+
+
+class TestDatabricksConfigAliases:
+    """https://github.com/dbt-labs/dbt-core/issues/15291
+
+    Databricks-specific config keys set in dbt_project.yml (e.g. `query_tags`)
+    should not trigger the `custom-key-in-config-deprecation` warning, the same
+    way BigQuery's `dataset`/`project` aliases are exempted.
+    """
+
+    @pytest.fixture(scope="class")
+    def project_dict_with_query_tags(self):
+        return {
+            "name": "my_proj",
+            "version": "1.0",
+            "profile": "default",
+            "models": {
+                "my_proj": {
+                    "+query_tags": ["team:data"],
+                },
+            },
+        }
+
+    def test_databricks_query_tags_no_warning(self, project_dict_with_query_tags):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("databricks")
+
+        jsonschema_validate(project_schema(), project_dict_with_query_tags, "dbt_project.yml")
+        assert active_deprecations == {}
+
+    def test_snowflake_query_tags_warns(self, project_dict_with_query_tags):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        # Set to adapter that doesn't support the `query_tags` alias
+        get_invocation_context().uses_adapter("snowflake")
+
+        jsonschema_validate(project_schema(), project_dict_with_query_tags, "dbt_project.yml")
+        assert active_deprecations == {"custom-key-in-config-deprecation": 1}

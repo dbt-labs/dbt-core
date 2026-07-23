@@ -1,0 +1,8 @@
+kind: Fixes
+body: Stop firing a false-positive `CustomKeyInConfigDeprecation` warning for the
+  Databricks-specific `query_tags` model config, matching the existing allowance
+  for BigQuery's `dataset`/`project` aliases
+time: 2026-07-16T20:41:46.000000000Z
+custom:
+    Author: zerafachris
+    Issue: "15291"
