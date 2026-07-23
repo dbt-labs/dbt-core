@@ -2,7 +2,7 @@ import dataclasses
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from metricflow.converters.osi_to_msi import OSIToMSIConverter
 
@@ -56,6 +56,30 @@ def _build_model_lookup(manifest: Manifest) -> Dict[Tuple[str, str, str], ModelN
     }
 
 
+def _match_database_less(
+    ctx: _OsiFileContext,
+    dataset_name: str,
+    table_ref: str,
+    key: Tuple[str, str, str],
+    model_lookup: Dict[Tuple[str, str, str], ModelNode],
+) -> Optional[ModelNode]:
+    # Database-less sources (`schema.table`) bind on schema + alias alone, so a
+    # single OSI document can be shared across environments whose only
+    # difference is the database (e.g. per-environment BigQuery projects).
+    candidates = [
+        node for (alias, schema, _), node in model_lookup.items() if (alias, schema) == key[:2]
+    ]
+    if len(candidates) > 1:
+        databases = sorted({node.database or "<no database>" for node in candidates})
+        raise ParsingError(
+            f"OSI file '{ctx.path}' contains dataset '{dataset_name}' "
+            f"({table_ref}) that matches models in multiple "
+            f"databases: {', '.join(databases)}. Qualify the source with a "
+            f"database to disambiguate."
+        )
+    return candidates[0] if candidates else None
+
+
 def _match_model_for_dataset(
     ctx: _OsiFileContext,
     dataset_name: str,
@@ -73,24 +97,7 @@ def _match_model_for_dataset(
 
     matched = model_lookup.get(key)
     if matched is None and not key[2]:
-        # Database-less sources (`schema.table`) bind on schema + alias alone, so a
-        # single OSI document can be shared across environments whose only
-        # difference is the database (e.g. per-environment BigQuery projects).
-        candidates = [
-            node
-            for (alias, schema, _), node in model_lookup.items()
-            if (alias, schema) == key[:2]
-        ]
-        if len(candidates) == 1:
-            matched = candidates[0]
-        elif len(candidates) > 1:
-            databases = sorted((node.database or "") for node in candidates)
-            raise ParsingError(
-                f"OSI file '{ctx.path}' contains dataset '{dataset_name}' "
-                f"({table_ref}) that matches models in multiple "
-                f"databases: {', '.join(databases)}. Qualify the source with a "
-                f"database to disambiguate."
-            )
+        matched = _match_database_less(ctx, dataset_name, table_ref, key, model_lookup)
     if matched is None:
         raise ParsingError(
             f"OSI file '{ctx.path}' contains dataset '{dataset_name}' "
