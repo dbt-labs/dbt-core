@@ -1641,7 +1641,10 @@ pub fn merge_meta(
     }
 }
 
-/// Merge two tag lists, deduplicating and sorting the result.
+/// Merge two string lists, deduplicating and sorting the result.
+///
+/// Prefer this for unordered set-like configs (e.g. classifiers). For tags,
+/// use [`merge_tags`] so inheritance order matches dbt-core.
 pub fn merge_vec(
     base_vec: Option<Vec<String>>,
     update_vec: Option<Vec<String>>,
@@ -1660,6 +1663,38 @@ pub fn merge_vec(
         (Some(base), None) => Some(base),
         (None, Some(update)) => Some(update),
     }
+}
+
+/// Merge inherited tags in dbt-core order: parent (less specific) first, then
+/// child (more specific), with first-seen deduplication and no alphabetical sort.
+///
+/// dbt-core concatenates additive tags along the config hierarchy. Callers that
+/// depend on list position (e.g. custom schema naming from `tags[0]`) require
+/// this order for Core/Fusion parity. See dbt-labs/dbt-core#15590.
+pub fn merge_tags(
+    parent_tags: Option<Vec<String>>,
+    child_tags: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match (parent_tags, child_tags) {
+        (None, None) => None,
+        (Some(mut parent), Some(child)) => {
+            parent.extend(child);
+            dedup_preserve_order(parent)
+        }
+        (Some(parent), None) => dedup_preserve_order(parent),
+        (None, Some(child)) => dedup_preserve_order(child),
+    }
+}
+
+fn dedup_preserve_order(tags: Vec<String>) -> Option<Vec<String>> {
+    let mut seen = std::collections::HashSet::with_capacity(tags.len());
+    let mut out = Vec::with_capacity(tags.len());
+    for tag in tags {
+        if seen.insert(tag.clone()) {
+            out.push(tag);
+        }
+    }
+    Some(out)
 }
 
 pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &str) -> String {
@@ -2656,6 +2691,47 @@ period: hour
     #[test]
     fn test_merge_classifiers_both_none_is_none() {
         assert_eq!(merge_vec(None, None), None);
+    }
+
+    #[test]
+    fn test_merge_tags_parent_first_preserves_inheritance_order() {
+        // Regression for dbt-labs/dbt-core#15590: nested +tags must keep
+        // parent-then-child order (not alphabetical). Alphabetical would put
+        // DAILY before INTERMEDIATE.
+        let parent = Some(vec!["INTERMEDIATE".to_string()]);
+        let child = Some(vec!["DAILY".to_string()]);
+        assert_eq!(
+            merge_tags(parent, child),
+            Some(vec!["INTERMEDIATE".to_string(), "DAILY".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_merge_tags_dedupes_preserving_first_seen() {
+        let parent = Some(vec!["a".to_string(), "b".to_string()]);
+        let child = Some(vec!["b".to_string(), "c".to_string()]);
+        assert_eq!(
+            merge_tags(parent, child),
+            Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_merge_tags_matches_docs_additive_hierarchy() {
+        // Docs example: contains_pii (project) + hourly (folder) + finance (model)
+        // must stay inheritance order, not alpha (contains_pii, finance, hourly).
+        let project = Some(vec!["contains_pii".to_string()]);
+        let folder = Some(vec!["hourly".to_string()]);
+        let model = Some(vec!["finance".to_string()]);
+        let after_folder = merge_tags(project, folder);
+        assert_eq!(
+            merge_tags(after_folder, model),
+            Some(vec![
+                "contains_pii".to_string(),
+                "hourly".to_string(),
+                "finance".to_string(),
+            ])
+        );
     }
 
     #[test]

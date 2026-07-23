@@ -15,6 +15,7 @@ use crate::default_to;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::merge_meta;
+use crate::schemas::common::merge_tags;
 use crate::schemas::common::merge_vec;
 use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
@@ -118,11 +119,12 @@ pub fn default_meta_and_tags(
     // Handle meta using existing merge function
     *child_meta = merge_meta(parent_meta.clone(), child_meta.take());
 
-    // Handle tags using existing merge function
+    // Parent (less specific) tags first, then child — matches dbt-core additive
+    // inheritance order. Do not alphabetically sort (dbt-labs/dbt-core#15590).
     let child_tags_vec = child_tags.take().map(|tags| tags.into());
     let parent_tags_vec = parent_tags.clone().map(|tags| tags.into());
     *child_tags =
-        merge_vec(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
+        merge_tags(parent_tags_vec, child_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
 }
 
 /// Helper function to handle default_to logic for classifiers.
@@ -139,7 +141,8 @@ pub fn default_classifiers(
 
 /// Helper function to handle default_to logic for packages
 /// Packages should append parent values to child values (parent first, then child)
-/// Note: Unlike tags, packages are NOT deduplicated or sorted, matching dbt-core behavior
+/// Note: Unlike tags (which order-preserving-dedupe), packages are NOT deduplicated,
+/// matching dbt-core behavior
 pub fn default_packages(
     child_packages: &mut Option<StringOrArrayOfStrings>,
     parent_packages: &Option<StringOrArrayOfStrings>,
@@ -1642,6 +1645,28 @@ mod tests {
             child,
             Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "pii".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_default_meta_and_tags_parent_first_order() {
+        // Nested dbt_project.yml +tags: parent folder INTERMEDIATE, child DAILY
+        // must resolve to [INTERMEDIATE, DAILY] like dbt-core (issue #15590).
+        let mut child_meta = None;
+        let parent_meta = None;
+        let mut child_tags = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "DAILY".to_string(),
+        ]));
+        let parent_tags = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "INTERMEDIATE".to_string(),
+        ]));
+        default_meta_and_tags(&mut child_meta, &parent_meta, &mut child_tags, &parent_tags);
+        assert_eq!(
+            child_tags,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "INTERMEDIATE".to_string(),
+                "DAILY".to_string(),
             ]))
         );
     }
