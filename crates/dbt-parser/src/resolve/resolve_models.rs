@@ -55,6 +55,7 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
+use dbt_schemas::schemas::common::OnSchemaChange;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
@@ -511,6 +512,31 @@ pub async fn resolve_models(
                 ),
                 arg.io.status_reporter.as_ref(),
             );
+        }
+
+        if matches!(materialized, DbtMaterialization::Incremental)
+            && model_config
+                .contract
+                .as_ref()
+                .is_some_and(|contract| contract.enforced)
+            && !matches!(
+                model_config.on_schema_change,
+                Some(OnSchemaChange::AppendNewColumns) | Some(OnSchemaChange::Fail)
+            )
+        {
+            let osc_str = match model_config.on_schema_change.as_ref() {
+                None | Some(OnSchemaChange::Ignore) => "ignore",
+                Some(OnSchemaChange::SyncAllColumns) => "sync_all_columns",
+                _ => "unknown",
+            };
+            let err = fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => dbt_asset.path.clone(),
+                "Invalid value for on_schema_change: {}. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns' or 'fail'",
+                osc_str,
+            );
+            emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            continue;
         }
 
         let deprecation_date = resolved_versioned.deprecation_date;
