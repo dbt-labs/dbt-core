@@ -227,7 +227,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- ${{ secrets.DATADOG_API_KEY != '' && '--ddtrace' || '' }} --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -305,7 +305,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- ${{ secrets.DATADOG_API_KEY != '' && '--ddtrace' || '' }} --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
