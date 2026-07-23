@@ -56,18 +56,21 @@ def _build_model_lookup(manifest: Manifest) -> Dict[Tuple[str, str, str], ModelN
     }
 
 
-def _inject_one_semantic_model(
-    manifest: Manifest,
+def _match_model_for_dataset(
     ctx: _OsiFileContext,
+    dataset_name: str,
+    node_relation: Any,
     model_lookup: Dict[Tuple[str, str, str], ModelNode],
-    pydantic_sm: Any,
-) -> str:
-    nr = pydantic_sm.node_relation
+) -> ModelNode:
     key = (
-        (nr.alias or "").lower(),
-        (nr.schema_name or "").lower(),
-        (nr.database or "").lower(),
+        (node_relation.alias or "").lower(),
+        (node_relation.schema_name or "").lower(),
+        (node_relation.database or "").lower(),
     )
+    table_ref = ".".join(
+        filter(None, [node_relation.database, node_relation.schema_name, node_relation.alias])
+    )
+
     matched = model_lookup.get(key)
     if matched is None and not key[2]:
         # Database-less sources (`schema.table`) bind on schema + alias alone, so a
@@ -83,18 +86,28 @@ def _inject_one_semantic_model(
         elif len(candidates) > 1:
             databases = sorted((node.database or "") for node in candidates)
             raise ParsingError(
-                f"OSI file '{ctx.path}' contains dataset '{pydantic_sm.name}' "
-                f"({nr.schema_name}.{nr.alias}) that matches models in multiple "
+                f"OSI file '{ctx.path}' contains dataset '{dataset_name}' "
+                f"({table_ref}) that matches models in multiple "
                 f"databases: {', '.join(databases)}. Qualify the source with a "
                 f"database to disambiguate."
             )
     if matched is None:
-        table_ref = ".".join(filter(None, [nr.database, nr.schema_name, nr.alias]))
         raise ParsingError(
-            f"OSI file '{ctx.path}' contains dataset '{pydantic_sm.name}' "
+            f"OSI file '{ctx.path}' contains dataset '{dataset_name}' "
             f"({table_ref}) that does not match any dbt model in this project. "
             f"Each OSI dataset must reference a table managed by a dbt model."
         )
+    return matched
+
+
+def _inject_one_semantic_model(
+    manifest: Manifest,
+    ctx: _OsiFileContext,
+    model_lookup: Dict[Tuple[str, str, str], ModelNode],
+    pydantic_sm: Any,
+) -> str:
+    nr = pydantic_sm.node_relation
+    matched = _match_model_for_dataset(ctx, pydantic_sm.name, nr, model_lookup)
 
     unique_id = f"semantic_model.{ctx.package_name}.{pydantic_sm.name}"
     if unique_id in manifest.semantic_models:
