@@ -69,6 +69,25 @@ def _inject_one_semantic_model(
         (nr.database or "").lower(),
     )
     matched = model_lookup.get(key)
+    if matched is None and not key[2]:
+        # Database-less sources (`schema.table`) bind on schema + alias alone, so a
+        # single OSI document can be shared across environments whose only
+        # difference is the database (e.g. per-environment BigQuery projects).
+        candidates = [
+            node
+            for (alias, schema, _), node in model_lookup.items()
+            if (alias, schema) == key[:2]
+        ]
+        if len(candidates) == 1:
+            matched = candidates[0]
+        elif len(candidates) > 1:
+            databases = sorted((node.database or "") for node in candidates)
+            raise ParsingError(
+                f"OSI file '{ctx.path}' contains dataset '{pydantic_sm.name}' "
+                f"({nr.schema_name}.{nr.alias}) that matches models in multiple "
+                f"databases: {', '.join(databases)}. Qualify the source with a "
+                f"database to disambiguate."
+            )
     if matched is None:
         table_ref = ".".join(filter(None, [nr.database, nr.schema_name, nr.alias]))
         raise ParsingError(
