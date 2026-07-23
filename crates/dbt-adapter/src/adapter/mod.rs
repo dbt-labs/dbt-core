@@ -2061,6 +2061,34 @@ impl Adapter {
         }
     }
 
+    /// Compute the range partitions needed to cover `[minimum, maximum]` at a granularity.
+    ///
+    /// PostgresAdapter (dbt-postgres issue #679).
+    #[tracing::instrument(skip_all, level = "trace")]
+    pub fn get_partition_bounds(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "get_partition_bounds",
+                    &["minimum", "maximum", "granularity"],
+                    args,
+                );
+                let minimum = iter.next_arg::<&Value>()?;
+                let maximum = iter.next_arg::<&Value>()?;
+                let granularity = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                adapter.get_partition_bounds(minimum, maximum, granularity)
+            }
+            // In parse mode, return an empty list without touching the warehouse
+            Parse(_) => Ok(empty_vec_value()),
+        }
+    }
+
     /// Get table options
     ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/57b131a11ea24b79cfebda003c15456972892427/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L793
@@ -3836,6 +3864,8 @@ impl Adapter {
             }
             // raw_partition_by: Optional[dict]
             "parse_partition_by" => self.parse_partition_by(state, args),
+            // minimum: Any, maximum: Any, granularity: str
+            "get_partition_bounds" => self.get_partition_bounds(state, args),
             // relation: Optional[BaseRelation], partition_by: Optional[dict], cluster_by: Optional[dict]
             "is_replaceable" => self.is_replaceable(state, args),
             // schema_relation: BaseRelation

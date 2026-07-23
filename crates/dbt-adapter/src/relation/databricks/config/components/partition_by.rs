@@ -86,6 +86,8 @@ fn from_local_config(
                     // in Databricks. We should be able to just accept this to reduce
                     // divergence between adapter types
                     PartitionConfig::BigqueryPartitionConfig(_) => Vec::new(),
+                    // Postgres declarative partitioning is not applicable to Databricks.
+                    PartitionConfig::PostgresPartitionConfig(_) => Vec::new(),
                 }
             })
             .unwrap_or_default(),

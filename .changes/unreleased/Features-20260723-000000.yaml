@@ -1,0 +1,8 @@
+kind: Features
+body: Add support for native PostgreSQL table partitioning via the `partition_by` config
+  on the `table` and `incremental` materializations (range/list/hash).
+time: 2026-07-23T00:00:00.000000-07:00
+custom:
+    author: "colin-rogers-dbt"
+    issue: '679'
+    project: dbt-adapters
