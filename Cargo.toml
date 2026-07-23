@@ -484,7 +484,7 @@ xshell = "0.2.7"
 zip = "8.3.0"
 
 # async + threading
-astral-tokio-tar = { version = "0.5.6" }
+astral-tokio-tar = { version = "0.6.4" }
 async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 async-trait = "0.1.83"
 crossbeam-queue = "0.3.12"
