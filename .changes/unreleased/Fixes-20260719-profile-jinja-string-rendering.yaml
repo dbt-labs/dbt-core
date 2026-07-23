@@ -1,0 +1,7 @@
+kind: Fixes
+body: Preserve string types when rendering Jinja in profiles.yml while retaining native types for whole expressions.
+time: 2026-07-19T02:00:00.000000+09:00
+custom:
+    author: BOKJUNSOO
+    issue: "15596"
+    project: dbt-core
