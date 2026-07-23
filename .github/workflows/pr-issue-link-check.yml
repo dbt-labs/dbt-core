@@ -44,24 +44,30 @@ jobs:
             const hasIssueLink = issueRefPattern.test(body) || bareLinkPattern.test(body);
             const hasSkipLabel = labels.includes(skipLabel);
 
-            return { hasIssueLink, hasSkipLabel };
+            core.setOutput('has_issue_link', hasIssueLink);
+            core.setOutput('has_skip_label', hasSkipLabel);
 
       - name: Manage flag label and comment
         uses: actions/github-script@v7
+        env:
+          HAS_ISSUE_LINK: ${{ steps.check.outputs.has_issue_link }}
+          HAS_SKIP_LABEL: ${{ steps.check.outputs.has_skip_label }}
         with:
           script: |
             const flagLabel = 'missing-issue-link';
-            const { hasIssueLink, hasSkipLabel } = ${{ steps.check.outputs.result }};
+            const hasIssueLink = process.env.HAS_ISSUE_LINK === 'true';
+            const hasSkipLabel = process.env.HAS_SKIP_LABEL === 'true';
             const prNumber = context.payload.pull_request.number;
             const { owner, repo } = context.repo;
 
             const commentMarker = '<!-- pr-issue-link-check -->';
-            const comments = await github.rest.issues.listComments({
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner,
               repo,
               issue_number: prNumber,
+              per_page: 100,
             });
-            const existingComment = comments.data.find((c) => c.body.includes(commentMarker));
+            const existingComment = comments.find((c) => c.body.includes(commentMarker));
 
             if (!hasIssueLink && !hasSkipLabel) {
               try {
@@ -104,11 +110,20 @@ jobs:
               }
 
               if (existingComment) {
-                await github.rest.issues.updateComment({
-                  owner,
-                  repo,
-                  comment_id: existingComment.id,
-                  body: `${commentMarker}\nThanks for linking an issue to this PR!`,
-                });
+                if (hasIssueLink) {
+                  await github.rest.issues.updateComment({
+                    owner,
+                    repo,
+                    comment_id: existingComment.id,
+                    body: `${commentMarker}\nThanks for linking an issue to this PR!`,
+                  });
+                } else {
+                  // Resolved via the opt-out label rather than an issue link.
+                  await github.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: existingComment.id,
+                  });
+                }
               }
             }
