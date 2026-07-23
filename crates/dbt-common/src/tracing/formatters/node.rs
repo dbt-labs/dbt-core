@@ -2,7 +2,7 @@ use dbt_telemetry::{
     AnyNodeOutcomeDetail, CompiledCode, CompiledCodeInline, ExecutionPhase, NodeEvaluated,
     NodeEvent, NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
     SourceFreshnessOutcome, TestOutcome, get_cache_detail, get_freshness_detail,
-    get_node_outcome_detail, get_test_outcome, has_node_warning,
+    get_node_outcome_detail, get_test_outcome, has_node_warning, is_statically_checked_test,
 };
 
 use crate::io_args::FsCommand;
@@ -144,6 +144,10 @@ fn format_node_description(node: &NodeProcessed) -> Option<String> {
                 "Cloned from cached relation within freshness tolerance".to_string()
             }
         });
+    }
+
+    if is_statically_checked_test(node.into()) {
+        return Some("Statically checked".to_string());
     }
 
     if matches!(node_type, NodeType::Test | NodeType::UnitTest)
@@ -316,6 +320,7 @@ pub fn format_node_processed_end(
     let duration = if node_outcome == NodeOutcome::Skipped
         || (node_outcome == NodeOutcome::Success
             && node.node_skip_reason() == NodeSkipReason::Cached)
+        || (node_outcome == NodeOutcome::Success && is_statically_checked_test(node.into()))
     {
         std::time::Duration::ZERO
     } else {
@@ -496,7 +501,8 @@ pub fn format_node_evaluated_end(
         node.idle_time_ms.unwrap_or_default(),
     ));
     let active_duration = if node_outcome == NodeOutcome::Success
-        && node.node_skip_reason() == NodeSkipReason::Cached
+        && (node.node_skip_reason() == NodeSkipReason::Cached
+            || is_statically_checked_test(node.into()))
     {
         std::time::Duration::ZERO
     } else {
@@ -703,7 +709,32 @@ mod tests {
         node.set_node_outcome(NodeOutcome::Success);
         node.set_node_skip_reason(NodeSkipReason::Cached);
         node.node_outcome_detail = Some(ProcessedDetail::NodeTestDetail(
-            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None),
+        ));
+        node
+    }
+
+    fn passed_test_processed(statically_checked: Option<bool>) -> NodeProcessed {
+        let mut node = NodeProcessed::start(
+            "test.project.accepted_values_orders_is_today_order__True".to_string(),
+            "accepted_values_orders_is_today_order__True".to_string(),
+            None,
+            Some("dbt_test__audit".to_string()),
+            None,
+            None,
+            None,
+            NodeType::Test,
+            Some(ExecutionPhase::Run),
+            "models/marts/orders.yml".to_string(),
+            Some(37),
+            Some(13),
+            "checksum".to_string(),
+            true,
+            None,
+        );
+        node.set_node_outcome(NodeOutcome::Success);
+        node.node_outcome_detail = Some(ProcessedDetail::NodeTestDetail(
+            TestEvaluationDetail::new(TestOutcome::Passed, 0, None, None, statically_checked),
         ));
         node
     }
@@ -727,7 +758,7 @@ mod tests {
         node.set_node_outcome(NodeOutcome::Success);
         node.set_node_skip_reason(NodeSkipReason::Cached);
         node.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
-            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None),
         ));
         node
     }
@@ -743,6 +774,32 @@ mod tests {
         assert!(output.contains("Warned"));
         assert!(output.contains("[-------]"));
         assert!(output.contains("accepted_values_orders_is_today_order__True"));
+    }
+
+    #[test]
+    fn statically_checked_test_processed_formats_no_query_duration_and_description() {
+        let output = format_node_processed_end(
+            &passed_test_processed(Some(true)),
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Passed"));
+        assert!(output.contains("[-------]"));
+        assert!(output.contains("Statically checked"));
+    }
+
+    #[test]
+    fn non_statically_checked_passed_test_processed_keeps_duration_and_description() {
+        let output = format_node_processed_end(
+            &passed_test_processed(None),
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Passed"));
+        assert!(!output.contains("[-------]"));
+        assert!(!output.contains("Statically checked"));
     }
 
     #[test]

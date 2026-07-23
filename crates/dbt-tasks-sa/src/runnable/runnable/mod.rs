@@ -8,8 +8,9 @@ use crate::materialize::{NodeHookPhase, NodeHookStyle, execute_node_hooks, model
 use crate::runnable::function::execute_function_remote;
 use crate::runnable::snapshot::execute_snapshot_remote;
 use crate::runnable::test::{
-    TestExecutionStatus, TestReportedResult, execute_test_remote, record_cached_test_span,
-    record_test_metric, reported_test_verdict_from_components, status_with_warn_error_overrides,
+    TestExecutionStatus, TestReportedResult, execute_test_remote,
+    process_statically_checked_test_result, record_test_metric, record_test_span_with_detail,
+    reported_test_verdict_from_components, status_with_warn_error_overrides,
 };
 use dbt_adapter::time_machine::{SaoStatus, global_recorder, global_replayer};
 use dbt_adapter_core::AdapterType;
@@ -31,7 +32,7 @@ use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::run_task_hooks::RunTaskHooks;
 use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task, TaskOp};
-use dbt_telemetry::{NodeEvaluated, NodeType};
+use dbt_telemetry::{NodeEvaluated, NodeSkipReason, NodeType};
 
 use tokio::task::JoinSet;
 use tracing::Instrument;
@@ -134,8 +135,20 @@ impl Task for RunTask {
 
             let execution_started_at = Instant::now();
             let mut after_success = RunCacheAfterSuccess::None;
-            let result = match self.execution_path {
-                RunExecutionPath::Remote => {
+            let statically_checked_test = match self.node.as_any().downcast_ref::<DbtTest>() {
+                Some(test) => ctx
+                    .is_data_test_statically_skippable(unique_id.as_str())
+                    .await
+                    .then_some(test),
+                None => None,
+            };
+            let result = match (statically_checked_test, self.execution_path) {
+                (Some(test), _) => {
+                    let node_status =
+                        process_statically_checked_test_result(test, ctx, start_time.into());
+                    Ok(node_status)
+                }
+                (None, RunExecutionPath::Remote) => {
                     // Step 0: Replay a cached SAO result if one was recorded
                     if let Some(status) = maybe_replay_remote_run(&self.node.unique_id()) {
                         return Ok(status);
@@ -233,7 +246,12 @@ impl Task for RunTask {
                             );
                             let reported_result = cached_status.reported_result();
                             record_test_metric(reported_result.status);
-                            record_cached_test_span(test, &reported_result);
+                            record_test_span_with_detail(
+                                &reported_result,
+                                Some(NodeSkipReason::Cached),
+                                test.deprecated_config.store_failures,
+                                None,
+                            );
                             ctx.inner.run_stats.insert(
                                 unique_id.clone(),
                                 Stat::new(
@@ -472,12 +490,12 @@ impl Task for RunTask {
                         }
                     }
                 }
-                RunExecutionPath::SideCar => {
+                (None, RunExecutionPath::SideCar) => {
                     self.task_hooks
                         .run_alt_compute_sidecar(ctx, Arc::clone(&self.node), task_result.clone())
                         .await
                 }
-                RunExecutionPath::AltCompute => {
+                (None, RunExecutionPath::AltCompute) => {
                     self.task_hooks
                         .run_on_alt_compute(ctx, Arc::clone(&self.node), task_result.clone())
                         .await

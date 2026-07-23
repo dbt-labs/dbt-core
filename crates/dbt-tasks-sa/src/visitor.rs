@@ -258,6 +258,7 @@ impl SkipSet {
                 NodeStatus::Succeeded
                 | NodeStatus::SucceededWithWarning
                 | NodeStatus::TestPassed
+                | NodeStatus::StaticallyCheckedDataTest
                 | NodeStatus::TestWarned
                 | NodeStatus::NoOp => (Vec::new(), Vec::new()),
                 NodeStatus::SkippedUpstreamFailed => {

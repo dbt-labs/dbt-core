@@ -13,6 +13,7 @@ fn status_action(node_status: &NodeStatus) -> &'static str {
         NodeStatus::Succeeded => SUCCEEDED,
         NodeStatus::SucceededWithWarning => SUCCEEDED,
         NodeStatus::TestPassed => PASSED,
+        NodeStatus::StaticallyCheckedDataTest => PASSED,
         NodeStatus::TestWarned => WARNED,
         NodeStatus::Errored => FAILED,
         NodeStatus::SkippedUpstreamFailed => SKIPPED,

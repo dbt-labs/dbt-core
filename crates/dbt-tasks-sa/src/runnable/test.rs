@@ -163,18 +163,11 @@ pub fn insert_test_run_stat(
     );
 }
 
-pub fn record_test_span(test: &DbtTest, result: &TestReportedResult) {
-    record_test_span_with_skip_reason(test, result, None);
-}
-
-pub fn record_cached_test_span(test: &DbtTest, result: &TestReportedResult) {
-    record_test_span_with_skip_reason(test, result, Some(NodeSkipReason::Cached));
-}
-
-fn record_test_span_with_skip_reason(
-    test: &DbtTest,
+pub(super) fn record_test_span_with_detail(
     result: &TestReportedResult,
     skip_reason: Option<NodeSkipReason>,
+    store_failures: Option<bool>,
+    statically_checked: Option<bool>,
 ) {
     let test_outcome = result.test_outcome();
     let failures = result.failures.min(i32::MAX as usize) as i32;
@@ -190,7 +183,8 @@ fn record_test_span_with_skip_reason(
                 test_outcome,
                 failures,
                 diff,
-                test.deprecated_config.store_failures,
+                store_failures,
+                statically_checked,
             ),
         ))
     });
@@ -459,6 +453,7 @@ impl AggregatedTestRunRemoteTask {
                         result.failures.min(i32::MAX as usize) as i32,
                         diff,
                         None,
+                        None,
                     ),
                 ));
             }
@@ -663,7 +658,7 @@ pub fn process_test_result(
 
     let node_status = result.node_status();
 
-    record_test_span(test, &result);
+    record_test_span_with_detail(&result, None, test.deprecated_config.store_failures, None);
 
     insert_test_run_stat(
         ctx,
@@ -679,4 +674,33 @@ pub fn process_test_result(
     }
 
     Ok(node_status)
+}
+
+pub fn process_statically_checked_test_result(
+    test: &DbtTest,
+    ctx: &TaskRunnerCtx,
+    start: SystemTime,
+) -> NodeStatus {
+    let result = TestReportedResult {
+        failures: 0,
+        status: TestExecutionStatus::Passed,
+        diff: None,
+        execution_result: None,
+    };
+    record_test_span_with_detail(&result, None, None, Some(true));
+
+    let unique_id = &test.common().unique_id;
+    ctx.inner.run_stats.insert(
+        unique_id.clone(),
+        Stat::new(
+            unique_id.clone(),
+            start,
+            Some(0),
+            NodeStatus::StaticallyCheckedDataTest,
+            None,
+            ctx.thread_id,
+        ),
+    );
+
+    NodeStatus::StaticallyCheckedDataTest
 }

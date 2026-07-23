@@ -10,6 +10,7 @@ use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::collections::{DashMap, SccHashMap};
+use dbt_common::io_args::OptimizeTestsOptions;
 use dbt_common::path::DbtPath;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_dag::schedule::Schedule;
@@ -33,7 +34,7 @@ use minijinja::Value;
 use crate::RunTasksArgs;
 use crate::span_manager::SpanManager;
 use crate::task::Task;
-use crate::test_aggregation::GenericTestRelationships;
+use crate::test_aggregation::{GenericTestRelationships, is_data_test_optimizable};
 use crate::visitor::SkipReason;
 
 use dbt_schemas::schemas::common::DbtMaterialization;
@@ -221,6 +222,15 @@ pub trait ExtendedCtx: Send + Sync + Any {
     ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
     fn is_sidecar(&self) -> bool;
+
+    fn should_statically_skip_data_test(
+        &self,
+        _model_unique_id: &str,
+        _test_name: &str,
+        _column_name: &str,
+    ) -> bool {
+        false
+    }
 }
 
 #[derive(Clone)]
@@ -242,10 +252,42 @@ pub struct TaskRunnerCtx {
 }
 
 impl TaskRunnerCtx {
-    pub async fn is_data_test_reused(&self, _unique_id: String) -> bool {
-        false
-    }
+    pub async fn is_data_test_statically_skippable(&self, unique_id: &str) -> bool {
+        if !self
+            .inner
+            .arg
+            .optimize_tests
+            .contains(&OptimizeTestsOptions::TestStaticAnalysis)
+        {
+            return false;
+        }
 
+        let Some(test) = self.nodes().tests.get(unique_id) else {
+            return false;
+        };
+        if !is_data_test_optimizable(test) {
+            return false;
+        }
+
+        let Some(column) = test.__test_attr__.column_name.as_deref() else {
+            return false;
+        };
+        let Some(test_metadata) = test.__test_attr__.test_metadata.as_ref() else {
+            return false;
+        };
+        let Some(model_unique_id) = test.__test_attr__.attached_node.as_deref() else {
+            return false;
+        };
+
+        self.inner.extended_ctx.should_statically_skip_data_test(
+            model_unique_id,
+            test_metadata.name.as_str(),
+            column,
+        )
+    }
+}
+
+impl TaskRunnerCtx {
     pub fn root_project_name(&self) -> &str {
         &self.inner.root_project_name
     }

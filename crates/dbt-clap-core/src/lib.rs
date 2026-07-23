@@ -850,9 +850,9 @@ pub struct TestArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Enable optimizations (testaggregation, testreuse)
-    #[arg(long, num_args(0..), hide = true, help = "Enable optimizations [options: testaggregation, testreuse]\n")]
-    pub optimize_tests: Vec<OptimizeTestsOptions>,
+    /// Aggregate compatible generic tests.
+    #[arg(long, hide = true)]
+    pub aggregate_tests: bool,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -894,7 +894,11 @@ pub struct TestArgs {
 impl TestArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.optimize_tests = self.optimize_tests.iter().cloned().collect();
+        if self.aggregate_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestAggregation);
+        }
         eval_args.resource_types = vec![ClapResourceType::Test, ClapResourceType::UnitTest];
         configure_run_cache(
             &mut eval_args,
@@ -923,9 +927,13 @@ pub struct BuildArgs {
     #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
-    /// Enable optimizations (testaggregation, testreuse)
-    #[arg(long, num_args(0..), hide = true, help = "Enable optimizations [options: testaggregation, testreuse]\n")]
-    pub optimize_tests: Vec<OptimizeTestsOptions>,
+    /// Aggregate compatible generic tests.
+    #[arg(long, hide = true)]
+    pub aggregate_tests: bool,
+
+    /// Skip data tests that are proven redundant.
+    #[arg(long, hide = true)]
+    pub skip_redundant_tests: bool,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -976,7 +984,16 @@ pub struct BuildArgs {
 impl BuildArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.optimize_tests = self.optimize_tests.iter().cloned().collect();
+        if self.aggregate_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestAggregation);
+        }
+        if self.skip_redundant_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestStaticAnalysis);
+        }
         eval_args.phase = Phases::All;
         // Enable task cache
         if let Some(resource_type) = &self.resource_type {

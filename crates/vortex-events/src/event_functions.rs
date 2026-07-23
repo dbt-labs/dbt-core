@@ -268,6 +268,10 @@ pub fn run_model_event(
             skipped = true;
             skipped_reason = "reused_cloned_from_cache_still_fresh".to_string();
         }
+        NodeStatus::StaticallyCheckedDataTest => {
+            skipped = true;
+            skipped_reason = "statically_checked_data_test".to_string();
+        }
         NodeStatus::NoOp => {
             skipped = true;
             skipped_reason = "no-op".to_string();

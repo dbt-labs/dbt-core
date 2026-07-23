@@ -1,11 +1,15 @@
-use crate::warn_error_options::WarnErrorOptions;
-use clap::ValueEnum;
+use crate::warn_error_options::{WarnErrorOptions, project_flags_get_value};
+use clap::{
+    ValueEnum,
+    builder::{BoolishValueParser, TypedValueParser},
+};
 use dbt_adapter_core::{AdapterType, STATIC_ANALYSIS_SUPPORTED_ADAPTERS};
 use dbt_base::{HashMap, HashSet};
 use dbt_telemetry::NodeType;
 use dbt_yaml::{JsonSchema, Value};
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::str::FromStr;
 use std::{
@@ -1278,7 +1282,103 @@ impl FromStr for RunCacheMode {
 #[clap(rename_all = "lowercase")]
 pub enum OptimizeTestsOptions {
     TestAggregation,
-    TestReuse,
+    TestStaticAnalysis,
+}
+
+pub const SKIP_REDUNDANT_TESTS_ENV: &str = "DBT_ENGINE_SKIP_REDUNDANT_TESTS";
+
+pub fn optimize_test_defaults_from_project_flags(
+    project_flags: Option<&Value>,
+) -> HashSet<OptimizeTestsOptions> {
+    let mut optimize_tests = HashSet::default();
+    insert_project_default_if_enabled(
+        &mut optimize_tests,
+        project_flags,
+        OptimizeTestsOptions::TestStaticAnalysis,
+        "skip_redundant_tests",
+    );
+    optimize_tests
+}
+
+fn insert_project_default_if_enabled(
+    optimize_tests: &mut HashSet<OptimizeTestsOptions>,
+    project_flags: Option<&Value>,
+    option: OptimizeTestsOptions,
+    project_flag: &str,
+) {
+    if project_flags
+        .and_then(|flags| project_flags_get_value(flags, project_flag))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        optimize_tests.insert(option);
+    }
+}
+
+pub fn resolve_effective_optimize_tests(
+    command: FsCommand,
+    explicit_cli: &HashSet<OptimizeTestsOptions>,
+    project_defaults: &HashSet<OptimizeTestsOptions>,
+) -> HashSet<OptimizeTestsOptions> {
+    resolve_effective_optimize_tests_with_env_lookup(
+        command,
+        explicit_cli,
+        project_defaults,
+        |name| std::env::var_os(name),
+    )
+}
+
+fn resolve_effective_optimize_tests_with_env_lookup(
+    command: FsCommand,
+    explicit_cli: &HashSet<OptimizeTestsOptions>,
+    project_defaults: &HashSet<OptimizeTestsOptions>,
+    get_env: impl Fn(&str) -> Option<OsString>,
+) -> HashSet<OptimizeTestsOptions> {
+    let mut optimize_tests = explicit_cli.clone();
+    if command == FsCommand::Build {
+        insert_effective_optimize_test_option(
+            &mut optimize_tests,
+            explicit_cli,
+            project_defaults,
+            &get_env,
+            OptimizeTestsOptions::TestStaticAnalysis,
+            SKIP_REDUNDANT_TESTS_ENV,
+        );
+    } else {
+        optimize_tests.remove(&OptimizeTestsOptions::TestStaticAnalysis);
+    }
+    optimize_tests
+}
+
+fn insert_effective_optimize_test_option(
+    optimize_tests: &mut HashSet<OptimizeTestsOptions>,
+    explicit_cli: &HashSet<OptimizeTestsOptions>,
+    project_defaults: &HashSet<OptimizeTestsOptions>,
+    get_env: impl Fn(&str) -> Option<OsString>,
+    option: OptimizeTestsOptions,
+    env_var: &str,
+) {
+    if explicit_cli.contains(&option) {
+        optimize_tests.insert(option);
+        return;
+    }
+
+    if let Some(value) = get_env(env_var) {
+        if parse_boolish_env(value.as_ref()).unwrap_or(false) {
+            optimize_tests.insert(option);
+        }
+        return;
+    }
+
+    if project_defaults.contains(&option) {
+        optimize_tests.insert(option);
+    }
+}
+
+fn parse_boolish_env(value: &OsStr) -> Option<bool> {
+    BoolishValueParser::new()
+        .parse_ref(&clap::Command::new("dbt-fusion"), None, value)
+        .ok()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum, EnumIter)]
@@ -1452,6 +1552,111 @@ pub fn validate_project_name(name: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn optimize_tests_with_env(
+        command: FsCommand,
+        explicit_cli: &HashSet<OptimizeTestsOptions>,
+        project_defaults: &HashSet<OptimizeTestsOptions>,
+        env: &[(&str, &str)],
+    ) -> HashSet<OptimizeTestsOptions> {
+        resolve_effective_optimize_tests_with_env_lookup(
+            command,
+            explicit_cli,
+            project_defaults,
+            |name| {
+                env.iter()
+                    .find_map(|(key, value)| (*key == name).then(|| OsString::from(*value)))
+            },
+        )
+    }
+
+    fn project_defaults(yaml: &str) -> HashSet<OptimizeTestsOptions> {
+        let project_flags: Value = dbt_yaml::from_str(yaml).unwrap();
+        optimize_test_defaults_from_project_flags(Some(&project_flags))
+    }
+
+    #[test]
+    fn optimize_tests_env_enables_skip_redundant_tests() {
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &HashSet::default(),
+            &HashSet::default(),
+            &[(SKIP_REDUNDANT_TESTS_ENV, "1")],
+        );
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+        assert!(!resolved.contains(&OptimizeTestsOptions::TestAggregation));
+    }
+
+    #[test]
+    fn optimize_tests_project_flags_enable_skip_redundant_tests() {
+        let project_defaults = project_defaults("skip_redundant_tests: true\n");
+
+        assert!(project_defaults.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+        assert!(!project_defaults.contains(&OptimizeTestsOptions::TestAggregation));
+    }
+
+    #[test]
+    fn optimize_tests_absent_env_uses_project_defaults() {
+        let project_defaults = project_defaults("skip_redundant_tests: true\n");
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &HashSet::default(),
+            &project_defaults,
+            &[],
+        );
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+        assert!(!resolved.contains(&OptimizeTestsOptions::TestAggregation));
+    }
+
+    #[test]
+    fn optimize_tests_env_false_overrides_project_true() {
+        let project_defaults = project_defaults("skip_redundant_tests: true\n");
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &HashSet::default(),
+            &project_defaults,
+            &[(SKIP_REDUNDANT_TESTS_ENV, "0")],
+        );
+
+        assert!(!resolved.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+    }
+
+    #[test]
+    fn optimize_tests_cli_true_wins_over_env_false() {
+        let mut explicit_cli = HashSet::default();
+        explicit_cli.insert(OptimizeTestsOptions::TestStaticAnalysis);
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &explicit_cli,
+            &HashSet::default(),
+            &[(SKIP_REDUNDANT_TESTS_ENV, "false")],
+        );
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+    }
+
+    #[test]
+    fn optimize_tests_skip_redundant_tests_is_build_only() {
+        let mut explicit_cli = HashSet::default();
+        explicit_cli.insert(OptimizeTestsOptions::TestAggregation);
+        explicit_cli.insert(OptimizeTestsOptions::TestStaticAnalysis);
+        let project_defaults = project_defaults("skip_redundant_tests: true\n");
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Test,
+            &explicit_cli,
+            &project_defaults,
+            &[(SKIP_REDUNDANT_TESTS_ENV, "1")],
+        );
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestAggregation));
+        assert!(!resolved.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+    }
 
     #[test]
     fn test_check_single_var() {

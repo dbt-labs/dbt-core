@@ -1,4 +1,7 @@
-use dbt_common::{io_utils::StatusReporter, tracing::dbt_emit::emit_warn_log_message};
+use dbt_common::{
+    io_args::SKIP_REDUNDANT_TESTS_ENV, io_utils::StatusReporter,
+    tracing::dbt_emit::emit_warn_log_message,
+};
 use dbt_init::{ErrorCode, FsResult, fs_err};
 use std::sync::Arc;
 
@@ -126,6 +129,7 @@ const USED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_RECORDER_MODE",
     "DBT_ENGINE_RECORDER_ROW_LIMIT",
     "DBT_ENGINE_RECORDER_TYPES",
+    SKIP_REDUNDANT_TESTS_ENV,
     "DBT_ENGINE_STATE_API_URL",
     "DBT_ENGINE_STATE_AUTH_URL",
     "DBT_ENGINE_STATE_EMIT_REUSED_STATUS",
@@ -299,6 +303,24 @@ mod tests {
             std::env::remove_var("DBT_ENGINE_STATE_OAUTH_CLIENT_ID");
         }
         assert!(result.is_ok(), "dbt State engine env vars should not error");
+    }
+
+    #[test]
+    fn validate_engine_env_vars_allows_test_optimization_vars() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var(SKIP_REDUNDANT_TESTS_ENV, "1");
+        }
+        let result = validate_engine_env_vars();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var(SKIP_REDUNDANT_TESTS_ENV);
+        }
+        assert!(
+            result.is_ok(),
+            "test optimization engine env vars should not error"
+        );
     }
 
     #[test]

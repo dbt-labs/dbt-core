@@ -51,7 +51,10 @@ use dbt_common::{
     cancellation::CancellationToken,
     constants::{DBT_MANIFEST_JSON, DBT_SEMANTIC_MANIFEST_JSON},
     fs_err,
-    io_args::{EvalArgs, EvalArgsBuilder, ListOutputFormat, Phases, ShowOptions},
+    io_args::{
+        EvalArgs, EvalArgsBuilder, ListOutputFormat, Phases, ShowOptions,
+        optimize_test_defaults_from_project_flags, resolve_effective_optimize_tests,
+    },
     io_utils::{checkpoint_error_count_maybe_exit, checkpoint_maybe_exit},
     path::DbtPath,
     tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message},
@@ -1511,6 +1514,13 @@ impl DbtProjectCompilation {
         let metricflow_server_client = self.metricflow_server_client.clone();
         let maybe_previous_state = self.previous_state.clone();
         let root_project_quoting = self.resolved_state.root_project_quoting;
+        let project_optimize_tests =
+            optimize_test_defaults_from_project_flags(self.root_project().flags.as_ref());
+        let optimize_tests = resolve_effective_optimize_tests(
+            arg.command,
+            &arg.optimize_tests,
+            &project_optimize_tests,
+        );
 
         // ========================================================================
         // PHASE 3: Use Pipeline for Schedule
@@ -1811,6 +1821,7 @@ impl DbtProjectCompilation {
             let mut run_task_args =
                 RunTasksArgs::from_eval_args(arg, feature_stack.cli.fail_fast.clone())
                     .with_resolved_profile(&self.resolved_state.dbt_profile);
+            run_task_args.optimize_tests = optimize_tests;
             run_task_args.sample_renaming = BTreeMap::new();
             run_task_args.previous_batch_results = previous_batch_results;
             run_task_args.into()

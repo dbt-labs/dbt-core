@@ -1867,7 +1867,7 @@ mod tests {
         );
         node.set_node_outcome(NodeOutcome::Success);
         node.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
-            TestEvaluationDetail::new(test_outcome, 1, None, None),
+            TestEvaluationDetail::new(test_outcome, 1, None, None, None),
         ));
         node
     }

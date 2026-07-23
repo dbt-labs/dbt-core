@@ -18,6 +18,9 @@ pub struct TestEvaluationDetail {
     /// Tell consumer whether or not the failure table exists.
     #[prost(bool, optional, tag = "5")]
     pub store_failures: ::core::option::Option<bool>,
+    /// Whether this test passed by static checking instead of execution.
+    #[prost(bool, optional, tag = "6")]
+    pub statically_checked: ::core::option::Option<bool>,
 }
 impl ::dbt_tracing::StaticName for TestEvaluationDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.TestEvaluationDetail";

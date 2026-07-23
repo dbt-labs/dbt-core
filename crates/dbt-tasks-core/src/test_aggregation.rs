@@ -66,7 +66,7 @@ impl GenericTestAggregation {
     }
 }
 
-fn is_aggregatable_test(test: &DbtTest) -> bool {
+pub fn is_data_test_optimizable(test: &DbtTest) -> bool {
     let Some(macro_name) = get_macro_name(test) else {
         return false;
     };
@@ -99,7 +99,7 @@ fn is_aggregatable_test(test: &DbtTest) -> bool {
 }
 
 fn get_test_group_key(test: &DbtTest) -> Option<(String, String)> {
-    if !is_aggregatable_test(test) {
+    if !is_data_test_optimizable(test) {
         return None;
     }
 
@@ -532,8 +532,8 @@ mod tests {
             );
             resolved_default_config(&mut test_a);
             resolved_default_config(&mut test_b);
-            assert!(is_aggregatable_test(&test_a));
-            assert!(is_aggregatable_test(&test_b));
+            assert!(is_data_test_optimizable(&test_a));
+            assert!(is_data_test_optimizable(&test_b));
 
             let (schedule, nodes) = schedule_and_nodes(vec![test_a, test_b]);
             let temp_dir = tempfile::tempdir().expect("temp dir");
@@ -596,7 +596,7 @@ mod tests {
             resolved_default_config(&mut test);
             mutate(&mut test);
             assert!(
-                !is_aggregatable_test(&test),
+                !is_data_test_optimizable(&test),
                 "{name} should make the test ineligible"
             );
         }

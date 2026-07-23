@@ -241,6 +241,15 @@ pub fn get_test_outcome(node: NodeEvent) -> Option<TestOutcome> {
     })
 }
 
+/// Returns true if a test passed by static checking instead of execution.
+pub fn is_statically_checked_test(node: NodeEvent<'_>) -> bool {
+    let Some(AnyNodeOutcomeDetail::NodeTestDetail(test_detail)) = get_node_outcome_detail(node)
+    else {
+        return false;
+    };
+    test_detail.statically_checked.unwrap_or(false)
+}
+
 /// Extract cache detail from node details if available
 pub fn get_cache_detail(node: NodeEvent<'_>) -> Option<&'_ NodeCacheDetail> {
     get_node_outcome_detail(node).and_then(|detail| {
