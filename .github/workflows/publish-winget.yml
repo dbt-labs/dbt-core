@@ -174,7 +174,9 @@ jobs:
       contents: read
     steps:
       # Post the winget-pkgs PR link to Slack so on-call can review it.
+      # A Slack outage shouldn't fail the release workflow, so don't let this step fail the job.
       - name: Post Slack message
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WINGET_WEBHOOK_URL }}
           VERSION: ${{ inputs.version }}
