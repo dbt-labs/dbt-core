@@ -1,7 +1,0 @@
-kind: Fixes
-body: Winget publish PR notifications now use a Slack incoming webhook instead of a bot token
-time: 2026-07-23T20:03:29.716261+05:30
-custom:
-    author: itsnamangoyal
-    issue: ""
-    project: dbt-core
