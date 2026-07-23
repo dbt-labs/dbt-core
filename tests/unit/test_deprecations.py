@@ -98,19 +98,22 @@ class TestPreviewDeprecation:
         assert "previewed-deprecation" not in deprecations.active_deprecations
         assert len(pfmd_catcher.caught_events) == 0
         assert len(note_catcher.caught_events) == 1
+
+
 @pytest.fixture(scope="function")
-def silenced_project_flags_moved():
-    event_manager = get_event_manager()
-    previous = event_manager._warn_error_options
-    event_manager.warn_error_options = WarnErrorOptionsV2(
-        error=["Deprecations"],
-        silence=["ProjectFlagsMovedDeprecation"],
-        valid_error_names=ALL_EVENT_NAMES,
+def silenced_project_flags_moved(monkeypatch):
+    # There is no public API for saving/restoring the underlying options slot,
+    # so patch the attribute via monkeypatch, which restores the previous value
+    # on teardown.
+    monkeypatch.setattr(
+        get_event_manager(),
+        "_warn_error_options",
+        WarnErrorOptionsV2(
+            error=["Deprecations"],
+            silence=["ProjectFlagsMovedDeprecation"],
+            valid_error_names=ALL_EVENT_NAMES,
+        ),
     )
-
-    yield
-
-    event_manager._warn_error_options = previous
 
 
 def test_summary_skips_silenced_deprecations(active_deprecations, silenced_project_flags_moved):
