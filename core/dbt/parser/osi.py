@@ -57,9 +57,7 @@ def _build_model_lookup(manifest: Manifest) -> Dict[Tuple[str, str, str], ModelN
 
 
 def _match_database_less(
-    ctx: _OsiFileContext,
-    dataset_name: str,
-    table_ref: str,
+    error_prefix: str,
     key: Tuple[str, str, str],
     model_lookup: Dict[Tuple[str, str, str], ModelNode],
 ) -> Optional[ModelNode]:
@@ -72,8 +70,7 @@ def _match_database_less(
     if len(candidates) > 1:
         databases = sorted({node.database or "<no database>" for node in candidates})
         raise ParsingError(
-            f"OSI file '{ctx.path}' contains dataset '{dataset_name}' "
-            f"({table_ref}) that matches models in multiple "
+            f"{error_prefix} matches models in multiple "
             f"databases: {', '.join(databases)}. Qualify the source with a "
             f"database to disambiguate."
         )
@@ -94,14 +91,14 @@ def _match_model_for_dataset(
     table_ref = ".".join(
         filter(None, [node_relation.database, node_relation.schema_name, node_relation.alias])
     )
+    error_prefix = f"OSI file '{ctx.path}' contains dataset '{dataset_name}' ({table_ref}) that"
 
     matched = model_lookup.get(key)
     if matched is None and not key[2]:
-        matched = _match_database_less(ctx, dataset_name, table_ref, key, model_lookup)
+        matched = _match_database_less(error_prefix, key, model_lookup)
     if matched is None:
         raise ParsingError(
-            f"OSI file '{ctx.path}' contains dataset '{dataset_name}' "
-            f"({table_ref}) that does not match any dbt model in this project. "
+            f"{error_prefix} does not match any dbt model in this project. "
             f"Each OSI dataset must reference a table managed by a dbt model."
         )
     return matched
