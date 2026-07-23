@@ -41,18 +41,4 @@ jobs:
                 issue_number: context.issue.number,
                 labels: [...labels, 'area:adapters'],
               });
-
-              // v2-labeled issues are auto-added to the Core working board with
-              // `area:core` applied by default. Adapter issues belong under
-              // area:adapters instead, so drop the default here.
-              try {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  name: 'area:core',
-                });
-              } catch (error) {
-                if (error.status !== 404) throw error;
-              }
             }
