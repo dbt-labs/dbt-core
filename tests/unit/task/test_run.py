@@ -7,6 +7,12 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace.status import StatusCode
 from psycopg2 import DatabaseError
 from pytest_mock import MockerFixture
 
@@ -17,12 +23,14 @@ from dbt.artifacts.resources.base import FileHash
 from dbt.artifacts.resources.types import NodeType, RunHookType
 from dbt.artifacts.resources.v1.components import DependsOn
 from dbt.artifacts.resources.v1.config import Hook, NodeConfig
+from dbt.artifacts.resources.v1.exposure import ExposureType
 from dbt.artifacts.resources.v1.model import LatestVersionPointer, ModelConfig
+from dbt.artifacts.resources.v1.owner import Owner
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HookNode, ModelNode
+from dbt.contracts.graph.nodes import Exposure, HookNode, ModelNode
 from dbt.events.types import LogModelResult
 from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
@@ -92,41 +100,42 @@ def test_adapter_info_tracking():
     }
 
 
+@pytest.fixture
+def model_runner(
+    postgres_adapter: PostgresAdapter,
+    table_model: ModelNode,
+    runtime_config: RuntimeConfig,
+) -> ModelRunner:
+    return ModelRunner(
+        config=runtime_config,
+        adapter=postgres_adapter,
+        node=table_model,
+        node_index=1,
+        num_nodes=1,
+    )
+
+
+@pytest.fixture
+def run_result(table_model: ModelNode) -> RunResult:
+    return RunResult(
+        status=RunStatus.Success,
+        timing=[],
+        thread_id="an_id",
+        execution_time=0,
+        adapter_response={},
+        message="It did it",
+        failures=None,
+        batch_results=None,
+        node=table_model,
+    )
+
+
 class TestModelRunner:
     @pytest.fixture
     def log_model_result_catcher(self) -> EventCatcher:
         catcher = EventCatcher(event_to_catch=LogModelResult)
         add_callback_to_manager(catcher.catch)
         return catcher
-
-    @pytest.fixture
-    def model_runner(
-        self,
-        postgres_adapter: PostgresAdapter,
-        table_model: ModelNode,
-        runtime_config: RuntimeConfig,
-    ) -> ModelRunner:
-        return ModelRunner(
-            config=runtime_config,
-            adapter=postgres_adapter,
-            node=table_model,
-            node_index=1,
-            num_nodes=1,
-        )
-
-    @pytest.fixture
-    def run_result(self, table_model: ModelNode) -> RunResult:
-        return RunResult(
-            status=RunStatus.Success,
-            timing=[],
-            thread_id="an_id",
-            execution_time=0,
-            adapter_response={},
-            message="It did it",
-            failures=None,
-            batch_results=None,
-            node=table_model,
-        )
 
     def test_print_result_line(
         self,
@@ -754,6 +763,21 @@ class TestMicrobatchModelRunner:
 
 
 class TestRunTask:
+
+    def setup_class(self):
+        self.tracer_provider = TracerProvider(resource=Resource.get_empty())
+        self.span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(self.tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(self.span_exporter))
+
+    @pytest.fixture(autouse=True)
+    def before_each(self, monkeypatch):
+        self.span_exporter.clear()
+        # Instrumentation is gated behind --snowflake-projects-otel; enable it so
+        # these span-emitting tests exercise the instrumented path.
+        monkeypatch.setattr("dbt.task.runnable._otel_enabled", lambda: True)
+        yield
+
     @pytest.fixture
     def hook_node(self) -> HookNode:
         return HookNode(
@@ -782,12 +806,12 @@ class TestRunTask:
         )
 
     @pytest.mark.parametrize(
-        "error_to_raise,expected_result",
+        "error_to_raise,expected_result,expected_span_status",
         [
-            (None, RunStatus.Success),
-            (DbtRuntimeError, RunStatus.Error),
-            (DatabaseError, RunStatus.Error),
-            (KeyboardInterrupt, KeyboardInterrupt),
+            (None, RunStatus.Success, StatusCode.UNSET),
+            (DbtRuntimeError, RunStatus.Error, StatusCode.ERROR),
+            (DatabaseError, RunStatus.Error, StatusCode.ERROR),
+            (KeyboardInterrupt, KeyboardInterrupt, StatusCode.UNSET),
         ],
     )
     def test_safe_run_hooks(
@@ -798,6 +822,7 @@ class TestRunTask:
         hook_node: HookNode,
         error_to_raise: Optional[Type[Exception]],
         expected_result: Union[RunStatus, Type[Exception]],
+        expected_span_status: StatusCode,
     ):
         mocker.patch("dbt.task.run.RunTask.get_hooks_by_type").return_value = [hook_node]
         mocker.patch("dbt.task.run.RunTask.get_hook_sql").return_value = hook_node.raw_code
@@ -829,7 +854,272 @@ class TestRunTask:
             )
             assert isinstance(expected_result, RunStatus)
             assert result == expected_result
+            exported_spans = self.span_exporter.get_finished_spans()
         except BaseException as e:
             assert not isinstance(expected_result, RunStatus)
             assert issubclass(expected_result, BaseException)
             assert type(e) == expected_result
+            exported_spans = self.span_exporter.get_finished_spans()
+
+        # each hook emits a child span + an outer type span.
+        assert len(exported_spans) == 2
+        outer_span = next(s for s in exported_spans if s.name == "on-run-end")
+        child_span = next(s for s in exported_spans if s.name == hook_node.unique_id)
+
+        assert expected_span_status == outer_span.status.status_code
+        assert outer_span.attributes.get("hook_type") == "on-run-end"
+        assert "hook_outcome" not in outer_span.attributes
+        assert "node.status" not in outer_span.attributes
+
+        # Per-hook child span attributes
+        if error_to_raise is not KeyboardInterrupt:
+            assert child_span.attributes.get("hook_type") == "on-run-end"
+            assert child_span.attributes.get("package_name") == hook_node.package_name
+            assert child_span.attributes.get("name") == hook_node.name
+            assert child_span.attributes.get("hook_index") == 1
+            assert child_span.attributes.get("unique_id") == hook_node.unique_id
+            expected_child_outcome = "error" if error_to_raise is not None else "success"
+            assert child_span.attributes.get("hook_outcome") == expected_child_outcome
+            expected_child_status = (
+                StatusCode.ERROR if error_to_raise is not None else StatusCode.OK
+            )
+            assert child_span.status.status_code == expected_child_status
+        else:
+            assert "hook_outcome" not in child_span.attributes
+            assert child_span.status.status_code == StatusCode.UNSET
+
+    def test_no_run_hooks(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+    ):
+        mocker.patch("dbt.task.run.RunTask.get_hooks_by_type").return_value = []
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+
+        run_task = RunTask(
+            args=flags,
+            config=runtime_config,
+            manifest=manifest,
+        )
+
+        adapter = mock.Mock()
+        adapter_execute = mock.Mock()
+        adapter_execute.return_value = (AdapterResponse(_message="Success"), None)
+        adapter.execute = adapter_execute
+
+        run_task.safe_run_hooks(
+            adapter=adapter,
+            hook_type=RunHookType.End,
+            extra_context={},
+        )
+        exported_spans = self.span_exporter.get_finished_spans()
+        assert len(exported_spans) == 0
+
+    def test_safe_run_hooks_no_spans_when_otel_disabled(
+        self,
+        monkeypatch,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        hook_node: HookNode,
+    ):
+        # With the gate off, safe_run_hooks must emit no spans even when hooks run.
+        monkeypatch.setattr("dbt.task.runnable._otel_enabled", lambda: False)
+        mocker.patch("dbt.task.run.RunTask.get_hooks_by_type").return_value = [hook_node]
+        mocker.patch("dbt.task.run.RunTask.get_hook_sql").return_value = hook_node.raw_code
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        adapter = mock.Mock()
+        adapter.execute = mock.Mock(return_value=(AdapterResponse(_message="Success"), None))
+
+        result = run_task.safe_run_hooks(
+            adapter=adapter,
+            hook_type=RunHookType.End,
+            extra_context={},
+        )
+        assert result == RunStatus.Success
+        assert len(self.span_exporter.get_finished_spans()) == 0
+
+    def test_call_runner(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        model_runner: ModelRunner,
+        run_result: RunResult,
+    ):
+        mocker.patch("dbt.task.run.ModelRunner.run_with_hooks").return_value = run_result
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+
+        run_task = RunTask(
+            args=flags,
+            config=runtime_config,
+            manifest=manifest,
+        )
+
+        run_task.call_runner(runner=model_runner)
+        exported_spans = self.span_exporter.get_finished_spans()
+        assert len(exported_spans) == 1
+        assert exported_spans[0].status.status_code == StatusCode.OK
+
+    def test_call_runner_error_sets_span_error(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        model_runner: ModelRunner,
+        run_result: RunResult,
+    ):
+        """error node result must set StatusCode.ERROR on the span."""
+        from dbt.artifacts.schemas.results import RunStatus as RS
+
+        run_result_error = RunResult(
+            status=RS.Error,
+            timing=[],
+            thread_id="an_id",
+            execution_time=0,
+            adapter_response={},
+            message="It failed",
+            failures=1,
+            batch_results=None,
+            node=run_result.node,
+        )
+        mocker.patch("dbt.task.run.ModelRunner.run_with_hooks").return_value = run_result_error
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        run_task.call_runner(runner=model_runner)
+        exported_spans = self.span_exporter.get_finished_spans()
+        assert len(exported_spans) == 1
+        assert exported_spans[0].status.status_code == StatusCode.ERROR
+
+    def test_call_runner_none_guard(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        run_result: RunResult,
+    ):
+        """non-relational nodes (e.g. Exposure) must not emit database/schema/
+        identifier/materialization span attrs when those values are None; the guard
+        in _set_span_attr must silently drop them so the OTel SDK never sees None."""
+        exposure = Exposure(
+            name="my_exposure",
+            resource_type=NodeType.Exposure,
+            type=ExposureType.Notebook,
+            owner=Owner(email="test@example.com"),
+            fqn=["pkg", "exposures", "my_exposure"],
+            unique_id="exposure.pkg.my_exposure",
+            package_name="pkg",
+            path="schema.yml",
+            original_file_path="models/schema.yml",
+        )
+
+        mock_runner = mock.Mock()
+        mock_runner.node = exposure
+        mock_runner.run_with_hooks.return_value = run_result
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        run_task.call_runner(runner=mock_runner)
+        exported_spans = self.span_exporter.get_finished_spans()
+        assert len(exported_spans) == 1
+        span = exported_spans[0]
+
+        # None-valued attrs must be absent — the guard must have dropped them
+        assert "database" not in span.attributes
+        assert "schema" not in span.attributes
+        assert "identifier" not in span.attributes
+        assert "materialization" not in span.attributes
+
+        # no attribute value should be None
+        assert all(v is not None for v in span.attributes.values())
+
+        # Core attrs that ARE set for all nodes must still be present
+        assert "node_outcome" in span.attributes
+        assert "unique_id" in span.attributes
+        assert "name" in span.attributes
+        assert "node_type" in span.attributes
+        assert "relative_path" in span.attributes
+
+        assert span.status.status_code == StatusCode.OK
+
+    def test_safe_run_hooks_masking_bug_fixed(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        hook_node: HookNode,
+    ):
+        """when on-run-start hook[0] fails and hook[1] is consequently
+        skipped, per-hook child spans capture the correct per-hook outcome at full
+        granularity — no aggregate to mask anything.  hook[0] child → hook_outcome
+        'error', StatusCode.ERROR; hook[1] child → hook_outcome 'skipped',
+        StatusCode.OK (skipped is not an error).  Outer span → StatusCode.ERROR,
+        no hook_outcome."""
+        import copy
+
+        hook_node2 = copy.deepcopy(hook_node)
+        hook_node2.unique_id = "model.test.foo2"
+        hook_node2.name = "foo2"
+
+        mocker.patch("dbt.task.run.RunTask.get_hooks_by_type").return_value = [
+            hook_node,
+            hook_node2,
+        ]
+        mocker.patch("dbt.task.run.RunTask.get_hook_sql").return_value = hook_node.raw_code
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        adapter = mock.Mock()
+        adapter_execute = mock.Mock()
+        adapter_execute.side_effect = DbtRuntimeError("hook failed!")
+        adapter.execute = adapter_execute
+
+        # hook[0] errors → hook[1] is skipped
+        run_task.safe_run_hooks(
+            adapter=adapter,
+            hook_type=RunHookType.Start,
+            extra_context={},
+        )
+
+        exported_spans = self.span_exporter.get_finished_spans()
+        # 1 outer span + 2 per-hook child spans
+        assert len(exported_spans) == 3
+
+        outer_span = next(s for s in exported_spans if s.name == "on-run-start")
+        child_span_0 = next(s for s in exported_spans if s.name == hook_node.unique_id)
+        child_span_1 = next(s for s in exported_spans if s.name == hook_node2.unique_id)
+
+        assert outer_span.attributes.get("hook_type") == "on-run-start"
+        assert "hook_outcome" not in outer_span.attributes
+        assert "node.status" not in outer_span.attributes
+        assert outer_span.status.status_code == StatusCode.ERROR
+
+        # hook[0] failed
+        assert child_span_0.attributes.get("hook_outcome") == "error"
+        assert child_span_0.status.status_code == StatusCode.ERROR
+
+        # hook[1] was skipped
+        assert child_span_1.attributes.get("hook_outcome") == "skipped"
+        assert child_span_1.status.status_code == StatusCode.OK

@@ -21,6 +21,9 @@ from typing import (
     cast,
 )
 
+from opentelemetry import trace
+from opentelemetry.trace import StatusCode
+
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.capability import Capability
@@ -1005,6 +1008,9 @@ class RunTask(CompileTask):
         self.batch_map = batch_map
         self.overload_map: Optional[Dict[str, OverloadResults]] = None
         self.original_invocation_started_at: Optional[datetime] = None
+        # Tracer handle is created unconditionally; it is inert (creates no spans)
+        # until the --snowflake-projects-otel gate opens a span via _maybe_span.
+        self.dbt_tracer = trace.get_tracer("dbt.runner")
 
     def raise_on_first_error(self) -> bool:
         return False
@@ -1169,80 +1175,96 @@ class RunTask(CompileTask):
         failed = False
         num_hooks = len(ordered_hooks)
 
-        for idx, hook in enumerate(ordered_hooks, 1):
-            with log_contextvars(node_info=hook.node_info):
-                hook.index = idx
-                hook_name = f"{hook.package_name}.{hook_type}.{hook.index - 1}"
-                execution_time = 0.0
-                timing: List[TimingInfo] = []
-                failures = 1
+        with self._maybe_span(hook_type) as hook_span:
+            hook_span.set_attribute("hook_type", hook_type.value)
+            for idx, hook in enumerate(ordered_hooks, 1):
+                with log_contextvars(node_info=hook.node_info), self._maybe_span(
+                    hook.unique_id
+                ) as hook_node_span:
+                    hook.index = idx
+                    hook_name = f"{hook.package_name}.{hook_type}.{hook.index - 1}"
+                    execution_time = 0.0
+                    timing: List[TimingInfo] = []
+                    failures = 1
 
-                if not failed:
-                    with collect_timing_info("compile", timing.append):
-                        sql = self.get_hook_sql(
-                            adapter, hook, hook.index, num_hooks, extra_context
+                    if not failed:
+                        with collect_timing_info("compile", timing.append):
+                            sql = self.get_hook_sql(
+                                adapter, hook, hook.index, num_hooks, extra_context
+                            )
+
+                        started_at = timing[0].started_at or datetime.now(timezone.utc).replace(
+                            tzinfo=None
+                        )
+                        hook.update_event_status(
+                            started_at=started_at.isoformat(), node_status=RunningStatus.Started
                         )
 
-                    started_at = timing[0].started_at or datetime.now(timezone.utc).replace(
-                        tzinfo=None
+                        fire_event(
+                            LogHookStartLine(
+                                statement=hook_name,
+                                index=hook.index,
+                                total=num_hooks,
+                                node_info=hook.node_info,
+                            )
+                        )
+
+                        with collect_timing_info("execute", timing.append):
+                            status, message = get_execution_status(sql, adapter)
+
+                        finished_at = timing[1].completed_at or datetime.now(timezone.utc).replace(
+                            tzinfo=None
+                        )
+                        hook.update_event_status(finished_at=finished_at.isoformat())
+                        execution_time = (finished_at - started_at).total_seconds()
+                        failures = 0 if status == RunStatus.Success else 1
+
+                        if status == RunStatus.Success:
+                            message = f"{hook_name} passed"
+                        else:
+                            message = f"{hook_name} failed, error:\n {message}"
+                            failed = True
+                            hook_span.set_status(StatusCode.ERROR)
+                    else:
+                        status = RunStatus.Skipped
+                        message = f"{hook_name} skipped"
+
+                    hook.update_event_status(node_status=status)
+                    hook_node_span.set_attribute("hook_type", hook_type.value)
+                    hook_node_span.set_attribute("package_name", hook.package_name)
+                    hook_node_span.set_attribute("name", hook.name)
+                    hook_node_span.set_attribute("hook_index", hook.index)
+                    hook_node_span.set_attribute("unique_id", hook.unique_id)
+                    hook_node_span.set_attribute("hook_outcome", status.value)
+                    hook_node_span.set_status(
+                        StatusCode.ERROR
+                        if status not in (RunStatus.Success, RunStatus.Skipped)
+                        else StatusCode.OK
                     )
-                    hook.update_event_status(
-                        started_at=started_at.isoformat(), node_status=RunningStatus.Started
+
+                    self.node_results.append(
+                        RunResult(
+                            status=status,
+                            thread_id="main",
+                            timing=timing,
+                            message=message,
+                            adapter_response={},
+                            execution_time=execution_time,
+                            failures=failures,
+                            node=hook,
+                        )
                     )
 
                     fire_event(
-                        LogHookStartLine(
+                        LogHookEndLine(
                             statement=hook_name,
+                            status=status,
                             index=hook.index,
                             total=num_hooks,
+                            execution_time=execution_time,
                             node_info=hook.node_info,
                         )
                     )
-
-                    with collect_timing_info("execute", timing.append):
-                        status, message = get_execution_status(sql, adapter)
-
-                    finished_at = timing[1].completed_at or datetime.now(timezone.utc).replace(
-                        tzinfo=None
-                    )
-                    hook.update_event_status(finished_at=finished_at.isoformat())
-                    execution_time = (finished_at - started_at).total_seconds()
-                    failures = 0 if status == RunStatus.Success else 1
-
-                    if status == RunStatus.Success:
-                        message = f"{hook_name} passed"
-                    else:
-                        message = f"{hook_name} failed, error:\n {message}"
-                        failed = True
-                else:
-                    status = RunStatus.Skipped
-                    message = f"{hook_name} skipped"
-
-                hook.update_event_status(node_status=status)
-
-                self.node_results.append(
-                    RunResult(
-                        status=status,
-                        thread_id="main",
-                        timing=timing,
-                        message=message,
-                        adapter_response={},
-                        execution_time=execution_time,
-                        failures=failures,
-                        node=hook,
-                    )
-                )
-
-                fire_event(
-                    LogHookEndLine(
-                        statement=hook_name,
-                        status=status,
-                        index=hook.index,
-                        total=num_hooks,
-                        execution_time=execution_time,
-                        node_info=hook.node_info,
-                    )
-                )
 
         if hook_type == RunHookType.Start and ordered_hooks:
             fire_event(Formatting(""))
@@ -1286,8 +1308,9 @@ class RunTask(CompileTask):
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
-            self.create_schemas(adapter, required_schemas)
-            self.populate_adapter_cache(adapter, required_schemas)
+            with self._maybe_span("metadata.setup"):
+                self.create_schemas(adapter, required_schemas)
+                self.populate_adapter_cache(adapter, required_schemas)
             self.populate_microbatch_batches(selected_uids)
             self.populate_function_overloads(selected_uids)
             group_lookup.init(self.manifest, selected_uids)

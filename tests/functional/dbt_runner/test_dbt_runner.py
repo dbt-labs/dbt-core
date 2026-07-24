@@ -2,6 +2,11 @@ import os
 from unittest import mock
 
 import pytest
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from dbt.adapters.factory import FACTORY, reset_adapters
 from dbt.cli.exceptions import DbtUsageException
@@ -168,7 +173,20 @@ class TestDbtRunnerHooks:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "models.sql": "select 1 as id",
+            "models.sql": """
+                            {{ config(
+                                pre_hook=["select 1"],
+                                post_hook="select 2",
+                            ) }}
+                            select 1 as id
+                        """,
+            "model2.sql": """
+                            {{ config(
+                                pre_hook=["select 1", "select 1/0"],
+                                post_hook="select 2/0",
+                            ) }}
+                            select * from {{ ref('models') }}
+                        """,
         }
 
     @pytest.fixture(scope="class")
@@ -179,3 +197,72 @@ class TestDbtRunnerHooks:
         dbt = dbtRunner()
         dbt.invoke(["run", "--select", "models"])
         assert get_node_info() == {}
+
+    def test_dbt_runner_spans(self, project):
+        tracer_provider = TracerProvider(resource=Resource.get_empty())
+        span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+        dbt = dbtRunner()
+        dbt.invoke(["--snowflake-projects-otel", "run", "--select", "models", "model2"])
+        assert get_node_info() == {}
+        exported_spans = span_exporter.get_finished_spans()
+        assert len(exported_spans) == 11
+        assert exported_spans[0].instrumentation_scope.name == "dbt.runner"
+        span_names = [span.name for span in exported_spans]
+        span_names.sort()
+        assert span_names == [
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "metadata.setup",
+            "model.test.model2",
+            "model.test.models",
+            "on-run-end",
+            "operation.test.test-on-run-end-0",
+        ]
+        model2_span = None
+        models_span = None
+        metadata_span = None
+        for span in exported_spans:
+            if span.name == "model.test.model2":
+                model2_span = span
+            if span.name == "model.test.models":
+                models_span = span
+            if span.name == "metadata.setup":
+                metadata_span = span
+
+        assert models_span is not None
+        assert model2_span is not None
+        assert metadata_span is not None
+
+        assert "node_outcome" in models_span.attributes
+        assert "materialization" in models_span.attributes
+        assert "database" in models_span.attributes
+        assert "schema" in models_span.attributes
+        assert models_span.attributes["node_outcome"] in ("success", "error", "warn", "skipped")
+        assert models_span.attributes["materialization"] is not None
+        assert models_span.attributes["node_type"] == "model"
+        assert "unique_id" in models_span.attributes
+        assert "name" in models_span.attributes
+        assert "node_type" in models_span.attributes
+        assert "identifier" in models_span.attributes
+        assert "relative_path" in models_span.attributes
+
+        assert len(model2_span.links) == 1
+        assert model2_span.links[0].attributes["upstream.name"] == "model.test.models"
+        assert model2_span.links[0].context.span_id == models_span.context.span_id
+        assert model2_span.links[0].context.trace_id == models_span.context.trace_id
+
+    def test_dbt_runner_no_spans_when_flag_off(self, project):
+        # With the default (--no-snowflake-projects-otel), no spans are emitted.
+        tracer_provider = TracerProvider(resource=Resource.get_empty())
+        span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+        dbt = dbtRunner()
+        dbt.invoke(["run", "--select", "models", "model2"])
+        assert len(span_exporter.get_finished_spans()) == 0

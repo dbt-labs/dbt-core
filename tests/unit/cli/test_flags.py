@@ -619,3 +619,38 @@ class TestFusionParserFlags:
         ctx = self.make_dbt_context("run", ["--no-use-v2-parser", "run"])
         flags = Flags(ctx, project_flags)
         assert flags.USE_V2_PARSER is False
+
+
+class TestSnowflakeProjectsOtelFlag:
+    def make_dbt_context(
+        self, context_name: str, args: List[str], parent: Optional[click.Context] = None
+    ) -> click.Context:
+        return cli.make_context(context_name, args.copy(), parent)
+
+    def test_default_off(self):
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is False
+
+    def test_cli_arg_enables(self):
+        ctx = self.make_dbt_context("run", ["--snowflake-projects-otel", "run"])
+        flags = Flags(ctx)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is True
+
+    def test_env_var_enables(self, monkeypatch):
+        monkeypatch.setenv("DBT_ENGINE_SNOWFLAKE_PROJECTS_OTEL", "True")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is True
+
+    def test_project_flags_enables(self):
+        project_flags = ProjectFlags(snowflake_projects_otel=True)
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is True
+
+    def test_cli_overrides_project_flags(self):
+        project_flags = ProjectFlags(snowflake_projects_otel=True)
+        ctx = self.make_dbt_context("run", ["--no-snowflake-projects-otel", "run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is False
