@@ -455,6 +455,13 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default)]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // Exasol
+    // Key names match the Python dbt-exasol adapter so existing projects
+    // migrate without config changes.
+    pub partition_by_config: Option<StringOrArrayOfStrings>,
+    pub distribute_by_config: Option<StringOrArrayOfStrings>,
+    pub primary_key_config: Option<StringOrArrayOfStrings>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -591,6 +598,11 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
             // Salesforce
             primary_key,
             category,
+
+            // Exasol
+            partition_by_config,
+            distribute_by_config,
+            primary_key_config,
         } = self;
 
         default_to!(
@@ -695,6 +707,10 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
                 // Salesforce
                 primary_key,
                 category,
+                // Exasol
+                partition_by_config,
+                distribute_by_config,
+                primary_key_config,
             ]
         );
     }

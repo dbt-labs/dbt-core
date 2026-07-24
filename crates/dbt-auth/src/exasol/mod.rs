@@ -18,6 +18,8 @@ enum ExasolAuthIR<'a> {
         certificate_validation: bool,
         certificate_fingerprint: Option<&'a str>,
         connection_timeout: Option<Cow<'a, str>>,
+        query_timeout: Option<Cow<'a, str>>,
+        idle_timeout: Option<Cow<'a, str>>,
     },
 }
 
@@ -34,6 +36,8 @@ impl<'a> ExasolAuthIR<'a> {
                 certificate_validation,
                 certificate_fingerprint,
                 connection_timeout,
+                query_timeout,
+                idle_timeout,
             } => {
                 let mut uri = format!("exasol://{host}:{port}");
 
@@ -58,6 +62,14 @@ impl<'a> ExasolAuthIR<'a> {
 
                 if let Some(timeout) = &connection_timeout {
                     params.push(format!("timeout={timeout}"));
+                }
+
+                if let Some(timeout) = &query_timeout {
+                    params.push(format!("query_timeout={timeout}"));
+                }
+
+                if let Some(timeout) = &idle_timeout {
+                    params.push(format!("idle_timeout={timeout}"));
                 }
 
                 if !params.is_empty() {
@@ -106,6 +118,8 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<ExasolAuthIR<'a>, AuthErr
         certificate_validation,
         certificate_fingerprint: config.get_str("certificate_fingerprint"),
         connection_timeout: config.get_string("connection_timeout"),
+        query_timeout: config.get_string("query_timeout"),
+        idle_timeout: config.get_string("idle_timeout"),
     })
 }
 
@@ -273,6 +287,25 @@ encryption: false
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "timeout=30");
+    }
+
+    #[test]
+    fn test_query_and_idle_timeout() {
+        let config = Mapping::from_iter([
+            ("user".into(), "sys".into()),
+            ("password".into(), "exasol".into()),
+            ("query_timeout".into(), YmlValue::number(300i64.into())),
+            ("idle_timeout".into(), "600".into()),
+        ]);
+
+        let builder = ExasolAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure")
+            .builder;
+
+        let uri = uri_value(&builder);
+        assert_contains!(&uri, "query_timeout=300");
+        assert_contains!(&uri, "idle_timeout=600");
     }
 
     #[test]

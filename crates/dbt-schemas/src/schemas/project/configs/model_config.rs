@@ -392,6 +392,15 @@ pub struct ProjectModelConfig {
     pub use_anonymous_sproc: Option<bool>,
     #[serde(rename = "+partition_by")]
     pub partition_by: Option<PartitionConfig>,
+    /// Exasol: PARTITION BY column list (name matches the Python dbt-exasol adapter)
+    #[serde(rename = "+partition_by_config")]
+    pub partition_by_config: Option<StringOrArrayOfStrings>,
+    /// Exasol: DISTRIBUTE BY column list (name matches the Python dbt-exasol adapter)
+    #[serde(rename = "+distribute_by_config")]
+    pub distribute_by_config: Option<StringOrArrayOfStrings>,
+    /// Exasol: advisory PRIMARY KEY column list (name matches the Python dbt-exasol adapter)
+    #[serde(rename = "+primary_key_config")]
+    pub primary_key_config: Option<StringOrArrayOfStrings>,
     #[serde(
         default,
         rename = "+partition_expiration_days",
@@ -755,6 +764,9 @@ impl From<ProjectModelConfig> for ModelConfig {
                 iceberg_version: config.iceberg_version,
 
                 partition_by: config.partition_by,
+                partition_by_config: config.partition_by_config,
+                distribute_by_config: config.distribute_by_config,
+                primary_key_config: config.primary_key_config,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
@@ -933,6 +945,9 @@ impl From<ModelConfig> for ProjectModelConfig {
             copy_tags: config.__warehouse_specific_config__.copy_tags,
             secure: config.__warehouse_specific_config__.secure,
             partition_by: config.__warehouse_specific_config__.partition_by,
+            partition_by_config: config.__warehouse_specific_config__.partition_by_config,
+            distribute_by_config: config.__warehouse_specific_config__.distribute_by_config,
+            primary_key_config: config.__warehouse_specific_config__.primary_key_config,
             cluster_by: config.__warehouse_specific_config__.cluster_by,
             hours_to_expiration: config.__warehouse_specific_config__.hours_to_expiration,
             job_execution_timeout_seconds: config

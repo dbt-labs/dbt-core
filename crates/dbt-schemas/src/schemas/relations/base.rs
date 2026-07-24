@@ -558,7 +558,21 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
                 }),
                 end.map(|end| format!("{event_time} < parseDateTime64BestEffort('{end}', 9)")),
             ),
-            AdapterType::Exasol => todo!("Exasol"),
+            // Exasol TIMESTAMP literals take no time-zone offset; strip the
+            // (always +00:00) offset and 'T' from the UTC rfc3339 boundary.
+            AdapterType::Exasol => {
+                let to_exasol_ts = |s: &str| {
+                    let s = s
+                        .trim_end_matches("+00:00")
+                        .trim_end_matches('Z')
+                        .replace('T', " ");
+                    format!("TIMESTAMP '{s}'")
+                };
+                (
+                    start.map(|start| format!("{event_time} >= {}", to_exasol_ts(&start))),
+                    end.map(|end| format!("{event_time} < {}", to_exasol_ts(&end))),
+                )
+            }
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),
