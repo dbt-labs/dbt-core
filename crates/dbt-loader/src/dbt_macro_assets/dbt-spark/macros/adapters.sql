@@ -23,6 +23,10 @@
 -- funcsign: () -> string
 {% macro spark__file_format_clause() %}
   {%- set file_format = config.get('file_format', validator=validation.any[basestring]) -%}
+  {%- if file_format is none and target.get('lakehouseid') -%}
+    {#-- Fabric Lakehouse tables are Delta by default (v1 dbt-fabricspark parity). --#}
+    {%- set file_format = 'delta' -%}
+  {%- endif -%}
   {%- if file_format is not none %}
     using {{ file_format }}
   {%- endif %}
@@ -157,7 +161,12 @@
     {%- if temporary -%}
       {{ create_temporary_view(relation, compiled_code) }}
     {%- else -%}
-      {% if config.get('file_format', validator=validation.any[basestring]) in ['delta', 'iceberg'] %}
+      {%- set file_format = config.get('file_format', validator=validation.any[basestring]) -%}
+      {%- if file_format is none and target.get('lakehouseid') -%}
+        {#-- Fabric Lakehouse tables are Delta by default (v1 dbt-fabricspark parity). --#}
+        {%- set file_format = 'delta' -%}
+      {%- endif -%}
+      {% if file_format in ['delta', 'iceberg'] %}
         create or replace table {{ relation }}
       {% else %}
         create table {{ relation }}
@@ -276,13 +285,23 @@
   -- from ani, cc @gliga @xuliangs
 {% macro spark__create_schema(relation) -%}
   {%- call statement('create_schema') -%}
-    create schema if not exists {{relation.without_identifier()}}
+    {%- if target.get('lakehouseid') and not relation.database -%}
+      {#-- Classic Fabric lakehouses have no schemas: the lakehouse itself is
+          the namespace, so schema creation is a no-op. --#}
+      select 1
+    {%- else -%}
+      create schema if not exists {{relation.without_identifier()}}
+    {%- endif -%}
   {% endcall %}
 {% endmacro %}
 
 {% macro spark__drop_schema(relation) -%}
   {%- call statement('drop_schema') -%}
-    drop schema if exists {{ relation.without_identifier() }} cascade
+    {%- if target.get('lakehouseid') and not relation.database -%}
+      select 1
+    {%- else -%}
+      drop schema if exists {{ relation.without_identifier() }} cascade
+    {%- endif -%}
   {%- endcall -%}
 {% endmacro %}
 
@@ -377,7 +396,13 @@
 
 
 {% macro spark__generate_database_name(custom_database_name=none, node=none) -%}
-  {% do return(None) %}
+  {#-- Schema-enabled Fabric lakehouses put the lakehouse in the database slot
+      (3-part naming); plain Spark and classic lakehouses have no database. --#}
+  {%- if target.database -%}
+    {% do return(custom_database_name or target.database) %}
+  {%- else -%}
+    {% do return(None) %}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro spark__persist_docs(relation, model, for_relation, for_columns) -%}
