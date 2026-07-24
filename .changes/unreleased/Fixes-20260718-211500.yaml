@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix `tags` config inheritance appending parent and child tags in the wrong order and incorrectly deduplicating/sorting them, causing Fusion to diverge from dbt Core on which tag comes first (and therefore on schema naming) for nested `+tags` config'
+time: 2026-07-18T21:15:00.000000+00:00
+custom:
+    author: DipakMandlik
+    issue: "15590"
+    project: dbt-fusion
