@@ -9,6 +9,7 @@ from dbt.deprecations import (
 )
 from dbt.jsonschemas.jsonschemas import (
     jsonschema_validate,
+    project_schema,
     resources_schema,
     validate_model_config,
 )
@@ -166,3 +167,44 @@ class TestSourceBigQueryAliases:
 
         jsonschema_validate(resources_schema(), source_with_dataset, "test.yml")
         assert active_deprecations == {"custom-key-in-object-deprecation": 1}
+
+
+class TestDatabricksConfigKeys:
+    DATABRICKS_CONFIG_KEYS = {
+        "query_tags": '{"team": "finance"}',
+        "view_update_via_alter": True,
+        "zorder": ["col_a", "col_b"],
+        "incremental_apply_config_changes": True,
+        "use_safer_relation_operations": True,
+        "unique_tmp_table_suffix": True,
+        "skip_optimize": True,
+    }
+
+    def test_model_config_no_warning(self):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("databricks")
+
+        config = {
+            "materialized": "incremental",
+            "options": {"compression": "snappy"},
+            **self.DATABRICKS_CONFIG_KEYS,
+        }
+        validate_model_config(config, "test.yml")
+        assert active_deprecations == {}
+
+    def test_project_config_no_warning(self):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("databricks")
+
+        project_dict = {
+            "name": "my_project",
+            "version": "1.0.0",
+            "profile": "my_project",
+            "models": {"my_project": {f"+{k}": v for k, v in self.DATABRICKS_CONFIG_KEYS.items()}},
+        }
+        jsonschema_validate(project_schema(), project_dict, "dbt_project.yml")
+        assert active_deprecations == {}
