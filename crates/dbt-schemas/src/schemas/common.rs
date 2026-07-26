@@ -1641,25 +1641,48 @@ pub fn merge_meta(
     }
 }
 
-/// Merge two tag lists, deduplicating and sorting the result.
-pub fn merge_vec(
+/// Append `update_vec` after `base_vec`, preserving declaration order and
+/// duplicates. Matches dbt-core's `MergeBehavior.Append` semantics (plain
+/// concatenation: `self_value + other_value`, no dedup, no sort) used for
+/// fields such as `tags` and `packages` -- as opposed to [`merge_vec`]'s
+/// deduplicated, sorted union, which is a different merge behavior only
+/// appropriate for fields that actually want set semantics.
+pub fn append_vec(
     base_vec: Option<Vec<String>>,
     update_vec: Option<Vec<String>>,
 ) -> Option<Vec<String>> {
     match (base_vec, update_vec) {
-        // If both are None, result is None
         (None, None) => None,
-        // If either has a value (even empty), we preserve that semantic meaning
         (Some(mut base), Some(update)) => {
             base.extend(update);
-            base.sort();
-            base.dedup();
             Some(base)
         }
-        // If only one side has a value, use it
         (Some(base), None) => Some(base),
         (None, Some(update)) => Some(update),
     }
+}
+
+/// Merge two lists into a deduplicated, sorted union. Used for fields like
+/// classifiers where set-like union semantics are wanted.
+///
+/// Do *not* use this for `tags`: dbt-core's `MergeBehavior.Append` (the
+/// merge behavior the `tags` field actually declares in `dbt_common`) is a
+/// plain, order-preserving, non-deduplicating concatenation. Use
+/// [`append_vec`] for that.
+pub fn merge_vec(
+    base_vec: Option<Vec<String>>,
+    update_vec: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    // Only sort/dedup when both sides actually contributed values, matching
+    // this function's original behavior: a single-sided result is returned
+    // as-is, unsorted and undeduplicated.
+    let both_present = base_vec.is_some() && update_vec.is_some();
+    let mut merged = append_vec(base_vec, update_vec)?;
+    if both_present {
+        merged.sort();
+        merged.dedup();
+    }
+    Some(merged)
 }
 
 pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &str) -> String {
@@ -2656,6 +2679,53 @@ period: hour
     #[test]
     fn test_merge_classifiers_both_none_is_none() {
         assert_eq!(merge_vec(None, None), None);
+    }
+
+    /// Regression test for https://github.com/dbt-labs/dbt-core/issues/15590:
+    /// tags must preserve declaration order (base/parent first, then
+    /// update/child), matching dbt-core's `MergeBehavior.Append`, not be
+    /// sorted alphabetically like `merge_vec`'s classifier union.
+    #[test]
+    fn test_append_vec_preserves_order_and_duplicates() {
+        let base = Some(vec!["intermediate".to_string()]);
+        let update = Some(vec!["daily".to_string()]);
+        let result = append_vec(base, update);
+        assert_eq!(
+            result,
+            Some(vec!["intermediate".to_string(), "daily".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_append_vec_does_not_deduplicate() {
+        let base = Some(vec!["pii".to_string()]);
+        let update = Some(vec!["pii".to_string(), "gdpr".to_string()]);
+        let result = append_vec(base, update);
+        assert_eq!(
+            result,
+            Some(vec![
+                "pii".to_string(),
+                "pii".to_string(),
+                "gdpr".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    fn test_append_vec_none_base_uses_update() {
+        let update = Some(vec!["daily".to_string()]);
+        assert_eq!(append_vec(None, update.clone()), update);
+    }
+
+    #[test]
+    fn test_append_vec_none_update_uses_base() {
+        let base = Some(vec!["intermediate".to_string()]);
+        assert_eq!(append_vec(base.clone(), None), base);
+    }
+
+    #[test]
+    fn test_append_vec_both_none_is_none() {
+        assert_eq!(append_vec(None, None), None);
     }
 
     #[test]
