@@ -120,6 +120,21 @@ impl Stat {
         }
     }
 
+    /// Stat entry for nodes that failed during compilation (before execution).
+    pub fn compilation_error(unique_id: String, at: SystemTime) -> Self {
+        Stat {
+            unique_id,
+            num_rows: None,
+            rows_affected: None,
+            adapter_response: Default::default(),
+            start_time: at,
+            end_time: at,
+            status: NodeStatus::Errored,
+            thread_id: "main".to_string(),
+            message: Some("Compilation Error".to_string()),
+        }
+    }
+
     pub fn get_duration(&self) -> Duration {
         self.end_time
             .duration_since(self.start_time)

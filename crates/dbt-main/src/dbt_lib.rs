@@ -1004,16 +1004,8 @@ impl<'a> AllPhasesExecutor<'a> {
                                 stats: schedule
                                     .selected_nodes
                                     .iter()
-                                    .map(|uid| dbt_common::stats::Stat {
-                                        unique_id: uid.clone(),
-                                        num_rows: None,
-                                        rows_affected: None,
-                                        adapter_response: Default::default(),
-                                        start_time: now,
-                                        end_time: now,
-                                        status: dbt_common::stats::NodeStatus::Errored,
-                                        thread_id: "main".to_string(),
-                                        message: Some("Compilation Error".to_string()),
+                                    .map(|uid| {
+                                        dbt_common::stats::Stat::compilation_error(uid.clone(), now)
                                     })
                                     .collect(),
                                 nodes: Some(compilation.nodes().clone()),

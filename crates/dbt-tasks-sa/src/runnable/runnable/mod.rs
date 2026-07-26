@@ -517,8 +517,6 @@ impl Task for RunTask {
                 attrs.sao_enabled = Some(cache_enabled);
                 span_rows_affected = attrs.rows_affected.map(|n| n as i64);
             });
-            let adapter_response =
-                dbt_common::adapter_response_store::take_adapter_response(&unique_id);
 
             // Get status and insert stats
             // Note: Inner visit_run implementations may insert their own stats on success,
@@ -536,30 +534,13 @@ impl Task for RunTask {
                         ctx.inner.arg.io.status_reporter.as_ref(),
                     );
 
-                    // Apply adapter_response / rows_affected from the main
-                    // statement onto whatever Stat entry exists (or create one).
-                    // Previously we only set these when inserting a *new* Stat,
-                    // so early-inserted stats lost warehouse metadata.
-                    if let Some(mut entry) = ctx.inner.run_stats.get_mut(&unique_id) {
-                        if span_rows_affected.is_some() {
-                            entry.rows_affected = span_rows_affected;
-                        }
-                        if !adapter_response.is_empty() {
-                            entry.adapter_response = adapter_response;
-                        }
-                    } else {
-                        let mut stat = Stat::new(
-                            unique_id.clone(),
-                            start_time.into(),
-                            None,
-                            node_status.clone(),
-                            None,
-                            ctx.thread_id,
-                        );
-                        stat.rows_affected = span_rows_affected;
-                        stat.adapter_response = adapter_response;
-                        ctx.inner.run_stats.insert(unique_id.clone(), stat);
-                    }
+                    apply_main_adapter_metadata(
+                        ctx,
+                        &unique_id,
+                        start_time.into(),
+                        &node_status,
+                        span_rows_affected,
+                    );
 
                     node_status
                 }
@@ -641,6 +622,45 @@ impl Task for RunTask {
     fn task_phase(&self) -> Option<TP> {
         Some(TP::Run)
     }
+}
+
+/// Apply adapter_response / rows_affected from the materialization's main
+/// statement onto whatever Stat entry exists (or create one).
+/// Previously we only set these when inserting a *new* Stat, so early-inserted
+/// stats lost warehouse metadata.
+fn apply_main_adapter_metadata(
+    ctx: &TaskRunnerCtx,
+    unique_id: &str,
+    start_time: std::time::SystemTime,
+    node_status: &NodeStatus,
+    span_rows_affected: Option<i64>,
+) {
+    let adapter_response =
+        dbt_common::adapter_response_store::take_adapter_response(unique_id);
+
+    if let Some(mut entry) = ctx.inner.run_stats.get_mut(unique_id) {
+        if span_rows_affected.is_some() {
+            entry.rows_affected = span_rows_affected;
+        }
+        if !adapter_response.is_empty() {
+            entry.adapter_response = adapter_response;
+        }
+        return;
+    }
+
+    let mut stat = Stat::new(
+        unique_id.to_string(),
+        start_time,
+        None,
+        node_status.clone(),
+        None,
+        ctx.thread_id,
+    );
+    stat.rows_affected = span_rows_affected;
+    stat.adapter_response = adapter_response;
+    ctx.inner
+        .run_stats
+        .insert(unique_id.to_string(), stat);
 }
 
 fn maybe_replay_remote_run(unique_id: &str) -> Option<NodeStatus> {
