@@ -2234,6 +2234,21 @@
             }
           ]
         },
+        "+unlogged": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+warn_if": {
           "type": [
             "string",
@@ -3987,6 +4002,21 @@
             }
           ]
         },
+        "+unlogged": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+use_anonymous_sproc": {
           "anyOf": [
             {
@@ -4944,6 +4974,20 @@
           ]
         },
         "+transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+unlogged": {
           "anyOf": [
             {
               "type": [
@@ -5946,6 +5990,21 @@
             }
           ]
         },
+        "+unlogged": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+updated_at": {
           "type": [
             "string",
@@ -6545,6 +6604,21 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "+unlogged": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": {
@@ -7251,6 +7325,21 @@
           ]
         },
         "+transient": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+unlogged": {
           "anyOf": [
             {
               "default": null,
