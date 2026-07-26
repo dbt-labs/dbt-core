@@ -30,7 +30,7 @@ use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
-use crate::record_batch::{RecordBatchExt, RenamedColumn};
+use crate::record_batch::{RecordBatchExt, RenamedColumn, SchemaExt};
 use crate::relation::Relation;
 use crate::relation::RelationObject;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
@@ -682,10 +682,32 @@ impl AdapterImpl {
 
         let last_batch = last_batch.expect("last_batch should never be None");
 
-        let response = AdapterResponse::new(
-            last_batch.rows_affected(self.adapter_type()),
-            last_batch.query_id(self.adapter_type()),
-        );
+        let query_id = last_batch.query_id(self.adapter_type());
+        let has_snowflake_dml = self.adapter_type() == Snowflake
+            && last_batch.schema().has_dml_columns(Snowflake);
+        let mut rows_affected = last_batch.rows_affected(self.adapter_type());
+
+        // Snowflake CTAS (`CREATE TABLE AS SELECT`) does not return Arrow DML
+        // columns like INSERT/MERGE. The drained status batch often has
+        // num_rows=1 ("table created"), which is NOT the row count — discard it
+        // for fetch=false and resolve the real count from QUERY_HISTORY, matching
+        // Core's SnowflakeCursor.stats behavior.
+        if self.adapter_type() == Snowflake && !has_snowflake_dml {
+            if !fetch {
+                rows_affected = 0;
+            }
+            if let Some(ref qid) = query_id
+                && let Ok(Some(produced)) =
+                    self.snowflake_rows_produced_for_query(state, conn, ctx, qid, token.clone())
+            {
+                rows_affected = produced;
+            }
+        }
+
+        let mut response = AdapterResponse::new(rows_affected, query_id);
+        if self.adapter_type() == Snowflake {
+            response = response.with_snowflake_dml(last_batch.snowflake_dml_stats());
+        }
 
         // Deduplicate column names to match dbt-core's behavior, which renames
         // duplicate columns to `col_2`, `col_3`, etc.
@@ -707,6 +729,43 @@ impl AdapterImpl {
         let table = AgateTable::from_record_batch(Arc::new(last_batch));
 
         Ok((response, table))
+    }
+
+    /// Look up row count for a Snowflake query via session query history.
+    ///
+    /// Used for CTAS / DDL where ADBC does not return Arrow DML metadata columns.
+    /// Prefers `ROWS_INSERTED` (what Core's cursor.stats exposes for CTAS), then
+    /// falls back to `ROWS_PRODUCED`. Returns `Ok(None)` if missing/null.
+    fn snowflake_rows_produced_for_query(
+        &self,
+        state: Option<&State>,
+        conn: &'_ mut dyn Connection,
+        _ctx: &QueryCtx,
+        query_id: &str,
+        token: CancellationToken,
+    ) -> AdapterResult<Option<i64>> {
+        // Escape single quotes in the query id (Snowflake query ids are UUID-like,
+        // but be defensive).
+        let qid = query_id.replace('\'', "''");
+        let sql = format!(
+            "select coalesce(rows_inserted, rows_produced) \
+             from table(information_schema.query_history_by_session()) \
+             where query_id = '{qid}' \
+             limit 1"
+        );
+        let lookup_ctx = QueryCtx::new("snowflake rows_produced lookup");
+        let batch = execute_query_with_retry(
+            Arc::clone(self.engine()),
+            state,
+            conn,
+            &lookup_ctx,
+            &sql,
+            1,
+            &ExecuteOptions::new(),
+            true,
+            token,
+        )?;
+        Ok(batch.first_value_as_i64())
     }
 
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L453
@@ -735,6 +794,7 @@ impl AdapterImpl {
                 code: sql.to_string(),
                 rows_affected: 1,
                 query_id: None,
+                ..Default::default()
             };
 
             let schema = Arc::new(Schema::new(vec![Field::new(

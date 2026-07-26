@@ -234,6 +234,7 @@ fn submit_workflow_job(
         code: "OK".to_string(),
         rows_affected: 0,
         query_id: Some(run_id.to_string()),
+        ..Default::default()
     })
 }
 
@@ -336,6 +337,7 @@ fn submit_via_command_api(
             code: "OK".to_string(),
             rows_affected: 0,
             query_id: Some(command_id),
+            ..Default::default()
         }),
         (Err(e), _) => Err(e),
         (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
@@ -405,6 +407,7 @@ fn submit_via_notebook(
         code: "OK".to_string(),
         rows_affected: 0,
         query_id: Some(run_id),
+        ..Default::default()
     })
 }
 

@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use crate::response::{AdapterResponse, ResultObject};
 use crate::value::none_value;
 use dbt_agate::AgateTable;
+use dbt_common::adapter_response_store::record_adapter_response;
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_telemetry::NodeEvaluated;
 
@@ -46,12 +47,12 @@ impl ResultStore {
                 Some(AgateTable::default())
             };
 
-            // Record rows_affected on the NodeEvaluated span if non-negative.
-            // dbt-core uses -1 to indicate unknown rows affected. Telemetry uses `None` for unknown.
-            if response.rows_affected >= 0 {
-                find_and_update_span_attrs::<_, NodeEvaluated>(|attrs| {
-                    attrs.rows_affected = Some(response.rows_affected as u64);
-                });
+            // Persist adapter metadata for run_results.json. Only the
+            // materialization's "main" statement should populate the node's
+            // adapter_response — helper queries (run_query, etc.) must not
+            // overwrite query_id / rows_affected / DML stats.
+            if name == "main" {
+                publish_adapter_response(&response);
             }
 
             let value = Value::from_object(ResultObject::new(response, table));
@@ -121,14 +122,6 @@ impl ResultStore {
             let rows_affected = if let Some(rows_affected) = rows_affected
                 && let Some(rows) = rows_affected.parse::<i64>().ok()
             {
-                // Record rows_affected on the NodeEvaluated span only if value was present and non-negative.
-                // dbt-core uses -1 to indicate unknown rows affected. Telemetry uses `None` for unknown.
-                if rows >= 0 {
-                    find_and_update_span_attrs::<_, NodeEvaluated>(|attrs| {
-                        attrs.rows_affected = Some(rows as u64);
-                    });
-                };
-
                 rows
             } else {
                 0
@@ -140,7 +133,13 @@ impl ResultStore {
                 code: code.unwrap_or_default(),
                 rows_affected,
                 query_id: None,
+                ..Default::default()
             };
+
+            if name == "main" {
+                publish_adapter_response(&response);
+            }
+
             let mut results = store.results.lock().unwrap();
             let value = Value::from_object(ResultObject::new(
                 response,
@@ -158,6 +157,24 @@ impl ResultStore {
             results.insert(name, value);
             Ok(Value::from(true))
         }
+    }
+}
+
+/// Write rows_affected onto the NodeEvaluated span and stash the full
+/// Core-compatible adapter_response map for later inclusion in run_results.
+fn publish_adapter_response(response: &AdapterResponse) {
+    // dbt-core uses -1 to indicate unknown rows affected. Telemetry uses `None` for unknown.
+    if response.rows_affected >= 0 {
+        find_and_update_span_attrs::<_, NodeEvaluated>(|attrs| {
+            attrs.rows_affected = Some(response.rows_affected as u64);
+            record_adapter_response(attrs.unique_id.clone(), response.to_run_results_map());
+        });
+    } else {
+        // Still record metadata (query_id / code / message / DML) even when
+        // rows_affected is unknown, so QUERY_HISTORY correlation still works.
+        find_and_update_span_attrs::<_, NodeEvaluated>(|attrs| {
+            record_adapter_response(attrs.unique_id.clone(), response.to_run_results_map());
+        });
     }
 }
 

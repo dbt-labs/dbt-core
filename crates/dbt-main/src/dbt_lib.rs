@@ -1008,6 +1008,7 @@ impl<'a> AllPhasesExecutor<'a> {
                                         unique_id: uid.clone(),
                                         num_rows: None,
                                         rows_affected: None,
+                                        adapter_response: Default::default(),
                                         start_time: now,
                                         end_time: now,
                                         status: dbt_common::stats::NodeStatus::Errored,

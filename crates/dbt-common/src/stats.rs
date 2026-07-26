@@ -85,6 +85,9 @@ pub struct Stat {
     /// Rows affected by the warehouse DML (e.g. `CREATE TABLE AS SELECT`).
     /// Set from the NodeEvaluated OTel span after execution; `None` for views.
     pub rows_affected: Option<i64>,
+    /// Core-compatible `adapter_response` map for `run_results.json`.
+    /// Populated from the materialization's `store_result('main', ...)` call.
+    pub adapter_response: std::collections::BTreeMap<String, dbt_yaml::Value>,
     pub start_time: SystemTime,
     pub end_time: SystemTime,
     pub status: NodeStatus,
@@ -108,6 +111,7 @@ impl Stat {
             unique_id,
             num_rows,
             rows_affected: None,
+            adapter_response: Default::default(),
             start_time,
             end_time,
             status,

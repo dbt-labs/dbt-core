@@ -20,6 +20,9 @@ pub(crate) const SNOWFLAKE_DML_COLUMNS: &[&str] = &[
     "number of rows deleted",
 ];
 
+/// Snowflake result column for multi-joined / duplicate DML rows.
+pub(crate) const SNOWFLAKE_DML_DUPLICATES_COLUMN: &str = "number of multi-joined rows updated";
+
 /// Information about a column that was renamed during disambiguation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenamedColumn<'a> {
@@ -38,6 +41,8 @@ pub trait RecordBatchExt {
         T: std::any::Any + Clone;
     fn rows_affected(&self, adapter_type: AdapterType) -> i64;
     fn query_id(&self, adapter_type: AdapterType) -> Option<String>;
+    /// Extract Snowflake DML breakdown when the result schema carries DML columns.
+    fn snowflake_dml_stats(&self) -> crate::response::SnowflakeDmlStats;
     fn disambiguate_column_names(
         self,
         on_disambiguate: Option<impl FnOnce(&[RenamedColumn<'_>])>,
@@ -76,6 +81,20 @@ impl RecordBatchExt for RecordBatch {
             AdapterType::Bigquery => meta.get("BIGQUERY:query_id").cloned(),
             AdapterType::Databricks => meta.get("DATABRICKS_QUERY_ID").cloned(),
             _ => None,
+        }
+    }
+
+    fn snowflake_dml_stats(&self) -> crate::response::SnowflakeDmlStats {
+        use crate::response::SnowflakeDmlStats;
+
+        if self.num_rows() == 0 || !self.schema().has_dml_columns(AdapterType::Snowflake) {
+            return SnowflakeDmlStats::default();
+        }
+        SnowflakeDmlStats {
+            rows_inserted: self.named_value_as_i64("number of rows inserted"),
+            rows_updated: self.named_value_as_i64("number of rows updated"),
+            rows_deleted: self.named_value_as_i64("number of rows deleted"),
+            rows_duplicates: self.named_value_as_i64(SNOWFLAKE_DML_DUPLICATES_COLUMN),
         }
     }
 
@@ -564,6 +583,50 @@ mod tests {
         )
         .unwrap();
         assert_eq!(batch.rows_affected(AdapterType::Snowflake), 3);
+    }
+
+    #[test]
+    fn snowflake_dml_stats_extracts_breakdown() {
+        let schema = Schema::new(vec![
+            Field::new("number of rows inserted", DataType::Int64, false),
+            Field::new("number of rows updated", DataType::Int64, false),
+            Field::new("number of rows deleted", DataType::Int64, false),
+            Field::new(
+                "number of multi-joined rows updated",
+                DataType::Int64,
+                false,
+            ),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(Int64Array::from(vec![10])),
+                Arc::new(Int64Array::from(vec![20])),
+                Arc::new(Int64Array::from(vec![5])),
+                Arc::new(Int64Array::from(vec![2])),
+            ],
+        )
+        .unwrap();
+        let stats = batch.snowflake_dml_stats();
+        assert_eq!(stats.rows_inserted, Some(10));
+        assert_eq!(stats.rows_updated, Some(20));
+        assert_eq!(stats.rows_deleted, Some(5));
+        assert_eq!(stats.rows_duplicates, Some(2));
+        assert_eq!(batch.rows_affected(AdapterType::Snowflake), 35);
+    }
+
+    #[test]
+    fn snowflake_dml_stats_empty_when_not_dml() {
+        let schema = Schema::new(vec![Field::new("id", DataType::Int64, false)]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![Arc::new(Int64Array::from(vec![1]))],
+        )
+        .unwrap();
+        assert_eq!(
+            batch.snowflake_dml_stats(),
+            crate::response::SnowflakeDmlStats::default()
+        );
     }
     use std::sync::LazyLock;
 

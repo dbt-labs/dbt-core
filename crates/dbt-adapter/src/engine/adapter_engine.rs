@@ -322,9 +322,14 @@ pub(crate) fn adbc_execute_with_options(
         let mut batches = Vec::with_capacity(1);
 
         // Snowflake DML (MERGE/INSERT/UPDATE/DELETE) returns a one-row metadata batch
-        // with columns like "number of rows inserted". AdapterResponse needs that batch
-        // to compute rows_affected correctly, so we must drain even when fetch=false.
-        if !fetch && !schema.has_dml_columns(engine.adapter_type()) {
+        // with columns like "number of rows inserted". CTAS often does *not* advertise those
+        // columns on the schema up-front, but still carries useful result data / query_id —
+        // so always drain Snowflake results even when fetch=false.
+        // AdapterResponse needs that batch to compute rows_affected correctly.
+        let must_drain = fetch
+            || adapter_type == AdapterType::Snowflake
+            || schema.has_dml_columns(engine.adapter_type());
+        if !must_drain {
             return Ok((schema, batches));
         }
 

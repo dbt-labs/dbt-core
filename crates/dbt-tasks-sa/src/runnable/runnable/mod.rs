@@ -517,6 +517,8 @@ impl Task for RunTask {
                 attrs.sao_enabled = Some(cache_enabled);
                 span_rows_affected = attrs.rows_affected.map(|n| n as i64);
             });
+            let adapter_response =
+                dbt_common::adapter_response_store::take_adapter_response(&unique_id);
 
             // Get status and insert stats
             // Note: Inner visit_run implementations may insert their own stats on success,
@@ -534,9 +536,18 @@ impl Task for RunTask {
                         ctx.inner.arg.io.status_reporter.as_ref(),
                     );
 
-                    // Insert stats for success case if not already inserted by inner implementation
-                    // This ensures stats are present even if inner code didn't insert them
-                    if !ctx.inner.run_stats.contains_key(&unique_id) {
+                    // Apply adapter_response / rows_affected from the main
+                    // statement onto whatever Stat entry exists (or create one).
+                    // Previously we only set these when inserting a *new* Stat,
+                    // so early-inserted stats lost warehouse metadata.
+                    if let Some(mut entry) = ctx.inner.run_stats.get_mut(&unique_id) {
+                        if span_rows_affected.is_some() {
+                            entry.rows_affected = span_rows_affected;
+                        }
+                        if !adapter_response.is_empty() {
+                            entry.adapter_response = adapter_response;
+                        }
+                    } else {
                         let mut stat = Stat::new(
                             unique_id.clone(),
                             start_time.into(),
@@ -546,6 +557,7 @@ impl Task for RunTask {
                             ctx.thread_id,
                         );
                         stat.rows_affected = span_rows_affected;
+                        stat.adapter_response = adapter_response;
                         ctx.inner.run_stats.insert(unique_id.clone(), stat);
                     }
 
