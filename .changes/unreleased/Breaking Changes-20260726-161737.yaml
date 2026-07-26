@@ -1,0 +1,6 @@
+kind: Breaking Changes
+time: 2026-07-26T16:17:37.998935+05:30
+custom:
+    author: priyankahotkar
+    issue: "15625"
+    project: dbt-core
