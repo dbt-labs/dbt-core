@@ -14,7 +14,6 @@
 
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use minijinja::Value;
 use serde::Serialize;
 
@@ -55,15 +54,6 @@ fn new_component(auto_cluster: bool, cluster_by: Vec<String>) -> LiquidClusterin
     }
 }
 
-/// Parses the live clustering state from `SHOW TBLPROPERTIES`.
-///
-/// Databricks represents the column list as a JSON array stored under
-/// `clusteringColumns`, for example `["event_date","user_id"]`.  When the table was
-/// created with `AUTO LIQUID CLUSTER`, the `clusterByAuto` key is `"true"`.
-///
-/// Returns an empty/disabled config when the metadata key is absent (non-table
-/// relation types) or when neither property is present (table has no liquid
-/// clustering configured).
 fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<LiquidClustering> {
     let Some(tblprops) = results.get(&DatabricksRelationMetadataKey::ShowTblProperties) else {
         return Ok(new_component(false, Vec::new()));
@@ -100,46 +90,27 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<Liqu
     Ok(new_component(auto_cluster, cluster_by))
 }
 
-/// Reads liquid-clustering configuration from the compiled dbt model node.
-///
-/// Models may declare clustering via:
-///   - `liquid_clustered_by: col`         — a single column as a plain string
-///   - `liquid_clustered_by: [col1, col2]` — an array of columns
-///   - `auto_liquid_cluster: true`         — delegate column selection to Databricks
-///
-/// Non-model node types (seeds, snapshots, etc.) are not expected to carry these
-/// attributes and fall through to the empty default.
 fn from_local_config(
     relation_config: &dyn InternalDbtNodeAttributes,
 ) -> AdapterResult<LiquidClustering> {
-    let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() else {
-        return Ok(new_component(false, Vec::new()));
-    };
-
-    let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr else {
-        return Ok(new_component(false, Vec::new()));
-    };
+    let databricks_attr = relation_config
+        .as_any()
+        .downcast_ref::<DbtModel>()
+        .and_then(|model| model.__adapter_attr__.databricks_attr.as_ref());
 
     let auto_cluster = databricks_attr
-        .auto_liquid_cluster
+        .and_then(|attr| attr.auto_liquid_cluster)
         .unwrap_or(false);
 
     let cluster_by = databricks_attr
-        .liquid_clustered_by
-        .as_ref()
-        .map(string_or_array_to_vec)
+        .and_then(|attr| attr.liquid_clustered_by.as_ref())
+        .map(|cols| cols.normalize())
         .unwrap_or_default();
 
     Ok(new_component(auto_cluster, cluster_by))
 }
 
-/// Normalises `StringOrArrayOfStrings` into a plain `Vec<String>`.
-fn string_or_array_to_vec(value: &StringOrArrayOfStrings) -> Vec<String> {
-    match value {
-        StringOrArrayOfStrings::String(s) => vec![s.clone()],
-        StringOrArrayOfStrings::ArrayOfStrings(cols) => cols.clone(),
-    }
-}
+
 
 /// Minimal parser for the JSON array that Databricks stores in the
 /// `clusteringColumns` tblproperty, e.g. `["event_date","user_id"]`.
@@ -171,12 +142,13 @@ fn parse_token(token: &str) -> Option<String> {
     }
 
     // Quoted JSON string — strip the surrounding quotes safely.
-    if let Some(unquoted) = t.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
-        return Some(unquoted.to_string());
-    }
-
     // Bare identifier — unexpected from Databricks but accept gracefully.
-    Some(t.to_string())
+    Some(
+        t.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(t)
+            .to_owned(),
+    )
 }
 
 
@@ -250,7 +222,7 @@ mod tests {
         let cfg = test_helpers::TestModelConfig {
             cluster_by: liquid_clustered_by
                 .as_ref()
-                .map(string_or_array_to_vec)
+                .map(|cols| cols.normalize())
                 .unwrap_or_default(),
             auto_cluster: auto_liquid_cluster.unwrap_or(false),
             ..Default::default()
