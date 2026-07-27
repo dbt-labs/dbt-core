@@ -220,7 +220,7 @@ pub fn execute_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
     // are cloned (Arc) into every batch; with concurrent_batches the batches
     // interleave store/load for the same statement name (e.g.
     // get_columns_in_relation) and collide with MacroResultAlreadyLoadedError.
-    reset_result_store(&mut ctx_for_batch);
+    reset_result_store(&mut ctx_for_batch, None);
 
     if !mb_unit.batch_ctx.is_first() || mb_unit.is_incremental {
         ctx_for_batch.insert(

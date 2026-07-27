@@ -1,0 +1,7 @@
+kind: Features
+body: reset_result_store accepts an optional caller-supplied ResultStore instead of always creating its own — lets embedders read adapter responses back out after rendering without discarding and re-injecting their own store
+time: 2026-07-27T13:09:54.293733+02:00
+custom:
+    author: thejens
+    issue: "14245"
+    project: dbt-core
