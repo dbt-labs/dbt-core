@@ -1953,6 +1953,20 @@
             }
           ]
         },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_safer_relation_operations": {
           "anyOf": [
             {
@@ -3968,6 +3982,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -6303,6 +6331,20 @@
             }
           ]
         },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_anonymous_sproc": {
           "anyOf": [
             {
@@ -8303,6 +8345,20 @@
             }
           ]
         },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_safer_relation_operations": {
           "anyOf": [
             {
@@ -9545,6 +9601,20 @@
             }
           ]
         },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "updated_at": {
           "type": [
             "string",
@@ -10635,6 +10705,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "unlogged": {
           "anyOf": [
             {
               "type": [
@@ -11966,6 +12050,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "unlogged": {
           "anyOf": [
             {
               "type": [
