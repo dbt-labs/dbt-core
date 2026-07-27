@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'dbt State no longer falls back to slow per-node freshness queries (and emits a misleading warning) for Databricks schemas that are legitimately empty, e.g. freshly created per-PR CI schemas; the fallback now only fires for adapters whose schema-level freshness dump can genuinely lag behind a just-created table'
+time: 2026-07-18T22:45:00.000000+00:00
+custom:
+    author: DipakMandlik
+    issue: "15594"
+    project: dbt-fusion
