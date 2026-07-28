@@ -28,7 +28,10 @@ use crate::AdapterType;
 use crate::cache::RelationCache;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::engine::sidecar_client::SidecarClient;
-use crate::errors::{adbc_error_to_adapter_error, arrow_error_to_adapter_error};
+use crate::errors::{
+    adbc_error_to_adapter_error, arrow_error_to_adapter_error, auth_error_to_adapter_error,
+};
+use crate::query_ctx::databricks_query_tags_from_state;
 use crate::record_batch::{RecordBatchExt, SchemaExt};
 use crate::sql::normalize::strip_sql_comments;
 use crate::sql_types::TypeOps;
@@ -259,6 +262,14 @@ pub(crate) fn adbc_execute_with_options(
     };
 
     let adapter_type = engine.adapter_type();
+    let databricks_query_tags = if adapter_type == AdapterType::Databricks {
+        Some(
+            databricks_query_tags_from_state(state, engine.get_config().get_str("query_tags"))
+                .map_err(auth_error_to_adapter_error)?,
+        )
+    } else {
+        None
+    };
     let mut options = options;
     if let (Some(state), AdapterType::Bigquery) = (state, adapter_type) {
         let mut job_labels = maybe_query_comment
@@ -288,6 +299,10 @@ pub(crate) fn adbc_execute_with_options(
         Cancellable<adbc_core::error::Error>,
     > {
         use dbt_adbc::statement::Statement as _;
+
+        if let Some(query_tags) = &databricks_query_tags {
+            conn.synchronize_query_tags(query_tags.as_map())?;
+        }
 
         let mut stmt = if engine.has_query_cache() {
             let stmt = conn.new_statement()?;

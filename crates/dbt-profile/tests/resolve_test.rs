@@ -118,6 +118,137 @@ my_project:
 }
 
 #[test]
+fn test_query_tags_env_var_remains_a_json_string() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    unsafe {
+        std::env::set_var(
+            "DBT_PROFILE_TEST_QUERY_TAGS",
+            r#"{"team":"analytics","cost_center":"3000"}"#,
+        );
+    }
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      query_tags: "{{ env_var('DBT_PROFILE_TEST_QUERY_TAGS') }}"
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    assert_eq!(
+        result.get_str("query_tags"),
+        Some(r#"{"team":"analytics","cost_center":"3000"}"#)
+    );
+
+    unsafe {
+        std::env::remove_var("DBT_PROFILE_TEST_QUERY_TAGS");
+    }
+}
+
+#[test]
+fn test_query_tags_with_embedded_jinja_remains_a_json_string() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    unsafe {
+        std::env::set_var("DBT_PROFILE_TEST_QUERY_TAG_RUN_ID", "run-123");
+    }
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      query_tags: '{"run_id":"{{ env_var("DBT_PROFILE_TEST_QUERY_TAG_RUN_ID") }}"}'
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    assert_eq!(
+        result.get_str("query_tags"),
+        Some(r#"{"run_id":"run-123"}"#)
+    );
+
+    unsafe {
+        std::env::remove_var("DBT_PROFILE_TEST_QUERY_TAG_RUN_ID");
+    }
+}
+
+#[test]
+fn test_nested_query_tags_key_keeps_native_rendering() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    unsafe {
+        std::env::set_var(
+            "DBT_PROFILE_TEST_NESTED_QUERY_TAGS",
+            r#"{"team":"analytics"}"#,
+        );
+    }
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: custom
+      adapter_options:
+        query_tags: "{{ env_var('DBT_PROFILE_TEST_NESTED_QUERY_TAGS') }}"
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    let nested_query_tags = result
+        .credentials
+        .get("adapter_options")
+        .and_then(|value| value.get("query_tags"))
+        .expect("nested query_tags should be present");
+    assert_eq!(
+        nested_query_tags
+            .get("team")
+            .and_then(dbt_yaml::Value::as_str),
+        Some("analytics")
+    );
+
+    unsafe {
+        std::env::remove_var("DBT_PROFILE_TEST_NESTED_QUERY_TAGS");
+    }
+}
+
+#[test]
 fn test_resolve_with_vars() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
@@ -384,11 +515,7 @@ proj:
 
     let result = resolve(&args).unwrap();
     let port = result.credentials.get("port").unwrap();
-    // The rendered value should be parsed back as a number
-    assert!(
-        port.as_i64().is_some() || (port.as_str() == Some("5432")),
-        "port should be a number or '5432', got: {port:?}"
-    );
+    assert_eq!(port.as_i64(), Some(5432));
 
     unsafe { std::env::remove_var("DBT_PROFILE_TEST_PORT2") };
 }

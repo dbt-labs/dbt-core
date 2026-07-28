@@ -155,6 +155,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub query_tags: Option<String>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,
@@ -426,6 +427,7 @@ pub fn same_warehouse_config(
     let buckets_eq = self_wh.buckets == other_wh.buckets;
     let catalog_eq = self_wh.catalog == other_wh.catalog;
     let databricks_tags_eq = self_wh.databricks_tags == other_wh.databricks_tags;
+    let query_tags_eq = self_wh.query_tags == other_wh.query_tags;
     let compression_eq = self_wh.compression == other_wh.compression;
     let databricks_compute_eq = self_wh.databricks_compute == other_wh.databricks_compute;
     let target_alias_eq = self_wh.target_alias == other_wh.target_alias;
@@ -522,6 +524,7 @@ pub fn same_warehouse_config(
         && buckets_eq
         && catalog_eq
         && databricks_tags_eq
+        && query_tags_eq
         && compression_eq
         && databricks_compute_eq
         && target_alias_eq
@@ -1009,6 +1012,14 @@ pub fn same_warehouse_config(
                     )),
                 ),
                 (
+                    "query_tags",
+                    query_tags_eq,
+                    Some((
+                        format!("{:?}", &self_wh.query_tags),
+                        format!("{:?}", &other_wh.query_tags),
+                    )),
+                ),
+                (
                     "query_tag",
                     query_tag_eq,
                     Some((
@@ -1441,3 +1452,4 @@ mod tests {
         );
     }
 }
+
