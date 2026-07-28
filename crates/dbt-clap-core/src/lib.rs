@@ -3040,4 +3040,35 @@ mod tests {
         let args = CommonArgs::default();
         assert!(args.get_send_anonymous_usage_stats_for_project(dir.path()));
     }
+
+    /// Regression test for dbt-core#15685: both entrypoints carry
+    /// `--log-format-file` from `CommonArgs` into `IoArgs`.
+    #[test]
+    fn cli_entrypoints_carry_log_format_file_into_io_args() {
+        // `Cli::common_args()` reads the subcommand's args, not the top-level field.
+        let cli = Cli {
+            command: Command::Core(CoreCommand::Run(RunArgs {
+                common_args: CommonArgs {
+                    log_format: LogFormat::Text,
+                    log_format_file: Some(LogFormat::Json),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
+            common_args: CommonArgs::default(),
+        };
+
+        for (entrypoint, args) in [("from_main", from_main(&cli)), ("from_lib", from_lib(&cli))] {
+            assert_eq!(
+                args.io.log_format_file,
+                Some(LogFormat::Json),
+                "expected `{entrypoint}` to carry log_format_file"
+            );
+            assert_eq!(
+                args.io.log_format,
+                LogFormat::Text,
+                "expected `{entrypoint}` to leave log_format alone"
+            );
+        }
+    }
 }
