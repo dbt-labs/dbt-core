@@ -907,6 +907,8 @@ pub struct DatabricksDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_scopes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_tags: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub session_properties: Option<HashMap<String, YmlValue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2160,6 +2162,25 @@ impl TryFrom<DbConfig> for TargetContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_databricks_profile_deserializes_query_tags_as_json_string() {
+        let config: DbConfig = dbt_yaml::from_str(
+            r#"
+type: databricks
+query_tags: '{"team":"analytics"}'
+"#,
+        )
+        .unwrap();
+        let DbConfig::Databricks(config) = config else {
+            panic!("Expected Databricks config");
+        };
+
+        assert_eq!(
+            config.query_tags.as_deref(),
+            Some(r#"{"team":"analytics"}"#)
+        );
+    }
 
     #[test]
     fn test_snowflake_adapter_unique_id() {

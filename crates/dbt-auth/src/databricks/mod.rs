@@ -5,6 +5,8 @@ use std::borrow::Cow;
 
 use dbt_adbc::{Backend, database, databricks};
 
+pub(crate) mod query_tags;
+
 /// User agent name provided to dbx for Fusion.
 ///
 /// Official guidance is <isv-name+product-name> but dbt Core provides 'dbt' only
@@ -136,6 +138,12 @@ fn apply_connection_args(
     mut builder: DatabaseBuilder,
 ) -> Result<DatabaseBuilder, AuthError> {
     let http_path = resolve_http_path(config)?;
+    let query_tags = query_tags::DatabricksQueryTags::from_sources(
+        config.get_str("query_tags"),
+        None,
+        None,
+        None,
+    )?;
 
     validate_config(config)?;
 
@@ -145,6 +153,7 @@ fn apply_connection_args(
     builder.with_named_option(databricks::SCHEMA, config.require_string("schema")?)?;
     builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
     builder.with_named_option(databricks::HTTP_PATH, http_path)?;
+    builder.with_named_option(databricks::QUERY_TAGS, query_tags.session_parameter())?;
 
     Ok(builder)
 }
@@ -241,7 +250,11 @@ mod tests {
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) -> Result<(), AuthError> {
         let auth = DatabricksAuth {};
         let builder = auth.configure(&AdapterConfig::new(config))?.builder;
-        assert_eq!(builder.clone().into_iter().count(), expected.len());
+        assert_eq!(builder.clone().into_iter().count(), expected.len() + 1);
+        assert_eq!(
+            other_option_value(&builder, databricks::QUERY_TAGS),
+            Some(concat!("@@dbt_core_version:", env!("CARGO_PKG_VERSION")))
+        );
 
         for &(key, expected_val) in expected {
             assert_eq!(
@@ -251,6 +264,30 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_query_tags_are_applied_as_an_initial_session_parameter() {
+        let mut config = base_config();
+        config.insert("token".into(), "T".into());
+        config.insert(
+            "query_tags".into(),
+            r#"{"team":"analytics","special":"a,b:c\\d"}"#.into(),
+        );
+
+        let builder = DatabricksAuth {}
+            .configure(&AdapterConfig::new(config))
+            .unwrap()
+            .builder;
+
+        assert_eq!(
+            other_option_value(&builder, "databricks.session_param.QUERY_TAGS"),
+            Some(concat!(
+                "@@dbt_core_version:",
+                env!("CARGO_PKG_VERSION"),
+                ",special:a\\,b\\:c\\\\d,team:analytics"
+            ))
+        );
     }
 
     #[test]

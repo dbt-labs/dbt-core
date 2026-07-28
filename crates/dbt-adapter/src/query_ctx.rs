@@ -4,6 +4,7 @@ use crate::errors::AdapterResult;
 
 use dbt_adapter_core::DBT_EXECUTION_PHASES;
 use dbt_adbc::QueryCtx;
+use dbt_auth::{AuthError, DatabricksQueryTags};
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
 };
@@ -61,6 +62,57 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
     }
 }
 
+pub fn databricks_query_tags_from_state(
+    state: Option<&State>,
+    profile_query_tags: Option<&str>,
+) -> Result<DatabricksQueryTags, AuthError> {
+    let Some(node) = state.and_then(|state| state.lookup("model", &[])) else {
+        return DatabricksQueryTags::from_sources(profile_query_tags, None, None, None);
+    };
+    let yaml_node = dbt_yaml::to_value(&node)?;
+    databricks_query_tags_from_yaml_node(&yaml_node, profile_query_tags)
+}
+
+fn databricks_query_tags_from_yaml_node(
+    yaml_node: &dbt_yaml::Value,
+    profile_query_tags: Option<&str>,
+) -> Result<DatabricksQueryTags, AuthError> {
+    if let Ok(model) = DbtModel::deserialize(yaml_node) {
+        let model_query_tags = model
+            .__adapter_attr__
+            .databricks_attr
+            .as_deref()
+            .and_then(|attr| attr.query_tags.as_deref());
+        return DatabricksQueryTags::from_sources(
+            profile_query_tags,
+            model_query_tags,
+            Some(&model.__common_attr__.name),
+            Some(&model.__base_attr__.materialized.to_string()),
+        );
+    }
+
+    macro_rules! tags_for_node {
+        ($node_type:ty) => {
+            if let Ok(node) = <$node_type>::deserialize(yaml_node) {
+                return DatabricksQueryTags::from_sources(
+                    profile_query_tags,
+                    None,
+                    Some(&node.__common_attr__.name),
+                    Some(&node.__base_attr__.materialized.to_string()),
+                );
+            }
+        };
+    }
+
+    tags_for_node!(DbtTest);
+    tags_for_node!(DbtSnapshot);
+    tags_for_node!(DbtSeed);
+    tags_for_node!(DbtUnitTest);
+
+    // Operations have neither model identity nor materialization.
+    DatabricksQueryTags::from_sources(profile_query_tags, None, None, None)
+}
+
 pub fn execution_phase_from_state(state: &State) -> Option<&'static str> {
     let value = state.lookup(CURRENT_EXECUTION_PHASE, &[])?;
     let s = value.as_str()?;
@@ -68,4 +120,52 @@ pub fn execution_phase_from_state(state: &State) -> Option<&'static str> {
         .iter()
         .position(|&p| p == s)
         .map(|idx| DBT_EXECUTION_PHASES[idx])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::databricks_query_tags_from_yaml_node;
+    use dbt_schemas::schemas::{
+        AdapterAttr, DbtModel, manifest::DbtOperation, nodes::DatabricksAttr,
+    };
+
+    #[test]
+    fn extracts_automatic_and_model_query_tags_from_model_node() {
+        let mut model = DbtModel::default();
+        model.__common_attr__.name = "orders".to_string();
+        model.__base_attr__.materialized =
+            dbt_schemas::schemas::common::DbtMaterialization::Incremental;
+        model.__adapter_attr__ =
+            AdapterAttr::default().with_databricks_attr(Some(Box::new(DatabricksAttr {
+                query_tags: Some(r#"{"team":"model"}"#.to_string()),
+                ..Default::default()
+            })));
+        let yaml = dbt_yaml::to_value(model).unwrap();
+
+        let tags = databricks_query_tags_from_yaml_node(
+            &yaml,
+            Some(r#"{"team":"profile","profile_only":"yes"}"#),
+        )
+        .unwrap();
+
+        assert_eq!(tags.get("team"), Some("model"));
+        assert_eq!(tags.get("profile_only"), Some("yes"));
+        assert_eq!(tags.get("@@dbt_model_name"), Some("orders"));
+        assert_eq!(tags.get("@@dbt_materialized"), Some("incremental"));
+    }
+
+    #[test]
+    fn operations_do_not_get_model_or_materialized_query_tags() {
+        let mut operation = DbtOperation::default();
+        operation.__common_attr__.name = "on-run-start-0".to_string();
+        let yaml = dbt_yaml::to_value(operation).unwrap();
+
+        let tags =
+            databricks_query_tags_from_yaml_node(&yaml, Some(r#"{"team":"profile"}"#)).unwrap();
+
+        assert_eq!(tags.get("team"), Some("profile"));
+        assert!(tags.get("@@dbt_core_version").is_some());
+        assert_eq!(tags.get("@@dbt_model_name"), None);
+        assert_eq!(tags.get("@@dbt_materialized"), None);
+    }
 }
