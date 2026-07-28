@@ -118,6 +118,7 @@ pub fn setup_databricks_profile(
         client_secret: None,
         oauth_redirect_url: None,
         oauth_scopes: None,
+        query_tags: None,
         session_properties: None,
         connection_parameters: None,
         auth_type: None,

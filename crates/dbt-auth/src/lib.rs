@@ -27,6 +27,7 @@ mod sqlserver;
 mod test_options;
 
 pub use config::AdapterConfig;
+pub use databricks::query_tags::DatabricksQueryTags;
 pub use duckdb::init::{generate_duckdb_init_sql, is_motherduck_path};
 
 /// The result of configuring an auth backend.
