@@ -40,6 +40,7 @@ pub(crate) struct TestModelConfig {
     #[expect(dead_code)]
     pub query: Option<String>,
     pub relation_comment: Option<String>,
+    pub raw_tags: Option<IndexMap<String, YmlValue>>,
     pub tags: IndexMap<String, String>,
     pub tbl_properties: IndexMap<String, String>,
     pub table_format: Option<String>,
@@ -105,12 +106,12 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
             cron: cfg.cron,
             time_zone_value: cfg.time_zone,
         })),
-        databricks_tags: Some(
+        databricks_tags: Some(cfg.raw_tags.unwrap_or_else(|| {
             cfg.tags
                 .into_iter()
                 .map(|(k, v)| (k, YmlValue::from(v)))
-                .collect(),
-        ),
+                .collect()
+        })),
         ..Default::default()
     };
 

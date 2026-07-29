@@ -143,6 +143,11 @@ mod tests {
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
                                     IndexMap::from_iter([
+                                        ("delta.enableRowTracking".to_string(), "true".to_string()),
+                                        (
+                                            "pipelines.pipelineId".to_string(),
+                                            "my_new_pipeline".to_string(),
+                                        ),
                                         ("customKey".to_string(), "new".to_string()),
                                         ("customKey2".to_string(), "value".to_string()),
                                     ]),

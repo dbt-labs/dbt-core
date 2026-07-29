@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::adapter::Adapter;
 use crate::adapter::adapter_impl::AdapterImpl;
+use crate::relation::config_v2::{ComponentConfigChange, RelationConfig};
+use crate::relation::databricks::config::components::RelationTagsLoader;
 use crate::sql_types::DefaultTypeOps;
 use crate::stmt_splitter::DefaultStmtSplitter;
 use dbt_adapter_core::AdapterType;
@@ -10,6 +12,31 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::never_cancels;
 use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
 use indexmap::IndexMap;
+
+fn never_full_refresh(_: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
+    false
+}
+
+fn model_config_value(tags: IndexMap<String, String>) -> Value {
+    Value::from_object(RelationConfig::new(
+        AdapterType::Databricks,
+        [RelationTagsLoader::new_component_type_erased(tags)],
+        never_full_refresh,
+    ))
+}
+
+#[test]
+fn test_relation_tag_metadata_planning_at_adapter_boundary() {
+    let tagged = model_config_value(IndexMap::from_iter([(
+        "deployment".to_string(),
+        "DBT".to_string(),
+    )]));
+    let empty = model_config_value(IndexMap::new());
+
+    assert!(should_fetch_relation_tags(Some(&tagged)));
+    assert!(!should_fetch_relation_tags(Some(&empty)));
+    assert!(should_fetch_relation_tags(None));
+}
 
 /// Helper to call [Adapter::call_method_impl] with jinja-valued arguments.
 fn dispatch_test(

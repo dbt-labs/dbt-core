@@ -50,6 +50,24 @@ pub mod describe_table;
 pub mod schemas;
 pub(crate) mod version;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MaterializedViewMetadataQuery {
+    RelationTags,
+    ViewDescription,
+}
+
+fn materialized_view_metadata_plan(
+    fetch_relation_tags: bool,
+) -> &'static [MaterializedViewMetadataQuery] {
+    use MaterializedViewMetadataQuery::{RelationTags, ViewDescription};
+
+    if fetch_relation_tags {
+        &[RelationTags, ViewDescription]
+    } else {
+        &[ViewDescription]
+    }
+}
+
 // Reference: https://github.com/databricks/dbt-databricks/blob/92f1442faabe0fce6f0375b95e46ebcbfcea4c67/dbt/include/databricks/macros/adapters/metadata.sql
 pub fn list_relations(
     engine: &dyn AdapterEngine,
@@ -254,6 +272,7 @@ impl DatabricksMetadataAdapter {
         state: &State,
         conn: &mut dyn Connection,
         base_relation: &Arc<dyn BaseRelation>,
+        fetch_relation_tags: bool,
         token: CancellationToken,
     ) -> AdapterResult<(RelationType, DatabricksRelationMetadata)> {
         let relation_type = base_relation.relation_type().ok_or_else(|| {
@@ -299,17 +318,36 @@ impl DatabricksMetadataAdapter {
         // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/adapters/databricks/impl.py#L914-L1021
         match relation_type {
             RelationType::MaterializedView => {
-                metadata.insert(
-                    DatabricksRelationMetadataKey::DescribeExtended,
-                    self.get_view_description(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token,
-                    )?,
-                );
+                for query in materialized_view_metadata_plan(fetch_relation_tags) {
+                    match query {
+                        MaterializedViewMetadataQuery::RelationTags => {
+                            metadata.insert(
+                                DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                                self.fetch_tags(
+                                    &database,
+                                    &schema,
+                                    &identifier,
+                                    state,
+                                    &mut *conn,
+                                    token.clone(),
+                                )?,
+                            );
+                        }
+                        MaterializedViewMetadataQuery::ViewDescription => {
+                            metadata.insert(
+                                DatabricksRelationMetadataKey::DescribeExtended,
+                                self.get_view_description(
+                                    &database,
+                                    &schema,
+                                    &identifier,
+                                    state,
+                                    &mut *conn,
+                                    token.clone(),
+                                )?,
+                            );
+                        }
+                    }
+                }
             }
             RelationType::View => {
                 metadata.insert(
@@ -1508,6 +1546,25 @@ mod tests {
     use dbt_schemas::schemas::common::ResolvedQuoting;
     use dbt_schemas::schemas::relations::base::BaseRelation;
     use std::sync::Arc;
+
+    #[test]
+    fn materialized_view_metadata_plan_fetches_tags_when_requested() {
+        assert_eq!(
+            materialized_view_metadata_plan(true),
+            &[
+                MaterializedViewMetadataQuery::RelationTags,
+                MaterializedViewMetadataQuery::ViewDescription,
+            ]
+        );
+    }
+
+    #[test]
+    fn materialized_view_metadata_plan_skips_tags_when_not_requested() {
+        assert_eq!(
+            materialized_view_metadata_plan(false),
+            &[MaterializedViewMetadataQuery::ViewDescription]
+        );
+    }
 
     // Helper function to create a test relation with specific quoting policies
     fn create_test_relation(

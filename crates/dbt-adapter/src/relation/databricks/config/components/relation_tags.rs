@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff, impl_loader,
+    ComponentConfig, ComponentConfigLoader, RelationConfig, SimpleComponentConfigImpl, impl_loader,
 };
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -29,10 +29,20 @@ fn to_jinja(v: &IndexMap<String, String>) -> Value {
 fn new_component(tags: IndexMap<String, String>) -> RelationTags {
     RelationTags {
         type_name: TYPE_NAME,
-        diff_fn: diff::desired_state,
+        diff_fn: set_only_diff,
         to_jinja_fn: to_jinja,
         value: tags,
     }
+}
+
+fn set_only_diff(
+    desired_state: &IndexMap<String, String>,
+    current_state: &IndexMap<String, String>,
+) -> Option<IndexMap<String, String>> {
+    desired_state
+        .iter()
+        .any(|(key, value)| current_state.get(key) != Some(value))
+        .then(|| desired_state.clone())
 }
 
 fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<RelationTags> {
@@ -46,14 +56,31 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<Rela
     for row in remote_tags.rows() {
         if let (Ok(tag_name_val), Ok(tag_value_val)) =
             (row.get_item(&Value::from(0)), row.get_item(&Value::from(1)))
-            && let (Some(tag_name), Some(tag_value)) =
-                (tag_name_val.as_str(), tag_value_val.as_str())
+            && let Some(tag_name) = tag_name_val.as_str()
         {
+            let tag_value = if tag_value_val.is_none() {
+                ""
+            } else if let Some(tag_value) = tag_value_val.as_str() {
+                tag_value
+            } else {
+                continue;
+            };
             tags.insert(tag_name.to_string(), tag_value.to_string());
         }
     }
 
     Ok(new_component(tags))
+}
+
+fn yml_scalar_to_string(value: &YmlValue) -> Option<String> {
+    match value {
+        YmlValue::Null(_) => Some(String::new()),
+        YmlValue::Bool(value, _) => Some(if *value { "True" } else { "False" }.to_string()),
+        YmlValue::Number(value, _) => Some(value.to_string()),
+        YmlValue::String(value, _) => Some(value.clone()),
+        YmlValue::Tagged(tagged, _) => yml_scalar_to_string(&tagged.value),
+        YmlValue::Sequence(_, _) | YmlValue::Mapping(_, _) => None,
+    }
 }
 
 fn from_local_config(
@@ -69,8 +96,8 @@ fn from_local_config(
         && let Some(tags_map) = &databricks_attr.databricks_tags
     {
         for (key, value) in tags_map {
-            if let YmlValue::String(value_str, _) = value {
-                tags.insert(key.clone(), value_str.clone());
+            if let Some(value) = yml_scalar_to_string(value) {
+                tags.insert(key.clone(), value);
             }
         }
     }
@@ -86,10 +113,21 @@ impl RelationTagsLoader {
     }
 }
 
+pub(crate) fn requires_server_metadata_for_diff(config: &RelationConfig) -> bool {
+    config
+        .get(TYPE_NAME)
+        .and_then(|component| component.as_any().downcast_ref::<RelationTags>())
+        .is_none_or(|tags| !tags.value.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::relation::config_v2::ComponentConfig;
+    use crate::AdapterType;
+    use crate::relation::config_v2::{ComponentConfig, ComponentConfigChange};
+    use crate::relation::databricks::config::test_helpers::{
+        TestModelConfig, create_mock_dbt_model,
+    };
 
     #[test]
     fn test_get_diff_add_or_update() {
@@ -121,5 +159,62 @@ mod tests {
         let diff = RelationTags::diff_from(&config, Some(&config));
 
         assert!(diff.is_none());
+    }
+
+    #[test]
+    fn test_get_diff_configured_removal_is_no_change() {
+        let current = new_component(IndexMap::from_iter([(
+            "deployment".to_string(),
+            "NEXT".to_string(),
+        )]));
+        let desired = new_component(IndexMap::new());
+
+        assert!(RelationTags::diff_from(&desired, Some(&current)).is_none());
+    }
+
+    fn never_full_refresh(_: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
+        false
+    }
+
+    #[test]
+    fn test_server_metadata_requirement_follows_local_tags() {
+        let empty = RelationConfig::new(
+            AdapterType::Databricks,
+            [Box::new(new_component(IndexMap::new())) as Box<dyn ComponentConfig>],
+            never_full_refresh,
+        );
+        let tagged = RelationConfig::new(
+            AdapterType::Databricks,
+            [Box::new(new_component(IndexMap::from_iter([(
+                "deployment".to_string(),
+                "DBT".to_string(),
+            )]))) as Box<dyn ComponentConfig>],
+            never_full_refresh,
+        );
+        let missing = RelationConfig::new(
+            AdapterType::Databricks,
+            Vec::<Box<dyn ComponentConfig>>::new(),
+            never_full_refresh,
+        );
+
+        assert!(!requires_server_metadata_for_diff(&empty));
+        assert!(requires_server_metadata_for_diff(&tagged));
+        assert!(requires_server_metadata_for_diff(&missing));
+    }
+
+    #[test]
+    fn test_local_config_stringifies_scalar_tag_values() {
+        let model = create_mock_dbt_model(TestModelConfig {
+            raw_tags: Some(IndexMap::from_iter([
+                ("priority".to_string(), YmlValue::from(0_i64)),
+                ("enabled".to_string(), YmlValue::from(false)),
+            ])),
+            ..Default::default()
+        });
+
+        let tags = from_local_config(&model).unwrap();
+
+        assert_eq!(tags.value.get("priority"), Some(&"0".to_string()));
+        assert_eq!(tags.value.get("enabled"), Some(&"False".to_string()));
     }
 }

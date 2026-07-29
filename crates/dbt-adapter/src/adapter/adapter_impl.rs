@@ -4217,6 +4217,7 @@ impl AdapterImpl {
         state: &State,
         conn: &mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
+        fetch_relation_tags: bool,
         token: CancellationToken,
     ) -> AdapterResult<RelationConfig> {
         use crate::relation::databricks::config::relation_types;
@@ -4243,7 +4244,13 @@ impl AdapterImpl {
             // In replay mode, adapter calls must go through the replay adapter so they consume
             // the recording stream.
             let metadata_adapter = DatabricksMetadataAdapter::new_from_adapter(self.clone());
-            metadata_adapter.fetch_relation_config_from_remote(state, conn, relation, token)?
+            metadata_adapter.fetch_relation_config_from_remote(
+                state,
+                conn,
+                relation,
+                fetch_relation_tags,
+                token,
+            )?
         };
 
         let config_loader = match relation_type {
