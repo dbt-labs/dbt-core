@@ -51,7 +51,7 @@ use crate::schemas::properties::{ModelFreshness, ModelState};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, default_type,
-    f64_or_string_f64, hours_to_expiration_or_string, string_or_number_to_string,
+    f64_or_string_f64, hours_to_expiration_or_string, pydantic_bool, string_or_number_to_string,
     u64_or_string_u64,
 };
 use dbt_proc_macros::Resolvable;
@@ -176,6 +176,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub create_notebook: Option<bool>,
+    #[serde(
+        default,
+        rename = "+notebook_scoped_libraries",
+        deserialize_with = "pydantic_bool"
+    )]
+    pub notebook_scoped_libraries: Option<bool>,
     #[serde(rename = "+index_url")]
     pub index_url: Option<String>,
     #[serde(rename = "+additional_libs")]
@@ -645,6 +651,8 @@ pub struct ModelConfig {
     pub cluster_id: Option<String>,
     pub http_path: Option<String>,
     pub create_notebook: Option<bool>,
+    #[serde(default, deserialize_with = "pydantic_bool")]
+    pub notebook_scoped_libraries: Option<bool>,
     pub index_url: Option<String>,
     pub additional_libs: Option<Vec<YmlValue>>,
     pub user_folder_for_python: Option<bool>,
@@ -683,6 +691,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             cluster_id: config.cluster_id.clone(),
             http_path: config.http_path.clone(),
             create_notebook: config.create_notebook,
+            notebook_scoped_libraries: config.notebook_scoped_libraries,
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
@@ -881,6 +890,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             cluster_id: config.cluster_id.clone(),
             http_path: config.http_path.clone(),
             create_notebook: config.create_notebook,
+            notebook_scoped_libraries: config.notebook_scoped_libraries,
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
@@ -1097,6 +1107,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
             cluster_id,
             http_path,
             create_notebook,
+            notebook_scoped_libraries,
             index_url,
             additional_libs,
             user_folder_for_python,
@@ -1184,6 +1195,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
                 cluster_id,
                 http_path,
                 create_notebook,
+                notebook_scoped_libraries,
                 index_url,
                 additional_libs,
                 user_folder_for_python,
