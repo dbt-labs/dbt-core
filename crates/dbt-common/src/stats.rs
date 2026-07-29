@@ -85,6 +85,9 @@ pub struct Stat {
     /// Rows affected by the warehouse DML (e.g. `CREATE TABLE AS SELECT`).
     /// Set from the NodeEvaluated OTel span after execution; `None` for views.
     pub rows_affected: Option<i64>,
+    /// Core-compatible `adapter_response` map for `run_results.json`.
+    /// Populated from the materialization's `store_result('main', ...)` call.
+    pub adapter_response: std::collections::BTreeMap<String, dbt_yaml::Value>,
     pub start_time: SystemTime,
     pub end_time: SystemTime,
     pub status: NodeStatus,
@@ -108,11 +111,27 @@ impl Stat {
             unique_id,
             num_rows,
             rows_affected: None,
+            adapter_response: Default::default(),
             start_time,
             end_time,
             status,
             thread_id: format!("Thread-{}", thread_id),
             message,
+        }
+    }
+
+    /// Stat entry for nodes that failed during compilation (before execution).
+    pub fn compilation_error(unique_id: String, at: SystemTime) -> Self {
+        Stat {
+            unique_id,
+            num_rows: None,
+            rows_affected: None,
+            adapter_response: Default::default(),
+            start_time: at,
+            end_time: at,
+            status: NodeStatus::Errored,
+            thread_id: "main".to_string(),
+            message: Some("Compilation Error".to_string()),
         }
     }
 

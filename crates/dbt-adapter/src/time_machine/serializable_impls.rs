@@ -495,6 +495,7 @@ mod tests {
             code: "SUCCESS".to_string(),
             rows_affected: 42,
             query_id: Some("query-123".to_string()),
+            ..Default::default()
         };
 
         let json = original.to_time_machine_json();

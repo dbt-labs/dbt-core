@@ -543,16 +543,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                         stats: resolved_state
                             .nodes_with_resolution_errors
                             .iter()
-                            .map(|uid| Stat {
-                                unique_id: uid.clone(),
-                                num_rows: None,
-                                rows_affected: None,
-                                start_time: now,
-                                end_time: now,
-                                status: NodeStatus::Errored,
-                                thread_id: "main".to_string(),
-                                message: Some("Compilation Error".to_string()),
-                            })
+                            .map(|uid| Stat::compilation_error(uid.clone(), now))
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
                         batch_results: Default::default(),

@@ -2,6 +2,7 @@
 pub mod macros;
 
 pub mod adapter;
+pub mod adapter_response_store;
 pub mod artifact_io;
 pub mod atomic;
 pub mod cancellation;
