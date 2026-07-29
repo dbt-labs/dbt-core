@@ -2454,6 +2454,24 @@ impl AdapterImpl {
                 Some(format!("{r} not enforced"))
             }
             (Bigquery, _) => None,
+            // ClickHouse only supports `CHECK` at the table/model level (`CONSTRAINT name
+            // CHECK (expr)`), never inline on an individual column. get_constraint_support
+            // reports Check as Enforced (it genuinely is, at the model level), so it isn't
+            // caught by the NotSupported early-return above; without this arm it would fall
+            // through to the generic renderer and produce invalid inline SQL on a column with
+            // zero warning. Mirrors the legacy Python adapter, which never renders column-level
+            // constraints for ClickHouse and only warns.
+            (ClickHouse, ConstraintType::Check) => {
+                emit_warn_log_message(
+                    ErrorCode::ConstraintNotSupported,
+                    "ClickHouse does not support column-level constraints. Declare `check` \
+                     constraints at the model level (top-level `constraints:` on the model) \
+                     instead of on an individual column."
+                        .to_string(),
+                    None,
+                );
+                None
+            }
             _ => Some(r.trim().to_string()),
         })
     }
@@ -2532,10 +2550,25 @@ impl AdapterImpl {
             (Fabric, ForeignKey) => Enforced,
             (Fabric, Custom) => NotSupported,
 
+            // ClickHouse
+            // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/impl.py (CONSTRAINT_SUPPORT)
+            // Only `CONSTRAINT name CHECK (expr)` is real, enforced ClickHouse DDL, and only at
+            // the table/model level. ClickHouse has no UNIQUE, no FOREIGN KEY, and no inline
+            // NOT NULL/PRIMARY KEY column-constraint syntax: nullability is expressed via the
+            // Nullable(T) type wrapper (already handled by the column-type machinery, not this
+            // constraint path), and PRIMARY KEY is a separate top-level engine clause driven by
+            // the `primary_key` model config, not the generic constraint renderer.
+            (ClickHouse, Check) => Enforced,
+            (ClickHouse, NotNull) => NotSupported,
+            (ClickHouse, Unique) => NotSupported,
+            (ClickHouse, PrimaryKey) => NotSupported,
+            (ClickHouse, ForeignKey) => NotSupported,
+            (ClickHouse, Custom) => NotSupported,
+
             // Salesforce
             (
-                Salesforce | Spark | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
-                | Dremio | Oracle,
+                Salesforce | Spark | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
+                | Oracle,
                 _,
             ) => {
                 unimplemented!("constraint support not implemented")
@@ -5378,7 +5411,7 @@ mod tests {
                     ("attach".into(), attach),
                 ])
             }
-            Bigquery | Redshift | Spark | Databricks => Mapping::new(),
+            Bigquery | Redshift | Spark | Databricks | ClickHouse => Mapping::new(),
             _ => unimplemented!("mock config for adapter type {:?}", adapter_type),
         };
         build_engine(adapter_type, config)
@@ -6326,6 +6359,74 @@ mod tests {
             warn_unenforced: None,
         };
         assert!(adapter.render_column_constraint(constraint).is_none());
+    }
+
+    // ClickHouse constraint_support (issue #14651): only `check` is enforced, and only at the
+    // model level. Mirrors the legacy Python adapter's CONSTRAINT_SUPPORT mapping.
+    #[test]
+    fn test_get_constraint_support_clickhouse_check_enforced() {
+        let adapter = AdapterImpl::new(engine(ClickHouse), None);
+        assert_eq!(
+            adapter.get_constraint_support(ConstraintType::Check),
+            ConstraintSupport::Enforced
+        );
+    }
+
+    #[test]
+    fn test_get_constraint_support_clickhouse_not_supported_types() {
+        let adapter = AdapterImpl::new(engine(ClickHouse), None);
+        for ct in [
+            ConstraintType::NotNull,
+            ConstraintType::Unique,
+            ConstraintType::PrimaryKey,
+            ConstraintType::ForeignKey,
+            ConstraintType::Custom,
+        ] {
+            assert_eq!(
+                adapter.get_constraint_support(ct),
+                ConstraintSupport::NotSupported,
+                "expected {ct:?} to be NotSupported for ClickHouse"
+            );
+        }
+    }
+
+    // Regression guard for the bug get_constraint_support(Check) => Enforced would otherwise
+    // introduce: ClickHouse's CHECK syntax only exists at the table/model level, never inline
+    // on a column, so a column-level check constraint must not be rendered as inline SQL.
+    #[test]
+    fn test_render_column_constraint_clickhouse_check_returns_none() {
+        let adapter = AdapterImpl::new(engine(ClickHouse), None);
+        let constraint = Constraint {
+            type_: ConstraintType::Check,
+            expression: Some("x > 0".to_string()),
+            name: None,
+            to: None,
+            to_columns: None,
+            warn_unsupported: None,
+            warn_unenforced: None,
+        };
+        assert!(adapter.render_column_constraint(constraint).is_none());
+    }
+
+    // Model-level rendering is untouched by this change: ClickHouse's generic
+    // render_model_constraint path already produces valid `CONSTRAINT name CHECK (expr)` DDL.
+    #[test]
+    fn test_render_model_constraint_clickhouse_check() {
+        let constraint = ModelConstraint {
+            type_: ConstraintType::Check,
+            expression: Some("x > 0".to_string()),
+            name: Some("my_check".to_string()),
+            to: None,
+            to_columns: None,
+            columns: None,
+            warn_unsupported: None,
+            warn_unenforced: None,
+        };
+        let rendered = crate::render_constraint::render_model_constraint(ClickHouse, constraint);
+        assert_eq!(
+            rendered,
+            Some("constraint my_check check (x > 0)".to_string())
+        );
     }
 
     /// Build a single-column `show databases` style result with the given column
