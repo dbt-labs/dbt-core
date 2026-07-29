@@ -1503,11 +1503,201 @@ fn extract_dbr_version(version_str: &str) -> AdapterResult<EngineVersion> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::Adapter;
     use crate::relation::Relation;
+    use crate::sql_types::DefaultTypeOps;
     use dbt_schemas::dbt_types::RelationType;
     use dbt_schemas::schemas::common::ResolvedQuoting;
-    use dbt_schemas::schemas::relations::base::BaseRelation;
+    use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, base::BaseRelation};
     use std::sync::Arc;
+
+    fn make_metadata_adapter() -> DatabricksMetadataAdapter {
+        let adapter = Adapter::new_parse_phase_adapter(
+            AdapterType::Databricks,
+            dbt_yaml::Mapping::new(),
+            DEFAULT_DBT_QUOTING,
+            Arc::new(DefaultTypeOps::new(AdapterType::Databricks)),
+            None,
+            None,
+        );
+        DatabricksMetadataAdapter::new(adapter.engine().clone())
+    }
+
+    struct CatalogRow<'a> {
+        table_schema: &'a str,
+        table_name: &'a str,
+        table_comment: Option<&'a str>,
+        table_owner: &'a str,
+        column_name: &'a str,
+        column_type: &'a str,
+    }
+
+    fn make_catalog_batch(row: CatalogRow<'_>) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("table_database", DataType::Utf8, false),
+            Field::new("table_schema", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+            Field::new("table_comment", DataType::Utf8, true),
+            Field::new("table_owner", DataType::Utf8, false),
+            Field::new("stats:last_modified:label", DataType::Utf8, false),
+            Field::new(
+                "stats:last_modified:value",
+                DataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
+                true,
+            ),
+            Field::new("stats:last_modified:description", DataType::Utf8, false),
+            Field::new("stats:last_modified:include", DataType::Boolean, false),
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("column_index", DataType::Int32, false),
+            Field::new("column_type", DataType::Utf8, false),
+            Field::new("column_comment", DataType::Utf8, true),
+        ]));
+        Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["catalog"])),
+                    Arc::new(StringArray::from(vec![row.table_schema])),
+                    Arc::new(StringArray::from(vec![row.table_name])),
+                    Arc::new(StringArray::from(vec!["table"])),
+                    Arc::new(StringArray::from(vec![row.table_comment])),
+                    Arc::new(StringArray::from(vec![row.table_owner])),
+                    Arc::new(StringArray::from(vec!["Last Modified"])),
+                    Arc::new(TimestampMicrosecondArray::from(vec![None])),
+                    Arc::new(StringArray::from(vec![
+                        "The timestamp for last update/change",
+                    ])),
+                    Arc::new(BooleanArray::from(vec![false])),
+                    Arc::new(StringArray::from(vec![row.column_name])),
+                    Arc::new(Int32Array::from(vec![1])),
+                    Arc::new(StringArray::from(vec![row.column_type])),
+                    Arc::new(StringArray::from(vec![None::<&str>])),
+                ],
+            )
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn catalog_metadata_preserves_numeric_looking_values_as_text() {
+        let adapter = make_metadata_adapter();
+        let batch = make_catalog_batch(CatalogRow {
+            table_schema: "schema_numeric",
+            table_name: "12345",
+            table_comment: Some("67890"),
+            table_owner: "24680",
+            column_name: "67890",
+            column_type: "string",
+        });
+        let tables = adapter
+            .build_schemas_from_stats_sql(Arc::clone(&batch))
+            .unwrap();
+        let columns = adapter.build_columns_from_get_columns(batch).unwrap();
+
+        let table = &tables["catalog.schema_numeric.12345"];
+        assert_eq!(
+            (
+                table.metadata.database.as_deref(),
+                table.metadata.schema.as_str(),
+                table.metadata.name.as_str(),
+                table.metadata.materialization_type.as_str(),
+                table.metadata.owner.as_deref(),
+                table.metadata.comment.as_deref(),
+            ),
+            (
+                Some("catalog"),
+                "schema_numeric",
+                "12345",
+                "table",
+                Some("24680"),
+                Some("67890"),
+            )
+        );
+
+        let column = &columns["catalog.schema_numeric.12345"]["67890"];
+        assert_eq!(
+            (
+                column.name.as_str(),
+                column.data_type.as_str(),
+                column.comment.as_deref(),
+            ),
+            ("67890", "string", None)
+        );
+    }
+
+    #[test]
+    fn catalog_metadata_aggregates_text_and_numeric_names_across_schemas() {
+        let adapter = make_metadata_adapter();
+        let mut tables = BTreeMap::new();
+        let mut columns = BTreeMap::new();
+        for batch in [
+            make_catalog_batch(CatalogRow {
+                table_schema: "schema_text",
+                table_name: "model",
+                table_comment: None,
+                table_owner: "owner",
+                column_name: "id",
+                column_type: "bigint",
+            }),
+            make_catalog_batch(CatalogRow {
+                table_schema: "schema_numeric",
+                table_name: "12345",
+                table_comment: None,
+                table_owner: "24680",
+                column_name: "67890",
+                column_type: "string",
+            }),
+        ] {
+            tables.extend(
+                adapter
+                    .build_schemas_from_stats_sql(Arc::clone(&batch))
+                    .unwrap(),
+            );
+            columns.extend(adapter.build_columns_from_get_columns(batch).unwrap());
+        }
+
+        assert_eq!(
+            tables.keys().map(String::as_str).collect::<Vec<_>>(),
+            vec!["catalog.schema_numeric.12345", "catalog.schema_text.model"]
+        );
+        assert_eq!(
+            tables["catalog.schema_numeric.12345"]
+                .metadata
+                .comment
+                .as_deref(),
+            None
+        );
+        assert_eq!(
+            (
+                columns.len(),
+                columns["catalog.schema_text.model"]["id"].name.as_str(),
+                columns["catalog.schema_numeric.12345"]["67890"]
+                    .name
+                    .as_str(),
+            ),
+            (2, "id", "67890")
+        );
+    }
+
+    #[test]
+    fn catalog_metadata_accepts_empty_results_without_warning_or_error() {
+        let adapter = make_metadata_adapter();
+        let empty = Arc::new(RecordBatch::new_empty(Arc::new(Schema::empty())));
+
+        assert!(
+            adapter
+                .build_schemas_from_stats_sql(Arc::clone(&empty))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            adapter
+                .build_columns_from_get_columns(empty)
+                .unwrap()
+                .is_empty()
+        );
+    }
 
     // Helper function to create a test relation with specific quoting policies
     fn create_test_relation(
