@@ -2552,12 +2552,25 @@ impl AdapterImpl {
 
             // ClickHouse
             // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/impl.py (CONSTRAINT_SUPPORT)
-            // Only `CONSTRAINT name CHECK (expr)` is real, enforced ClickHouse DDL, and only at
-            // the table/model level. ClickHouse has no UNIQUE, no FOREIGN KEY, and no inline
-            // NOT NULL/PRIMARY KEY column-constraint syntax: nullability is expressed via the
-            // Nullable(T) type wrapper (already handled by the column-type machinery, not this
-            // constraint path), and PRIMARY KEY is a separate top-level engine clause driven by
-            // the `primary_key` model config, not the generic constraint renderer.
+            // Verified directly against a live ClickHouse 26.7 server (not just inferred from
+            // the upstream Python source):
+            //   - CHECK: `CONSTRAINT name CHECK (expr)` is real DDL and is genuinely enforced
+            //     (a violating INSERT is rejected) — but only at the table/model level; there
+            //     is no inline per-column CHECK syntax (SYNTAX_ERROR).
+            //   - UNIQUE: no such column-constraint syntax exists at all (SYNTAX_ERROR).
+            //   - NOT NULL: syntactically accepted, but only as a no-op on an already
+            //     non-nullable type; combining it with Nullable(T) is a hard error
+            //     (ILLEGAL_SYNTAX_FOR_DATA_TYPE). It never enforces anything beyond what the
+            //     type itself already guarantees, so it can't back dbt's not_null semantics.
+            //     Nullability is controlled entirely by the Nullable(T) type wrapper, already
+            //     handled by the column-type machinery, not this constraint path.
+            //   - PRIMARY KEY: the inline column syntax *is* accepted and does get recorded as
+            //     the table's primary key (confirmed via SHOW CREATE TABLE) — but it's a pure
+            //     sparse-index locality hint with zero uniqueness enforcement (inserting a
+            //     duplicate key value succeeds). It's already exposed as a working, distinct
+            //     mechanism via the `primary_key` model config in the vendored macros; routing
+            //     it through this generic path too would misleadingly imply uniqueness.
+            //   - FOREIGN KEY: no such concept in ClickHouse.
             (ClickHouse, Check) => Enforced,
             (ClickHouse, NotNull) => NotSupported,
             (ClickHouse, Unique) => NotSupported,
