@@ -41,6 +41,29 @@ pub(crate) fn extract_config_map(
         })
 }
 
+/// Builds the raw schema.yml config map for a model entry, merging the version-level
+/// `config:` block (for versioned models) over the model-level one. This mirrors
+/// dbt-core's versioned model patch construction, so per-version overrides (e.g.
+/// `alias`) are recorded in `unrendered_config` and detected by `state:modified`.
+pub(crate) fn extract_schema_yml_config_map(
+    schema_value: &dbt_yaml::Value,
+    version_config: Option<&dbt_yaml::Value>,
+) -> Option<BTreeMap<String, dbt_yaml::Value>> {
+    let mut config_map = extract_config_map(schema_value).unwrap_or_default();
+    if let Some(mapping) = version_config.and_then(|v| v.as_mapping()) {
+        config_map.extend(
+            mapping
+                .iter()
+                .filter_map(|(k, v)| k.as_str().map(|k| (k.to_string(), v.clone()))),
+        );
+    }
+    if config_map.is_empty() {
+        None
+    } else {
+        Some(config_map)
+    }
+}
+
 /// Builds `unrendered_config` by merging config sources in hierarchical order:
 /// project < root < schema.yml < inline. Each source is merged independently so
 /// that hook key normalization (pre_hook → pre-hook, etc.) applies per-source

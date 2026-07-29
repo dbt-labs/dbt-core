@@ -1,0 +1,9 @@
+kind: Fixes
+body: Fix `state:modified` not detecting alias removal/change on versioned models by
+    recording the version-level `config:` block (e.g. `alias`) in `unrendered_config`,
+    matching dbt-core v1 behavior.
+time: 2026-07-28T12:00:00.000000-05:00
+custom:
+    author: Mohith26
+    issue: "15707"
+    project: dbt-core
