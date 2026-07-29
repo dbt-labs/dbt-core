@@ -140,7 +140,7 @@ pub struct ProjectSourceConfig {
     #[serde(
         default,
         rename = "+databricks_tags",
-        deserialize_with = "super::common::deserialize_databricks_tags"
+        deserialize_with = "super::databricks::deserialize_databricks_tags"
     )]
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+compression")]

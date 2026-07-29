@@ -51,7 +51,7 @@ pub struct DbtColumn {
     pub classifiers: Option<Vec<String>>,
     #[serde(
         default,
-        deserialize_with = "crate::schemas::project::configs::common::deserialize_databricks_tags"
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
     )]
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -128,7 +128,7 @@ pub struct ColumnProperties {
     pub classifiers: Option<Vec<String>>,
     #[serde(
         default,
-        deserialize_with = "crate::schemas::project::configs::common::deserialize_databricks_tags"
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
     )]
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -158,7 +158,7 @@ pub struct VersionColumnProperties {
     pub policy_tags: Option<Vec<String>>,
     #[serde(
         default,
-        deserialize_with = "crate::schemas::project::configs::common::deserialize_databricks_tags"
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
     )]
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -199,7 +199,7 @@ pub struct ColumnConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(
         default,
-        deserialize_with = "crate::schemas::project::configs::common::deserialize_databricks_tags"
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
     )]
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub policy_tags: Option<Vec<String>>,

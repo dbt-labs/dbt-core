@@ -38,7 +38,7 @@ mod tests {
     };
     use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
-        test_helpers::{TestModelConfig, run_test_cases},
+        test_helpers::{TestModelConfig, expected_tbl_properties, run_test_cases},
     };
     use crate::relation::test_helpers::TestCase;
     use indexmap::IndexMap;
@@ -83,14 +83,10 @@ mod tests {
                             components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
-                                    IndexMap::from_iter([
-                                        ("delta.enableRowTracking".to_string(), "true".to_string()),
-                                        (
-                                            "pipelines.pipelineId".to_string(),
-                                            "my_old_pipeline".to_string(),
-                                        ),
-                                        ("custom.key".to_string(), "new".to_string()),
-                                    ]),
+                                    expected_tbl_properties(
+                                        "my_old_pipeline",
+                                        [("custom.key", "new")],
+                                    ),
                                 ),
                             ),
                         ),

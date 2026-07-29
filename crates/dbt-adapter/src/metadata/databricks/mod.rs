@@ -318,36 +318,16 @@ impl DatabricksMetadataAdapter {
         // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/adapters/databricks/impl.py#L914-L1021
         match relation_type {
             RelationType::MaterializedView => {
-                for query in materialized_view_metadata_plan(fetch_relation_tags) {
-                    match query {
-                        MaterializedViewMetadataQuery::RelationTags => {
-                            metadata.insert(
-                                DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                                self.fetch_tags(
-                                    &database,
-                                    &schema,
-                                    &identifier,
-                                    state,
-                                    &mut *conn,
-                                    token.clone(),
-                                )?,
-                            );
-                        }
-                        MaterializedViewMetadataQuery::ViewDescription => {
-                            metadata.insert(
-                                DatabricksRelationMetadataKey::DescribeExtended,
-                                self.get_view_description(
-                                    &database,
-                                    &schema,
-                                    &identifier,
-                                    state,
-                                    &mut *conn,
-                                    token.clone(),
-                                )?,
-                            );
-                        }
-                    }
-                }
+                self.fetch_materialized_view_metadata(
+                    &mut metadata,
+                    fetch_relation_tags,
+                    &database,
+                    &schema,
+                    &identifier,
+                    state,
+                    &mut *conn,
+                    token,
+                )?;
             }
             RelationType::View => {
                 metadata.insert(
@@ -502,6 +482,51 @@ impl DatabricksMetadataAdapter {
         // we might need to query internal delta system tables or expose something via ADBC
 
         Ok((relation_type, metadata))
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    fn fetch_materialized_view_metadata(
+        &self,
+        metadata: &mut DatabricksRelationMetadata,
+        fetch_relation_tags: bool,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+        token: CancellationToken,
+    ) -> AdapterResult<()> {
+        for query in materialized_view_metadata_plan(fetch_relation_tags) {
+            match query {
+                MaterializedViewMetadataQuery::RelationTags => {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            database,
+                            schema,
+                            identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+                MaterializedViewMetadataQuery::ViewDescription => {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::DescribeExtended,
+                        self.get_view_description(
+                            database,
+                            schema,
+                            identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     // convenience for executing SQL

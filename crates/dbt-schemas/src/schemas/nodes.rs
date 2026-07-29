@@ -5798,7 +5798,7 @@ pub struct DatabricksAttr {
     pub catalog: Option<String>,
     #[serde(
         default,
-        deserialize_with = "crate::schemas::project::configs::common::deserialize_databricks_tags"
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
     )]
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub compression: Option<String>,

@@ -180,3 +180,23 @@ pub(crate) fn run_test_cases(
 ) {
     test_helpers::run_test_cases(test_cases, create_mock_dbt_model)
 }
+
+pub(crate) fn expected_tbl_properties<K, V>(
+    pipeline_id: &str,
+    custom_properties: impl IntoIterator<Item = (K, V)>,
+) -> IndexMap<String, String>
+where
+    K: Into<String>,
+    V: Into<String>,
+{
+    let mut properties = IndexMap::from_iter([
+        ("delta.enableRowTracking".to_string(), "true".to_string()),
+        ("pipelines.pipelineId".to_string(), pipeline_id.to_string()),
+    ]);
+    properties.extend(
+        custom_properties
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into())),
+    );
+    properties
+}
