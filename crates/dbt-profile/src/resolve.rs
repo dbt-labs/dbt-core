@@ -401,6 +401,16 @@ fn render_value_recursive<S: Serialize>(
     ctx: &S,
     value: &dbt_yaml::Value,
 ) -> Result<dbt_yaml::Value> {
+    render_value_recursive_inner(env, ctx, value, false, true)
+}
+
+fn render_value_recursive_inner<S: Serialize>(
+    env: &Environment<'_>,
+    ctx: &S,
+    value: &dbt_yaml::Value,
+    preserve_rendered_string: bool,
+    preserve_query_tags_child: bool,
+) -> Result<dbt_yaml::Value> {
     let listeners: &[Rc<dyn RenderingEventListener>] = &[];
 
     match value {
@@ -413,7 +423,9 @@ fn render_value_recursive<S: Serialize>(
                 s.clone()
             };
             let resolved = render_secrets(&rendered)?;
-            if !has_jinja && resolved == rendered {
+            if preserve_rendered_string {
+                Ok(dbt_yaml::Value::String(resolved, span.clone()))
+            } else if !has_jinja && resolved == rendered {
                 Ok(value.clone())
             } else {
                 match dbt_yaml::from_str::<dbt_yaml::Value>(&resolved) {
@@ -430,14 +442,19 @@ fn render_value_recursive<S: Serialize>(
         dbt_yaml::Value::Mapping(map, span) => {
             let mut new_map = dbt_yaml::Mapping::new();
             for (k, v) in map.iter() {
-                new_map.insert(k.clone(), render_value_recursive(env, ctx, v)?);
+                let preserve_rendered_string =
+                    preserve_query_tags_child && k.as_str() == Some("query_tags");
+                new_map.insert(
+                    k.clone(),
+                    render_value_recursive_inner(env, ctx, v, preserve_rendered_string, false)?,
+                );
             }
             Ok(dbt_yaml::Value::Mapping(new_map, span.clone()))
         }
         dbt_yaml::Value::Sequence(seq, span) => {
             let rendered: std::result::Result<Vec<_>, _> = seq
                 .iter()
-                .map(|v| render_value_recursive(env, ctx, v))
+                .map(|v| render_value_recursive_inner(env, ctx, v, false, false))
                 .collect();
             Ok(dbt_yaml::Value::Sequence(rendered?, span.clone()))
         }
