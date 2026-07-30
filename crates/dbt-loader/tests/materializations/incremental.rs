@@ -35,15 +35,23 @@ fn incremental_model(alias: &str, sql: &str) -> Value {
             Value::from(format!("model.test_project.{alias}")),
         ),
         ("columns", Value::from(BTreeMap::<String, Value>::new())),
+        (
+            "config",
+            Value::from_serialize(BTreeMap::from([(
+                "materialized",
+                Value::from("incremental"),
+            )])),
+        ),
         ("language", Value::from("sql")),
         ("compiled_code", Value::from(sql)),
     ]))
 }
 
-fn incremental_config() -> Arc<MockJinjaObject> {
+fn incremental_config_with(strategy: Option<&str>, full_refresh: bool) -> Arc<MockJinjaObject> {
     let mock = default_mock_config();
     mock.set_attr("materialized", Value::from("incremental"));
-    mock.on("get", |args| {
+    let strategy = strategy.map(str::to_owned);
+    mock.on("get", move |args| {
         let key = args.first().and_then(|v| v.as_str());
         let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
         match key {
@@ -51,7 +59,11 @@ fn incremental_config() -> Arc<MockJinjaObject> {
                 "enforced".to_string(),
                 Value::from(false),
             )]))),
-            Some("full_refresh") => Ok(Value::from(false)),
+            Some("full_refresh") => Ok(Value::from(full_refresh)),
+            Some("incremental_strategy") => Ok(strategy
+                .clone()
+                .map(Value::from)
+                .unwrap_or(Value::UNDEFINED)),
             Some("on_schema_change") => Ok(Value::from("ignore")),
             _ => Ok(default),
         }
@@ -59,11 +71,22 @@ fn incremental_config() -> Arc<MockJinjaObject> {
     mock
 }
 
+fn incremental_config() -> Arc<MockJinjaObject> {
+    incremental_config_with(None, false)
+}
+
 fn incremental_ctx(harness: &MacroTestHarness) -> BTreeMap<String, Value> {
+    incremental_ctx_with_config(harness, incremental_config())
+}
+
+fn incremental_ctx_with_config(
+    harness: &MacroTestHarness,
+    config: Arc<MockJinjaObject>,
+) -> BTreeMap<String, Value> {
     harness
         .materialization_context("my_incr", "SELECT id, name FROM source")
         .relation_type(RelationType::Table)
-        .config(Value::from_dyn_object(incremental_config()))
+        .config(Value::from_dyn_object(config))
         .with(
             "model",
             incremental_model("my_incr", "SELECT id, name FROM source"),
@@ -76,10 +99,14 @@ mod databricks {
     const ADAPTER: AdapterType = AdapterType::Databricks;
 
     fn build_harness() -> MacroTestHarness {
+        build_harness_with_materialization_v2(false)
+    }
+
+    fn build_harness_with_materialization_v2(enabled: bool) -> MacroTestHarness {
         let mut harness = MacroTestHarness::for_adapter(ADAPTER)
             .load_all_macros()
             .with_stub_functions()
-            .with_behavior_flag("use_materialization_v2", false)
+            .with_behavior_flag("use_materialization_v2", enabled)
             .with_behavior_flag("use_catalogs_v2", false)
             .with_behavior_flag("use_managed_iceberg", false)
             .build()
@@ -207,6 +234,8 @@ mod databricks {
             "Expected at least 2 SQL statements (temp table + merge), got: {sqls:?}",
         );
     }
+
+    mod append;
 }
 
 mod spark {
