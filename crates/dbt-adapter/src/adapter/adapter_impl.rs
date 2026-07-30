@@ -1016,7 +1016,7 @@ impl AdapterImpl {
             Postgres | DuckDB | Alt => &[Append, DeleteInsert, Merge, Microbatch],
             Snowflake => &[Append, DeleteInsert, InsertOverwrite, Merge, Microbatch],
             Bigquery => &[Append],
-            Databricks => &[Append, Merge, InsertOverwrite, ReplaceWhere],
+            Databricks => &[Append, DeleteInsert, Merge, InsertOverwrite, ReplaceWhere],
             Redshift => &[Append, DeleteInsert, Merge, Microbatch],
             Fabric => &[Append, DeleteInsert, Merge, Microbatch],
             Salesforce => &[Append, Merge],
@@ -6088,6 +6088,36 @@ mod tests {
         assert_eq!(AdapterImpl::warehouse_restore_name("\"WH$1\""), "WH$1");
         assert_eq!(AdapterImpl::warehouse_restore_name("\"_WH\""), "_WH");
         assert_eq!(AdapterImpl::warehouse_restore_name("\"\""), "\"\"");
+    }
+
+    #[test]
+    fn databricks_accepts_delete_insert_incremental_strategy() {
+        let adapter = AdapterImpl::new(engine(Databricks), None);
+
+        assert!(
+            adapter
+                .valid_incremental_strategies()
+                .contains(&DbtIncrementalStrategy::DeleteInsert)
+        );
+    }
+
+    #[test]
+    fn databricks_resolves_delete_insert_incremental_macro() {
+        let adapter = AdapterImpl::new(engine(Databricks), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        let macro_value = adapter
+            .get_incremental_strategy_macro(&state, "delete+insert")
+            .expect("delete+insert must resolve for Databricks");
+
+        assert_eq!(
+            macro_value
+                .get_attr("macro_name")
+                .expect("dispatch object must expose its macro name")
+                .as_str(),
+            Some("get_incremental_delete_insert_sql")
+        );
     }
 
     #[test]

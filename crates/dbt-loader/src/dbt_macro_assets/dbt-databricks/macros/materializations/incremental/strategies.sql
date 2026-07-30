@@ -157,7 +157,7 @@ INSERT INTO {{ target_relation.render() }}
     {#-- DBR 17.1+: Use efficient REPLACE ON syntax --#}
     {%- set replace_on_expr = [] -%}
     {%- for key in unique_keys -%}
-      {%- do replace_on_expr.append('target.' ~ key ~ ' <=> temp.' ~ key) -%}
+      {%- do replace_on_expr.append('target.' ~ adapter.quote(key) ~ ' <=> temp.' ~ adapter.quote(key)) -%}
     {%- endfor -%}
     {%- set replace_on_expr = replace_on_expr | join(' and ') -%}
  insert into table {{ target_relation }} as target
@@ -179,7 +179,7 @@ replace on ({{ replace_on_expr }})
   {#-- Build WHERE clause for DELETE statement --#}
   {%- set delete_conditions = [] -%}
   {%- for key in unique_keys -%}
-    {%- do delete_conditions.append(target_relation ~ '.' ~ key ~ ' IN (SELECT ' ~ key ~ ' FROM ' ~ source_relation ~ ')') -%}
+    {%- do delete_conditions.append(target_relation ~ '.' ~ adapter.quote(key) ~ ' IN (SELECT ' ~ adapter.quote(key) ~ ' FROM ' ~ source_relation ~ ')') -%}
   {%- endfor -%}
   
   {#-- Add incremental predicates to DELETE if specified --#}
