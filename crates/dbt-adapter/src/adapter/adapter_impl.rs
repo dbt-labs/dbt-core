@@ -2462,14 +2462,18 @@ impl AdapterImpl {
             // zero warning. Mirrors the legacy Python adapter, which never renders column-level
             // constraints for ClickHouse and only warns.
             (ClickHouse, ConstraintType::Check) => {
-                emit_warn_log_message(
-                    ErrorCode::ConstraintNotSupported,
-                    "ClickHouse does not support column-level constraints. Declare `check` \
-                     constraints at the model level (top-level `constraints:` on the model) \
-                     instead of on an individual column."
-                        .to_string(),
-                    None,
-                );
+                // Respect warn_unsupported: false like the standard warn_constraint_support
+                // path does, rather than warning unconditionally.
+                if constraint.warn_unsupported.unwrap_or(true) {
+                    emit_warn_log_message(
+                        ErrorCode::ConstraintNotSupported,
+                        "ClickHouse does not support column-level constraints. Declare `check` \
+                         constraints at the model level (top-level `constraints:` on the model) \
+                         instead of on an individual column."
+                            .to_string(),
+                        None,
+                    );
+                }
                 None
             }
             _ => Some(r.trim().to_string()),
