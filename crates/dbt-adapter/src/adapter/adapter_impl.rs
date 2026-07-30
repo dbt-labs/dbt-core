@@ -2462,22 +2462,28 @@ impl AdapterImpl {
             // zero warning. Mirrors the legacy Python adapter, which never renders column-level
             // constraints for ClickHouse and only warns.
             (ClickHouse, ConstraintType::Check) => {
-                // Respect warn_unsupported: false like the standard warn_constraint_support
-                // path does, rather than warning unconditionally.
-                if constraint.warn_unsupported.unwrap_or(true) {
-                    emit_warn_log_message(
-                        ErrorCode::ConstraintNotSupported,
-                        "ClickHouse does not support column-level constraints. Declare `check` \
-                         constraints at the model level (top-level `constraints:` on the model) \
-                         instead of on an individual column."
-                            .to_string(),
-                        None,
-                    );
-                }
-                None
+                Self::warn_and_drop_clickhouse_column_check(constraint.warn_unsupported)
             }
             _ => Some(r.trim().to_string()),
         })
+    }
+
+    /// ClickHouse only supports `CHECK` at the table/model level (`CONSTRAINT name
+    /// CHECK (expr)`), never inline on an individual column — see `render_column_constraint`.
+    /// Warns (respecting `warn_unsupported`, like `warn_constraint_support` does everywhere
+    /// else) and always drops the constraint rather than rendering invalid inline SQL.
+    fn warn_and_drop_clickhouse_column_check(warn_unsupported: Option<bool>) -> Option<String> {
+        if warn_unsupported.unwrap_or(true) {
+            emit_warn_log_message(
+                ErrorCode::ConstraintNotSupported,
+                "ClickHouse does not support column-level constraints. Declare `check` \
+                 constraints at the model level (top-level `constraints:` on the model) \
+                 instead of on an individual column."
+                    .to_string(),
+                None,
+            );
+        }
+        None
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/5379513bad9c75661b990a5ed5f32ac9c62a0758/dbt-adapters/src/dbt/adapters/base/impl.py#L293
