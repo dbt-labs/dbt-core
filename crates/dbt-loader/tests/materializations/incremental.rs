@@ -6,6 +6,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
 use dbt_schemas::dbt_types::RelationType;
 use minijinja::Value;
+use minijinja::dispatch_object::DispatchObject;
 
 use crate::macro_test_harness::{
     MacroTestHarness, assert_executed_contains, default_mock_config, executed_sql,
@@ -59,6 +60,33 @@ fn incremental_config() -> Arc<MockJinjaObject> {
     mock
 }
 
+fn delete_insert_config() -> Arc<MockJinjaObject> {
+    let mock = incremental_config();
+    mock.on("get", |args| {
+        let key = args.first().and_then(|v| v.as_str());
+        let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
+        match key {
+            Some("contract") => Ok(Value::from_serialize(BTreeMap::from([(
+                "enforced".to_string(),
+                Value::from(false),
+            )]))),
+            Some("full_refresh") => Ok(Value::from(false)),
+            Some("incremental_strategy") => Ok(Value::from("delete+insert")),
+            Some("incremental_predicates") | Some("predicates") => Ok(Value::from(())),
+            Some("unique_key") => Ok(Value::from("id")),
+            Some("on_schema_change") => Ok(Value::from("ignore")),
+            _ => Ok(default),
+        }
+    });
+    mock.on("require", |args| {
+        match args.first().and_then(|v| v.as_str()) {
+            Some("unique_key") => Ok(Value::from("id")),
+            _ => Ok(Value::UNDEFINED),
+        }
+    });
+    mock
+}
+
 fn incremental_ctx(harness: &MacroTestHarness) -> BTreeMap<String, Value> {
     harness
         .materialization_context("my_incr", "SELECT id, name FROM source")
@@ -104,6 +132,13 @@ mod databricks {
         mock.on("has_dbr_capability", |_| Ok(Value::from(false)));
         mock.on("is_cluster", |_| Ok(Value::from(false)));
         mock.on("optimize", |_| Ok(Value::UNDEFINED));
+        mock.on("quote", |args| {
+            let identifier = args
+                .first()
+                .and_then(Value::as_str)
+                .expect("quote receives an identifier");
+            Ok(Value::from(format!("`{identifier}`")))
+        });
         mock.on("valid_incremental_strategies", |_| {
             Ok(Value::from(vec![
                 Value::from("append"),
@@ -121,6 +156,32 @@ mod databricks {
         mock.on("build_catalog_relation", move |_| Ok(catalog_val.clone()));
 
         harness
+    }
+
+    fn assert_ordered_delete_insert_statements(sqls: &[String]) {
+        let delete_index = sqls
+            .iter()
+            .position(|sql| sql.to_lowercase().contains("delete from"))
+            .expect("DELETE statement");
+        let insert_index = sqls
+            .iter()
+            .position(|sql| sql.to_lowercase().contains("insert into"))
+            .expect("INSERT statement");
+
+        assert!(
+            delete_index < insert_index,
+            "DELETE must execute before INSERT: {sqls:?}"
+        );
+        assert!(
+            sqls[delete_index].contains(".`id` IN (SELECT `id` FROM"),
+            "unique key must be quoted in DELETE: {:?}",
+            sqls[delete_index]
+        );
+        assert!(
+            sqls[insert_index].contains("select `id`, `name`"),
+            "INSERT must select quoted target columns: {:?}",
+            sqls[insert_index]
+        );
     }
 
     #[test]
@@ -206,6 +267,67 @@ mod databricks {
             sqls.len() >= 2,
             "Expected at least 2 SQL statements (temp table + merge), got: {sqls:?}",
         );
+    }
+
+    #[test]
+    fn existing_table_incremental_delete_insert_executes_ordered_statements() {
+        let harness = build_harness();
+
+        let existing = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "my_incr",
+            Some(RelationType::Table),
+        );
+        harness.mock().on("get_relation", move |_| {
+            Ok(RelationObject::new(Arc::clone(&existing)).into_value())
+        });
+        harness
+            .mock()
+            .on("get_relation_config", |_| Ok(Value::UNDEFINED));
+
+        let model_config = Arc::new(MockJinjaObject::new());
+        model_config.on("get_changeset", |_| Ok(Value::from(())));
+        let model_config_val = Value::from_dyn_object(model_config);
+        harness.mock().on("get_config_from_model", move |_| {
+            Ok(model_config_val.clone())
+        });
+
+        harness.mock().on("get_columns_in_relation", |_| {
+            Ok(Value::from_serialize(vec![
+                BTreeMap::from([("quoted", "`id`")]),
+                BTreeMap::from([("quoted", "`name`")]),
+            ]))
+        });
+        harness.mock().on("get_incremental_strategy_macro", |args| {
+            let strategy = args
+                .get(1)
+                .and_then(|v| v.as_str())
+                .expect("strategy argument should be passed")
+                .replace('+', "_");
+            Ok(Value::from_object(DispatchObject {
+                macro_name: format!("get_incremental_{strategy}_sql"),
+                package_name: None,
+                strict: false,
+                auto_execute: false,
+                context: None,
+            }))
+        });
+
+        let ctx = harness
+            .materialization_context("my_incr", "SELECT id, name FROM source")
+            .relation_type(RelationType::Table)
+            .config(Value::from_dyn_object(delete_insert_config()))
+            .with(
+                "model",
+                incremental_model("my_incr", "SELECT id, name FROM source"),
+            )
+            .build();
+        render_incremental(&harness, ADAPTER, ctx)
+            .unwrap_or_else(|e| panic!("incremental delete+insert failed: {e:?}"));
+
+        let sqls = executed_sql(harness.mock());
+        assert_ordered_delete_insert_statements(&sqls);
     }
 }
 
