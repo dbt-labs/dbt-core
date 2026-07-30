@@ -4,10 +4,15 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
+use minijinja::value::ValueKind;
 use minijinja::{State, Value};
 use serde_json::json;
 
 mod api_client;
+#[cfg(test)]
+mod notebook_scoped_packages_tests;
+#[cfg(test)]
+mod parity_regression_tests;
 use api_client::DatabricksApiClient;
 
 pub fn submit_python_job(
@@ -40,11 +45,8 @@ pub fn submit_python_job(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .ok_or_else(|| AdapterError::new(AdapterErrorKind::Internal, "alias is required"))?;
 
-    let submission_method = config
-        .get_attr("submission_method")
-        .ok()
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "all_purpose_cluster".to_string());
+    let submission_method = extract_submission_method(&config);
+    let compiled_code = prepare_code_from_config(&config, compiled_code)?;
 
     match submission_method.as_str() {
         "all_purpose_cluster" => submit_all_purpose_cluster(
@@ -53,7 +55,7 @@ pub fn submit_python_job(
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
         ),
         "job_cluster" => submit_job_cluster(
             adapter,
@@ -61,7 +63,7 @@ pub fn submit_python_job(
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
         ),
         "serverless_cluster" => submit_serverless_cluster(
             adapter,
@@ -69,7 +71,7 @@ pub fn submit_python_job(
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
         ),
         "workflow_job" => submit_workflow_job(
             adapter,
@@ -77,7 +79,7 @@ pub fn submit_python_job(
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
         ),
         _ => Err(AdapterError::new(
             AdapterErrorKind::NotSupported,
@@ -108,11 +110,8 @@ fn submit_all_purpose_cluster(
 
     if create_notebook {
         // Extract library configuration (packages, index_url, additional_libs)
-        let packages = extract_packages(config);
-        let index_url = config
-            .get_attr("index_url")
-            .ok()
-            .and_then(|v| v.as_str().map(|s| s.to_string()));
+        let packages = extract_packages(config)?;
+        let index_url = extract_index_url(config);
 
         let additional_libs = config
             .get_attr("additional_libs")
@@ -124,7 +123,12 @@ fn submit_all_purpose_cluster(
             })
             .unwrap_or_default();
 
-        let libraries = build_libraries(&packages, index_url.as_deref(), &additional_libs);
+        let libraries = build_libraries(
+            &packages,
+            index_url.as_deref(),
+            &additional_libs,
+            extract_notebook_scoped_libraries(config)?,
+        );
 
         let mut task_settings = json!({
             "existing_cluster_id": cluster_id
@@ -255,11 +259,8 @@ fn submit_job_cluster(
 
     validate_job_cluster_config(&job_cluster_config)?;
 
-    let packages = extract_packages(config);
-    let index_url = config
-        .get_attr("index_url")
-        .ok()
-        .and_then(|v| v.as_str().map(|s| s.to_string()));
+    let packages = extract_packages(config)?;
+    let index_url = extract_index_url(config);
 
     let additional_libs = config
         .get_attr("additional_libs")
@@ -278,7 +279,12 @@ fn submit_job_cluster(
         )
     })?;
 
-    let libraries = build_libraries(&packages, index_url.as_deref(), &additional_libs);
+    let libraries = build_libraries(
+        &packages,
+        index_url.as_deref(),
+        &additional_libs,
+        extract_notebook_scoped_libraries(config)?,
+    );
 
     let mut task_settings = json!({
         "new_cluster": cluster_config_json
@@ -487,16 +493,114 @@ fn validate_job_cluster_config(config: &Value) -> AdapterResult<()> {
     Ok(())
 }
 
-fn extract_packages(config: &Value) -> Vec<String> {
-    config
-        .get_attr("packages")
-        .ok()
-        .and_then(|v| v.try_iter().ok())
-        .map(|iter| {
-            iter.filter_map(|v| v.as_str().map(String::from))
-                .collect::<Vec<_>>()
+fn extract_packages(config: &Value) -> AdapterResult<Vec<String>> {
+    let Ok(packages) = config.get_attr("packages") else {
+        return Ok(Vec::new());
+    };
+    if matches!(packages.kind(), ValueKind::None | ValueKind::Undefined) {
+        return Ok(Vec::new());
+    }
+    if packages.kind() != ValueKind::Seq {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "packages must be a list of strings",
+        ));
+    }
+
+    packages
+        .try_iter()
+        .map_err(|error| AdapterError::new(AdapterErrorKind::Configuration, error.to_string()))?
+        .map(|package| {
+            package.as_str().map(String::from).ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "packages must be a list of strings",
+                )
+            })
         })
-        .unwrap_or_default()
+        .collect()
+}
+
+fn extract_index_url(config: &Value) -> Option<String> {
+    config
+        .get_attr("index_url")
+        .ok()
+        .and_then(|value| value.as_str().map(String::from))
+        .filter(|value| !value.is_empty())
+}
+
+fn extract_submission_method(config: &Value) -> String {
+    config
+        .get_attr("submission_method")
+        .ok()
+        .and_then(|value| value.as_str().map(String::from))
+        .unwrap_or_else(|| "all_purpose_cluster".to_string())
+}
+
+fn extract_notebook_scoped_libraries(config: &Value) -> AdapterResult<bool> {
+    let Ok(value) = config.get_attr("notebook_scoped_libraries") else {
+        return Ok(false);
+    };
+    match value.kind() {
+        ValueKind::None | ValueKind::Undefined => Ok(false),
+        ValueKind::Bool => Ok(value.is_true()),
+        ValueKind::Number => match value.as_i64() {
+            Some(0) => Ok(false),
+            Some(1) => Ok(true),
+            _ => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "notebook_scoped_libraries must be a valid boolean",
+            )),
+        },
+        ValueKind::String => match value.as_str().unwrap().to_ascii_lowercase().as_str() {
+            "0" | "false" | "f" | "n" | "no" | "off" => Ok(false),
+            "1" | "true" | "t" | "y" | "yes" | "on" => Ok(true),
+            _ => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "notebook_scoped_libraries must be a valid boolean",
+            )),
+        },
+        _ => Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "notebook_scoped_libraries must be a valid boolean",
+        )),
+    }
+}
+
+fn prepare_code_from_config(config: &Value, compiled_code: &str) -> AdapterResult<String> {
+    let packages = extract_packages(config)?;
+    let index_url = extract_index_url(config);
+    let notebook_scoped_libraries = extract_notebook_scoped_libraries(config)?;
+    Ok(prepare_code_with_notebook_scoped_packages(
+        compiled_code,
+        &packages,
+        notebook_scoped_libraries,
+        index_url.as_deref(),
+    ))
+}
+
+fn prepare_code_with_notebook_scoped_packages(
+    compiled_code: &str,
+    packages: &[String],
+    notebook_scoped_libraries: bool,
+    index_url: Option<&str>,
+) -> String {
+    if !notebook_scoped_libraries || packages.is_empty() {
+        return compiled_code.to_string();
+    }
+
+    let index_url = index_url
+        .filter(|url| !url.is_empty())
+        .map(|url| format!("--index-url {url} "))
+        .unwrap_or_default();
+    let pip_install = format!("%pip install {index_url}-q {}", packages.join(" "));
+    let separator = "\n\n# COMMAND ----------\n\n";
+    [
+        pip_install,
+        "dbutils.library.restartPython()".to_string(),
+        compiled_code.to_string(),
+    ]
+    .join(separator)
 }
 
 fn extract_timeout(config: &Value) -> u64 {
@@ -526,25 +630,28 @@ fn build_libraries(
     packages: &[String],
     index_url: Option<&str>,
     additional_libs: &[serde_json::Value],
+    notebook_scoped_libraries: bool,
 ) -> Vec<serde_json::Value> {
     let mut libraries = Vec::new();
 
-    for package in packages {
-        let lib = if let Some(idx_url) = index_url {
-            json!({
-                "pypi": {
-                    "package": package,
-                    "repo": idx_url
-                }
-            })
-        } else {
-            json!({
-                "pypi": {
-                    "package": package
-                }
-            })
-        };
-        libraries.push(lib);
+    if !notebook_scoped_libraries {
+        for package in packages {
+            let lib = if let Some(idx_url) = index_url.filter(|url| !url.is_empty()) {
+                json!({
+                    "pypi": {
+                        "package": package,
+                        "repo": idx_url
+                    }
+                })
+            } else {
+                json!({
+                    "pypi": {
+                        "package": package
+                    }
+                })
+            };
+            libraries.push(lib);
+        }
     }
 
     libraries.extend_from_slice(additional_libs);
@@ -717,6 +824,14 @@ fn build_workflow_spec(
         )
     })?;
 
+    for control_field in [
+        "grants",
+        "existing_job_id",
+        "post_hook_tasks",
+        "additional_task_settings",
+    ] {
+        spec_map.remove(control_field);
+    }
     spec_map.insert("name".to_string(), json!(workflow_name));
     spec_map.insert("tasks".to_string(), json!(tasks));
 

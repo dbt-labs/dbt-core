@@ -607,18 +607,14 @@ impl DatabricksApiClient {
         Ok(response.job_id)
     }
 
-    /// https://docs.databricks.com/api/workspace/jobs/update
+    /// https://docs.databricks.com/api/workspace/jobs/reset
     pub(crate) fn update_workflow(
         &self,
         job_id: u64,
         workflow_spec: serde_json::Value,
     ) -> AdapterResult<()> {
-        let mut payload = workflow_spec;
-        if let serde_json::Value::Object(ref mut map) = payload {
-            map.insert("job_id".to_string(), json!(job_id));
-        }
-
-        self.post_json::<serde_json::Value>("/api/2.1/jobs/update", payload)?;
+        let payload = workflow_reset_payload(job_id, workflow_spec);
+        self.post_json::<serde_json::Value>("/api/2.1/jobs/reset", payload)?;
         Ok(())
     }
 
@@ -634,6 +630,13 @@ impl DatabricksApiClient {
         let response: RunWorkflowResponse = self.post_json("/api/2.1/jobs/run-now", payload)?;
         Ok(response.run_id)
     }
+}
+
+fn workflow_reset_payload(job_id: u64, workflow_spec: serde_json::Value) -> serde_json::Value {
+    json!({
+        "job_id": job_id,
+        "new_settings": workflow_spec,
+    })
 }
 
 #[derive(Deserialize)]
@@ -716,4 +719,26 @@ struct CreateWorkflowResponse {
 #[derive(Deserialize)]
 struct RunWorkflowResponse {
     run_id: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::workflow_reset_payload;
+    use serde_json::json;
+
+    #[test]
+    fn workflow_reset_wraps_job_settings_for_the_reset_api() {
+        let workflow_spec = json!({
+            "name": "notebook-scoped-packages",
+            "tasks": [{"task_key": "inner_notebook"}],
+        });
+
+        assert_eq!(
+            workflow_reset_payload(42, workflow_spec.clone()),
+            json!({
+                "job_id": 42,
+                "new_settings": workflow_spec,
+            })
+        );
+    }
 }
