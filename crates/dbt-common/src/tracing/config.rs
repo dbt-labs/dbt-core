@@ -86,6 +86,8 @@ pub struct FsTraceConfig {
     pub(super) export_to_otlp: bool,
     /// The log format being used
     pub(super) log_format: LogFormat,
+    /// File-specific log format (`--log-format-file`), overriding `log_format` for the on-disk log sink only.
+    pub(super) file_log_format: Option<LogFormat>,
     /// If True, enables separate query log file output
     pub(super) enable_query_log: bool,
     /// Show options controlling terminal/file output visibility
@@ -117,6 +119,7 @@ impl Default for FsTraceConfig {
             parent_span_id: None,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            file_log_format: None,
             enable_query_log: false,
             show_options: HashSet::default(),
             show_all_deprecations: false,
@@ -309,6 +312,7 @@ impl FsTraceConfig {
             parent_span_id,
             export_to_otlp,
             log_format,
+            file_log_format: None,
             enable_query_log,
             show_options,
             show_all_deprecations,
@@ -322,6 +326,12 @@ impl FsTraceConfig {
     /// JSON log lines.
     pub fn with_command_name(mut self, command_name: &'static str) -> Self {
         self.command_name = command_name;
+        self
+    }
+
+    /// Override the file-specific log format. When `None` fall back to `log_format`.
+    pub fn with_file_log_format(mut self, file_log_format: Option<LogFormat>) -> Self {
+        self.file_log_format = file_log_format;
         self
     }
 
@@ -373,6 +383,7 @@ impl FsTraceConfig {
             io_args.log_file_max_bytes,
             false, // disable_console_output defaults to false for CLI
         )
+        .with_file_log_format(io_args.log_format_file)
     }
 
     /// Builds the configured tracing layers and corresponding shutdown items.
@@ -503,7 +514,9 @@ impl FsTraceConfig {
                 )
             })?;
 
-            if let Some((file_log_layer, writer_handle)) = match self.log_format {
+            // File sink honours `--log-format-file` when set, otherwise uses `log_format`
+            let file_log_format = self.file_log_format.unwrap_or(self.log_format);
+            if let Some((file_log_layer, writer_handle)) = match file_log_format {
                 LogFormat::Default | LogFormat::Text => Some(
                     build_file_log_layer_with_background_writer(file, self.max_file_log_verbosity),
                 ),
