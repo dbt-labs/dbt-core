@@ -635,6 +635,14 @@ class Compiler:
                 model._pre_injected_sql = model.compiled_code
                 model.compiled_code = injected_sql
                 model.extra_ctes = prepended_ctes
+                # compiled_code_full_refresh needs the same ephemeral CTEs injected as
+                # compiled_code, otherwise models that `ref()` ephemeral models would
+                # produce full-refresh SQL missing the CTE definitions it depends on.
+                if model.compiled_code_full_refresh:
+                    model.compiled_code_full_refresh = inject_ctes_into_sql(
+                        model.compiled_code_full_refresh,
+                        prepended_ctes,
+                    )
 
         # if model.extra_ctes is not set to prepended ctes, something went wrong
         return model, model.extra_ctes
@@ -681,14 +689,23 @@ class Compiler:
                             node,
                         )
 
-            # we update the model context to run in full refresh mode to get the full refresh sql
-            # this is required when on_schema_change is set to full_refresh
-            context["flags"].FULL_REFRESH = True
-            node.compiled_code_full_refresh = jinja.get_rendered(
-                node.raw_code,
-                context,
-                node,
-            )
+            # Only compile the full-refresh variant of the SQL for models that
+            # actually need it, to avoid doubling compile cost/memory for every
+            # other model.
+            if getattr(node.config, "on_schema_change", "ignore") == "full_refresh":
+                if context["flags"].FULL_REFRESH:
+                    # The run is already executing with --full-refresh, so the
+                    # compiled_code above is already the full-refresh variant.
+                    node.compiled_code_full_refresh = node.compiled_code
+                else:
+                    # we update the model context to run in full refresh mode to get the full refresh sql
+                    # this is required when on_schema_change is set to full_refresh
+                    context["flags"].FULL_REFRESH = True
+                    node.compiled_code_full_refresh = jinja.get_rendered(
+                        node.raw_code,
+                        context,
+                        node,
+                    )
 
         node.compiled = True
 

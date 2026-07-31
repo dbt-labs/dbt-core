@@ -298,6 +298,11 @@ class CompiledResource(ParsedResource):
         dct = super().__post_serialize__(dct, context)
         if "_pre_injected_sql" in dct:
             del dct["_pre_injected_sql"]
+        # compiled_code_full_refresh is only needed at runtime for the
+        # `sql_full_refresh` Jinja context variable; it isn't part of the
+        # manifest/run-results JSON schemas.
+        if "compiled_code_full_refresh" in dct:
+            del dct["compiled_code_full_refresh"]
         # Remove compiled attributes
         if "compiled" in dct and dct["compiled"] is False:
             del dct["compiled"]
