@@ -241,6 +241,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1820,6 +1821,16 @@
             "null"
           ]
         },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataTestState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "static_analysis": {
           "anyOf": [
             {
@@ -1953,6 +1964,20 @@
             }
           ]
         },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_safer_relation_operations": {
           "anyOf": [
             {
@@ -2040,6 +2065,37 @@
           "anyOf": [
             {
               "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DataTestState": {
+      "description": "The dbt State configs supported on data tests: only `require_fresh_data_from` and `evaluate_volatile_sql` (snapshots reuse the full `ModelState`). Other keys are not fields here, so they are flagged as unknown keys at parse time.",
+      "type": "object",
+      "properties": {
+        "evaluate_volatile_sql": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "require_fresh_data_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UpdatesOn"
             },
             {
               "type": "null"
@@ -3888,6 +3944,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -3968,6 +4025,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -5244,6 +5315,15 @@
             }
           ]
         },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ModelConstraint"
+          }
+        },
         "contract": {
           "anyOf": [
             {
@@ -6300,6 +6380,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -8303,6 +8397,20 @@
             }
           ]
         },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_safer_relation_operations": {
           "anyOf": [
             {
@@ -9398,6 +9506,16 @@
             "null"
           ]
         },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "static_analysis": {
           "anyOf": [
             {
@@ -9542,6 +9660,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "unlogged": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -10635,6 +10767,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "unlogged": {
           "anyOf": [
             {
               "type": [
@@ -11907,6 +12053,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -11966,6 +12113,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "unlogged": {
           "anyOf": [
             {
               "type": [
