@@ -410,7 +410,7 @@ class TestYamlSnapshotCompiledPath(BasicYaml):
         """Verify yml-based snapshots get correct compiled paths without doubling."""
         manifest = run_dbt(["parse"])
         node = manifest.nodes["snapshot.test.snapshot_actual"]
-        assert node.path == "snapshot.yml/snapshot_actual.sql"
+        assert node.path == os.path.join("snapshot.yml", "snapshot_actual.sql")
         assert node.original_file_path == os.path.join("snapshots", "snapshot.yml")
 
         run_dbt(["compile"])
