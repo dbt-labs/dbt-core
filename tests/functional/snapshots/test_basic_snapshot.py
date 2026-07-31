@@ -509,7 +509,8 @@ snapshots:
 
 class TestYamlSnapshotNodePathIncludesSubdir:
     """Regression test: node.path for a snapshot in a subdirectory must include
-    the subdirectory (e.g. 'subdir/subdir_snap.sql'), not just the filename.
+    the subdirectory and original filename (e.g. 'subdir/subdir_snap.yml/subdir_snap.sql'),
+    not just the filename.
     See https://github.com/dbt-labs/dbt-core/issues/15753."""
 
     @pytest.fixture(scope="class")
