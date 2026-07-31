@@ -521,6 +521,17 @@
         }
       ]
     },
+    "ConstraintType": {
+      "type": "string",
+      "enum": [
+        "not_null",
+        "unique",
+        "primary_key",
+        "foreign_key",
+        "check",
+        "custom"
+      ]
+    },
     "DataLakeObjectCategory": {
       "description": "See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject",
       "type": "string",
@@ -531,6 +542,37 @@
         "Insights",
         "Other"
       ]
+    },
+    "DataTestState": {
+      "description": "The dbt State configs supported on data tests: only `require_fresh_data_from` and `evaluate_volatile_sql` (snapshots reuse the full `ModelState`). Other keys are not fields here, so they are flagged as unknown keys at parse time.",
+      "type": "object",
+      "properties": {
+        "evaluate_volatile_sql": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "require_fresh_data_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UpdatesOn"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "DbtBatchSize": {
       "type": "string",
@@ -1058,6 +1100,86 @@
       "enum": [
         "logs"
       ]
+    },
+    "ModelConstraint": {
+      "description": "Model level contraint",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "columns": {
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "expression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_columns": {
+          "description": "Only ForeignKey constraints accept: a list columns in that table containing the corresponding primary or unique key.",
+          "default": [],
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "$ref": "#/definitions/ConstraintType"
+        },
+        "warn_unenforced": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "warn_unsupported": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "ModelFreshness": {
       "type": "object",
@@ -2134,6 +2256,16 @@
             "null"
           ]
         },
+        "+state": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataTestState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+static_analysis": {
           "anyOf": [
             {
@@ -2220,6 +2352,21 @@
           ]
         },
         "+transient": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+unlogged": {
           "anyOf": [
             {
               "default": null,
@@ -2911,6 +3058,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "+constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ModelConstraint"
+          }
         },
         "+contract": {
           "anyOf": [
@@ -3987,6 +4143,21 @@
             }
           ]
         },
+        "+unlogged": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+use_anonymous_sproc": {
           "anyOf": [
             {
@@ -4467,6 +4638,7 @@
           ]
         },
         "+hours_to_expiration": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrInteger"
@@ -4944,6 +5116,20 @@
           ]
         },
         "+transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+unlogged": {
           "anyOf": [
             {
               "type": [
@@ -5832,6 +6018,16 @@
             "null"
           ]
         },
+        "+state": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+static_analysis": {
           "anyOf": [
             {
@@ -5943,6 +6139,21 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "+unlogged": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -6545,6 +6756,21 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "+unlogged": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": {
@@ -7251,6 +7477,21 @@
           ]
         },
         "+transient": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+unlogged": {
           "anyOf": [
             {
               "default": null,
