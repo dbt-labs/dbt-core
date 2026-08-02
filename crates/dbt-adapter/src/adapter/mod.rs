@@ -1468,8 +1468,16 @@ impl Adapter {
                                     ),
                                 }
 
-                                self.get_relation_value_from_cache(temp_relation.as_ref())
-                                    .or(Some(none_value()))
+                                match self.get_relation_value_from_cache(temp_relation.as_ref()) {
+                                    cache_hit @ Some(_) => cache_hit,
+                                    // Databricks system.information_schema can temporarily omit
+                                    // a just-created relation. Verify the miss with the direct
+                                    // get_relation path instead of caching a false absence.
+                                    None if adapter.adapter_type() == AdapterType::Databricks => {
+                                        None
+                                    }
+                                    None => Some(none_value()),
+                                }
                             } else {
                                 None
                             }
@@ -4240,7 +4248,9 @@ impl Adapter {
         }
         // If we have captured the entire schema previously, we can check for non-existence
         // In these cases, return early with a None value
-        else if relation_cache.contains_full_schema_for_relation(temp_relation) {
+        else if relation_cache.contains_full_schema_for_relation(temp_relation)
+            && self.adapter_type() != AdapterType::Databricks
+        {
             Some(none_value())
         } else {
             None
