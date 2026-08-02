@@ -143,12 +143,12 @@ const LINKED_SNOWFLAKE_FIELDS: &[FieldSpec] = &[
 const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("endpoint")
         .non_empty()
-        .doc("Full REST catalog URL. Mutually exclusive with endpoint_type."),
+        .doc("REST catalog URL, with or without a scheme (DuckDB assumes https for SigV4 catalogs and http otherwise, and leaves an explicit scheme alone). Mutually exclusive with endpoint_type."),
     FieldSpec::enumerated("endpoint_type", DUCKDB_ENDPOINT_TYPES)
-        .doc("Managed endpoint type. Mutually exclusive with endpoint."),
+        .doc("Managed AWS endpoint type. DuckDB derives the endpoint URL and SigV4 authorization from it, so it is mutually exclusive with both endpoint and authorization_type."),
     FieldSpec::string("warehouse")
         .non_empty()
-        .doc("S3 warehouse URI. Required when endpoint_type is S3_TABLES."),
+        .doc("Warehouse identifier used as the ATTACH source: the S3 Tables bucket ARN (required when endpoint_type is S3_TABLES), or the Glue catalog path (defaults to ':', the current account's default catalog)."),
     FieldSpec::string("secret")
         .non_empty()
         .doc("Name of a DuckDB secret from profiles.yml to use for authentication."),

@@ -1,0 +1,13 @@
+# Scenario: AWS Glue reached through the `endpoint_type: GLUE` shortcut.
+# Exercises: ENDPOINT_TYPE emission; the source defaulting to ':' (Glue's
+# default catalog in the caller's own account) rather than the catalog name,
+# which Glue's catalog-path grammar would reject; and *no* AUTHORIZATION_TYPE,
+# since DuckDB derives SigV4 from the endpoint type and errors on the pair.
+catalogs:
+  - name: aws_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: GLUE
+        secret: glue_s3

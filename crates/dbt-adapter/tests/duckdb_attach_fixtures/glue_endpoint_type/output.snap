@@ -1,0 +1,4 @@
+---
+source: crates/dbt-adapter/tests/duckdb_attach.rs
+---
+ATTACH IF NOT EXISTS ':' AS aws_glue (TYPE ICEBERG, SECRET glue_s3, ENDPOINT_TYPE 'GLUE', READ_ONLY false)
