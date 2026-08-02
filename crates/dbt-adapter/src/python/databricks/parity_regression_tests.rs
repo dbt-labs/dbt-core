@@ -1,40 +1,40 @@
 use super::{
-    build_workflow_spec, extract_notebook_scoped_libraries, extract_packages,
-    prepare_code_with_notebook_scoped_packages,
+    DatabricksPythonJobModel, build_workflow_spec, prepare_code_with_notebook_scoped_packages,
 };
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use minijinja::Value;
 use serde_json::json;
 
+fn typed_model(config: serde_json::Value) -> Result<DatabricksPythonJobModel, String> {
+    minijinja_value_to_typed_struct(Value::from_serialize(json!({"config": config})))
+        .map_err(|error| error.to_string())
+}
+
 #[test]
 fn packages_require_a_list_of_strings_and_preserve_order_and_duplicates() {
-    let valid = Value::from_serialize(json!({
+    let valid = typed_model(json!({
         "packages": ["pandas", "numpy", "pandas"],
-    }));
-    assert_eq!(
-        extract_packages(&valid).unwrap(),
-        vec!["pandas", "numpy", "pandas"]
-    );
+    }))
+    .unwrap();
+    assert_eq!(valid.config.packages(), vec!["pandas", "numpy", "pandas"]);
 
-    let scalar = Value::from_serialize(json!({"packages": "pandas"}));
-    assert!(extract_packages(&scalar).is_err());
+    assert!(typed_model(json!({"packages": "pandas"})).is_err());
 
-    let non_string = Value::from_serialize(json!({"packages": ["pandas", 1]}));
-    assert!(extract_packages(&non_string).is_err());
+    assert!(typed_model(json!({"packages": ["pandas", 1]})).is_err());
 }
 
 #[test]
 fn notebook_scoped_libraries_matches_pydantic_boolean_coercion() {
     for value in [json!(true), json!(1), json!("yes"), json!("ON")] {
-        let config = Value::from_serialize(json!({"notebook_scoped_libraries": value}));
-        assert!(extract_notebook_scoped_libraries(&config).unwrap());
+        let model = typed_model(json!({"notebook_scoped_libraries": value})).unwrap();
+        assert!(model.config.notebook_scoped_libraries());
     }
     for value in [json!(false), json!(0), json!("no"), json!("off")] {
-        let config = Value::from_serialize(json!({"notebook_scoped_libraries": value}));
-        assert!(!extract_notebook_scoped_libraries(&config).unwrap());
+        let model = typed_model(json!({"notebook_scoped_libraries": value})).unwrap();
+        assert!(!model.config.notebook_scoped_libraries());
     }
     for value in [json!("sometimes"), json!(2), json!([]), json!({})] {
-        let config = Value::from_serialize(json!({"notebook_scoped_libraries": value}));
-        assert!(extract_notebook_scoped_libraries(&config).is_err());
+        assert!(typed_model(json!({"notebook_scoped_libraries": value})).is_err());
     }
 }
 

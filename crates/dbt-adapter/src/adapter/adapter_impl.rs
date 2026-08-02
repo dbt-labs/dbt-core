@@ -905,6 +905,7 @@ impl AdapterImpl {
         conn: &'_ mut dyn Connection,
         state: &State,
         model: &Value,
+        databricks_config: Option<&python::databricks::DatabricksPythonJobConfig>,
         compiled_code: &str,
         token: CancellationToken,
     ) -> AdapterResult<AdapterResponse> {
@@ -952,9 +953,20 @@ impl AdapterImpl {
                 token,
             ),
             // https://docs.getdbt.com/reference/resource-configs/databricks-configs
-            Impl(Databricks, _) => {
-                python::databricks::submit_python_job(self, ctx, conn, state, model, compiled_code)
-            }
+            Impl(Databricks, _) => python::databricks::submit_python_job(
+                self,
+                ctx,
+                conn,
+                state,
+                model,
+                databricks_config.ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Internal,
+                        "Databricks Python model config was not validated at the Jinja boundary",
+                    )
+                })?,
+                compiled_code,
+            ),
             Replay(Bigquery | Databricks, replay) => {
                 replay.replay_submit_python_job(ctx, conn, state, model, compiled_code)
             }

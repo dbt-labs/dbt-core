@@ -4,8 +4,8 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
-use minijinja::value::ValueKind;
 use minijinja::{State, Value};
+use serde::Deserialize;
 use serde_json::json;
 
 mod api_client;
@@ -15,12 +15,52 @@ mod notebook_scoped_packages_tests;
 mod parity_regression_tests;
 use api_client::DatabricksApiClient;
 
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct DatabricksPythonJobModel {
+    #[serde(default)]
+    pub(crate) config: DatabricksPythonJobConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct DatabricksPythonJobConfig {
+    #[serde(default)]
+    packages: Option<Vec<String>>,
+    #[serde(
+        default,
+        deserialize_with = "dbt_schemas::schemas::serde::pydantic_bool"
+    )]
+    notebook_scoped_libraries: Option<bool>,
+    index_url: Option<String>,
+    submission_method: Option<String>,
+}
+
+impl DatabricksPythonJobConfig {
+    fn packages(&self) -> &[String] {
+        self.packages.as_deref().unwrap_or_default()
+    }
+
+    fn notebook_scoped_libraries(&self) -> bool {
+        self.notebook_scoped_libraries.unwrap_or(false)
+    }
+
+    fn index_url(&self) -> Option<&str> {
+        self.index_url.as_deref().filter(|value| !value.is_empty())
+    }
+
+    fn submission_method(&self) -> &str {
+        self.submission_method
+            .as_deref()
+            .unwrap_or("all_purpose_cluster")
+    }
+}
+
 pub fn submit_python_job(
     adapter: &AdapterImpl,
     _ctx: &QueryCtx,
     _conn: &'_ mut dyn Connection,
     _state: &State,
     model: &Value,
+    typed_config: &DatabricksPythonJobConfig,
     compiled_code: &str,
 ) -> AdapterResult<AdapterResponse> {
     let config = model
@@ -45,10 +85,9 @@ pub fn submit_python_job(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .ok_or_else(|| AdapterError::new(AdapterErrorKind::Internal, "alias is required"))?;
 
-    let submission_method = extract_submission_method(&config);
-    let compiled_code = prepare_code_from_config(&config, compiled_code)?;
+    let compiled_code = prepare_code_from_config(typed_config, compiled_code);
 
-    match submission_method.as_str() {
+    match typed_config.submission_method() {
         "all_purpose_cluster" => submit_all_purpose_cluster(
             adapter,
             &config,
@@ -56,6 +95,7 @@ pub fn submit_python_job(
             &schema,
             &identifier,
             &compiled_code,
+            typed_config,
         ),
         "job_cluster" => submit_job_cluster(
             adapter,
@@ -64,6 +104,7 @@ pub fn submit_python_job(
             &schema,
             &identifier,
             &compiled_code,
+            typed_config,
         ),
         "serverless_cluster" => submit_serverless_cluster(
             adapter,
@@ -85,7 +126,7 @@ pub fn submit_python_job(
             AdapterErrorKind::NotSupported,
             format!(
                 "Unsupported submission_method: '{}'. Supported methods: all_purpose_cluster, job_cluster, serverless_cluster, workflow_job",
-                submission_method
+                typed_config.submission_method()
             ),
         )),
     }
@@ -99,6 +140,7 @@ fn submit_all_purpose_cluster(
     schema: &str,
     identifier: &str,
     compiled_code: &str,
+    typed_config: &DatabricksPythonJobConfig,
 ) -> AdapterResult<AdapterResponse> {
     let cluster_id = resolve_cluster_id(adapter, config)?;
 
@@ -110,9 +152,6 @@ fn submit_all_purpose_cluster(
 
     if create_notebook {
         // Extract library configuration (packages, index_url, additional_libs)
-        let packages = extract_packages(config)?;
-        let index_url = extract_index_url(config);
-
         let additional_libs = config
             .get_attr("additional_libs")
             .ok()
@@ -124,10 +163,10 @@ fn submit_all_purpose_cluster(
             .unwrap_or_default();
 
         let libraries = build_libraries(
-            &packages,
-            index_url.as_deref(),
+            typed_config.packages(),
+            typed_config.index_url(),
             &additional_libs,
-            extract_notebook_scoped_libraries(config)?,
+            typed_config.notebook_scoped_libraries(),
         );
 
         let mut task_settings = json!({
@@ -249,6 +288,7 @@ fn submit_job_cluster(
     schema: &str,
     identifier: &str,
     compiled_code: &str,
+    typed_config: &DatabricksPythonJobConfig,
 ) -> AdapterResult<AdapterResponse> {
     let job_cluster_config = config.get_attr("job_cluster_config").ok().ok_or_else(|| {
         AdapterError::new(
@@ -258,9 +298,6 @@ fn submit_job_cluster(
     })?;
 
     validate_job_cluster_config(&job_cluster_config)?;
-
-    let packages = extract_packages(config)?;
-    let index_url = extract_index_url(config);
 
     let additional_libs = config
         .get_attr("additional_libs")
@@ -280,10 +317,10 @@ fn submit_job_cluster(
     })?;
 
     let libraries = build_libraries(
-        &packages,
-        index_url.as_deref(),
+        typed_config.packages(),
+        typed_config.index_url(),
         &additional_libs,
-        extract_notebook_scoped_libraries(config)?,
+        typed_config.notebook_scoped_libraries(),
     );
 
     let mut task_settings = json!({
@@ -493,90 +530,13 @@ fn validate_job_cluster_config(config: &Value) -> AdapterResult<()> {
     Ok(())
 }
 
-fn extract_packages(config: &Value) -> AdapterResult<Vec<String>> {
-    let Ok(packages) = config.get_attr("packages") else {
-        return Ok(Vec::new());
-    };
-    if matches!(packages.kind(), ValueKind::None | ValueKind::Undefined) {
-        return Ok(Vec::new());
-    }
-    if packages.kind() != ValueKind::Seq {
-        return Err(AdapterError::new(
-            AdapterErrorKind::Configuration,
-            "packages must be a list of strings",
-        ));
-    }
-
-    packages
-        .try_iter()
-        .map_err(|error| AdapterError::new(AdapterErrorKind::Configuration, error.to_string()))?
-        .map(|package| {
-            package.as_str().map(String::from).ok_or_else(|| {
-                AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    "packages must be a list of strings",
-                )
-            })
-        })
-        .collect()
-}
-
-fn extract_index_url(config: &Value) -> Option<String> {
-    config
-        .get_attr("index_url")
-        .ok()
-        .and_then(|value| value.as_str().map(String::from))
-        .filter(|value| !value.is_empty())
-}
-
-fn extract_submission_method(config: &Value) -> String {
-    config
-        .get_attr("submission_method")
-        .ok()
-        .and_then(|value| value.as_str().map(String::from))
-        .unwrap_or_else(|| "all_purpose_cluster".to_string())
-}
-
-fn extract_notebook_scoped_libraries(config: &Value) -> AdapterResult<bool> {
-    let Ok(value) = config.get_attr("notebook_scoped_libraries") else {
-        return Ok(false);
-    };
-    match value.kind() {
-        ValueKind::None | ValueKind::Undefined => Ok(false),
-        ValueKind::Bool => Ok(value.is_true()),
-        ValueKind::Number => match value.as_i64() {
-            Some(0) => Ok(false),
-            Some(1) => Ok(true),
-            _ => Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "notebook_scoped_libraries must be a valid boolean",
-            )),
-        },
-        ValueKind::String => match value.as_str().unwrap().to_ascii_lowercase().as_str() {
-            "0" | "false" | "f" | "n" | "no" | "off" => Ok(false),
-            "1" | "true" | "t" | "y" | "yes" | "on" => Ok(true),
-            _ => Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "notebook_scoped_libraries must be a valid boolean",
-            )),
-        },
-        _ => Err(AdapterError::new(
-            AdapterErrorKind::Configuration,
-            "notebook_scoped_libraries must be a valid boolean",
-        )),
-    }
-}
-
-fn prepare_code_from_config(config: &Value, compiled_code: &str) -> AdapterResult<String> {
-    let packages = extract_packages(config)?;
-    let index_url = extract_index_url(config);
-    let notebook_scoped_libraries = extract_notebook_scoped_libraries(config)?;
-    Ok(prepare_code_with_notebook_scoped_packages(
+fn prepare_code_from_config(config: &DatabricksPythonJobConfig, compiled_code: &str) -> String {
+    prepare_code_with_notebook_scoped_packages(
         compiled_code,
-        &packages,
-        notebook_scoped_libraries,
-        index_url.as_deref(),
-    ))
+        config.packages(),
+        config.notebook_scoped_libraries(),
+        config.index_url(),
+    )
 }
 
 fn prepare_code_with_notebook_scoped_packages(

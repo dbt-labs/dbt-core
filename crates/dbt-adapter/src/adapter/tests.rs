@@ -217,6 +217,35 @@ fn make_mock_adapter(adapter_type: AdapterType) -> Arc<Adapter> {
 }
 
 #[test]
+fn databricks_submit_python_job_validates_typed_config_at_jinja_boundary() {
+    let adapter = make_mock_adapter(AdapterType::Databricks);
+    let mut env = minijinja::Environment::new();
+    env.add_global("obj", Value::from_object((*adapter).clone()));
+    let error = env
+        .render_str(
+            r#"{{ obj.submit_python_job({
+                "database": "main",
+                "schema": "schema_name",
+                "alias": "model_name",
+                "config": {
+                    "submission_method": "all_purpose_cluster",
+                    "notebook_scoped_libraries": [],
+                    "packages": ["emoji==2.14.1"]
+                }
+            }, "compiled_code") }}"#,
+            BTreeMap::<String, String>::new(),
+            &[],
+        )
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Invalid Databricks Python model config"),
+        "actual Jinja method dispatch must reject invalid typed config before connection acquisition: {error}"
+    );
+}
+
+#[test]
 fn test_render_equals_flag_off_returns_simple_eq() {
     let adapter = make_duckdb_adapter();
     let result = dispatch_test(
