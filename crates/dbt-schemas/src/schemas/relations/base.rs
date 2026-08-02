@@ -546,7 +546,8 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             | AdapterType::Spark
             | AdapterType::DuckDB
             | AdapterType::Alt
-            | AdapterType::Fabric => (
+            | AdapterType::Fabric
+            | AdapterType::SqlServer => (
                 start.map(|start| format!("{event_time} >= '{start}'")),
                 end.map(|end| format!("{event_time} < '{end}'")),
             ),
