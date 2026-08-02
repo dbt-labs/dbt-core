@@ -1468,9 +1468,8 @@ impl Adapter {
                                     ),
                                 }
 
-                                self.get_relation_value_from_cache_after_listing(
-                                    temp_relation.as_ref(),
-                                )
+                                self.get_relation_value_from_cache(temp_relation.as_ref())
+                                    .or(Some(none_value()))
                             } else {
                                 None
                             }
@@ -4234,40 +4233,14 @@ impl Object for Adapter {
 }
 
 impl Adapter {
-    fn get_relation_value_from_cache_after_listing(
-        &self,
-        temp_relation: &dyn BaseRelation,
-    ) -> Option<Value> {
-        let cache_result = self.get_relation_value_from_cache(temp_relation);
-        if cache_result.is_some() || self.adapter_type() == AdapterType::Databricks {
-            // `Some(relation)` is a positive cache hit, `Some(none)` is an
-            // authoritative absence, and Rust `None` means the cache cannot
-            // answer and the caller must perform a direct relation lookup.
-            // Databricks system.information_schema can temporarily omit a
-            // just-created relation, so a negative schema-listing result is not
-            // authoritative there. Preserve the positive-hit fast path, but
-            // return Rust `None` for a Databricks miss so the direct DESCRIBE
-            // path verifies whether the relation actually exists.
-            cache_result
-        } else {
-            Some(none_value())
-        }
-    }
-
     fn get_relation_value_from_cache(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
         let relation_cache = self.engine().relation_cache();
         if let Some(cached_entry) = relation_cache.get_relation(temp_relation) {
             Some(RelationObject::new(cached_entry.relation()).into_value())
         }
-        // A complete schema listing normally makes a missing relation an
-        // authoritative negative cache hit. Databricks is excluded because its
-        // eventually consistent system.information_schema may omit a recently
-        // created relation; returning Jinja `none` here would suppress the
-        // direct DESCRIBE fallback and could make a rerun attempt CREATE against
-        // a table that already exists.
-        else if relation_cache.contains_full_schema_for_relation(temp_relation)
-            && self.adapter_type() != AdapterType::Databricks
-        {
+        // If we have captured the entire schema previously, we can check for non-existence
+        // In these cases, return early with a None value
+        else if relation_cache.contains_full_schema_for_relation(temp_relation) {
             Some(none_value())
         } else {
             None
