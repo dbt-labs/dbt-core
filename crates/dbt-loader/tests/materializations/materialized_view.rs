@@ -262,8 +262,13 @@ mod databricks {
         let a_position = result
             .find("'a_tag' = 'second'")
             .expect("SET TAGS SQL should contain a_tag");
+        let normalized = result.split_whitespace().collect::<Vec<_>>().join(" ");
 
         assert!(result.contains("SET TAGS"));
+        assert!(
+            normalized.contains("SET TAGS ( 'z_tag' = 'first'"),
+            "SET TAGS should preserve the v1 space after the opening parenthesis: {result}"
+        );
         assert!(
             z_position < a_position,
             "configured insertion order must be preserved in SET TAGS SQL: {result}"

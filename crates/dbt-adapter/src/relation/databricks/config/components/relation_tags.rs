@@ -72,14 +72,69 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<Rela
     Ok(new_component(tags))
 }
 
-fn yml_scalar_to_string(value: &YmlValue) -> Option<String> {
+fn python_string_repr(value: &str) -> String {
+    let quote = if value.contains('\'') && !value.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    let mut result = String::with_capacity(value.len() + 2);
+    result.push(quote);
+    for character in value.chars() {
+        match character {
+            '\\' => result.push_str("\\\\"),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            '\u{0008}' => result.push_str("\\b"),
+            '\u{000c}' => result.push_str("\\f"),
+            character if character == quote => {
+                result.push('\\');
+                result.push(character);
+            }
+            character => result.push(character),
+        }
+    }
+    result.push(quote);
+    result
+}
+
+fn yml_value_to_python_repr(value: &YmlValue) -> String {
     match value {
-        YmlValue::Null(_) => Some(String::new()),
-        YmlValue::Bool(value, _) => Some(if *value { "True" } else { "False" }.to_string()),
-        YmlValue::Number(value, _) => Some(value.to_string()),
-        YmlValue::String(value, _) => Some(value.clone()),
-        YmlValue::Tagged(tagged, _) => yml_scalar_to_string(&tagged.value),
-        YmlValue::Sequence(_, _) | YmlValue::Mapping(_, _) => None,
+        YmlValue::Null(_) => "None".to_string(),
+        YmlValue::Bool(value, _) => (if *value { "True" } else { "False" }).to_string(),
+        YmlValue::Number(value, _) => value.to_string(),
+        YmlValue::String(value, _) => python_string_repr(value),
+        YmlValue::Tagged(tagged, _) => yml_value_to_python_repr(&tagged.value),
+        YmlValue::Sequence(values, _) => format!(
+            "[{}]",
+            values
+                .iter()
+                .map(yml_value_to_python_repr)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        YmlValue::Mapping(values, _) => format!(
+            "{{{}}}",
+            values
+                .iter()
+                .map(|(key, value)| format!(
+                    "{}: {}",
+                    yml_value_to_python_repr(key),
+                    yml_value_to_python_repr(value)
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+fn yml_value_to_python_string(value: &YmlValue) -> String {
+    match value {
+        YmlValue::Null(_) => String::new(),
+        YmlValue::String(value, _) => value.clone(),
+        YmlValue::Tagged(tagged, _) => yml_value_to_python_string(&tagged.value),
+        _ => yml_value_to_python_repr(value),
     }
 }
 
@@ -96,9 +151,7 @@ fn from_local_config(
         && let Some(tags_map) = &databricks_attr.databricks_tags
     {
         for (key, value) in tags_map {
-            if let Some(value) = yml_scalar_to_string(value) {
-                tags.insert(key.clone(), value);
-            }
+            tags.insert(key.clone(), yml_value_to_python_string(value));
         }
     }
 
@@ -216,5 +269,29 @@ mod tests {
 
         assert_eq!(tags.value.get("priority"), Some(&"0".to_string()));
         assert_eq!(tags.value.get("enabled"), Some(&"False".to_string()));
+    }
+
+    #[test]
+    fn test_local_config_stringifies_collection_tag_values_like_v1() {
+        let sequence: YmlValue = dbt_yaml::from_str("[1, two, false, null]").unwrap();
+        let mapping: YmlValue = dbt_yaml::from_str("{team: data, active: true}").unwrap();
+        let model = create_mock_dbt_model(TestModelConfig {
+            raw_tags: Some(IndexMap::from_iter([
+                ("sequence".to_string(), sequence),
+                ("mapping".to_string(), mapping),
+            ])),
+            ..Default::default()
+        });
+
+        let tags = from_local_config(&model).unwrap();
+
+        assert_eq!(
+            tags.value.get("sequence"),
+            Some(&"[1, 'two', False, None]".to_string())
+        );
+        assert_eq!(
+            tags.value.get("mapping"),
+            Some(&"{'team': 'data', 'active': True}".to_string())
+        );
     }
 }
