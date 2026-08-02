@@ -5,6 +5,7 @@ use dbt_adapter_core::AdapterType;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{Environment, Error, ErrorKind, State, Value, context};
+use minijinja_contrib::testing::jinja_assert;
 use serde_json::{Value as JsonValue, json};
 
 use super::QueryCommentConfig;
@@ -32,6 +33,35 @@ impl Object for Target {
             _ => Value::UNDEFINED,
         })
     }
+}
+
+#[test]
+fn test_target_jinja_contract() {
+    jinja_assert(
+        Target,
+        "
+        profile_name: {{ obj.get('profile_name') }}
+        target_name: {{ obj.get('target_name') }}
+        missing_is_undefined: {{ obj.get('missing') is undefined }}
+        ",
+        "
+        profile_name: invocation_id_query_comment
+        target_name: conformance
+        missing_is_undefined: True
+        ",
+    );
+
+    let mut env = Environment::new();
+    env.add_global("obj", Value::from_object(Target));
+    let error = env
+        .render_str("{{ obj.unsupported() }}", (), &[])
+        .expect_err("unsupported Target methods should fail in Jinja");
+    assert_eq!(error.kind(), ErrorKind::UnknownMethod);
+    assert!(
+        error
+            .to_string()
+            .contains("Unknown method on Target: unsupported")
+    );
 }
 
 fn render_default_comment(
