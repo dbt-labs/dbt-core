@@ -1,66 +1,42 @@
-use std::rc::Rc;
-use std::sync::Arc;
+use std::collections::BTreeMap;
 
 use dbt_adapter_core::AdapterType;
-use minijinja::listener::RenderingEventListener;
-use minijinja::value::Object;
-use minijinja::{Environment, Error, ErrorKind, State, Value, context};
-use minijinja_contrib::testing::jinja_assert;
+use minijinja::{Environment, Error, ErrorKind, Value, context};
+use minijinja_contrib::pycompat::unknown_method_callback;
 use serde_json::{Value as JsonValue, json};
 
 use super::QueryCommentConfig;
 
-#[derive(Debug)]
-struct Target;
-
-impl Object for Target {
-    fn call_method(
-        self: &Arc<Self>,
-        _state: &State<'_, '_>,
-        name: &str,
-        args: &[Value],
-        _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, Error> {
-        if name != "get" {
-            return Err(Error::new(
-                ErrorKind::UnknownMethod,
-                format!("Unknown method on Target: {name}"),
-            ));
-        }
-        Ok(match args.first().and_then(Value::as_str) {
-            Some("profile_name") => Value::from("invocation_id_query_comment"),
-            Some("target_name") => Value::from("conformance"),
-            _ => Value::UNDEFINED,
-        })
-    }
+fn target() -> BTreeMap<String, Value> {
+    BTreeMap::from([
+        (
+            "profile_name".to_string(),
+            Value::from("invocation_id_query_comment"),
+        ),
+        ("target_name".to_string(), Value::from("conformance")),
+    ])
 }
 
 #[test]
-fn test_target_jinja_contract() {
-    jinja_assert(
-        Target,
-        "
-        profile_name: {{ obj.get('profile_name') }}
-        target_name: {{ obj.get('target_name') }}
-        missing_is_undefined: {{ obj.get('missing') is undefined }}
+fn test_target_map_jinja_contract() {
+    let mut env = Environment::new();
+    env.set_unknown_method_callback(unknown_method_callback);
+    let rendered = env
+        .render_str(
+            "
+        profile_name: {{ target.get('profile_name') }}
+        target_name: {{ target.get('target_name') }}
         ",
+            context! { target => target() },
+            &[],
+        )
+        .expect("target map should support Python-compatible get");
+    assert_eq!(
+        rendered,
         "
         profile_name: invocation_id_query_comment
         target_name: conformance
-        missing_is_undefined: True
-        ",
-    );
-
-    let mut env = Environment::new();
-    env.add_global("obj", Value::from_object(Target));
-    let error = env
-        .render_str("{{ obj.unsupported() }}", (), &[])
-        .expect_err("unsupported Target methods should fail in Jinja");
-    assert_eq!(error.kind(), ErrorKind::UnknownMethod);
-    assert!(
-        error
-            .to_string()
-            .contains("Unknown method on Target: unsupported")
+        "
     );
 }
 
@@ -71,6 +47,7 @@ fn render_default_comment(
 ) -> JsonValue {
     let config = QueryCommentConfig::from_query_comment(None, AdapterType::Databricks, true, None);
     let mut env = Environment::new();
+    env.set_unknown_method_callback(unknown_method_callback);
     env.add_function("return", |value: Value| value);
     env.add_function("tojson", |value: Value| -> Result<String, Error> {
         serde_json::to_string(&value)
@@ -82,7 +59,7 @@ fn render_default_comment(
             &config.comment,
             context! {
                 dbt_version => "2.0.0",
-                target => Value::from_object(Target),
+                target => target(),
                 invocation_id => invocation_id,
                 node => node,
                 connection_name => connection_name,

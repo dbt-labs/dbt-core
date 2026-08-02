@@ -12,19 +12,14 @@ use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
 // Reference: https://github.com/dbt-labs/dbt-adapters/blob/317e809abd19026d3784e04281b307c5e6a9d469/dbt-adapters/src/dbt/adapters/contracts/connection.py#L197
-macro_rules! default_query_comment_template {
-    ($additional_fields:literal) => {
-        concat!(
-            "
+const DEFAULT_QUERY_COMMENT: &str = "
 {%- set comment_dict = {} -%}
 {%- do comment_dict.update(
     app='dbt',
     dbt_version=dbt_version,
     profile_name=target.get('profile_name'),
     target_name=target.get('target_name'),
-",
-            $additional_fields,
-            ") -%}
+) -%}
 {%- if node is not none -%}
   {%- do comment_dict.update(
     node_id=node.unique_id,
@@ -34,19 +29,29 @@ macro_rules! default_query_comment_template {
   {%- do comment_dict.update(connection_name=connection_name) -%}
 {%- endif -%}
 {{ return(tojson(comment_dict)) }}
-"
-        )
-    };
-}
-
-const DEFAULT_QUERY_COMMENT: &str = default_query_comment_template!("");
+";
 
 // Databricks includes the command invocation ID in its default query comment.
 // Keep this adapter-specific so the default comments of other adapters remain unchanged.
-const DATABRICKS_QUERY_COMMENT: &str = default_query_comment_template!(
-    "    invocation_id=invocation_id,
-"
-);
+const DATABRICKS_QUERY_COMMENT: &str = "
+{%- set comment_dict = {} -%}
+{%- do comment_dict.update(
+    app='dbt',
+    dbt_version=dbt_version,
+    profile_name=target.get('profile_name'),
+    target_name=target.get('target_name'),
+    invocation_id=invocation_id,
+) -%}
+{%- if node is not none -%}
+  {%- do comment_dict.update(
+    node_id=node.unique_id,
+  ) -%}
+{% else %}
+  {# in the node context, the connection name is the node_id #}
+  {%- do comment_dict.update(connection_name=connection_name) -%}
+{%- endif -%}
+{{ return(tojson(comment_dict)) }}
+";
 
 // Extended default query comment that includes dbt Cloud environment variables when present.
 // Used automatically when any DBT_CLOUD_* environment variable is set.
