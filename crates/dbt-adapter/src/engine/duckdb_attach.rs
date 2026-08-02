@@ -172,7 +172,37 @@ fn build_duckdb_catalog_attach_stmt(
     let alias = resolve_required_attach_alias(catalog)?;
     let endpoint_type = duckdb_get_str(duckdb, "endpoint_type");
 
+    // Emission order is part of the snapshot contract: connection options, then
+    // user-supplied passthrough options, then dbt's defaults.
     let mut opts = vec!["TYPE ICEBERG".to_string()];
+    push_connection_opts(&mut opts, duckdb, endpoint_type);
+    push_passthrough_opts(&mut opts, duckdb)?;
+    push_default_opts(&mut opts, duckdb, catalog.catalog_type, endpoint_type)?;
+
+    let source = format!(
+        "'{}'",
+        escape_string_literal(
+            resolve_attach_source(catalog, duckdb, endpoint_type),
+            AdapterType::DuckDB
+        )
+    );
+
+    Ok((
+        alias.clone(),
+        format!(
+            "ATTACH IF NOT EXISTS {source} AS {alias} ({})",
+            opts.join(", ")
+        ),
+    ))
+}
+
+/// How DuckDB reaches the catalog: which secret to authenticate with, and where
+/// the REST endpoint lives.
+fn push_connection_opts(
+    opts: &mut Vec<String>,
+    duckdb: &dbt_yaml::Mapping,
+    endpoint_type: Option<&str>,
+) {
     if let Some(secret) = duckdb_get_str(duckdb, "secret") {
         let secret = dbt_adapter_sql::ident::sanitize_identifier(secret, AdapterType::DuckDB);
         if !secret.is_empty() {
@@ -196,7 +226,11 @@ fn build_duckdb_catalog_attach_stmt(
             escape_string_literal(ep, AdapterType::DuckDB)
         ));
     }
+}
 
+/// ATTACH options passed straight through from `config.duckdb`, emitted only
+/// when the user set them.
+fn push_passthrough_opts(opts: &mut Vec<String>, duckdb: &dbt_yaml::Mapping) -> AdapterResult<()> {
     for (key, sql_key) in [
         ("default_region", "DEFAULT_REGION"),
         ("default_schema", "DEFAULT_SCHEMA"),
@@ -229,13 +263,23 @@ fn build_duckdb_catalog_attach_stmt(
             opts.push(format!("{sql_key} {val}"));
         }
     }
+    Ok(())
+}
+
+/// Options dbt supplies on the user's behalf: the read-write default and the
+/// per-catalog-type write-compat presets, each yielding to an explicit user value.
+fn push_default_opts(
+    opts: &mut Vec<String>,
+    duckdb: &dbt_yaml::Mapping,
+    catalog_type: V2CatalogType,
+    endpoint_type: Option<&str>,
+) -> AdapterResult<()> {
     // duckdb's AUTOMATIC access mode resolves to read-only for a remote Iceberg
     // REST catalog, which blocks CREATE/INSERT. dbt writes to its catalogs, so
     // attach read-write by default; a user-supplied `read_only` config overrides.
     let read_only = duckdb_get_bool(duckdb, "read_only")?.unwrap_or(false);
     opts.push(format!("READ_ONLY {read_only}"));
-    // Preset write-compat defaults per catalog type for keys the user did not set.
-    for (config_key, default_clause) in catalog_attach_defaults(catalog.catalog_type) {
+    for (config_key, default_clause) in catalog_attach_defaults(catalog_type) {
         // `endpoint_type` already implies an authorization type inside DuckDB,
         // which rejects the pair outright ("'authorization_type' can not be
         // combined with 'endpoint_type'"). Presetting one here would turn a
@@ -250,10 +294,17 @@ fn build_duckdb_catalog_attach_stmt(
     if duckdb_get_bool(duckdb, "encode_entire_prefix")?.unwrap_or(false) {
         opts.push("ENCODE_ENTIRE_PREFIX true".to_string());
     }
+    Ok(())
+}
 
-    // For Iceberg REST catalogs, source is the warehouse name, not the endpoint
-    // URL.
-    let warehouse = duckdb_get_str(duckdb, "warehouse").unwrap_or_else(|| {
+/// The `ATTACH '<source>'` operand. For Iceberg REST catalogs this is the
+/// warehouse name, not the endpoint URL.
+fn resolve_attach_source<'a>(
+    catalog: &CatalogSpecV2View<'a>,
+    duckdb: &'a dbt_yaml::Mapping,
+    endpoint_type: Option<&str>,
+) -> &'a str {
+    duckdb_get_str(duckdb, "warehouse").unwrap_or_else(|| {
         // Glue reads the source as a catalog path, not a free-form warehouse
         // name, and validates it against its own grammar (':', a 12-digit
         // account id, 'cat1/cat2', ...) — a dbt catalog name fails that check.
@@ -263,19 +314,7 @@ fn build_duckdb_catalog_attach_stmt(
         } else {
             catalog.name
         }
-    });
-    let source = format!(
-        "'{}'",
-        escape_string_literal(warehouse, AdapterType::DuckDB)
-    );
-
-    Ok((
-        alias.clone(),
-        format!(
-            "ATTACH IF NOT EXISTS {source} AS {alias} ({})",
-            opts.join(", ")
-        ),
-    ))
+    })
 }
 
 /// Whether this catalog attaches to AWS Glue, by either route: a `glue` catalog
