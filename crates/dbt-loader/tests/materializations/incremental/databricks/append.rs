@@ -2,6 +2,47 @@ use super::*;
 
 const APPEND_SQL: &str = "INSERT INTO target SELECT * FROM source";
 
+fn normalize_sql(sql: &str) -> String {
+    sql.to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn mock_insert_columns(harness: &MacroTestHarness) {
+    harness.mock().on("get_columns_in_relation", |_| {
+        Ok(Value::from_serialize(vec![
+            BTreeMap::from([("name", "id")]),
+            BTreeMap::from([("name", "name")]),
+        ]))
+    });
+}
+
+fn insert_context(harness: &MacroTestHarness) -> BTreeMap<String, Value> {
+    let target = harness.relation(
+        "TEST_DB",
+        "TEST_SCHEMA",
+        "my_incr",
+        Some(RelationType::Table),
+    );
+    let source = harness.relation(
+        "TEST_DB",
+        "TEST_SCHEMA",
+        "my_incr__dbt_tmp",
+        Some(RelationType::Table),
+    );
+    BTreeMap::from([
+        (
+            "source".to_string(),
+            RelationObject::new(source).into_value(),
+        ),
+        (
+            "target".to_string(),
+            RelationObject::new(target).into_value(),
+        ),
+    ])
+}
+
 fn existing_table_harness(materialization_v2: bool) -> MacroTestHarness {
     let harness = build_harness_with_materialization_v2(materialization_v2);
     let existing = harness.relation(
@@ -71,64 +112,16 @@ fn assert_append_executed(harness: &MacroTestHarness) {
     );
 }
 
-#[test]
-fn append_strategy_renders_insert_into_target() {
-    let harness = build_harness();
-    harness.mock().on("get_columns_in_relation", |_| {
-        Ok(Value::from_serialize(vec![
-            BTreeMap::from([("name", "id")]),
-            BTreeMap::from([("name", "name")]),
-        ]))
-    });
-    let target = harness.relation(
-        "TEST_DB",
-        "TEST_SCHEMA",
-        "my_incr",
-        Some(RelationType::Table),
-    );
-    let source = harness.relation(
-        "TEST_DB",
-        "TEST_SCHEMA",
-        "my_incr__dbt_tmp",
-        Some(RelationType::Table),
-    );
-    let ctx = BTreeMap::from([
-        (
-            "source".to_string(),
-            RelationObject::new(source).into_value(),
-        ),
-        (
-            "target".to_string(),
-            RelationObject::new(target).into_value(),
-        ),
-    ]);
-
-    let sql = harness
-        .render(
-            "{{ databricks__get_incremental_append_sql({'temp_relation': source, 'target_relation': target}) }}",
-            ctx,
-        )
-        .unwrap_or_else(|e| panic!("rendering Databricks append SQL failed: {e:?}"));
-    let normalized = sql
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    assert!(
-        normalized.contains("insert into `test_db`.`test_schema`.`my_incr`"),
-        "expected the persistent relation to be the INSERT target, got: {sql}",
-    );
-    assert!(
-        normalized.contains("select * from `test_db`.`test_schema`.`my_incr__dbt_tmp`"),
-        "expected the temporary relation to be the SELECT source, got: {sql}",
-    );
-    assert!(!normalized.contains("create or replace"), "got: {sql}");
+fn assert_create_without_incremental_strategy(harness: &MacroTestHarness) {
+    assert_executed_contains(harness.mock(), "create");
+    harness
+        .mock()
+        .observed_calls()
+        .assert_not_called("get_incremental_strategy_macro");
 }
 
-#[test]
-fn existing_table_append_uses_incremental_statement() {
-    let harness = existing_table_harness(false);
+fn assert_existing_table_append(materialization_v2: bool) {
+    let harness = existing_table_harness(materialization_v2);
     mock_incremental_strategy(&harness);
 
     render_append(&harness, false);
@@ -136,17 +129,60 @@ fn existing_table_append_uses_incremental_statement() {
     assert_append_executed(&harness);
 }
 
-#[test]
-fn existing_table_full_refresh_recreates_instead_of_appending() {
-    let harness = existing_table_harness(false);
+fn assert_existing_table_full_refresh(materialization_v2: bool) {
+    let harness = existing_table_harness(materialization_v2);
+    if materialization_v2 {
+        mock_v2_creation(&harness);
+    }
 
     render_append(&harness, true);
 
-    assert_executed_contains(harness.mock(), "create");
-    harness
-        .mock()
-        .observed_calls()
-        .assert_not_called("get_incremental_strategy_macro");
+    assert_create_without_incremental_strategy(&harness);
+}
+
+#[test]
+fn append_strategy_renders_insert_into_target() {
+    let harness = build_harness();
+    mock_insert_columns(&harness);
+    let ctx = insert_context(&harness);
+
+    let append_sql = harness
+        .render(
+            "{{ databricks__get_incremental_append_sql({'temp_relation': source, 'target_relation': target}) }}",
+            ctx.clone(),
+        )
+        .unwrap_or_else(|e| panic!("rendering Databricks append SQL failed: {e:?}"));
+    let qualified_sql = harness
+        .render(
+            "{{ databricks__get_insert_into_sql(source, target) }}",
+            ctx.clone(),
+        )
+        .unwrap_or_else(|e| panic!("rendering qualified insert SQL failed: {e:?}"));
+    let normalized = normalize_sql(&append_sql);
+
+    assert!(
+        normalized.contains("insert into `test_db`.`test_schema`.`my_incr`"),
+        "expected the persistent relation to be the INSERT target, got: {append_sql}",
+    );
+    assert!(
+        normalized.contains("select * from `test_db`.`test_schema`.`my_incr__dbt_tmp`"),
+        "expected the temporary relation to be the SELECT source, got: {append_sql}",
+    );
+    assert!(
+        !normalized.contains("create or replace"),
+        "got: {append_sql}"
+    );
+    assert_eq!(normalize_sql(&qualified_sql), normalized);
+}
+
+#[test]
+fn existing_table_append_uses_incremental_statement() {
+    assert_existing_table_append(false);
+}
+
+#[test]
+fn existing_table_full_refresh_recreates_instead_of_appending() {
+    assert_existing_table_full_refresh(false);
 }
 
 #[test]
@@ -157,33 +193,15 @@ fn v2_no_existing_relation_creates_table() {
 
     render_append(&harness, false);
 
-    assert_executed_contains(harness.mock(), "create");
-    harness
-        .mock()
-        .observed_calls()
-        .assert_not_called("get_incremental_strategy_macro");
+    assert_create_without_incremental_strategy(&harness);
 }
 
 #[test]
 fn v2_existing_table_append_uses_incremental_statement() {
-    let harness = existing_table_harness(true);
-    mock_incremental_strategy(&harness);
-
-    render_append(&harness, false);
-
-    assert_append_executed(&harness);
+    assert_existing_table_append(true);
 }
 
 #[test]
 fn v2_existing_table_full_refresh_recreates_instead_of_appending() {
-    let harness = existing_table_harness(true);
-    mock_v2_creation(&harness);
-
-    render_append(&harness, true);
-
-    assert_executed_contains(harness.mock(), "create");
-    harness
-        .mock()
-        .observed_calls()
-        .assert_not_called("get_incremental_strategy_macro");
+    assert_existing_table_full_refresh(true);
 }

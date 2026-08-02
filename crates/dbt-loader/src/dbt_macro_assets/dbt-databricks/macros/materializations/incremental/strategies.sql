@@ -217,10 +217,6 @@ where {{ incremental_predicates }}
 {% endmacro %}
 
 
-{% macro get_insert_into_sql(source_relation, target_relation) %}
-    {{ return(databricks__get_insert_into_sql(source_relation, target_relation)) }}
-{% endmacro %}
-
 {% macro databricks__get_insert_into_sql(source_relation, target_relation) %}
     {%- set source_columns = adapter.get_columns_in_relation(source_relation) | map(attribute="name") | list -%}
     {%- set dest_columns = adapter.get_columns_in_relation(target_relation) | map(attribute="name") | list -%}
