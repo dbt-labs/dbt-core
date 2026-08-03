@@ -64,8 +64,9 @@ class TestSnapshotChangeWithUpstreamSourceCoChange:
         write_file(sources_yml_changed, project.project_root, "models", "sources.yml")
         write_file(snapshot_yml_changed, project.project_root, "models", "a_snap.yml")
 
-        # partial parse (reuses the msgpack from the baseline run)
-        run_dbt(["parse"])
+        # partial parse (reuses the msgpack from the baseline run); pass --partial-parse
+        # explicitly so the test can't silently pass via a full-parse fallback
+        run_dbt(["--partial-parse", "parse"])
         manifest = get_manifest(project.project_root)
         # FAILS on 1.latest (stays "team_a" - stale node); PASSES after the fix
         assert manifest.nodes[SNAP_ID].config.meta["owner"] == "team_b"
@@ -81,6 +82,7 @@ class TestSnapshotChangeInIsolationStillDetected:
     def test_isolated_snapshot_change_detected(self, project):
         run_dbt(["parse"])
         write_file(snapshot_yml_changed, project.project_root, "models", "a_snap.yml")
-        run_dbt(["parse"])
+        # explicit --partial-parse so a full-parse fallback can't mask a regression
+        run_dbt(["--partial-parse", "parse"])
         manifest = get_manifest(project.project_root)
         assert manifest.nodes[SNAP_ID].config.meta["owner"] == "team_b"
