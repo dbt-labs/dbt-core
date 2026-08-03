@@ -1050,7 +1050,13 @@ impl Column {
                 if self._nullable == Some(false) {
                     s.push_str(" NOT NULL");
                 }
-                if let Some(comment) = &self.comment {
+                let comment = match self._adapter_type {
+                    AdapterType::Databricks => {
+                        self.comment.as_ref().filter(|comment| !comment.is_empty())
+                    }
+                    _ => self.comment.as_ref(),
+                };
+                if let Some(comment) = comment {
                     let escaped = comment.replace('\\', "\\\\").replace('\'', "\\'");
                     s.push_str(&format!(" COMMENT '{escaped}'"));
                 }
@@ -1287,6 +1293,51 @@ mod tests {
                 "{adapter:?} should double-quote identifiers"
             );
         }
+    }
+
+    #[test]
+    fn databricks_create_column_omits_empty_comment() {
+        let column = Column::new(
+            AdapterType::Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(Some(String::new()));
+
+        assert_eq!(column.render_for_create(), "`id` int");
+    }
+
+    #[test]
+    fn databricks_create_column_preserves_non_empty_comment() {
+        let column = Column::new(
+            AdapterType::Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(Some("documented".to_string()));
+
+        assert_eq!(column.render_for_create(), "`id` int COMMENT 'documented'");
+    }
+
+    #[test]
+    fn spark_create_column_preserves_empty_comment() {
+        let column = Column::new(
+            AdapterType::Spark,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(Some(String::new()));
+
+        assert_eq!(column.render_for_create(), "`id` int COMMENT ''");
     }
 
     #[test]
