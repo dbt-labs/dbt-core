@@ -501,10 +501,19 @@ class PartialParsing:
                 file_id = node.file_id
                 if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                     source_file = self.saved_files[file_id]
-                    self.remove_mssat_file(source_file)
-                    # content of non-schema files is only in new files
-                    self.saved_files[file_id] = deepcopy(self.new_files[file_id])
-                    self.add_to_pp_files(self.saved_files[file_id])
+                    if isinstance(source_file, SchemaSourceFile):
+                        # YAML-defined nodes live in a schema file, not a SQL SourceFile.
+                        # remove_mssat_file is a no-op for these and overwriting saved_files with
+                        # the new content here would leave the stale node in the manifest. Route
+                        # through the schema-file change path so the stale node is removed and
+                        # the new one is scheduled.
+                        if file_id in self.new_files:
+                            self.change_schema_file(file_id)
+                    else:
+                        self.remove_mssat_file(source_file)
+                        # content of non-schema files is only in new files
+                        self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                        self.add_to_pp_files(self.saved_files[file_id])
             elif unique_id in self.saved_manifest.sources:
                 source = self.saved_manifest.sources[unique_id]
                 self._schedule_for_parsing(
