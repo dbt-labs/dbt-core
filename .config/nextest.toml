@@ -1,0 +1,14 @@
+# Nextest configuration for dbt-core (Rust workspace).
+#
+# The live warehouse tests (`live_warehouse_*` in dbt-sa-cli) require a real
+# Snowflake/Redshift connection, so they are excluded from the default profile
+# and only run via the dedicated `warehouse` profile (in CI, with credentials
+# provisioned at ~/.dbt/profiles.yml).
+
+[profile.default]
+default-filter = 'not test(live_warehouse)'
+
+# Runs ONLY the live warehouse tests. Use in CI with credentials configured:
+#   cargo nextest run --profile warehouse
+[profile.warehouse]
+default-filter = 'test(live_warehouse)'

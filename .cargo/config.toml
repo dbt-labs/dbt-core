@@ -1,2 +1,7 @@
 [alias]
 ci = "run --quiet --package dbt-ci --"
+
+# Dev/test builds are unoptimized; parse/analysis recursion needs a larger
+# stack than the default or the test process aborts (SIGABRT).
+[env]
+RUST_MIN_STACK = "16777216"

@@ -1,0 +1,14 @@
+# Compile only exercises dialect-specific static analysis / SQL rendering, so
+# no warehouse connection is made. The connection values below are unused.
+default:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: dummy_account
+      user: dummy_user
+      password: dummy_password
+      role: dummy_role
+      database: dummy_database
+      warehouse: dummy_warehouse
+      schema: dummy_schema
