@@ -1,0 +1,8 @@
+kind: Fixes
+body: Fix should_warn/should_error test result columns being read via generic Jinja
+    truthiness, which reads any non-empty string (including the text 'false') as true.
+time: 2026-08-03T00:10:00.000000-00:00
+custom:
+    author: axellpadilla
+    issue: "15767"
+    project: dbt-core
