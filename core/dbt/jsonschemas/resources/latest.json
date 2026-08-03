@@ -8526,6 +8526,7 @@
       "type": "object",
       "properties": {
         "meta": {
+          "default": {},
           "type": [
             "object",
             "null"
