@@ -2,6 +2,6 @@ kind: Features
 body: "Support notebook-scoped Python package installation for Databricks Python models."
 time: 2026-07-29T08:50:25.000000+00:00
 custom:
-    author: ""
+    author: "sd-db"
     issue: "15688"
     project: dbt-core
