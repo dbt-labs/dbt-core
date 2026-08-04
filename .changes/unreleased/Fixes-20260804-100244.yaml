@@ -1,0 +1,7 @@
+kind: Fixes
+body: Return a catchable dispatch error when a resolved Jinja template does not export the requested macro instead of overflowing the stack
+time: 2026-08-04T10:02:44.528289-04:00
+custom:
+    author: mach-kernel
+    issue: "15700"
+    project: dbt-core

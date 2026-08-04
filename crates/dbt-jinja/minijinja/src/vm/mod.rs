@@ -203,7 +203,7 @@ impl<'env> Vm<'env> {
     ) -> Result<(Value, State<'template, 'env>), Error> {
         let _guard = value_optimization();
 
-        let ctx = Context::new_with_frame_and_stack_depth(
+        let ctx = ok!(Context::new_with_frame_and_stack_depth(
             ok!(Frame::new_checked(root.clone())),
             self.env.recursion_limit(),
             root.get_attr_fast(CURRENT_PATH)
@@ -211,7 +211,7 @@ impl<'env> Vm<'env> {
             root.get_attr_fast(CURRENT_SPAN)
                 .map_or_else(Span::default, |value| deserialize_span(&value)),
             outer_stack_depth,
-        );
+        ));
 
         let mut state = State::new(
             self.env,

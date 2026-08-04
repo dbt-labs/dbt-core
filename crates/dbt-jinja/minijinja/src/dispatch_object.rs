@@ -87,14 +87,10 @@ impl Object for DispatchObject {
                 let template_name = format!("{}.{}", pkg, self.macro_name);
                 attempts.push(template_name.clone());
 
-                // Try to execute the template, but catch any errors and convert to a strict mode error
-                match self.execute_template(state, &template_name, args, listeners) {
-                    Ok(rv) => return Ok(rv),
-                    Err(err) => {
-                        // In strict mode, we want a specific error message
-                        return Err(err);
-                    }
+                if let Some(rv) = self.execute_template(state, &template_name, args, listeners)? {
+                    return Ok(rv);
                 }
+                return Err(self.macro_not_found_error(&attempts));
             }
         }
 
@@ -126,18 +122,22 @@ impl Object for DispatchObject {
                         if let Some(pkg) = dbt_and_adapters_namespace.get(&search_name_value) {
                             let template_name = format!("{pkg}.{search_name}");
                             attempts.push(template_name.clone());
-                            let rv =
-                                self.execute_template(state, &template_name, args, listeners)?;
-                            return Ok(rv);
+                            if let Some(rv) =
+                                self.execute_template(state, &template_name, args, listeners)?
+                            {
+                                return Ok(rv);
+                            }
                         }
                     } else if non_internal_namespace.contains_key(&Value::from(package_name)) {
                         // For non-internal packages
                         let template_name = format!("{package_name}.{search_name}");
                         attempts.push(template_name.clone());
                         if template_exists(state, &template_name) {
-                            let rv =
-                                self.execute_template(state, &template_name, args, listeners)?;
-                            return Ok(rv);
+                            if let Some(rv) =
+                                self.execute_template(state, &template_name, args, listeners)?
+                            {
+                                return Ok(rv);
+                            }
                         }
                     }
                 }
@@ -146,32 +146,42 @@ impl Object for DispatchObject {
                 for prefix in &adapter_prefixes {
                     let search_name = format!("{}__{}", prefix, self.macro_name);
 
-                    if let Some(template_name) =
-                        macro_namespace_template_resolver(state, &search_name, &mut attempts)
+                    for template_name in
+                        macro_namespace_template_candidates(state, &search_name, &mut attempts)
                     {
-                        let rv = self.execute_template(state, &template_name, args, listeners)?;
-                        return Ok(rv);
+                        if let Some(rv) =
+                            self.execute_template(state, &template_name, args, listeners)?
+                        {
+                            return Ok(rv);
+                        }
                     }
                 }
                 // find the macro without prefix
-                if let Some(template_name) =
-                    macro_namespace_template_resolver(state, &self.macro_name, &mut attempts)
+                for template_name in
+                    macro_namespace_template_candidates(state, &self.macro_name, &mut attempts)
                 {
-                    let rv = self.execute_template(state, &template_name, args, listeners)?;
-                    return Ok(rv);
+                    if let Some(rv) =
+                        self.execute_template(state, &template_name, args, listeners)?
+                    {
+                        return Ok(rv);
+                    }
                 }
             }
         }
 
-        // Format error message
+        Err(self.macro_not_found_error(&attempts))
+    }
+}
+
+impl DispatchObject {
+    fn macro_not_found_error(&self, attempts: &[String]) -> Error {
         let searched = attempts
             .iter()
             .map(|a| format!("'{a}'"))
             .collect::<Vec<_>>()
             .join(", ");
 
-        // Create error with the original file information preserved
-        let err = Error::new(
+        Error::new(
             ErrorKind::UnknownFunction,
             format!(
                 "In dispatch: No macro named '{}' found within namespace: '{}'\n    Searched for: {}",
@@ -179,13 +189,9 @@ impl Object for DispatchObject {
                 self.package_name.clone().unwrap_or_else(|| "None".to_string()),
                 searched
             ),
-        );
-
-        Err(err)
+        )
     }
-}
 
-impl DispatchObject {
     // Update the get_search_packages method to better match Python's logic
     fn get_search_packages(&self, state: &State<'_, '_>) -> Vec<Option<String>> {
         let root_package = state.env().get_root_package_name();
@@ -253,7 +259,7 @@ impl DispatchObject {
         template_name: &str,
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, Error> {
+    ) -> Result<Option<Value>, Error> {
         let template = match state.env().get_template(template_name) {
             Ok(template) => template,
             Err(err) => {
@@ -320,22 +326,23 @@ impl DispatchObject {
             }
         }
 
-        let func = template_state
-            .lookup(
-                template_name
-                    .split('.')
-                    .next_back()
-                    .expect("template_name should have a dot"),
-                listeners,
-            )
-            .expect("function should exist in template");
+        let macro_name = template_name
+            .split('.')
+            .next_back()
+            .expect("template_name should have a dot");
+        let Some(func) = template_state.ctx.exports().get(macro_name).cloned() else {
+            return Ok(None);
+        };
+        if func.downcast_object_ref::<Macro>().is_none() {
+            return Ok(None);
+        }
 
         // Forward the caller's pending call site (recorded by the vm before the
         // dispatch) onto the macro's template state, since `func.call` runs with
         // `template_state` rather than the original caller state.
         template_state.pending_call_site = state.pending_call_site.clone();
 
-        func.call(&template_state, &args, listeners)
+        func.call(&template_state, &args, listeners).map(Some)
     }
 }
 
@@ -403,7 +410,7 @@ fn template_exists(state: &State<'_, '_>, template_name: &str) -> bool {
 /// * `attempts` - A vector to track attempted template paths (for error reporting)
 ///
 /// # Returns
-/// * `Result<Option<String>, Error>` - The template path if found, None otherwise
+/// * `Option<String>` - The template path if found, None otherwise
 ///
 /// Logic comes from https://github.com/dbt-labs/dbt-core/blob/4aa5169212d8256002095d44dc5f2505dca1b07c/core/dbt/context/macros.py#L83
 /// and https://github.com/dbt-labs/dbt-core/blob/4aa5169212d8256002095d44dc5f2505dca1b07c/core/dbt/context/macros.py#L34
@@ -413,6 +420,16 @@ pub fn macro_namespace_template_resolver(
     search_name: &str,
     attempts: &mut Vec<String>,
 ) -> Option<String> {
+    macro_namespace_template_candidates(state, search_name, attempts)
+        .into_iter()
+        .next()
+}
+
+fn macro_namespace_template_candidates(
+    state: &State<'_, '_>,
+    search_name: &str,
+    attempts: &mut Vec<String>,
+) -> Vec<String> {
     // Get necessary values from state
     let current_package_name = state
         .ctx
@@ -421,19 +438,20 @@ pub fn macro_namespace_template_resolver(
         .unwrap_or_else(|| "dbt".to_string());
     let root_package = state.env().get_root_package_name();
     let dbt_and_adapters = state.env().get_dbt_and_adapters_namespace();
+    let mut candidates = Vec::new();
 
     // 1. Local namespace (current package)
     let template_name = format!("{current_package_name}.{search_name}");
     attempts.push(template_name.clone());
     if template_exists(state, &template_name) {
-        return Some(template_name);
+        candidates.push(template_name);
     }
 
     // 2. Root package namespace
     let template_name = format!("{root_package}.{search_name}");
     attempts.push(template_name.clone());
-    if template_exists(state, &template_name) {
-        return Some(template_name);
+    if template_exists(state, &template_name) && !candidates.contains(&template_name) {
+        candidates.push(template_name);
     }
 
     // 3. Internal packages
@@ -441,11 +459,10 @@ pub fn macro_namespace_template_resolver(
     if let Some(pkg) = dbt_and_adapters.get(&search_name_value) {
         let template_name = format!("{pkg}.{search_name}");
         attempts.push(template_name.clone());
-        if template_exists(state, &template_name) {
-            return Some(template_name);
+        if template_exists(state, &template_name) && !candidates.contains(&template_name) {
+            candidates.push(template_name);
         }
     }
 
-    // No template found
-    None
+    candidates
 }
