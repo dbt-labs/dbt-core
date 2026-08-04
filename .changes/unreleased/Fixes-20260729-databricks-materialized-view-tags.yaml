@@ -3,5 +3,5 @@ body: Preserve Databricks materialized view tags when detecting and applying con
 time: 2026-07-29T00:00:00.000000+05:30
 custom:
     author: sd-db
-    issue: ""
+    issue: "15690"
     project: dbt-core
