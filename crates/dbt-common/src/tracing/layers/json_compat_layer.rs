@@ -18,7 +18,7 @@ use dbt_tracing::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     layer::{ConsumerLayer, TelemetryConsumer},
-    shared_writer::SharedWriter,
+    shared_writer::{SharedWriter, resolve_is_terminal},
     shutdown::TelemetryShutdownItem,
 };
 
@@ -193,7 +193,7 @@ impl JsonCompatLayer {
         command: FsCommand,
         command_name: &'static str,
     ) -> Self {
-        let is_tty = writer.is_terminal();
+        let is_tty = resolve_is_terminal(&writer);
         let custom_envs = crate::constants::collect_dbt_custom_envs();
 
         Self {

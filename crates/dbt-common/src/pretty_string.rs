@@ -4,6 +4,55 @@ use std::error::Error;
 use std::fmt::Display;
 use std::sync::LazyLock;
 
+/// Apply widely-adopted color-control environment variables to the `console`
+/// crate's global color-enabled flag. Call once, early in `main`, before any
+/// styled output is produced.
+///
+/// * `NO_COLOR` disables ANSI styling. Presence-only: any value (including
+///   an empty string, as produced by `export NO_COLOR` with no assignment)
+///   counts. Widely honored convention used by many CLI tools.
+/// * `FORCE_COLOR=0` disables ANSI styling, matching the npm
+///   `supports-color` / `chalk` convention.
+/// * `FORCE_COLOR` set to any other value enables ANSI styling even when
+///   stdout is not a TTY — see <https://force-color.org>. This lets parent
+///   processes that capture stdout (e.g. a wrapper piping output) still
+///   receive colored output.
+/// * If none of the above apply, the `console` crate's default TTY
+///   detection wins.
+///
+/// When `FORCE_COLOR` is enabling, `CLICOLOR_FORCE=1` is also exported so
+/// clap/anstream-styled output (usage/error text) is colored consistently.
+pub fn apply_color_env_overrides() {
+    if std::env::var_os("NO_COLOR").is_some() {
+        console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
+        return;
+    }
+    if let Some(v) = std::env::var_os("FORCE_COLOR") {
+        if v == "0" {
+            console::set_colors_enabled(false);
+            console::set_colors_enabled_stderr(false);
+            return;
+        }
+        console::set_colors_enabled(true);
+        console::set_colors_enabled_stderr(true);
+        // Treat an empty CLICOLOR_FORCE as unset — if a parent set it to ""
+        // it did not actually opt into forcing colors, and clap/anstream
+        // would otherwise still skip forced coloring, making output
+        // inconsistent with the caller's FORCE_COLOR intent.
+        let clicolor_force_effective =
+            std::env::var_os("CLICOLOR_FORCE").is_some_and(|v| !v.is_empty());
+        if !clicolor_force_effective {
+            // SAFETY: called at the top of main before any threads are
+            // spawned; mutating the process environment here is race-free.
+            #[allow(clippy::disallowed_methods)]
+            unsafe {
+                std::env::set_var("CLICOLOR_FORCE", "1");
+            }
+        }
+    }
+}
+
 pub static CYAN: LazyLock<Style> = LazyLock::new(|| Style::new().cyan().bold());
 pub static BLUE: LazyLock<Style> = LazyLock::new(|| Style::new().blue().bold());
 pub static RED: LazyLock<Style> = LazyLock::new(|| Style::new().red().bold());
