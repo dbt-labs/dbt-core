@@ -964,22 +964,9 @@ impl Adapter {
                 let compiled_code = iter.next_arg::<&str>()?;
                 iter.finish()?;
 
-                let databricks_config = if adapter.adapter_type() == AdapterType::Databricks {
-                    Some(
-                        minijinja_value_to_typed_struct::<
-                            crate::python::databricks::DatabricksPythonJobModel,
-                        >(model.clone())
-                        .map_err(|error| {
-                            AdapterError::new(
-                                AdapterErrorKind::Configuration,
-                                format!("Invalid Databricks Python model config: {error}"),
-                            )
-                        })?
-                        .config,
-                    )
-                } else {
-                    None
-                };
+                if adapter.adapter_type() == AdapterType::Databricks {
+                    crate::python::databricks::DatabricksPythonJobConfig::try_from_model(model)?;
+                }
 
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
@@ -990,7 +977,6 @@ impl Adapter {
                     conn.as_mut(),
                     state,
                     model,
-                    databricks_config.as_ref(),
                     compiled_code,
                     self.cancellation_token.clone(),
                 )?;

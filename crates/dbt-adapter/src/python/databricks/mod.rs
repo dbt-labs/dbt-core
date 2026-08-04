@@ -4,6 +4,7 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use minijinja::{State, Value};
 use serde::Deserialize;
 use serde_json::json;
@@ -35,6 +36,17 @@ pub struct DatabricksPythonJobConfig {
 }
 
 impl DatabricksPythonJobConfig {
+    pub fn try_from_model(model: &Value) -> AdapterResult<Self> {
+        minijinja_value_to_typed_struct::<DatabricksPythonJobModel>(model.clone())
+            .map(|parsed| parsed.config)
+            .map_err(|error| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!("Invalid Databricks Python model config: {error}"),
+                )
+            })
+    }
+
     fn packages(&self) -> &[String] {
         self.packages.as_deref().unwrap_or_default()
     }
@@ -60,9 +72,10 @@ pub fn submit_python_job(
     _conn: &'_ mut dyn Connection,
     _state: &State,
     model: &Value,
-    typed_config: &DatabricksPythonJobConfig,
     compiled_code: &str,
 ) -> AdapterResult<AdapterResponse> {
+    let typed_config = DatabricksPythonJobConfig::try_from_model(model)?;
+
     let config = model
         .get_attr("config")
         .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?;
@@ -85,7 +98,7 @@ pub fn submit_python_job(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .ok_or_else(|| AdapterError::new(AdapterErrorKind::Internal, "alias is required"))?;
 
-    let compiled_code = prepare_code_from_config(typed_config, compiled_code);
+    let compiled_code = prepare_code_from_config(&typed_config, compiled_code);
 
     match typed_config.submission_method() {
         "all_purpose_cluster" => submit_all_purpose_cluster(
@@ -95,7 +108,7 @@ pub fn submit_python_job(
             &schema,
             &identifier,
             &compiled_code,
-            typed_config,
+            &typed_config,
         ),
         "job_cluster" => submit_job_cluster(
             adapter,
@@ -104,7 +117,7 @@ pub fn submit_python_job(
             &schema,
             &identifier,
             &compiled_code,
-            typed_config,
+            &typed_config,
         ),
         "serverless_cluster" => submit_serverless_cluster(
             adapter,

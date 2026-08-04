@@ -1,13 +1,24 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
 use crate::adapter::Adapter;
 use crate::adapter::adapter_impl::AdapterImpl;
+use crate::cache::RelationCache;
+use crate::engine::AdapterEngine;
+use crate::engine::query_comment::QueryCommentConfig;
 use crate::sql_types::DefaultTypeOps;
-use crate::stmt_splitter::DefaultStmtSplitter;
+use crate::sql_types::TypeOps;
+use crate::stmt_splitter::{DefaultStmtSplitter, StmtSplitter};
 use dbt_adapter_core::AdapterType;
+use dbt_adbc::{Backend, Connection};
+use dbt_auth::AdapterConfig;
 
+use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::never_cancels;
+use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
+use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
 use indexmap::IndexMap;
 
@@ -216,9 +227,107 @@ fn make_mock_adapter(adapter_type: AdapterType) -> Arc<Adapter> {
     Arc::new(Adapter::new(Arc::new(concrete), None, never_cancels()))
 }
 
+struct ConnectionCountingEngine {
+    inner: Arc<dyn AdapterEngine>,
+    connection_attempts: Arc<AtomicUsize>,
+}
+
+impl AdapterEngine for ConnectionCountingEngine {
+    fn adapter_type(&self) -> AdapterType {
+        self.inner.adapter_type()
+    }
+
+    fn backend(&self) -> Backend {
+        self.inner.backend()
+    }
+
+    fn quoting(&self) -> ResolvedQuoting {
+        self.inner.quoting()
+    }
+
+    fn splitter(&self) -> &dyn StmtSplitter {
+        self.inner.splitter()
+    }
+
+    fn type_ops(&self) -> &Arc<dyn TypeOps> {
+        self.inner.type_ops()
+    }
+
+    fn query_comment(&self) -> &QueryCommentConfig {
+        self.inner.query_comment()
+    }
+
+    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.inner.config(key)
+    }
+
+    fn get_config(&self) -> &AdapterConfig {
+        self.inner.get_config()
+    }
+
+    fn relation_cache(&self) -> &Arc<RelationCache> {
+        self.inner.relation_cache()
+    }
+
+    fn behavior(&self) -> &Arc<Behavior> {
+        self.inner.behavior()
+    }
+
+    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
+        self.inner.behavior_flag_overrides()
+    }
+
+    fn new_connection(
+        &self,
+        _state: Option<&State>,
+        _node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        self.connection_attempts.fetch_add(1, Ordering::Relaxed);
+        Err(AdapterError::new(
+            AdapterErrorKind::Internal,
+            "connection must not be acquired for invalid Databricks Python config",
+        ))
+    }
+
+    fn new_connection_with_config(
+        &self,
+        _config: &AdapterConfig,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        self.connection_attempts.fetch_add(1, Ordering::Relaxed);
+        Err(AdapterError::new(
+            AdapterErrorKind::Internal,
+            "connection must not be acquired for invalid Databricks Python config",
+        ))
+    }
+
+    fn fingerprint(&self) -> u64 {
+        0x15716
+    }
+}
+
+fn make_connection_counting_databricks_adapter() -> (Arc<Adapter>, Arc<AtomicUsize>) {
+    let mock = AdapterImpl::new_mock(
+        AdapterType::Databricks,
+        BTreeMap::new(),
+        DEFAULT_RESOLVED_QUOTING,
+        Arc::new(DefaultTypeOps::new(AdapterType::Databricks)),
+        Arc::new(DefaultStmtSplitter),
+    );
+    let connection_attempts = Arc::new(AtomicUsize::new(0));
+    let engine = Arc::new(ConnectionCountingEngine {
+        inner: Arc::clone(mock.engine()),
+        connection_attempts: Arc::clone(&connection_attempts),
+    });
+    let adapter = AdapterImpl::new(engine, None);
+    (
+        Arc::new(Adapter::new(Arc::new(adapter), None, never_cancels())),
+        connection_attempts,
+    )
+}
+
 #[test]
-fn databricks_submit_python_job_validates_typed_config_at_jinja_boundary() {
-    let adapter = make_mock_adapter(AdapterType::Databricks);
+fn test_submit_python_job_rejects_invalid_databricks_config() {
+    let (adapter, connection_attempts) = make_connection_counting_databricks_adapter();
     let mut env = minijinja::Environment::new();
     env.add_global("obj", Value::from_object((*adapter).clone()));
     let error = env
@@ -241,7 +350,12 @@ fn databricks_submit_python_job_validates_typed_config_at_jinja_boundary() {
         error
             .to_string()
             .contains("Invalid Databricks Python model config"),
-        "actual Jinja method dispatch must reject invalid typed config before connection acquisition: {error}"
+        "unexpected error: {error}"
+    );
+    assert_eq!(
+        connection_attempts.load(Ordering::Relaxed),
+        0,
+        "Databricks config validation must run before the shared connection-acquisition path used by live and replay adapters"
     );
 }
 
