@@ -2,6 +2,6 @@ kind: Fixes
 body: Preserve Databricks materialized view tags when detecting and applying configuration changes.
 time: 2026-07-29T00:00:00.000000+05:30
 custom:
-    author: ""
+    author: sd-db
     issue: ""
     project: dbt-core
