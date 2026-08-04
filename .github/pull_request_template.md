@@ -5,7 +5,7 @@ Resolves #
   PRs for code changes without an associated issue *will not be merged*.
   See CONTRIBUTING.md for more information.
 
-  Add the `user docs` label to this PR if it will need docs changes.  An 
+  Add the `action:needs-docs` label to this PR if it will need docs changes.  An 
   issue will get opened in docs.getdbt.com upon successful merge of this PR.
 -->
 
