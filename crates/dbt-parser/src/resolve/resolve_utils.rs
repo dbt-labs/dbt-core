@@ -41,6 +41,29 @@ pub(crate) fn extract_config_map(
         })
 }
 
+/// Builds the raw schema.yml config map for a model entry, merging the version-level
+/// `config:` block (for versioned models) over the model-level one. This mirrors
+/// dbt-core's versioned model patch construction, so per-version overrides (e.g.
+/// `alias`) are recorded in `unrendered_config` and detected by `state:modified`.
+pub(crate) fn extract_schema_yml_config_map(
+    schema_value: &dbt_yaml::Value,
+    version_config: Option<&dbt_yaml::Value>,
+) -> Option<BTreeMap<String, dbt_yaml::Value>> {
+    let mut config_map = extract_config_map(schema_value).unwrap_or_default();
+    if let Some(mapping) = version_config.and_then(|v| v.as_mapping()) {
+        config_map.extend(
+            mapping
+                .iter()
+                .filter_map(|(k, v)| k.as_str().map(|k| (k.to_string(), v.clone()))),
+        );
+    }
+    if config_map.is_empty() {
+        None
+    } else {
+        Some(config_map)
+    }
+}
+
 /// Builds `unrendered_config` by merging config sources in hierarchical order:
 /// project < root < schema.yml < inline. Each source is merged independently so
 /// that hook key normalization (pre_hook → pre-hook, etc.) applies per-source
@@ -381,5 +404,65 @@ mod tests {
                 validate_alt(mat, Some("horizon"), AdapterType::Snowflake, true, false).is_err()
             );
         }
+    }
+
+    /// Helper: parse a YAML snippet into a `dbt_yaml::Value` for the
+    /// `extract_schema_yml_config_map` tests below.
+    fn yaml(s: &str) -> dbt_yaml::Value {
+        dbt_yaml::from_str(s).unwrap()
+    }
+
+    /// Regression test for dbt-labs/dbt-core#15707: a versioned model's
+    /// version-level `config:` block (e.g. `alias`) must be recorded in the raw
+    /// schema.yml config map feeding `unrendered_config`, otherwise
+    /// `state:modified` cannot detect that the alias was removed or changed.
+    #[test]
+    fn version_level_alias_is_recorded_in_schema_yml_config() {
+        let schema_value = yaml("name: y_v\nlatest_version: 1");
+        let version_config = yaml("alias: aliased_y_v");
+        let config_map =
+            extract_schema_yml_config_map(&schema_value, Some(&version_config)).unwrap();
+        assert_eq!(
+            config_map.get("alias").and_then(|v| v.as_str()),
+            Some("aliased_y_v")
+        );
+    }
+
+    /// Removing the version-level alias (with no model-level `config:`) must
+    /// yield no schema.yml config at all — the before (`alias` present) vs.
+    /// after (absent) difference is what `state:modified` keys off.
+    #[test]
+    fn version_level_alias_removal_yields_no_schema_yml_config() {
+        let schema_value = yaml("name: y_v\nlatest_version: 1");
+        assert!(extract_schema_yml_config_map(&schema_value, None).is_none());
+    }
+
+    /// A version-level `config:` key overrides the model-level one, while
+    /// non-conflicting model-level keys are preserved.
+    #[test]
+    fn version_level_config_overrides_model_level() {
+        let schema_value = yaml("name: y_v\nconfig:\n  alias: model_alias\n  tags: [a]");
+        let version_config = yaml("alias: version_alias");
+        let config_map =
+            extract_schema_yml_config_map(&schema_value, Some(&version_config)).unwrap();
+        assert_eq!(
+            config_map.get("alias").and_then(|v| v.as_str()),
+            Some("version_alias")
+        );
+        assert!(config_map.contains_key("tags"));
+    }
+
+    /// Non-versioned models (no version-level config) keep the previous
+    /// behavior: model-level `config:` is extracted as-is, and models without
+    /// any `config:` block produce no entry.
+    #[test]
+    fn non_versioned_model_schema_yml_config_unchanged() {
+        let schema_value = yaml("name: a\nconfig:\n  alias: aliased_a");
+        let config_map = extract_schema_yml_config_map(&schema_value, None).unwrap();
+        assert_eq!(
+            config_map.get("alias").and_then(|v| v.as_str()),
+            Some("aliased_a")
+        );
+        assert!(extract_schema_yml_config_map(&yaml("name: b"), None).is_none());
     }
 }

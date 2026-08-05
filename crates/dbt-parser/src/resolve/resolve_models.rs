@@ -13,7 +13,7 @@ use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::err_resource_name_has_spaces;
-use crate::resolve::resolve_utils::extract_config_map;
+use crate::resolve::resolve_utils::extract_schema_yml_config_map;
 use crate::utils::RelationComponents;
 use crate::utils::extract_resource_config_from_raw_project;
 use crate::utils::get_node_fqn;
@@ -265,12 +265,18 @@ pub async fn resolve_models(
     });
 
     // Snapshot raw schema.yml config blocks before render_unresolved_sql_files nulls out
-    // schema_value entries via std::mem::replace. Keyed by model name.
+    // schema_value entries via std::mem::replace. Keyed by model name. For versioned
+    // models, the version-level `config:` block is merged over the model-level one so
+    // per-version overrides (e.g. `alias`) land in `unrendered_config`.
     let raw_schema_yml_configs: BTreeMap<String, BTreeMap<String, dbt_yaml::Value>> =
         models_properties_sans_semantics
             .iter()
             .filter_map(|(key, mpe)| {
-                let config_map = extract_config_map(&mpe.schema_value)?;
+                let version_config = mpe
+                    .version_info
+                    .as_ref()
+                    .and_then(|vi| (*vi.version_config).as_ref());
+                let config_map = extract_schema_yml_config_map(&mpe.schema_value, version_config)?;
                 Some((key.clone(), config_map))
             })
             .collect();
