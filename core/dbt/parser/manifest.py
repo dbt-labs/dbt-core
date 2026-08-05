@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from itertools import chain
-from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type, Union
 
 import jinja2
 import msgpack
@@ -940,27 +940,10 @@ class ManifestLoader:
     # Loop through macros in the manifest and statically parse
     # the 'macro_sql' to find depends_on.macros
     def macro_depends_on(self):
-        macro_ctx = generate_macro_context(self.root_project)
-        macro_namespace = TestMacroNamespace(self.macro_resolver, {}, None, MacroStack(), [])
-        adapter = get_adapter(self.root_project)
-        db_wrapper = ParseProvider().DatabaseWrapper(adapter, macro_namespace)
-        for macro in self.manifest.macros.values():
-            if macro.created_at < self.started_at:
-                continue
-            possible_macro_calls = statically_extract_macro_calls(
-                macro.macro_sql, macro_ctx, db_wrapper
-            )
-            for macro_name in possible_macro_calls:
-                # adapter.dispatch calls can generate a call with the same name as the macro
-                # it ought to be an adapter prefix (postgres_) or default_
-                if macro_name == macro.name:
-                    continue
-                package_name = macro.package_name
-                if "." in macro_name:
-                    package_name, macro_name = macro_name.split(".")
-                dep_macro_id = self.macro_resolver.get_macro_id(package_name, macro_name)
-                if dep_macro_id:
-                    macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
+        macros = [
+            macro for macro in self.manifest.macros.values() if macro.created_at >= self.started_at
+        ]
+        resolve_macro_depends_on(self.root_project, self.macro_resolver, macros)
 
     def write_manifest_for_partial_parse(self):
         if get_flags().USE_V2_PARSER:
@@ -2527,6 +2510,34 @@ def _process_functions_for_node(
             continue
 
         node.depends_on.add_node(target_function.unique_id)
+
+
+# Statically parse the 'macro_sql' of each given macro to find macro-to-macro
+# calls and populate 'depends_on.macros' accordingly.
+def resolve_macro_depends_on(
+    root_project: RuntimeConfig,
+    macro_resolver: MacroResolver,
+    macros: Iterable[Macro],
+) -> None:
+    macro_ctx = generate_macro_context(root_project)
+    macro_namespace = TestMacroNamespace(macro_resolver, {}, None, MacroStack(), [])
+    adapter = get_adapter(root_project)
+    db_wrapper = ParseProvider().DatabaseWrapper(adapter, macro_namespace)
+    for macro in macros:
+        possible_macro_calls = statically_extract_macro_calls(
+            macro.macro_sql, macro_ctx, db_wrapper
+        )
+        for macro_name in possible_macro_calls:
+            # adapter.dispatch calls can generate a call with the same name as the macro
+            # it ought to be an adapter prefix (postgres_) or default_
+            if macro_name == macro.name:
+                continue
+            package_name = macro.package_name
+            if "." in macro_name:
+                package_name, macro_name = macro_name.split(".")
+            dep_macro_id = macro_resolver.get_macro_id(package_name, macro_name)
+            if dep_macro_id:
+                macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is

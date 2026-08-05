@@ -140,14 +140,17 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
     dbt-<adapter> differs, those differences are silently lost after manifest load.
     This function replaces the embedded macros with freshly parsed ones from disk.
     """
-    from dbt.adapters.factory import get_adapter_package_names, load_plugin
+    from dbt.adapters.factory import get_adapter_package_names, get_include_paths, load_plugin
+    from dbt.context.macro_resolver import MacroResolver
     from dbt.parser.macros import MacroParser
+    from dbt.parser.manifest import resolve_macro_depends_on
     from dbt.parser.read_files import load_source_file
     from dbt.parser.search import FileBlock
 
     adapter_type = runtime_config.credentials.type
     load_plugin(adapter_type)
-    internal_pkg_names = set(get_adapter_package_names(adapter_type))
+    internal_pkg_names_list = get_adapter_package_names(adapter_type)
+    internal_pkg_names = set(internal_pkg_names_list)
 
     stale_ids = [uid for uid, m in manifest.macros.items() if m.package_name in internal_pkg_names]
     for uid in stale_ids:
@@ -155,7 +158,11 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
     manifest._macros_by_name = None
     manifest._macros_by_package = None
 
-    adapter_projects = runtime_config.load_dependencies(base_only=True)
+    # load_dependencies() caches its result onto runtime_config.dependencies, so calling
+    # it here would permanently exclude installed packages from later ref resolution
+    # and macro dispatch. load_projects() has no such side effect.
+    adapter_projects = dict(runtime_config.load_projects(get_include_paths(adapter_type)))
+    pre_existing_ids = set(manifest.macros.keys())
     for project_name, project in adapter_projects.items():
         if project_name not in internal_pkg_names:
             continue
@@ -164,6 +171,14 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
             source_file = load_source_file(path, ParseFileType.Macro, project.project_name, {})
             if source_file:
                 macro_parser.parse_file(FileBlock(source_file))
+
+    new_macro_ids = set(manifest.macros.keys()) - pre_existing_ids
+    if new_macro_ids:
+        macro_resolver = MacroResolver(
+            manifest.macros, runtime_config.project_name, internal_pkg_names_list
+        )
+        new_macros = [manifest.macros[uid] for uid in new_macro_ids]
+        resolve_macro_depends_on(runtime_config, macro_resolver, new_macros)
 
 
 def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:

@@ -429,6 +429,7 @@ class TestRediscoverAdapterMacros:
             mock.patch(
                 "dbt.adapters.factory.get_adapter_package_names", return_value=["dbt_postgres"]
             ),
+            mock.patch("dbt.adapters.factory.get_include_paths", return_value=[]),
             mock.patch("dbt.parser.macros.MacroParser"),
             mock.patch("dbt.parser.read_files.load_source_file", return_value=source_file_return),
         )
@@ -448,13 +449,15 @@ class TestRediscoverAdapterMacros:
 
         runtime_config = mock.MagicMock()
         runtime_config.credentials.type = "postgres"
-        runtime_config.load_dependencies.return_value = {
-            "my_project": mock.MagicMock(),
-            "dbt_postgres": fake_project,
-        }
+        runtime_config.load_projects.return_value = [
+            ("my_project", mock.MagicMock()),
+            ("dbt_postgres", fake_project),
+        ]
 
-        p_load, p_names, MockMacroParser, p_source = self._patch_adapter_deps(mock.MagicMock())
-        with p_load, p_names, MockMacroParser as MockParser, p_source:
+        p_load, p_names, p_include, MockMacroParser, p_source = self._patch_adapter_deps(
+            mock.MagicMock()
+        )
+        with p_load, p_names, p_include, MockMacroParser as MockParser, p_source:
             mock_parser_instance = MockParser.return_value
             mock_parser_instance.get_paths.return_value = [mock.MagicMock()]
 
@@ -475,13 +478,68 @@ class TestRediscoverAdapterMacros:
 
         runtime_config = mock.MagicMock()
         runtime_config.credentials.type = "postgres"
-        runtime_config.load_dependencies.return_value = {"dbt_postgres": fake_project}
+        runtime_config.load_projects.return_value = [("dbt_postgres", fake_project)]
 
-        p_load, p_names, MockMacroParser, p_source = self._patch_adapter_deps(None)
-        with p_load, p_names, MockMacroParser as MockParser, p_source:
+        p_load, p_names, p_include, MockMacroParser, p_source = self._patch_adapter_deps(None)
+        with p_load, p_names, p_include, MockMacroParser as MockParser, p_source:
             mock_parser_instance = MockParser.return_value
             mock_parser_instance.get_paths.return_value = [mock.MagicMock()]
 
             rediscover_adapter_macros(manifest, runtime_config)
 
         mock_parser_instance.parse_file.assert_not_called()
+
+    def test_populates_depends_on_for_reparsed_macros(self):
+        """A re-parsed adapter macro that calls another macro should get
+        depends_on.macros populated, mirroring what ManifestLoader.macro_depends_on
+        does for the normal (non-fusion) parse pipeline."""
+        from dbt.contracts.graph.nodes import Macro
+        from dbt.node_types import NodeType
+
+        other_macro = Macro(
+            name="other_macro",
+            resource_type=NodeType.Macro,
+            package_name="my_project",
+            path="macros/other_macro.sql",
+            original_file_path="macros/other_macro.sql",
+            unique_id="macro.my_project.other_macro",
+            macro_sql="{% macro other_macro() %}select 1{% endmacro %}",
+        )
+        new_macro = Macro(
+            name="get_something",
+            resource_type=NodeType.Macro,
+            package_name="dbt_postgres",
+            path="macros/get_something.sql",
+            original_file_path="macros/get_something.sql",
+            unique_id="macro.dbt_postgres.get_something",
+            macro_sql="{% macro get_something() %}{{ other_macro() }}{% endmacro %}",
+        )
+
+        manifest = mock.MagicMock()
+        manifest.macros = {other_macro.unique_id: other_macro}
+
+        fake_project = mock.MagicMock()
+        fake_project.project_name = "dbt_postgres"
+
+        runtime_config = mock.MagicMock()
+        runtime_config.credentials.type = "postgres"
+        runtime_config.project_name = "my_project"
+        runtime_config.load_projects.return_value = [("dbt_postgres", fake_project)]
+
+        def _parse_file_side_effect(block):
+            manifest.macros[new_macro.unique_id] = new_macro
+
+        p_load, p_names, p_include, MockMacroParser, p_source = self._patch_adapter_deps(
+            mock.MagicMock()
+        )
+        with p_load, p_names, p_include, MockMacroParser as MockParser, p_source:
+            mock_parser_instance = MockParser.return_value
+            mock_parser_instance.get_paths.return_value = [mock.MagicMock()]
+            mock_parser_instance.parse_file.side_effect = _parse_file_side_effect
+
+            with mock.patch("dbt.parser.manifest.get_adapter", return_value=mock.MagicMock()):
+                rediscover_adapter_macros(manifest, runtime_config)
+
+        assert new_macro.depends_on.macros == [other_macro.unique_id]
+        # pre-existing macros not touched by the rediscovery pass are left alone
+        assert other_macro.depends_on.macros == []
