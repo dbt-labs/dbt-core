@@ -1007,6 +1007,34 @@ class TestRunTask:
         assert len(exported_spans) == 1
         assert exported_spans[0].status.status_code == StatusCode.ERROR
 
+    def test_call_runner_exception_records_on_span(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        model_runner: ModelRunner,
+    ):
+        """when run_with_hooks raises, the exception must be recorded on the node
+        span and the span marked StatusCode.ERROR."""
+        boom = ValueError("boom")
+        mocker.patch("dbt.task.run.ModelRunner.run_with_hooks").side_effect = boom
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        run_task.call_runner(runner=model_runner)
+        exported_spans = self.span_exporter.get_finished_spans()
+        assert len(exported_spans) == 1
+        span = exported_spans[0]
+        assert span.status.status_code == StatusCode.ERROR
+        assert len(span.events) == 1
+        event = span.events[0]
+        assert event.name == "exception"
+        assert event.attributes["exception.type"] == "ValueError"
+        assert event.attributes["exception.message"] == "boom"
+
     def test_call_runner_none_guard(
         self,
         mocker: MockerFixture,

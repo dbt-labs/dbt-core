@@ -380,6 +380,11 @@ class GraphRunnableTask(ConfiguredTask):
                     except Exception as e:
                         result = self._handle_thread_exception(runner, e)
                 else:
+                    # No result means run_with_hooks raised; record the exception
+                    # on the node span and mark it errored before handling it.
+                    if thread_exception is not None:
+                        node_span.set_status(StatusCode.ERROR)
+                        node_span.record_exception(thread_exception)
                     result = self._handle_thread_exception(runner, thread_exception)
 
             # `_event_status` dict is only used for logging.  Make sure
