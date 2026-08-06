@@ -606,21 +606,26 @@ mod tests {
         assert!(is_retryable_databricks_error(&cfg_retry_all(), &e));
     }
 
-    #[test]
-    fn bigquery_job_error_retryability() {
-        use dbt_common::AdapterErrorKind;
-        let err = |msg: &str| AdapterError::new(AdapterErrorKind::Internal, msg);
+    fn bigquery_err(msg: &str) -> AdapterError {
+        AdapterError::new(dbt_common::AdapterErrorKind::Internal, msg)
+    }
 
-        assert!(is_retryable_bigquery_job_error(&err(
+    #[test]
+    fn bigquery_rate_limit_job_errors_are_retryable() {
+        assert!(is_retryable_bigquery_job_error(&bigquery_err(
             "Exceeded rate limits: too many table update operations for this table"
         )));
-        assert!(is_retryable_bigquery_job_error(&err(
+        assert!(is_retryable_bigquery_job_error(&bigquery_err(
             "jobRateLimitExceeded: retry later"
         )));
-        assert!(!is_retryable_bigquery_job_error(&err(
+    }
+
+    #[test]
+    fn bigquery_permanent_job_errors_are_not_retryable() {
+        assert!(!is_retryable_bigquery_job_error(&bigquery_err(
             "quotaExceeded: Your project exceeded quota for copies per project"
         )));
-        assert!(!is_retryable_bigquery_job_error(&err(
+        assert!(!is_retryable_bigquery_job_error(&bigquery_err(
             "notFound: Table db:schema.t"
         )));
     }

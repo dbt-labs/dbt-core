@@ -5079,29 +5079,7 @@ impl AdapterImpl {
                 target_fqn.clone(),
                 write_disposition,
             ));
-
-            let mut attempt = 0u32;
-            loop {
-                match engine.execute_with_options(
-                    None,
-                    &ctx,
-                    conn,
-                    "",
-                    options.clone(),
-                    false,
-                    map_token.clone(),
-                ) {
-                    Ok(_) => return Ok(()),
-                    Err(err)
-                        if attempt < BIGQUERY_JOB_MAX_RETRIES
-                            && is_retryable_bigquery_job_error(&err) =>
-                    {
-                        attempt += 1;
-                        bigquery_job_backoff_sleep(attempt, &map_token)?;
-                    }
-                    Err(err) => return Err(Cancellable::Error(err)),
-                }
-            }
+            execute_bigquery_copy_job_with_retry(&engine, &ctx, conn, &options, &map_token)
         };
 
         let reduce_f =
@@ -5110,14 +5088,15 @@ impl AdapterImpl {
              copy_res: Result<(), Cancellable<AdapterError>>| copy_res;
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), node_id);
-        match run_traced_async_blocking(map_reduce.run(Arc::new(copy_jobs), token)) {
-            Ok(()) => Ok(()),
-            Err(Cancellable::Error(err)) => Err(err),
-            Err(Cancellable::Cancelled) => Err(AdapterError::new(
-                AdapterErrorKind::Cancelled,
-                "copy_partitions operation cancelled",
-            )),
-        }
+        run_traced_async_blocking(map_reduce.run(Arc::new(copy_jobs), token)).map_err(|err| {
+            match err {
+                Cancellable::Error(err) => err,
+                Cancellable::Cancelled => AdapterError::new(
+                    AdapterErrorKind::Cancelled,
+                    "copy_partitions operation cancelled",
+                ),
+            }
+        })
     }
 
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L818
@@ -5957,6 +5936,37 @@ fn bigquery_write_disposition(caller: &str, materialization: &str) -> AdapterRes
             AdapterErrorKind::Configuration,
             format!("{caller} 'materialization' must be either 'table' or 'incremental'"),
         )),
+    }
+}
+
+/// Run one BigQuery copy job, retrying rate-limited jobs with backoff.
+fn execute_bigquery_copy_job_with_retry(
+    engine: &Arc<dyn AdapterEngine>,
+    ctx: &QueryCtx,
+    conn: &mut dyn Connection,
+    options: &ExecuteOptions,
+    token: &CancellationToken,
+) -> Result<(), Cancellable<AdapterError>> {
+    let mut attempt = 0u32;
+    loop {
+        match engine.execute_with_options(
+            None,
+            ctx,
+            conn,
+            "",
+            options.clone(),
+            false,
+            token.clone(),
+        ) {
+            Ok(_) => return Ok(()),
+            Err(err)
+                if attempt < BIGQUERY_JOB_MAX_RETRIES && is_retryable_bigquery_job_error(&err) =>
+            {
+                attempt += 1;
+                bigquery_job_backoff_sleep(attempt, token)?;
+            }
+            Err(err) => return Err(Cancellable::Error(err)),
+        }
     }
 }
 
