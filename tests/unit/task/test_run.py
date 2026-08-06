@@ -36,9 +36,11 @@ from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
 from dbt.task.run import MicrobatchModelRunner, ModelRunner, RunTask, _get_adapter_info
 from dbt.tests.util import safe_set_invocation_context
+from dbt.version import __version__
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
+from dbt_common.invocation import get_invocation_id
 
 
 @pytest.mark.parametrize(
@@ -1151,3 +1153,100 @@ class TestRunTask:
         # hook[1] was skipped
         assert child_span_1.attributes.get("hook_outcome") == "skipped"
         assert child_span_1.status.status_code == StatusCode.OK
+
+    def test_run_emits_invocation_span(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+    ):
+        """run() must emit a root 'dbt invocation' span carrying command,
+        invocation_id and version."""
+        safe_set_invocation_context()
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+        flags.write_json = False
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        # Take the "nothing to do" branch so run() needs no adapter/database.
+        mocker.patch.object(RunTask, "_runtime_initialize")
+        run_task._flattened_nodes = []
+        mocker.patch.object(RunTask, "task_end_messages")
+
+        run_task.run()
+
+        exported_spans = self.span_exporter.get_finished_spans()
+        invocation_span = next(s for s in exported_spans if s.name == "dbt invocation")
+
+        assert invocation_span.attributes["command"] == get_flags().WHICH
+        assert invocation_span.attributes["invocation_id"] == get_invocation_id()
+        assert invocation_span.attributes["version"] == __version__
+
+    def test_run_no_invocation_span_when_otel_disabled(
+        self,
+        mocker: MockerFixture,
+        monkeypatch,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+    ):
+        """with the gate off, run() must emit no spans at all."""
+        monkeypatch.setattr("dbt.task.runnable._otel_enabled", lambda: False)
+        safe_set_invocation_context()
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+        flags.write_json = False
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        mocker.patch.object(RunTask, "_runtime_initialize")
+        run_task._flattened_nodes = []
+        mocker.patch.object(RunTask, "task_end_messages")
+
+        run_task.run()
+
+        assert len(self.span_exporter.get_finished_spans()) == 0
+
+    def test_run_invocation_span_is_current_during_execution(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        model_runner: ModelRunner,
+    ):
+        """the invocation span must be the current span while execute_with_hooks
+        runs — that is what makes _submit's context.get_current() capture parent
+        node and hook spans under it."""
+        safe_set_invocation_context()
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+        flags.write_json = False
+        run_task = RunTask(args=flags, config=runtime_config, manifest=manifest)
+
+        mocker.patch.object(RunTask, "_runtime_initialize")
+        run_task._flattened_nodes = [model_runner.node]
+        mocker.patch.object(RunTask, "task_end_messages")
+
+        captured = {}
+
+        def fake_execute_with_hooks(selected_uids):
+            current = trace.get_current_span()
+            captured["span_id"] = current.get_span_context().span_id
+            captured["trace_id"] = current.get_span_context().trace_id
+            captured["name"] = getattr(current, "name", None)
+            return mock.Mock(results=[])
+
+        mocker.patch.object(RunTask, "execute_with_hooks", side_effect=fake_execute_with_hooks)
+
+        run_task.run()
+
+        exported_spans = self.span_exporter.get_finished_spans()
+        invocation_span = next(s for s in exported_spans if s.name == "dbt invocation")
+
+        assert captured["name"] == "dbt invocation"
+        assert captured["span_id"] == invocation_span.context.span_id
+        assert captured["trace_id"] == invocation_span.context.trace_id

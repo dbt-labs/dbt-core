@@ -75,12 +75,14 @@ from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
 from dbt.task.printer import print_run_end_messages, print_run_result_error
 from dbt.utils.artifact_upload import add_artifact_produced
+from dbt.version import __version__
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
+from dbt_common.invocation import get_invocation_id
 
 
 def _otel_enabled() -> bool:
@@ -731,7 +733,14 @@ class GraphRunnableTask(ConfiguredTask):
         """
         # We set up a context manager here with "task_contextvars" because we
         # need the project_root in runtime_initialize.
-        with task_contextvars(project_root=self.config.project_root):
+        with task_contextvars(project_root=self.config.project_root), self._maybe_span(
+            "dbt invocation"
+        ) as invocation_span:
+            # Root span for the run. Node and hook spans nest under it because
+            # _submit captures context.get_current() while this span is active.
+            _set_span_attr(invocation_span, "command", getattr(get_flags(), "WHICH", None))
+            _set_span_attr(invocation_span, "invocation_id", get_invocation_id())
+            _set_span_attr(invocation_span, "version", __version__)
             self._runtime_initialize()
 
             if self._flattened_nodes is None:

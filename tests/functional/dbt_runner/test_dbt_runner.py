@@ -15,6 +15,7 @@ from dbt.exceptions import DbtProjectError
 from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
 from dbt_common.events.contextvars import get_node_info
+from dbt_common.invocation import get_invocation_id
 
 
 class TestDbtRunner:
@@ -207,11 +208,12 @@ class TestDbtRunnerHooks:
         dbt.invoke(["--snowflake-projects-otel", "run", "--select", "models", "model2"])
         assert get_node_info() == {}
         exported_spans = span_exporter.get_finished_spans()
-        assert len(exported_spans) == 11
+        assert len(exported_spans) == 12
         assert exported_spans[0].instrumentation_scope.name == "dbt.runner"
         span_names = [span.name for span in exported_spans]
         span_names.sort()
         assert span_names == [
+            "dbt invocation",
             "hook_span",
             "hook_span",
             "hook_span",
@@ -227,6 +229,7 @@ class TestDbtRunnerHooks:
         model2_span = None
         models_span = None
         metadata_span = None
+        invocation_span = None
         for span in exported_spans:
             if span.name == "model.test.model2":
                 model2_span = span
@@ -234,10 +237,28 @@ class TestDbtRunnerHooks:
                 models_span = span
             if span.name == "metadata.setup":
                 metadata_span = span
+            if span.name == "dbt invocation":
+                invocation_span = span
 
         assert models_span is not None
         assert model2_span is not None
         assert metadata_span is not None
+        assert invocation_span is not None
+
+        # The invocation span is the root of the run: it has no parent, and every
+        # other span shares its trace and descends from it.
+        assert invocation_span.parent is None
+        assert invocation_span.attributes["command"] == "run"
+        assert invocation_span.attributes["invocation_id"] == get_invocation_id()
+        assert invocation_span.attributes["version"] == dbt_version
+
+        for span in exported_spans:
+            assert span.context.trace_id == invocation_span.context.trace_id
+
+        # Node and hook spans parent under the invocation span.
+        assert models_span.parent.span_id == invocation_span.context.span_id
+        assert model2_span.parent.span_id == invocation_span.context.span_id
+        assert metadata_span.parent.span_id == invocation_span.context.span_id
 
         assert "node_outcome" in models_span.attributes
         assert "materialization" in models_span.attributes
