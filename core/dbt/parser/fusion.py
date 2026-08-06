@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.artifacts.schemas.manifest import WritableManifest
+from dbt.contracts.files import ParseFileType
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import V2ParserEnd, V2ParserStart
 from dbt.exceptions import (
@@ -118,6 +119,7 @@ def parse_with_fusion(
     )
 
     manifest = Manifest.from_writable_manifest(writable_manifest)
+    rediscover_adapter_macros(manifest, runtime_config)
     # build_flat_graph is normally called by ManifestLoader.get_full_manifest;
     # the fusion path bypasses that loader, so populate flat_graph here to
     # power the `graph` context variable (graph.nodes, graph.sources, ...).
@@ -129,6 +131,74 @@ def parse_with_fusion(
         enrich_manifest_with_plugin_artifacts(manifest, runtime_config.project_name)
 
     return manifest
+
+
+def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig") -> None:
+    """Evict Fusion-embedded adapter macros and re-parse them from the installed adapter.
+
+    Fusion compiles against its own bundled adapter macros. If the user's installed
+    dbt-<adapter> differs, those differences are silently lost after manifest load.
+    This function replaces the embedded macros with freshly parsed ones from disk.
+    """
+    from dbt.adapters.factory import (
+        get_adapter_package_names,
+        get_include_paths,
+        load_plugin,
+        register_adapter,
+    )
+    from dbt.context.macro_resolver import MacroResolver
+    from dbt.mp_context import get_mp_context
+    from dbt.parser.macros import MacroParser
+    from dbt.parser.manifest import resolve_macro_depends_on
+    from dbt.parser.read_files import load_source_file
+    from dbt.parser.search import FileBlock
+
+    adapter_type = runtime_config.credentials.type
+    load_plugin(adapter_type)
+    # resolve_macro_depends_on below needs a live adapter instance, but in the
+    # fusion CLI flow the adapter isn't registered until after this function
+    # returns (see requires.py's _wire_adapter_for_external_manifest). Register
+    # it now; a later re-registration for the same adapter name is a no-op.
+    register_adapter(runtime_config, get_mp_context())
+    internal_pkg_names_list = get_adapter_package_names(adapter_type)
+    internal_pkg_names = set(internal_pkg_names_list)
+
+    stale_ids = [uid for uid, m in manifest.macros.items() if m.package_name in internal_pkg_names]
+    for uid in stale_ids:
+        manifest.macros.pop(uid)
+    manifest._macros_by_name = None
+    manifest._macros_by_package = None
+
+    # load_dependencies() caches its result onto runtime_config.dependencies, so calling
+    # it here would permanently exclude installed packages from later ref resolution
+    # and macro dispatch. load_projects() has no such side effect.
+    adapter_projects = dict(runtime_config.load_projects(get_include_paths(adapter_type)))
+    pre_existing_ids = set(manifest.macros.keys())
+    for project_name, project in adapter_projects.items():
+        if project_name not in internal_pkg_names:
+            continue
+        macro_parser = MacroParser(project, manifest)
+        for path in macro_parser.get_paths():
+            source_file = load_source_file(path, ParseFileType.Macro, project.project_name, {})
+            if source_file:
+                macro_parser.parse_file(FileBlock(source_file))
+
+    new_macro_ids = set(manifest.macros.keys()) - pre_existing_ids
+    if new_macro_ids:
+        macro_resolver = MacroResolver(
+            manifest.macros, runtime_config.project_name, internal_pkg_names_list
+        )
+        new_macros = [manifest.macros[uid] for uid in new_macro_ids]
+        # resolve_macro_depends_on statically extracts adapter.dispatch() calls, which
+        # requires runtime_config.dependencies to be a mapping rather than None. We
+        # can't populate it via load_dependencies() (see comment above), so set it
+        # temporarily to what we just loaded and restore it afterward.
+        previous_dependencies = runtime_config.dependencies
+        runtime_config.dependencies = adapter_projects
+        try:
+            resolve_macro_depends_on(runtime_config, macro_resolver, new_macros)
+        finally:
+            runtime_config.dependencies = previous_dependencies
 
 
 def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
