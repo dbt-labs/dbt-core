@@ -8,10 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace.status import StatusCode
 from psycopg2 import DatabaseError
 from pytest_mock import MockerFixture
@@ -766,15 +762,9 @@ class TestMicrobatchModelRunner:
 
 class TestRunTask:
 
-    def setup_class(self):
-        self.tracer_provider = TracerProvider(resource=Resource.get_empty())
-        self.span_exporter = InMemorySpanExporter()
-        trace.set_tracer_provider(self.tracer_provider)
-        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(self.span_exporter))
-
     @pytest.fixture(autouse=True)
-    def before_each(self, monkeypatch):
-        self.span_exporter.clear()
+    def before_each(self, monkeypatch, otel_spans):
+        self.span_exporter = otel_spans
         # Instrumentation is gated behind --snowflake-projects-otel; enable it so
         # these span-emitting tests exercise the instrumented path.
         monkeypatch.setattr("dbt.task.runnable._otel_enabled", lambda: True)
@@ -810,7 +800,7 @@ class TestRunTask:
     @pytest.mark.parametrize(
         "error_to_raise,expected_result,expected_span_status",
         [
-            (None, RunStatus.Success, StatusCode.UNSET),
+            (None, RunStatus.Success, StatusCode.OK),
             (DbtRuntimeError, RunStatus.Error, StatusCode.ERROR),
             (DatabaseError, RunStatus.Error, StatusCode.ERROR),
             (KeyboardInterrupt, KeyboardInterrupt, StatusCode.UNSET),
@@ -1178,7 +1168,7 @@ class TestRunTask:
         run_task.run()
 
         exported_spans = self.span_exporter.get_finished_spans()
-        invocation_span = next(s for s in exported_spans if s.name == "dbt invocation")
+        invocation_span = next(s for s in exported_spans if s.name == "dbt.invocation")
 
         assert invocation_span.attributes["command"] == get_flags().WHICH
         assert invocation_span.attributes["invocation_id"] == get_invocation_id()
@@ -1245,8 +1235,8 @@ class TestRunTask:
         run_task.run()
 
         exported_spans = self.span_exporter.get_finished_spans()
-        invocation_span = next(s for s in exported_spans if s.name == "dbt invocation")
+        invocation_span = next(s for s in exported_spans if s.name == "dbt.invocation")
 
-        assert captured["name"] == "dbt invocation"
+        assert captured["name"] == "dbt.invocation"
         assert captured["span_id"] == invocation_span.context.span_id
         assert captured["trace_id"] == invocation_span.context.trace_id

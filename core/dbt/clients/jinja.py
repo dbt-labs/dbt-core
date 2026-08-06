@@ -1,7 +1,7 @@
 import re
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, List, NoReturn, Optional, Tuple, Union
+from typing import Any, Dict, Generator, List, NoReturn, Optional, Tuple, Union
 
 import jinja2
 import jinja2.ext
@@ -30,9 +30,24 @@ from dbt_common.utils import deep_map_render
 
 SUPPORTED_LANG_ARG = jinja2.nodes.Name("supported_languages", "param")
 
-# Module-level tracer. Inert (creates no spans) until the
-# --snowflake-projects-otel gate opens a span in __call__.
+# Inert until the --snowflake-projects-otel gate opens a span in __call__.
 _TRACER = trace.get_tracer("dbt.runner")
+
+
+def _hook_count(hooks: Any, inside_transaction: bool) -> int:
+    """How many hooks `run_hooks` actually executes in this transaction phase.
+
+    Mirrors the macro's own `selectattr('transaction', ...)` filter: a
+    materialization passes its whole hook list to all four run_hooks calls, so two of
+    them run nothing. Returns 0 for anything that isn't the expected list of
+    mappings, since run_hooks is reachable from user and adapter macros too.
+    """
+    if not isinstance(hooks, (list, tuple)):
+        return 0
+    try:
+        return sum(1 for hook in hooks if hook["transaction"] == inside_transaction)
+    except (TypeError, KeyError, IndexError):
+        return 0
 
 
 class MacroStack(threading.local):
@@ -83,12 +98,30 @@ class MacroGenerator(CallableMacroGenerator):
             finally:
                 self.stack.pop(unique_id)
 
+    @contextmanager
+    def _hook_span(
+        self, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> Generator[None, None, None]:
+        inside_transaction = kwargs.get("inside_transaction", args[1] if len(args) > 1 else True)
+        hook_count = _hook_count(args[0] if args else None, inside_transaction)
+        if not hook_count:
+            yield
+            return
+
+        phase = "inside" if inside_transaction else "outside"
+        with _TRACER.start_as_current_span(f"hooks.{phase}_transaction") as span:
+            span.set_attribute("inside_transaction", bool(inside_transaction))
+            span.set_attribute("hook_count", hook_count)
+            unique_id = getattr(self.node, "unique_id", None)
+            if unique_id is not None:
+                span.set_attribute("unique_id", unique_id)
+            yield
+
     # this makes MacroGenerator objects callable like functions
     def __call__(self, *args, **kwargs) -> Any:
         otel_enabled = getattr(get_flags(), "SNOWFLAKE_PROJECTS_OTEL", False)
-        if otel_enabled and self.get_name() == "run_hooks" and args and args[0]:
-            span_name = kwargs["span_name"] if "span_name" in kwargs else "hook_span"
-            with self.track_call(), _TRACER.start_as_current_span(span_name):
+        if otel_enabled and self.get_name() == "run_hooks":
+            with self.track_call(), self._hook_span(args, kwargs):
                 return self.call_macro(*args, **kwargs)
         else:
             with self.track_call():

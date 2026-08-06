@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import pytest
 import yaml
 
-from dbt.clients.jinja import get_rendered, get_template
+from dbt.clients.jinja import _hook_count, get_rendered, get_template
 from dbt_common.exceptions import JinjaRenderingError
 
 
@@ -414,3 +414,38 @@ def test_native_render():
     s = "{{ 1991 | as_text }}"
     value = get_rendered(s, {}, native=True)
     assert value == "1991"
+
+
+class TestHookCount:
+    """A zero count means `run_hooks` was called for a phase it will run nothing in,
+    and so must not get a span."""
+
+    def test_counts_only_the_matching_transaction_phase(self):
+        hooks = [
+            {"sql": "select 1", "transaction": True},
+            {"sql": "select 2", "transaction": False},
+            {"sql": "select 3", "transaction": True},
+        ]
+        assert _hook_count(hooks, True) == 2
+        assert _hook_count(hooks, False) == 1
+
+    def test_zero_when_no_hook_runs_in_this_phase(self):
+        assert _hook_count([{"sql": "select 1", "transaction": True}], False) == 0
+
+    def test_zero_for_empty_hook_list(self):
+        assert _hook_count([], True) == 0
+
+    @pytest.mark.parametrize(
+        "hooks",
+        [
+            None,
+            "not a list",
+            [{"sql": "select 1"}],  # no 'transaction' key
+            ["a bare string"],
+            [None],
+        ],
+    )
+    def test_zero_for_unexpected_shapes(self, hooks):
+        # run_hooks is reachable from user and adapter macros, so an unfamiliar
+        # payload must disable instrumentation rather than raise.
+        assert _hook_count(hooks, True) == 0

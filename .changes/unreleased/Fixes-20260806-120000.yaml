@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix OpenTelemetry hook spans: name them by transaction phase, skip calls that
+    run no hooks, and add node context.'
+time: 2026-08-06T12:00:00.000000-07:00
+custom:
+    Author: tauhid621
+    Issue: "11367"
