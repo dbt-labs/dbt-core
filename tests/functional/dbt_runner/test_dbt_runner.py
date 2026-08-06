@@ -2,6 +2,11 @@ import os
 from unittest import mock
 
 import pytest
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from dbt.adapters.factory import FACTORY, reset_adapters
 from dbt.cli.exceptions import DbtUsageException
@@ -10,6 +15,7 @@ from dbt.exceptions import DbtProjectError
 from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
 from dbt_common.events.contextvars import get_node_info
+from dbt_common.invocation import get_invocation_id
 
 
 class TestDbtRunner:
@@ -168,7 +174,20 @@ class TestDbtRunnerHooks:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "models.sql": "select 1 as id",
+            "models.sql": """
+                            {{ config(
+                                pre_hook=["select 1"],
+                                post_hook="select 2",
+                            ) }}
+                            select 1 as id
+                        """,
+            "model2.sql": """
+                            {{ config(
+                                pre_hook=["select 1", "select 1/0"],
+                                post_hook="select 2/0",
+                            ) }}
+                            select * from {{ ref('models') }}
+                        """,
         }
 
     @pytest.fixture(scope="class")
@@ -179,3 +198,141 @@ class TestDbtRunnerHooks:
         dbt = dbtRunner()
         dbt.invoke(["run", "--select", "models"])
         assert get_node_info() == {}
+
+    def test_dbt_runner_spans(self, project):
+        tracer_provider = TracerProvider(resource=Resource.get_empty())
+        span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+        dbt = dbtRunner()
+        dbt.invoke(["--snowflake-projects-otel", "run", "--select", "models", "model2"])
+        assert get_node_info() == {}
+        exported_spans = span_exporter.get_finished_spans()
+        assert len(exported_spans) == 12
+        assert exported_spans[0].instrumentation_scope.name == "dbt.runner"
+        span_names = [span.name for span in exported_spans]
+        span_names.sort()
+        assert span_names == [
+            "dbt invocation",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "metadata.setup",
+            "model.test.model2",
+            "model.test.models",
+            "on-run-end",
+            "operation.test.test-on-run-end-0",
+        ]
+        model2_span = None
+        models_span = None
+        metadata_span = None
+        invocation_span = None
+        for span in exported_spans:
+            if span.name == "model.test.model2":
+                model2_span = span
+            if span.name == "model.test.models":
+                models_span = span
+            if span.name == "metadata.setup":
+                metadata_span = span
+            if span.name == "dbt invocation":
+                invocation_span = span
+
+        assert models_span is not None
+        assert model2_span is not None
+        assert metadata_span is not None
+        assert invocation_span is not None
+
+        # The invocation span is the root of the run: it has no parent, and every
+        # other span shares its trace and descends from it.
+        assert invocation_span.parent is None
+        assert invocation_span.attributes["command"] == "run"
+        assert invocation_span.attributes["invocation_id"] == get_invocation_id()
+        assert invocation_span.attributes["version"] == dbt_version
+
+        for span in exported_spans:
+            assert span.context.trace_id == invocation_span.context.trace_id
+
+        # Node and hook spans parent under the invocation span.
+        assert models_span.parent.span_id == invocation_span.context.span_id
+        assert model2_span.parent.span_id == invocation_span.context.span_id
+        assert metadata_span.parent.span_id == invocation_span.context.span_id
+
+        assert "node_outcome" in models_span.attributes
+        assert "materialization" in models_span.attributes
+        assert "database" in models_span.attributes
+        assert "schema" in models_span.attributes
+        assert models_span.attributes["node_outcome"] in ("success", "error", "warn", "skipped")
+        assert models_span.attributes["materialization"] is not None
+        assert models_span.attributes["node_type"] == "model"
+        assert "unique_id" in models_span.attributes
+        assert "name" in models_span.attributes
+        assert "node_type" in models_span.attributes
+        assert "identifier" in models_span.attributes
+        assert "relative_path" in models_span.attributes
+
+        assert len(model2_span.links) == 1
+        assert model2_span.links[0].attributes["upstream.name"] == "model.test.models"
+        assert model2_span.links[0].context.span_id == models_span.context.span_id
+        assert model2_span.links[0].context.trace_id == models_span.context.trace_id
+
+    def test_dbt_runner_no_spans_when_flag_off(self, project):
+        # With the default (--no-snowflake-projects-otel), no spans are emitted.
+        tracer_provider = TracerProvider(resource=Resource.get_empty())
+        span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+        dbt = dbtRunner()
+        dbt.invoke(["run", "--select", "models", "model2"])
+        assert len(span_exporter.get_finished_spans()) == 0
+
+
+class TestDbtRunnerUnitTestSpans:
+    """A model with unit tests is submitted by BuildTask via
+    handle_model_with_unit_tests_node rather than _submit, so it needs its own
+    coverage that the invocation context still reaches the node spans."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_a.sql": "select 1 as id",
+            "my_model.sql": "select id from {{ ref('model_a') }}",
+            "schema.yml": """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('model_a')
+        rows:
+          - {id: 1}
+    expect:
+      rows:
+        - {id: 1}
+""",
+        }
+
+    def test_build_with_unit_tests_shares_one_trace(self, project):
+        tracer_provider = TracerProvider(resource=Resource.get_empty())
+        span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+        dbt = dbtRunner()
+        dbt.invoke(["--snowflake-projects-otel", "build"])
+
+        exported_spans = span_exporter.get_finished_spans()
+        by_name = {span.name: span for span in exported_spans}
+
+        invocation_span = by_name["dbt invocation"]
+        model_span = by_name["model.test.my_model"]
+        unit_test_span = by_name["unit_test.test.my_model.test_my_model"]
+
+        # Every span belongs to the invocation's trace: no node may start a new one.
+        assert {span.context.trace_id for span in exported_spans} == {
+            invocation_span.context.trace_id
+        }
+
+        # The model and its unit test parent under the invocation span.
+        assert model_span.parent.span_id == invocation_span.context.span_id
+        assert unit_test_span.parent.span_id == invocation_span.context.span_id
