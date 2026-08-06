@@ -9,6 +9,7 @@ import jinja2.nativetypes  # type: ignore
 import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
+from opentelemetry import trace
 
 from dbt.artifacts.resources.types import FunctionLanguage
 from dbt.contracts.graph.nodes import GenericTestNode
@@ -17,6 +18,7 @@ from dbt.exceptions import (
     MaterializtionMacroNotUsedError,
     NoSupportedLanguagesFoundError,
 )
+from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage
 from dbt_common.clients.jinja import (
     CallableMacroGenerator,
@@ -27,6 +29,10 @@ from dbt_common.clients.jinja import (
 from dbt_common.utils import deep_map_render
 
 SUPPORTED_LANG_ARG = jinja2.nodes.Name("supported_languages", "param")
+
+# Module-level tracer. Inert (creates no spans) until the
+# --snowflake-projects-otel gate opens a span in __call__.
+_TRACER = trace.get_tracer("dbt.runner")
 
 
 class MacroStack(threading.local):
@@ -78,9 +84,15 @@ class MacroGenerator(CallableMacroGenerator):
                 self.stack.pop(unique_id)
 
     # this makes MacroGenerator objects callable like functions
-    def __call__(self, *args, **kwargs):
-        with self.track_call():
-            return self.call_macro(*args, **kwargs)
+    def __call__(self, *args, **kwargs) -> Any:
+        otel_enabled = getattr(get_flags(), "SNOWFLAKE_PROJECTS_OTEL", False)
+        if otel_enabled and self.get_name() == "run_hooks" and args and args[0]:
+            span_name = kwargs["span_name"] if "span_name" in kwargs else "hook_span"
+            with self.track_call(), _TRACER.start_as_current_span(span_name):
+                return self.call_macro(*args, **kwargs)
+        else:
+            with self.track_call():
+                return self.call_macro(*args, **kwargs)
 
 
 class UnitTestMacroGenerator(MacroGenerator):

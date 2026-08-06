@@ -700,6 +700,13 @@ single_threaded = _create_option_and_track_env_var(
     hidden=True,
 )
 
+snowflake_projects_otel = _create_option_and_track_env_var(
+    "--snowflake-projects-otel/--no-snowflake-projects-otel",
+    envvar="DBT_ENGINE_SNOWFLAKE_PROJECTS_OTEL",
+    help="Enable OpenTelemetry span instrumentation for node and hook execution.",
+    default=False,
+)
+
 show_all_deprecations = _create_option_and_track_env_var(
     "--show-all-deprecations/--no-show-all-deprecations",
     envvar=None,
