@@ -287,3 +287,52 @@ class TestDbtRunnerHooks:
         dbt = dbtRunner()
         dbt.invoke(["run", "--select", "models", "model2"])
         assert len(span_exporter.get_finished_spans()) == 0
+
+
+class TestDbtRunnerUnitTestSpans:
+    """A model with unit tests is submitted by BuildTask via
+    handle_model_with_unit_tests_node rather than _submit, so it needs its own
+    coverage that the invocation context still reaches the node spans."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_a.sql": "select 1 as id",
+            "my_model.sql": "select id from {{ ref('model_a') }}",
+            "schema.yml": """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('model_a')
+        rows:
+          - {id: 1}
+    expect:
+      rows:
+        - {id: 1}
+""",
+        }
+
+    def test_build_with_unit_tests_shares_one_trace(self, project):
+        tracer_provider = TracerProvider(resource=Resource.get_empty())
+        span_exporter = InMemorySpanExporter()
+        trace.set_tracer_provider(tracer_provider)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+        dbt = dbtRunner()
+        dbt.invoke(["--snowflake-projects-otel", "build"])
+
+        exported_spans = span_exporter.get_finished_spans()
+        by_name = {span.name: span for span in exported_spans}
+
+        invocation_span = by_name["dbt invocation"]
+        model_span = by_name["model.test.my_model"]
+        unit_test_span = by_name["unit_test.test.my_model.test_my_model"]
+
+        # Every span belongs to the invocation's trace: no node may start a new one.
+        assert {span.context.trace_id for span in exported_spans} == {
+            invocation_span.context.trace_id
+        }
+
+        # The model and its unit test parent under the invocation span.
+        assert model_span.parent.span_id == invocation_span.context.span_id
+        assert unit_test_span.parent.span_id == invocation_span.context.span_id
