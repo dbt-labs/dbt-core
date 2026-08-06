@@ -5015,22 +5015,7 @@ impl AdapterImpl {
         materialization: &str,
         token: CancellationToken,
     ) -> AdapterResult<()> {
-        if self.adapter_type() != Bigquery {
-            return Err(AdapterError::new(
-                AdapterErrorKind::NotSupported,
-                "copy_partitions is only supported for BigQuery adapter",
-            ));
-        }
-        if source_relations.len() != target_relations.len() {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                format!(
-                    "copy_partitions source/target length mismatch: {} vs {}",
-                    source_relations.len(),
-                    target_relations.len()
-                ),
-            ));
-        }
+        validate_copy_partitions_args(self.adapter_type(), source_relations, target_relations)?;
         if source_relations.is_empty() {
             return Ok(());
         }
@@ -5043,13 +5028,16 @@ impl AdapterImpl {
 
         let write_disposition = bigquery_write_disposition("copy_partitions", materialization)?;
 
-        let mut copy_jobs = Vec::with_capacity(source_relations.len());
-        for (source, target) in source_relations.iter().zip(target_relations) {
-            copy_jobs.push((
-                bigquery_relation_fqn(source)?,
-                bigquery_relation_fqn(target)?,
-            ));
-        }
+        let copy_jobs = source_relations
+            .iter()
+            .zip(target_relations)
+            .map(|(source, target)| {
+                Ok((
+                    bigquery_relation_fqn(source)?,
+                    bigquery_relation_fqn(target)?,
+                ))
+            })
+            .collect::<AdapterResult<Vec<_>>>()?;
 
         // resolve job labels once here: worker threads can't hold `state`
         let mut base_options = self.get_adbc_execute_options(state);
@@ -5082,21 +5070,12 @@ impl AdapterImpl {
             execute_bigquery_copy_job_with_retry(&engine, &ctx, conn, &options, &map_token)
         };
 
-        let reduce_f =
-            |_: &mut (),
-             _copy_job: (String, String),
-             copy_res: Result<(), Cancellable<AdapterError>>| copy_res;
+        type CopyResult = Result<(), Cancellable<AdapterError>>;
+        let reduce_f = |_: &mut (), _job: (String, String), res: CopyResult| res;
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), node_id);
-        run_traced_async_blocking(map_reduce.run(Arc::new(copy_jobs), token)).map_err(|err| {
-            match err {
-                Cancellable::Error(err) => err,
-                Cancellable::Cancelled => AdapterError::new(
-                    AdapterErrorKind::Cancelled,
-                    "copy_partitions operation cancelled",
-                ),
-            }
-        })
+        run_traced_async_blocking(map_reduce.run(Arc::new(copy_jobs), token))
+            .map_err(copy_partitions_run_error)
     }
 
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L818
@@ -5937,6 +5916,40 @@ fn bigquery_write_disposition(caller: &str, materialization: &str) -> AdapterRes
             format!("{caller} 'materialization' must be either 'table' or 'incremental'"),
         )),
     }
+}
+
+fn copy_partitions_run_error(err: Cancellable<AdapterError>) -> AdapterError {
+    match err {
+        Cancellable::Error(err) => err,
+        Cancellable::Cancelled => AdapterError::new(
+            AdapterErrorKind::Cancelled,
+            "copy_partitions operation cancelled",
+        ),
+    }
+}
+
+fn validate_copy_partitions_args(
+    adapter_type: AdapterType,
+    source_relations: &[Arc<dyn BaseRelation>],
+    target_relations: &[Arc<dyn BaseRelation>],
+) -> AdapterResult<()> {
+    if adapter_type != Bigquery {
+        return Err(AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            "copy_partitions is only supported for BigQuery adapter",
+        ));
+    }
+    if source_relations.len() != target_relations.len() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "copy_partitions source/target length mismatch: {} vs {}",
+                source_relations.len(),
+                target_relations.len()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// Run one BigQuery copy job, retrying rate-limited jobs with backoff.
