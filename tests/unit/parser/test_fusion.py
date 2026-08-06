@@ -1,9 +1,8 @@
 import json
 import os
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
+from typing import Iterable, Optional
 from unittest import mock
 
 import pytest
@@ -21,6 +20,8 @@ from dbt.parser.fusion import (
     parse_with_fusion,
     rediscover_adapter_macros,
 )
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.types import Note
 
 
 def _flags(**overrides):
@@ -39,21 +40,47 @@ def _flags(**overrides):
     return SimpleNamespace(**base)
 
 
-def _fake_parser(manifest_text: Optional[str], returncode: int = 0, stderr: str = ""):
-    """Build a subprocess.run side_effect that writes manifest.json into the
+class _FakePopen:
+    """Stand-in for subprocess.Popen that supplies the attributes _run_fusion
+    reads: iterable text-mode stdout/stderr streams, wait() -> returncode."""
+
+    def __init__(
+        self,
+        argv,
+        returncode: int = 0,
+        stdout_lines: Iterable[str] = (),
+        stderr_lines: Iterable[str] = (),
+    ):
+        self.stdout = iter([line + "\n" for line in stdout_lines])
+        self.stderr = iter([line + "\n" for line in stderr_lines])
+        self.returncode = returncode
+
+    def wait(self) -> int:
+        return self.returncode
+
+
+def _fake_parser(
+    manifest_text: Optional[str],
+    returncode: int = 0,
+    stderr: str = "",
+    stdout_lines: Iterable[str] = (),
+    stderr_lines: Iterable[str] = (),
+):
+    """Build a subprocess.Popen side_effect that writes manifest.json into the
     --target-path argv slot. Pass manifest_text=None to simulate a parser run
     that exits successfully without writing a manifest."""
 
-    def _run(argv, *args, **kwargs):
+    def _popen(argv, *args, **kwargs):
         if manifest_text is not None and returncode == 0:
             target_path = Path(argv[argv.index("--target-path") + 1])
             target_path.mkdir(parents=True, exist_ok=True)
             (target_path / "manifest.json").write_text(manifest_text)
-        return subprocess.CompletedProcess(
-            args=argv, returncode=returncode, stdout="", stderr=stderr
+        lines = stderr_lines or ([stderr] if stderr else ())
+        return _FakePopen(
+            argv, returncode=returncode, stdout_lines=stdout_lines, stderr_lines=lines
         )
 
-    return _run
+    return _popen
 
 
 @pytest.fixture(autouse=True)
@@ -174,7 +201,7 @@ class TestParseWithFusion:
         with mock.patch(
             "dbt.parser.fusion.get_flags",
             return_value=_flags(V2_PARSER="definitely-not-a-real-binary-xyz"),
-        ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=FileNotFoundError()):
+        ), mock.patch("dbt.parser.fusion.subprocess.Popen", side_effect=FileNotFoundError()):
             with pytest.raises(FusionParserError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
@@ -190,7 +217,7 @@ class TestParseWithFusion:
 
         with mock.patch.dict(
             "os.environ", {"DBT_INVOCATION_ENV": "dbt-cloud-prod__host:cloud"}, clear=False
-        ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_capture), mock.patch(
+        ), mock.patch("dbt.parser.fusion.subprocess.Popen", side_effect=_capture), mock.patch(
             "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
         ), mock.patch(
             "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
@@ -226,7 +253,7 @@ class TestParseWithFusion:
             "DBT_ENGINE_STATE_API_URL": "https://state.example.com",
         }
         with mock.patch.dict("os.environ", parent_env, clear=False), mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_capture
+            "dbt.parser.fusion.subprocess.Popen", side_effect=_capture
         ), mock.patch(
             "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
         ), mock.patch(
@@ -243,19 +270,70 @@ class TestParseWithFusion:
         assert child_env["DBT_ENGINE_STATE_API_URL"] == "https://state.example.com"
 
     def test_nonzero_exit_raises(self, tmp_path: Path, _patch_fusion_deps):
-        # Passthrough mode: the parser's stderr streams directly to the user,
-        # so the exception only carries the exit code, not the captured stderr.
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run",
+            "dbt.parser.fusion.subprocess.Popen",
             side_effect=_fake_parser(manifest_text=None, returncode=2),
         ):
             with pytest.raises(FusionParserError, match="exit 2"):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
+    def test_nonzero_exit_error_includes_captured_output(self, tmp_path: Path, _patch_fusion_deps):
+        """Captured stdout/stderr must be embedded in the raised error so the
+        failure reason is visible even to a caller that only sees the exception,
+        not just the live event stream (e.g. dbt Studio's error surfacing)."""
+        with mock.patch(
+            "dbt.parser.fusion.subprocess.Popen",
+            side_effect=_fake_parser(
+                manifest_text=None,
+                returncode=1,
+                stdout_lines=["compiling model foo"],
+                stderr_lines=["panic: division by zero"],
+            ),
+        ):
+            with pytest.raises(FusionParserError, match="panic: division by zero"):
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
+
+    def test_output_lines_reemitted_as_note_events(self, tmp_path: Path, _patch_fusion_deps):
+        """stdout/stderr lines must be re-emitted through dbt-core's event
+        system (as Note events) so they reach any consumer of that stream
+        (e.g. dbt Studio), not just a raw inherited terminal fd."""
+        events: list = []
+        levels: list = []
+
+        def _capture(event, *args, **kwargs):
+            events.append(event)
+            levels.append(kwargs.get("level"))
+
+        with mock.patch(
+            "dbt.parser.fusion.subprocess.Popen",
+            side_effect=_fake_parser(
+                manifest_text=json.dumps({"metadata": {}}),
+                stdout_lines=["compiling model foo"],
+                stderr_lines=["warning: deprecated config"],
+            ),
+        ), mock.patch(
+            "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.fusion.fire_event", side_effect=_capture
+        ):
+            parse_with_fusion(self._runtime_config(tmp_path), write=False, write_json=False)
+
+        notes = [(e.msg, lvl) for e, lvl in zip(events, levels) if isinstance(e, Note)]
+        assert (
+            "compiling model foo",
+            EventLevel.INFO,
+        ) in notes
+        assert (
+            "warning: deprecated config",
+            EventLevel.WARN,
+        ) in notes
+
     def test_missing_manifest_after_success_raises(self, tmp_path: Path, _patch_fusion_deps):
         """Parser exits 0 but writes nothing — must raise, not silently load a stale file."""
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(manifest_text=None)
+            "dbt.parser.fusion.subprocess.Popen", side_effect=_fake_parser(manifest_text=None)
         ):
             with pytest.raises(FusionParserError, match="did not produce"):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
@@ -265,14 +343,14 @@ class TestParseWithFusion:
         the fusion handoff — parser writes into a fresh temp dir."""
         (tmp_path / "manifest.json").write_text(json.dumps({"stale": True}))
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(manifest_text=None)
+            "dbt.parser.fusion.subprocess.Popen", side_effect=_fake_parser(manifest_text=None)
         ):
             with pytest.raises(FusionParserError, match="did not produce"):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
     def test_invalid_json_raises_schema_error(self, tmp_path: Path, _patch_fusion_deps):
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser("{ not valid json")
+            "dbt.parser.fusion.subprocess.Popen", side_effect=_fake_parser("{ not valid json")
         ):
             with pytest.raises(FusionParserSchemaError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
@@ -283,7 +361,9 @@ class TestParseWithFusion:
         bad_version = json.dumps(
             {"metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v1.json"}}
         )
-        with mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(bad_version)):
+        with mock.patch(
+            "dbt.parser.fusion.subprocess.Popen", side_effect=_fake_parser(bad_version)
+        ):
             with pytest.raises(FusionParserVersionError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
@@ -294,7 +374,7 @@ class TestParseWithFusion:
         target = tmp_path / "target"
         target.mkdir()
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run",
+            "dbt.parser.fusion.subprocess.Popen",
             side_effect=_fake_parser(json.dumps({"metadata": {}})),
         ), mock.patch(
             "dbt.parser.fusion._load_writable_manifest",
@@ -310,7 +390,7 @@ class TestParseWithFusion:
         target = tmp_path / "target"
         target.mkdir()
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run",
+            "dbt.parser.fusion.subprocess.Popen",
             side_effect=_fake_parser(json.dumps({"metadata": {}})),
         ), mock.patch(
             "dbt.parser.fusion._load_writable_manifest",
@@ -345,7 +425,7 @@ class TestParseWithFusionTelemetry:
     def test_success_fires_start_and_end_success(self, tmp_path: Path, _patch_fusion_deps):
         events, patch_fire = self._patch_fire_event()
         with patch_fire, mock.patch(
-            "dbt.parser.fusion.subprocess.run",
+            "dbt.parser.fusion.subprocess.Popen",
             side_effect=_fake_parser(json.dumps({"metadata": {}})),
         ), mock.patch(
             "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
@@ -386,7 +466,7 @@ class TestParseWithFusionTelemetry:
     ):
         events, patch_fire = self._patch_fire_event()
         with patch_fire, mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=subprocess_side_effect
+            "dbt.parser.fusion.subprocess.Popen", side_effect=subprocess_side_effect
         ):
             with pytest.raises(FusionParserError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
@@ -404,7 +484,7 @@ class TestParseWithFusionTelemetry:
             {"metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v1.json"}}
         )
         with patch_fire, mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(bad_version)
+            "dbt.parser.fusion.subprocess.Popen", side_effect=_fake_parser(bad_version)
         ):
             with pytest.raises(FusionParserVersionError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
