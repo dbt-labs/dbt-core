@@ -17,7 +17,6 @@ on:
     types: [opened, reopened, edited, synchronize]
 
 permissions:
-  pull-requests: write
   issues: write
 
 jobs:
@@ -29,19 +28,24 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const { owner, repo } = context.repo;
+            const repoIssueUrl = `https?://github\\.com/${owner}/${repo}/issues/\\d+`;
             const closingKeywords = '(close[sd]?|fix(e[sd])?|resolve[sd]?)';
             const issueRefPattern = new RegExp(
-              `${closingKeywords}\\s*:?\\s*(#\\d+|https?://github\\.com/[^\\s]+/issues/\\d+)`,
+              `${closingKeywords}\\s*:?\\s*(#\\d+|${repoIssueUrl})`,
               'i'
             );
-            const bareLinkPattern = /#\d+|https?:\/\/github\.com\/[^\s]+\/issues\/\d+/;
+            const directLinkPattern = new RegExp(repoIssueUrl);
             const skipLabel = 'no-issue-needed';
 
             const pr = context.payload.pull_request;
             const body = pr.body || '';
             const labels = pr.labels.map((l) => l.name);
 
-            const hasIssueLink = issueRefPattern.test(body) || bareLinkPattern.test(body);
+            // A closing keyword (with either a bare #123 or a full issue URL) or a
+            // direct link to an issue in this repo counts; a bare #123 with no
+            // keyword doesn't, since that also matches unrelated PR/issue mentions.
+            const hasIssueLink = issueRefPattern.test(body) || directLinkPattern.test(body);
             const hasSkipLabel = labels.includes(skipLabel);
 
             core.setOutput('has_issue_link', hasIssueLink);
@@ -73,13 +77,18 @@ jobs:
               try {
                 await github.rest.issues.getLabel({ owner, repo, name: flagLabel });
               } catch (e) {
-                await github.rest.issues.createLabel({
-                  owner,
-                  repo,
-                  name: flagLabel,
-                  color: 'D93F0B',
-                  description: "PR doesn't explicitly link to an issue",
-                });
+                try {
+                  await github.rest.issues.createLabel({
+                    owner,
+                    repo,
+                    name: flagLabel,
+                    color: 'D93F0B',
+                    description: "PR doesn't explicitly link to an issue",
+                  });
+                } catch (createErr) {
+                  // Another concurrent run may have created it first; ignore "already exists".
+                  if (createErr.status !== 422) throw createErr;
+                }
               }
 
               await github.rest.issues.addLabels({
@@ -89,12 +98,20 @@ jobs:
                 labels: [flagLabel],
               });
 
-              if (!existingComment) {
+              const warningBody = `${commentMarker}\nThis PR doesn't appear to explicitly link to an issue. Please reference the issue it addresses (e.g. \`Closes #123\`) in the PR description, or add the \`no-issue-needed\` label if this change doesn't need one.`;
+              if (existingComment) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existingComment.id,
+                  body: warningBody,
+                });
+              } else {
                 await github.rest.issues.createComment({
                   owner,
                   repo,
                   issue_number: prNumber,
-                  body: `${commentMarker}\nThis PR doesn't appear to explicitly link to an issue. Please reference the issue it addresses (e.g. \`Closes #123\`) in the PR description, or add the \`no-issue-needed\` label if this change doesn't need one.`,
+                  body: warningBody,
                 });
               }
             } else {
