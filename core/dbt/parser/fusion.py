@@ -144,8 +144,10 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
         get_adapter_package_names,
         get_include_paths,
         load_plugin,
+        register_adapter,
     )
     from dbt.context.macro_resolver import MacroResolver
+    from dbt.mp_context import get_mp_context
     from dbt.parser.macros import MacroParser
     from dbt.parser.manifest import resolve_macro_depends_on
     from dbt.parser.read_files import load_source_file
@@ -153,6 +155,11 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
 
     adapter_type = runtime_config.credentials.type
     load_plugin(adapter_type)
+    # resolve_macro_depends_on below needs a live adapter instance, but in the
+    # fusion CLI flow the adapter isn't registered until after this function
+    # returns (see requires.py's _wire_adapter_for_external_manifest). Register
+    # it now; a later re-registration for the same adapter name is a no-op.
+    register_adapter(runtime_config, get_mp_context())
     internal_pkg_names_list = get_adapter_package_names(adapter_type)
     internal_pkg_names = set(internal_pkg_names_list)
 
@@ -182,7 +189,16 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
             manifest.macros, runtime_config.project_name, internal_pkg_names_list
         )
         new_macros = [manifest.macros[uid] for uid in new_macro_ids]
-        resolve_macro_depends_on(runtime_config, macro_resolver, new_macros)
+        # resolve_macro_depends_on statically extracts adapter.dispatch() calls, which
+        # requires runtime_config.dependencies to be a mapping rather than None. We
+        # can't populate it via load_dependencies() (see comment above), so set it
+        # temporarily to what we just loaded and restore it afterward.
+        previous_dependencies = runtime_config.dependencies
+        runtime_config.dependencies = adapter_projects
+        try:
+            resolve_macro_depends_on(runtime_config, macro_resolver, new_macros)
+        finally:
+            runtime_config.dependencies = previous_dependencies
 
 
 def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
