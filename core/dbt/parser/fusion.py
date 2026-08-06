@@ -140,7 +140,11 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
     dbt-<adapter> differs, those differences are silently lost after manifest load.
     This function replaces the embedded macros with freshly parsed ones from disk.
     """
-    from dbt.adapters.factory import get_adapter_package_names, get_include_paths, load_plugin
+    from dbt.adapters.factory import (
+        get_adapter_package_names,
+        get_include_paths,
+        load_plugin,
+    )
     from dbt.context.macro_resolver import MacroResolver
     from dbt.parser.macros import MacroParser
     from dbt.parser.manifest import resolve_macro_depends_on

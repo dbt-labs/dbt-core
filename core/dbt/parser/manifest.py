@@ -7,7 +7,19 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from itertools import chain
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import jinja2
 import msgpack
@@ -2522,7 +2534,9 @@ def resolve_macro_depends_on(
     macro_ctx = generate_macro_context(root_project)
     macro_namespace = TestMacroNamespace(macro_resolver, {}, None, MacroStack(), [])
     adapter = get_adapter(root_project)
-    db_wrapper = ParseProvider().DatabaseWrapper(adapter, macro_namespace)
+    db_wrapper = ParseProvider().DatabaseWrapper(
+        adapter, macro_namespace  # type: ignore[arg-type]
+    )
     for macro in macros:
         possible_macro_calls = statically_extract_macro_calls(
             macro.macro_sql, macro_ctx, db_wrapper
