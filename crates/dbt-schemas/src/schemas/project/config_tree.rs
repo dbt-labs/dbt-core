@@ -6,9 +6,8 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 
-use dbt_common::{FsResult, tracing::dbt_emit::emit_strict_parse_error};
-use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
-use dbt_schemas::schemas::{
+use crate::schemas::{common::DbtQuoting, project::DbtProject};
+use crate::schemas::{
     project::{
         AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
         ResolvableConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig,
@@ -16,6 +15,7 @@ use dbt_schemas::schemas::{
     },
     serde::yaml_to_fs_error,
 };
+use dbt_common::{FsResult, tracing::dbt_emit::emit_strict_parse_error};
 use dbt_yaml::ShouldBe;
 
 /// Used to deserialize the top-level `dbt_project.yml` configuration
@@ -89,7 +89,7 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
     ///
     /// # Example
     /// ```rust
-    /// use dbt_parser::dbt_project_config::DbtProjectConfig;
+    /// use dbt_schemas::schemas::project::DbtProjectConfig;
     /// use dbt_schemas::schemas::project::ModelConfig;
     /// use indexmap::IndexMap;
     ///
@@ -635,7 +635,7 @@ mod tests {
         };
         staging_config.config.enabled = Some(true);
         staging_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
+            Some(crate::schemas::common::DbtMaterialization::Table);
 
         project_config
             .children
@@ -650,7 +650,7 @@ mod tests {
         assert_eq!(result.enabled, Some(true));
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
+            Some(crate::schemas::common::DbtMaterialization::Table)
         );
     }
 
@@ -683,7 +683,7 @@ mod tests {
         };
         node_config.config.enabled = Some(false);
         node_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental);
+            Some(crate::schemas::common::DbtMaterialization::Incremental);
 
         staging_config
             .children
@@ -705,7 +705,7 @@ mod tests {
         assert_eq!(result.enabled, Some(false));
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)
+            Some(crate::schemas::common::DbtMaterialization::Incremental)
         );
     }
 
@@ -730,8 +730,7 @@ mod tests {
             children: IndexMap::new(),
         };
         staging_config.config.enabled = Some(false);
-        staging_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View);
+        staging_config.config.materialized = Some(crate::schemas::common::DbtMaterialization::View);
 
         project_config
             .children
@@ -753,7 +752,7 @@ mod tests {
         assert_eq!(result.enabled, Some(false));
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View)
+            Some(crate::schemas::common::DbtMaterialization::View)
         );
     }
 
@@ -764,7 +763,7 @@ mod tests {
             children: IndexMap::new(),
         };
         config.config.enabled = Some(true);
-        config.config.materialized = Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
+        config.config.materialized = Some(crate::schemas::common::DbtMaterialization::Table);
 
         let fqn = vec![
             "nonexistent_project".to_string(),
@@ -777,7 +776,7 @@ mod tests {
         assert_eq!(result.enabled, Some(true));
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
+            Some(crate::schemas::common::DbtMaterialization::Table)
         );
     }
 
@@ -788,7 +787,7 @@ mod tests {
             children: IndexMap::new(),
         };
         config.config.enabled = Some(true);
-        config.config.materialized = Some(dbt_schemas::schemas::common::DbtMaterialization::View);
+        config.config.materialized = Some(crate::schemas::common::DbtMaterialization::View);
 
         let fqn: Vec<String> = vec![];
         let result = config.get_config_for_fqn(&fqn);
@@ -797,7 +796,7 @@ mod tests {
         assert_eq!(result.enabled, Some(true));
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View)
+            Some(crate::schemas::common::DbtMaterialization::View)
         );
     }
 
@@ -821,8 +820,7 @@ mod tests {
             config: ModelConfig::default(),
             children: IndexMap::new(),
         };
-        marts_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
+        marts_config.config.materialized = Some(crate::schemas::common::DbtMaterialization::Table);
 
         let mut finance_config = DbtProjectConfig {
             config: ModelConfig::default(),
@@ -835,7 +833,7 @@ mod tests {
             children: IndexMap::new(),
         };
         revenue_reports_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View);
+            Some(crate::schemas::common::DbtMaterialization::View);
 
         let mut monthly_revenue_config = DbtProjectConfig {
             config: ModelConfig::default(),
@@ -843,7 +841,7 @@ mod tests {
         };
         monthly_revenue_config.config.enabled = Some(true);
         monthly_revenue_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental);
+            Some(crate::schemas::common::DbtMaterialization::Incremental);
 
         revenue_reports_config
             .children
@@ -874,7 +872,7 @@ mod tests {
         assert_eq!(result.enabled, Some(true));
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)
+            Some(crate::schemas::common::DbtMaterialization::Incremental)
         );
     }
 
@@ -902,7 +900,7 @@ mod tests {
             children: IndexMap::new(),
         };
         example_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
+            Some(crate::schemas::common::DbtMaterialization::Table);
 
         models_config
             .children
@@ -927,7 +925,7 @@ mod tests {
         // (since my_model doesn't exist, it stops at example)
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
+            Some(crate::schemas::common::DbtMaterialization::Table)
         );
     }
 
@@ -940,7 +938,7 @@ mod tests {
             children: IndexMap::new(),
         };
         config.config.enabled = Some(true);
-        config.config.materialized = Some(dbt_schemas::schemas::common::DbtMaterialization::View);
+        config.config.materialized = Some(crate::schemas::common::DbtMaterialization::View);
 
         // Set up project structure like: my_project -> staging -> +materialized: table
         let mut project_config = DbtProjectConfig {
@@ -954,7 +952,7 @@ mod tests {
             children: IndexMap::new(),
         };
         staging_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
+            Some(crate::schemas::common::DbtMaterialization::Table);
         staging_config.config.enabled = Some(true);
 
         // Add specific model config
@@ -963,7 +961,7 @@ mod tests {
             children: IndexMap::new(),
         };
         customers_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental);
+            Some(crate::schemas::common::DbtMaterialization::Incremental);
         customers_config.config.enabled = Some(false);
 
         staging_config
@@ -990,7 +988,7 @@ mod tests {
         assert_eq!(result.enabled, Some(false));
         assert_eq!(
             result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)
+            Some(crate::schemas::common::DbtMaterialization::Incremental)
         );
     }
 }

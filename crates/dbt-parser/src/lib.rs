@@ -14,7 +14,17 @@ pub mod args;
 pub mod constants;
 /// DbtNamespace for intercepting dbt macro calls during parse phase
 pub mod dbt_namespace;
-pub mod dbt_project_config;
+/// FQN-based `dbt_project.yml` config resolution.
+///
+/// The implementation lives in `dbt-schemas` so that it can be shared with code
+/// that runs before a manifest exists (e.g. the deps-time skill install pass),
+/// which cannot depend on this crate. Re-exported here for existing call sites.
+pub mod dbt_project_config {
+    pub use dbt_schemas::schemas::project::{
+        DbtProjectConfig, ProjectConfigResolver, RootProjectConfigs, build_root_project_configs,
+        init_project_config, recur_build_dbt_project_config, strip_resource_paths_from_ref_path,
+    };
+}
 /// Parallel dispatch utilities
 pub mod parallel;
 /// Python AST parsing utilities
