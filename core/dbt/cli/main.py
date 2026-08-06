@@ -141,6 +141,7 @@ def global_flags(func):
     @p.record_timing_info
     @p.send_anonymous_usage_stats
     @p.single_threaded
+    @p.snowflake_projects_otel
     @p.show_all_deprecations
     @p.state
     @p.static_parser

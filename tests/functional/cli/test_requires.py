@@ -107,6 +107,7 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_VERSION_CHECK",
             "DBT_ENGINE_QUIET",
             "DBT_ENGINE_SINGLE_THREADED",
+            "DBT_ENGINE_SNOWFLAKE_PROJECTS_OTEL",
             "DBT_ENGINE_SQLPARSE",
             "DBT_ENGINE_ARTIFACT_STATE_PATH",
             "DBT_ENGINE_FULL_REFRESH",
