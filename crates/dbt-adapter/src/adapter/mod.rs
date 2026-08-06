@@ -2981,6 +2981,53 @@ impl Adapter {
         }
     }
 
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    pub fn copy_partitions(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "copy_partitions",
+                    &["source_relations", "target_relations", "materialization"],
+                    args,
+                );
+                let source_relations_val = iter.next_arg::<Vec<Value>>()?;
+                let target_relations_val = iter.next_arg::<Vec<Value>>()?;
+                let materialization = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                let source_relations = source_relations_val
+                    .iter()
+                    .map(downcast_value_to_dyn_base_relation)
+                    .collect::<Result<Vec<_>, _>>()?;
+                let target_relations = target_relations_val
+                    .iter()
+                    .map(downcast_value_to_dyn_base_relation)
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                for target_relation in &target_relations {
+                    adapter
+                        .engine()
+                        .relation_cache()
+                        .insert_relation(target_relation.clone(), None);
+                }
+
+                adapter.copy_partitions(
+                    state,
+                    &source_relations,
+                    &target_relations,
+                    materialization,
+                    self.cancellation_token.clone(),
+                )?;
+                Ok(none_value())
+            }
+            Parse(_) => Ok(none_value()),
+        }
+    }
+
     #[tracing::instrument(skip(self), level = "trace")]
     pub fn describe_relation(
         &self,
@@ -3819,6 +3866,8 @@ impl Adapter {
             "list_relations_without_caching" => self.list_relations_without_caching(state, args),
             // tmp_relation_partitioned: BaseRelation, target_relation_partitioned: BaseRelation, materialization: str
             "copy_table" => self.copy_table(state, args),
+            // source_relations: List[BaseRelation], target_relations: List[BaseRelation], materialization: str
+            "copy_partitions" => self.copy_partitions(state, args),
             // relation: BaseRelation, columns: Dict[str, DbtColumn]
             "update_columns" => self.update_columns(state, args),
             // database: str, schema: str, identifier: str, description: str

@@ -1,9 +1,13 @@
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
 use crate::config::AdapterConfig;
-use crate::connection::{ConnectionGuard, borrow_tlocal_connection};
+use crate::connection::{AdapterConnectionFactory, ConnectionGuard, borrow_tlocal_connection};
+use crate::engine::retry::{
+    BIGQUERY_JOB_MAX_RETRIES, bigquery_job_backoff_sleep, is_retryable_bigquery_job_error,
+};
 use crate::engine::{
-    AdapterEngine, AdbcEngine, Options as ExecuteOptions, execute_query_with_retry,
+    AdapterEngine, AdbcEngine, Options as ExecuteOptions, bigquery_job_labels_option,
+    execute_query_with_retry,
 };
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
@@ -52,10 +56,10 @@ use dashmap::DashMap;
 use dbt_adapter_core::AdapterType;
 use dbt_adbc::bigquery::*;
 use dbt_adbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
-use dbt_adbc::{Connection, QueryCtx};
+use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_schema_store::SchemaStoreTrait;
@@ -73,6 +77,7 @@ use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, Policy};
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
+use dbt_tracing::async_tracing::run_traced_async_blocking;
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
@@ -4970,52 +4975,14 @@ impl AdapterImpl {
                 if let Replay(_, replay) = self.inner_adapter() {
                     return replay.replay_copy_table(state, source, dest, &materialization);
                 }
-                let append = materialization == "incremental";
-                let truncate = materialization == "table";
-                if !append && !truncate {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::Configuration,
-                        "copy_table 'materialization' must be either 'table' or 'incremental'"
-                            .to_string(),
-                    ));
-                }
-
-                let source_fqn = format!(
-                    "{}.{}.{}",
-                    source.database_as_str()?,
-                    source.schema_as_str()?,
-                    source.identifier_as_str()?
-                );
-                let dest_fqn = format!(
-                    "{}.{}.{}",
-                    dest.database_as_str()?,
-                    dest.schema_as_str()?,
-                    dest.identifier_as_str()?
-                );
-
-                // Determine write disposition based on materialization
-                // WRITE_TRUNCATE for table materialization, WRITE_APPEND for incremental
-                let write_disposition = if truncate {
-                    "WRITE_TRUNCATE"
-                } else {
-                    "WRITE_APPEND"
-                };
+                let write_disposition = bigquery_write_disposition("copy_table", &materialization)?;
 
                 let mut options = self.get_adbc_execute_options(state);
-                options.extend(vec![
-                    (
-                        COPY_TABLE_SOURCE.to_string(),
-                        OptionValue::String(source_fqn),
-                    ),
-                    (
-                        COPY_TABLE_DESTINATION.to_string(),
-                        OptionValue::String(dest_fqn),
-                    ),
-                    (
-                        COPY_TABLE_WRITE_DISPOSITION.to_string(),
-                        OptionValue::String(write_disposition.to_string()),
-                    ),
-                ]);
+                options.extend(bigquery_copy_options(
+                    bigquery_relation_fqn(source)?,
+                    bigquery_relation_fqn(dest)?,
+                    write_disposition,
+                ));
 
                 let ctx = query_ctx_from_state(state)?.with_desc("copy_table adapter call");
                 self.engine().execute_with_options(
@@ -5035,6 +5002,121 @@ impl AdapterImpl {
             | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
+        }
+    }
+
+    /// Like [AdapterImpl::copy_table] but copies many partitions concurrently
+    /// through a bounded pool, retrying rate-limited jobs with backoff.
+    pub fn copy_partitions(
+        &self,
+        state: &State,
+        source_relations: &[Arc<dyn BaseRelation>],
+        target_relations: &[Arc<dyn BaseRelation>],
+        materialization: &str,
+        token: CancellationToken,
+    ) -> AdapterResult<()> {
+        if self.adapter_type() != Bigquery {
+            return Err(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "copy_partitions is only supported for BigQuery adapter",
+            ));
+        }
+        if source_relations.len() != target_relations.len() {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!(
+                    "copy_partitions source/target length mismatch: {} vs {}",
+                    source_relations.len(),
+                    target_relations.len()
+                ),
+            ));
+        }
+        if source_relations.is_empty() {
+            return Ok(());
+        }
+        if let Replay(_, replay) = self.inner_adapter() {
+            for (source, target) in source_relations.iter().zip(target_relations) {
+                replay.replay_copy_table(state, source, target, materialization)?;
+            }
+            return Ok(());
+        }
+
+        let write_disposition = bigquery_write_disposition("copy_partitions", materialization)?;
+
+        let mut copy_jobs = Vec::with_capacity(source_relations.len());
+        for (source, target) in source_relations.iter().zip(target_relations) {
+            copy_jobs.push((
+                bigquery_relation_fqn(source)?,
+                bigquery_relation_fqn(target)?,
+            ));
+        }
+
+        // resolve job labels once here: worker threads can't hold `state`
+        let mut base_options = self.get_adbc_execute_options(state);
+        let query_comment = self.engine().query_comment().resolve_comment(state)?;
+        base_options.push(bigquery_job_labels_option(
+            self.engine().query_comment(),
+            Some(&query_comment),
+            state,
+        ));
+
+        // shares the global connection budget, like the metadata MapReduce ops
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.engine().clone(),
+            self.engine().threads(),
+        ));
+
+        let ctx = query_ctx_from_state(state)?.with_desc("copy_partitions adapter call");
+        let node_id = node_id_from_state(state);
+        let engine = self.engine().clone();
+        let map_token = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          (source_fqn, target_fqn): &(String, String)|
+              -> Result<(), Cancellable<AdapterError>> {
+            let mut options = base_options.clone();
+            options.extend(bigquery_copy_options(
+                source_fqn.clone(),
+                target_fqn.clone(),
+                write_disposition,
+            ));
+
+            let mut attempt = 0u32;
+            loop {
+                match engine.execute_with_options(
+                    None,
+                    &ctx,
+                    conn,
+                    "",
+                    options.clone(),
+                    false,
+                    map_token.clone(),
+                ) {
+                    Ok(_) => return Ok(()),
+                    Err(err)
+                        if attempt < BIGQUERY_JOB_MAX_RETRIES
+                            && is_retryable_bigquery_job_error(&err) =>
+                    {
+                        attempt += 1;
+                        bigquery_job_backoff_sleep(attempt, &map_token)?;
+                    }
+                    Err(err) => return Err(Cancellable::Error(err)),
+                }
+            }
+        };
+
+        let reduce_f =
+            |_: &mut (),
+             _copy_job: (String, String),
+             copy_res: Result<(), Cancellable<AdapterError>>| copy_res;
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), node_id);
+        match run_traced_async_blocking(map_reduce.run(Arc::new(copy_jobs), token)) {
+            Ok(()) => Ok(()),
+            Err(Cancellable::Error(err)) => Err(err),
+            Err(Cancellable::Cancelled) => Err(AdapterError::new(
+                AdapterErrorKind::Cancelled,
+                "copy_partitions operation cancelled",
+            )),
         }
     }
 
@@ -5858,6 +5940,47 @@ pub trait Replayer: fmt::Debug + Send + Sync {
     -> AdapterResult<Option<serde_json::Value>>;
 }
 
+fn bigquery_relation_fqn(relation: &Arc<dyn BaseRelation>) -> AdapterResult<String> {
+    Ok(format!(
+        "{}.{}.{}",
+        relation.database_as_str()?,
+        relation.schema_as_str()?,
+        relation.identifier_as_str()?
+    ))
+}
+
+fn bigquery_write_disposition(caller: &str, materialization: &str) -> AdapterResult<&'static str> {
+    match materialization {
+        "table" => Ok("WRITE_TRUNCATE"),
+        "incremental" => Ok("WRITE_APPEND"),
+        _ => Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!("{caller} 'materialization' must be either 'table' or 'incremental'"),
+        )),
+    }
+}
+
+fn bigquery_copy_options(
+    source_fqn: String,
+    dest_fqn: String,
+    write_disposition: &str,
+) -> [(String, OptionValue); 3] {
+    [
+        (
+            COPY_TABLE_SOURCE.to_string(),
+            OptionValue::String(source_fqn),
+        ),
+        (
+            COPY_TABLE_DESTINATION.to_string(),
+            OptionValue::String(dest_fqn),
+        ),
+        (
+            COPY_TABLE_WRITE_DISPOSITION.to_string(),
+            OptionValue::String(write_disposition.to_string()),
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5874,6 +5997,7 @@ mod tests {
     use dbt_adapter_core::AdapterType;
     use dbt_auth::{NoopAuthWarningPrinter, auth_for_backend};
     use dbt_common::AdapterResult;
+    use dbt_common::cancellation::never_cancels;
     use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};
@@ -7127,5 +7251,62 @@ mod tests {
             parse_from_relation("my_table"),
             Some("my_table".to_string())
         );
+    }
+
+    fn test_relation(adapter_type: AdapterType, identifier: &str) -> Arc<dyn BaseRelation> {
+        Arc::new(Relation::new(
+            adapter_type,
+            "db".to_string(),
+            "schema".to_string(),
+            identifier.to_string(),
+        ))
+    }
+
+    #[test]
+    fn test_copy_partitions_validates_source_target_lengths() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        let sources = vec![
+            test_relation(Bigquery, "src_a"),
+            test_relation(Bigquery, "src_b"),
+        ];
+        let targets = vec![test_relation(Bigquery, "dst_a")];
+
+        let err = adapter
+            .copy_partitions(&state, &sources, &targets, "table", never_cancels())
+            .expect_err("expected source/target length mismatch");
+        assert_eq!(err.kind(), AdapterErrorKind::Configuration);
+    }
+
+    #[test]
+    fn test_copy_partitions_non_bigquery_returns_not_supported() {
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        let sources = vec![test_relation(Snowflake, "src_a")];
+        let targets = vec![test_relation(Snowflake, "dst_a")];
+
+        let err = adapter
+            .copy_partitions(&state, &sources, &targets, "table", never_cancels())
+            .expect_err("expected non-bigquery copy_partitions to be not supported");
+        assert_eq!(err.kind(), AdapterErrorKind::NotSupported);
+    }
+
+    #[test]
+    fn test_copy_partitions_rejects_bad_materialization() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        let sources = vec![test_relation(Bigquery, "src_a")];
+        let targets = vec![test_relation(Bigquery, "dst_a")];
+
+        let err = adapter
+            .copy_partitions(&state, &sources, &targets, "view", never_cancels())
+            .expect_err("expected invalid materialization to be rejected");
+        assert_eq!(err.kind(), AdapterErrorKind::Configuration);
     }
 }

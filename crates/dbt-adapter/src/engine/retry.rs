@@ -4,6 +4,8 @@ use dbt_adapter_core::AdapterType;
 use dbt_adbc::Connection;
 use dbt_adbc::duration::parse_duration;
 use dbt_auth::AdapterConfig;
+use dbt_common::AdapterError;
+use dbt_common::cancellation::{Cancellable, CancellationToken};
 
 #[derive(Debug)]
 pub(crate) enum BackoffStrategy {
@@ -241,6 +243,49 @@ fn is_retryable_databricks_error(config: &AdapterConfig, err: &adbc_core::error:
     }
 
     err.message.to_lowercase().contains("retryableerror")
+}
+
+/// Retries per BigQuery job on retryable errors, with backoff via [bigquery_job_backoff_sleep].
+pub(crate) const BIGQUERY_JOB_MAX_RETRIES: u32 = 8;
+const BIGQUERY_JOB_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
+const BIGQUERY_JOB_MAX_BACKOFF_EXP: u32 = 5; // caps backoff at 2^5 = 32s
+
+/// Retryable BigQuery job error reasons, matching the official google-cloud-bigquery client.
+/// Excludes `quotaExceeded`: daily quotas don't recover within a backoff window.
+pub(crate) fn is_retryable_bigquery_job_error(err: &AdapterError) -> bool {
+    let message = err.message().to_ascii_lowercase();
+    [
+        "ratelimitexceeded",
+        "jobratelimitexceeded",
+        "exceeded rate limits",
+        "backenderror",
+        "internalerror",
+    ]
+    .iter()
+    .any(|reason| message.contains(reason))
+}
+
+/// Jittered exponential sleep before the `attempt`-th BigQuery job retry (1-indexed),
+/// waking periodically to honor cancellation.
+pub(crate) fn bigquery_job_backoff_sleep(
+    attempt: u32,
+    token: &CancellationToken,
+) -> Result<(), Cancellable<AdapterError>> {
+    let backoff =
+        BIGQUERY_JOB_INITIAL_BACKOFF * (1u32 << (attempt - 1).min(BIGQUERY_JOB_MAX_BACKOFF_EXP));
+    // jitter in [backoff/2, backoff] spreads out competing workers
+    let jitter = rand::random::<u64>() % (backoff.as_micros() as u64 / 2);
+    let deadline = std::time::Instant::now() + backoff / 2 + Duration::from_micros(jitter);
+    loop {
+        if token.is_cancelled() {
+            return Err(Cancellable::Cancelled);
+        }
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            return Ok(());
+        }
+        std::thread::sleep((deadline - now).min(Duration::from_millis(100)));
+    }
 }
 
 #[cfg(test)]
@@ -559,5 +604,24 @@ mod tests {
         let e = adbc_err(Status::InvalidArguments, "bad config option");
         assert!(!is_retryable_databricks_error(&cfg_default(), &e));
         assert!(is_retryable_databricks_error(&cfg_retry_all(), &e));
+    }
+
+    #[test]
+    fn bigquery_job_error_retryability() {
+        use dbt_common::AdapterErrorKind;
+        let err = |msg: &str| AdapterError::new(AdapterErrorKind::Internal, msg);
+
+        assert!(is_retryable_bigquery_job_error(&err(
+            "Exceeded rate limits: too many table update operations for this table"
+        )));
+        assert!(is_retryable_bigquery_job_error(&err(
+            "jobRateLimitExceeded: retry later"
+        )));
+        assert!(!is_retryable_bigquery_job_error(&err(
+            "quotaExceeded: Your project exceeded quota for copies per project"
+        )));
+        assert!(!is_retryable_bigquery_job_error(&err(
+            "notFound: Table db:schema.t"
+        )));
     }
 }
