@@ -49,9 +49,9 @@
 # by the `release_target` input.
 #
 # `dbt-core`'s wheels are built by `maturin build` in the `build` job
-# (abi3-py310, one cp310-abi3 wheel per platform) — not `cargo ci pypi pack`,
+# (abi3-py311, one cp311-abi3 wheel per platform) — not `cargo ci pypi pack`,
 # which only packs the standalone analyzer binary into `dbt-core-experimental-
-# parser`. `publish-pypi` passes `--python-tag cp310 --abi-tag abi3` for the
+# parser`. `publish-pypi` passes `--python-tag cp311 --abi-tag abi3` for the
 # dbt-core publish step so the sdist's manifest matches the maturin wheel
 # filenames actually sitting at the GitHub Release download URL (the default
 # `py3`/`none` tags are for the binary-CLI wheel, used for the parser publish
@@ -358,20 +358,52 @@ jobs:
           ls -la archives/
 
       # dbt-core is the maturin abi3 extension wheel (CLI + dbtRunner), not a
-      # packed binary. abi3-py310 → one cp310-abi3 wheel per platform. The
-      # manylinux containers ship the cp310 interpreter under /opt/python;
-      # the mac/windows runners use the system Python (abi3 is forward-compat).
+      # packed binary. abi3-py311 → one cp311-abi3 wheel per platform, valid
+      # on any interpreter >= 3.11 (crates/dbt-python's own requires-python
+      # floor). abi3 does NOT support older interpreters — maturin only
+      # *warns* and silently falls back to a version-specific, non-abi3
+      # cp3xx-cp3xx wheel if handed one, so `--interpreter` must resolve to
+      # an actual >=3.11 build or the release ships a wheel that's
+      # uninstallable everywhere (its own metadata says >=3.11, but the
+      # wheel tag says otherwise).
+      #
+      # The manylinux containers bundle cp311 under /opt/python; the
+      # mac/windows runner images don't reliably ship 3.11 as `python3` (this
+      # bit us once already — the containers only had cp310 available), so
+      # those two pin it explicitly via actions/setup-python.
+      - name: Setup Python 3.11 (macOS/Windows)
+        if: ${{ matrix.container == '' }}
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # A venv sidesteps the mac/windows runners' externally-managed system
+      # Python (PEP 668), which rejects a plain `pip install maturin`
+      # outright. `maturin build` only writes a wheel file (it doesn't
+      # install anything, unlike `maturin develop`), so the venv only needs
+      # to hold the `maturin` CLI itself — `--interpreter "$PY"` is what
+      # actually controls which Python's ABI the wheel targets.
       - name: Build maturin wheel (dbt-core)
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          if [ -x /opt/python/cp310-cp310/bin/python ]; then
-            PY=/opt/python/cp310-cp310/bin/python
+          if [ -x /opt/python/cp311-cp311/bin/python ]; then
+            PY=/opt/python/cp311-cp311/bin/python
           else
             PY=python3
           fi
-          "$PY" -m pip install --upgrade maturin
-          "$PY" -m maturin build --release --locked \
+          # Belt-and-suspenders: fail loudly instead of letting maturin
+          # silently downgrade to a version-specific, non-abi3 wheel.
+          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 11), f"need Python >=3.11, got {sys.version}"'
+
+          "$PY" -m venv .maturin-venv
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            VENV_BIN=".maturin-venv/Scripts"
+          else
+            VENV_BIN=".maturin-venv/bin"
+          fi
+          "$VENV_BIN/python" -m pip install --upgrade pip "maturin>=1.0,<2.0"
+          "$VENV_BIN/maturin" build --release --locked \
             --target "$TARGET" \
             --interpreter "$PY" \
             -m crates/dbt-python/Cargo.toml \
@@ -471,19 +503,25 @@ jobs:
       - name: Run tests
         run: cargo nextest run
 
-      # uv is used here purely as a fast venv/pip tool (`uv venv` + `uv pip
-      # install`), not the project-sync workflow — so this doesn't require
-      # declaring maturin/pytest in crates/dbt-python's own pyproject.toml.
-      - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # astral-sh/setup-uv@v9.0.0
+      # Pinned to 3.11 explicitly, same as the `build` job's maturin
+      # invocation — this job's whole point is gating `pack` on a build of
+      # the actual shipped artifact, so testing against anything other than
+      # the abi3 floor (crates/dbt-python's own requires-python) wouldn't
+      # actually exercise what gets published.
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
+        with:
+          python-version: "3.11"
 
       # Prepending .venv/bin to PATH lets every later step call `maturin`/
-      # `pytest` directly instead of the full .venv/bin/... path.
+      # `pytest` directly instead of the full .venv/bin/... path. This
+      # doesn't require declaring maturin/pytest in crates/dbt-python's own
+      # pyproject.toml.
       - name: Create venv and install maturin + pytest
         working-directory: crates/dbt-python
         run: |
-          uv venv .venv
-          uv pip install --python .venv "maturin>=1.0,<2.0" "pytest>=9.1"
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip "maturin>=1.0,<2.0" "pytest>=9.1"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       # No --locked: this is a test job, not a reproducible release build
@@ -697,7 +735,7 @@ jobs:
       # One --target per wheel uploaded to the Release; keep in lockstep with
       # the `build` job's matrix — each target's wheel is fetched and hashed.
       #
-      # dbt-core's wheels are maturin abi3 extension wheels (cp310-abi3), not
+      # dbt-core's wheels are maturin abi3 extension wheels (cp311-abi3), not
       # the binary CLI wheel (py3-none) `cargo ci pypi pack` produces — pass
       # the matching python/abi tags so the sdist manifest's filenames match
       # what's actually sitting at BASE_URL.
@@ -710,7 +748,7 @@ jobs:
             --environment prod \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --download-base-url "$BASE_URL" \
-            --python-tag cp310 \
+            --python-tag cp311 \
             --abi-tag abi3 \
             --target x86_64-unknown-linux-gnu \
             --target aarch64-unknown-linux-gnu \
