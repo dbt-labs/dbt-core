@@ -3841,51 +3841,8 @@ impl Adapter {
                     excluded_schemas,
                 )
             }
-            // only available for BigQuery
-            // columns: dict
-            "nest_column_data_types" => self.nest_column_data_types(args),
-            // partition_by: dict, columns: List[Column]
-            // only available for BigQuery
-            "get_struct_select_expression" => {
-                // col_name: string, data_type: string
-                let iter = ArgsIter::new(name, &["col_name", "data_type"], args);
-                let col_name = iter.next_arg::<&str>()?;
-                let data_type = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.get_struct_select_expression(state, col_name, data_type)
-            }
-            "add_time_ingestion_partition_column" => {
-                self.add_time_ingestion_partition_column(state, args)
-            }
-            // raw_partition_by: Optional[dict]
-            "parse_partition_by" => self.parse_partition_by(state, args),
-            // relation: Optional[BaseRelation], partition_by: Optional[dict], cluster_by: Optional[dict]
-            "is_replaceable" => self.is_replaceable(state, args),
             // schema_relation: BaseRelation
             "list_relations_without_caching" => self.list_relations_without_caching(state, args),
-            // tmp_relation_partitioned: BaseRelation, target_relation_partitioned: BaseRelation, materialization: str
-            "copy_table" => self.copy_table(state, args),
-            // source_relations: List[BaseRelation], target_relations: List[BaseRelation], materialization: str
-            "copy_partitions" => self.copy_partitions(state, args),
-            // relation: BaseRelation, columns: Dict[str, DbtColumn]
-            "update_columns" => self.update_columns(state, args),
-            // database: str, schema: str, identifier: str, description: str
-            "update_table_description" => self.update_table_description(state, args),
-            // relation: BaseRelation, columns: Value
-            "alter_table_add_columns" => self.alter_table_add_columns(state, args),
-            // database: str, schema: str, table_name: str, file_path: str,
-            // agate_table: AgateTable, column_overrides: dict, field_delimiter: str
-            "load_dataframe" => self.load_dataframe(state, args),
-            "upload_file" => self.upload_file(state, args),
-            // relation: BaseRelation
-            "get_bq_table" => self.get_bq_table(state, args),
-            // relation: BaseRelation
-            "describe_relation" => self.describe_relation(state, args),
-            // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
-            "grant_access_to" => self.grant_access_to(state, args),
-            // relation: BaseRelation
-            "get_dataset_location" => self.get_dataset_location(state, args),
             // sql: str
             "get_column_schema_from_query" => self.get_column_schema_from_query(state, args),
             // sql: str
@@ -3896,8 +3853,6 @@ impl Adapter {
             "get_table_options" => self.get_table_options(state, args),
             // config: dict, node: dict
             "get_view_options" => self.get_view_options(state, args),
-            // table: BaseRelation
-            "get_partitions_metadata" => self.get_partitions_metadata(state, args),
             // schema_relation: BaseRelation
             "get_relations_without_caching" => self.get_relations_without_caching(state, args),
             // raw_index: dict
@@ -4131,6 +4086,62 @@ impl Adapter {
                 iter.finish()?;
                 self.render_equals(state, expr1, expr2)
             }
+            _ => self.call_bigquery_method_impl(state, name, args),
+        }
+    }
+
+    /// Dispatch for the BigQuery-specific adapter methods, chained from the
+    /// default arm of [Adapter::call_method_impl].
+    fn call_bigquery_method_impl(
+        self: &Arc<Self>,
+        state: &State,
+        name: &str,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        match name {
+            // columns: dict
+            "nest_column_data_types" => self.nest_column_data_types(args),
+            "get_struct_select_expression" => {
+                // col_name: string, data_type: string
+                let iter = ArgsIter::new(name, &["col_name", "data_type"], args);
+                let col_name = iter.next_arg::<&str>()?;
+                let data_type = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                self.get_struct_select_expression(state, col_name, data_type)
+            }
+            // partition_by: dict, columns: List[Column]
+            "add_time_ingestion_partition_column" => {
+                self.add_time_ingestion_partition_column(state, args)
+            }
+            // raw_partition_by: Optional[dict]
+            "parse_partition_by" => self.parse_partition_by(state, args),
+            // relation: Optional[BaseRelation], partition_by: Optional[dict], cluster_by: Optional[dict]
+            "is_replaceable" => self.is_replaceable(state, args),
+            // tmp_relation_partitioned: BaseRelation, target_relation_partitioned: BaseRelation, materialization: str
+            "copy_table" => self.copy_table(state, args),
+            // source_relations: List[BaseRelation], target_relations: List[BaseRelation], materialization: str
+            "copy_partitions" => self.copy_partitions(state, args),
+            // relation: BaseRelation, columns: Dict[str, DbtColumn]
+            "update_columns" => self.update_columns(state, args),
+            // database: str, schema: str, identifier: str, description: str
+            "update_table_description" => self.update_table_description(state, args),
+            // relation: BaseRelation, columns: Value
+            "alter_table_add_columns" => self.alter_table_add_columns(state, args),
+            // database: str, schema: str, table_name: str, file_path: str,
+            // agate_table: AgateTable, column_overrides: dict, field_delimiter: str
+            "load_dataframe" => self.load_dataframe(state, args),
+            "upload_file" => self.upload_file(state, args),
+            // relation: BaseRelation
+            "get_bq_table" => self.get_bq_table(state, args),
+            // relation: BaseRelation
+            "describe_relation" => self.describe_relation(state, args),
+            // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
+            "grant_access_to" => self.grant_access_to(state, args),
+            // relation: BaseRelation
+            "get_dataset_location" => self.get_dataset_location(state, args),
+            // table: BaseRelation
+            "get_partitions_metadata" => self.get_partitions_metadata(state, args),
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on adapter object: '{name}'"),
