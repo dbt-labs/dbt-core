@@ -1,4 +1,3 @@
-use crate::default_to;
 use crate::schemas::common::ConstraintType;
 use crate::schemas::common::DimensionValidityParams;
 use crate::schemas::common::ModelFreshnessRules;
@@ -13,7 +12,7 @@ use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::ModelConfig;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::SemanticModelConfig;
-use crate::schemas::project::configs::common::default_meta_and_tags;
+use crate::schemas::project::configs::config_merge::DefaultTo;
 use crate::schemas::project::configs::semantic_model_config::ResolvedSemanticModelConfig;
 use crate::schemas::properties::MetricsProperties;
 use crate::schemas::properties::properties::GetConfig;
@@ -41,7 +40,7 @@ pub struct ModelConstraint {
     #[serde(
         default,
         deserialize_with = "string_or_array",
-        serialize_with = "crate::schemas::serde::serialize_option_as_empty_vec"
+        serialize_with = "crate::schemas::serde::serialize_none_as_empty_vec"
     )]
     pub to_columns: Option<Vec<String>>,
     #[serde(default, deserialize_with = "string_or_array")]
@@ -104,17 +103,7 @@ impl ResolvableConfig<SemanticModelConfig> for ModelPropertiesSemanticModelConfi
     }
 
     fn default_to(&mut self, parent: &SemanticModelConfig) {
-        let enabled = &mut Some(self.enabled);
-        let group = &mut self.group;
-        let meta = &mut self.config.clone().unwrap_or_default().meta;
-        let tags = &mut None;
-
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused)]
-        let tags = ();
-
-        default_to!(parent, [enabled, group]);
+        DefaultTo::inherit_from(&mut self.group, &parent.group);
     }
 }
 
@@ -187,6 +176,7 @@ pub struct ModelState {
     pub pre_clone: Option<StatePreClone>,
     #[serde(alias = "execute_hooks_on_reuse")]
     pub execute_hooks_on_any_reuse: Option<bool>,
+    pub compare_unrendered_code: Option<bool>,
 }
 
 impl PartialEq for ModelState {
@@ -199,10 +189,34 @@ impl PartialEq for ModelState {
             && self.evaluate_volatile_sql == other.evaluate_volatile_sql
             && self.pre_clone == other.pre_clone
             && self.execute_hooks_on_any_reuse == other.execute_hooks_on_any_reuse
+            && self.compare_unrendered_code == other.compare_unrendered_code
     }
 }
 
 impl Eq for ModelState {}
+
+/// The dbt State configs supported on data tests: only `require_fresh_data_from`,
+/// `evaluate_volatile_sql` and `compare_unrendered_code` (snapshots reuse the full `ModelState`).
+/// Other keys are not fields here, so they are flagged as unknown keys at parse time.
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+pub struct DataTestState {
+    pub require_fresh_data_from: Option<UpdatesOn>,
+    pub evaluate_volatile_sql: Option<bool>,
+    pub compare_unrendered_code: Option<bool>,
+}
+
+impl PartialEq for DataTestState {
+    fn eq(&self, other: &Self) -> bool {
+        updates_on_eq(
+            &self.require_fresh_data_from,
+            &other.require_fresh_data_from,
+        ) && self.evaluate_volatile_sql == other.evaluate_volatile_sql
+            && self.compare_unrendered_code == other.compare_unrendered_code
+    }
+}
+
+impl Eq for DataTestState {}
 
 fn updates_on_eq(a: &Option<UpdatesOn>, b: &Option<UpdatesOn>) -> bool {
     match (a.as_ref(), b.as_ref()) {
@@ -267,6 +281,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
         let other = ModelState {
             require_fresh_data_from: Some(UpdatesOn::Any),
@@ -274,6 +289,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
 
         assert_eq!(base, other);
@@ -287,6 +303,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
         let other = ModelState {
             require_fresh_data_from: Some(UpdatesOn::All),
@@ -294,6 +311,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
 
         assert_ne!(base, other);
@@ -307,6 +325,47 @@ execute_hooks_on_reuse: true
         let state: ModelState = dbt_yaml::from_str(yaml).unwrap();
 
         assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
+    }
+
+    #[test]
+    fn compare_unrendered_code_parses_on_models_and_data_tests() {
+        let yaml = "compare_unrendered_code: true\n";
+
+        let model_state: ModelState = dbt_yaml::from_str(yaml).unwrap();
+        let data_test_state: DataTestState = dbt_yaml::from_str(yaml).unwrap();
+
+        assert_eq!(model_state.compare_unrendered_code, Some(true));
+        assert_eq!(data_test_state.compare_unrendered_code, Some(true));
+    }
+
+    #[test]
+    fn compare_unrendered_code_participates_in_state_eq() {
+        let base = ModelState {
+            require_fresh_data_from: None,
+            lag_tolerance: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
+        };
+        let other = ModelState {
+            compare_unrendered_code: Some(true),
+            ..base.clone()
+        };
+
+        assert_ne!(base, other);
+
+        let base_test = DataTestState {
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            compare_unrendered_code: None,
+        };
+        let other_test = DataTestState {
+            compare_unrendered_code: Some(true),
+            ..base_test.clone()
+        };
+
+        assert_ne!(base_test, other_test);
     }
 
     #[test]

@@ -45,6 +45,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 dbt-test-primitives = { workspace = true }
+dbt-tracing = { workspace = true, features = ["test-utils"] }
 serde = { workspace = true }
 tempfile = { workspace = true }
 

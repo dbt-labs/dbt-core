@@ -384,30 +384,30 @@ impl<T: ArrowPrimitiveType<Native = i64>> TimestampArrayConverter<T> {
         if self.array.is_valid(idx) {
             let raw = self.array.value(idx);
 
-            let naive = match Self::from_arrow_timestamp(raw, time_unit) {
-                Some(naive) => naive,
-                None => {
-                    // Even when given 64-bits, real-world timestamps won't be
-                    // INT32_MAX (~2 billion) days from UNIX epoch. Even the Python
-                    // standard library limits this to 999_999_999 and most data
-                    // warehouses also have a limit that lets the number of days fit
-                    // in 32-bits.
-                    panic!(
-                        "Timestamp conversion overflow: {raw}{time_unit:?} is out of the valid range."
-                    )
+            let naive_opt = Self::from_arrow_timestamp(raw, time_unit);
+            debug_assert!(
+                naive_opt.is_some(),
+                "out-of-range timestamp ({time_unit:?}) value: {raw}"
+            );
+
+            match naive_opt {
+                Some(naive) => {
+                    let py_dt = self
+                        .tz
+                        .map(|tz| tz.from_utc_datetime(&naive))
+                        .map(|aware| {
+                            debug_assert!(
+                                self.py_tz.is_some(),
+                                "py_tz must be some when tz is some"
+                            );
+                            PyDateTime::new_aware(aware, self.py_tz.clone())
+                        })
+                        .unwrap_or_else(|| PyDateTime::new_naive(naive));
+
+                    Value::from_object(py_dt)
                 }
-            };
-
-            let py_dt = self
-                .tz
-                .map(|tz| tz.from_utc_datetime(&naive))
-                .map(|aware| {
-                    debug_assert!(self.py_tz.is_some(), "py_tz must be some when tz is some");
-                    PyDateTime::new_aware(aware, self.py_tz.clone())
-                })
-                .unwrap_or_else(|| PyDateTime::new_naive(naive));
-
-            Value::from_object(py_dt)
+                None => Value::from(()),
+            }
         } else {
             Value::from(())
         }

@@ -47,9 +47,7 @@ const EQ_IGNORE_LIST: [&str; 24] = [
     "delta.feature.deletionVectors",
 ];
 
-/// Component for Databricks table properties
-///
-/// Holds a IndexMap of tag key and values.
+/// Component for Databricks table properties.
 pub type TblProperties = SimpleComponentConfigImpl<IndexMap<String, String>>;
 
 fn to_jinja(v: &IndexMap<String, String>) -> Value {
@@ -138,7 +136,6 @@ fn from_local_config(
 
     let mut tblproperties = IndexMap::new();
 
-    // Extract tblproperties from databricks_attr
     if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr
         && let Some(props_map) = &databricks_attr.tblproperties
     {
@@ -149,7 +146,6 @@ fn from_local_config(
         }
     }
 
-    // Check for Iceberg table format using direct field
     let is_iceberg = model
         .deprecated_config
         .table_format

@@ -293,7 +293,6 @@ impl TryFrom<&DbtModel> for RedshiftMaterializedViewConfig {
     }
 }
 
-// Helper function to get a string value from an AgateTable Row by column name
 fn get_string_by_name_from_agate_row(row: &Value, col_name: &str) -> Option<String> {
     if let Ok(cell_value) = row.get_attr(col_name) {
         cell_value.as_str().map(|s| s.to_string())
@@ -372,7 +371,6 @@ impl TryFrom<DescribeMaterializedViewResults> for RedshiftMaterializedViewConfig
             RedshiftDistConfig::default()
         };
 
-        // Handle sort config from columns table
         let sort = if columns_table.num_rows() > 0 {
             let mut sort_columns = Vec::new();
 
@@ -517,22 +515,15 @@ impl RelationChangeSet for RedshiftMaterializedViewConfigChangeset {
 impl Object for RedshiftMaterializedViewConfigChangeset {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         match key.as_str() {
-            Some("autorefresh") => {
-                // Return None if no change, otherwise return the new value
-                self.autorefresh.map(Value::from)
-            }
-            Some("dist") => {
-                // Return None if no change, otherwise return the config as an object
-                self.dist
-                    .as_ref()
-                    .map(|dist_config| Value::from_object(dist_config.clone()))
-            }
-            Some("sort") => {
-                // Return None if no change, otherwise return the config as an object
-                self.sort
-                    .as_ref()
-                    .map(|sort_config| Value::from_object(sort_config.clone()))
-            }
+            Some("autorefresh") => self.autorefresh.map(Value::from),
+            Some("dist") => self
+                .dist
+                .as_ref()
+                .map(|dist_config| Value::from_object(dist_config.clone())),
+            Some("sort") => self
+                .sort
+                .as_ref()
+                .map(|sort_config| Value::from_object(sort_config.clone())),
             _ => None,
         }
     }

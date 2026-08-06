@@ -6,6 +6,7 @@ option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/vsce";
 import "dbtlabs/proto/public/v1/common/vortex_options.proto";
 import "dbtlabs/proto/public/v1/events/vortex.proto";
 import "dbtlabs/proto/public/v1/fields/vscode_types.proto";
+import "dbtlabs/proto/public/v1/common/vortex_telemetry_contexts.proto";
 
 
 message ExtensionActivated {
@@ -56,6 +57,7 @@ message ExtensionActivated {
     // Outcome of OAuth session file load at activation.
     v1.public.fields.vscode_types.OAuthSessionFileActionAtActivation oauth_session_file_action = 16;
 
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 17;
 }
 
 message ExtensionLspCompileStart {
@@ -93,6 +95,7 @@ message ExtensionLspCompileStart {
 
     // UUID to uniquely identify the event
     string event_id = 12;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 13;
 }
 
 message ExtensionLspCompile {
@@ -138,6 +141,7 @@ message ExtensionLspCompile {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 15;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 16;
 }
 
 message ExtensionUserStateChange {
@@ -154,6 +158,7 @@ message ExtensionUserStateChange {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionCtePreview {
@@ -167,6 +172,7 @@ message ExtensionCtePreview {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 4;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 message ExtensionLineageTabClicked {
@@ -180,6 +186,7 @@ message ExtensionLineageTabClicked {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 4;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 message ExtensionColumnLineage {
@@ -193,6 +200,7 @@ message ExtensionColumnLineage {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 4;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Emitted when the user interacts with the lineage panel (node click, context menu action,
@@ -226,6 +234,7 @@ message ExtensionLineageInteraction {
 
     // selected lens value; set only when interaction_type == LINEAGE_INTERACTION_TYPE_LENS_CHANGED
     string lens = 8;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 9;
 }
 
 message ExtensionShowCompiledFile {
@@ -239,6 +248,7 @@ message ExtensionShowCompiledFile {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 4;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 message ExtensionModelRename {
@@ -252,6 +262,7 @@ message ExtensionModelRename {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 4;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 message ExtensionColumnRename {
@@ -265,6 +276,7 @@ message ExtensionColumnRename {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 4;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 message ExtensionUsedBuildMenu {
@@ -281,6 +293,7 @@ message ExtensionUsedBuildMenu {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionGetSupportPopupShown {
@@ -297,6 +310,7 @@ message ExtensionGetSupportPopupShown {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionGetSupportClicked {
@@ -313,6 +327,7 @@ message ExtensionGetSupportClicked {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionGetSupportFormShown {
@@ -329,6 +344,7 @@ message ExtensionGetSupportFormShown {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionGetSupportUnverifiedNoticeShown {
@@ -345,6 +361,7 @@ message ExtensionGetSupportUnverifiedNoticeShown {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionGetSupportFormSubmitted {
@@ -364,6 +381,7 @@ message ExtensionGetSupportFormSubmitted {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 6;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 message ExtensionGetSupportFormCancelled {
@@ -380,6 +398,7 @@ message ExtensionGetSupportFormCancelled {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionGetSupportPanelClosed {
@@ -396,6 +415,7 @@ message ExtensionGetSupportPanelClosed {
 
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionCompareViewed {
@@ -412,6 +432,7 @@ message ExtensionCompareViewed {
 
     // UUID to uniquely identify the event
     string event_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 message ExtensionCompareStarted {
@@ -431,6 +452,7 @@ message ExtensionCompareStarted {
 
     // UUID to uniquely identify the event
     string event_id = 6;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 message ExtensionCompareFinished {
@@ -477,6 +499,7 @@ message ExtensionCompareFinished {
 
     // invocation_id reported by the compare artifact (correlates to the dbt run that produced it)
     string artifact_invocation_id = 15;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 16;
 }
 
 // Emitted when the user opens (drills into) a single row in the Compare panel results table.
@@ -503,6 +526,7 @@ message ExtensionCompareRowOpened {
     // One of: 'value_diff' | 'added_record' | 'removed_record' | 'non_unique_record' | 'unknown'.
     // Kept as a string for forward-compat (no enum needed today).
     string diff_type = 7;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // Emited if the user dismiss a message prompting them to register the extension?
@@ -520,6 +544,7 @@ message ExtensionRegistrationMessageDismissed {
 
     // UUID to uniquely identify the event
     string event_id = 5;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 // Emitted if the user starts the registration flow. There are several UI affordances to do this.
@@ -543,6 +568,7 @@ message ExtensionRegisterStarted {
 
     // identifier to correlate related registration events (matches RegisterClicked)
     string correlation_id = 7;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // In vscode, extensions cannot automatically open external URLs
@@ -574,6 +600,7 @@ message ExtensionRegistrationUrlAttempted {
 
     // identifier to correlate related registration events (matches RegisterClicked)
     string correlation_id = 8;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 9;
 }
 
 // Emitted when the user successfully completes registration
@@ -609,6 +636,7 @@ message ExtensionRegistrationCompleted {
 
     // dbt Cloud hostname (e.g., cloud.getdbt.com)
     string account_host = 11;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 12;
 }
 
 // Once a user starts registration, they must complete it within 10 minutes
@@ -636,6 +664,7 @@ message ExtensionRegistrationTimedOut {
 
     // identifier to correlate related registration events (matches RegisterClicked)
     string correlation_id = 8;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 9;
 }
 
 // Emitted when an error occurs during registration
@@ -669,6 +698,7 @@ message ExtensionRegistrationErrored {
 
     // identifier to correlate related registration events (matches RegisterClicked)
     string correlation_id = 10;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 11;
 }
 
 // Emitted when the user clicks a control to begin registration
@@ -693,6 +723,7 @@ message ExtensionRegisterClicked {
 
     // identifier to correlate related registration events
     string correlation_id = 7;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 message ExtensionModelDocsPanelOpened {
@@ -715,6 +746,7 @@ message ExtensionModelDocsPanelOpened {
 
     // true if dbt Cloud credentials were available at panel-open time
     bool cloud_configured = 7;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 message ExtensionModelDocsManifestLoaded {
@@ -734,6 +766,7 @@ message ExtensionModelDocsManifestLoaded {
 
     // md5 hash of the dbt project name (anonymized)
     string project_id = 6;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 message ExtensionModelDocsEnrichmentCompleted {
@@ -762,6 +795,7 @@ message ExtensionModelDocsEnrichmentCompleted {
 
     // sanitized error message (error.name + ": " + error.message, max 512 chars); empty on success/skip
     string error_message = 9;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 10;
 }
 
 message ExtensionModelDocsViewInDbtClicked {
@@ -781,6 +815,7 @@ message ExtensionModelDocsViewInDbtClicked {
 
     // md5 hash of the dbt project name (anonymized)
     string project_id = 6;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Emitted when the user interacts with the Get Started onboarding panel:
@@ -812,6 +847,7 @@ message ExtensionGetStartedInteraction {
 
     // count of steps with status=COMPLETED at the time of the event (0–4)
     int32 steps_completed_count = 9;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 10;
 }
 
 // Emitted when a query begins in the Query Results panel.
@@ -840,6 +876,7 @@ message ExtensionQueryStarted {
 
     // md5 hash of the dbt project name (anonymized); same md5(project_name) used by compile events
     string project_id = 8;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 9;
 }
 
 // Emitted when a query in the Query Results panel finishes (success, failure, cancellation,
@@ -879,6 +916,7 @@ message ExtensionQueryCompleted {
 
     // sanitized error message (max 512 chars, newlines stripped); empty on success/cancel/invalid
     string error_message = 12;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 13;
 }
 
 // Emitted when a user interacts with the Query Results panel after results render.
@@ -900,6 +938,7 @@ message ExtensionQueryResultInteracted {
 
     // which kind of interaction the user performed
     v1.public.fields.vscode_types.QueryResultInteractionType interaction_type = 6;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Emitted every time a trial-light gate fires for a user (CTA impression or action denial).
@@ -927,6 +966,7 @@ message ExtensionTrialLightGateFired {
 
     // Whether this was a passive impression or an active block.
     v1.public.fields.vscode_types.TrialLightGateKind gate_kind = 8;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 9;
 }
 
 // Emitted when the extension adopts an OAuth session from the on-disk session file
@@ -947,6 +987,7 @@ message ExtensionOAuthSessionAdopted {
     string event_id = 5;
 
     v1.public.fields.vscode_types.OAuthSessionAdoptTrigger trigger = 6;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Emitted when the extension persists its OAuth session to the on-disk session file.
@@ -969,4 +1010,5 @@ message ExtensionOAuthSessionPersisted {
 
     // True when this write created our slot for the first time (no prior slot existed).
     bool is_first_write = 7;
+    v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }

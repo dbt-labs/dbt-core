@@ -35,10 +35,7 @@ pub struct EventRecorder {
 }
 
 impl EventRecorder {
-    /// Create a new event recorder.
-    ///
-    /// Returns the recorder and the receiver end of the channel.
-    /// The caller is responsible for spawning the writer task with the receiver.
+    /// The caller must spawn the writer task with the returned receiver.
     pub fn new() -> (Self, mpsc::Receiver<RecordedEvent>) {
         let (sender, receiver) = mpsc::channel(CHANNEL_BUFFER_SIZE);
 
@@ -62,7 +59,6 @@ impl EventRecorder {
         self.closed.store(true, Ordering::Release);
     }
 
-    /// Check if the recorder has been closed.
     #[inline]
     pub fn is_closed(&self) -> bool {
         self.closed.load(Ordering::Relaxed)

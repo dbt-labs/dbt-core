@@ -161,7 +161,6 @@ impl QueryCommentConfig {
     }
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L629
-    /// Return job labels from query comment
     pub fn get_job_labels_from_query_comment(
         &self,
         resolved_comment: &str,
@@ -177,7 +176,7 @@ impl QueryCommentConfig {
                 .map(|(key, value)| {
                     let value_str = match value.as_str() {
                         Some(s) => s.to_string(),
-                        None => value.to_string(), // Convert non-string values to string
+                        None => value.to_string(),
                     };
                     (sanitize_label(&key), sanitize_label(&value_str))
                 })
@@ -197,7 +196,6 @@ const _SANITIZE_LABEL_PATTERN: &str = r"[^a-z0-9_-]";
 const _VALIDATE_LABEL_LENGTH_LIMIT: usize = 63;
 
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L640
-/// Return a legal value for a BigQuery label.
 fn sanitize_label(label: &str) -> String {
     let value = label.to_lowercase();
 

@@ -256,10 +256,17 @@ impl RelationConfig {
             requires_full_refresh_fn,
         }
     }
+
+    pub(crate) fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
+    }
+
+    pub(crate) fn components(&self) -> IndexMapIter<'_, &'static str, Box<dyn ComponentConfig>> {
+        self.components.iter()
+    }
 }
 
 impl RelationConfig {
-    /// Get a component by type name
     pub(crate) fn get<'a>(
         &'a self,
         component_type_name: &'static str,
@@ -499,7 +506,6 @@ impl RelationComponentConfigChangeSet {
         }
     }
 
-    /// Get the count of changes in this changeset
     pub fn len(&self) -> usize {
         self.changes.len()
     }
@@ -516,7 +522,6 @@ impl RelationComponentConfigChangeSet {
         self.changes.iter()
     }
 
-    /// Get a change by TypeId
     pub fn get<'a>(&'a self, component_type_name: &'static str) -> &'a ComponentConfigChange {
         self.changes
             .get(&component_type_name)

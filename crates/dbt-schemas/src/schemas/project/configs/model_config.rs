@@ -16,9 +16,7 @@ use std::collections::btree_map::Iter;
 use std::collections::{BTreeMap, HashSet};
 
 use super::config_keys::ConfigKeys;
-use super::omissible_utils::handle_omissible_override;
-
-use crate::default_to;
+use crate::schemas::common::ComputePlatform;
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtContract;
 use crate::schemas::common::DbtIncrementalStrategy;
@@ -31,27 +29,23 @@ use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange, OnError};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::project::configs::common::default_classifiers;
-use crate::schemas::project::configs::common::default_column_types;
-use crate::schemas::project::configs::common::default_hooks;
-use crate::schemas::project::configs::common::default_meta_and_tags;
-use crate::schemas::project::configs::common::default_packages;
-use crate::schemas::project::configs::common::default_quoting;
-use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
-    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_equal_with_unrendered, meta_eq,
-    omissible_option_eq, same_warehouse_config_with_unrendered,
+    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_equal, meta_eq, omissible_option_eq,
+    same_warehouse_config,
 };
+use crate::schemas::project::configs::config_merge::{Classifiers, Packages, Tags};
 use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
+use crate::schemas::properties::model_properties::ModelConstraint;
 use crate::schemas::properties::{ModelFreshness, ModelState};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, bool_or_string_bool, default_type, f64_or_string_f64,
+    IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, default_type,
+    f64_or_string_f64, hours_to_expiration_or_string_omissible, string_or_number_to_string,
     u64_or_string_u64,
 };
-use dbt_proc_macros::Resolvable;
+use dbt_proc_macros::{DefaultTo, Resolvable};
 use dbt_yaml::ShouldBe;
 
 /// Represents the latest version view configuration for versioned models.
@@ -119,6 +113,8 @@ pub struct ProjectModelConfig {
     pub catalog: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+alt_compute")]
+    pub alt_compute: Option<ComputePlatform>,
     #[serde(rename = "+cluster_by")]
     pub cluster_by: Option<ClusterConfig>,
     #[serde(rename = "+clustered_by")]
@@ -242,9 +238,9 @@ pub struct ProjectModelConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -263,6 +259,8 @@ pub struct ProjectModelConfig {
     pub incremental_predicates: Option<Vec<String>>,
     #[serde(rename = "+incremental_strategy")]
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
+    #[serde(rename = "+constraints")]
+    pub constraints: Option<Vec<ModelConstraint>>,
     #[serde(rename = "+initialize")]
     pub initialize: Option<String>,
     #[serde(rename = "+scheduler")]
@@ -363,7 +361,12 @@ pub struct ProjectModelConfig {
     pub on_schema_change: Option<OnSchemaChange>,
     #[serde(rename = "+packages")]
     pub packages: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+python_version")]
+    #[serde(
+        rename = "+python_version",
+        default,
+        deserialize_with = "string_or_number_to_string"
+    )]
+    #[schemars(with = "Option<String>", skip_serializing_if = "Option::is_none")]
     pub python_version: Option<String>,
     #[serde(rename = "+imports")]
     pub imports: Option<StringOrArrayOfStrings>,
@@ -491,6 +494,14 @@ pub struct ProjectModelConfig {
     #[serde(default, rename = "+indexes")]
     pub indexes: IndexesConfig,
 
+    // Postgres unlogged table
+    #[serde(
+        default,
+        rename = "+unlogged",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unlogged: Option<bool>,
+
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
     pub schedule: Option<Schedule>,
@@ -531,7 +542,9 @@ impl TypedRecursiveConfig for ProjectModelConfig {
     }
 }
 
-#[derive(Resolvable, Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema,
+)]
 pub struct ModelConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -541,27 +554,21 @@ pub struct ModelConfig {
     pub database: Omissible<Option<String>>,
     #[serde(alias = "dataset")]
     pub schema: Omissible<Option<String>>,
-    // serialize_with ensures tags is always present as [] when None for Jinja macros
-    // that call obj.config.tags.extend(...) or similar list operations.
-    // See: https://github.com/dbt-labs/dbt-fusion/issues/1198
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub classifiers: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
+    #[serde(default)]
+    pub classifiers: Classifiers,
     pub catalog_name: Option<String>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_compute: Option<ComputePlatform>,
     // need default to ensure None if field is not set
     // serialize_with ensures meta is always present (as {} when None) for Jinja macros
     // that access node.config.meta.get(...)
     #[serde(
         default,
         deserialize_with = "default_type",
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_map"
+        serialize_with = "crate::schemas::serde::serialize_none_as_empty_map"
     )]
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
@@ -569,6 +576,10 @@ pub struct ModelConfig {
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     pub incremental_predicates: Option<Vec<String>>,
+    // Model-level constraints authored via `{{ config(constraints=[...]) }}`, as opposed to
+    // the schema.yml `constraints:` model property (see `resolve_models.rs`, which prefers
+    // this when set and otherwise falls back to the schema.yml-resolved value).
+    pub constraints: Option<Vec<ModelConstraint>>,
     pub batch_size: Option<DbtBatchSize>,
     #[resolved(promote, default = 1)]
     pub lookback: Option<i32>,
@@ -587,7 +598,9 @@ pub struct ModelConfig {
     pub on_configuration_change: Option<OnConfigurationChange>,
     pub on_error: Option<OnError>,
     pub grants: OmissibleGrantConfig,
-    pub packages: Option<StringOrArrayOfStrings>,
+    pub packages: Packages,
+    #[serde(default, deserialize_with = "string_or_number_to_string")]
+    #[schemars(with = "Option<String>", skip_serializing_if = "Option::is_none")]
     pub python_version: Option<String>,
     pub docs: Option<DocsConfig>,
     pub imports: Option<StringOrArrayOfStrings>,
@@ -664,6 +677,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
             catalog_name: config.catalog_name.clone(),
+            alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -679,6 +693,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             grants: config.grants,
             group: config.group,
             incremental_predicates: config.incremental_predicates,
+            constraints: config.constraints,
             incremental_strategy: config.incremental_strategy,
             location: config.location,
             lookback: config.lookback,
@@ -689,7 +704,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             on_configuration_change: config.on_configuration_change,
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,
-            packages: config.packages,
+            packages: Packages(config.packages),
             python_version: config.python_version,
             imports: config.imports,
             secrets: config.secrets,
@@ -705,8 +720,8 @@ impl From<ProjectModelConfig> for ModelConfig {
             static_analysis: config.static_analysis,
             sync: config.sync,
             table_format: config.table_format,
-            tags: config.tags.into_inner(),
-            classifiers: config.classifiers.into_inner(),
+            tags: Tags(config.tags.into_inner()),
+            classifiers: Classifiers(config.classifiers.into_inner()),
             unique_key: config.unique_key,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: config.description,
@@ -802,6 +817,7 @@ impl From<ProjectModelConfig> for ModelConfig {
 
                 table_type: config.table_type,
                 indexes: config.indexes,
+                unlogged: config.unlogged,
 
                 primary_key: config.primary_key,
                 category: config.category,
@@ -826,6 +842,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             begin: config.begin,
             bind: config.__warehouse_specific_config__.bind,
             catalog_name: config.catalog_name,
+            alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -842,6 +859,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             grants: config.grants,
             group: config.group,
             incremental_predicates: config.incremental_predicates,
+            constraints: config.constraints,
             incremental_strategy: config.incremental_strategy,
             location: config.location,
             lookback: config.lookback,
@@ -861,7 +879,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             on_configuration_change: config.on_configuration_change,
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,
-            packages: config.packages,
+            packages: config.packages.into_inner(),
             python_version: config.python_version,
             imports: config.imports,
             secrets: config.secrets,
@@ -876,8 +894,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             sql_header: config.sql_header,
             static_analysis: config.static_analysis,
             table_format: config.table_format,
-            tags: config.tags.into(),
-            classifiers: config.classifiers.into(),
+            tags: config.tags.into_inner().into(),
+            classifiers: config.classifiers.into_inner().into(),
             transient: config.__warehouse_specific_config__.transient,
             unique_key: config.unique_key,
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
@@ -982,6 +1000,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             as_columnstore: config.__warehouse_specific_config__.as_columnstore,
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
+            unlogged: config.__warehouse_specific_config__.unlogged,
             schedule: config.__warehouse_specific_config__.schedule,
             incremental_apply_config_changes: config
                 .__warehouse_specific_config__
@@ -999,171 +1018,8 @@ impl From<ModelConfig> for ProjectModelConfig {
 }
 
 impl ResolvableConfig<ModelConfig> for ModelConfig {
-    /// Default this config to the parent config
-    ///
-    /// This method ensures that:
-    /// 1. All fields are explicitly handled
-    /// 2. Custom merge logic is applied where needed
-    /// 3. Compile-time safety through exhaustive pattern matching
-    #[allow(clippy::cognitive_complexity)]
     fn default_to(&mut self, parent: &ModelConfig) {
-        // Handle simple fields - using a pattern that ensures all fields are covered
-        let ModelConfig {
-            // Custom fields (already handled above)
-            post_hook,
-            pre_hook,
-            meta,
-            tags,
-            classifiers,
-            quoting,
-
-            // Flattened config (already handled above)
-            __warehouse_specific_config__: warehouse_specific_config,
-
-            // Simple fields (handle with macro)
-            enabled,
-            alias,
-            schema,
-            database,
-            catalog_name,
-            compute,
-            group,
-            materialized,
-            incremental_strategy,
-            incremental_predicates,
-            batch_size,
-            lookback,
-            begin,
-            persist_docs,
-            column_types,
-            full_refresh,
-            unique_key,
-            on_schema_change,
-            on_configuration_change,
-            on_error,
-            grants,
-            packages,
-            python_version,
-            imports,
-            secrets,
-            external_access_integrations,
-            use_anonymous_sproc,
-            docs,
-            contract,
-            event_time,
-            concurrent_batches,
-            merge_update_columns,
-            merge_exclude_columns,
-            access,
-            table_format,
-            static_analysis,
-            freshness,
-            state,
-            latest_version_pointer,
-            sql_header,
-            location,
-            predicates,
-            submission_method,
-            job_cluster_config,
-            python_job_config,
-            cluster_id,
-            http_path,
-            create_notebook,
-            index_url,
-            additional_libs,
-            user_folder_for_python,
-            config_keys_used,
-            config_keys_defaults,
-            meta_keys_used,
-            meta_keys_defaults,
-            sync,
-        } = self;
-
-        // Handle flattened configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-
-        // Protect the mutable refs from being used in the default_to macro
-        #[allow(unused, clippy::let_unit_value)]
-        let pre_hook = default_hooks(pre_hook, &parent.pre_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let post_hook = default_hooks(post_hook, &parent.post_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
-        #[allow(unused, clippy::let_unit_value)]
-        let classifiers = default_classifiers(classifiers, &parent.classifiers);
-        #[allow(unused, clippy::let_unit_value)]
-        let column_types = default_column_types(column_types, &parent.column_types);
-        #[allow(unused, clippy::let_unit_value)]
-        let grants = default_to_grants(grants, &parent.grants);
-        #[allow(unused, clippy::let_unit_value)]
-        let packages = default_packages(packages, &parent.packages);
-
-        // Handle Omissible fields for hierarchical overrides
-        handle_omissible_override(schema, &parent.schema);
-        handle_omissible_override(database, &parent.database);
-
-        default_to!(
-            parent,
-            [
-                enabled,
-                alias,
-                catalog_name,
-                compute,
-                group,
-                materialized,
-                incremental_strategy,
-                incremental_predicates,
-                batch_size,
-                lookback,
-                begin,
-                persist_docs,
-                full_refresh,
-                unique_key,
-                on_schema_change,
-                on_configuration_change,
-                on_error,
-                python_version,
-                use_anonymous_sproc,
-                secrets,
-                external_access_integrations,
-                imports,
-                docs,
-                contract,
-                event_time,
-                concurrent_batches,
-                merge_update_columns,
-                merge_exclude_columns,
-                access,
-                table_format,
-                static_analysis,
-                freshness,
-                state,
-                latest_version_pointer,
-                sql_header,
-                location,
-                predicates,
-                submission_method,
-                job_cluster_config,
-                python_job_config,
-                cluster_id,
-                http_path,
-                create_notebook,
-                index_url,
-                additional_libs,
-                user_folder_for_python,
-                config_keys_used,
-                config_keys_defaults,
-                meta_keys_used,
-                meta_keys_defaults,
-                sync,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 
     type Resolved = ResolvedModelConfig;
@@ -1234,15 +1090,11 @@ impl ModelConfig {
     }
 
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
-    pub fn same_config(
-        &self,
-        other: &ModelConfig,
-        self_unrendered_config: &BTreeMap<String, YmlValue>,
-        other_unrendered_config: &BTreeMap<String, YmlValue>,
-    ) -> bool {
+    pub fn same_config(&self, other: &ModelConfig) -> bool {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
+        let alt_compute_eq = self.alt_compute == other.alt_compute;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let materialized_eq_result = materialized_eq(&self.materialized, &other.materialized);
         let incremental_strategy_eq = self.incremental_strategy == other.incremental_strategy;
@@ -1267,13 +1119,8 @@ impl ModelConfig {
             &other.on_configuration_change,
         ); // Custom comparison for on_configuration_change
         let on_error_eq = self.on_error == other.on_error;
-        let grants_eq = grants_equal_with_unrendered(
-            &self.grants,
-            &other.grants,
-            self_unrendered_config,
-            other_unrendered_config,
-        ); // Custom comparison for grants
-        let packages_eq = packages_and_imports_eq(&self.packages, &other.packages); // Custom comparison for packages
+        let grants_eq = grants_equal(&self.grants, &other.grants); // Custom comparison for grants
+        let packages_eq = packages_and_imports_eq(self.packages.inner(), other.packages.inner()); // Custom comparison for packages
         let imports_eq = packages_and_imports_eq(&self.imports, &other.imports); // Custom comparison for imports (same function as packages)
         let python_version_eq = self.python_version == other.python_version;
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
@@ -1300,15 +1147,14 @@ impl ModelConfig {
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
         let predicates_eq = self.predicates == other.predicates;
-        let warehouse_config_eq = same_warehouse_config_with_unrendered(
+        let warehouse_config_eq = same_warehouse_config(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
-            self_unrendered_config,
-            other_unrendered_config,
         );
 
         let result = enabled_eq
             && catalog_name_eq
+            && alt_compute_eq
             && meta_eq_result
             && materialized_eq_result
             && incremental_strategy_eq
@@ -1363,6 +1209,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.catalog_name),
                             format!("{:?}", &other.catalog_name),
+                        )),
+                    ),
+                    (
+                        "alt_compute",
+                        alt_compute_eq,
+                        Some((
+                            format!("{:?}", &self.alt_compute),
+                            format!("{:?}", &other.alt_compute),
                         )),
                     ),
                     (
@@ -1771,34 +1625,36 @@ fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization
 mod tests {
     use super::ModelConfig;
     use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
+    use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
 
     #[test]
     fn test_classifiers_merge_in_default_to() {
+        use crate::schemas::project::configs::config_merge::Classifiers;
         use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
-            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            classifiers: Classifiers(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "finance".to_string(),
                 "pii".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = ModelConfig {
-            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            classifiers: Classifiers(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "gdpr".to_string(),
                 "pii".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         child.default_to(&parent);
 
         assert_eq!(
-            child.classifiers,
+            child.classifiers.into_inner(),
             Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "finance".to_string(),
                 "gdpr".to_string(),
@@ -1809,25 +1665,26 @@ mod tests {
 
     #[test]
     fn test_classifiers_none_child_inherits_parent() {
+        use crate::schemas::project::configs::config_merge::Classifiers;
         use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
-            classifiers: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            classifiers: Classifiers(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "pii".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = ModelConfig {
-            classifiers: None,
+            classifiers: Classifiers(None),
             ..Default::default()
         };
 
         child.default_to(&parent);
 
         assert_eq!(
-            child.classifiers,
+            child.classifiers.into_inner(),
             Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "pii".to_string(),
             ]))
@@ -1886,6 +1743,36 @@ __additional_properties__: {}
         assert_eq!(state.evaluate_volatile_sql, Some(false));
         assert_eq!(state.pre_clone, Some(StatePreClone::Always));
         assert_eq!(state.execute_hooks_on_any_reuse, Some(false));
+    }
+
+    #[test]
+    fn test_python_version_deserializes_from_number() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++python_version: 3.10
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.python_version.as_deref(), Some("3.1"));
+
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+python_version: 3.10
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.python_version.as_deref(), Some("3.1"));
+
+        let config: ManifestModelConfig = dbt_yaml::from_str(
+            r#"
+python_version: 3.10
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.python_version.as_deref(), Some("3.1"));
     }
 
     #[test]
@@ -1996,21 +1883,22 @@ __additional_properties__: {}
 
     #[test]
     fn test_packages_append() {
+        use crate::schemas::project::configs::config_merge::Packages;
         use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = ModelConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "matplotlib".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
@@ -2019,28 +1907,29 @@ __additional_properties__: {}
         // Should have parent packages first, then child packages (no dedup/sort, matches dbt-core)
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
                 "matplotlib".to_string(),
-            ]))
+            ])))
         );
     }
 
     #[test]
     fn test_packages_append_with_string_variant() {
+        use crate::schemas::project::configs::config_merge::Packages;
         use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
-            packages: Some(StringOrArrayOfStrings::String("numpy".to_string())),
+            packages: Packages(Some(StringOrArrayOfStrings::String("numpy".to_string()))),
             ..Default::default()
         };
 
         let mut child = ModelConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "pandas".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
@@ -2049,27 +1938,28 @@ __additional_properties__: {}
         // Should convert String to ArrayOfStrings and merge
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
-            ]))
+            ])))
         );
     }
 
     #[test]
     fn test_packages_none_child_inherits_parent() {
+        use crate::schemas::project::configs::config_merge::Packages;
         use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = ModelConfig {
-            packages: None,
+            packages: Packages::default(),
             ..Default::default()
         };
 
@@ -2078,30 +1968,31 @@ __additional_properties__: {}
         // Child should inherit parent's packages
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ]))
+            ])))
         );
     }
 
     #[test]
     fn test_packages_no_deduplication() {
+        use crate::schemas::project::configs::config_merge::Packages;
         use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = ModelConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "matplotlib".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
@@ -2110,12 +2001,12 @@ __additional_properties__: {}
         // Should preserve duplicates (no dedup/sort, matches dbt-core behavior)
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
                 "numpy".to_string(),
                 "matplotlib".to_string(),
-            ]))
+            ])))
         );
     }
 }

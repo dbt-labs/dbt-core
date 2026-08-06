@@ -222,7 +222,7 @@ pub fn infer_seed_column_name_strategy(
             | AdapterType::Salesforce
             | AdapterType::Redshift
             | AdapterType::DuckDB
-            | AdapterType::Fdcs,
+            | AdapterType::Alt,
         ) => InferColumnNameStrategy::Lowercase,
         (false, AdapterType::Snowflake) => InferColumnNameStrategy::Uppercase,
         (

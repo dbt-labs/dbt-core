@@ -398,6 +398,23 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
     }
 }
 
+/// Selects the compute target a model's DML is executed against.
+///
+/// `Default` uses the profile's adapter. A run implementation may honor an
+/// alternate target for other variants; parse/compile/render and introspection
+/// are unaffected by this selection.
+#[derive(
+    Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputePlatform {
+    /// Execute on the profile's (default) adapter.
+    #[default]
+    Default,
+    /// Execute on the alternate compute target.
+    Alt,
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {
@@ -907,7 +924,7 @@ pub struct Constraint {
     #[serde(
         default,
         deserialize_with = "crate::schemas::serde::string_or_array",
-        serialize_with = "crate::schemas::serde::serialize_option_as_empty_vec"
+        serialize_with = "crate::schemas::serde::serialize_none_as_empty_vec"
     )]
     pub to_columns: Option<Vec<String>>,
     pub warn_unsupported: Option<bool>,
@@ -931,6 +948,20 @@ pub enum ConstraintType {
     ForeignKey,
     Check,
     Custom,
+}
+
+impl ConstraintType {
+    /// The dbt-core `ConstraintType` enum value, e.g. for use in warning messages.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConstraintType::NotNull => "not_null",
+            ConstraintType::Unique => "unique",
+            ConstraintType::PrimaryKey => "primary_key",
+            ConstraintType::ForeignKey => "foreign_key",
+            ConstraintType::Check => "check",
+            ConstraintType::Custom => "custom",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize)]
@@ -1100,7 +1131,15 @@ impl DbtChecksum {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct IncludeExclude {
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::string_or_number_or_array_to_string_array"
+    )]
     pub exclude: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::string_or_number_or_array_to_string_array"
+    )]
     pub include: Option<StringOrArrayOfStrings>,
 }
 
@@ -1440,6 +1479,55 @@ pub enum Severity {
     Warn,
 }
 
+/// Parses a `deprecation_date` string in any of the documented input formats
+/// (bare date, or a full datetime with or without a UTC offset -- see
+/// https://docs.getdbt.com/reference/resource-properties/deprecation_date)
+/// into a timezone-aware timestamp. An already offset-aware input keeps its
+/// original offset; a naive (offset-less) datetime is assumed to be UTC.
+pub fn parse_deprecation_date(raw: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let raw = raw.trim();
+
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
+        return Some(dt);
+    }
+    for format in ["%Y-%m-%d %H:%M:%S%.f%z", "%Y-%m-%d %H:%M:%S%z"] {
+        if let Ok(dt) = chrono::DateTime::parse_from_str(raw, format) {
+            return Some(dt);
+        }
+    }
+
+    let naive_utc_to_fixed = |naive: chrono::NaiveDateTime| {
+        chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive, chrono::Utc)
+            .fixed_offset()
+    };
+    for format in [
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+    ] {
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(raw, format) {
+            return Some(naive_utc_to_fixed(naive));
+        }
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+        let naive = date.and_hms_opt(0, 0, 0).unwrap();
+        return Some(naive_utc_to_fixed(naive));
+    }
+
+    None
+}
+
+/// Normalizes a raw `deprecation_date` string (as authored in YAML) to an
+/// RFC 3339 string with an explicit UTC offset, matching dbt-core's manifest
+/// output. Falls back to the original string if it doesn't match any
+/// documented format.
+pub fn normalize_deprecation_date(raw: &str) -> String {
+    parse_deprecation_date(raw)
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_else(|| raw.to_string())
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct Versions {
@@ -1460,9 +1548,6 @@ pub struct Versions {
     // &[VersionColumnProperties] instead of &YmlValue.
     #[serde(skip_deserializing, default)]
     pub columns: Option<Vec<crate::schemas::dbt_column::VersionColumnProperties>>,
-    // TODO: promote `docs` to a typed field once we settle on the right struct (dbt-core uses
-    // Docs { show: bool, node_color: Optional[str] } but we only have DocsConfig which may
-    // not match exactly).
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
 
@@ -1556,7 +1641,10 @@ pub fn merge_meta(
     }
 }
 
-/// Merge two tag lists, deduplicating and sorting the result.
+/// Merge two string lists, deduplicating and sorting the result.
+///
+/// Prefer this for unordered set-like configs (e.g. classifiers). For tags,
+/// use [`merge_tags`] so inheritance order matches dbt-core.
 pub fn merge_vec(
     base_vec: Option<Vec<String>>,
     update_vec: Option<Vec<String>>,
@@ -1575,6 +1663,38 @@ pub fn merge_vec(
         (Some(base), None) => Some(base),
         (None, Some(update)) => Some(update),
     }
+}
+
+/// Merge inherited tags in dbt-core order: parent (less specific) first, then
+/// child (more specific), with first-seen deduplication and no alphabetical sort.
+///
+/// dbt-core concatenates additive tags along the config hierarchy. Callers that
+/// depend on list position (e.g. custom schema naming from `tags[0]`) require
+/// this order for Core/Fusion parity. See dbt-labs/dbt-core#15590.
+pub fn merge_tags(
+    parent_tags: Option<Vec<String>>,
+    child_tags: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match (parent_tags, child_tags) {
+        (None, None) => None,
+        (Some(mut parent), Some(child)) => {
+            parent.extend(child);
+            dedup_preserve_order(parent)
+        }
+        (Some(parent), None) => dedup_preserve_order(parent),
+        (None, Some(child)) => dedup_preserve_order(child),
+    }
+}
+
+fn dedup_preserve_order(tags: Vec<String>) -> Option<Vec<String>> {
+    let mut seen = std::collections::HashSet::with_capacity(tags.len());
+    let mut out = Vec::with_capacity(tags.len());
+    for tag in tags {
+        if seen.insert(tag.clone()) {
+            out.push(tag);
+        }
+    }
+    Some(out)
 }
 
 pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &str) -> String {
@@ -1876,6 +1996,29 @@ mod tests {
             DbtChecksum::Object(o) => (o.name.as_str(), o.checksum.as_str()),
             DbtChecksum::String(_) => panic!("expected object checksum"),
         }
+    }
+
+    #[test]
+    fn test_include_exclude_deserializes_number_versions() {
+        let config: IncludeExclude = dbt_yaml::from_str(
+            r#"
+include: [1, "2"]
+exclude: 3
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.include,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "1".to_string(),
+                "2".to_string(),
+            ]))
+        );
+        assert_eq!(
+            config.exclude,
+            Some(StringOrArrayOfStrings::String("3".to_string()))
+        );
     }
 
     #[test]
@@ -2551,6 +2694,47 @@ period: hour
     }
 
     #[test]
+    fn test_merge_tags_parent_first_preserves_inheritance_order() {
+        // Regression for dbt-labs/dbt-core#15590: nested +tags must keep
+        // parent-then-child order (not alphabetical). Alphabetical would put
+        // DAILY before INTERMEDIATE.
+        let parent = Some(vec!["INTERMEDIATE".to_string()]);
+        let child = Some(vec!["DAILY".to_string()]);
+        assert_eq!(
+            merge_tags(parent, child),
+            Some(vec!["INTERMEDIATE".to_string(), "DAILY".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_merge_tags_dedupes_preserving_first_seen() {
+        let parent = Some(vec!["a".to_string(), "b".to_string()]);
+        let child = Some(vec!["b".to_string(), "c".to_string()]);
+        assert_eq!(
+            merge_tags(parent, child),
+            Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_merge_tags_matches_docs_additive_hierarchy() {
+        // Docs example: contains_pii (project) + hourly (folder) + finance (model)
+        // must stay inheritance order, not alpha (contains_pii, finance, hourly).
+        let project = Some(vec!["contains_pii".to_string()]);
+        let folder = Some(vec!["hourly".to_string()]);
+        let model = Some(vec!["finance".to_string()]);
+        let after_folder = merge_tags(project, folder);
+        assert_eq!(
+            merge_tags(after_folder, model),
+            Some(vec![
+                "contains_pii".to_string(),
+                "hourly".to_string(),
+                "finance".to_string(),
+            ])
+        );
+    }
+
+    #[test]
     fn test_bigquery_partition_config_legacy_deserialize_from_jinja_values() {
         // Test String variant
         let string_value = MinijinjaValue::from("partition_field");
@@ -2699,5 +2883,61 @@ period: hour
             is_array,
             "`columns` property must have type 'array' (got {type_field})"
         );
+    }
+
+    // ---- deprecation_date normalization (dbt-core#14563) ----
+
+    #[test]
+    fn test_normalize_deprecation_date_bare_date() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_naive_t_separator() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31T00:00:00"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_naive_space_separator() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31 00:00:00"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_z_suffix() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31T00:00:00Z"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_with_offset_preserved() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31T00:00:00-05:00"),
+            "2025-10-31T00:00:00-05:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_space_separator_with_offset_and_fraction() {
+        // Exact example from the docs page for `deprecation_date`.
+        assert_eq!(
+            normalize_deprecation_date("1999-01-01 00:00:00.00+00:00"),
+            "1999-01-01T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_unparseable_passes_through() {
+        assert_eq!(normalize_deprecation_date("not-a-date"), "not-a-date");
     }
 }

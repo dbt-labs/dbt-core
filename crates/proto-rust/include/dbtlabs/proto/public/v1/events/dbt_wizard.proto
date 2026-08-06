@@ -5,6 +5,21 @@ option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/dbt_wizar
 
 import "dbtlabs/proto/public/v1/common/vortex_options.proto";
 import "dbtlabs/proto/public/v1/events/vortex.proto";
+import "dbtlabs/proto/public/v1/common/vortex_telemetry_contexts.proto";
+
+enum DbtWizardToolOutcome {
+  DBT_WIZARD_TOOL_OUTCOME_UNSPECIFIED = 0;
+  // The tool completed successfully.
+  DBT_WIZARD_TOOL_OUTCOME_SUCCEEDED = 1;
+  // The invocation could not be constructed or routed.
+  DBT_WIZARD_TOOL_OUTCOME_REJECTED = 2;
+  // Policy or a pre-execution hook prevented execution.
+  DBT_WIZARD_TOOL_OUTCOME_BLOCKED = 3;
+  // Execution was attempted but failed.
+  DBT_WIZARD_TOOL_OUTCOME_FAILED = 4;
+  // The attempt was interrupted or never reached a normal terminal result.
+  DBT_WIZARD_TOOL_OUTCOME_ABORTED = 5;
+}
 
 // Emitted once at session start and once at session end.
 message DbtWizardSession {
@@ -48,6 +63,7 @@ message DbtWizardSession {
   // The anonymous UUID from ~/.dbt/.user.yml. Always populated regardless of
   // auth state, enabling a join between pre-auth and post-auth events.
   string anonymous_id = 18;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 19;
 }
 
 // Emitted once per turn completion.
@@ -82,9 +98,11 @@ message DbtWizardTurn {
   string collaboration_mode = 15;
   // Whether the WIZARD_INTERNAL env var was set for this session.
   bool is_wizard_internal = 16;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 17;
 }
 
-// Emitted once per tool invocation.
+// Emitted once per tool attempt after it reaches a terminal outcome.
+// Tool argument names and values are not captured.
 message DbtWizardToolUse {
   option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
   option (v1.public.common.vortex_enabled) = true;
@@ -96,9 +114,11 @@ message DbtWizardToolUse {
   string session_id = 3;
   // Turn correlation ID.
   string turn_id = 4;
-  // Tool category: "builtin", "mcp", "shell", "subagent".
+  // Tool category: one of "builtin", "mcp", "hosted", or "unknown".
   string tool_type = 5;
-  // Specific tool name (e.g. "dbt_index.search", "apply_patch").
+  // Registered canonical flattened tool name (e.g.
+  // "mcp__dbt_index__search"); unrecognized model-controlled names are emitted
+  // as "<unknown>".
   string tool_name = 6;
   // Whether the tool call resulted in an error.
   bool is_error = 7;
@@ -106,6 +126,18 @@ message DbtWizardToolUse {
   int64 execution_time_ms = 8;
   // Whether the WIZARD_INTERNAL env var was set for this session.
   bool is_wizard_internal = 9;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 10;
+  // Model/provider call correlation identifier.
+  string call_id = 11;
+  // Call origin: "direct" or "code_mode".
+  string call_source = 12;
+  // Unix timestamp in milliseconds when the attempt was first observed.
+  int64 call_observed_at_ms = 13;
+  // Terminal outcome of the tool attempt.
+  DbtWizardToolOutcome outcome = 14;
+  // Elapsed wall-clock time from first observing the tool attempt through its
+  // terminal outcome, including queueing, hooks, and execution.
+  int64 attempt_duration_ms = 15;
 }
 
 // Emitted immediately at binary launch, before onboarding or thread creation.
@@ -134,6 +166,7 @@ message DbtWizardCliStarted {
   // The anonymous UUID from ~/.dbt/.user.yml. Always populated regardless of
   // auth state, enabling a join between pre-auth and post-auth events.
   string anonymous_id = 13;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 14;
 }
 
 // Emitted once per onboarding step transition.
@@ -174,6 +207,7 @@ message DbtWizardOnboarding {
   // The anonymous UUID from ~/.dbt/.user.yml. Always populated regardless of
   // auth state, enabling a join between pre-auth and post-auth events.
   string anonymous_id = 20;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 21;
 }
 
 // Emitted at subagent start and end to track full lifecycle.
@@ -208,6 +242,7 @@ message DbtWizardSubAgent {
   // The anonymous UUID from ~/.dbt/.user.yml. Always populated regardless of
   // auth state, enabling a join between pre-auth and post-auth events.
   string anonymous_id = 17;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 18;
 }
 
 // Emitted on structured errors (sidecar crashes, provider auth failures, panics).
@@ -244,6 +279,7 @@ message DbtWizardError {
   // The anonymous UUID from ~/.dbt/.user.yml. Always populated regardless of
   // auth state, enabling a join between pre-auth and post-auth events.
   string anonymous_id = 20;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 21;
 }
 
 // Emitted when a user submits feedback via /feedback.
@@ -284,4 +320,5 @@ message DbtWizardFeedback {
   // The anonymous UUID from ~/.dbt/.user.yml. Always populated regardless of
   // auth state, enabling a join between pre-auth and post-auth events.
   string anonymous_id = 16;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 17;
 }

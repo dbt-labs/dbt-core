@@ -12,23 +12,14 @@ use dbt_schemas::{
 use crate::stats_to_results;
 
 /// Build a `RunResultsArtifact` from run stats.
-fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsArtifact {
+pub fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsArtifact {
     let now = SystemTime::now();
     let generated_at: DateTime<Utc> = DateTime::from(now);
 
     let results: Vec<RunResultOutput> = stats
         .stats
         .iter()
-        .map(|stat| {
-            stats_to_results(
-                stat,
-                stats
-                    .nodes
-                    .as_ref()
-                    .expect("stats should have nodes for results generation"),
-            )
-            .into()
-        })
+        .map(|stat| stats_to_results(stat, stats).into())
         .collect();
 
     let total_elapsed_time: f64 = stats
@@ -81,14 +72,16 @@ fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsArtifa
 }
 
 // TODO: We need to add more information to the run_results.json file
-pub fn write_run_results_json(stats: &Stats, arg: &EvalArgs) -> FsResult<()> {
+pub fn write_run_results_json(
+    run_results_artifact: &RunResultsArtifact,
+    arg: &EvalArgs,
+) -> FsResult<()> {
     let run_results_path = arg.io.out_dir.join("run_results.json");
     let run_results_file = File::create(run_results_path)?;
-    let run_results_artifact = build_run_results_artifact(stats, arg);
     // Serialize via dbt_yaml first so the `__other__` dunder-flatten field is
     // flattened into the parent object (raw `serde_json` would emit it as a
     // literal nested `__other__` key, which the reader cannot interpret).
-    let yml_val = dbt_yaml::to_value(&run_results_artifact).map_err(|e| {
+    let yml_val = dbt_yaml::to_value(run_results_artifact).map_err(|e| {
         dbt_common::fs_err!(
             ErrorCode::SerializationError,
             "Failed to serialize run_results: {e}"
@@ -99,12 +92,11 @@ pub fn write_run_results_json(stats: &Stats, arg: &EvalArgs) -> FsResult<()> {
 }
 
 /// Write `run_results.json`, emitting a warning on failure instead of propagating the error.
-pub fn write_run_results_json_or_warn(stats: &Stats, arg: &EvalArgs) {
-    if let Err(e) = write_run_results_json(stats, arg) {
+pub fn write_run_results_json_or_warn(run_results_artifact: &RunResultsArtifact, arg: &EvalArgs) {
+    if let Err(e) = write_run_results_json(run_results_artifact, arg) {
         emit_warn_log_message(
             ErrorCode::IoError,
             format!("Failed to write run_results.json: {e}"),
-            arg.io.status_reporter.as_ref(),
         );
     }
 }
@@ -127,8 +119,9 @@ mod tests {
         let stats = Stats {
             stats: vec![],
             nodes: None,
+            batch_results: Default::default(),
         };
-        write_run_results_json(&stats, &arg).unwrap();
+        write_run_results_json(&build_run_results_artifact(&stats, &arg), &arg).unwrap();
 
         let artifact = RunResultsArtifact::from_file(&tmp.path().join("run_results.json")).unwrap();
         assert_eq!(

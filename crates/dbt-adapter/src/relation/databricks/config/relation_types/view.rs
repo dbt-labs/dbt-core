@@ -131,13 +131,12 @@ mod tests {
                                 ),
                             ),
                         ),
-                        // TODO: query is not implemented
-                        // (
-                        //     components::QueryLoader.type_name(),
-                        //     ComponentConfigChange::Some(components::QueryLoader::new_component_type_erased(
-                        //         "SELECT 1000",
-                        //     )),
-                        // ),
+                        (
+                            components::QueryLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::QueryLoader::new_component_type_erased("SELECT 1000"),
+                            ),
+                        ),
                         (
                             components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
@@ -163,6 +162,11 @@ mod tests {
         True
     </persist>
 </column_comments>
+<query>
+    <query>
+        SELECT 1000
+    </query>
+</query>
 <tags>
     <set_tags>
         <a_tag>
@@ -199,11 +203,14 @@ mod tests {
                 current_state: TestModelConfig {
                     relation_comment: Some("old comment".to_string()),
                     persist_relation_comments: true,
+                    // A view always has SQL; holding it constant keeps `query` out of the changeset
+                    query: Some("SELECT 1".to_string()),
                     ..Default::default()
                 },
                 desired_state: TestModelConfig {
                     relation_comment: Some("new comment".to_string()),
                     persist_relation_comments: true,
+                    query: Some("SELECT 1".to_string()),
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(

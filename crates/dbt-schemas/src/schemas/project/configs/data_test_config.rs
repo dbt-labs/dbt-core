@@ -10,22 +10,22 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use super::omissible_utils::handle_omissible_override;
-use crate::default_to;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{
     ClusterConfig, DbtMaterialization, DbtQuoting, Schedule, Severity, StoreFailuresAs,
 };
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::project::configs::common::{
-    WarehouseSpecificNodeConfig, default_meta_and_tags, default_quoting,
-};
+use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
+use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::properties::DataTestState;
+use dbt_proc_macros::DefaultTo;
 use dbt_proc_macros::Resolvable;
 
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PartitionsConfig, PrimaryKeyConfig, QueryTag, StringOrArrayOfStrings,
-    bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
+    StringOrInteger, bool_or_string_bool, f64_or_string_f64,
+    hours_to_expiration_or_string_omissible, u64_or_string_u64,
 };
 
 pub const DEFAULT_DATA_TEST_ERROR_IF: &str = "!= 0";
@@ -153,9 +153,9 @@ pub struct ProjectDataTestConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -304,10 +304,20 @@ pub struct ProjectDataTestConfig {
     // Postgres specific fields
     #[serde(default, rename = "+indexes")]
     pub indexes: IndexesConfig,
+    #[serde(
+        default,
+        rename = "+unlogged",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unlogged: Option<bool>,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
     pub schedule: Option<Schedule>,
+
+    // dbt State configs (restricted subset: only require_fresh_data_from + evaluate_volatile_sql)
+    #[serde(rename = "+state")]
+    pub state: Option<DataTestState>,
 
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectDataTestConfig>>,
 }
@@ -323,7 +333,7 @@ impl TypedRecursiveConfig for ProjectDataTestConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, DbtSchema)]
+#[derive(Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, Default, DbtSchema)]
 pub struct DataTestConfig {
     pub alias: Option<String>,
     pub compute: Option<ComputeArg>,
@@ -343,7 +353,7 @@ pub struct DataTestConfig {
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
     pub limit: Option<i32>,
-    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
+    #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[resolved(promote, default = DEFAULT_DATA_TEST_SEVERITY.clone())]
     pub severity: Option<Severity>,
@@ -351,11 +361,8 @@ pub struct DataTestConfig {
     pub store_failures: Option<bool>,
     pub store_failures_as: Option<StoreFailuresAs>,
     pub sql_header: Option<String>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     #[resolved(promote, default = DEFAULT_DATA_TEST_WARN_IF.to_string())]
     pub warn_if: Option<String>,
     #[resolved(promote, expect = "quoting set by apply_package_defaults")]
@@ -366,6 +373,11 @@ pub struct DataTestConfig {
     pub where_: Option<String>,
     #[resolved(promote, default = DbtMaterialization::Test)]
     pub materialized: Option<DbtMaterialization>,
+    // dbt State configs (restricted subset: only require_fresh_data_from + evaluate_volatile_sql).
+    // `skip_serializing_if` avoids emitting `state: null` into data-test manifest nodes (this config
+    // is serialized directly into the manifest).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<DataTestState>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -388,12 +400,13 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             store_failures: config.store_failures,
             store_failures_as: config.store_failures_as,
             sql_header: config.sql_header,
-            tags: config.tags,
+            tags: Tags(config.tags),
             warn_if: config.warn_if,
             quoting: config.quoting,
             where_: config.where_,
             static_analysis: config.static_analysis,
             materialized: Some(DataTestConfig::default_materialized()), // TODO: config.materialized?
+            state: config.state,
             // Initialize adapter specific configs with values from flattened fields
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: None, // Not applicable for data tests
@@ -490,6 +503,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+                unlogged: config.unlogged,
 
                 // data test is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
@@ -517,11 +531,12 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             store_failures: config.store_failures,
             store_failures_as: config.store_failures_as,
             sql_header: config.sql_header,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             warn_if: config.warn_if,
             quoting: config.quoting,
             where_: config.where_,
             static_analysis: config.static_analysis,
+            state: config.state,
             partition_by: config.__warehouse_specific_config__.partition_by,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
@@ -614,6 +629,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             // Postgres Fields
             indexes: config.__warehouse_specific_config__.indexes,
+            unlogged: config.__warehouse_specific_config__.unlogged,
             // Schedule (Databricks streaming tables)
             schedule: config.__warehouse_specific_config__.schedule,
             __additional_properties__: BTreeMap::new(),
@@ -672,77 +688,101 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
     }
 
     fn default_to(&mut self, parent: &DataTestConfig) {
-        let DataTestConfig {
-            alias,
-            compute,
-            database,
-            enabled,
-            error_if,
-            fail_calc,
-            full_refresh,
-            group,
-            limit,
-            meta,
-            schema,
-            severity,
-            store_failures,
-            store_failures_as,
-            sql_header,
-            tags,
-            warn_if,
-            quoting,
-            where_,
-            static_analysis,
-            materialized,
-            // Adapter specific configs
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
-
-        // Handle adapter-specific configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-        // Protect the mutable refs from being used in the default_to macro
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
-        // Unlike other node configs where schema: null means "use target schema directly",
-        // DataTestConfig has a non-null default ("dbt_test__audit") applied during finalization.
-        // Omissible lets us distinguish an explicit null (opt out of the suffix) from an absent
-        // key (inherit the default). handle_omissible_override preserves that signal across
-        // config inheritance, so Present(None) from a child wins over a parent's Present(Some(_)).
-        #[allow(unused, clippy::let_unit_value)]
-        let schema = handle_omissible_override(schema, &parent.schema);
-
-        default_to!(
-            parent,
-            [
-                enabled,
-                compute,
-                store_failures,
-                store_failures_as,
-                sql_header,
-                limit,
-                severity,
-                error_if,
-                warn_if,
-                fail_calc,
-                full_refresh,
-                alias,
-                database,
-                group,
-                where_,
-                static_analysis,
-                materialized,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 
 impl ConfigKeys for DataTestConfig {
     // The default implementation from the trait will handle
     // extracting field names via serialization automatically
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DataTestConfig, ProjectDataTestConfig};
+    use crate::schemas::common::UpdatesOn;
+
+    #[test]
+    fn test_project_data_test_config_state_parses_with_plus_prefix() {
+        let config: ProjectDataTestConfig = dbt_yaml::from_str(
+            r#"
++state:
+  require_fresh_data_from: all
+  evaluate_volatile_sql: true
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let data_test_config: DataTestConfig = config.into();
+        let state = data_test_config
+            .state
+            .expect("+state should propagate to DataTestConfig");
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+    }
+
+    #[test]
+    fn test_data_test_config_state_parses() {
+        let config: DataTestConfig = dbt_yaml::from_str(
+            r#"
+state:
+  require_fresh_data_from: any
+  evaluate_volatile_sql: false
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("state config should parse");
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::Any));
+        assert_eq!(state.evaluate_volatile_sql, Some(false));
+    }
+
+    #[test]
+    fn test_data_test_config_state_propagates_via_default_to() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+        use crate::schemas::properties::DataTestState;
+
+        let parent = DataTestConfig {
+            state: Some(DataTestState {
+                require_fresh_data_from: Some(UpdatesOn::All),
+                evaluate_volatile_sql: Some(true),
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        let mut child = DataTestConfig::default();
+        child.default_to(&parent);
+
+        let state = child
+            .state
+            .expect("state should propagate from parent to child via default_to");
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+    }
+
+    #[test]
+    fn test_data_test_state_type_models_only_two_keys() {
+        use crate::schemas::properties::DataTestState;
+
+        // Verifies the `DataTestState` type shape: only `require_fresh_data_from` and
+        // `evaluate_volatile_sql` bind; any other key is silently ignored by serde. This does not
+        // test user-facing rejection of unsupported keys.
+        let state: DataTestState = dbt_yaml::from_str(
+            r#"
+require_fresh_data_from: all
+evaluate_volatile_sql: true
+lag_tolerance:
+  count: 1
+  period: day
+pre_clone: if_missing
+execute_hooks_on_any_reuse: true
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+    }
 }

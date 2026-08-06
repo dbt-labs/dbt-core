@@ -32,7 +32,7 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
-use dbt_common::io_utils::StatusReporter;
+use dbt_common::path::DbtPath;
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
@@ -41,6 +41,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtModelAttr;
@@ -54,12 +55,13 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
-use dbt_schemas::schemas::common::OnError;
+use dbt_schemas::schemas::common::OnSchemaChange;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
 use dbt_schemas::schemas::dbt_column::process_columns;
+use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::manifest::semantic_model::NodeRelation;
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
@@ -77,6 +79,7 @@ use dbt_schemas::state::NodeResolverTracker;
 use dbt_schemas::state::ResourcePathKind;
 use dbt_yaml::Spanned;
 use minijinja::MacroSpans;
+use minijinja::constants::CURRENT_PATH;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -87,7 +90,7 @@ use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::resolve_tests::persist_generic_data_tests::{
     TestUnrenderedConfigs, extract_test_unrendered_configs,
 };
-use super::resolve_utils::validate_compute;
+use super::resolve_utils::{validate_compute, validate_compute_platform};
 use super::validate_models::validate_model;
 
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
@@ -158,6 +161,7 @@ pub async fn resolve_models(
     root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     models_properties: &BTreeMap<String, MinimalPropertiesEntry>,
+    macros: &BTreeMap<String, DbtMacro>,
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
@@ -182,6 +186,12 @@ pub async fn resolve_models(
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
+    // Used to detect custom materializations — including ones that shadow a
+    // built-in name (e.g. `table`, `incremental`) — so static analysis can be
+    // skipped for the models that use them (see the per-model use below).
+    let materialization_resolver =
+        MaterializationResolver::new(macros, adapter_type, root_package.dbt_project.name.as_str());
+
     let is_dependency = dependency_package_name.is_some();
     // Best-effort raw parse of the root project's `models:` subtree, used only to hydrate
     // dependency package nodes' `unrendered_config` with root overrides (preserving Jinja).
@@ -199,7 +209,6 @@ pub async fn resolve_models(
     let config_resolver =
         ProjectConfigResolver::build(root_project_configs.models.clone(), is_dependency, || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.models,
                 package_quoting,
                 dependency_package_name,
@@ -216,6 +225,7 @@ pub async fn resolve_models(
             root_project_name: root_package.dbt_project.name.clone(),
             config_resolver: config_resolver.clone(),
             package_quoting,
+            uses_snapshot_fqn: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -443,13 +453,13 @@ pub async fn resolve_models(
                 if !errors.is_empty() {
                     // Show each error individually
                     for error in errors {
-                        emit_error_log_from_fs_error(&error, arg.io.status_reporter.as_ref());
+                        emit_error_log_from_fs_error(error);
                     }
                     continue;
                 }
             }
             Err(e) => {
-                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
 
                 continue;
             }
@@ -466,7 +476,7 @@ pub async fn resolve_models(
                 "Invalid access type '{}' — must be one of: private, protected, public",
                 raw,
             );
-            emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            emit_error_log_from_fs_error(*err);
         }
 
         // Iterate over metrics and construct the dependencies
@@ -482,7 +492,7 @@ pub async fn resolve_models(
         let mut columns = process_columns(
             properties.columns.as_ref(),
             model_config.meta.clone(),
-            model_config.tags.clone().map(|tags| tags.into()),
+            model_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
         let materialized = model_config.materialized.clone();
 
@@ -508,34 +518,72 @@ pub async fn resolve_models(
                 format!(
                     "Constraint types are not supported for {materialized} materializations and will be ignored.  Set 'warn_unsupported: false' on this constraint to ignore this warning."
                 ),
-                arg.io.status_reporter.as_ref(),
             );
+        }
+
+        if matches!(materialized, DbtMaterialization::Incremental)
+            && model_config
+                .contract
+                .as_ref()
+                .is_some_and(|contract| contract.enforced)
+            && !matches!(
+                model_config.on_schema_change,
+                Some(OnSchemaChange::AppendNewColumns) | Some(OnSchemaChange::Fail)
+            )
+        {
+            let osc_str = match model_config.on_schema_change.as_ref() {
+                None | Some(OnSchemaChange::Ignore) => "ignore",
+                Some(OnSchemaChange::SyncAllColumns) => "sync_all_columns",
+                _ => "unknown",
+            };
+            let err = fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => dbt_asset.path.clone(),
+                "Invalid value for on_schema_change: {}. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns' or 'fail'",
+                osc_str,
+            );
+            emit_error_log_from_fs_error(*err);
+            continue;
         }
 
         let deprecation_date = resolved_versioned.deprecation_date;
 
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
         validate_compute(model_config.compute, &dbt_asset.path)?;
-
-        if model_config.on_error == Some(OnError::Continue) {
-            emit_warn_log_message(
-                ErrorCode::NotYetSupportedOption,
-                "The 'continue' option for on_error is not yet supported in dbt Fusion.",
-                arg.io.status_reporter.as_ref(),
-            );
-        }
+        validate_compute_platform(
+            model_config.alt_compute,
+            &materialized,
+            model_config.catalog_name.as_deref(),
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            dbt_asset.is_python(),
+            &dbt_asset.path,
+        )?;
 
         if let Some(freshness) = &model_config.freshness {
             ModelFreshnessRules::validate(freshness.build_after.as_ref())?;
         }
 
-        let static_analysis = model_config.static_analysis.clone();
+        // A model uses a custom materialization when the macro dbt would
+        // dispatch for its materialization is user-defined — either a novel
+        // name (e.g. `my_incremental`) or a user macro that *shadows* a
+        // built-in name (e.g. `table`/`incremental`). dbt runs the user's
+        // macro in both cases, so Fusion cannot statically analyze the model;
+        // skipping static analysis avoids emitting malformed SQL when the
+        // materialization guards `graph.nodes` introspection behind
+        // `{% if execute %}` (dbt-core#14486).
+        let is_custom_materialization =
+            materialization_resolver.is_custom_materialization(&materialized.to_string());
+        let static_analysis = if is_custom_materialization {
+            Spanned::new(StaticAnalysisKind::Off)
+        } else {
+            model_config.static_analysis.clone()
+        };
         check_node_static_analysis(
             &model_config,
             arg.static_analysis,
             unique_id.as_str(),
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
 
         // Hydrate time_spine from model properties
@@ -587,10 +635,10 @@ pub async fn resolve_models(
             __common_attr__: CommonAttributes {
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.to_owned(),
+                path: DbtPath::from(dbt_asset.path.to_owned()),
                 name_span: dbt_common::Span::default(),
                 original_file_path,
-                patch_path: patch_path.clone(),
+                patch_path: patch_path.as_ref().map(DbtPath::from),
                 unique_id: unique_id.clone(),
                 fqn,
                 // dbt-core: description is always default ''
@@ -604,13 +652,15 @@ pub async fn resolve_models(
                 },
                 tags: model_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: model_config
                     .classifiers
+                    .inner()
                     .clone()
-                    .map(|c| c.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 meta: model_config.meta.clone().unwrap_or_default(),
             },
@@ -734,8 +784,12 @@ pub async fn resolve_models(
                     .try_into()
                     .expect("DbtQuoting -> QuotingConfig conversion"),
                 quoting_ignore_case: model_config.quoting.snowflake_ignore_case.unwrap_or(false),
-                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
-                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis_off_reason: if is_custom_materialization {
+                    Some(StaticAnalysisOffReason::CustomMaterialization)
+                } else {
+                    (*static_analysis == StaticAnalysisKind::Off)
+                        .then_some(StaticAnalysisOffReason::ConfiguredOff)
+                },
                 static_analysis,
                 unrendered_config,
             },
@@ -763,8 +817,10 @@ pub async fn resolve_models(
                 state: model_config.state.clone(),
                 event_time: model_config.event_time.clone(),
                 catalog_name: model_config.catalog_name.clone(),
+                alt_compute: model_config.alt_compute,
                 table_format: model_config.table_format.clone(),
                 sync: model_config.sync.clone(),
+                compiled_code: None,
             },
             __adapter_attr__: AdapterAttr::from_config_and_dialect(
                 &model_config.__warehouse_specific_config__,
@@ -813,7 +869,7 @@ pub async fn resolve_models(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
-                emit_error_log_from_fs_error(&err_with_loc, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(err_with_loc);
             }
         }
 
@@ -890,7 +946,7 @@ pub async fn resolve_models(
                 "Unused schema.yml entry for model '{}'",
                 model_name,
             );
-            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            emit_warn_log_from_fs_error(*err);
         }
     }
 
@@ -915,7 +971,7 @@ pub async fn resolve_models(
             if errs.is_empty() {
                 return Err(err);
             }
-            emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            emit_error_log_from_fs_error(*err);
         }
     }
 
@@ -952,8 +1008,7 @@ pub async fn resolve_models(
 ///   - `columns` -> `process_versioned_columns` (include/exclude merge)
 ///   - `config`  -> `VersionInfo.version_config` (deep merge)
 ///   - `meta`    -> top-level only, no per-version semantics
-///   - `docs`, `data_tests` -> not yet wired (flow through other pipelines;
-///     see follow-up issues)
+///   - `data_tests` -> not yet wired (flow through other pipelines)
 struct ResolvedVersionedFields {
     description: String,
     constraints: Vec<ModelConstraint>,
@@ -1002,7 +1057,8 @@ fn resolve_versioned_fields(
         version_match.and_then(|v| v.deprecation_date.clone())
     } else {
         properties.deprecation_date.clone()
-    };
+    }
+    .map(|raw| dbt_schemas::schemas::common::normalize_deprecation_date(&raw));
 
     // dbt-core: `unparsed_version.access or target.access`. Empty string is
     // falsy in Python -> fall through to the top-level (config) value.
@@ -1050,7 +1106,7 @@ fn process_versioned_columns(
             let mut versioned_columns = process_columns(
                 Some(&column_map),
                 model_config.meta.clone(),
-                model_config.tags.clone().map(|tags| tags.into()),
+                model_config.tags.inner().clone().map(|tags| tags.into()),
             )?;
 
             if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
@@ -1137,14 +1193,14 @@ fn process_python_models(
         let stmts = match parse_python(&source, &python_asset.path) {
             Ok(stmts) => stmts,
             Err(e) => {
-                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
                 continue;
             }
         };
 
         // Validate Python model structure (def model(dbt, session): ...)
         if let Err(e) = validate_python_model(&python_asset.path, &stmts) {
-            emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+            emit_error_log_from_fs_error(*e);
             continue;
         }
 
@@ -1157,13 +1213,12 @@ fn process_python_models(
             &source,
             &stmts,
             checksum,
-            &arg.io,
             dependency_package_name,
             Some(python_asset.path.clone()),
         ) {
             Ok(info) => info,
             Err(e) => {
-                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
                 continue;
             }
         };
@@ -1186,7 +1241,7 @@ fn process_python_models(
         ) {
             Ok(config) => config,
             Err(err) => {
-                emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*err);
                 continue;
             }
         };
@@ -1250,14 +1305,19 @@ fn extract_model_properties(
         // Consume the schema_value by replacing it with null
         // This marks the entry as "used" to prevent unused warnings
         let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
+        let mut base_ctx = base_ctx.clone();
+        base_ctx.insert(
+            CURRENT_PATH.to_string(),
+            minijinja::Value::from(mpe.relative_path.to_string_lossy().to_string()),
+        );
         let properties = dbt_jinja_utils::serde::into_typed_with_jinja::<ModelProperties, _>(
             &arg.io,
             schema_value,
             false,
             env,
-            base_ctx,
+            &base_ctx,
             &[],
-            dependency_package_name_from_ctx(env, base_ctx),
+            dependency_package_name_from_ctx(env, &base_ctx),
             true,
         )?;
         return Ok((Some(properties), Some(mpe.relative_path.clone())));
@@ -1266,11 +1326,7 @@ fn extract_model_properties(
 }
 
 /// Warn when config.get() accesses keys that exist in config.meta
-fn check_config_get_on_meta_keys(
-    config: &ResolvedModelConfig,
-    path: &Path,
-    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
-) {
+fn check_config_get_on_meta_keys(config: &ResolvedModelConfig, path: &Path) {
     let Some(meta) = &config.meta else {
         return;
     };
@@ -1278,18 +1334,15 @@ fn check_config_get_on_meta_keys(
         return;
     };
     for key in config_keys.iter().filter(|key| meta.contains_key(*key)) {
-        emit_warn_log_from_fs_error(
-            &fs_err!(
-                code => ErrorCode::Generic,
-                loc => path.to_path_buf(),
-                "The key '{}' was accessed using dbt.config.get('{}'), \
-                 but was detected as a custom config under 'meta'. \
-                 Please use dbt.config.meta_get('{}') instead of dbt.config.get('{}') \
-                 to access the custom config value.",
-                key, key, key, key
-            ),
-            status_reporter,
-        );
+        emit_warn_log_from_fs_error(*fs_err!(
+            code => ErrorCode::Generic,
+            loc => path.to_path_buf(),
+            "The key '{}' was accessed using dbt.config.get('{}'), \
+            but was detected as a custom config under 'meta'. \
+            Please use dbt.config.meta_get('{}') instead of dbt.config.get('{}') \
+            to access the custom config value.",
+            key, key, key, key
+        ));
     }
 }
 
@@ -1365,11 +1418,7 @@ fn merge_python_config(
     );
 
     if let Some(spanned) = pre_defaults_config.static_analysis {
-        crate::validation::warn_python_static_analysis(
-            spanned.into_inner(),
-            &unique_id,
-            arg.io.status_reporter.as_ref(),
-        );
+        crate::validation::warn_python_static_analysis(spanned.into_inner(), &unique_id);
     }
 
     check_node_static_analysis(
@@ -1377,14 +1426,9 @@ fn merge_python_config(
         arg.static_analysis,
         &unique_id,
         dependency_package_name,
-        arg.io.status_reporter.as_ref(),
     );
 
-    check_config_get_on_meta_keys(
-        &merged_config,
-        &python_asset.path,
-        arg.io.status_reporter.as_ref(),
-    );
+    check_config_get_on_meta_keys(&merged_config, &python_asset.path);
 
     let mat = merged_config.materialized.clone();
     if mat != DbtMaterialization::Table && mat != DbtMaterialization::Incremental {

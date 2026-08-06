@@ -234,7 +234,7 @@ create or replace iceberg table {{ relation }}
     {%- endif %}
     {{ optional('external_volume', catalog_relation.external_volume, "'") }}
     catalog = 'SNOWFLAKE'  -- required, and always SNOWFLAKE for built-in Iceberg tables
-    base_location = '{{ catalog_relation.base_location }}'
+    {{ optional('base_location', catalog_relation.base_location, "'") }}
     {% if partition_by_string -%} partition by ({{ partition_by_string }}) {%- endif %}
     {{ optional('storage_serialization_policy', catalog_relation.storage_serialization_policy, "'")}}
     {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}

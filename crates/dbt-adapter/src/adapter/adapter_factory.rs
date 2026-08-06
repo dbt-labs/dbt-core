@@ -39,7 +39,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Salesforce => Backend::Salesforce,
         AdapterType::Spark => Backend::Spark,
         AdapterType::DuckDB => Backend::DuckDB,
-        AdapterType::Fdcs => Backend::Fdcs,
+        AdapterType::Alt => Backend::Alt,
         AdapterType::Fabric => Backend::SQLServer,
         AdapterType::ClickHouse => Backend::ClickHouse,
         AdapterType::Exasol => Backend::Exasol,
@@ -74,10 +74,8 @@ pub trait AdapterFactory: Send + Sync {
         threads: Option<usize>,
     ) -> FsResult<Arc<Adapter>>;
 
-    /// Return the statement splitter used by this factory.
     fn stmt_splitter(&self) -> Arc<dyn StmtSplitter>;
 
-    /// Create a relation from a InternalDbtNode
     fn create_relation_from_node(
         &self,
         node: &dyn InternalDbtNodeAttributes,
@@ -169,7 +167,6 @@ impl AdapterFactory for DefaultAdapterFactory {
 
         let adapter_impl = Arc::new(AdapterImpl::new(engine, schema_cache));
 
-        // Create adapter with appropriate time machine mode
         let adapter: Arc<Adapter> = Arc::new(Adapter::new(adapter_impl, None, token));
         Ok(adapter)
     }
@@ -178,7 +175,6 @@ impl AdapterFactory for DefaultAdapterFactory {
         Arc::new(crate::stmt_splitter::DefaultStmtSplitter {})
     }
 
-    /// create a relation from a InternalDbtNode
     fn create_relation_from_node(
         &self,
         node: &dyn InternalDbtNodeAttributes,

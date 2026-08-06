@@ -10,6 +10,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fmt;
+use std::io::Write;
 use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
@@ -172,35 +173,99 @@ impl CliParser {
             .help_template(CLI_HELP_TEMPLATE)
     }
 
+    /// Key used for the machine-readable `--format json --version` output, e.g.
+    /// `"dbt-fusion"` -> `"fusion"`, `"dbt-core"` -> `"core"`.
+    fn version_json_key(&self) -> &str {
+        self.command_name
+            .strip_prefix("dbt-")
+            .unwrap_or(self.command_name)
+    }
+
+    pub fn version_json(&self) -> String {
+        serde_json::json!({ self.version_json_key(): self.version }).to_string()
+    }
+
+    fn version_json_error(&self) -> clap::Error {
+        clap::Error::raw(clap::error::ErrorKind::DisplayVersion, self.version_json())
+    }
+
+    fn args_request_json_version<I, T>(itr: I) -> bool
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<OsStr>,
+    {
+        let mut version = false;
+        let mut json_format = false;
+        let mut expect_format_value = false;
+
+        for arg in itr.into_iter().skip(1) {
+            let arg = arg.as_ref();
+
+            if expect_format_value {
+                if arg != OsStr::new("json") {
+                    return false;
+                }
+                json_format = true;
+                expect_format_value = false;
+            } else if arg == OsStr::new("--version") {
+                version = true;
+            } else if arg == OsStr::new("--format") || arg == OsStr::new("--output") {
+                expect_format_value = true;
+            } else if arg == OsStr::new("--format=json") || arg == OsStr::new("--output=json") {
+                json_format = true;
+            } else {
+                return false;
+            }
+        }
+
+        version && json_format && !expect_format_value
+    }
+
+    pub fn json_version_for_args<I, T>(&self, itr: I) -> Option<String>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<OsStr>,
+    {
+        Self::args_request_json_version(itr).then(|| self.version_json())
+    }
+
+    pub fn print_json_version_and_exit_for_args<I, T>(&self, itr: I)
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<OsStr>,
+    {
+        if let Some(version) = self.json_version_for_args(itr) {
+            let mut stdout = std::io::stdout().lock();
+            let _ = writeln!(stdout, "{version}");
+            let _ = stdout.flush();
+            std::process::exit(0);
+        }
+    }
+
     fn format_error(&self, err: clap::Error) -> clap::Error {
         let mut cmd = self.app();
         err.format(&mut cmd)
     }
 
     /// Write shell completion scripts for the given shell to `writer`.
-    pub fn write_completions<W: std::io::Write>(&self, shell: Shell, writer: &mut W) {
+    pub fn write_completions<W: Write>(&self, shell: Shell, writer: &mut W) {
         clap_complete::generate(shell, &mut self.app(), "dbt", writer);
     }
 
     /// Parse from `std::env::args_os()`, [exit][Error::exit] on error.
     pub fn parse(&self) -> Box<Cli> {
-        let mut matches = self.app().get_matches();
-        let res = self
-            .try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err));
-        match res {
-            Ok(s) => Box::new(s),
+        let args = env::args_os().collect::<Vec<_>>();
+        self.print_json_version_and_exit_for_args(&args);
+
+        match self.try_parse_from(args) {
+            Ok(s) => s,
             Err(e) => e.exit(),
         }
     }
 
     /// Parse from `std::env::args_os()`, return Err on error.
     pub fn try_parse(&self) -> Result<Box<Cli>, clap::Error> {
-        let mut matches = self.app().try_get_matches()?;
-        let cli = self
-            .try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err))?;
-        Ok(Box::new(cli))
+        self.try_parse_from(env::args_os())
     }
 
     /// Parse from iterator, [exit][clap::Error::exit] on error.
@@ -209,12 +274,11 @@ impl CliParser {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        let mut matches = self.app().get_matches_from(itr);
-        let res = self
-            .try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err));
-        match res {
-            Ok(s) => Box::new(s),
+        let args = itr.into_iter().collect::<Vec<_>>();
+        self.print_json_version_and_exit_for_args(args.iter().cloned().map(Into::into));
+
+        match self.try_parse_from(args) {
+            Ok(s) => s,
             Err(e) => e.exit(),
         }
     }
@@ -225,7 +289,12 @@ impl CliParser {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        let mut matches = self.app().try_get_matches_from(itr)?;
+        let args = itr.into_iter().collect::<Vec<_>>();
+        if Self::args_request_json_version(args.iter().cloned().map(Into::into)) {
+            return Err(self.version_json_error());
+        }
+
+        let mut matches = self.app().try_get_matches_from(args)?;
         let cli = self
             .try_parse_from_arg_matches_mut(&mut matches)
             .map_err(|err| self.format_error(err))?;
@@ -297,7 +366,9 @@ got {:?}, expected an instance of {}",
     pub fn is_project_command(&self) -> bool {
         use CoreCommand::*;
         match &self.command {
-            Command::Core(Man(_) | Init(_) | Docs(_) | Login(_) | Completions(_)) => {
+            Command::Core(
+                Man(_) | Init(_) | Docs(_) | Login(_) | State(_) | Completions(_) | Internal(_),
+            ) => {
                 // These commands do not require a project directory
                 false
             }
@@ -310,6 +381,8 @@ got {:?}, expected an instance of {}",
     }
 
     pub fn to_eval_args(&self, system_arg: SystemArgs) -> FsResult<EvalArgs> {
+        validate_manage_state_env()?;
+
         use CoreCommand::*;
         let common_args = self.common_args();
         // Determine the input and output directories based on the command.
@@ -346,7 +419,9 @@ got {:?}, expected an instance of {}",
                 Retry(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Docs(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Login(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                State(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Completions(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                Internal(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
             },
             Command::Extension(ext_cmd) => ext_cmd.to_eval_args(&common_args, system_arg)?,
         };
@@ -406,7 +481,9 @@ got {:?}, expected an instance of {}",
                 Retry(args) => args.common_args.phase.clone().unwrap_or(Phases::All),
                 Docs(_args) => unreachable!("Docs command does not need a phase"),
                 Login(_args) => unreachable!("Login command does not need a phase"),
+                State(_args) => unreachable!("State command does not need a phase"),
                 Completions(_args) => unreachable!("Completions command does not need a phase"),
+                Internal(_args) => unreachable!("Internal command does not need a phase"),
             },
             Command::Extension(ext_cmd) => ext_cmd.stage(),
         }
@@ -563,11 +640,11 @@ pub struct CompileArgs {
     pub inline: Option<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
@@ -585,6 +662,18 @@ pub struct CompileArgs {
     /// Drop incremental models and fully recalculate incremental tables.
     #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), short = 'f', env = "DBT_FULL_REFRESH")]
     pub full_refresh: bool,
+
+    #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), env = "DBT_INFER_SCHEMAS", help = "Bind without a catalog; assume referenced tables/columns exist and infer schemas from usage")]
+    pub infer_schemas: bool,
+
+    #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), env = "DBT_SKIP_TYPE_CHECKING", help = "Bind against the catalog but skip type checking/inference")]
+    pub skip_type_checking: bool,
+
+    #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), env = "DBT_SHOW_SOURCES", help = "With --infer-schemas, print inferred column-to-source lineage at the end of the run")]
+    pub show_sources: bool,
+
+    #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), env = "DBT_RESOLVE_AMBIGUOUS_COLS", help = "With --infer-schemas, interactively resolve ambiguous column-to-table attributions at the end of the run")]
+    pub resolve_ambiguous_cols: bool,
 
     /// Use the samples as given in this YAML/JSON file.
     #[arg(
@@ -612,6 +701,10 @@ impl CompileArgs {
             Some(StaticAnalysisKind::Off)
         };
         eval_args.full_refresh = self.full_refresh;
+        eval_args.infer_schemas = self.infer_schemas;
+        eval_args.skip_type_checking = self.skip_type_checking;
+        eval_args.show_sources = self.show_sources;
+        eval_args.resolve_ambiguous_cols = self.resolve_ambiguous_cols;
         eval_args.format = self.output.unwrap_or(DEFAULT_FORMAT);
         if let Some(resource_type) = &self.resource_type {
             eval_args.resource_types = resource_type.clone();
@@ -619,6 +712,12 @@ impl CompileArgs {
         if let Some(exclude_resource_type) = &self.exclude_resource_type {
             eval_args.exclude_resource_types = exclude_resource_type.clone();
         }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            false,
+            &RunCacheMode::ReadWrite,
+        );
 
         eval_args
     }
@@ -728,11 +827,11 @@ pub struct ShowArgs {
     pub inline: Option<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
@@ -793,6 +892,12 @@ impl ShowArgs {
         if let Some(exclude_resource_type) = &self.exclude_resource_type {
             eval_args.exclude_resource_types = exclude_resource_type.clone();
         }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            false,
+            &RunCacheMode::ReadWrite,
+        );
         eval_args
     }
 }
@@ -850,9 +955,17 @@ pub struct TestArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Enable optimizations (testaggregation, testreuse)
-    #[arg(long, num_args(0..), hide = true, help = "Enable optimizations [options: testaggregation, testreuse]\n")]
-    pub optimize_tests: Vec<OptimizeTestsOptions>,
+    /// Aggregate compatible generic tests.
+    #[arg(long, hide = true)]
+    pub aggregate_tests: bool,
+
+    /// Select nodes of a specific type;
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
+    pub resource_type: Option<Vec<ClapResourceType>>,
+
+    /// Exclude nodes of a specific type;
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
+    pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -894,8 +1007,19 @@ pub struct TestArgs {
 impl TestArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.optimize_tests = self.optimize_tests.iter().cloned().collect();
-        eval_args.resource_types = vec![ClapResourceType::Test, ClapResourceType::UnitTest];
+        if self.aggregate_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestAggregation);
+        }
+        if let Some(resource_type) = &self.resource_type {
+            eval_args.resource_types = resource_type.clone();
+        } else {
+            eval_args.resource_types = vec![ClapResourceType::Test, ClapResourceType::UnitTest];
+        }
+        if let Some(exclude_resource_type) = &self.exclude_resource_type {
+            eval_args.exclude_resource_types = exclude_resource_type.clone();
+        }
         configure_run_cache(
             &mut eval_args,
             &self.common_args,
@@ -916,16 +1040,20 @@ pub struct BuildArgs {
     pub common_args: CommonArgs,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
-    /// Enable optimizations (testaggregation, testreuse)
-    #[arg(long, num_args(0..), hide = true, help = "Enable optimizations [options: testaggregation, testreuse]\n")]
-    pub optimize_tests: Vec<OptimizeTestsOptions>,
+    /// Aggregate compatible generic tests.
+    #[arg(long, hide = true)]
+    pub aggregate_tests: bool,
+
+    /// Skip data tests that are proven redundant.
+    #[arg(long, hide = true)]
+    pub skip_redundant_tests: bool,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -976,7 +1104,16 @@ pub struct BuildArgs {
 impl BuildArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.optimize_tests = self.optimize_tests.iter().cloned().collect();
+        if self.aggregate_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestAggregation);
+        }
+        if self.skip_redundant_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestStaticAnalysis);
+        }
         eval_args.phase = Phases::All;
         // Enable task cache
         if let Some(resource_type) = &self.resource_type {
@@ -1032,11 +1169,11 @@ pub struct ListArgs {
     pub output_keys: Vec<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 }
 
@@ -1160,7 +1297,7 @@ fn configure_run_cache(
         return;
     }
 
-    let manage_state = common_args.get_manage_state(&eval_args.io.in_dir);
+    let manage_state = common_args.get_manage_state(&eval_args.io.in_dir, false);
     if common_args.task_cache_url != NOOP || manage_state {
         eval_args.run_cache_service = manage_state;
         eval_args.run_cache_mode = if force_node_selection {
@@ -1271,6 +1408,77 @@ impl LoginArgs {
 pub enum LoginSubcommand {
     /// Show current authentication status
     Status,
+}
+
+/// Undocumented plumbing commands, not intended for direct end-user use.
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct InternalArgs {
+    #[command(subcommand)]
+    pub command: InternalCommand,
+}
+
+impl InternalArgs {
+    pub fn common_args(&self) -> &CommonArgs {
+        match &self.command {
+            InternalCommand::GetDistributionInfo(args) => &args.common_args,
+        }
+    }
+
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        self.common_args().to_eval_args(arg, in_dir, out_dir)
+    }
+}
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+#[command()]
+pub enum InternalCommand {
+    /// Resolve release-channel and distribution info for a dbt installation
+    GetDistributionInfo(GetDistributionInfoArgs),
+}
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct GetDistributionInfoArgs {
+    /// Path to a dbt executable to inspect. Defaults to the currently running
+    /// process. Mutually exclusive with `--all`.
+    #[arg(value_name = "PATH", conflicts_with = "all")]
+    pub path: Option<PathBuf>,
+
+    /// Print distribution info for every dbt executable found on PATH.
+    /// Mutually exclusive with the PATH argument.
+    #[arg(short = 'a', long, conflicts_with = "path")]
+    pub all: bool,
+
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+}
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct StateArgs {
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+
+    #[command(subcommand)]
+    pub subcommand: StateSubcommand,
+}
+
+impl StateArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        self.common_args.to_eval_args(arg, in_dir, out_dir)
+    }
+}
+
+#[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum StateSubcommand {
+    Explain(StateExplainArgs),
+}
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct StateExplainArgs {
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    #[arg(short = 'l', long = "log-file")]
+    pub log_file: Option<PathBuf>,
 }
 
 impl ManArgs {
@@ -1400,6 +1608,16 @@ pub struct CommonArgs {
         hide_short_help = true
     )]
     pub target: Option<String>,
+
+    /// The profile output to use for models on the alternate compute target
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_X_ALT_TARGET",
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
+    pub x_alt_target: Option<String>,
 
     /// The directory to load the dbt project from
     #[arg(
@@ -1591,11 +1809,14 @@ pub struct CommonArgs {
 
     /// Enable full metadata output: incremental parse cache, epoch parquet state, and no JSON
     /// artifacts. Implies --partial-parse --no-write-json.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
+    ///
+    /// Not user-facing: kept for backwards compatibility with programmatic callers. Use
+    /// --write-index instead.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), hide = true)]
     pub write_metadata: bool,
 
-    /// Write parquet index to target/index/. Implies --write-metadata so that epoch parquet
-    /// is produced, then converts metadata → index parquet via the snapshot writer.
+    /// Write the parquet index to target/index/. With --static-analysis strict, also writes
+    /// column schemas and column-level lineage.
     #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_index: bool,
 
@@ -1620,8 +1841,8 @@ pub struct CommonArgs {
     pub index_dir: Option<PathBuf>,
 
     /// Compute and write column-level lineage into compile/cll parquet.
-    /// Requires --write-metadata and --static-analysis strict. Omitting this flag
-    /// skips the expensive CLL graph build, keeping --write-metadata fast.
+    /// Requires --write-index and --static-analysis strict. Omitting this flag
+    /// skips the expensive CLL graph build, keeping index writing fast.
     #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_lineage: bool,
 
@@ -1852,6 +2073,12 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_EXPERIMENTAL_PARSER", value_parser = BoolishValueParser::new(), hide = true)]
     pub no_use_experimental_parser: bool,
 
+    // Use the v2 parser. Accepted as a no-op for compatibility; fusion always uses its own parser.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub use_v2_parser: bool,
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_use_v2_parser: bool,
+
     #[arg(global = true, long, default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_USE_FAST_TEST_EDGES", value_parser = BoolishValueParser::new(), hide = true)]
     pub use_fast_test_edges: bool,
     #[arg(global = true, long, default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_USE_FAST_TEST_EDGES", value_parser = BoolishValueParser::new(), hide = true)]
@@ -1917,7 +2144,7 @@ pub struct CommonArgs {
     pub task_cache_url: String,
 
     /// Enable service-backed dbt State without legacy task-cache coordination
-    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, env = MANAGE_STATE_ENV, value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
+    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub manage_state: bool,
     /// Disable service-backed dbt State
     #[arg(global = true, long = "no-manage-state", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
@@ -2164,6 +2391,27 @@ fn manage_state_from_yaml(path: &Path) -> Option<bool> {
     file.flags.and_then(|flags| flags.manage_state)
 }
 
+fn parse_manage_state_env(value: Option<&OsStr>) -> FsResult<Option<bool>> {
+    let Some(value) = value.filter(|value| !value.to_string_lossy().trim().is_empty()) else {
+        return Ok(None);
+    };
+    BoolishValueParser::new()
+        .parse_ref(&clap::Command::new("dbt-fusion"), None, value)
+        .map(Some)
+        .map_err(|_| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Invalid value for {}: '{}'. Expected a boolean.",
+                MANAGE_STATE_ENV,
+                value.to_string_lossy()
+            )
+        })
+}
+
+fn validate_manage_state_env() -> FsResult<()> {
+    parse_manage_state_env(env::var_os(MANAGE_STATE_ENV).as_deref()).map(|_| ())
+}
+
 fn maximum_seed_size_mib_from_yaml(path: &Path) -> Option<u64> {
     let content = stdfs::read_to_string(path).ok()?;
     let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
@@ -2186,11 +2434,14 @@ fn user_settings_path() -> Option<PathBuf> {
 }
 
 impl CommonArgs {
-    pub fn get_manage_state(&self, project_dir: &Path) -> bool {
+    /// `default` applies only when neither the flags, `DBT_ENGINE_MANAGE_STATE`,
+    /// `dbt_project.yml`, nor the user settings say anything.
+    pub fn get_manage_state(&self, project_dir: &Path, default: bool) -> bool {
         self.get_manage_state_with(
             project_dir,
             env::var_os(MANAGE_STATE_ENV),
             user_settings_path(),
+            default,
         )
     }
 
@@ -2200,11 +2451,14 @@ impl CommonArgs {
             .unwrap_or(DEFAULT_MAXIMUM_SEED_SIZE_MIB)
     }
 
+    /// Precedence: CLI flag, then an explicit config opt-out, then env var, then
+    /// config. Callers get an authoritative answer and must not re-read the env.
     fn get_manage_state_with(
         &self,
         project_dir: &Path,
         manage_state_env: Option<OsString>,
         user_settings_path: Option<PathBuf>,
+        default: bool,
     ) -> bool {
         if self.no_manage_state {
             return false;
@@ -2212,14 +2466,18 @@ impl CommonArgs {
         if self.manage_state {
             return true;
         }
-        if let Some(value) = manage_state_env {
-            return BoolishValueParser::new()
-                .parse_ref(&clap::Command::new("dbt-fusion"), None, value.as_ref())
-                .unwrap_or(self.manage_state);
+
+        let configured = manage_state_from_yaml(&project_dir.join(DBT_PROJECT_YML))
+            .or_else(|| user_settings_path.and_then(|path| manage_state_from_yaml(&path)));
+
+        if configured == Some(false) {
+            return false;
         }
-        manage_state_from_yaml(&project_dir.join(DBT_PROJECT_YML))
-            .or_else(|| user_settings_path.and_then(|path| manage_state_from_yaml(&path)))
-            .unwrap_or(false)
+
+        let env_value = parse_manage_state_env(manage_state_env.as_deref())
+            .ok()
+            .flatten();
+        env_value.or(configured).unwrap_or(default)
     }
 
     pub fn get_warn_error(&self) -> Option<bool> {
@@ -2323,6 +2581,7 @@ impl CommonArgs {
             lock: false,       // comes from DepsArgs
             profile: self.profile.clone(),
             target: self.target.clone(),
+            x_alt_target: self.x_alt_target.clone(),
             update_deps: false,
             vars: self.vars.clone().unwrap_or_default(),
             phase: self.phase.clone().unwrap_or(Phases::All),
@@ -2420,6 +2679,10 @@ impl CommonArgs {
             task_cache_url: self.task_cache_url.clone(),
             static_analysis: None,
             full_refresh: false,
+            infer_schemas: false,
+            skip_type_checking: false,
+            show_sources: false,
+            resolve_ambiguous_cols: false,
             store_failures: self.store_failures,
             check_all: false,
             sample_renaming: BTreeMap::new(),
@@ -2581,6 +2844,12 @@ impl InitArgs {
             favor_state: self.common_args.favor_state,
             phase: Phases::Debug,
             send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
+            // Propagate profile-resolution inputs so post-init validation reads the same
+            // profiles.yml the setup step used (e.g. --profiles-dir / DBT_PROFILES_DIR).
+            profiles_dir: self.common_args.profiles_dir.clone(),
+            profile: self.common_args.profile.clone(),
+            target: self.common_args.target.clone(),
+            vars: self.common_args.vars.clone().unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -2628,6 +2897,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
         },
         from_main: true,
+        exit_process_on_panic: true,
 
         target: common_args.target,
         num_threads: common_args.threads,
@@ -2670,6 +2940,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
         },
         from_main: false,
+        exit_process_on_panic: true,
         target: common_args.target,
         num_threads: common_args.threads,
         no_parallel: common_args.no_parallel,
@@ -2680,16 +2951,26 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
 mod tests {
     use super::*;
 
+    struct NoopParser;
+
+    impl ExtensionCommandParser for NoopParser {
+        fn has_subcommand(&self, _name: &str) -> bool {
+            false
+        }
+    }
+
     fn get_manage_state_with_env(
         common_args: &CommonArgs,
         project_dir: &Path,
         env_value: Option<&str>,
         user_settings_path: Option<PathBuf>,
+        default: bool,
     ) -> bool {
         common_args.get_manage_state_with(
             project_dir,
             env_value.map(OsString::from),
             user_settings_path,
+            default,
         )
     }
 
@@ -2702,7 +2983,22 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            None
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn manage_state_uses_supplied_default() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            None,
+            true
         ));
     }
 
@@ -2720,7 +3016,8 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            None
+            None,
+            false
         ));
     }
 
@@ -2737,7 +3034,8 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            Some(user_settings)
+            Some(user_settings),
+            false
         ));
     }
 
@@ -2753,7 +3051,8 @@ mod tests {
             &common_args,
             project_dir.path(),
             Some("false"),
-            None
+            None,
+            false
         ));
     }
 
@@ -2774,8 +3073,227 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            None
+            None,
+            false
         ));
+    }
+
+    /// The dbt platform path: the injected env var alone still enables dbt State.
+    #[test]
+    fn env_true_enables_manage_state() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            None,
+            false
+        ));
+    }
+
+    /// dbt platform injects `DBT_ENGINE_MANAGE_STATE=true` on production
+    /// deployments, so an explicit opt-out has to beat it or users have no way to
+    /// turn dbt State off.
+    #[test]
+    fn no_manage_state_overrides_env_true() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs {
+            no_manage_state: true,
+            ..Default::default()
+        };
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn project_flag_false_overrides_env_true() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: false\n",
+        )
+        .unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn user_settings_false_overrides_env_true() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let home_dir = tempfile::tempdir().unwrap();
+        stdfs::create_dir_all(home_dir.path().join(".dbt")).unwrap();
+        let user_settings = home_dir.path().join(USER_SETTINGS_YML);
+        stdfs::write(&user_settings, "flags:\n  manage_state: false\n").unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            Some(user_settings),
+            false
+        ));
+    }
+
+    /// Guards the clap wiring itself: if `manage_state` regains `env = ...`, the env
+    /// var becomes indistinguishable from the flag and a config opt-out stops working.
+    #[test]
+    fn manage_state_flag_is_not_populated_from_env() {
+        use clap::CommandFactory;
+
+        let reads_env = CompileArgs::command()
+            .get_arguments()
+            .find(|arg| arg.get_id() == "manage_state")
+            .map(|arg| arg.get_env().is_some());
+
+        assert_eq!(
+            reads_env,
+            Some(false),
+            "--manage-state must not read DBT_ENGINE_MANAGE_STATE via clap"
+        );
+    }
+
+    #[test]
+    fn invalid_env_value_is_rejected() {
+        let err = parse_manage_state_env(Some(OsStr::new("treu"))).unwrap_err();
+
+        assert!(
+            err.to_string().contains(MANAGE_STATE_ENV) && err.to_string().contains("treu"),
+            "error must name the variable and the bad value, got: {err}"
+        );
+    }
+
+    #[test]
+    fn valid_and_unset_env_values_parse() {
+        assert_eq!(parse_manage_state_env(None).unwrap(), None);
+        assert_eq!(
+            parse_manage_state_env(Some(OsStr::new("   "))).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_manage_state_env(Some(OsStr::new("true"))).unwrap(),
+            Some(true)
+        );
+        assert_eq!(
+            parse_manage_state_env(Some(OsStr::new("false"))).unwrap(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn empty_env_value_is_treated_as_unset() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+
+        assert!(get_manage_state_with_env(
+            &CommonArgs::default(),
+            project_dir.path(),
+            Some("   "),
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn project_flag_true_beats_user_settings_false() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+        let home_dir = tempfile::tempdir().unwrap();
+        stdfs::create_dir_all(home_dir.path().join(".dbt")).unwrap();
+        let user_settings = home_dir.path().join(USER_SETTINGS_YML);
+        stdfs::write(&user_settings, "flags:\n  manage_state: false\n").unwrap();
+
+        assert!(get_manage_state_with_env(
+            &CommonArgs::default(),
+            project_dir.path(),
+            None,
+            Some(user_settings),
+            false
+        ));
+    }
+
+    /// An explicit `--manage-state` is the user acting right now, so it still wins
+    /// over a stale project-level opt-out.
+    #[test]
+    fn manage_state_flag_overrides_project_flag_false() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: false\n",
+        )
+        .unwrap();
+        let common_args = CommonArgs {
+            manage_state: true,
+            ..Default::default()
+        };
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn compile_resolves_manage_state_from_project_flags() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+
+        let compile_args = CompileArgs {
+            common_args: CommonArgs {
+                manage_state: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let system_args = SystemArgs {
+            command: FsCommand::Compile,
+            io: IoArgs::default(),
+            from_main: false,
+            exit_process_on_panic: false,
+            num_threads: None,
+            no_parallel: false,
+            target: None,
+        };
+        let eval_args = compile_args.to_eval_args(
+            system_args,
+            project_dir.path(),
+            &project_dir.path().join("target"),
+        );
+
+        assert!(
+            eval_args.run_cache_service,
+            "compile must resolve dbt State like the other auto-defer commands"
+        );
     }
 
     #[test]
@@ -2792,7 +3310,15 @@ mod tests {
             &common_args,
             project_dir.path(),
             Some("false"),
-            None
+            None,
+            false
+        ));
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("false"),
+            None,
+            true
         ));
     }
 
@@ -2804,6 +3330,68 @@ mod tests {
     }
 
     #[test]
+    fn detects_top_level_json_version() {
+        assert!(CliParser::args_request_json_version([
+            "dbt",
+            "--format",
+            "json",
+            "--version"
+        ]));
+        assert!(CliParser::args_request_json_version([
+            "dbt",
+            "--version",
+            "--format=json",
+        ]));
+        assert!(CliParser::args_request_json_version([
+            "dbt",
+            "--output=json",
+            "--version",
+        ]));
+        assert!(!CliParser::args_request_json_version([
+            "dbt",
+            "list",
+            "--format",
+            "json",
+            "--version"
+        ]));
+        assert!(!CliParser::args_request_json_version([
+            "dbt",
+            "--format",
+            "text",
+            "--version"
+        ]));
+    }
+
+    #[test]
+    fn version_json_uses_fusion_key() {
+        let parser = CliParser::new("dbt-fusion", "2.0.0-preview.92", Box::new(NoopParser));
+
+        assert_eq!(parser.version_json(), r#"{"fusion":"2.0.0-preview.92"}"#);
+        assert_eq!(
+            parser.json_version_for_args(["dbt", "--format", "json", "--version"]),
+            Some(r#"{"fusion":"2.0.0-preview.92"}"#.to_string())
+        );
+    }
+
+    #[test]
+    fn version_json_key_derives_from_command_name() {
+        let parser = CliParser::new("dbt-core", "1.9.0", Box::new(NoopParser));
+
+        assert_eq!(parser.version_json(), r#"{"core":"1.9.0"}"#);
+    }
+
+    #[test]
+    fn json_version_returns_display_version_error() {
+        let err = CliParser::new("dbt-fusion", "2.0.0-preview.92", Box::new(NoopParser))
+            .try_parse_from(["dbt", "--format", "json", "--version"])
+            .expect_err("json version should short-circuit parsing");
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::DisplayVersion);
+        assert!(!err.use_stderr());
+        assert_eq!(err.exit_code(), 0);
+    }
+
+    #[test]
     fn non_project_core_commands_do_not_require_a_project() {
         use CoreCommand::*;
         let non_project = [
@@ -2811,9 +3399,16 @@ mod tests {
             Man(ManArgs::default()),
             Docs(DocsArgs::default()),
             Login(LoginArgs::default()),
+            State(StateArgs {
+                common_args: CommonArgs::default(),
+                subcommand: StateSubcommand::Explain(StateExplainArgs::default()),
+            }),
             Completions(CompletionsArgs {
                 shell: Shell::Bash,
                 common_args: CommonArgs::default(),
+            }),
+            Internal(InternalArgs {
+                command: InternalCommand::GetDistributionInfo(GetDistributionInfoArgs::default()),
             }),
         ];
         for command in non_project {
@@ -2975,5 +3570,43 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let args = CommonArgs::default();
         assert!(args.get_send_anonymous_usage_stats_for_project(dir.path()));
+    }
+
+    fn parse_internal_args(args: &[&str]) -> Result<InternalArgs, clap::Error> {
+        InternalArgs::try_parse_from(std::iter::once("internal").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn get_distribution_info_defaults_to_no_path_and_not_all() {
+        let parsed = parse_internal_args(&["get-distribution-info"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert_eq!(args.path, None);
+        assert!(!args.all);
+    }
+
+    #[test]
+    fn get_distribution_info_accepts_a_path() {
+        let parsed = parse_internal_args(&["get-distribution-info", "/some/dbt"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert_eq!(args.path, Some(PathBuf::from("/some/dbt")));
+        assert!(!args.all);
+    }
+
+    #[test]
+    fn get_distribution_info_accepts_all_flag() {
+        let parsed = parse_internal_args(&["get-distribution-info", "--all"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert_eq!(args.path, None);
+        assert!(args.all);
+
+        let parsed = parse_internal_args(&["get-distribution-info", "-a"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert!(args.all);
+    }
+
+    #[test]
+    fn get_distribution_info_path_and_all_are_mutually_exclusive() {
+        let result = parse_internal_args(&["get-distribution-info", "--all", "/some/dbt"]);
+        assert!(result.is_err());
     }
 }

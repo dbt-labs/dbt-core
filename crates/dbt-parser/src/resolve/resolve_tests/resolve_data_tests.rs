@@ -31,6 +31,7 @@ use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::try_read_yml_to_str;
+use dbt_common::path::DbtPath;
 use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
@@ -192,6 +193,36 @@ fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
         });
     }
     None
+}
+
+fn filter_core_builtin_test_macro_dependencies(
+    test_asset: Option<&GenericTestAsset>,
+    macros: &mut Vec<String>,
+) {
+    // This filtering is intentionally not a strictly semantic account of dependencies
+    // in the test macro body. A project-defined test with the same name as a built-in
+    // retains get_where_subquery even when its macro body does not call that helper,
+    // because dbt-core renders the generated model kwarg for every test macro that does
+    // not resolve to the exact built-in unique ID. Keep that behavior for manifest parity.
+    let Some(test_name) = test_asset.and_then(|asset| asset.test_metadata_name.as_deref()) else {
+        return;
+    };
+    let builtin_macro = match test_name {
+        "not_null" => "macro.dbt.test_not_null",
+        "unique" => "macro.dbt.test_unique",
+        _ => return,
+    };
+    let test_macro_suffix = format!(".test_{test_name}");
+    let is_core_builtin_test = macros
+        .iter()
+        .any(|macro_id| macro_id.as_str() == builtin_macro)
+        && !macros.iter().any(|macro_id| {
+            macro_id.as_str() != builtin_macro && macro_id.ends_with(&test_macro_suffix)
+        });
+
+    if is_core_builtin_test {
+        macros.retain(|macro_id| macro_id != "macro.dbt.get_where_subquery");
+    }
 }
 
 fn file_key_name_from_asset(asset: &GenericTestAsset) -> Option<String> {
@@ -358,12 +389,7 @@ pub async fn resolve_data_tests(
                 (None, Some(data_tests)) => Some(data_tests),
                 (None, None) => None,
             };
-            init_project_config(
-                &arg.io,
-                &tests_config,
-                package_quoting,
-                dependency_package_name,
-            )
+            init_project_config(&tests_config, package_quoting, dependency_package_name)
         })?
         .with_resolve_defaults((arg.static_analysis.unwrap_or_default(), arg.store_failures));
 
@@ -373,6 +399,7 @@ pub async fn resolve_data_tests(
             root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
+            uses_snapshot_fqn: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -449,7 +476,7 @@ pub async fn resolve_data_tests(
 
         // Merge column test tags into the top-level config.
         // Reference: https://github.com/dbt-labs/dbt-core/blob/b783c97eff9cf72e6fc43ef93523b8ec7b029583/core/dbt/parser/schema_generic_tests.py#L368
-        let test_tags = test_config.tags.clone().map(|tags| tags.into());
+        let test_tags = test_config.tags.inner().clone().map(|tags| tags.into());
         let column_tags = test_path_to_test_asset
             .get(&dbt_asset.path)
             .map(|asset| asset.column_tags.clone());
@@ -477,8 +504,12 @@ pub async fn resolve_data_tests(
         // depends_on.macros empty. (dbt-core#15308)
         jinja_type_checking_event_listener_factory
             .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
-        let macro_depends_on =
+        let mut macro_depends_on =
             jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
+        filter_core_builtin_test_macro_dependencies(
+            test_path_to_test_asset.get(&dbt_asset.path).copied(),
+            &mut macro_depends_on,
+        );
 
         // Check if this test_name corresponds to any test in our collected tests
         // If so, use the original_file_path from the GenericTestAsset for the fqn construction and original_file_path
@@ -499,7 +530,6 @@ pub async fn resolve_data_tests(
             arg.static_analysis,
             unique_id.as_str(),
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
         validate_compute(test_config.compute, &dbt_asset.path)?;
 
@@ -518,7 +548,7 @@ pub async fn resolve_data_tests(
         let manifest_original_file_path = if is_singular_data_test {
             generated_file_path.clone()
         } else {
-            patch_path.clone()
+            DbtPath::from(patch_path)
         };
 
         // Populate TestMetadata only for generic data tests (not singular .sql tests)
@@ -564,7 +594,7 @@ pub async fn resolve_data_tests(
             __common_attr__: CommonAttributes {
                 name: fqn_name.clone(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.to_owned(),
+                path: DbtPath::from(dbt_asset.path.to_owned()),
                 name_span: dbt_common::Span::default(),
                 // original_file_path is a misnomer for tests, it's the path to the generated sql file
                 original_file_path: generated_file_path,
@@ -674,6 +704,7 @@ pub async fn resolve_data_tests(
                     introspection: IntrospectionKind::None,
                     original_name: test_asset.and_then(|ta| ta.original_name.clone()),
                     group,
+                    state: test_config.state.clone(),
                 }
             },
             __adapter_attr__: AdapterAttr::from_config_and_dialect(
@@ -713,6 +744,18 @@ pub async fn resolve_data_tests(
             &components,
             adapter_type,
         )?;
+
+        // Mirror dbt-core behavior: when the synthesized name was truncated and the user
+        // provided no explicit alias, backfill both config representations with the short
+        // name so manifest config.alias and unrendered_config.alias match core.
+        if test_config.alias.is_none() && test_name != fqn_name {
+            dbt_test.deprecated_config.alias = Some(test_name.clone());
+            dbt_test
+                .__base_attr__
+                .unrendered_config
+                .entry("alias".to_string())
+                .or_insert_with(|| YmlValue::from(test_name.as_str()));
+        }
 
         dbt_test.__common_attr__.raw_code = if is_singular_data_test {
             get_original_file_contents(&arg.io.in_dir, &manifest_original_file_path)

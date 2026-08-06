@@ -42,7 +42,6 @@ pub async fn execute_deps_command(
         cli_warn_error,
         cli_warn_error_options.as_ref(),
         tracing_features,
-        load_args.io.status_reporter.as_ref(),
     )?;
 
     let (packages_install_path, _internal_packages_install_path) = get_packages_install_path(
@@ -89,7 +88,7 @@ pub async fn execute_deps_command(
 /// before the `load_profiles` call.
 fn load_simplified_project_only(arg: &LoadArgs) -> FsResult<DbtProjectSimplified> {
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
-    let raw = value_from_file(&arg.io, &dbt_project_path, false, None)?;
+    let raw = value_from_file(&dbt_project_path, false, None)?;
 
     let env = initialize_load_profile_jinja_environment();
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([

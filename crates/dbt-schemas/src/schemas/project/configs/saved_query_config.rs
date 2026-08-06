@@ -10,13 +10,12 @@ type YmlValue = dbt_yaml::Value;
 
 use dbt_proc_macros::Resolvable;
 
-use crate::{
-    default_to,
-    schemas::{
-        project::{ResolvableConfig, TypedRecursiveConfig, configs::common::default_meta_and_tags},
-        serde::{StringOrArrayOfStrings, bool_or_string_bool},
-    },
+use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::{
+    project::{ResolvableConfig, TypedRecursiveConfig},
+    serde::{StringOrArrayOfStrings, bool_or_string_bool},
 };
+use dbt_proc_macros::DefaultTo;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -49,7 +48,7 @@ impl TypedRecursiveConfig for ProjectSavedQueryConfig {
     }
 }
 
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
+#[derive(Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct SavedQueryConfig {
     pub cache: Option<SavedQueryCache>,
     #[resolved(promote, method = get_enabled_with_default)]
@@ -59,11 +58,8 @@ pub struct SavedQueryConfig {
     pub schema: Option<String>,
     pub group: Option<String>,
     pub meta: Option<IndexMap<String, YmlValue>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
 }
 
 #[skip_serializing_none]
@@ -93,7 +89,7 @@ impl Default for SavedQueryConfig {
             schema: None,
             group: None,
             meta: Some(IndexMap::new()),
-            tags: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![])),
+            tags: Tags(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![]))),
         }
     }
 }
@@ -107,7 +103,7 @@ impl From<ProjectSavedQueryConfig> for SavedQueryConfig {
             schema: config.schema,
             group: config.group,
             meta: config.meta,
-            tags: config.tags,
+            tags: Tags(config.tags),
         }
     }
 }
@@ -121,7 +117,7 @@ impl From<SavedQueryConfig> for ProjectSavedQueryConfig {
             schema: config.schema,
             group: config.group,
             meta: config.meta,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -147,21 +143,6 @@ impl ResolvableConfig<SavedQueryConfig> for SavedQueryConfig {
     }
 
     fn default_to(&mut self, parent: &SavedQueryConfig) {
-        let SavedQueryConfig {
-            cache,
-            enabled,
-            export_as,
-            schema,
-            group,
-            meta,
-            tags,
-        } = self;
-
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused)]
-        let tags = ();
-
-        default_to!(parent, [cache, enabled, export_as, schema, group]);
+        self.default_to_fields(parent);
     }
 }

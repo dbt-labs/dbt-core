@@ -88,7 +88,6 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<Colu
     };
     let mut comments = IndexMap::new();
 
-    // Iterate through rows looking for column information
     for row in describe_extended.rows().into_iter() {
         // Get col_name - if it starts with #, we've reached the end of columns
         if let Ok(col_name_value) = row.get_attr("col_name")
@@ -103,7 +102,6 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<Colu
                 continue;
             }
 
-            // Get the comment for this column (default to empty string if None)
             let comment = if let Ok(comment_value) = row.get_attr("comment") {
                 comment_value.as_str().unwrap_or("").to_string()
             } else {
@@ -125,7 +123,6 @@ fn from_local_config(
 ) -> AdapterResult<ColumnComments> {
     let columns = &relation_config.base().columns;
 
-    // Check if persist_docs.relation is enabled
     let persist = relation_config
         .base()
         .persist_docs
@@ -277,7 +274,6 @@ email,string,\n\
         let config = from_remote_state(&results).unwrap();
 
         assert_eq!(config.value.len(), 3);
-        // All keys should be lowercase
         assert_eq!(config.value.get("id"), Some(&"Primary key".to_string()));
         assert_eq!(config.value.get("name"), Some(&"User name".to_string()));
         assert_eq!(
@@ -298,7 +294,6 @@ email,string,\n\
         let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results).unwrap();
 
-        // Should stop at first # delimiter, so only 'id' should be included
         assert_eq!(config.value.len(), 1);
         assert_eq!(config.value.get("id"), Some(&"Primary key".to_string()));
         assert!(!config.value.contains_key("name"));
@@ -327,7 +322,6 @@ email,string,\n\
         let config = from_remote_state(&results).unwrap();
 
         assert_eq!(config.value.len(), 2);
-        // Should default to empty string when comment column is missing
         assert_eq!(config.value.get("id"), Some(&"".to_string()));
         assert_eq!(config.value.get("name"), Some(&"".to_string()));
     }
@@ -346,11 +340,9 @@ email,string,\n\
         let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results).unwrap();
 
-        // Should only have 2 valid columns, skipping empty and whitespace-only names
         assert_eq!(config.value.len(), 2);
         assert_eq!(config.value.get("id"), Some(&"Primary key".to_string()));
         assert_eq!(config.value.get("name"), Some(&"User name".to_string()));
-        // Should not contain empty column name
         assert!(!config.value.contains_key(""));
     }
 
@@ -371,7 +363,6 @@ email,string,\n\
         let mock_node = create_mock_dbt_model(columns, false);
         let config = from_local_config(&mock_node).unwrap();
 
-        // It should behave as if no config was specified
         assert_eq!(config.value.len(), 0);
     }
 
@@ -434,7 +425,6 @@ email,string,\n\
             .downcast_ref::<ColumnComments>()
             .unwrap();
         assert_eq!(diff_config.value.len(), 1);
-        // Dropped comment gets reset to empty string
         assert_eq!(diff_config.value.get("name"), Some(&"".to_string()));
     }
 }

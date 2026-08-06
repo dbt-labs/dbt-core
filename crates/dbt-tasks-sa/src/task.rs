@@ -7,6 +7,7 @@ use dbt_adapter::sql_types::TypeOps;
 use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_dag::schedule::Schedule;
+use dbt_schemas::schemas::common::ComputePlatform;
 use dbt_schemas::schemas::manifest::DbtSavedQuery;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::schemas::properties::UnitTestOverrides;
@@ -201,6 +202,16 @@ impl RunTaskHooks for DefaultRunTaskHooks {
         Ok(NodeStatus::Errored)
     }
 
+    async fn run_on_alt_compute(
+        &self,
+        _ctx: &mut TaskRunnerCtx,
+        _node: Arc<dyn InternalDbtNodeAttributes>,
+        _task_result: Option<TaskResult>,
+    ) -> FsResult<NodeStatus> {
+        debug_assert!(false, "run_on_alt_compute called");
+        Ok(NodeStatus::Errored)
+    }
+
     async fn did_run_unit_test(
         &self,
         _ctx: &mut TaskRunnerCtx,
@@ -391,7 +402,22 @@ pub trait TasksForNodeFactory: Send + Sync {
                     (_, Execute::Service) => (),
                 }
             } else {
+                // A model configured with a non-`default` `alt_compute`
+                // takes the compute-platform path instead of the default (remote)
+                // one; selection/execution is delegated to the run hook.
+                let alt_compute = nodes
+                    .models
+                    .get(unique_id)
+                    .and_then(|model| model.__model_attr__.alt_compute);
                 match (the_runnable_task, execute) {
+                    (Some(t), Execute::Remote) if alt_compute == Some(ComputePlatform::Alt) => {
+                        runnable = Some(Arc::new(RunTask::new(
+                            t,
+                            next_receiver.take(),
+                            RunExecutionPath::AltCompute,
+                            run_task_hooks,
+                        )) as Arc<dyn Task>);
+                    }
                     (Some(t), Execute::Remote) => {
                         runnable = Some(Arc::new(RunTask::new(
                             t,

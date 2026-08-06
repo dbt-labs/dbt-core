@@ -270,6 +270,57 @@ pub fn sql_split_statements(input: &str, dialect: Option<Dialect>) -> Vec<String
     do_sql_split_statements(sql_buf, dialect)
 }
 
+/// Return the statement whose result is exposed by a Snowflake flow chain.
+///
+/// Snowflake's lexer keeps operators inside comments and quoted values in
+/// single tokens, so they cannot be mistaken for statement separators.
+pub fn snowflake_terminal_flow_statement(input: &str) -> &str {
+    if !input.contains("->>") {
+        return input;
+    }
+
+    #[derive(Clone, Copy)]
+    enum Match {
+        None,
+        Minus(isize),
+        Arrow(isize),
+    }
+
+    let input_stream = InputStream::new(input);
+    let result_start = Arena::with(|arena| {
+        let mut token_stream = UnbufferedTokenStream::new_unbuffered(
+            dbt_lexer_snowflake::Lexer::<_>::new(arena, input_stream),
+        );
+        let tokens = token_stream.token_iter();
+
+        let mut current_match = Match::None;
+        let mut result_start = 0;
+        for token in tokens.filter(|token| token.get_channel() == 0) {
+            if token.get_text() == "->>" {
+                result_start = token.get_stop_index() + 1;
+                current_match = Match::None;
+                continue;
+            }
+
+            current_match = match (current_match, token.get_text()) {
+                (Match::Minus(stop), ">") if token.get_start_index() == stop + 1 => {
+                    Match::Arrow(token.get_stop_index())
+                }
+                (Match::Arrow(stop), ">") if token.get_start_index() == stop + 1 => {
+                    result_start = token.get_stop_index() + 1;
+                    Match::None
+                }
+                (_, "-") => Match::Minus(token.get_stop_index()),
+                (_, "->") => Match::Arrow(token.get_stop_index()),
+                _ => Match::None,
+            };
+        }
+        result_start
+    });
+
+    &input[result_start as usize..]
+}
+
 fn do_sql_split_statements(input: &str, dialect: Option<Dialect>) -> Vec<String> {
     let mut result = vec![];
     for span in sql_find_statement_spans(input, dialect) {

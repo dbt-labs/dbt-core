@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use dbt_common::path::DbtPath;
 use dbt_yaml::Value;
 use minijinja::{
     ArgSpec,
@@ -43,15 +44,15 @@ pub struct MacroConfig {
 pub struct DbtMacro {
     pub name: String,
     pub package_name: String,
-    pub path: PathBuf,
+    pub path: DbtPath,
     /// Package-root-relative path from the manifest (e.g. `macros/my_macro.sql`).
     /// Present for all macros including those loaded from a serialized manifest.
-    pub original_file_path: PathBuf,
+    pub original_file_path: DbtPath,
     /// Absolute on-disk path, set during parse. Empty for macros loaded from a
     /// serialized manifest without going through parse-state restoration.
     /// Use `has_absolute_path()` to check before accessing.
     #[serde(skip, default)]
-    pub absolute_path: PathBuf,
+    pub absolute_path: DbtPath,
     #[serde(skip_serializing, default)]
     pub span: Option<Span>,
     pub unique_id: String,
@@ -64,6 +65,7 @@ pub struct DbtMacro {
     pub config: MacroConfig,
     pub patch_path: Option<PathBuf>,
     pub funcsign: Option<String>,
+    pub supported_languages: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<ArgSpec>,
     /// Macro arguments from YAML spec (used for manifest serialization via ManifestMacro)
@@ -92,8 +94,8 @@ pub struct MacroDependsOn {
 pub struct DbtDocsMacro {
     pub name: String,
     pub package_name: String,
-    pub path: PathBuf,
-    pub original_file_path: PathBuf,
+    pub path: DbtPath,
+    pub original_file_path: DbtPath,
     pub unique_id: String,
     pub block_contents: String,
 }
@@ -146,6 +148,20 @@ mod tests {
             docs.get("node_color").expect("node_color key"),
             &serde_json::Value::Null,
             "docs.node_color should serialize as explicit null even when None"
+        );
+    }
+
+    #[test]
+    fn test_macro_supported_languages_serializes_as_strings() {
+        let macro_ = DbtMacro {
+            supported_languages: Some(vec!["sql".to_string(), "python".to_string()]),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_value(&macro_).expect("serializes");
+        assert_eq!(
+            json.get("supported_languages"),
+            Some(&serde_json::json!(["sql", "python"]))
         );
     }
 }

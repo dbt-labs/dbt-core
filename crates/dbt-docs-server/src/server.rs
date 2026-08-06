@@ -14,9 +14,15 @@ use crate::handlers::{
     identity, lineage, macros, metrics, models, nodes, project, saved_queries, search, seeds,
     semantic_models, snapshots, sources, tests,
 };
+#[cfg(feature = "openapi-ui")]
+use crate::openapi::ApiDoc;
+#[cfg(not(feature = "openapi-ui"))]
+use crate::openapi::get_openapi_spec;
 use crate::providers::Providers;
 use crate::resolve_index_dir;
 use crate::state::AppState;
+#[cfg(feature = "openapi-ui")]
+use utoipa::OpenApi as _;
 
 /// Run the docs server. Must be called from within a tokio runtime —
 /// `dbt-main` already initialises one before dispatching commands, so
@@ -129,9 +135,21 @@ where
         )
         .route("/api/v1/search", get(search::search))
         .route("/api/v1/search/facets", get(search::search_facets))
-        .route("/api/v1/analytics/events", post(analytics::post_events))
-        .fallback(serve_assets)
-        .with_state(state.clone());
+        .route("/api/v1/analytics/events", post(analytics::post_events));
+
+    // With `openapi-ui`, `SwaggerUi::url(...)` below also serves the spec
+    // itself at this path, so the plain route is only added when that
+    // feature is off (registering both panics on overlapping routes).
+    #[cfg(not(feature = "openapi-ui"))]
+    let app = app.route("/api/v1/openapi.json", get(get_openapi_spec));
+
+    #[cfg(feature = "openapi-ui")]
+    let app = app.merge(
+        utoipa_swagger_ui::SwaggerUi::new("/api/v1/docs")
+            .url("/api/v1/openapi.json", ApiDoc::openapi()),
+    );
+
+    let app = app.fallback(serve_assets).with_state(state.clone());
 
     let bind = format!("{}:{}", args.host, args.port);
     let listener = tokio::net::TcpListener::bind(&bind).await?;

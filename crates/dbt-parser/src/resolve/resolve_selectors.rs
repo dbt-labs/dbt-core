@@ -107,12 +107,14 @@ pub fn resolve_final_selectors(
         Ok(ResolvedSelector {
             include: Some(include),
             exclude,
+            selector_definitions: resolved_selectors,
         })
     } else {
         // No selector chosen → use CLI flags and apply CLI indirect selection
         let mut resolved = ResolvedSelector {
             include: arg.select.clone(),
             exclude: arg.exclude.clone(),
+            selector_definitions: resolved_selectors,
         };
 
         let default_mode = arg.indirect_selection.unwrap_or_default();
@@ -140,7 +142,7 @@ fn load_and_parse_selectors_file(
         return Ok(None);
     }
 
-    let raw_selectors = value_from_file(&arg.io, &path, true, None)?;
+    let raw_selectors = value_from_file(&path, true, None)?;
 
     // Treat an empty or null selectors.yml the same as an absent file — dbt Core does not
     // error on a zero-byte selectors.yml; it simply has no selectors defined.
@@ -197,7 +199,7 @@ fn resolve_selector_definitions(
         .iter()
         .map(|d| (d.name.clone(), d.clone()))
         .collect::<BTreeMap<_, _>>();
-    let parser = SelectorParser::new(defs, &arg.io);
+    let parser = SelectorParser::new(defs);
     let mut resolved_selectors = HashMap::new();
 
     // The selector `default:` expression is only consulted when the user

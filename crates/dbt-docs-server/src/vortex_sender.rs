@@ -13,7 +13,6 @@
 
 use std::fs;
 use std::io::{self, Write as _};
-use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
@@ -469,7 +468,7 @@ struct VortexProducerClient {
     /// Only set in development mode. MUST be `None` in production.
     dev_mode_output_path: Option<PathBuf>,
     /// Dev-mode output writer, used to write messages to a file in development mode.
-    dev_mode_output_writer: Mutex<Result<io::BufWriter<fs::File>, io::Error>>,
+    dev_mode_output_writer: Mutex<Result<fs::File, io::Error>>,
 }
 
 impl Default for VortexProducerClient {
@@ -526,16 +525,8 @@ impl Default for VortexProducerClient {
 impl VortexProducerClient {
     fn new(agent: Box<dyn SenderAgent>, dev_mode_output_path: Option<PathBuf>) -> Self {
         let dev_mode_output_writer = if let Some(path) = &dev_mode_output_path {
-            match fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(path)
-            {
-                Ok(file) => {
-                    let writer = io::BufWriter::new(file);
-                    Mutex::new(Ok(writer))
-                }
+            match fs::OpenOptions::new().create(true).append(true).open(path) {
+                Ok(file) => Mutex::new(Ok(file)),
                 Err(e) => Mutex::new(Err(e)),
             }
         } else {
@@ -630,15 +621,12 @@ impl VortexProducerClient {
             type_url: format!("/{package}.{name}"),
             message: json_message,
         };
-        let json_payload = serde_json::to_string(&dev_mode_msg).unwrap_or_default();
+        let mut json_payload = serde_json::to_string(&dev_mode_msg).unwrap_or_default();
+        json_payload.push('\n');
 
         let mut writer_res_lock_guard = self.dev_mode_output_writer.lock().unwrap();
-        match writer_res_lock_guard.deref_mut() {
-            Ok(writer) => {
-                writer.write_all(json_payload.as_bytes())?;
-                writeln!(writer)?; // carriage return after
-                writer.flush()
-            }
+        match &mut *writer_res_lock_guard {
+            Ok(writer) => writer.write_all(json_payload.as_bytes()),
             Err(e) => {
                 // we can't clone io::Error, so we create a custom one that carries the kind
                 let e = io::Error::new(e.kind(), e.to_string());

@@ -263,7 +263,6 @@ impl Constraints {
     }
 
     fn from_remote_state(results: &DatabricksRelationMetadata) -> Self {
-        // Get non-null constraint columns from results
         let mut non_null_columns = results
             .get(&DatabricksRelationMetadataKey::NonNullConstraints)
             .map(|table| {
@@ -271,14 +270,12 @@ impl Constraints {
                     .rows()
                     .into_iter()
                     .filter_map(|row| {
-                        // Try both "column_name" and "col_name" as different sources might use different names
-                        // Try "column_name" first, but filter out undefined values
+                        // Different metadata sources use "column_name" or "col_name"; try both.
                         row.get_attr("column_name")
                             .ok()
                             .map(|v| v.to_string())
                             .filter(|s| !s.is_empty() && s != "undefined")
                             .or_else(|| {
-                                // If that didn't work, try "col_name"
                                 row.get_attr("col_name")
                                     .ok()
                                     .map(|v| v.to_string())
@@ -292,17 +289,14 @@ impl Constraints {
         // The engine might return them in random order so sorting to always be consistent
         non_null_columns.sort();
 
-        // Process check constraints from table properties
         let check_constraints = Self::process_check_constraints(
             results.get(&DatabricksRelationMetadataKey::ShowTblProperties),
         );
 
-        // Process primary key constraints
         let pk_constraints = Self::process_primary_key_constraints(
             results.get(&DatabricksRelationMetadataKey::PrimaryKeyConstraints),
         );
 
-        // Process foreign key constraints
         let fk_constraints = Self::process_foreign_key_constraints(
             results.get(&DatabricksRelationMetadataKey::ForeignKeyConstraints),
         );
@@ -326,7 +320,6 @@ impl Constraints {
     fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Self {
         let columns = &relation_config.base().columns;
 
-        // Get model constraints from the node by downcasting to DbtModel
         let model_constraints = if let Some(model) = relation_config
             .as_any()
             .downcast_ref::<dbt_schemas::schemas::nodes::DbtModel>(
@@ -336,7 +329,6 @@ impl Constraints {
             &[]
         };
 
-        // Use our parse_constraints function to handle both column and model constraints
         let Ok((not_null_columns, other_constraints)) =
             crate::relation::databricks::typed_constraint::parse_constraints(
                 columns,
@@ -924,7 +916,6 @@ fk_composite,parent_type,main,default,parents,type
         let render_val = constraint_val
             .get_attr("render")
             .expect("render should be accessible");
-        // "render" should be a function value (non-None, non-undefined)
         assert!(
             !render_val.is_undefined(),
             "render should be a callable function"
@@ -933,8 +924,6 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_constraint_normalization_and_diff() {
-        // Test that normalization works correctly during diff calculation
-        // Focus on the main Databricks-specific normalization: clearing columns for check constraints
         let prev_constraint = TypedConstraint::Check {
             name: Some("test_check".to_string()),
             expression: "value > 0".to_string(),
@@ -942,8 +931,8 @@ fk_composite,parent_type,main,default,parents,type
         };
         let next_constraint = TypedConstraint::Check {
             name: Some("test_check".to_string()),
-            expression: "value > 0".to_string(), // Same expression
-            columns: None,                       // No columns (like Databricks stores it)
+            expression: "value > 0".to_string(),
+            columns: None, // No columns (like Databricks stores it)
         };
 
         let prev = Constraints::new(
@@ -959,23 +948,19 @@ fk_composite,parent_type,main,default,parents,type
             IndexSet::new(),
         );
 
-        // The diff should be None because after normalization they should be considered equal
-        // (The main difference - columns being cleared - should be normalized away)
         let diff = Constraints::diff_from(&next, Some(&prev));
         assert!(
             diff.is_none(),
             "Normalized constraints should be considered equal"
         );
 
-        // Test expression normalization with safe cases (no quotes/strings)
         let normalized_expr1 = Constraints::normalize_expression("value > 0");
-        let normalized_expr2 = Constraints::normalize_expression("  value > 0  "); // Just whitespace
+        let normalized_expr2 = Constraints::normalize_expression("  value > 0  ");
         assert_eq!(
             normalized_expr1, normalized_expr2,
             "Whitespace should be normalized"
         );
 
-        // Test that quoted identifiers are preserved (not broken)
         let quoted_expr = Constraints::normalize_expression(r#""user name" IS NOT NULL"#);
         assert!(
             quoted_expr.contains(r#""user name""#),

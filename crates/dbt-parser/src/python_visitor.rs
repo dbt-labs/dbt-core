@@ -8,7 +8,7 @@ use crate::python_ast::{
     offset_to_line_col,
 };
 use crate::python_file_info::PythonFileInfo;
-use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs};
+use dbt_common::{ErrorCode, FsResult, err};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_jinja_utils::serde::into_typed_with_error;
 use dbt_schemas::schemas::project::ResolvableConfig;
@@ -122,8 +122,6 @@ pub struct DbtPythonVisitor<'a, T: ResolvableConfig<T>> {
     pub file_info: PythonFileInfo<T>,
     /// Errors encountered during parsing
     pub errors: Vec<String>,
-    /// IO args for emitting strict parse warnings/errors
-    io_args: &'a IoArgs,
     /// Dependency package name if analyzing a package asset
     dependency_package_name: Option<&'a str>,
     /// Display path used when reporting errors
@@ -137,7 +135,6 @@ impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
     pub fn new(
         file_path: &'a PathBuf,
         file_info: PythonFileInfo<T>,
-        io_args: &'a IoArgs,
         dependency_package_name: Option<&'a str>,
         error_path: Option<PathBuf>,
         source: &str,
@@ -147,7 +144,6 @@ impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
             file_path,
             file_info,
             errors: Vec::new(),
-            io_args,
             dependency_package_name,
             error_path,
             line_starts,
@@ -343,7 +339,6 @@ impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
         // Deserialize the entire mapping into the config struct, emitting strict warnings on unused keys
         let yaml_value = dbt_yaml::Value::Mapping(mapping, call_span);
         match into_typed_with_error(
-            self.io_args,
             yaml_value,
             true,
             self.dependency_package_name,
@@ -495,7 +490,6 @@ pub fn analyze_python_file<T: ResolvableConfig<T>>(
     source: &str,
     stmts: &[Stmt],
     checksum: dbt_schemas::schemas::common::DbtChecksum,
-    io_args: &IoArgs,
     dependency_package_name: Option<&str>,
     error_path: Option<PathBuf>,
 ) -> FsResult<PythonFileInfo<T>> {
@@ -503,7 +497,6 @@ pub fn analyze_python_file<T: ResolvableConfig<T>>(
     let mut visitor = DbtPythonVisitor::new(
         file_path,
         file_info,
-        io_args,
         dependency_package_name,
         error_path,
         source,
@@ -531,7 +524,6 @@ pub fn analyze_python_file<T: ResolvableConfig<T>>(
 mod tests {
     use super::*;
     use crate::python_ast::parse_python;
-    use dbt_common::io_args::IoArgs;
     use dbt_schemas::schemas::common::DbtChecksum;
     use std::path::PathBuf;
 
@@ -549,7 +541,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -573,7 +564,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -598,7 +588,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -629,7 +618,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -654,7 +642,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -678,7 +665,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -710,7 +696,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -743,7 +728,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -771,7 +755,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -797,7 +780,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         );
@@ -825,7 +807,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         );
@@ -881,7 +862,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -939,7 +919,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -968,7 +947,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1022,7 +1000,6 @@ def model(dbt, fal):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1057,7 +1034,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         );
@@ -1088,7 +1064,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1115,7 +1090,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1153,7 +1127,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1191,7 +1164,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1218,7 +1190,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1245,7 +1216,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1276,7 +1246,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1303,7 +1272,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1330,7 +1298,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1359,7 +1326,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1386,7 +1352,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1420,7 +1385,6 @@ def model(dbt, _):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1476,7 +1440,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         );
@@ -1504,7 +1467,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1531,7 +1493,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         )
@@ -1559,7 +1520,6 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
         );

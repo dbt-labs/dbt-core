@@ -102,7 +102,6 @@ where
                         "attempt {attempt}/{max_attempts} failed: {msg} — retrying in {}",
                         fmt_duration(sleep_dur)
                     ),
-                    None,
                 );
                 tokio::time::sleep(sleep_dur).await;
                 delay = delay.saturating_mul(2);

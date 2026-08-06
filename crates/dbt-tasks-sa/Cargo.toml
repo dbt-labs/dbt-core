@@ -41,10 +41,12 @@ arrow = { workspace = true }
 arrow-schema = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 csv = { workspace = true }
 datafusion-expr = { workspace = true }
 itertools = { workspace = true }
 minijinja = { workspace = true }
+minijinja-contrib = { workspace = true }
 num_cpus = { workspace = true }
 parking_lot = { workspace = true }
 petgraph = { workspace = true }

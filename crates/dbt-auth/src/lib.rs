@@ -8,13 +8,13 @@ use dbt_adbc::{Backend, database};
 mod config;
 
 // Database-specific auth implementations
+mod alt;
 mod athena;
 mod bigquery;
 mod clickhouse;
 mod databricks;
 mod duckdb;
 mod exasol;
-mod fdcs;
 #[cfg(test)]
 mod flock;
 mod postgres;
@@ -89,7 +89,7 @@ pub fn auth_for_backend(
         Backend::Salesforce => Box::new(salesforce::SalesforceAuth {}),
         Backend::Spark => Box::new(spark::SparkAuth {}),
         Backend::DuckDB | Backend::DuckDBExtended => Box::new(duckdb::DuckDbAuth::new(backend)),
-        Backend::Fdcs => Box::new(fdcs::FdcsAuth {}),
+        Backend::Alt => Box::new(alt::AltAuth {}),
         Backend::SQLServer => Box::new(sqlserver::SQLServerAuth {}),
         Backend::ClickHouse => Box::new(clickhouse::ClickHouseAuth {}),
         Backend::Athena => Box::new(athena::AthenaAuth {}),

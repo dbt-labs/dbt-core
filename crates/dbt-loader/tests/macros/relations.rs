@@ -172,7 +172,6 @@ mod databricks {
             catalogs,
             std::path::Path::new("catalogs.yml"),
             Some(&project_flags),
-            None,
         )
         .expect("catalogs.yml v2 should load");
     }

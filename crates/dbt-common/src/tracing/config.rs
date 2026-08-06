@@ -1,7 +1,13 @@
-use std::{borrow::Cow, path::PathBuf};
+use std::{
+    borrow::Cow,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 use super::{
     dbt_convert::log_level_filter_to_tracing,
+    dbt_init::init_tracing_with_layers,
+    fs_error_log::get_log_message,
     layers::{
         file_log_layer::build_file_log_layer_with_background_writer,
         json_compat_layer::{
@@ -31,7 +37,7 @@ use crate::{
     warn_error_options::WarnErrorOptions,
 };
 use dbt_error::{ErrorCode, FsError, FsResult};
-use dbt_telemetry::{LogMessage, TelemetryEventTypeRegistry};
+use dbt_telemetry::TelemetryEventTypeRegistry;
 use dbt_tracing::{
     LogRecordInfo,
     layer::{ConsumerLayer, MiddlewareLayer},
@@ -94,9 +100,6 @@ pub struct FsTraceConfig {
     pub(super) show_all_deprecations: bool,
     /// The initial warn-error options loaded from CLI/env before project flags are resolved.
     pub(super) warn_error_options: WarnErrorOptions,
-    /// If True, disables stdout/console output even when using Text/Default format.
-    /// Useful for long-running services like LSP that only want file logging.
-    pub(super) disable_console_output: bool,
     /// User-facing CLI brand name shown in the version banner and JSON log lines.
     pub(super) command_name: &'static str,
 }
@@ -121,7 +124,6 @@ impl Default for FsTraceConfig {
             show_options: HashSet::default(),
             show_all_deprecations: false,
             warn_error_options: WarnErrorOptions::default(),
-            disable_console_output: false,
             command_name: DBT_FUSION,
         }
     }
@@ -150,7 +152,7 @@ fn calculate_trace_dirs(
 }
 
 fn dbt_log_preprocessor_hook(record: &LogRecordInfo) -> Cow<'_, LogRecordInfo> {
-    if !record.attributes.is::<LogMessage>() {
+    if get_log_message(&record.attributes).is_none() {
         return Cow::Borrowed(record);
     }
 
@@ -161,6 +163,118 @@ fn dbt_log_preprocessor_hook(record: &LogRecordInfo) -> Cow<'_, LogRecordInfo> {
         }),
         Cow::Borrowed(_) => Cow::Borrowed(record),
     }
+}
+
+/// Builds the middleware pipeline shared by dbt tracing configurations.
+pub fn build_shared_middleware_layers(
+    show_all_deprecations: bool,
+    warn_error_options: WarnErrorOptions,
+) -> (Vec<MiddlewareLayer>, Arc<RwLock<WarnErrorOptions>>) {
+    let (warn_error_options_middleware, warn_error_options) =
+        TelemetryWarnErrorOptionsMiddleware::new(warn_error_options);
+
+    (
+        vec![
+            Box::new(TelemetryMarkdownLogFilter),
+            Box::new(TelemetryParsingErrorFilter::new(show_all_deprecations)),
+            Box::new(warn_error_options_middleware),
+            Box::new(TelemetryNodeWarnOutcome),
+            Box::new(TelemetryMetricAggregator),
+        ],
+        warn_error_options,
+    )
+}
+
+/// Builds a JSONL file consumer with dbt log preprocessing.
+pub fn build_jsonl_file_consumer(
+    file_path: &std::path::Path,
+    max_verbosity: LevelFilter,
+) -> FsResult<(ConsumerLayer, TelemetryShutdownItem)> {
+    if let Some(log_dir) = file_path.parent() {
+        crate::stdfs::create_dir_all(log_dir)?;
+    }
+
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)
+        .map_err(|error| {
+            fs_err!(
+                ErrorCode::IoError,
+                "Failed to open telemetry jsonl file for append: {}",
+                error
+            )
+        })?;
+
+    Ok(build_jsonl_layer_with_background_writer(
+        file,
+        max_verbosity,
+        Some(dbt_log_preprocessor_hook),
+    ))
+}
+
+/// Builds an unstructured rotating file-log consumer.
+#[allow(clippy::too_many_arguments)]
+pub fn build_file_log_consumer(
+    max_file_log_verbosity: LevelFilter,
+    log_path: &std::path::Path,
+    log_file_name: Option<&str>,
+    log_file_max_bytes: u64,
+    log_format: LogFormat,
+    invocation_id: uuid::Uuid,
+    command: FsCommand,
+    command_name: &'static str,
+) -> FsResult<(
+    Option<ConsumerLayer>,
+    Vec<TelemetryShutdownItem>,
+    Option<PathBuf>,
+)> {
+    if max_file_log_verbosity == LevelFilter::OFF {
+        return Ok((None, Vec::new(), None));
+    }
+
+    crate::stdfs::create_dir_all(log_path)?;
+    let log_file_name = log_file_name.unwrap_or(DBT_DEFAULT_LOG_FILE_NAME);
+    let file_log_path = log_path.join(log_file_name);
+    let file = RotatingFileWriter::new(
+        &file_log_path,
+        log_file_max_bytes,
+        DBT_DEFAULT_LOG_FILE_BACKUP_COUNT,
+    )
+    .map_err(|error| {
+        fs_err!(
+            ErrorCode::IoError,
+            "Failed to open log file for append: {}",
+            error
+        )
+    })?;
+
+    let Some((consumer, shutdown_item)) = (match log_format {
+        LogFormat::Default | LogFormat::Text => Some(build_file_log_layer_with_background_writer(
+            file,
+            max_file_log_verbosity,
+        )),
+        LogFormat::Json => Some(build_json_compat_layer_with_background_writer(
+            file,
+            max_file_log_verbosity,
+            invocation_id,
+            command,
+            command_name,
+        )),
+        LogFormat::Otel => None,
+    }) else {
+        return Ok((None, Vec::new(), Some(file_log_path)));
+    };
+
+    Ok((Some(consumer), vec![shutdown_item], Some(file_log_path)))
+}
+
+pub fn build_tracing_config_provider(
+    warn_error_options: Arc<RwLock<WarnErrorOptions>>,
+    file_log_path: Option<PathBuf>,
+    command_name: &'static str,
+) -> Box<dyn TracingConfigProvider> {
+    create_tracing_config_provider(warn_error_options, file_log_path, command_name)
 }
 
 pub struct FsTraceLayers {
@@ -224,7 +338,6 @@ impl FsTraceConfig {
     ///   If Some, creates log file at `{log_path}/{log_file_name}`
     /// * `log_file_max_bytes` - Max size for rotating file logs in bytes.
     ///   `0` means no size limit.
-    /// * `disable_console_output` - If true, disables stdout/console output even when using Text/Default format
     ///
     /// # Path Resolution
     ///
@@ -234,29 +347,6 @@ impl FsTraceConfig {
     /// - Log files: `{log_path or project_dir/logs}/{otel_file_name}`
     /// - Parquet files: `{target_path}/metadata/{otel_parquet_file_name}`
     ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use tracing::level_filters::LevelFilter;
-    /// use uuid::Uuid;
-    /// use std::{collections::HashSet, path::PathBuf};
-    ///
-    /// let config = FsTraceConfig::new(
-    ///     "dbt-cli",
-    ///     Some(PathBuf::from("/path/to/project")),
-    ///     None, // Use default target path
-    ///     None, // Use default log path
-    ///     LevelFilter::INFO,
-    ///     LevelFilter::DEBUG,
-    ///     Some("otel.jsonl".to_string()),
-    ///     Some("otel.parquet".to_string()),
-    ///     Uuid::new_v4(),
-    ///     false, // Don't export to OTLP
-    ///     LogFormat::Default, // Use default log format
-    ///     true,  // Enable query log
-    ///     HashSet::new(),
-    /// );
-    /// ```
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         package: &'static str,
@@ -278,7 +368,6 @@ impl FsTraceConfig {
         warn_error_options: WarnErrorOptions,
         log_file_name: Option<&str>,
         log_file_max_bytes: u64,
-        disable_console_output: bool,
     ) -> Self {
         let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
 
@@ -313,7 +402,6 @@ impl FsTraceConfig {
             show_options,
             show_all_deprecations,
             warn_error_options,
-            disable_console_output,
             command_name: DBT_FUSION,
         }
     }
@@ -371,7 +459,32 @@ impl FsTraceConfig {
             warn_error_options.cloned().unwrap_or_default(),
             None, // log_file_name - use default dbt.log
             io_args.log_file_max_bytes,
-            false, // disable_console_output defaults to false for CLI
+        )
+    }
+
+    /// Initializes tracing with the consumers configured for this CLI invocation.
+    pub fn init(
+        self,
+    ) -> FsResult<(
+        dbt_tracing::init::TelemetryHandle,
+        Box<dyn TracingConfigProvider>,
+    )> {
+        let package = self.package;
+        let fallback_trace_id = self.invocation_id.as_u128();
+        let fallback_parent_span_id = self.parent_span_id;
+        let max_log_verbosity = std::cmp::max(self.max_log_verbosity, self.max_file_log_verbosity);
+        let (middlewares, consumer_layers, shutdown_items, feature_handle) =
+            self.build_layers()?.into_parts();
+
+        init_tracing_with_layers(
+            package,
+            fallback_trace_id,
+            fallback_parent_span_id,
+            max_log_verbosity,
+            middlewares,
+            consumer_layers,
+            shutdown_items,
+            feature_handle,
         )
     }
 
@@ -381,34 +494,15 @@ impl FsTraceConfig {
     pub fn build_layers(&self) -> FsResult<FsTraceLayers> {
         let mut shutdown_items = Vec::new();
         let mut consumer_layers = Vec::new();
-        let (warn_error_options_middleware, warn_error_options) =
-            TelemetryWarnErrorOptionsMiddleware::new(self.warn_error_options.clone());
+        let (middleware_layers, warn_error_options) = build_shared_middleware_layers(
+            self.show_all_deprecations,
+            self.warn_error_options.clone(),
+        );
 
         // Create jsonl writer layer if file path provided
         if let Some(file_path) = &self.otel_file_path {
-            // Ensure log directory exists
-            if let Some(log_dir) = file_path.parent() {
-                crate::stdfs::create_dir_all(log_dir)?;
-            }
-
-            // Open file in append mode to avoid overwriting existing telemetry
-            let file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(file_path)
-                .map_err(|e| {
-                    fs_err!(
-                        ErrorCode::IoError,
-                        "Failed to open telemetry jsonl file for append: {}",
-                        e
-                    )
-                })?;
-
-            let (layer, handle) = build_jsonl_layer_with_background_writer(
-                file,
-                self.max_file_log_verbosity,
-                Some(dbt_log_preprocessor_hook),
-            );
+            let (layer, handle) =
+                build_jsonl_file_consumer(file_path, self.max_file_log_verbosity)?;
 
             // Keep a handle for shutdown
             shutdown_items.push(handle);
@@ -443,37 +537,35 @@ impl FsTraceConfig {
             consumer_layers.push(parquet_layer)
         };
 
-        // Create console layer based on log format (unless disabled)
-        if !self.disable_console_output {
-            match self.log_format {
-                LogFormat::Default | LogFormat::Text => {
-                    // Create layer and apply user specified filtering
-                    consumer_layers.push(build_tui_layer(
-                        self.max_log_verbosity,
-                        self.log_format,
-                        self.show_options.clone(),
-                        self.command,
-                    ))
-                }
-                LogFormat::Json => {
-                    // Create layer and apply user specified filtering
-                    consumer_layers.push(build_json_compat_layer(
-                        std::io::stdout(),
-                        self.max_log_verbosity,
-                        self.invocation_id,
-                        self.command,
-                        self.command_name,
-                    ))
-                }
-                LogFormat::Otel => {
-                    // Create jsonl writer layer on stdout if log format is OTEL
-                    // No shutdown logic as we flushing to stdout as we write anyway
-                    consumer_layers.push(build_jsonl_layer(
-                        std::io::stdout(),
-                        self.max_log_verbosity,
-                        Some(dbt_log_preprocessor_hook),
-                    ));
-                }
+        // Create console layer based on log format.
+        match self.log_format {
+            LogFormat::Default | LogFormat::Text => {
+                // Create layer and apply user specified filtering
+                consumer_layers.push(build_tui_layer(
+                    self.max_log_verbosity,
+                    self.log_format,
+                    self.show_options.clone(),
+                    self.command,
+                ))
+            }
+            LogFormat::Json => {
+                // Create layer and apply user specified filtering
+                consumer_layers.push(build_json_compat_layer(
+                    std::io::stdout(),
+                    self.max_log_verbosity,
+                    self.invocation_id,
+                    self.command,
+                    self.command_name,
+                ))
+            }
+            LogFormat::Otel => {
+                // Create jsonl writer layer on stdout if log format is OTEL
+                // No shutdown logic as we flushing to stdout as we write anyway
+                consumer_layers.push(build_jsonl_layer(
+                    std::io::stdout(),
+                    self.max_log_verbosity,
+                    Some(dbt_log_preprocessor_hook),
+                ));
             }
         };
 
@@ -483,53 +575,23 @@ impl FsTraceConfig {
             crate::stdfs::create_dir_all(&self.log_path)?;
         }
 
-        let file_log_path = if self.max_file_log_verbosity != LevelFilter::OFF {
-            let log_file_name = self
-                .log_file_name
-                .as_deref()
-                .unwrap_or(DBT_DEFAULT_LOG_FILE_NAME);
-            let file_log_path = self.log_path.join(log_file_name);
-            // Open file in rotating wrapper, same as dbt core.
-            let file = RotatingFileWriter::new(
-                &file_log_path,
-                self.log_file_max_bytes,
-                DBT_DEFAULT_LOG_FILE_BACKUP_COUNT,
-            )
-            .map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to open log file for append: {}",
-                    e
-                )
-            })?;
-
-            if let Some((file_log_layer, writer_handle)) = match self.log_format {
-                LogFormat::Default | LogFormat::Text => Some(
-                    build_file_log_layer_with_background_writer(file, self.max_file_log_verbosity),
-                ),
-                LogFormat::Json => Some(build_json_compat_layer_with_background_writer(
-                    file,
-                    self.max_file_log_verbosity,
-                    self.invocation_id,
-                    self.command,
-                    self.command_name,
-                )),
-                LogFormat::Otel => None,
-            } {
-                // Keep a handle for shutdown
-                shutdown_items.push(writer_handle);
-
-                // Create layer. User specified filtering is not applied here
-                consumer_layers.push(file_log_layer)
-            }
-
-            Some(file_log_path)
-        } else {
-            None
-        };
+        let (file_log_layer, mut file_log_shutdown_items, file_log_path) = build_file_log_consumer(
+            self.max_file_log_verbosity,
+            &self.log_path,
+            self.log_file_name.as_deref(),
+            self.log_file_max_bytes,
+            self.log_format,
+            self.invocation_id,
+            self.command,
+            self.command_name,
+        )?;
+        if let Some(file_log_layer) = file_log_layer {
+            consumer_layers.push(file_log_layer);
+        }
+        shutdown_items.append(&mut file_log_shutdown_items);
 
         let tracing_config_provider =
-            create_tracing_config_provider(warn_error_options, file_log_path, self.command_name);
+            build_tracing_config_provider(warn_error_options, file_log_path, self.command_name);
 
         // Create query log writer layer (always enabled; internal-only event sink)
         if self.enable_query_log {
@@ -555,19 +617,7 @@ impl FsTraceConfig {
         };
 
         Ok(FsTraceLayers {
-            middleware_layers: vec![
-                // Order matters:
-                // 1. Downgrade markdown errors first
-                // 2. Filter parsing errors
-                // 3. Apply warn-error-options (may silence or upgrade warns to errors)
-                // 4. Mark node spans with WithWarnings for remaining Warn logs
-                // 5. Aggregate metrics last (sees final severity after all transforms)
-                Box::new(TelemetryMarkdownLogFilter),
-                Box::new(TelemetryParsingErrorFilter::new(self.show_all_deprecations)),
-                Box::new(warn_error_options_middleware),
-                Box::new(TelemetryNodeWarnOutcome),
-                Box::new(TelemetryMetricAggregator),
-            ],
+            middleware_layers,
             consumer_layers,
             shutdown_items,
             tracing_config_provider,

@@ -11,7 +11,6 @@ pub(crate) mod constraints;
 pub(crate) use constraints::ConstraintsLoader;
 
 pub(crate) mod liquid_clustering;
-#[expect(unused_imports)]
 pub(crate) use liquid_clustering::LiquidClusteringLoader;
 
 pub(crate) mod partition_by;

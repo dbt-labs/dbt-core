@@ -5,6 +5,7 @@ option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/dbt_index
 
 import "dbtlabs/proto/public/v1/common/vortex_options.proto";
 import "dbtlabs/proto/public/v1/events/vortex.proto";
+import "dbtlabs/proto/public/v1/common/vortex_telemetry_contexts.proto";
 
 // CLI invocation lifecycle event. Each dbt-index command emits a start/end
 // pair linked by invocation_id. Tracks activation (installs), engagement
@@ -66,6 +67,7 @@ message DbtIndexInvocation {
 
   // Global account identifier. From dbt Cloud admin API.
   string account_identifier = 18;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 19;
 }
 
 // Resource counts emitted once per ingest. Captures project size for
@@ -115,6 +117,7 @@ message DbtIndexResourceCounts {
 
   // Count of semantic models in the project.
   int32 semantic_models = 14;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 15;
 }
 
 // MCP tool call event from dbt-index serve mode. Each row represents one
@@ -140,4 +143,5 @@ message DbtIndexToolCall {
 
   // Wall-clock time of the tool call in milliseconds.
   int64 execution_time_ms = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }

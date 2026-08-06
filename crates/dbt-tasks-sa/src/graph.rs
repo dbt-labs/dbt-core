@@ -4,7 +4,6 @@ use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_dag::deps_mgmt::{find_all_upstream_deps, restrict_with_transitive};
 use dbt_dag::schedule::Schedule;
-use dbt_loader::args::IoArgs;
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::Nodes;
@@ -131,10 +130,7 @@ impl GraphBuilder {
 
         let (graph, nodes_with_no_tasks) = {
             match self.arg.command {
-                FsCommand::Clone => (
-                    build_clone_task_graph(&self.arg.io, schedule, nodes),
-                    BTreeSet::new(),
-                ),
+                FsCommand::Clone => (build_clone_task_graph(schedule, nodes), BTreeSet::new()),
                 FsCommand::Extension("compare") => (
                     self.compare_task_graph_builder
                         .as_ref()
@@ -167,6 +163,7 @@ impl GraphBuilder {
                             phases,
                             self.static_analysis_buckets.as_ref(),
                             aggregation,
+                            self.arg.infer_schemas,
                         )
                     } else {
                         // Handle unknown commands
@@ -174,7 +171,6 @@ impl GraphBuilder {
                             emit_warn_log_message(
                                 ErrorCode::Unexpected,
                                 format!("Unhandled command: {:?}", cmd),
-                                self.arg.io.status_reporter.as_ref(),
                             );
                         }
                         (Graph::new(), BTreeSet::new())
@@ -203,6 +199,7 @@ impl GraphBuilder {
         phases: &[TP],
         buckets: &dyn StaticAnalysisBuckets,
         generic_test_aggregation: Option<&GenericTestAggregation>,
+        infer_schemas: bool,
     ) -> (DiGraph<Arc<dyn Task>, ()>, BTreeSet<String>) {
         // Build reverse dependencies map once for efficient propagation
         let reverse_deps = build_reverse_deps(&schedule.deps);
@@ -323,13 +320,27 @@ impl GraphBuilder {
                                         graph.update_edge(from_idx, to_idx, ());
                                     }
                                 });
+                                if infer_schemas {
+                                    deps.iter().for_each(|dep| {
+                                        if let Some(dep_phases) = node_to_phases.get(dep)
+                                            && dep_phases.contains(&TP::Analyze)
+                                            && let Some(&from_idx) =
+                                                node_indices.get(&(TP::Analyze, dep.clone()))
+                                        {
+                                            graph.update_edge(from_idx, to_idx, ());
+                                        }
+                                    });
+                                }
                                 continue;
                             } else {
                                 // find the first upstream nodes with the same phase and add an
                                 // edge to the current node. Except for analyze -> analyze edges
                                 // between baseline nodes, because baseline analyze is only for the
                                 // node itself
-                                if phase == TP::Analyze && buckets.in_baseline_closure(unique_id) {
+                                if phase == TP::Analyze
+                                    && !infer_schemas
+                                    && buckets.in_baseline_closure(unique_id)
+                                {
                                     continue;
                                 }
 
@@ -542,7 +553,6 @@ fn create_aggregated_schedule_and_nodes(
 }
 
 fn build_clone_task_graph(
-    io: &IoArgs,
     schedule: &Schedule<String>,
     nodes: &Nodes,
 ) -> DiGraph<Arc<dyn Task>, ()> {
@@ -566,7 +576,6 @@ fn build_clone_task_graph(
             emit_warn_log_message(
                 ErrorCode::Unexpected,
                 format!("Node '{}' is not cloneable. Skipping", unique_id),
-                io.status_reporter.as_ref(),
             );
         }
     }
@@ -680,8 +689,13 @@ fn initialize_graph(
                 .collect();
         }
 
-        // for all fontier node, remove show phase
-        if schedule.frontier_nodes.contains(unique_id) {
+        // for all frontier nodes, and for ephemeral nodes only pulled in to satisfy rendering
+        // of a downstream selected node (in selected_nodes but not directly selected by the
+        // user, i.e. absent from all_selected_nodes), remove show phase
+        if schedule.frontier_nodes.contains(unique_id)
+            || (schedule.selected_nodes.contains(unique_id)
+                && !schedule.all_selected_nodes.contains(unique_id))
+        {
             expected_node_phases.retain(|&phase| phase != TP::Show);
         }
 

@@ -150,6 +150,10 @@ pub enum ErrorCode {
     UnusedResourceConfigPath = 1097,
     DepsScrubbedPackageName = 1098,
     DepsDuplicatePackage = 1099,
+    /// A constraint is recognized by the adapter but not enforced at the database level.
+    ConstraintNotEnforced = 1109,
+    /// A constraint type is not supported by the adapter at all and is dropped from the rendered DDL.
+    ConstraintNotSupported = 1110,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]

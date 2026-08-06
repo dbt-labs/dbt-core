@@ -16,9 +16,7 @@ use minijinja::value::{Value, ValueMap};
 pub(crate) const TYPE_NAME: &str = "tags";
 
 // TODO(serramatutu): reuse this for `tags` and `labels` in other warehouses
-/// Component for Databricks tags
-///
-/// Holds a IndexMap of tag key and values.
+/// Component for Databricks tags.
 pub type RelationTags = SimpleComponentConfigImpl<IndexMap<String, String>>;
 
 fn to_jinja(v: &IndexMap<String, String>) -> Value {

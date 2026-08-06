@@ -1,6 +1,7 @@
 use crate::args::ResolveArgs;
 
 use dbt_common::FsResult;
+use dbt_common::path::DbtPath;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -57,12 +58,12 @@ pub async fn resolve_groups(
                 __common_attr__: CommonAttributes {
                     name: group_name.to_string(),
                     package_name: package_name.to_string(),
-                    path: mpe.relative_path.clone(),
+                    path: DbtPath::from(&mpe.relative_path),
                     name_span: dbt_common::Span::from_serde_span(
                         mpe.name_span.clone(),
                         mpe.relative_path.clone(),
                     ),
-                    original_file_path: mpe.relative_path.clone(),
+                    original_file_path: DbtPath::from(&mpe.relative_path),
                     unique_id: unique_id.clone(),
                     fqn: vec![],
                     description: group.description,

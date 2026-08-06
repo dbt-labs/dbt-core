@@ -27,6 +27,7 @@ enum ExplainBadge {
   TARGET_TABLE_EXISTS = 8;
 }
 
+
 message ExplainLine {
   string text = 1;
   optional ExplainMarker marker = 2;

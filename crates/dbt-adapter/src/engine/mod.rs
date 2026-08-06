@@ -60,8 +60,6 @@ const REMOVED_IN_FUSION: &[&str] = &[
     // ---
     // metadata adapter already uses SVV views
     "restrict_direct_pg_catalog_access",
-    // transactions handled at driver level
-    "redshift_skip_autocommit_transaction_statements",
     // dbt-bigquery flags
     // ---
     // metadata adapter already uses batched __TABLES__ queries for freshness.

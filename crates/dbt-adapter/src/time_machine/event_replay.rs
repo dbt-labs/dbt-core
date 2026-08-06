@@ -1,26 +1,14 @@
 //! Replay infrastructure for time-machine recordings.
 //!
-//! This module provides functionality to load and navigate recorded adapter events.
-//!
-//! # Replay Modes
-//!
-//! The replay system supports two ordering modes:
-//!
-//! - **Strict**: Events must match in exact recorded sequence order.
-//!   This is the default and ensures deterministic replay.
-//!
-//! - **Semantic**: Events are matched based on semantic constraints:
-//!   - Write operations are barriers and must match in strict order
-//!   - Read operations can match flexibly within a "segment" (between writes)
-//!   - This enables replay tolerance for minor ordering variations
-//!
-//! The semantic mode treats the recording as a graph segmentation problem where
-//! write operations create ordering constraints (barriers) while read operations
-//! within a segment can be matched in any order.
+//! Loads and navigates recorded adapter events. Replay defaults to strict mode, where
+//! events must match in exact recorded order. Semantic mode relaxes this: writes still
+//! act as ordering barriers that must match in sequence, but reads between two barriers
+//! (a "segment") can match in any order, so minor read reordering doesn't break replay.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
+use std::str::FromStr;
 
 use flate2::read::GzDecoder;
 use parking_lot::RwLock;
@@ -49,9 +37,46 @@ fn extract_sql_from_args(args: &serde_json::Value) -> Option<&str> {
     }
 }
 
-/// Check if a method executes input SQL.
 fn is_sql_method(method: &str) -> bool {
     method == "execute" || method == "run_query"
+}
+
+/// Returns true if the SQL string is read-only and cannot mutate DB state.
+///
+/// These are calls that use execute/run_query but are semantically reads —
+/// for example compile-time probe queries from dbt macros like dbt_utils.date_spine
+/// (`SELECT datediff(...)`) or Snowflake parameter reads (`SHOW PARAMETERS ...`).
+///
+/// Public so the Mantle replay engine (`sdf-adapter`) classifies read-only statements
+/// identically; both engines must agree on what counts as an ordering barrier.
+pub fn is_read_only_sql(sql: &str) -> bool {
+    // Only check the first 8 chars to keep this O(1).
+    let prefix: String = sql
+        .trim()
+        .chars()
+        .take(8)
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+    prefix.starts_with("SELECT")
+        || prefix.starts_with("SHOW")
+        || prefix.starts_with("EXPLAIN")
+        || prefix.starts_with("DESCRIBE")
+}
+
+/// Returns true if this recorded event is a read-only execute/run_query call.
+fn is_read_only_execute_event(event: &AdapterCallEvent) -> bool {
+    is_sql_method(&event.method)
+        && extract_sql_from_args(&event.args)
+            .map(is_read_only_sql)
+            .unwrap_or(false)
+}
+
+/// Returns true if this incoming replay call is a read-only execute/run_query.
+pub(crate) fn is_read_only_execute_call(method: &str, args: &serde_json::Value) -> bool {
+    is_sql_method(method)
+        && extract_sql_from_args(args)
+            .map(is_read_only_sql)
+            .unwrap_or(false)
 }
 
 /// Compare two MetadataCallArgs for semantic equality.
@@ -76,7 +101,7 @@ fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -
             // Case-insensitive superset check: semantic_fqn strings may differ
             // only in casing due to identifier normalization (e.g. Snowflake
             // uppercasing unquoted identifiers), so we compare uppercased forms.
-            let recorded_set: std::collections::HashSet<String> = recorded_relations
+            let recorded_set: HashSet<String> = recorded_relations
                 .iter()
                 .map(|r| r.to_ascii_uppercase())
                 .collect();
@@ -96,10 +121,11 @@ fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -
     }
 }
 
-pub(crate) fn adapter_args_match(
+pub(crate) fn adapter_args_match_for_type(
     method: &str,
     recorded: &serde_json::Value,
     actual: &serde_json::Value,
+    adapter_type: AdapterType,
 ) -> bool {
     match method {
         "get_relation" => match (
@@ -119,6 +145,12 @@ pub(crate) fn adapter_args_match(
                     },
                 )
         }
+        "execute" | "run_query" => extract_sql_from_args(recorded)
+            .zip(extract_sql_from_args(actual))
+            .map_or_else(
+                || values_match(recorded, actual),
+                |(rec_sql, act_sql)| compare_sql(rec_sql, act_sql, adapter_type).is_ok(),
+            ),
         "submit_python_job" => python_job_args_match(recorded, actual),
         _ => values_match(recorded, actual),
     }
@@ -245,7 +277,6 @@ pub enum ReplayMode {
 }
 
 impl ReplayMode {
-    /// Returns true if this mode allows flexible matching of reads.
     pub fn allows_flexible_reads(&self) -> bool {
         matches!(self, Self::Semantic)
     }
@@ -363,6 +394,9 @@ pub struct Recording {
     semantic_adapter_state: RwLock<HashMap<String, SemanticReplayState>>,
     /// Semantic mode state for metadata calls
     semantic_metadata_state: RwLock<HashMap<String, SemanticReplayState>>,
+    /// Strict mode: seq numbers of read-only execute events already matched globally.
+    /// These events are skipped by take_next so they don't consume the wrong write slot.
+    ro_exec_matched: RwLock<HashMap<String, HashSet<u32>>>,
 }
 
 /// State for semantic replay mode per node/caller.
@@ -381,6 +415,10 @@ struct SemanticReplayState {
 }
 
 impl Recording {
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::from_str(&self.header.adapter_type).unwrap_or(AdapterType::Snowflake)
+    }
+
     /// Load a recording from disk.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ReplayError> {
         let path = path.as_ref();
@@ -471,6 +509,7 @@ impl Recording {
             cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
+            ro_exec_matched: RwLock::new(HashMap::new()),
         })
     }
 
@@ -478,24 +517,19 @@ impl Recording {
     // SAO (State Aware Orchestration) methods
     // -------------------------------------------------------------------------
 
-    /// Get SAO skip event for a node, if one was recorded.
-    ///
-    /// Returns the SAO event if the node was skipped due to a cache hit during recording.
+    /// Present only when the node was skipped due to a cache hit during recording.
     pub fn get_sao_event(&self, node_id: &str) -> Option<&SaoEvent> {
         self.sao_events.get(node_id)
     }
 
-    /// Check if a node has a recorded SAO skip event.
     pub fn has_sao_event(&self, node_id: &str) -> bool {
         self.sao_events.contains_key(node_id)
     }
 
-    /// Get all node IDs that have SAO skip events.
     pub fn sao_node_ids(&self) -> impl Iterator<Item = &str> {
         self.sao_events.keys().map(|s| s.as_str())
     }
 
-    /// Get total number of SAO skip events.
     pub fn total_sao_events(&self) -> usize {
         self.sao_events.len()
     }
@@ -505,32 +539,97 @@ impl Recording {
     // -------------------------------------------------------------------------
 
     /// Get the next recorded adapter event for a node without advancing the position.
+    ///
+    /// Skips events already consumed as read-only execute reads (ro_exec_matched).
     pub fn peek_next(&self, node_id: &str) -> Option<&AdapterCallEvent> {
+        let events = self.adapter_events_by_node.get(node_id)?;
+        let ro_matched: HashSet<u32> = {
+            let guard = self.ro_exec_matched.read();
+            guard.get(node_id).cloned().unwrap_or_default()
+        };
         let positions = self.adapter_positions.read();
-        let pos = positions.get(node_id).copied().unwrap_or(0);
-        self.adapter_events_by_node.get(node_id)?.get(pos)
+        let mut scan_pos = positions.get(node_id).copied().unwrap_or(0);
+        loop {
+            let event = events.get(scan_pos)?;
+            scan_pos += 1;
+            if !ro_matched.contains(&event.seq) {
+                return Some(event);
+            }
+        }
     }
 
     /// Get the next recorded adapter event for a node and advance the position.
+    ///
+    /// Skips events already consumed as read-only execute reads (ro_exec_matched).
     pub fn take_next(&self, node_id: &str) -> Option<&AdapterCallEvent> {
         let events = self.adapter_events_by_node.get(node_id)?;
+        let ro_matched: HashSet<u32> = {
+            let guard = self.ro_exec_matched.read();
+            guard.get(node_id).cloned().unwrap_or_default()
+        };
         let mut positions = self.adapter_positions.write();
         let pos = positions.entry(node_id.to_string()).or_insert(0);
-        let event = events.get(*pos)?;
-        *pos += 1;
+        let event = loop {
+            let e = events.get(*pos)?;
+            *pos += 1;
+            if !ro_matched.contains(&e.seq) {
+                break e;
+            }
+        };
         Some(event)
     }
 
-    /// Get all recorded adapter events for a node.
     pub fn events_for_node(&self, node_id: &str) -> Option<&[AdapterCallEvent]> {
         self.adapter_events_by_node
             .get(node_id)
             .map(|v| v.as_slice())
     }
 
-    /// Get all node IDs in the recording.
     pub fn node_ids(&self) -> impl Iterator<Item = &str> {
         self.adapter_events_by_node.keys().map(|s| s.as_str())
+    }
+
+    /// Find a read-only execute event (SELECT/SHOW SQL) anywhere in this node's recording
+    /// and mark it as consumed so it is skipped by strict-mode sequential matching.
+    ///
+    /// dbt macros such as dbt_utils.date_spine call `run_query("SELECT datediff(...)")`
+    /// during Jinja compilation to compute parameters. Python dbt records these after the
+    /// query-tag SHOW call, but Fusion emits them earlier (during compilation). The result
+    /// is an ordering mismatch that would cause strict mode to consume the wrong event.
+    ///
+    /// By matching these calls globally (anywhere in the node's event list) and marking
+    /// them in `ro_exec_matched`, we let subsequent sequential writes still find their
+    /// correct recorded events.
+    pub fn take_ro_exec_read(
+        &self,
+        node_id: &str,
+        method: &str,
+        args: &serde_json::Value,
+    ) -> Option<&AdapterCallEvent> {
+        let events = self.adapter_events_by_node.get(node_id)?;
+        let adapter_type = self.adapter_type();
+
+        // Snapshot the skip-set without holding the write lock during the linear scan.
+        let already_matched: HashSet<u32> = {
+            let guard = self.ro_exec_matched.read();
+            guard.get(node_id).cloned().unwrap_or_default()
+        };
+
+        let event = events.iter().find(|e| {
+            !already_matched.contains(&e.seq)
+                && is_read_only_execute_event(e)
+                && e.method == method
+                && adapter_args_match_for_type(method, &e.args, args, adapter_type)
+        })?;
+
+        // Mark as consumed so take_next skips it during sequential strict replay.
+        self.ro_exec_matched
+            .write()
+            .entry(node_id.to_string())
+            .or_default()
+            .insert(event.seq);
+
+        Some(event)
     }
 
     // -------------------------------------------------------------------------
@@ -561,7 +660,15 @@ impl Recording {
 
         match category {
             SemanticCategory::Write => {
-                // Writes are barriers - must match the next write in sequence.
+                // Check whether the actual SQL is read-only (SELECT, SHOW, ...).
+                // dbt macros like dbt_utils.date_spine call execute/run_query with a
+                // SELECT during Jinja compilation. These are semantically reads even
+                // though the method is classified as Write. Treat them as untracked
+                // reads so ordering differences don't cause false-positive mismatches.
+                if is_read_only_execute_call(method, args) {
+                    return self.find_read_in_segment_untracked(events, node_state, method, args);
+                }
+                // Real writes are barriers - must match the next write in sequence.
                 // Writes ARE tracked and consumed.
                 self.find_next_write_in_segment(events, node_state, method)
             }
@@ -580,7 +687,10 @@ impl Recording {
     ///
     /// Writes are tracked and consumed. They act as segment barriers.
     /// Matching is by method name only - the sequence order provides correctness.
-    /// SQL validation happens separately via `validate_replay()`.
+    /// SQL validation happens separately via `validate_replay()`, but the args
+    /// must still match here before advancing the replay state. Otherwise an
+    /// unrecorded write can consume the next recorded write and turn the real
+    /// error into a misleading SQL mismatch on a later call.
     fn find_next_write_in_segment<'a>(
         &'a self,
         events: &'a [AdapterCallEvent],
@@ -591,8 +701,9 @@ impl Recording {
 
         // Find the first write from segment_start onwards
         for (idx, event) in events[search_start..].iter().enumerate() {
-            // Skip non-write operations
-            if !event.semantic_category.is_mutating() {
+            // Skip non-write operations and read-only execute events (SELECT/SHOW SQL).
+            // Read-only executes are not barriers; they belong to the read search space.
+            if !event.semantic_category.is_mutating() || is_read_only_execute_event(event) {
                 continue;
             }
 
@@ -602,7 +713,13 @@ impl Recording {
                 return None;
             }
 
-            // Match found. SQL validation should happen separately
+            // Match found by method name. SQL content is validated separately by
+            // `validate_event`, which uses a more permissive sanitizer pipeline
+            // (strips comments, query tags, UUIDs, ...) than the comparison here
+            // would. Gating consumption on SQL equality duplicated that check with
+            // stricter rules, so legitimate writes whose SQL contains tolerable
+            // dynamic content (e.g. audit-log timestamps) failed to match at all
+            // instead of surfacing as a normal SQL-mismatch validation error.
 
             // Advance the segment past this write
             let abs_idx = search_start + idx;
@@ -632,17 +749,22 @@ impl Recording {
     ) -> Option<&'a AdapterCallEvent> {
         let search_start = state.segment_start;
 
-        // Determine segment end (next write or end of events)
+        // Determine segment end: the next real write barrier.
+        // Read-only execute events (SELECT/SHOW SQL) are NOT barriers even though
+        // their recorded semantic_category is Write; they live in the read search space.
         let segment_end = events[search_start..]
             .iter()
-            .position(|e| e.semantic_category.is_mutating())
+            .position(|e| e.semantic_category.is_mutating() && !is_read_only_execute_event(e))
             .map(|pos| search_start + pos)
             .unwrap_or(events.len());
 
-        // Search within the segment for a matching read (method + args)
-        events[search_start..segment_end]
-            .iter()
-            .find(|event| event.method == method && adapter_args_match(method, &event.args, args))
+        // Search within the segment for a matching read (method + args).
+        // Use the recording's adapter type for SQL comparison.
+        let adapter_type = self.adapter_type();
+        events[search_start..segment_end].iter().find(|event| {
+            event.method == method
+                && adapter_args_match_for_type(method, &event.args, args, adapter_type)
+        })
     }
 
     /// Peek at the next event in semantic mode without consuming it.
@@ -702,13 +824,11 @@ impl Recording {
             .map(|pos| search_start + pos)
             .unwrap_or(events.len());
 
-        // Check if there are any non-write events in the segment
         events[search_start..segment_end]
             .iter()
             .any(|e| !e.semantic_category.is_mutating())
     }
 
-    /// Check if there is a pending write barrier for a node.
     pub fn has_pending_write(&self, node_id: &str) -> bool {
         let Some(events) = self.adapter_events_by_node.get(node_id) else {
             return false;
@@ -815,7 +935,6 @@ impl Recording {
     // Metadata call methods (strict mode)
     // -------------------------------------------------------------------------
 
-    /// Check if we have any recorded metadata events for a caller.
     pub fn has_metadata_events_for_caller(&self, caller_id: &str) -> bool {
         self.metadata_events_by_caller.contains_key(caller_id)
     }
@@ -870,14 +989,12 @@ impl Recording {
         Some(event)
     }
 
-    /// Get all recorded metadata events for a caller.
     pub fn metadata_events_for_caller(&self, caller_id: &str) -> Option<&[MetadataCallEvent]> {
         self.metadata_events_by_caller
             .get(caller_id)
             .map(|v| v.as_slice())
     }
 
-    /// Get all caller IDs for metadata events.
     pub fn metadata_caller_ids(&self) -> impl Iterator<Item = &str> {
         self.metadata_events_by_caller.keys().map(|s| s.as_str())
     }
@@ -901,12 +1018,10 @@ impl Recording {
             + self.run_remote_adhoc_events.len()
     }
 
-    /// Get total adapter events count.
     pub fn total_adapter_events(&self) -> usize {
         self.adapter_events_by_node.values().map(|v| v.len()).sum()
     }
 
-    /// Get total metadata events count.
     pub fn total_metadata_events(&self) -> usize {
         self.metadata_events_by_caller
             .values()
@@ -914,7 +1029,6 @@ impl Recording {
             .sum()
     }
 
-    /// Get total run_remote_adhoc events count.
     pub fn total_run_remote_adhoc_events(&self) -> usize {
         self.run_remote_adhoc_events.len()
     }
@@ -943,12 +1057,14 @@ impl Recording {
         *self.cache_invalidation_position.write() = 0;
         self.semantic_adapter_state.write().clear();
         self.semantic_metadata_state.write().clear();
+        self.ro_exec_matched.write().clear();
     }
 
     /// Reset replay position for a specific node.
     pub fn reset_node(&self, node_id: &str) {
         self.adapter_positions.write().remove(node_id);
         self.semantic_adapter_state.write().remove(node_id);
+        self.ro_exec_matched.write().remove(node_id);
     }
 
     /// Reset replay position for a specific metadata caller.
@@ -1078,7 +1194,6 @@ pub fn validate_replay(
 ) -> ReplayResult {
     let mut differences = Vec::new();
 
-    // Check method name
     if recorded.method != method {
         differences.push(ReplayDifference::MethodMismatch {
             expected: recorded.method.clone(),
@@ -1228,6 +1343,7 @@ mod tests {
             cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
+            ro_exec_matched: RwLock::new(HashMap::new()),
         }
     }
 
@@ -1770,6 +1886,7 @@ mod tests {
             cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
+            ro_exec_matched: RwLock::new(HashMap::new()),
         };
 
         // Request TABLE_B first (out of order by seq, but should match by args)
@@ -1824,8 +1941,18 @@ mod tests {
             "import pandas as pd\n\ndef model(dbt, session):\n    return None\n"
         ]);
 
-        assert!(adapter_args_match("submit_python_job", &recorded, &actual));
-        assert!(adapter_args_match("submit_python_job", &actual, &recorded));
+        assert!(adapter_args_match_for_type(
+            "submit_python_job",
+            &recorded,
+            &actual,
+            AdapterType::Snowflake
+        ));
+        assert!(adapter_args_match_for_type(
+            "submit_python_job",
+            &actual,
+            &recorded,
+            AdapterType::Snowflake
+        ));
     }
 
     #[test]
@@ -1840,7 +1967,12 @@ mod tests {
             "def model(dbt, session):\n    return 2\n"
         ]);
 
-        assert!(!adapter_args_match("submit_python_job", &recorded, &actual));
+        assert!(!adapter_args_match_for_type(
+            "submit_python_job",
+            &recorded,
+            &actual,
+            AdapterType::Snowflake
+        ));
     }
 
     #[test]
@@ -1855,8 +1987,18 @@ mod tests {
             }
         ]);
 
-        assert!(adapter_args_match("get_relation", &kwargs, &positional));
-        assert!(adapter_args_match("get_relation", &positional, &kwargs));
+        assert!(adapter_args_match_for_type(
+            "get_relation",
+            &kwargs,
+            &positional,
+            AdapterType::Snowflake
+        ));
+        assert!(adapter_args_match_for_type(
+            "get_relation",
+            &positional,
+            &kwargs,
+            AdapterType::Snowflake
+        ));
     }
 
     #[test]
@@ -1947,25 +2089,29 @@ mod tests {
         let positional_true =
             serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions", true]);
 
-        assert!(adapter_args_match(
+        assert!(adapter_args_match_for_type(
             "get_relation",
             &default_needs_information,
-            &explicit_false
+            &explicit_false,
+            AdapterType::Snowflake,
         ));
-        assert!(!adapter_args_match(
+        assert!(!adapter_args_match_for_type(
             "get_relation",
             &default_needs_information,
-            &explicit_true
+            &explicit_true,
+            AdapterType::Snowflake,
         ));
-        assert!(!adapter_args_match(
+        assert!(!adapter_args_match_for_type(
             "get_relation",
             &default_needs_information,
-            &positional_true
+            &positional_true,
+            AdapterType::Snowflake,
         ));
-        assert!(adapter_args_match(
+        assert!(adapter_args_match_for_type(
             "get_relation",
             &explicit_true,
-            &positional_true
+            &positional_true,
+            AdapterType::Snowflake,
         ));
     }
 
@@ -2021,6 +2167,162 @@ mod tests {
         assert!(
             !sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
             "Different table names should not match"
+        );
+    }
+
+    #[test]
+    fn test_semantic_mode_does_not_match_date_spine_probe_to_model_execute() {
+        let node_id = "model.project.date_details";
+        let recorded_model_sql = r#"
+            create or replace view analytics.public.date_details as (
+                with date_spine as (
+                    with rawdata as (
+                        select 1 as generated_number
+                    )
+                    select * from rawdata
+                )
+                select * from date_spine
+            )
+        "#;
+        let actual_date_spine_probe_sql = r#"
+            select datediff(
+                day,
+                to_date('01/01/2019', 'mm/dd/yyyy'),
+                current_date+1
+            )
+        "#;
+        let recording = make_recording(vec![AdapterCallEvent {
+            node_id: node_id.to_string(),
+            seq: 0,
+            method: "execute".to_string(),
+            semantic_category: SemanticCategory::Write,
+            args: serde_json::json!([recorded_model_sql]),
+            result: serde_json::json!({"rows": 0}),
+            success: true,
+            error: None,
+            timestamp_ns: 0,
+        }]);
+
+        let actual_args = serde_json::json!([actual_date_spine_probe_sql]);
+        let event = recording.take_semantic_match(
+            node_id,
+            "execute",
+            &actual_args,
+            SemanticCategory::Write,
+        );
+
+        assert!(
+            event.is_none(),
+            "date_spine's compile-time datediff probe should not consume the recorded model DDL write"
+        );
+
+        let model_args = serde_json::json!([recorded_model_sql]);
+        let event = recording
+            .take_semantic_match(node_id, "execute", &model_args, SemanticCategory::Write)
+            .expect("the recorded model DDL should remain available after the probe mismatch");
+        assert_eq!(event.args, model_args);
+    }
+
+    /// Recording has [SHOW_PARAMS, DATEDIFF_PROBE, CREATE_VIEW] but Fusion emits them
+    /// as [DATEDIFF_PROBE, SHOW_PARAMS, CREATE_VIEW]. In semantic mode all three should
+    /// still be matched correctly.
+    #[test]
+    fn test_semantic_mode_date_spine_ordering_mismatch() {
+        let node_id = "model.project.date_details";
+        let show_sql = "show parameters like 'query_tag' in session";
+        let probe_sql =
+            "select datediff(day, '2018-12-31'::date, sysdate()::date + interval '1 day')";
+        let ddl_sql = "create or replace view analytics.public.date_details as (select 1)";
+
+        let make_exec = |seq: u32, sql: &str| AdapterCallEvent {
+            node_id: node_id.to_string(),
+            seq,
+            method: "execute".to_string(),
+            semantic_category: SemanticCategory::Write,
+            args: serde_json::json!([sql]),
+            result: serde_json::json!({"rows": 0}),
+            success: true,
+            error: None,
+            timestamp_ns: seq as u64,
+        };
+
+        // Recording order: SHOW_PARAMS (0), DATEDIFF_PROBE (1), CREATE_VIEW (2)
+        let recording = make_recording(vec![
+            make_exec(0, show_sql),
+            make_exec(1, probe_sql),
+            make_exec(2, ddl_sql),
+        ]);
+
+        // Fusion replay order: DATEDIFF_PROBE first, then SHOW_PARAMS, then CREATE_VIEW
+        let probe_args = serde_json::json!([probe_sql]);
+        let e = recording
+            .take_semantic_match(node_id, "execute", &probe_args, SemanticCategory::Write)
+            .expect("probe should be found as untracked read in segment");
+        assert_eq!(e.seq, 1);
+
+        let show_args = serde_json::json!([show_sql]);
+        let e = recording
+            .take_semantic_match(node_id, "execute", &show_args, SemanticCategory::Write)
+            .expect("SHOW PARAMETERS should be found as untracked read in segment");
+        assert_eq!(e.seq, 0);
+
+        let ddl_args = serde_json::json!([ddl_sql]);
+        let e = recording
+            .take_semantic_match(node_id, "execute", &ddl_args, SemanticCategory::Write)
+            .expect("CREATE VIEW should still be matched as a write barrier");
+        assert_eq!(e.seq, 2);
+    }
+
+    /// In strict mode, read-only execute calls (SELECT/SHOW) should be matched globally
+    /// via take_ro_exec_read and should not consume the sequential write slot.
+    #[test]
+    fn test_strict_mode_read_only_execute_global_match() {
+        let node_id = "model.project.date_details";
+        let show_sql = "show parameters like 'query_tag' in session";
+        let probe_sql = "select datediff(day, '2018-12-31'::date, sysdate()::date)";
+        let ddl_sql = "create or replace view analytics.public.date_details as (select 1)";
+
+        let make_exec = |seq: u32, sql: &str| AdapterCallEvent {
+            node_id: node_id.to_string(),
+            seq,
+            method: "execute".to_string(),
+            semantic_category: SemanticCategory::Write,
+            args: serde_json::json!([sql]),
+            result: serde_json::json!({"rows": 0}),
+            success: true,
+            error: None,
+            timestamp_ns: seq as u64,
+        };
+
+        // Recording order: SHOW_PARAMS (0), DATEDIFF_PROBE (1), CREATE_VIEW (2)
+        let recording = make_recording(vec![
+            make_exec(0, show_sql),
+            make_exec(1, probe_sql),
+            make_exec(2, ddl_sql),
+        ]);
+
+        // Strict mode replay: DATEDIFF_PROBE arrives first via global read search
+        let probe_args = serde_json::json!([probe_sql]);
+        let e = recording
+            .take_ro_exec_read(node_id, "execute", &probe_args)
+            .expect("probe should be matched globally");
+        assert_eq!(e.seq, 1, "should match the probe event (seq 1)");
+
+        // SHOW_PARAMS also arrives out of order; matched globally
+        let show_args = serde_json::json!([show_sql]);
+        let e = recording
+            .take_ro_exec_read(node_id, "execute", &show_args)
+            .expect("SHOW PARAMETERS should be matched globally");
+        assert_eq!(e.seq, 0);
+
+        // take_next (strict sequential) should skip seq 0 and seq 1 (already consumed
+        // as read-only execute reads) and return seq 2 (CREATE_VIEW).
+        let e = recording
+            .take_next(node_id)
+            .expect("CREATE VIEW should be the next sequential event");
+        assert_eq!(
+            e.seq, 2,
+            "take_next should skip ro_exec_matched events and return CREATE_VIEW"
         );
     }
 
@@ -2124,6 +2426,7 @@ mod tests {
             cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
+            ro_exec_matched: RwLock::new(HashMap::new()),
         }
     }
 

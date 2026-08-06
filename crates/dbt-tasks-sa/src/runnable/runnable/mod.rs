@@ -8,8 +8,9 @@ use crate::materialize::{NodeHookPhase, NodeHookStyle, execute_node_hooks, model
 use crate::runnable::function::execute_function_remote;
 use crate::runnable::snapshot::execute_snapshot_remote;
 use crate::runnable::test::{
-    TestExecutionStatus, TestReportedResult, execute_test_remote, record_cached_test_span,
-    record_test_metric, status_with_warn_error_overrides,
+    TestExecutionStatus, TestReportedResult, execute_test_remote,
+    process_statically_checked_test_result, record_test_metric, record_test_span_with_detail,
+    reported_test_verdict_from_components, status_with_warn_error_overrides,
 };
 use dbt_adapter::time_machine::{SaoStatus, global_recorder, global_replayer};
 use dbt_adapter_core::AdapterType;
@@ -31,7 +32,7 @@ use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::run_task_hooks::RunTaskHooks;
 use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task, TaskOp};
-use dbt_telemetry::{NodeEvaluated, NodeType};
+use dbt_telemetry::{NodeEvaluated, NodeSkipReason, NodeType};
 
 use tokio::task::JoinSet;
 use tracing::Instrument;
@@ -43,22 +44,24 @@ use crate::materialize::{
 use crate::runnable::cache::cache_materialization_return_value;
 use crate::runnable::model::{
     execute_microbatch_batch, execute_model_remote, prepare_microbatch_batches,
-    try_get_microbatch_model,
+    resolve_microbatch_window, try_get_microbatch_model,
 };
 use crate::runnable::seed::{execute_seed_remote, maybe_resolve_remote_seed_column_hint};
 use crate::runnable::unit_test::execute_unit_test_remote;
 use dbt_tasks_core::run_cache::run_cache_service::{
-    RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError, RunCacheReuseHookExecutor,
-    RunCacheReuseHookPhase, RunCacheServiceDecision, confirm_run_cache_service_execution,
+    CachedTestExecutionResult, RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError,
+    RunCacheReuseHookExecutor, RunCacheReuseHookPhase, RunCacheServiceDecision,
+    clear_stale_missing_last_modified_epoch_for_node, confirm_run_cache_service_execution,
     execute_run_cache_service_clone, insert_compiled_view_definition,
-    record_run_cache_service_execution, refresh_final_last_modified_epoch_for_node,
-    run_cache_service_before_execution, should_execute_hooks_for_skip_reuse,
+    record_run_cache_service_execution, run_cache_service_before_execution,
+    should_execute_hooks_for_skip_reuse,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunExecutionPath {
     Remote,
     SideCar,
+    AltCompute,
 }
 
 pub struct RunTask {
@@ -132,8 +135,20 @@ impl Task for RunTask {
 
             let execution_started_at = Instant::now();
             let mut after_success = RunCacheAfterSuccess::None;
-            let result = match self.execution_path {
-                RunExecutionPath::Remote => {
+            let statically_checked_test = match self.node.as_any().downcast_ref::<DbtTest>() {
+                Some(test) => ctx
+                    .is_data_test_statically_skippable(unique_id.as_str())
+                    .await
+                    .then_some(test),
+                None => None,
+            };
+            let result = match (statically_checked_test, self.execution_path) {
+                (Some(test), _) => {
+                    let node_status =
+                        process_statically_checked_test_result(test, ctx, start_time.into());
+                    Ok(node_status)
+                }
+                (None, RunExecutionPath::Remote) => {
                     // Step 0: Replay a cached SAO result if one was recorded
                     if let Some(status) = maybe_replay_remote_run(&self.node.unique_id()) {
                         return Ok(status);
@@ -160,8 +175,33 @@ impl Task for RunTask {
                         ctx.inner.run_cache_ctx.run_cache_service_requested;
                     let decision = if run_cache_service_requested {
                         insert_compiled_view_definition(ctx, self.node.as_ref(), &task_result);
-                        run_cache_service_before_execution(ctx, self.node.as_ref(), &task_result)
-                            .await
+                        // Microbatch models make one per-model cache decision keyed to
+                        // the run's event-time window. Resolve it here (fail open: a
+                        // resolution error yields None and the service submit executes
+                        // normally rather than risk a window-independent skip).
+                        let microbatch_window = match try_get_microbatch_model(self.node.as_ref()) {
+                            Some(model) => match resolve_microbatch_window(model, ctx) {
+                                Ok(window) => Some(window),
+                                Err(e) => {
+                                    emit_warn_log_message(
+                                        ErrorCode::StateServiceWarn,
+                                        format!(
+                                            "Failed to resolve microbatch window for node {}: {e}; executing without dbt State",
+                                            self.node.unique_id()
+                                        ),
+                                    );
+                                    None
+                                }
+                            },
+                            None => None,
+                        };
+                        run_cache_service_before_execution(
+                            ctx,
+                            self.node.as_ref(),
+                            &task_result,
+                            microbatch_window,
+                        )
+                        .await
                     } else if cache_enabled {
                         TaskOp::r#async(self.task_hooks.check_sao_cache(
                             ctx,
@@ -182,31 +222,35 @@ impl Task for RunTask {
                     if let RunCacheServiceDecision::Skip {
                         status,
                         sao_stored_hash,
-                        cached_test_failures,
+                        cached_test_result,
                     } = &decision
                     {
                         let source = sao_stored_hash.as_deref().unwrap_or("run-cache-service");
                         // For data tests, override the generic
                         // ReusedNoChanges status with a test-shaped verdict
-                        // and insert a Stat carrying the cached failures
-                        // count plus a NO-OP marker, so run_results.json
-                        // looks like dbt-core's _DataTestAdapterProxy
-                        // produces.
-                        let final_status = if let (Some(failures), Some(test)) = (
-                            cached_test_failures,
+                        // and insert a Stat carrying the cached failures plus
+                        // a NO-OP marker, so run_results.json looks like
+                        // dbt-core's _DataTestAdapterProxy produces.
+                        let final_status = if let (Some(cached_result), Some(test)) = (
+                            cached_test_result,
                             self.node.as_any().downcast_ref::<DbtTest>(),
                         ) {
                             let severity =
                                 test.deprecated_config.severity.clone().unwrap_or_default();
                             let cached_status = cached_data_test_status(
                                 status,
-                                *failures,
+                                *cached_result,
                                 severity,
                                 &ctx.inner.arg.warn_error_options,
                             );
                             let reported_result = cached_status.reported_result();
                             record_test_metric(reported_result.status);
-                            record_cached_test_span(test, &reported_result);
+                            record_test_span_with_detail(
+                                &reported_result,
+                                Some(NodeSkipReason::Cached),
+                                test.deprecated_config.store_failures,
+                                None,
+                            );
                             ctx.inner.run_stats.insert(
                                 unique_id.clone(),
                                 Stat::new(
@@ -265,7 +309,6 @@ impl Task for RunTask {
                                                 "dbt State service clone failed for node {}: {err}; executing normally",
                                                 self.node.unique_id()
                                             ),
-                                            None,
                                         );
                                         clone
                                             .fallback_confirmation()
@@ -445,9 +488,14 @@ impl Task for RunTask {
                         }
                     }
                 }
-                RunExecutionPath::SideCar => {
+                (None, RunExecutionPath::SideCar) => {
                     self.task_hooks
                         .run_alt_compute_sidecar(ctx, Arc::clone(&self.node), task_result.clone())
+                        .await
+                }
+                (None, RunExecutionPath::AltCompute) => {
+                    self.task_hooks
+                        .run_on_alt_compute(ctx, Arc::clone(&self.node), task_result.clone())
                         .await
                 }
             };
@@ -504,6 +552,7 @@ impl Task for RunTask {
                 Err(e) => {
                     // TODO: At some point, these should log as part of the same event
                     let node_status = NodeStatus::Errored;
+                    let error_message = e.to_string();
                     report_completed(
                         &NodeStatus::Errored,
                         self.node.defined_at().cloned(),
@@ -514,12 +563,11 @@ impl Task for RunTask {
 
                     if matches!(
                         self.execution_path,
-                        RunExecutionPath::Remote | RunExecutionPath::SideCar
+                        RunExecutionPath::Remote
+                            | RunExecutionPath::SideCar
+                            | RunExecutionPath::AltCompute
                     ) {
-                        emit_error_log_from_fs_error(
-                            e.as_ref(),
-                            ctx.inner.arg.io.status_reporter.as_ref(),
-                        );
+                        emit_error_log_from_fs_error(*e);
                     }
 
                     // Insert stats for the error case so it appears in run_results.json
@@ -530,7 +578,7 @@ impl Task for RunTask {
                             start_time.into(),
                             None,
                             node_status.clone(),
-                            Some(e.to_string()),
+                            Some(error_message),
                             ctx.thread_id,
                         ),
                     );
@@ -780,38 +828,23 @@ async fn run_cache_after_success_action(
             // the current invocation invalidates the cached `None`. The
             // prefetch miss-filter in `prefetch_last_modified_epochs` treats
             // `Some(None)` as a hit (not a miss), so downstream models
-            // never re-query and see the upstream as missing — tripping
-            // their own `metadata_complete = false` and submit-skipping
-            // them too. Re-fetching the just-executed node's epoch here
-            // replaces that stale `None` with the real value so downstream
-            // consumers see the relation correctly.
-            // The `Confirm` arm gets the same refresh as the first step of
-            // `confirm_run_cache_service_execution`; we mirror it here for
-            // the no-confirmation case so the cache stays coherent
-            // regardless of which path the submit took.
-            if ctx.inner.run_cache_ctx.run_cache_service_requested
-                && let Err(err) = refresh_final_last_modified_epoch_for_node(ctx, node).await
-            {
-                emit_warn_log_message(
-                    ErrorCode::StateServiceWarn,
-                    format!(
-                        "dbt State post-execution metadata refresh failed for node {}: {err}; command remains successful",
-                        node.unique_id()
-                    ),
-                    None,
-                );
+            // never re-query. Clear the stale value after successful execution;
+            // the next downstream submit sees a real miss and uses the normal
+            // planned prefetch path.
+            if ctx.inner.run_cache_ctx.run_cache_service_requested {
+                clear_stale_missing_last_modified_epoch_for_node(ctx, node);
             }
         }
         RunCacheAfterSuccess::Confirm(mut confirmation) => {
-            // Data tests: lift the just-executed failures count from
-            // run_stats into the confirmation so future runs can replay it.
-            // process_test_result inserts the stat before this hook fires,
-            // so the value is available here.
+            // Data tests: lift the just-executed result into the confirmation
+            // so future runs can replay it.
             if node.as_any().is::<DbtTest>() {
-                if let Some(stat) = ctx.inner.run_stats.get(node.unique_id().as_str()) {
-                    if let Some(failures) = stat.num_rows {
-                        confirmation.set_test_execution_results(failures as i64);
-                    }
+                if let Some(result) = ctx
+                    .inner
+                    .data_test_execution_results
+                    .get(node.unique_id().as_str())
+                {
+                    confirmation.set_test_execution_results(*result);
                 }
             }
             confirm_run_cache_service_execution(
@@ -846,6 +879,7 @@ impl CachedDataTestStatus {
             failures: self.failures,
             status: self.status,
             diff: None,
+            execution_result: None,
         }
     }
 }
@@ -853,23 +887,21 @@ impl CachedDataTestStatus {
 /// Converts a cached data test result into the statuses and metrics needed for reuse reporting.
 ///
 /// Cached passing tests keep the run-cache reuse status as the task's final status while recording
-/// a passing test stat. Cached failures use the data test severity to report warn/error stats and
-/// increment the matching invocation metric so command status matches a normally executed test.
+/// a passing test stat. Cached failures use the cached threshold booleans plus data test severity
+/// to report warn/error stats and increment the matching invocation metric so command status
+/// matches a normally executed test.
 fn cached_data_test_status(
     reused_status: &NodeStatus,
-    failures: i64,
+    result: CachedTestExecutionResult,
     severity: Severity,
     warn_error_options: &WarnErrorOptions,
 ) -> CachedDataTestStatus {
-    let failures = failures.max(0) as usize;
-    let status = if failures == 0 {
-        TestExecutionStatus::Passed
-    } else {
-        match severity {
-            Severity::Warn => TestExecutionStatus::Warned,
-            Severity::Error => TestExecutionStatus::Failed,
-        }
-    };
+    let failures = result.failures.max(0) as usize;
+    let status = reported_test_verdict_from_components(
+        Some(&severity),
+        result.should_warn,
+        result.should_error,
+    );
     let status = status_with_warn_error_overrides(status, warn_error_options);
     let stat_status = status.node_status();
 
@@ -949,7 +981,7 @@ fn emit_run_usage_stats(
 ) {
     let (maybe_incremental_strategy, is_contract_enforced, has_group, table_format, catalog_name) =
         match execution_path {
-            RunExecutionPath::Remote | RunExecutionPath::SideCar => {
+            RunExecutionPath::Remote | RunExecutionPath::SideCar | RunExecutionPath::AltCompute => {
                 if let Some(model) = node.as_any().downcast_ref::<DbtModel>() {
                     (
                         model
@@ -1149,6 +1181,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse,
+            compare_unrendered_code: None,
         });
         model.deprecated_config.pre_hook =
             Verbatim::from(Some(Hooks::String("select 1".to_string())));
@@ -1167,7 +1200,11 @@ mod tests {
 
         let status = cached_data_test_status(
             &reused_status,
-            0,
+            CachedTestExecutionResult {
+                failures: 0,
+                should_warn: false,
+                should_error: false,
+            },
             Severity::Error,
             &WarnErrorOptions::default(),
         );
@@ -1186,7 +1223,11 @@ mod tests {
 
         let status = cached_data_test_status(
             &reused_status,
-            2,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: true,
+            },
             Severity::Error,
             &WarnErrorOptions::default(),
         );
@@ -1208,8 +1249,38 @@ mod tests {
 
         let status = cached_data_test_status(
             &reused_status,
-            2,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
             Severity::Warn,
+            &WarnErrorOptions::default(),
+        );
+
+        assert_eq!(status.failures, 2);
+        assert_eq!(status.status, TestExecutionStatus::Warned);
+        assert_eq!(status.stat_status, NodeStatus::TestWarned);
+        assert_eq!(status.final_status, NodeStatus::TestWarned);
+        assert_eq!(
+            status.status.metric_key(),
+            Some(InvocationMetricKey::TotalWarnings)
+        );
+    }
+
+    #[test]
+    fn cached_error_severity_data_test_uses_cached_warning_threshold() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
+            Severity::Error,
             &WarnErrorOptions::default(),
         );
 
@@ -1232,8 +1303,16 @@ mod tests {
             ..Default::default()
         };
 
-        let status =
-            cached_data_test_status(&reused_status, 2, Severity::Warn, &warn_error_options);
+        let status = cached_data_test_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
+            Severity::Warn,
+            &warn_error_options,
+        );
 
         assert_eq!(status.failures, 2);
         assert_eq!(status.status, TestExecutionStatus::Failed);
@@ -1254,8 +1333,16 @@ mod tests {
             ..Default::default()
         };
 
-        let status =
-            cached_data_test_status(&reused_status, 2, Severity::Warn, &warn_error_options);
+        let status = cached_data_test_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            },
+            Severity::Warn,
+            &warn_error_options,
+        );
 
         assert_eq!(status.failures, 2);
         assert_eq!(status.status, TestExecutionStatus::Passed);

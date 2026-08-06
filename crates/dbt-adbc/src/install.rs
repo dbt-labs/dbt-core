@@ -12,7 +12,7 @@ use percent_encoding::AsciiSet;
 use sha2::{Digest, Sha256};
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
-static INSTALLABLE_DRIVERS: &[Backend; 11] = &[
+static INSTALLABLE_DRIVERS: &[Backend; 12] = &[
     Backend::Snowflake,
     Backend::BigQuery,
     Backend::ClickHouse,
@@ -21,12 +21,19 @@ static INSTALLABLE_DRIVERS: &[Backend; 11] = &[
     Backend::Redshift,
     Backend::DuckDB,
     Backend::DuckDBExtended,
+    Backend::Alt,
     Backend::Salesforce,
     Backend::Spark,
     Backend::SQLServer,
 ];
 
-const LINUX_TARGET_OS: &str = "manylinux_2_17-linux-gnu";
+/// Linux drivers are labelled with the manylinux image they were built in,
+/// so the label is not the same for every driver. Only `OS_ALTERNATES` and the
+/// tests read these, so off Linux they are dead code outside `cfg(test)`.
+#[cfg(any(target_os = "linux", test))]
+const MANYLINUX_2_17_TARGET_OS: &str = "manylinux_2_17-linux-gnu";
+#[cfg(any(target_os = "linux", test))]
+const MANYLINUX_2_28_TARGET_OS: &str = "manylinux_2_28-linux-gnu";
 const MACOS_TARGET_OS: &str = "apple-darwin";
 const WINDOWS_TARGET_OS: &str = "pc-windows-msvc";
 
@@ -50,7 +57,6 @@ impl<'a> DriverTriplet<'a> {
     pub fn dll_suffix(&self) -> &'static str {
         match self.os {
             MACOS_TARGET_OS => ".dylib",
-            LINUX_TARGET_OS => ".so",
             WINDOWS_TARGET_OS => ".dll",
             _ if self.os.starts_with("manylinux") => ".so",
             _ => {
@@ -312,8 +318,8 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
         Backend::Spark => ("spark", SPARK_DRIVER_VERSION),
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
         Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
-        Backend::Fdcs => ("fdcs", FDCS_DRIVER_VERSION),
         Backend::DuckDBExtended => ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION),
+        Backend::Alt => ("dbt", ALT_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::ClickHouse => ("clickhouse", CLICKHOUSE_DRIVER_VERSION),
         Backend::Athena | Backend::Exasol | Backend::Generic { .. } => {
@@ -327,19 +333,37 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
 /// Pre-condition: is_installable_driver(backend)
 pub fn driver_parameters(backend: Backend) -> (&'static str, DriverTriplet<'static>) {
     #[cfg(target_os = "linux")]
-    const OS: &str = LINUX_TARGET_OS;
+    const OS_ALTERNATES: &[&str] = &[MANYLINUX_2_17_TARGET_OS, MANYLINUX_2_28_TARGET_OS];
     #[cfg(target_os = "macos")]
-    const OS: &str = MACOS_TARGET_OS;
+    const OS_ALTERNATES: &[&str] = &[MACOS_TARGET_OS];
     #[cfg(target_os = "windows")]
-    const OS: &str = WINDOWS_TARGET_OS;
+    const OS_ALTERNATES: &[&str] = &[WINDOWS_TARGET_OS];
 
     let (backend_name, version) = backend_name_and_version(backend);
-    let triplet = DriverTriplet {
-        os: OS,
-        arch: env::consts::ARCH,
-        version,
-    };
-    (backend_name, triplet)
+    for os in OS_ALTERNATES {
+        let triplet = DriverTriplet {
+            os,
+            arch: env::consts::ARCH,
+            version,
+        };
+        if find_expected_checksum(backend_name, triplet).is_some() {
+            return (backend_name, triplet);
+        }
+    }
+    // If this is reached, there is a bug somewhere else.
+    debug_assert!(
+        false,
+        "No known driver triplet for backend {} on this platform",
+        backend_name
+    );
+    (
+        backend_name,
+        DriverTriplet {
+            os: OS_ALTERNATES[0],
+            arch: env::consts::ARCH,
+            version,
+        },
+    )
 }
 
 /// Find the expected SHA-256 checksum for the compressed driver file.
@@ -673,7 +697,16 @@ mod tests {
         let cases = [
             (
                 DriverTriplet {
-                    os: LINUX_TARGET_OS,
+                    os: MANYLINUX_2_17_TARGET_OS,
+                    arch: "x86_64",
+                    version: "1",
+                },
+                "lib",
+                ".so",
+            ),
+            (
+                DriverTriplet {
+                    os: MANYLINUX_2_28_TARGET_OS,
                     arch: "x86_64",
                     version: "1",
                 },
@@ -779,7 +812,7 @@ mod tests {
         assert_eq!(triplet.version, SNOWFLAKE_DRIVER_VERSION);
 
         #[cfg(target_os = "linux")]
-        assert_eq!(triplet.os, LINUX_TARGET_OS);
+        assert!(triplet.os == MANYLINUX_2_17_TARGET_OS || triplet.os == MANYLINUX_2_28_TARGET_OS);
         #[cfg(target_os = "macos")]
         assert_eq!(triplet.os, MACOS_TARGET_OS);
         #[cfg(target_os = "windows")]
@@ -875,28 +908,44 @@ mod tests {
     #[test]
     fn test_all_checksums_are_listed() {
         let target_os_and_archs = [
-            (LINUX_TARGET_OS, vec!["x86_64", "aarch64"]),
-            (MACOS_TARGET_OS, vec!["x86_64", "aarch64"]),
-            (WINDOWS_TARGET_OS, vec!["x86_64"]),
+            (
+                &[MANYLINUX_2_17_TARGET_OS, MANYLINUX_2_28_TARGET_OS] as &[&str],
+                vec!["x86_64", "aarch64"],
+            ),
+            (&[MACOS_TARGET_OS], vec!["x86_64", "aarch64"]),
+            (&[WINDOWS_TARGET_OS], vec!["x86_64"]),
         ];
         for backend in INSTALLABLE_DRIVERS {
             let (backend_name, version) = backend_name_and_version(*backend);
-            for (os, archs) in target_os_and_archs.iter() {
+            for (os_alternates, archs) in target_os_and_archs.iter() {
                 for arch in archs {
-                    match (backend, *os, *arch) {
-                        // no driver available for Intel Macs connecting to MS SQL or ClickHouse
-                        (Backend::SQLServer | Backend::ClickHouse, MACOS_TARGET_OS, "x86_64") => {
-                            continue;
-                        }
-                        _ => {
-                            let triplet = DriverTriplet { os, arch, version };
-                            let checksum = find_expected_checksum(backend_name, triplet);
-                            assert!(
-                                checksum.is_some(),
-                                "Missing checksum for backend: {backend}, version: {version}, os: {os}, arch: {arch}"
-                            );
+                    let mut count_hits = 0;
+                    for os in *os_alternates {
+                        match (backend, *os, *arch) {
+                            // no driver available for Intel Macs connecting to MS SQL or ClickHouse
+                            (
+                                Backend::SQLServer | Backend::ClickHouse,
+                                MACOS_TARGET_OS,
+                                "x86_64",
+                            ) => {
+                                count_hits += 1;
+                                continue;
+                            }
+                            _ => {
+                                let triplet = DriverTriplet { os, arch, version };
+                                let checksum = find_expected_checksum(backend_name, triplet);
+                                if checksum.is_some() {
+                                    count_hits += 1;
+                                }
+                            }
                         }
                     }
+                    assert!(
+                        count_hits > 0,
+                        "Missing checksum for `{}`, version: {version},
+ os: {os_alternates:?}, arch: {arch}",
+                        backend_name
+                    );
                 }
             }
         }

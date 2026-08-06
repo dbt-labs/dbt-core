@@ -19,6 +19,8 @@ use dbt_dag::{deps_mgmt::reverse, schedule::Schedule};
 use dbt_defer::DeferState;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
+use dbt_index_core::ingest::ingest_state::IngestState;
+use dbt_index_core::ingest::metadata_to_parquet::ingest_from_metadata_direct;
 use dbt_index_core::{WriteSource, save_artifact_meta};
 use dbt_jinja_utils::{
     JinjaFactory,
@@ -26,7 +28,7 @@ use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     listener::JinjaTypeCheckingEventListenerFactory,
     node_resolver::NodeResolver,
-    phases::{build_compile_and_run_base_context, configure_compile_and_run_jinja_environment},
+    phases::{build_operation_context_btreemap, configure_compile_and_run_jinja_environment},
 };
 use dbt_loader::args::*;
 use dbt_parser::args::ResolveArgs;
@@ -39,8 +41,9 @@ use dbt_tasks_core::{
     CompiledSqlCache, RunTaskResults,
     local_schema_builder::{init_data_store, init_schema_store},
     metricflow::MetricflowClient,
+    run_cache::run_cache_service::run_cache_service_after_run_failed,
     static_analysis_buckets::{StaticAnalysisBuckets, build_refresh_intervals},
-    utils::{write_run_results_json, write_run_results_json_or_warn},
+    utils::{build_run_results_artifact, write_run_results_json, write_run_results_json_or_warn},
 };
 
 use dbt_common::{
@@ -49,7 +52,10 @@ use dbt_common::{
     cancellation::CancellationToken,
     constants::{DBT_MANIFEST_JSON, DBT_SEMANTIC_MANIFEST_JSON},
     fs_err,
-    io_args::{EvalArgs, EvalArgsBuilder, ListOutputFormat, Phases, ShowOptions},
+    io_args::{
+        EvalArgs, EvalArgsBuilder, ListOutputFormat, Phases, ShowOptions,
+        optimize_test_defaults_from_project_flags, resolve_effective_optimize_tests,
+    },
     io_utils::{checkpoint_error_count_maybe_exit, checkpoint_maybe_exit},
     path::DbtPath,
     tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message},
@@ -62,8 +68,8 @@ use dbt_metadata::file_registry::CompleteStateWithKind;
 use dbt_schemas::{
     filter::RunFilter,
     schemas::{
-        Nodes, ResolvedCloudConfig, common::ResolvedQuoting, manifest::DbtManifestV12,
-        profiles::Execute, project::DbtProject,
+        DbtCommandExecutionArtifacts, Nodes, ResolvedCloudConfig, common::ResolvedQuoting,
+        manifest::DbtManifestV12, profiles::Execute, project::DbtProject,
         semantic_layer::semantic_manifest::SemanticManifest,
     },
     state::{CacheState, DbtPackage, DbtState, Macros, ModelStatus, ResolverState},
@@ -265,7 +271,6 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 static_analysis,
                 StaticAnalysisDeprecationOrigin::CliArg,
                 None,
-                self.arg.io.status_reporter.as_ref(),
             );
         }
         self.token.check_cancellation()?;
@@ -287,12 +292,10 @@ impl<'a> CompilationPhasesExecutor<'a> {
 
         // Handle 'debug' or 'init' commands to run debug.
         if let FsCommand::Debug | FsCommand::Init = self.arg.command {
-            compilation_pipeline::loaded_project::debug(
-                &loaded_project,
-                DebugArgs::from_eval_args(self.arg.as_ref()),
-                &self.token,
-            )
-            .await?;
+            let mut debug_args = DebugArgs::from_eval_args(self.arg.as_ref());
+            debug_args.alt_propagation_checker = feature_stack.cli.hooks.alt_propagation_checker();
+            compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
+                .await?;
             self.token.check_cancellation()?;
         }
 
@@ -362,7 +365,6 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 emit_warn_log_message(
                     ErrorCode::Generic,
                     "verify-partial-parse: round-trip FAILED — deserialization did not reconstruct valid state",
-                    self.arg.io.status_reporter.as_ref(),
                 );
             }
         }
@@ -475,18 +477,39 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 &empty_column_classifiers,
             );
 
-            let index_dir = self.arg.index_dir();
-            if let Err(e) = save_artifact_meta(
-                &index_dir,
-                &self.arg.io.out_dir,
-                WriteSource::DirectWrite,
-                None,
-            ) {
-                emit_warn_log_message(
-                    ErrorCode::Generic,
-                    format!("dbt-index: save_artifact_meta: {e}"),
-                    self.arg.io.status_reporter.as_ref(),
-                );
+            // When --write-index is set, convert the parse epochs into snapshot index
+            // parquet. The parse index is intentionally incomplete: it carries nodes and
+            // node-level lineage from the manifest, but no column schemas or column-level
+            // lineage (those require compilation). ingest_from_metadata_direct creates the
+            // index directory, so the subsequent save_artifact_meta can record the fingerprint.
+            // Metadata-only runs (no --write-index) write epochs only and skip the index.
+            if self.arg.write_index {
+                let metadata_dir = self.arg.metadata_dir();
+                let index_dir = self.arg.index_dir();
+                let mut state = IngestState::default();
+                match ingest_from_metadata_direct(&metadata_dir, &index_dir, &mut state) {
+                    Ok(_) => {
+                        if let Err(e) = save_artifact_meta(
+                            &index_dir,
+                            &self.arg.io.out_dir,
+                            WriteSource::DirectWrite,
+                            None,
+                        ) {
+                            emit_warn_log_message(
+                                ErrorCode::Generic,
+                                format!("dbt-index: save_artifact_meta: {e}"),
+                            );
+                        }
+                        emit_warn_log_message(
+                            ErrorCode::Generic,
+                            "--write-index: the index produced by `parse` is incomplete; column schemas and column-level lineage are only written by `compile`, `run`, or `build`.",
+                        );
+                    }
+                    Err(e) => emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!("dbt-index: write-index: {e}"),
+                    ),
+                }
             }
         }
 
@@ -526,9 +549,14 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             })
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
+                        batch_results: Default::default(),
                     };
                     if self.arg.write_json {
-                        write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
+                        write_run_results_json_or_warn(
+                            // TODO: should also be captured by the caller?
+                            &build_run_results_artifact(&error_stats, self.arg.as_ref()),
+                            self.arg.as_ref(),
+                        );
                     }
                     if self.arg.write_metadata {
                         crate::utils::write_runtime_results_parquet(
@@ -765,7 +793,7 @@ impl DbtProjectCompilation {
             .root_package()
             .package_root_path
             .as_path();
-        DbtPath::from_path(path)
+        DbtPath::from(path)
     }
 
     pub fn adapter_type(&self) -> AdapterType {
@@ -855,6 +883,7 @@ impl DbtProjectCompilation {
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        artifacts_sink: &mut DbtCommandExecutionArtifacts,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -871,6 +900,7 @@ impl DbtProjectCompilation {
                 jinja_type_checking_event_listener_factory,
                 token,
                 version_check_handle,
+                artifacts_sink,
             )
             .await;
         }
@@ -902,6 +932,7 @@ impl DbtProjectCompilation {
             None,
             token,
             version_check_handle,
+            artifacts_sink,
         )
         .await
     }
@@ -918,6 +949,7 @@ impl DbtProjectCompilation {
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        artifacts_sink: &mut DbtCommandExecutionArtifacts,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -963,6 +995,7 @@ impl DbtProjectCompilation {
                         None,
                         token,
                         version_check_handle,
+                        artifacts_sink,
                     )
                     .await;
                 }
@@ -1037,6 +1070,7 @@ impl DbtProjectCompilation {
             maybe_prev.clone(),
             token,
             version_check_handle,
+            artifacts_sink,
         )
         .await;
 
@@ -1073,6 +1107,7 @@ impl DbtProjectCompilation {
                             None,
                             token,
                             version_check_handle,
+                            artifacts_sink,
                         )
                         .await;
                     }
@@ -1092,6 +1127,7 @@ impl DbtProjectCompilation {
                                 None,
                                 token,
                                 version_check_handle,
+                                artifacts_sink,
                             )
                             .await;
                         }
@@ -1109,6 +1145,7 @@ impl DbtProjectCompilation {
                         None,
                         token,
                         version_check_handle,
+                        artifacts_sink,
                     )
                     .await
                 }
@@ -1131,6 +1168,7 @@ impl DbtProjectCompilation {
                     None,
                     token,
                     version_check_handle,
+                    artifacts_sink,
                 )
                 .await
             }
@@ -1180,6 +1218,7 @@ impl DbtProjectCompilation {
             prev_compilation,
             token,
             &mut None,
+            &mut Default::default(),
         )
         .await
     }
@@ -1198,6 +1237,7 @@ impl DbtProjectCompilation {
         maybe_prev_compilation: Option<Arc<DbtProjectCompilation>>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        artifacts_sink: &mut DbtCommandExecutionArtifacts,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -1299,7 +1339,7 @@ impl DbtProjectCompilation {
             };
         token.check_cancellation()?;
 
-        executor
+        match executor
             .maybe_write_json_and_exit(
                 feature_stack,
                 &loaded_project,
@@ -1310,7 +1350,19 @@ impl DbtProjectCompilation {
                 &invocation_id,
                 &jinja_env,
             )
-            .await?;
+            .await
+        {
+            // `compile --write-catalog` returns Ok here, so the catalog has to be
+            // taken on this path too or it is never surfaced.
+            Ok(()) => artifacts_sink.catalog = executor.catalog_artifact.take(),
+            Err(e) => {
+                // Capture artifacts if possible before early exit
+                artifacts_sink.manifest = executor.lazy_dbt_manifest.take();
+                artifacts_sink.catalog = executor.catalog_artifact.take();
+
+                return Err(e);
+            }
+        };
         token.check_cancellation()?;
 
         let mut cloud_defer_path: Option<PathBuf> = None;
@@ -1438,6 +1490,7 @@ impl DbtProjectCompilation {
                         &custom_schedule_desc.unique_ids,
                         custom_schedule_desc.include_parents,
                         custom_schedule_desc.include_children,
+                        custom_schedule_desc.indirect_selection,
                         arg.local_execution_backend,
                         token,
                     )
@@ -1476,6 +1529,7 @@ impl DbtProjectCompilation {
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
         task_runner_hooks_factory: &dyn TaskRunnerHooksFactory,
         token: &CancellationToken,
+        previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
     ) -> FsResult<DbtRunTasksResult> {
         token.check_cancellation()?;
 
@@ -1483,6 +1537,13 @@ impl DbtProjectCompilation {
         let metricflow_server_client = self.metricflow_server_client.clone();
         let maybe_previous_state = self.previous_state.clone();
         let root_project_quoting = self.resolved_state.root_project_quoting;
+        let project_optimize_tests =
+            optimize_test_defaults_from_project_flags(self.root_project().flags.as_ref());
+        let optimize_tests = resolve_effective_optimize_tests(
+            arg.command,
+            &arg.optimize_tests,
+            &project_optimize_tests,
+        );
 
         // ========================================================================
         // PHASE 3: Use Pipeline for Schedule
@@ -1528,14 +1589,12 @@ impl DbtProjectCompilation {
                             "The selection criterion '{}' does not match any enabled nodes",
                             select_expr
                         ),
-                        None,
                     );
                 }
 
                 emit_warn_log_message(
                     ErrorCode::NoNodesSelected,
                     "Nothing to do. Try checking your model configs and model specification args",
-                    None,
                 );
             }
         }
@@ -1547,6 +1606,17 @@ impl DbtProjectCompilation {
             .cli
             .hooks
             .will_run_tasks(cli, arg, &self.resolved_state, token)?;
+
+        // Give extensions access to the built schedule (and its resolved
+        // selection) before any tasks run. May terminate execution.
+        feature_stack.cli.hooks.did_build_schedule(
+            cli,
+            arg,
+            &self.resolved_state,
+            &schedule,
+            &jinja_env,
+            token,
+        )?;
 
         // FEATURES: schedule
         if arg.io.should_show(ShowOptions::Schedule) {
@@ -1582,7 +1652,6 @@ impl DbtProjectCompilation {
                                 arg.format,
                                 ListOutputFormat::supported_formats_display()
                             ),
-                            None,
                         );
                     }
                     ListOutputFormat::Selector
@@ -1623,21 +1692,36 @@ impl DbtProjectCompilation {
 
         let execute_mode = Execute::from_compute_flag(arg.local_execution_backend);
 
-        // FEATURES: sidecar service
-        // For sidecar/service mode, clear stale schema cache to ensure we use
-        // fresh schemas from the sample data. The schema store's sourced_remote
-        // directory may contain schemas from a different target/run.
-        if matches!(execute_mode, Execute::Sidecar | Execute::Service) {
-            let sourced_remote_dir = arg.metadata_dir().join("warehouse").join("schemas");
-            if sourced_remote_dir.exists() {
-                if let Err(e) = std::fs::remove_dir_all(&sourced_remote_dir) {
+        let clear_schema_cache_dir = |cache_dir: PathBuf| {
+            if cache_dir.exists() {
+                if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
                     tracing::warn!(
                         "Failed to clear stale schema cache at {}: {}",
-                        sourced_remote_dir.display(),
+                        cache_dir.display(),
                         e
                     );
                 }
             }
+        };
+
+        let is_duckdb_adapter = self.adapter_type() == AdapterType::DuckDB;
+
+        // Sidecar/service schemas and all remote entries in the epoch cache share
+        // this directory, so clear it before loading schemas from the current run.
+        if matches!(execute_mode, Execute::Sidecar | Execute::Service) || is_duckdb_adapter {
+            clear_schema_cache_dir(arg.metadata_dir().join("warehouse").join("schemas"));
+        }
+
+        // DuckDB `run` does not mirror updated schemas to the legacy frontier cache.
+        // Clear only internal entries so deferred and external caches remain intact.
+        if is_duckdb_adapter {
+            clear_schema_cache_dir(
+                arg.io
+                    .out_dir
+                    .join("schemas")
+                    .join("sourced_remote")
+                    .join("internal"),
+            );
         }
 
         // FEATURES: schema_hydration build_cache
@@ -1733,6 +1817,7 @@ impl DbtProjectCompilation {
             token,
             sidecar_client.clone(),
             execute_mode,
+            arg.infer_schemas,
         )?;
         token.check_cancellation()?;
 
@@ -1768,8 +1853,9 @@ impl DbtProjectCompilation {
             let mut run_task_args =
                 RunTasksArgs::from_eval_args(arg, feature_stack.cli.fail_fast.clone())
                     .with_resolved_profile(&self.resolved_state.dbt_profile);
-            // This actually affect running tests quite a lot
+            run_task_args.optimize_tests = optimize_tests;
             run_task_args.sample_renaming = BTreeMap::new();
+            run_task_args.previous_batch_results = previous_batch_results;
             run_task_args.into()
         };
 
@@ -1959,9 +2045,11 @@ impl DbtProjectCompilation {
             let run_stats = Stats {
                 stats: vec![stat],
                 nodes: Some(resolved_state.nodes),
+                batch_results: Default::default(),
             };
             if arg.write_json {
-                write_run_results_json(&run_stats, arg)?;
+                // TODO: should also be captured by the caller?
+                write_run_results_json(&build_run_results_artifact(&run_stats, arg), arg)?;
             }
 
             return Err(return_exit_code_from_error_counter());
@@ -2062,7 +2150,12 @@ impl DbtProjectCompilation {
                     )
                     .await?;
 
-                task_runner
+                // Cheap clone (all fields are `Arc`s): keeps a handle to the
+                // run's telemetry state even if `run` drops `ctx` on an early
+                // error, so any failure still reports `SessionEnd` instead of
+                // leaving the session open. No-ops if a session never started.
+                let run_cache_ctx_on_error = ctx.clone();
+                let run_result = task_runner
                     .run(
                         Arc::clone(&run_task_args),
                         schedule,
@@ -2072,7 +2165,15 @@ impl DbtProjectCompilation {
                         has_dynamic_closure,
                         token.clone(),
                     )
-                    .await?
+                    .await;
+                if run_result.is_err() {
+                    run_cache_service_after_run_failed(
+                        &run_cache_ctx_on_error,
+                        token.is_cancelled(),
+                    )
+                    .await;
+                }
+                run_result?
             }
         };
 
@@ -2350,6 +2451,7 @@ async fn write_catalog(
         token,
         None,
         execute,
+        arg.infer_schemas,
     )?;
     let mut jinja_env = Arc::unwrap_or_clone(jinja_env.clone());
     configure_compile_and_run_jinja_environment(&mut jinja_env, adapter.clone());
@@ -2358,13 +2460,14 @@ async fn write_catalog(
         .get_macro_namespace_registry()
         .map(|r| r.keys().map(|k| k.to_string()).collect())
         .unwrap_or_default();
-    let base_context = build_compile_and_run_base_context(
+    let base_context = build_operation_context_btreemap(
         resolved_state.node_resolver.clone(),
         &resolved_state.root_project_name,
         &resolved_state.nodes,
         resolved_state.defer_nodes.as_ref(),
         resolved_state.runtime_config.clone(),
         namespace_keys,
+        None,
     );
 
     let relations = resolved_state

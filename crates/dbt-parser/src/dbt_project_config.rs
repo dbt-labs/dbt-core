@@ -6,8 +6,7 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 
-use crate::args::ResolveArgs;
-use dbt_common::{FsResult, io_args::IoArgs, tracing::dbt_emit::emit_strict_parse_error};
+use dbt_common::{FsResult, tracing::dbt_emit::emit_strict_parse_error};
 use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
 use dbt_schemas::schemas::{
     project::{
@@ -48,7 +47,6 @@ pub struct DbtProjectConfig<T: ResolvableConfig<T>> {
 impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
     /// Create a new [GlobalProjectConfig] from a default configuration and the root dbt_project.yml [DbtProjectConfigs]
     pub fn try_new<S: Into<T> + TypedRecursiveConfig>(
-        io: &IoArgs,
         dbt_config: &T,
         configs: &S,
         dependency_package_name: Option<&str>,
@@ -70,7 +68,7 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
                         .as_err_msg()
                         .expect("Error message always present on ShouldBe::ButIsnt variant")
                 ));
-                emit_strict_parse_error(&fs_err, dependency_package_name, io);
+                emit_strict_parse_error(fs_err, dependency_package_name);
             }
         };
         Ok(recur_build_dbt_project_config(
@@ -369,7 +367,6 @@ pub struct RootProjectConfigs {
 
 /// Build the [RootProjectConfigs] from a [DbtProject]
 pub fn build_root_project_configs(
-    arg: &ResolveArgs,
     root_project: &DbtProject,
     root_project_quoting: DbtQuoting,
 ) -> FsResult<RootProjectConfigs> {
@@ -384,39 +381,23 @@ pub fn build_root_project_configs(
         };
 
     Ok(RootProjectConfigs {
-        models: init_project_config(&arg.io, &root_project.models, root_project_quoting, None)?,
-        sources: init_project_config(&arg.io, &root_project.sources, (), None)?,
-        snapshots: init_project_config(
-            &arg.io,
-            &root_project.snapshots,
-            root_project_quoting,
-            None,
-        )?,
-        seeds: init_project_config(&arg.io, &root_project.seeds, root_project_quoting, None)?,
-        tests: init_project_config(
-            &arg.io,
-            &maybe_root_project_config,
-            root_project_quoting,
-            None,
-        )?,
-        unit_tests: init_project_config(&arg.io, &root_project.unit_tests, (), None)?,
-        exposures: init_project_config(&arg.io, &root_project.exposures, (), None)?,
-        semantic_models: init_project_config(&arg.io, &root_project.semantic_models, (), None)?,
-        metrics: init_project_config(&arg.io, &root_project.metrics, (), None)?,
-        saved_queries: init_project_config(&arg.io, &root_project.saved_queries, (), None)?,
-        analyses: init_project_config(&arg.io, &root_project.analyses, (), None)?,
-        functions: init_project_config(
-            &arg.io,
-            &root_project.functions,
-            root_project_quoting,
-            None,
-        )?,
+        models: init_project_config(&root_project.models, root_project_quoting, None)?,
+        sources: init_project_config(&root_project.sources, (), None)?,
+        snapshots: init_project_config(&root_project.snapshots, root_project_quoting, None)?,
+        seeds: init_project_config(&root_project.seeds, root_project_quoting, None)?,
+        tests: init_project_config(&maybe_root_project_config, root_project_quoting, None)?,
+        unit_tests: init_project_config(&root_project.unit_tests, (), None)?,
+        exposures: init_project_config(&root_project.exposures, (), None)?,
+        semantic_models: init_project_config(&root_project.semantic_models, (), None)?,
+        metrics: init_project_config(&root_project.metrics, (), None)?,
+        saved_queries: init_project_config(&root_project.saved_queries, (), None)?,
+        analyses: init_project_config(&root_project.analyses, (), None)?,
+        functions: init_project_config(&root_project.functions, root_project_quoting, None)?,
     })
 }
 
 /// generate the project config that will be inherited throughout the project
 pub fn init_project_config<T: ResolvableConfig<T>, S: TypedRecursiveConfig + Into<T>>(
-    io_args: &IoArgs,
     dbt_project_configs: &Option<S>,
     package_defaults: T::PackageDefaults,
     dependency_package_name: Option<&str>,
@@ -424,7 +405,7 @@ pub fn init_project_config<T: ResolvableConfig<T>, S: TypedRecursiveConfig + Int
     let mut default_config = T::default();
     default_config.apply_package_defaults(package_defaults);
     let project_config = if let Some(configs) = dbt_project_configs {
-        DbtProjectConfig::try_new(io_args, &default_config, configs, dependency_package_name)?
+        DbtProjectConfig::try_new(&default_config, configs, dependency_package_name)?
     } else {
         DbtProjectConfig {
             config: default_config,

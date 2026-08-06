@@ -25,8 +25,6 @@ pub struct DefaultStmtSplitter;
 impl StmtSplitter for DefaultStmtSplitter {
     fn split(&self, sql: &str, adapter_type: AdapterType) -> Vec<String> {
         let dialect = dialect_of(adapter_type);
-        // Use sql_split_statements for splitting, then filter out empty/comment-only statements
-        // This separation of concerns keeps filtering logic in the adapter layer
         sql_split_statements(sql, dialect).into_iter().collect()
     }
 

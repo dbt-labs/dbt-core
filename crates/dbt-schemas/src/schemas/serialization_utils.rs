@@ -76,7 +76,7 @@ mod tests {
     #[derive(Serialize)]
     struct TestConfigWithMeta {
         pub enabled: Option<bool>,
-        #[serde(serialize_with = "crate::schemas::nodes::serialize_none_as_empty_map")]
+        #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
         pub meta: Option<IndexMap<String, YmlValue>>,
     }
 

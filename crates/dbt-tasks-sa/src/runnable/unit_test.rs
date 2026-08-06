@@ -155,7 +155,7 @@ pub fn process_unit_test_result(
             attrs.set_node_outcome(NodeOutcome::Success);
 
             attrs.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
-                TestEvaluationDetail::new(TestOutcome::Passed, 0, None, None),
+                TestEvaluationDetail::new(TestOutcome::Passed, 0, None, None, None),
             ));
         });
         let thread_id = ctx.thread_id;
@@ -187,6 +187,7 @@ pub fn process_unit_test_result(
                     TestOutcome::Failed,
                     result.diff_num_rows.try_into().unwrap_or(i32::MAX),
                     diff.take(),
+                    None,
                     None,
                 ),
             ))

@@ -214,6 +214,7 @@ pub fn try_load_prev_compilation(
         macros: state.macros,
         operations: state.operations,
         dbt_profile: state.dbt_profile,
+        cloud_config: dbt_state.cloud_config.clone(),
         render_results: Default::default(),
         node_resolver,
         get_relation_calls: reconstruct_relation_calls(
@@ -241,6 +242,9 @@ pub fn try_load_prev_compilation(
             let mut resolved = ResolvedSelector {
                 include: eval.select.clone(),
                 exclude: eval.exclude.clone(),
+                // Empty on the partial-parse path: selectors.yml is not re-parsed here, so
+                // `selector:` references in --select/--exclude cannot be resolved.
+                selector_definitions: Default::default(),
             };
             let default_mode: IndirectSelection = eval.indirect_selection.unwrap_or_default();
             if let Some(ref mut include) = resolved.include {

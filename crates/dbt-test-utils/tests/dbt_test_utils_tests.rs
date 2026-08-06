@@ -1,7 +1,7 @@
 mod assertions {
     use dbt_common::{FsResult, current_function_name};
     use dbt_test_utils::task::{
-        AssertDirExistsTask, AssertFileContainsTask, AssertFileExistsTask, ProjectEnv, TaskSeq,
+        AssertDirExistsTask, AssertFileExistsTask, ProjectEnv, TaskSeq, assert_file_contains,
     };
 
     #[tokio::test]
@@ -10,11 +10,7 @@ mod assertions {
         let env = ProjectEnv::immutable_from(root, "tests/data/hello")?;
 
         TaskSeq::new(current_function_name!())
-            .task(Box::new(AssertFileContainsTask::new(
-                "profiles.yml",
-                "datafusion",
-                false,
-            )))
+            .task_fn(assert_file_contains("profiles.yml", "datafusion", false))
             .execute_in(&env)
             .await?;
 

@@ -103,7 +103,7 @@ impl InteractiveSetup for SnowflakeDbConfig {
                     match auth_method {
                         2 => self.authenticator = Some("externalbrowser".to_string()),
                         3 => self.authenticator = Some("username_password_mfa".to_string()),
-                        _ => {}
+                        _ => self.authenticator = None,
                     }
                 }
             }

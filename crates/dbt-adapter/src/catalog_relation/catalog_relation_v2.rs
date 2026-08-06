@@ -578,12 +578,12 @@ impl CatalogRelation {
         catalog: &CatalogSpecV2View<'_>,
         catalog_name: &str,
     ) -> AdapterResult<CatalogRelation> {
-        if Self::get_model_config_value(model, FIELD_TRANSIENT, AdapterType::Snowflake).is_some() {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "transient may not be specified for ICEBERG catalogs. Snowflake built-in catalog DDL does not support transient ICEBERG tables.",
-            ));
-        }
+        // FIXME(versusfacit): we just swallow transient here for now instead of
+        // honoring it. Snowflake actually supports transient iceberg tables when the
+        // location is Snowflake managed storage aka SNOWFLAKE_MANAGED. We need to
+        // detect that case and stop dropping the value on the floor. See
+        // dbt-labs/dbt-core#15427 and
+        // https://docs.snowflake.com/en/user-guide/tables-iceberg-internal-storage
 
         let snowflake = require_platform_block(catalog, catalog_name, "snowflake")?;
 
@@ -605,12 +605,20 @@ impl CatalogRelation {
         let schema = Self::get_model_config_value(model, "schema", AdapterType::Snowflake);
         let identifier = Self::get_model_config_value(model, "alias", AdapterType::Snowflake)
             .or_else(|| Self::get_model_config_value(model, "identifier", AdapterType::Snowflake));
-        let base_location = Self::build_base_location(
-            &base_location_root,
-            &base_location_subpath,
-            &schema,
-            &identifier,
-        );
+        let base_location = external_volume
+            .as_ref()
+            .filter(|v| {
+                !v.trim()
+                    .eq_ignore_ascii_case(SNOWFLAKE_MANAGED_EXTERNAL_VOLUME)
+            })
+            .map(|_| {
+                Self::build_base_location(
+                    &base_location_root,
+                    &base_location_subpath,
+                    &schema,
+                    &identifier,
+                )
+            });
 
         let mut adapter_properties = BTreeMap::new();
 
@@ -683,7 +691,7 @@ impl CatalogRelation {
             table_format: catalog.table_format,
             external_volume,
             catalog_database,
-            base_location: Some(base_location),
+            base_location,
             adapter_properties,
             is_transient: Some(false),
             file_format: None,
@@ -1168,6 +1176,122 @@ catalogs:
             .unwrap();
 
             assert_eq!(r.catalog_database.as_deref(), Some("PROD_DB"));
+        }
+    }
+
+    #[test]
+    fn snowflake_v2_horizon_iceberg_with_external_volume_synthesizes_base_location() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: SF_HORIZON
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: my_volume
+        base_location_root: _root
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "SF_HORIZON",
+            "schema": "SCH",
+            "identifier": "ID",
+            "base_location_subpath": "sub",
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Snowflake,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_name, Some("SF_HORIZON".to_string()));
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.catalog_type, ICEBERG_BUILT_IN_CATALOG);
+            assert_eq!(r.external_volume.as_deref(), Some("my_volume"));
+            assert_eq!(r.base_location.as_deref(), Some("_root/SCH/ID/sub"));
+        }
+    }
+
+    #[test]
+    fn snowflake_v2_horizon_iceberg_explicit_snowflake_managed_external_volume_omits_base_location()
+    {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: SF_HORIZON
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: SNOWFLAKE_MANAGED
+        base_location_root: _root
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "SF_HORIZON",
+            "schema": "SCH",
+            "identifier": "ID",
+            "base_location_subpath": "sub",
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Snowflake,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.external_volume.as_deref(), Some("SNOWFLAKE_MANAGED"));
+            assert!(r.base_location.is_none());
+        }
+    }
+
+    #[test]
+    fn snowflake_v2_horizon_iceberg_without_catalog_omits_base_location() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: my_volume
+"#,
+        );
+        let conf = json!({ "table_format": "ICEBERG", "schema": "SCH", "identifier": "ID" });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Snowflake,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.catalog_type, ICEBERG_BUILT_IN_CATALOG);
+            assert!(r.external_volume.is_none());
+            assert!(r.base_location.is_none());
         }
     }
 

@@ -36,8 +36,8 @@ pub(crate) struct TestModelConfig {
     pub partition_by: Vec<String>,
     pub persist_column_comments: bool,
     pub persist_relation_comments: bool,
-    // This will be used once we actually implement query
-    #[expect(dead_code)]
+    /// The model's compiled SQL, which the `query` component diffs against the applied view
+    /// definition.
     pub query: Option<String>,
     pub relation_comment: Option<String>,
     pub tags: IndexMap<String, String>,
@@ -130,6 +130,10 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
         },
         __adapter_attr__: adapter_attr,
         __base_attr__: base_attrs,
+        __model_attr__: DbtModelAttr {
+            compiled_code: cfg.query,
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -141,7 +145,6 @@ pub(crate) fn create_mock_describe_extended_table<'a>(
 ) -> AgateTable {
     let mut csv_data = "key,value\n".to_string();
 
-    // Add regular table info rows
     csv_data.push_str("Table,test_table\n");
     csv_data.push_str("Owner,test_user\n");
 
@@ -149,7 +152,6 @@ pub(crate) fn create_mock_describe_extended_table<'a>(
         csv_data.push_str(&format!("{label},{value}\n"))
     }
 
-    // Add partition information section
     let partition_columns_vec = Vec::from_iter(partition_columns);
     if !partition_columns_vec.is_empty() {
         csv_data.push_str("# Partition Information,\n");
@@ -160,7 +162,6 @@ pub(crate) fn create_mock_describe_extended_table<'a>(
         csv_data.push_str(",\n");
     }
 
-    // Add remaining info
     csv_data.push_str("# Detailed Table Information,\n");
 
     let schema = Arc::new(Schema::new(vec![

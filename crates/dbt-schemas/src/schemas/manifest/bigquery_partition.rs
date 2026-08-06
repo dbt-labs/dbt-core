@@ -290,6 +290,18 @@ impl BigqueryPartitionConfig {
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let alias = self.get_alias(args)?;
 
+        // The partition key for RANGE [start, end) partitioned tables is always "start",
+        if self.data_type == "int64" {
+            if let Ok(range) = self.range() {
+                let column = self.render(alias)?;
+                let column = column.as_str().unwrap();
+                return Ok(MinijinjaValue::from(format!(
+                    "({column} - MOD({column} - {}, {}))",
+                    range.start, range.interval
+                )));
+            }
+        }
+
         if (self.data_type == "date"
             || self.data_type == "timestamp"
             || self.data_type == "datetime")
@@ -628,6 +640,127 @@ mod tests {
                 }
             })
         ));
+    }
+
+    fn time_config(
+        field: &str,
+        data_type: &str,
+        granularity: &str,
+        time_ingestion_partitioning: bool,
+    ) -> BigqueryPartitionConfig {
+        BigqueryPartitionConfig {
+            field: field.to_string(),
+            data_type: data_type.to_string(),
+            __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
+                granularity: granularity.to_string(),
+                time_ingestion_partitioning,
+            }),
+            copy_partitions: false,
+        }
+    }
+
+    fn range_config(field: &str, start: i64, end: i64, interval: i64) -> BigqueryPartitionConfig {
+        BigqueryPartitionConfig {
+            field: field.to_string(),
+            data_type: "int64".to_string(),
+            __inner__: BigqueryPartitionConfigInner::Range(RangeConfig {
+                range: Range {
+                    start,
+                    end,
+                    interval,
+                },
+            }),
+            copy_partitions: false,
+        }
+    }
+
+    fn rendered_wrapped(config: &BigqueryPartitionConfig, alias: Option<&str>) -> String {
+        let args: Vec<MinijinjaValue> = match alias {
+            Some(a) => vec![MinijinjaValue::from(a)],
+            None => vec![],
+        };
+        config
+            .render_wrapped(&args)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn test_render_wrapped_range_int64() {
+        let config = range_config("user_id", 0, 100, 10);
+        assert_eq!(
+            rendered_wrapped(&config, None),
+            "(user_id - MOD(user_id - 0, 10))"
+        );
+    }
+
+    #[test]
+    fn test_render_wrapped_range_int64_with_alias() {
+        let config = range_config("user_id", 5, 100, 10);
+        assert_eq!(
+            rendered_wrapped(&config, Some("t")),
+            "(t.user_id - MOD(t.user_id - 5, 10))"
+        );
+    }
+
+    #[test]
+    fn test_render_wrapped_date_day_wraps_in_cast() {
+        // date with day granularity is not truncated, so it is wrapped in date(...)
+        let config = time_config("created_at", "date", "day", false);
+        assert_eq!(rendered_wrapped(&config, None), "date(created_at)");
+    }
+
+    #[test]
+    fn test_render_wrapped_date_day_with_alias() {
+        let config = time_config("created_at", "date", "day", false);
+        assert_eq!(rendered_wrapped(&config, Some("t")), "date(t.created_at)");
+    }
+
+    #[test]
+    fn test_render_wrapped_date_month_is_truncated() {
+        // date with non-day granularity is truncated, not wrapped
+        let config = time_config("created_at", "date", "month", false);
+        assert_eq!(
+            rendered_wrapped(&config, None),
+            "date_trunc(created_at, month)"
+        );
+    }
+
+    #[test]
+    fn test_render_wrapped_timestamp_is_truncated() {
+        // timestamp is always truncated, never wrapped in a cast
+        let config = time_config("created_at", "timestamp", "hour", false);
+        assert_eq!(
+            rendered_wrapped(&config, None),
+            "timestamp_trunc(created_at, hour)"
+        );
+    }
+
+    #[test]
+    fn test_render_wrapped_datetime_is_truncated() {
+        let config = time_config("created_at", "datetime", "day", false);
+        assert_eq!(
+            rendered_wrapped(&config, None),
+            "datetime_trunc(created_at, day)"
+        );
+    }
+
+    #[test]
+    fn test_render_wrapped_date_time_ingestion_uses_partition_date() {
+        // ingestion-time date partitioning renders the pseudo column without a cast
+        let config = time_config("created_at", "date", "day", true);
+        assert_eq!(rendered_wrapped(&config, None), "_PARTITIONDATE");
+    }
+
+    #[test]
+    fn test_render_wrapped_timestamp_time_ingestion_uses_partition_time() {
+        let config = time_config("created_at", "timestamp", "hour", true);
+        assert_eq!(
+            rendered_wrapped(&config, None),
+            "timestamp_trunc(_PARTITIONTIME, hour)"
+        );
     }
 
     #[test]

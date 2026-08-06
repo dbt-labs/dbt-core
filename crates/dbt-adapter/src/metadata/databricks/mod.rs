@@ -1073,7 +1073,9 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
                              _task: FreshnessTask,
                              res: AdapterResult<FreshnessTaskResult>|
               -> Result<(), Cancellable<AdapterError>> {
-            apply_freshness_task_result(acc, res?)?;
+            if let Ok(task_result) = res {
+                apply_freshness_task_result(acc, task_result)?;
+            }
             Ok(())
         };
 
@@ -1145,8 +1147,8 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         &'a self,
         relations: &'a [Arc<dyn BaseRelation>],
         token: CancellationToken,
-    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
-        type Acc = Vec<ViewDefinition>;
+    ) -> AsyncAdapterResult<'a, ViewDefinitionFetchResult> {
+        type Acc = ViewDefinitionFetchResult;
 
         if self.adapter.adapter_type() != AdapterType::Databricks {
             let err = AdapterError::new(
@@ -1157,7 +1159,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         }
 
         if relations.is_empty() {
-            return Box::pin(async { Ok(vec![]) });
+            return Box::pin(async { Ok(ViewDefinitionFetchResult::default()) });
         }
 
         // Dedupe FQNs while preserving insertion order.
@@ -1210,12 +1212,11 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
                     format!(
                         "Skipping view definition: could not parse `View Catalog and Namespace` ({catalog_and_ns:?}) or fqn ({fqn})"
                     ),
-                    None,
                 );
                 return Ok(());
             };
 
-            acc.push(ViewDefinition {
+            acc.definitions.push(ViewDefinition {
                 fqn,
                 definition: view_text,
                 dialect: AdapterType::Databricks,

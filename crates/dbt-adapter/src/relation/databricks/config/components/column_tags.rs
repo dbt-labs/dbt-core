@@ -15,9 +15,7 @@ use minijinja::value::{Value, ValueMap};
 
 pub(crate) const TYPE_NAME: &str = "column_tags";
 
-/// Component for Databricks column tags
-///
-/// Holds a IndexMap of column name to column tags.
+/// Component for Databricks column tags: column name -> (tag key -> value).
 pub type ColumnTags = SimpleComponentConfigImpl<IndexMap<String, IndexMap<String, String>>>;
 
 fn to_jinja(v: &IndexMap<String, IndexMap<String, String>>) -> Value {

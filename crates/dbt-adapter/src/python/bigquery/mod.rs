@@ -1,6 +1,7 @@
 use crate::AdapterResponse;
 use crate::adapter::adapter_impl::AdapterImpl;
-use std::collections::HashMap;
+use crate::engine::Options;
+use adbc_core::options::OptionValue;
 
 use dbt_adbc::bigquery::{
     CREATE_BATCH_REQ_BATCH_ID, CREATE_BATCH_REQ_BATCH_YML, CREATE_BATCH_REQ_PARENT,
@@ -190,16 +191,20 @@ pub fn submit_python_job(
     let model_file_name = format!("{}/{}.py", schema, alias);
     let gcs_path = format!("gs://{}/{}", &gcs_bucket, model_file_name);
 
-    let options: HashMap<_, _> = vec![
-        (WRITE_GCS_BUCKET.to_string(), gcs_bucket.clone()),
+    let options: Options = vec![
+        (
+            WRITE_GCS_BUCKET.to_string(),
+            OptionValue::String(gcs_bucket.clone()),
+        ),
         (
             WRITE_GCS_OBJECT_NAME.to_string(),
-            model_file_name.to_string(),
+            OptionValue::String(model_file_name.to_string()),
         ),
-        (WRITE_GCS_CONTENT.to_string(), compiled_code),
-    ]
-    .into_iter()
-    .collect();
+        (
+            WRITE_GCS_CONTENT.to_string(),
+            OptionValue::String(compiled_code),
+        ),
+    ];
 
     adapter.execute(
         None,
@@ -290,24 +295,28 @@ fn submit_cluster_job(
             )
         })?;
 
-    let options: HashMap<_, _> = vec![
-        (DATAPROC_REGION.to_string(), params.region.to_string()),
-        (DATAPROC_PROJECT.to_string(), params.project.to_string()),
+    let options: Options = vec![
+        (
+            DATAPROC_REGION.to_string(),
+            OptionValue::String(params.region.to_string()),
+        ),
+        (
+            DATAPROC_PROJECT.to_string(),
+            OptionValue::String(params.project.to_string()),
+        ),
         (
             DATAPROC_POOLING_TIMEOUT.to_string(),
-            params.timeout.to_string(),
+            OptionValue::String(params.timeout.to_string()),
         ),
         (
             DATAPROC_SUBMIT_JOB_REQ_CLUSTER_NAME.to_string(),
-            dataproc_cluster_name,
+            OptionValue::String(dataproc_cluster_name),
         ),
         (
             DATAPROC_SUBMIT_JOB_REQ_GCS_PATH.to_string(),
-            params.gcs_path.to_string(),
+            OptionValue::String(params.gcs_path.to_string()),
         ),
-    ]
-    .into_iter()
-    .collect();
+    ];
 
     let response = job_ctx.adapter.execute(
         None,
@@ -342,24 +351,31 @@ fn submit_serverless_job(
         dataproc_batch_config,
     )?;
 
-    let options: HashMap<_, _> = vec![
-        (DATAPROC_REGION.to_string(), params.region.to_string()),
+    let options: Options = vec![
+        (
+            DATAPROC_REGION.to_string(),
+            OptionValue::String(params.region.to_string()),
+        ),
         (
             CREATE_BATCH_REQ_PARENT.to_string(),
-            format!("projects/{}/locations/{}", params.project, params.region),
+            OptionValue::String(format!(
+                "projects/{}/locations/{}",
+                params.project, params.region
+            )),
         ),
-        (CREATE_BATCH_REQ_BATCH_YML.to_string(), batch),
+        (
+            CREATE_BATCH_REQ_BATCH_YML.to_string(),
+            OptionValue::String(batch),
+        ),
         (
             CREATE_BATCH_REQ_BATCH_ID.to_string(),
-            params.batch_id.to_string(),
+            OptionValue::String(params.batch_id.to_string()),
         ),
         (
             DATAPROC_POOLING_TIMEOUT.to_string(),
-            params.timeout.to_string(),
+            OptionValue::String(params.timeout.to_string()),
         ),
-    ]
-    .into_iter()
-    .collect();
+    ];
 
     let response = job_ctx.adapter.execute(
         None,
@@ -441,52 +457,53 @@ fn submit_bigframes_job(
         .ok()
         .and_then(|v| v.as_i64().map(|u| u.to_string()));
 
-    let mut options: HashMap<_, _> = vec![
+    let mut options: Options = vec![
         (
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_PATH.to_string(),
-            params.gcs_path.to_string(),
+            OptionValue::String(params.gcs_path.to_string()),
         ),
         (
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_FILE_NAME.to_string(),
-            params.model_file_name.to_string(),
+            OptionValue::String(params.model_file_name.to_string()),
         ),
         (
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_NAME.to_string(),
-            params.model_name.to_string(),
+            OptionValue::String(params.model_name.to_string()),
         ),
         (
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_BUCKET.to_string(),
-            params.gsc_bucket.to_string(),
+            OptionValue::String(params.gsc_bucket.to_string()),
         ),
         (
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PARENT.to_string(),
-            format!("projects/{}/locations/{}", params.project, params.region),
+            OptionValue::String(format!(
+                "projects/{}/locations/{}",
+                params.project, params.region
+            )),
         ),
         (
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PROJECT.to_string(),
-            params.project.to_string(),
+            OptionValue::String(params.project.to_string()),
         ),
         (
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_REGION.to_string(),
-            params.region.to_string(),
+            OptionValue::String(params.region.to_string()),
         ),
         (
             CREATE_BATCH_REQ_BATCH_ID.to_string(),
-            params.batch_id.to_string(),
+            OptionValue::String(params.batch_id.to_string()),
         ),
         (
             DATAPROC_POOLING_TIMEOUT.to_string(),
-            params.timeout.to_string(),
+            OptionValue::String(params.timeout.to_string()),
         ),
-    ]
-    .into_iter()
-    .collect();
+    ];
 
     if let Some(notebook_template_id) = notebook_template_id {
-        options.insert(
+        options.push((
             CREATE_NOTEBOOK_EXECUTE_JOB_REQ_TEMPLATE_ID.to_string(),
-            notebook_template_id,
-        );
+            OptionValue::String(notebook_template_id),
+        ));
     }
 
     let response = job_ctx.adapter.execute(

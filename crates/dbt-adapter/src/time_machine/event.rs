@@ -24,7 +24,6 @@ pub enum RecordedEvent {
 }
 
 impl RecordedEvent {
-    /// Get the node/caller ID for this event
     pub fn node_id(&self) -> &str {
         match self {
             RecordedEvent::AdapterCall(e) => &e.node_id,
@@ -35,7 +34,6 @@ impl RecordedEvent {
         }
     }
 
-    /// Get the sequence number for this event
     pub fn seq(&self) -> u32 {
         match self {
             RecordedEvent::AdapterCall(e) => e.seq,

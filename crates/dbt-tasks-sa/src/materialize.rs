@@ -39,8 +39,7 @@ use dbt_schemas::{
     materialization_resolver::MaterializationResolver,
     schemas::{
         DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
-        NodePathKind, Nodes,
-        common::{DbtMaterialization, Severity},
+        NodePathKind, Nodes, common::DbtMaterialization,
     },
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
@@ -1433,7 +1432,9 @@ pub fn materialize_test(
                         .map(|line| format!("  {line}"))
                         .collect::<Vec<_>>()
                         .join("\n");
-                    let message = format!("{unique_id} ({run_display_path})\n{indented_body}",);
+                    let message = format!(
+                        "Error materializing test {unique_id} ({run_display_path})\n{indented_body}",
+                    );
                     Box::new(dbt_common::FsError::new(e.code, message))
                 } else {
                     Box::new(
@@ -1449,20 +1450,10 @@ pub fn materialize_test(
 
     reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
 
-    // If render_result is an error but the test is configured with severity warn, return a warning result
-    if render_result.is_err() && matches!(test.deprecated_config.severity, Some(Severity::Warn)) {
-        return Ok((
-            vec![TestResult {
-                column_name: None,
-                failures: 0,
-                should_warn: true,
-                should_error: false,
-            }],
-            None,
-        ));
-    }
-
-    let _ = render_result?; // ensure we don't swallow errors
+    // Any render/execution error (including database errors) is a hard error,
+    // independent of severity. Severity only governs successfully-returned test
+    // results, so it must not downgrade an execution failure to a warning.
+    let _ = render_result?;
 
     let expr = jinja_env.compile_expression("load_result('main').table")?;
     let table = expr

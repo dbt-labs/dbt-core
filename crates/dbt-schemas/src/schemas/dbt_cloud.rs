@@ -90,6 +90,7 @@ pub struct ResolvedCloudConfig {
     pub environment_id: Option<String>,
     pub defer_env_id: Option<String>,
     pub defer_job_id: Option<String>,
+    pub state_org_id: Option<String>,
     pub job_id: Option<String>,
 }
 

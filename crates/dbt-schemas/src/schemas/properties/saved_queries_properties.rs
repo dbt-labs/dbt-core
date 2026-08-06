@@ -14,7 +14,7 @@ pub struct SavedQueriesProperties {
     pub exports: Option<Vec<Export>>,
     pub label: Option<String>,
     pub name: String,
-    pub query_params: Verbatim<SavedQueriesQueryParams>,
+    pub query_params: SavedQueriesQueryParams,
 }
 
 #[skip_serializing_none]
@@ -23,7 +23,7 @@ pub struct SavedQueriesQueryParams {
     pub group_by: Option<Vec<String>>,
     pub metrics: Option<Vec<String>>,
     #[serde(rename = "where")]
-    pub where_: Option<Vec<String>>,
+    pub where_: Verbatim<Option<Vec<String>>>,
 }
 
 #[skip_serializing_none]

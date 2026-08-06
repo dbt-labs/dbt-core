@@ -139,7 +139,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         test_name_truncations: &mut HashMap<String, String>,
         adapter_type: AdapterType,
         io_args: &IoArgs,
-        original_file_path: &PathBuf,
+        original_file_path: &Path,
         suppress_deprecated_test_validation: bool,
         raw_test_configs: &TestUnrenderedConfigs,
     ) -> FsResult<()> {
@@ -229,7 +229,7 @@ fn persist_inner(
     column_name: Option<&str>,
     test: &DataTests,
     io_args: &IoArgs,
-    original_file_path: &PathBuf,
+    original_file_path: &Path,
     seen_tests: &mut HashSet<String>,
     test_name_truncations: &mut HashMap<String, String>,
     column_tags: &[String],
@@ -247,7 +247,6 @@ fn persist_inner(
         test,
         test_config,
         column_name,
-        io_args,
         dependecy_package_name,
         suppress_deprecated_test_validation,
     )?;
@@ -324,7 +323,7 @@ fn persist_inner(
     stdfs::write(&test_file, generated_test_sql)?;
     let dbt_asset = DbtAsset {
         path,
-        original_path: original_file_path.clone(),
+        original_path: original_file_path.to_path_buf(),
         base_path: io_args.out_dir.to_path_buf(),
         package_name: project_name.to_string(),
     };
@@ -402,7 +401,6 @@ fn get_test_details(
     test: &DataTests,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
-    io_args: &IoArgs,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
 ) -> FsResult<TestDetails> {
@@ -458,7 +456,6 @@ fn get_test_details(
                     &mk.arguments,
                     &mk.__deprecated_args_and_configs__,
                     &mk.config,
-                    io_args,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
                 )?;
@@ -481,7 +478,6 @@ fn get_test_details(
                     &inner.arguments,
                     &inner.__deprecated_args_and_configs__,
                     &inner.config,
-                    io_args,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
                 )?;
@@ -544,7 +540,6 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     arguments: &Verbatim<Option<dbt_yaml::Value>>,
     deprecated_args_and_configs: &Verbatim<BTreeMap<String, dbt_yaml::Value>>,
     existing_config: &Option<DataTestConfig>,
-    io_args: &IoArgs,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
 ) -> FsResult<KwargsExtractionResult> {
@@ -603,7 +598,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
         );
 
         if !suppress_deprecated_test_validation {
-            emit_strict_parse_error(&schema_error, dependency_package_name, io_args);
+            emit_strict_parse_error(*schema_error, dependency_package_name);
         }
     }
     for (key, value) in deprecated.clone() {
@@ -1354,15 +1349,7 @@ fn collect_versioned_model_tests(
         let mut version_config = base_test_config.clone();
         version_config.version_num = Some(version_suffix.to_string());
 
-        // Override with version-specific tests if they exist
-        // Base model level tests are exclusive or with versioned model level tests
-        if version.tests.is_some() && version.data_tests.is_some() {
-            return err!(
-                ErrorCode::InvalidConfig,
-                "Cannot have both 'tests' and 'data_tests' defined"
-            );
-        }
-        if let Some(version_tests) = version.tests.clone().or_else(|| version.data_tests.clone()) {
+        if let Some(version_tests) = version.data_tests.clone() {
             version_config.model_tests = Some(version_tests);
         }
 
@@ -1786,13 +1773,10 @@ mod tests {
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
-        let io_args = IoArgs::default();
-
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &verbatim_wrapper,
             &empty_deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -2022,6 +2006,80 @@ mod tests {
                 .unwrap_or(false),
             "v2 must not have a test for cost_center_bkey (it is excluded)"
         );
+    }
+
+    #[test]
+    fn test_version_model_tests_legacy_alias_ignored() {
+        let base_config = versioned_model_base_config();
+        let version = version_with_model_tests(
+            Some(vec![DataTests::String(Spanned::from(
+                "not_null".to_string(),
+            ))]),
+            None,
+        );
+
+        let result = collect_versioned_model_tests(&base_config, &[version]).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].version_num.as_deref(), Some("1"));
+        assert!(
+            result[0].model_tests.is_none(),
+            "version-level `tests` should not create model tests"
+        );
+    }
+
+    #[test]
+    fn test_version_model_data_tests_prefer_data_tests_when_legacy_alias_also_present() {
+        let base_config = versioned_model_base_config();
+        let data_test = DataTests::String(Spanned::from("unique".to_string()));
+        let version = version_with_model_tests(
+            Some(vec![DataTests::String(Spanned::from(
+                "not_null".to_string(),
+            ))]),
+            Some(vec![data_test]),
+        );
+
+        let result = collect_versioned_model_tests(&base_config, &[version]).unwrap();
+
+        assert_eq!(result.len(), 1);
+        let model_tests = result[0]
+            .model_tests
+            .as_ref()
+            .expect("version data_tests should be preserved");
+        assert_eq!(model_tests.len(), 1);
+        assert_eq!(model_tests[0].test_name(), Some("unique"));
+    }
+
+    fn versioned_model_base_config() -> GenericTestConfig {
+        GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "orders".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        }
+    }
+
+    fn version_with_model_tests(
+        tests: Option<Vec<DataTests>>,
+        data_tests: Option<Vec<DataTests>>,
+    ) -> Versions {
+        use dbt_yaml::Verbatim;
+
+        Versions {
+            v: dbt_yaml::Value::Number(dbt_yaml::Number::from(1), Span::zero()),
+            deprecation_date: None,
+            defined_in: None,
+            description: None,
+            access: None,
+            config: Verbatim::from(None),
+            constraints: None,
+            data_tests,
+            tests,
+            columns: None,
+            __additional_properties__: Verbatim::from(HashMap::new()),
+        }
     }
 
     #[test]
@@ -2720,14 +2778,11 @@ mod tests {
         let arguments = Verbatim::from(Some(args_yaml));
         let deprecated = Verbatim::from(BTreeMap::new());
         let existing_config: Option<DataTestConfig> = None;
-        let io_args = IoArgs::default();
-
         // Act
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &arguments,
             &deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -2826,13 +2881,10 @@ mod tests {
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
-        let io_args = IoArgs::default();
-
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &verbatim_wrapper,
             &empty_deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -2976,13 +3028,10 @@ mod tests {
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
-        let io_args = IoArgs::default();
-
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &verbatim_wrapper,
             &empty_deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -3369,12 +3418,10 @@ mod tests {
             source_name: None,
         };
 
-        let io_args = IoArgs::default();
         let details = get_test_details(
             &DataTests::String("not_null".to_string().into()),
             &test_config,
             None,
-            &io_args,
             None,
             false,
         )

@@ -1826,9 +1826,8 @@ mod builtins {
                 value_to_compare.clone()
             };
 
-            if !seen.contains(&memorized_value) {
+            if seen.insert(memorized_value) {
                 rv.push(item);
-                seen.insert(memorized_value);
             }
         }
 

@@ -8,6 +8,7 @@ members = [
   "crates/dbt-auth",
   "crates/dbt-base",
   "crates/dbt-clap-core",
+  "crates/dbt-goldie",
   "crates/dbt-docs-core",
   "crates/dbt-docs-server",
   "crates/dbt-adapter-core",
@@ -42,6 +43,7 @@ members = [
   "crates/dbt-metadata",
   "crates/dbt-metadata-parquet",
   "crates/dbt-profile",
+  "crates/dbt-python",
   "crates/dbt-state",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
@@ -56,6 +58,7 @@ members = [
   "crates/dbt-ident",
   "crates/dbt-jinja-utils",
   "crates/dbt-main",
+  "crates/dbt-dist",
   "crates/dbt-sa-cli",
   "crates/dbt-adbc",
   "crates/adbc-record-replay",
@@ -81,6 +84,7 @@ members = [
   "crates/dbt-ci",
   "crates/dbt-login",
   "crates/dbt-platform-auth",
+
 ]
 exclude = [
   "wizard/wizard-app/src-tauri",
@@ -98,7 +102,7 @@ homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "Apache-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.5"
 
 [patch.crates-io]
 
@@ -132,6 +136,7 @@ sqlparser = { git = "https://github.com/sdf-labs/datafusion-sqlparser-rs", rev =
 # sqlparser = { path = "../datafusion-sqlparser-rs" }
 
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
+arrow-flight = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
 arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
 arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
 arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
@@ -172,6 +177,13 @@ split-debuginfo = "unpacked"
 # Enable basic optimizations for all non-member dependencies. This greatly
 # speeds up test times, with no loss of debuggability.
 opt-level = 1
+
+[profile.dev.package.sdf-frontend]
+# This is a quick workaround to reign in the compiled size of sdf-frontend, which
+# as of e522a37f2a7e56c6ba3479dcb2de957f3561eb7e exceeded the 4GB file limit
+# making the whole unbuidable on Windows.
+# FIXME: remove this once sdf-frontend is broken up
+debug = 1
 
 [profile.dev.build-override]
 # Some libraries (e.g. syn, proc-macro2 and all their dependencies) are compiled
@@ -229,6 +241,7 @@ dbt-dag = { path = "crates/dbt-dag" }
 dbt-defer = { path = "crates/dbt-defer" }
 dbt-deps = { path = "crates/dbt-deps" }
 dbt-df-providers = { path = "crates/dbt-df-providers" }
+dbt-dist = { path = "crates/dbt-dist" }
 dbt-docs-core = { path = "crates/dbt-docs-core" }
 dbt-docs-server = { path = "crates/dbt-docs-server", default-features = false }
 dbt-env = { path = "crates/dbt-env" }
@@ -236,6 +249,7 @@ dbt-error = { path = "crates/dbt-error" }
 dbt-feature-gating = { path = "crates/dbt-feature-gating" }
 dbt-features = { path = "crates/dbt-features" }
 dbt-frontend-common = { path = "crates/dbt-frontend-common" }
+dbt-goldie = { path = "crates/dbt-goldie" }
 dbt-handles = { path = "crates/dbt-handles" }
 dbt-ident = { path = "crates/dbt-ident" }
 dbt-index-core = { path = "crates/dbt-index-core" }
@@ -291,6 +305,7 @@ minijinja = { path = "crates/dbt-jinja/minijinja", features = [
   "loader",
   "custom_syntax",
   "preserve_order",
+  "unicode",
 ] }
 minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
   "pycompat",
@@ -311,6 +326,7 @@ dbt-yaml = { version = "0.9.6", features = [
   "flatten_dunder",
 ] }
 erased-serde = "0.4.9"
+rmp-serde = "1.3.0"
 serde = { version = "1.0.147", default-features = false, features = ["derive"] }
 serde_derive = "1.0.215"
 serde_json = "1.0.133"
@@ -335,6 +351,7 @@ arrow-buffer = { version = "=56.0.0" }
 arrow-cast = { version = "=56.0.0" }
 arrow-csv = { version = "=56.0.0" }
 arrow-data = { version = "=56.0.0" }
+arrow-flight = { version = "=56.0.0" }
 arrow-ipc = { version = "=56.0.0" }
 arrow-json = { version = "=56.0.0" }
 arrow-schema = { version = "=56.0.0", features = ["serde"] }
@@ -350,7 +367,7 @@ adbc-record-replay = { path = "crates/adbc-record-replay" }
 dbt-adbc = { path = "crates/dbt-adbc" }
 
 # antlr for frontend
-dbt-antlr4 = { version = "1.3.6", features = [
+dbt-antlr4 = { version = "2.0.2", features = [
   "arena-allocation-limit",
   "recursion-limit",
   "stacker",
@@ -558,7 +575,6 @@ zstd-safe = "7"
 
 # testing
 fake = { version = "4.4.0", features = ["derive", "uuid", "time"] }
-goldie = "0.5.0"
 indoc = "2.0.6"
 merge = { version = "0.2.0" }
 mockito = "1.2"
@@ -640,6 +656,8 @@ unicode-segmentation = "1.12"
 axum = "0.8.5"
 tower = "0.5.2"
 tower-http = { version = "0.6", features = ["trace"] }
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 
 # system browser opener
 open = "5"

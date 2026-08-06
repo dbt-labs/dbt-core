@@ -12,6 +12,7 @@ use std::sync::Arc;
 use dbt_adapter::Column;
 use dbt_adapter::errors::into_fs_error;
 use dbt_adapter::formatter::SqlLiteralFormatter;
+use dbt_adapter::metadata::BIGQUERY_PSEUDOCOLUMNS;
 use dbt_adapter::relation::{RelationObject, create_relation_from_node};
 use dbt_adapter::sql_types::DefaultTypeOps;
 use dbt_adapter::sql_types::{TypeOps, make_arrow_field};
@@ -23,8 +24,10 @@ use dbt_common::static_analysis::is_static_analysis_off_or_baseline;
 use dbt_common::stats::NodeStatus;
 use dbt_common::stdfs;
 use dbt_common::{ErrorCode, FsResult, MacroSpansOnly, err, fs_err};
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::compile::DependencyValidationConfig;
 use dbt_jinja_utils::phases::run::build_run_node_context;
+use dbt_jinja_utils::serde::single_expression_body;
 use dbt_jinja_utils::utils::add_task_context;
 use dbt_jinja_utils::utils::macro_spans_to_macro_span_vec;
 use dbt_jinja_utils::utils::render_sql;
@@ -43,16 +46,17 @@ use dbt_telemetry::{ExecutionPhase as TelemetryExecutionPhase, NodeType};
 use crate::renderable::unit_test_typing::{BigqueryTyping, SnowflakeTyping};
 use dbt_tasks_core::task::TaskResult;
 
-use arrow_schema::{DataType, Schema, SchemaRef};
+use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use csv::ReaderBuilder;
 use itertools::Itertools;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{CodeLocation, State, Value, Value as MinijinjaValue};
 use regex::Regex;
-use tracing::warn;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 use super::common::handle_render_result;
+use crate::sql::dialect::sqlparser_dialect_for;
 
 type YmlValue = dbt_yaml::Value;
 
@@ -567,11 +571,40 @@ fn populate_schema_from_empty_relation(
     )
 }
 
+/// `run_started_at` is a plain datetime global, not a macro invoked with
+/// `()` (dbt-core lets it be frozen via `overrides.macros` anyway). Stubbing
+/// it out as a callable like other macro overrides breaks
+/// `.strftime()`/`.astimezone()`, so eval its value as Jinja and bind the
+/// resulting `Value` directly.
+fn bind_run_started_at_override(
+    macro_value: &YmlValue,
+    compile_context: &BTreeMap<String, Value>,
+    env: &JinjaEnv,
+) -> Value {
+    macro_value
+        .as_str()
+        .and_then(single_expression_body)
+        .and_then(|expr| {
+            env.compile_expression(expr)
+                .ok()?
+                .eval(compile_context.clone(), &[])
+                .ok()
+        })
+        .unwrap_or_else(|| MinijinjaValue::from_serialize(macro_value.clone()))
+}
+
 fn bind_override_macros(
     macros: &BTreeMap<String, YmlValue>,
     compile_context: &mut BTreeMap<String, Value>,
+    env: &JinjaEnv,
 ) {
     for (macro_name, macro_value) in macros.iter() {
+        if macro_name == "run_started_at" {
+            let value = bind_run_started_at_override(macro_value, compile_context, env);
+            compile_context.insert(macro_name.clone(), value);
+            continue;
+        }
+
         let return_value = MinijinjaValue::from_serialize(macro_value.clone());
         let fn_stub =
             MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| Ok(return_value.clone()));
@@ -600,8 +633,8 @@ pub fn apply_unit_test_overrides(
     ctx: &TaskRunnerCtx,
 ) {
     // Override for Macros
-    if let Some(macros) = &overrides.macros {
-        bind_override_macros(macros, compile_context);
+    if let Some(macros) = overrides.macros.as_ref() {
+        bind_override_macros(macros, compile_context, &ctx.env);
     }
 
     // Override for Environment Variables
@@ -775,6 +808,7 @@ fn extract_expect_values<'a>(
                 type_ops,
                 None,
                 &unit_test.__unit_test_attr__.model,
+                false,
             )?,
             row_column_names_or_default(rows, column_names, expect_schema),
         )),
@@ -802,6 +836,7 @@ fn extract_expect_values<'a>(
                     type_ops,
                     None,
                     &unit_test.__unit_test_attr__.model,
+                    false,
                 )?,
                 row_column_names_or_default(&rows, column_names, expect_schema),
             ))
@@ -835,6 +870,7 @@ fn extract_expect_values<'a>(
                     type_ops,
                     None,
                     &unit_test.__unit_test_attr__.model,
+                    false,
                 )?,
                 row_column_names_or_default(&rows, column_names, expect_schema),
             ))
@@ -1108,6 +1144,7 @@ fn render_unit_test(
                         type_ops,
                         None,
                         given.input.as_str(),
+                        true,
                     )?
                 } else {
                     return Err(fs_err!(
@@ -1143,6 +1180,7 @@ fn render_unit_test(
                         type_ops,
                         None,
                         given.input.as_str(),
+                        true,
                     )?
                 } else if let Some(fixture) = &given.fixture {
                     let rows = get_fixture_rows(fixture, &given.format, ctx)?;
@@ -1153,6 +1191,7 @@ fn render_unit_test(
                         type_ops,
                         None,
                         given.input.as_str(),
+                        true,
                     )?
                 } else {
                     return Err(fs_err!(
@@ -1345,7 +1384,7 @@ fn render_unit_test(
     // ... iterate over all subqueries
     let mut subqueries_vec = vec![];
     for (fqn, values) in &subqueries {
-        let query = format!("\t{fqn} as ({values})");
+        let query = format_unit_test_subquery(adapter_type, fqn, values);
         subqueries_vec.push(query);
     }
 
@@ -1429,7 +1468,7 @@ WITH
             e
         )
     })
-    .map_err(|e| e.with_location(original_file_path.clone()))?;
+    .map_err(|e| e.with_location(original_file_path.to_path_buf()))?;
     let macro_spans = ctx
         .rendering_listener_factory
         .drain_macro_spans(original_file_path);
@@ -1461,6 +1500,21 @@ WITH
         },
         config_map,
     ))
+}
+
+fn format_unit_test_subquery(adapter_type: AdapterType, fqn: &str, values: &str) -> String {
+    let needs_newline = Tokenizer::new(sqlparser_dialect_for(adapter_type), values)
+        .tokenize()
+        .is_ok_and(|tokens| {
+            matches!(
+                tokens.last(),
+                Some(Token::Whitespace(Whitespace::SingleLineComment { comment, .. }))
+                    if !comment.ends_with('\n') && !comment.ends_with('\r')
+            )
+        });
+    let newline = if needs_newline { "\n" } else { "" };
+
+    format!("\t{fqn} as ({values}{newline})")
 }
 
 fn format_fqn(type_ops: &dyn TypeOps, catalog: &str, schema: &str, table: &str) -> String {
@@ -1501,6 +1555,7 @@ fn is_supported_type(adapter_type: AdapterType, ref_type: &DataType) -> bool {
         || match adapter_type {
             AdapterType::Snowflake => {
                 SnowflakeTyping::is_any_timestamp(ref_type).is_yes()
+                    || SnowflakeTyping::is_time(ref_type).is_yes()
                     || SnowflakeTyping::is_semi_structured_array(ref_type)
                     || SnowflakeTyping::is_variant(ref_type)
                     || SnowflakeTyping::is_object(ref_type)
@@ -1645,14 +1700,11 @@ fn yml_value_to_sql_literal(
         YmlValue::Null(_) => Ok(literal_formatter.none_value()),
         YmlValue::Bool(b, _) => Ok(literal_formatter.format_bool(b)),
         YmlValue::Number(n, _) => Ok(n.to_string()),
-        // For BigQuery, a string fixture for a STRUCT or GEOGRAPHY column is a
-        // SQL expression (e.g. `STRUCT("A" AS f1)`, `ST_GEOGPOINT(1, 2)`) that
-        // must be injected verbatim: these types cannot be produced by CASTing
-        // a string literal. See dbt-labs/dbt-core#14625.
+        // A string fixture for a type that cannot be produced by casting a
+        // string literal (e.g. BigQuery STRUCT/GEOGRAPHY) is a SQL expression
+        // that must be injected verbatim. See dbt-labs/dbt-core#14625.
         YmlValue::String(s, _)
-            if adapter_type == AdapterType::Bigquery
-                && (matches!(data_type, DataType::Struct(_))
-                    || BigqueryTyping::is_geography(data_type)) =>
+            if type_ops.cast_from_quoted_string_literal_unsupported_for(data_type) =>
         {
             Ok(s)
         }
@@ -1695,6 +1747,85 @@ fn columns_to_formatted_types<'a>(
         .collect::<FsResult<Vec<_>>>()
 }
 
+/// Queryable pseudocolumns per adapter that are not reported by the information
+/// schema, and therefore never appear in a relation's fetched schema.
+///
+/// Pseudocolumns are system-generated columns that can be queried but are absent
+/// from `INFORMATION_SCHEMA` (e.g. BigQuery's `_FILE_NAME` on external tables).
+/// The BigQuery set is sourced from [`dbt_adapter::metadata::BIGQUERY_PSEUDOCOLUMNS`]
+/// so there is a single source of truth. Names are compared case-insensitively.
+fn known_pseudocolumns(adapter_type: AdapterType) -> &'static [&'static str] {
+    match adapter_type {
+        AdapterType::Bigquery => &BIGQUERY_PSEUDOCOLUMNS,
+        _ => &[],
+    }
+}
+
+/// Return `ref_schema` extended with any recognized pseudocolumns (see
+/// [`known_pseudocolumns`]) that a fixture row references but that are missing
+/// from the fetched schema. This lets unit tests provide values for queryable
+/// columns like BigQuery's `_FILE_NAME` without raising a spurious "invalid
+/// column name" warning. Pseudocolumns are only appended when actually
+/// referenced, so fixtures that don't use them produce identical SQL.
+///
+/// This is intended for `given`/upstream input relations only — see the
+/// `allow_pseudocolumns` argument of [`create_values`].
+///
+/// Note: the dbt Core v1 (Python `dbt-adapters`) implementation only exposes
+/// `_FILE_NAME` for tables it has verified are `EXTERNAL`. Here we accept the
+/// pseudocolumn purely on the strength of the fixture referencing it, because
+/// Fusion's schema cache carries columns but not table type. A fixture that
+/// references `_FILE_NAME` against a non-external table is therefore allowed
+/// here and only fails later at the warehouse (with a raw SQL error rather
+/// than dbt's friendlier column-name message).
+fn append_referenced_pseudocolumns(
+    ref_schema: &SchemaRef,
+    rows: &[BTreeMap<String, YmlValue>],
+    adapter_type: AdapterType,
+) -> SchemaRef {
+    let pseudocolumns = known_pseudocolumns(adapter_type);
+    if pseudocolumns.is_empty() {
+        return ref_schema.clone();
+    }
+
+    let existing: HashSet<String> = ref_schema
+        .fields()
+        .iter()
+        .map(|f| f.name().to_ascii_lowercase())
+        .collect();
+
+    let mut extra_fields = Vec::new();
+    for pseudocolumn in pseudocolumns {
+        let pseudocolumn_lower = pseudocolumn.to_ascii_lowercase();
+        if existing.contains(&pseudocolumn_lower) {
+            continue;
+        }
+        let referenced = rows.iter().any(|row| {
+            row.keys()
+                .any(|k| k.to_ascii_lowercase() == pseudocolumn_lower)
+        });
+        if referenced {
+            // Pseudocolumns are typed as strings here; the fixture supplies a
+            // literal that `create_values` casts to this type. This matches the
+            // string-valued pseudocolumns (`_FILE_NAME`, `_TABLE_SUFFIX`, …); the
+            // few timestamp/date ones would need a richer mapping if used.
+            extra_fields.push(Field::new(*pseudocolumn, DataType::Utf8, true));
+        }
+    }
+
+    if extra_fields.is_empty() {
+        return ref_schema.clone();
+    }
+
+    let mut fields: Vec<Field> = ref_schema
+        .fields()
+        .iter()
+        .map(|f| f.as_ref().clone())
+        .collect();
+    fields.extend(extra_fields);
+    Arc::new(Schema::new(fields))
+}
+
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/60fc903f705f447a7b58d0df6b33d7be7cd00690/dbt-adapters/src/dbt/include/global_project/macros/unit_test_sql/get_fixture_sql.sql#L51
 fn create_values(
     ref_schema: &SchemaRef,
@@ -1703,7 +1834,19 @@ fn create_values(
     type_ops: &dyn TypeOps,
     named_column: Option<(String, YmlValue)>,
     relation_name: &str,
+    allow_pseudocolumns: bool,
 ) -> FsResult<String> {
+    // Accept queryable pseudocolumns (e.g. BigQuery's `_FILE_NAME`) that a
+    // fixture references but the information schema does not report. This only
+    // applies to `given`/input relations; `expect` fixtures describe the
+    // model's own output and must never gain synthetic columns.
+    let augmented_schema = if allow_pseudocolumns {
+        append_referenced_pseudocolumns(ref_schema, rows, adapter_type)
+    } else {
+        ref_schema.clone()
+    };
+    let ref_schema = &augmented_schema;
+
     let columns = columns_to_formatted_types(ref_schema, type_ops)?;
 
     let mut enriched_rows = vec![];
@@ -1768,8 +1911,16 @@ fn create_values(
                 .iter()
                 .map(|f| f.name().as_str())
                 .collect();
-            warn!(
-                "Invalid column name(s): {} in row {} of unit test fixture for '{relation_name}'. Accepted columns are: {:?}",
+            // `expect` fixtures never allow pseudocolumns; use that to match dbt
+            // Core's wording ("expected output" vs the quoted input relation name).
+            let fixture_desc = if allow_pseudocolumns {
+                format!("'{relation_name}'")
+            } else {
+                "expected output".to_string()
+            };
+            return err!(
+                ErrorCode::InvalidConfig,
+                "Invalid column name(s): {} in row {} of unit test fixture for {fixture_desc}. Accepted columns for {fixture_desc} are: {:?}",
                 invalid_columns.iter().map(|c| format!("'{c}'")).join(", "),
                 i + 1,
                 accepted_columns
@@ -2070,6 +2221,67 @@ mod tests {
 
     type YmlValue = dbt_yaml::Value;
 
+    /// Binds `value` as the `run_started_at` override and renders `template`,
+    /// exercising the same path unit tests use.
+    fn render_run_started_at_override(value: YmlValue, template: &str) -> String {
+        let mut raw_env = minijinja::Environment::new();
+        minijinja_contrib::add_to_environment(&mut raw_env);
+        let env = JinjaEnv::new(raw_env);
+
+        let mut macros = BTreeMap::new();
+        macros.insert("run_started_at".to_string(), value);
+
+        let mut compile_context: BTreeMap<String, Value> = BTreeMap::new();
+        bind_override_macros(&macros, &mut compile_context, &env);
+
+        env.render_str(template, &compile_context, &[])
+            .expect("bound run_started_at override should render")
+    }
+
+    /// Regression test for https://github.com/dbt-labs/dbt-fusion/issues/12271:
+    /// dbt-core lets `overrides.macros` freeze `run_started_at`, but unlike a
+    /// real macro override it's accessed without `()`, so wrapping it as a
+    /// callable stub broke `.strftime()`/`.astimezone()`.
+    #[test]
+    fn test_run_started_at_override_binds_a_real_value_not_a_callable_stub() {
+        let rendered = render_run_started_at_override(
+            YmlValue::string(
+                "{{ modules.datetime.datetime.strptime('2025-09-04 20:00:00', '%Y-%m-%d %H:%M:%S') }}"
+                    .to_string(),
+            ),
+            "{{ run_started_at.strftime('%Y-%m-%d') }}",
+        );
+        assert_eq!(rendered, "2025-09-04");
+    }
+
+    // Unhappy paths: a non-datetime override must still bind as a plain value,
+    // never a callable stub, so bare interpolation renders it. `.strftime()` on
+    // these would error the same as it does in dbt-core.
+    #[test]
+    fn test_run_started_at_override_plain_string_binds_as_value() {
+        let rendered = render_run_started_at_override(
+            YmlValue::string("2025-09-04 20:00:00".to_string()),
+            "{{ run_started_at }}",
+        );
+        assert_eq!(rendered, "2025-09-04 20:00:00");
+    }
+
+    #[test]
+    fn test_run_started_at_override_non_datetime_expression_evaluates() {
+        let rendered = render_run_started_at_override(
+            YmlValue::string("{{ 'hello' }}".to_string()),
+            "{{ run_started_at }}",
+        );
+        assert_eq!(rendered, "hello");
+    }
+
+    #[test]
+    fn test_run_started_at_override_non_string_binds_as_value() {
+        let rendered =
+            render_run_started_at_override(YmlValue::number(12345.into()), "{{ run_started_at }}");
+        assert_eq!(rendered, "12345");
+    }
+
     #[test]
     fn test_create_cte_name_from_fqn_with_bigquery_backticks() {
         let adapter_type = AdapterType::Bigquery;
@@ -2080,12 +2292,15 @@ mod tests {
     }
 
     #[test]
-    fn test_create_cte_name_from_fqn_with_hyphenated_bigquery_project() {
+    fn test_create_cte_name_from_fqn_with_bigquery_quoted_fqn() {
         let adapter_type = AdapterType::Bigquery;
-        let fqn = "`my-project.dataset.table`";
+        let fqn = "`my-gcp-project`.`my_schema`.`na_unit_test__my_model_expect`";
         let result =
             create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
-        assert_eq!(result, "`my-project_dataset_table`");
+        assert_eq!(
+            result,
+            "`my-gcp-project_my_schema_na_unit_test__my_model_expect`"
+        );
     }
 
     #[test]
@@ -2095,6 +2310,56 @@ mod tests {
         let result =
             create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
         assert_eq!(result, "\"database_schema_table\"");
+    }
+
+    #[test]
+    fn test_unit_test_subquery_closes_after_trailing_line_comment() {
+        let result = format_unit_test_subquery(
+            AdapterType::Snowflake,
+            "\"database_schema_model_actual\"",
+            "SELECT 1\n-- trailing comment",
+        );
+
+        assert_eq!(
+            result,
+            "\t\"database_schema_model_actual\" as (SELECT 1\n-- trailing comment\n)"
+        );
+
+        let sql = format!("WITH {result} SELECT * FROM \"database_schema_model_actual\"");
+        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::SnowflakeDialect {}, &sql)
+            .expect("unit test CTE should remain valid after a trailing line comment");
+    }
+
+    #[test]
+    fn test_unit_test_subquery_preserves_existing_formatting() {
+        for values in [
+            "SELECT 1",
+            "SELECT '-- not a comment'",
+            "SELECT 1\n-- terminated comment\n",
+        ] {
+            assert_eq!(
+                format_unit_test_subquery(
+                    AdapterType::Snowflake,
+                    "\"database_schema_model_actual\"",
+                    values,
+                ),
+                format!("\t\"database_schema_model_actual\" as ({values})")
+            );
+        }
+    }
+
+    #[test]
+    fn test_snowflake_time_is_supported_type() {
+        let time_type = DataType::FixedSizeList(
+            Arc::new(Field::new(
+                "time:9",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            )),
+            1,
+        );
+
+        assert!(is_supported_type(AdapterType::Snowflake, &time_type));
     }
 
     #[test]
@@ -2819,5 +3084,168 @@ mod tests {
             "CAST('hello' AS string) AS name",
             "plain string values must remain quoted"
         );
+    }
+
+    #[test]
+    fn test_create_bigquery_relation_string_expr_for_geography() {
+        let geography_type =
+            DataType::FixedSizeList(Arc::new(Field::new("geography", DataType::Binary, true)), 1);
+        let nested_struct_type = DataType::Struct(
+            vec![Arc::new(Field::new(
+                "nested_point",
+                geography_type.clone(),
+                true,
+            ))]
+            .into(),
+        );
+        let geography_array_type =
+            DataType::List(Arc::new(Field::new("item", geography_type.clone(), true)));
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("some_point", geography_type, true),
+            Field::new("nested_struct", nested_struct_type, true),
+            Field::new("geography_array", geography_array_type, true),
+        ]));
+
+        let columns =
+            columns_to_formatted_types(&schema, &DefaultTypeOps::new(AdapterType::Bigquery))
+                .expect("Must format column types");
+
+        let mut nested_struct_map = dbt_yaml::mapping::Mapping::new();
+        nested_struct_map.insert(
+            YmlValue::string("nested_point".to_string()),
+            YmlValue::string("ST_GEOGPOINT(101, -38)".to_string()),
+        );
+
+        let yml_rows = vec![vec![
+            YmlValue::string("ST_GEOGPOINT(100, -37)".to_string()),
+            YmlValue::Mapping(nested_struct_map, Default::default()),
+            YmlValue::Sequence(
+                vec![YmlValue::string("ST_GEOGPOINT(102, -39)".to_string())],
+                Default::default(),
+            ),
+        ]];
+
+        let result = create_bigquery_relation_to_select_from(
+            &DefaultTypeOps::new(AdapterType::Bigquery),
+            yml_rows,
+            &schema,
+            &columns,
+        )
+        .unwrap();
+
+        assert_contains!(
+            result,
+            "CAST(ST_GEOGPOINT(100, -37) AS GEOGRAPHY) AS some_point"
+        );
+        assert_contains!(
+            result,
+            "ST_GEOGPOINT(101, -38) AS nested_point",
+            "nested GEOGRAPHY expression should stay raw inside STRUCT"
+        );
+        assert_contains!(
+            result,
+            "ST_GEOGPOINT(102, -39)",
+            "array GEOGRAPHY expression should stay raw inside ARRAY"
+        );
+        assert!(
+            !result.contains("CAST('ST_GEOGPOINT(100, -37)' AS"),
+            "GEOGRAPHY expression should not be quoted as a string literal: {result}"
+        );
+        assert!(
+            !result.contains("'ST_GEOGPOINT(101, -38)'"),
+            "nested GEOGRAPHY expression should not be quoted as a string literal: {result}"
+        );
+        assert!(
+            !result.contains("'ST_GEOGPOINT(102, -39)'"),
+            "array GEOGRAPHY expression should not be quoted as a string literal: {result}"
+        );
+    }
+
+    fn row(pairs: &[(&str, i64)]) -> BTreeMap<String, YmlValue> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), YmlValue::number((*v).into())))
+            .collect()
+    }
+
+    /// A fixture row with a numeric `id` and a string-valued `_FILE_NAME`
+    /// pseudocolumn (`file_name_key` lets tests vary the casing), mirroring how
+    /// a real BigQuery external-table fixture supplies `_FILE_NAME`.
+    fn row_with_file_name(
+        id: i64,
+        file_name_key: &str,
+        file_name: &str,
+    ) -> BTreeMap<String, YmlValue> {
+        BTreeMap::from([
+            ("id".to_string(), YmlValue::number(id.into())),
+            (
+                file_name_key.to_string(),
+                YmlValue::string(file_name.to_string()),
+            ),
+        ])
+    }
+
+    fn schema_id_name() -> SchemaRef {
+        Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, true),
+        ]))
+    }
+
+    #[test]
+    fn test_pseudocolumn_appended_when_referenced_bigquery() {
+        let schema = schema_id_name();
+        let rows = vec![row_with_file_name(1, "_FILE_NAME", "gs://bucket/file1.csv")];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        let names: Vec<&str> = result.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["id", "name", "_FILE_NAME"]);
+        let file_name = result.field_with_name("_FILE_NAME").unwrap();
+        assert_eq!(file_name.data_type(), &DataType::Utf8);
+    }
+
+    #[test]
+    fn test_pseudocolumn_matching_is_case_insensitive() {
+        let schema = schema_id_name();
+        let rows = vec![row_with_file_name(1, "_file_name", "gs://bucket/file1.csv")];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        // The canonical pseudocolumn name is appended regardless of the fixture casing.
+        assert!(result.field_with_name("_FILE_NAME").is_ok());
+    }
+
+    #[test]
+    fn test_pseudocolumn_not_appended_when_unreferenced() {
+        let schema = schema_id_name();
+        let rows = vec![row(&[("id", 1), ("name", 2)])];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        let names: Vec<&str> = result.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["id", "name"]);
+    }
+
+    #[test]
+    fn test_pseudocolumn_not_appended_for_other_adapters() {
+        let schema = schema_id_name();
+        let rows = vec![row_with_file_name(1, "_FILE_NAME", "gs://bucket/file1.csv")];
+        // Only BigQuery exposes pseudocolumns today; other adapters leave the fixture
+        // to raise the usual "invalid column" warning.
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Postgres);
+        let names: Vec<&str> = result.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["id", "name"]);
+    }
+
+    #[test]
+    fn test_pseudocolumn_not_duplicated_when_already_present() {
+        // A relation that already reports `_FILE_NAME` as a native column must not gain a duplicate.
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("_FILE_NAME", DataType::Utf8, true),
+        ]));
+        let rows = vec![row_with_file_name(1, "_FILE_NAME", "gs://bucket/file1.csv")];
+        let result = append_referenced_pseudocolumns(&schema, &rows, AdapterType::Bigquery);
+        let count = result
+            .fields()
+            .iter()
+            .filter(|f| f.name().eq_ignore_ascii_case("_FILE_NAME"))
+            .count();
+        assert_eq!(count, 1);
     }
 }

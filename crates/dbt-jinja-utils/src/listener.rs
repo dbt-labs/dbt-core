@@ -126,7 +126,6 @@ impl DefaultRenderingEventListenerFactory {
         if self.check_mangled_refs {
             listeners.push(Rc::new(crate::mangled_ref::MangledRefWarningPrinter::new(
                 filename.to_path_buf(),
-                self.io_args.clone(),
                 shared_tracker.clone(),
             )));
         }
@@ -157,7 +156,6 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
                 emit_error_log_message(
                     ErrorCode::Generic,
                     "Failed to acquire write lock on macro_spans",
-                    None,
                 );
             }
         }
@@ -170,7 +168,6 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
             emit_error_log_message(
                 ErrorCode::Generic,
                 "Failed to acquire write lock on macro_spans",
-                None,
             );
             MacroSpans::default()
         }
@@ -416,7 +413,6 @@ impl TypecheckingEventListener for WarningPrinter {
             emit_warn_log_message(
                 ErrorCode::JinjaTypeCheckFailed,
                 format!("{}\n  --> {}", message, location),
-                self.args.status_reporter.as_ref(),
             );
         });
     }
@@ -859,7 +855,6 @@ impl RenderingEventListener for DefaultRenderingEventListener {
                     "return is not at the top level of the block.\nIts value is final and cannot be modified by surrounding expressions.\nExample: return(0) + 1. The + 1 is ignored and the macro returns 0.\n  --> {}",
                     location
                 ),
-                self.args.status_reporter.as_ref(),
             );
         }
     }

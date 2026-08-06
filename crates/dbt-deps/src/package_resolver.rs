@@ -89,7 +89,7 @@ impl PackageResolver for GitUnpinnedPackage {
                 .await?;
         self.name = Some(dbt_project.name.clone());
         let mut transitive_deps = Vec::new();
-        if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
+        if let Some(dbt_packages) = load_dbt_packages(&checkout_path).await?.0 {
             ctx.notices.collect(&dbt_packages);
             transitive_deps = dbt_packages.packages;
         }
@@ -118,7 +118,7 @@ impl PackageResolver for LocalUnpinnedPackage {
     async fn resolve_inner(&mut self, ctx: &DepsOperationContext<'_>) -> FsResult<ResolvedPackage> {
         let pinned: LocalPinnedPackage = self.clone().try_into()?;
         let mut transitive_deps = Vec::new();
-        if let Some(dbt_packages) = load_dbt_packages(ctx.io, &self.local).await?.0 {
+        if let Some(dbt_packages) = load_dbt_packages(&self.local).await?.0 {
             ctx.notices.collect(&dbt_packages);
             transitive_deps = dbt_packages.packages;
         }
@@ -158,7 +158,7 @@ impl PackageResolver for PrivateUnpinnedPackage {
                 .await?;
         self.name = Some(dbt_project.name.clone());
         let mut transitive_deps = Vec::new();
-        if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
+        if let Some(dbt_packages) = load_dbt_packages(&checkout_path).await?.0 {
             ctx.notices.collect(&dbt_packages);
             transitive_deps = dbt_packages.packages;
         }
@@ -199,7 +199,7 @@ impl PackageResolver for TarballUnpinnedPackage {
                 .await?;
         self.name = Some(dbt_project.name.clone());
         let mut transitive_deps = Vec::new();
-        if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
+        if let Some(dbt_packages) = load_dbt_packages(&checkout_path).await?.0 {
             ctx.notices.collect(&dbt_packages);
             transitive_deps = dbt_packages.packages;
         }

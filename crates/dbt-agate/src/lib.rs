@@ -222,10 +222,18 @@ impl TupleRepr for ExcludedTupleRepr {
 
 impl fmt::Display for Tuple {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let len = self.len();
+
         write!(f, "(")?;
-        for i in 0..self.len() {
+        for i in 0..len {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
             let value = self.get(i as isize).unwrap();
-            write!(f, "{value}, ")?;
+            write!(f, "{value}")?;
+        }
+        if len == 1 {
+            write!(f, ",")?;
         }
         write!(f, ")")
     }
@@ -882,6 +890,16 @@ mod tests {
     }
 
     #[test]
+    fn tuple_display_matches_python_tuple_punctuation() {
+        assert_eq!(tuple(vec![]).to_string(), "()");
+        assert_eq!(tuple(vec![Value::from(1)]).to_string(), "(1,)");
+        assert_eq!(
+            tuple(vec![Value::from(1), Value::from(2), Value::from(3)]).to_string(),
+            "(1, 2, 3)"
+        );
+    }
+
+    #[test]
     fn test_tuple() {
         let values = vec![Value::from(2), Value::from("biscoito")];
         let tuple = Arc::new(Tuple(Box::new(TestTupleRepr::new(Arc::new(values)))));
@@ -942,10 +960,10 @@ mod tests {
         ]);
 
         assert!(!sample.is_empty());
-        assert_eq!(sample.to_string(), "(a, b, a, c, )");
+        assert_eq!(sample.to_string(), "(a, b, a, c)");
         assert_eq!(
             Value::from_dyn_object(Arc::new(sample.clone_repr())).to_string(),
-            "(a, b, a, c, )"
+            "(a, b, a, c)"
         );
         assert_eq!(sample.count(&Value::from("a")), 2);
         assert_eq!(sample.count(&Value::from("missing")), 0);

@@ -17,7 +17,6 @@ use std::collections::btree_map::Iter;
 type YmlValue = dbt_yaml::Value;
 
 use super::config_keys::ConfigKeys;
-use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
@@ -31,16 +30,17 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::default_hooks;
-use crate::schemas::project::configs::common::default_meta_and_tags;
-use crate::schemas::project::configs::common::default_quoting;
-use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::properties::ModelState;
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, StringOrInteger, f64_or_string_f64,
+    hours_to_expiration_or_string_omissible, u64_or_string_u64,
 };
+use dbt_common::serde_utils::Omissible;
+use dbt_proc_macros::DefaultTo;
 use dbt_proc_macros::Resolvable;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -199,9 +199,9 @@ pub struct ProjectSnapshotConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -336,6 +336,12 @@ pub struct ProjectSnapshotConfig {
     // Adapter-specific fields (Postgres)
     #[serde(default, rename = "+indexes")]
     pub indexes: IndexesConfig,
+    #[serde(
+        default,
+        rename = "+unlogged",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unlogged: Option<bool>,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
@@ -344,6 +350,10 @@ pub struct ProjectSnapshotConfig {
     /// Schema synchronization configuration
     #[serde(rename = "+sync")]
     pub sync: Option<SyncConfig>,
+
+    // dbt State configs (state-aware run-cache behavior)
+    #[serde(rename = "+state")]
+    pub state: Option<ModelState>,
 
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSnapshotConfig>>,
@@ -360,7 +370,9 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq,
+)]
 pub struct SnapshotConfig {
     // Snapshot-specific Configuration
     #[serde(alias = "project", alias = "data_space")]
@@ -388,11 +400,8 @@ pub struct SnapshotConfig {
     pub enabled: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(alias = "post-hook")]
@@ -414,6 +423,8 @@ pub struct SnapshotConfig {
     pub docs: Option<DocsConfig>,
     /// Schema synchronization configuration
     pub sync: Option<SyncConfig>,
+    // dbt State configs (state-aware run-cache behavior)
+    pub state: Option<ModelState>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -553,7 +564,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             compute: config.compute,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
-            tags: config.tags,
+            tags: Tags(config.tags),
             pre_hook: config.pre_hook,
             post_hook: config.post_hook,
             persist_docs: config.persist_docs,
@@ -567,6 +578,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             invalidate_hard_deletes: config.invalidate_hard_deletes,
             docs: config.docs,
             sync: config.sync,
+            state: config.state,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: None, // Only for Bigquery models
                 adapter_properties: config.adapter_properties,
@@ -662,6 +674,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+                unlogged: config.unlogged,
 
                 // snapshot is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
@@ -690,7 +703,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             compute: config.compute,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             pre_hook: config.pre_hook,
             post_hook: config.post_hook,
             persist_docs: config.persist_docs,
@@ -796,9 +809,11 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             // Postgres Fields
             indexes: config.__warehouse_specific_config__.indexes,
+            unlogged: config.__warehouse_specific_config__.unlogged,
             // Schedule (Databricks streaming tables)
             schedule: config.__warehouse_specific_config__.schedule,
             sync: config.sync,
+            state: config.state,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -839,92 +854,8 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
         self.finalize_resolved()
     }
 
-    #[allow(clippy::cognitive_complexity)]
     fn default_to(&mut self, parent: &SnapshotConfig) {
-        let SnapshotConfig {
-            database,
-            schema,
-            alias,
-            materialized,
-            strategy,
-            unique_key,
-            check_cols,
-            updated_at,
-            dbt_valid_to_current,
-            snapshot_meta_column_names,
-            hard_deletes,
-            target_database,
-            target_schema,
-            compute,
-            enabled,
-            full_refresh,
-            tags,
-            pre_hook,
-            post_hook,
-            persist_docs,
-            grants,
-            event_time,
-            quoting,
-            meta,
-            group,
-            quote_columns,
-            invalidate_hard_deletes,
-            docs,
-            static_analysis,
-            sync,
-            // Flattened configs
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
-
-        // Handle flattened configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-
-        #[allow(unused, clippy::let_unit_value)]
-        let pre_hook = default_hooks(pre_hook, &parent.pre_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let post_hook = default_hooks(post_hook, &parent.post_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
-        #[allow(unused, clippy::let_unit_value)]
-        let grants = default_to_grants(grants, &parent.grants);
-
-        // Use the improved default_to macro for simple fields
-        default_to!(
-            parent,
-            [
-                enabled,
-                compute,
-                full_refresh,
-                alias,
-                schema,
-                database,
-                target_database,
-                target_schema,
-                materialized,
-                group,
-                persist_docs,
-                unique_key,
-                docs,
-                event_time,
-                quote_columns,
-                invalidate_hard_deletes,
-                strategy,
-                updated_at,
-                dbt_valid_to_current,
-                snapshot_meta_column_names,
-                hard_deletes,
-                check_cols,
-                static_analysis,
-                materialized,
-                sync,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 
@@ -936,6 +867,8 @@ impl ConfigKeys for SnapshotConfig {
 #[cfg(test)]
 mod tests {
     use super::{ProjectSnapshotConfig, SnapshotConfig};
+    use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
+    use crate::schemas::properties::{ModelState, StatePreClone};
 
     #[test]
     fn test_project_snapshot_config_resource_tags_parses() {
@@ -993,5 +926,88 @@ __additional_properties__: {}
             "resource_tags should propagate from SnapshotConfig back to ProjectSnapshotConfig",
         );
         assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
+
+    #[test]
+    fn test_project_snapshot_config_state_parses_with_plus_prefix() {
+        let config: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++state:
+  lag_tolerance:
+    count: 2
+    period: hour
+  require_fresh_data_from: all
+  evaluate_volatile_sql: true
+  pre_clone: if_missing
+  execute_hooks_on_any_reuse: true
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let snapshot_config: SnapshotConfig = config.into();
+        let state = snapshot_config
+            .state
+            .expect("+state should propagate to SnapshotConfig");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(2));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::hour));
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+        assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
+        assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
+    }
+
+    #[test]
+    fn test_snapshot_config_state_parses() {
+        let config: SnapshotConfig = dbt_yaml::from_str(
+            r#"
+state:
+  lag_tolerance:
+    count: 30
+    period: minute
+  require_fresh_data_from: any
+  evaluate_volatile_sql: false
+  pre_clone: always
+  execute_hooks_on_any_reuse: false
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        let state = config.state.expect("state config should parse");
+        let lag_tolerance = state.lag_tolerance.expect("lag_tolerance should parse");
+        assert_eq!(lag_tolerance.count, Some(30));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::minute));
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::Any));
+        assert_eq!(state.evaluate_volatile_sql, Some(false));
+        assert_eq!(state.pre_clone, Some(StatePreClone::Always));
+        assert_eq!(state.execute_hooks_on_any_reuse, Some(false));
+    }
+
+    #[test]
+    fn test_snapshot_config_state_propagates_via_default_to() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+
+        let parent = SnapshotConfig {
+            state: Some(ModelState {
+                lag_tolerance: None,
+                require_fresh_data_from: Some(UpdatesOn::All),
+                evaluate_volatile_sql: Some(true),
+                pre_clone: Some(StatePreClone::IfMissing),
+                execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        let mut child = SnapshotConfig::default();
+        child.default_to(&parent);
+
+        let state = child
+            .state
+            .expect("state should propagate from parent to child via default_to");
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+        assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
     }
 }

@@ -74,15 +74,6 @@ pub struct RecordingResult {
     pub node_count: usize,
 }
 
-/// Spawn the background writer task.
-///
-/// This function spawns an async task that:
-/// 1. Writes the header file
-/// 2. Drains events from the channel in batches
-/// 3. Writes events to NDJSON (optionally compressed)
-/// 4. Writes the index file when the channel closes or cancellation is requested
-///
-/// Returns a handle that can be awaited to get the recording result.
 pub fn spawn_writer(
     receiver: mpsc::Receiver<RecordedEvent>,
     header: RecordingHeader,
@@ -101,10 +92,8 @@ pub async fn writer_task(
     config: WriterConfig,
     token: CancellationToken,
 ) -> io::Result<RecordingResult> {
-    // Create output directory
     std::fs::create_dir_all(&config.output_path)?;
 
-    // Write header file
     let header_path = config.output_path.join("header.json");
     let header_json = serde_json::to_string_pretty(&header)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -192,7 +181,9 @@ pub async fn writer_task(
     })
 }
 
-/// Flush a batch of events to the writer.
+/// Flush a batch of events to the writer, serializing each as a newline-delimited
+/// JSON (NDJSON) line so the recording can be streamed/appended incrementally
+/// and replayed without loading the whole file into memory.
 fn flush_batch(
     batch: &mut Vec<RecordedEvent>,
     writer: &mut Box<dyn Write + Send>,
@@ -203,19 +194,16 @@ fn flush_batch(
         let node_id = event.node_id().to_string();
         let timestamp_ns = event.timestamp_ns();
 
-        // Serialize event to NDJSON line
         let mut line = serde_json::to_vec(&event)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         line.push(b'\n');
 
-        // Update index with event count and timestamp range
         let entry = index.entry(node_id).or_insert(NodeIndex {
             event_count: 0,
             first_timestamp_ns: timestamp_ns,
             last_timestamp_ns: timestamp_ns,
         });
 
-        // Write line
         writer.write_all(&line)?;
 
         entry.event_count += 1;
@@ -253,13 +241,11 @@ impl SyncWriter {
         let output_path = output_path.into();
         std::fs::create_dir_all(&output_path)?;
 
-        // Write header
         let header_path = output_path.join("header.json");
         let header_json = serde_json::to_string_pretty(header)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         std::fs::write(header_path, header_json)?;
 
-        // Create compressed events file
         let events_path = output_path.join("events.ndjson.gz");
         let file = std::fs::File::create(events_path)?;
         let writer: Box<dyn Write + Send> = Box::new(flate2::write::GzEncoder::new(
@@ -300,7 +286,6 @@ impl SyncWriter {
         Ok(())
     }
 
-    /// Finish writing and return the result.
     pub(crate) fn finish(mut self) -> io::Result<RecordingResult> {
         self.writer.flush()?;
         drop(self.writer);

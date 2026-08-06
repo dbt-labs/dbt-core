@@ -3,7 +3,6 @@
 pub(crate) mod config;
 pub use config::{BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, RelationChangeSet};
 
-// Relation and RelationConfig for different data warehouses
 pub mod bigquery;
 pub mod databricks;
 pub mod redshift;
@@ -22,6 +21,7 @@ pub use relation_object::{
 };
 
 pub(crate) mod config_v2;
+pub use config_v2::RelationConfig;
 
 #[cfg(test)]
 pub(crate) mod test_helpers;

@@ -121,7 +121,7 @@ pub fn max_identifier_length(adapter_type: AdapterType) -> Option<NonZero<usize>
             Some(unsafe { NonZero::new_unchecked(127) })
         }
         Snowflake | Bigquery | Databricks | Spark | DuckDB | Salesforce | Fabric | ClickHouse
-        | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle | Fdcs => None,
+        | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle | Alt => None,
     }
 }
 
@@ -176,7 +176,7 @@ pub fn is_valid_ident_char(c: char, backend: AdapterType) -> bool {
             | Datafusion
             | Dremio
             | Oracle
-            | Fdcs
+            | Alt
             | Exasol => c.is_alphanumeric() || c == '_',
     }
 }

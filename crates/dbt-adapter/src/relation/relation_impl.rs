@@ -528,7 +528,6 @@ impl Relation {
 }
 
 impl BaseRelation for Relation {
-    /// Whether the relation is a system table or not
     fn is_system(&self) -> bool {
         use AdapterType::*;
         match self.adapter_type {
@@ -704,14 +703,7 @@ impl BaseRelation for Relation {
         matches!(self.table_format, TableFormat::Iceberg)
     }
 
-    /// Returns the appropriate DDL prefix for creating a table
-    ///
-    /// # Arguments
-    /// * `model_config` - The RunConfig containing model configuration
-    /// * `temporary` - Whether the table should be temporary
-    ///
-    /// # Returns
-    /// One of: "temporary", "iceberg", "transient", or "" (empty string)
+    /// Returns the DDL prefix: one of "temporary", "iceberg", "transient", or "".
     fn get_ddl_prefix_for_create(
         &self,
         config: Value,
@@ -995,12 +987,7 @@ impl BaseRelation for Relation {
     }
 
     fn normalize_component(&self, component: &str) -> String {
-        use AdapterType::*;
-        match self.adapter_type {
-            Salesforce | Bigquery | ClickHouse => component.to_string(),
-            Snowflake => component.to_uppercase(),
-            _ => component.to_lowercase(),
-        }
+        crate::format_ident::default_identifier_case(component, self.adapter_type)
     }
 
     fn render_self_as_str(&self) -> String {
@@ -1571,6 +1558,54 @@ mod tests {
             assert_eq!(
                 result,
                 "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
+            );
+        }
+
+        /// Regression test: when microbatch calls `with_filter` (empty: false + batch window)
+        /// on a RelationObject that already has `empty: true` from `--empty`, the empty flag
+        /// must be preserved so the relation still renders as a zero-row subquery.
+        #[test]
+        fn test_with_filter_preserves_empty_flag() {
+            let start = DateTime::<Utc>::from_naive_utc_and_offset(
+                NaiveDate::from_ymd_opt(2026, 7, 13)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+                Utc,
+            );
+            let end = DateTime::<Utc>::from_naive_utc_and_offset(
+                NaiveDate::from_ymd_opt(2026, 7, 14)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+                Utc,
+            );
+
+            let inner: Arc<dyn BaseRelation> = Arc::new(filter_relation());
+            let obj = RelationObject::new_with_filter(
+                inner,
+                RunFilter {
+                    empty: true,
+                    sample: None,
+                },
+                Some("event_date".to_string()),
+            );
+
+            // Microbatch overwrites the filter with a batch window (empty: false)
+            let batch_filter = RunFilter {
+                empty: false,
+                sample: Some(Sample {
+                    start: Some(start),
+                    end: Some(end),
+                }),
+            };
+            let filtered = obj.with_filter(batch_filter, Some("event_date".to_string()));
+
+            // The --empty zero-row wrapper must be preserved under the event-time filter
+            let rendered = format!("{}", Value::from_object(filtered));
+            assert_eq!(
+                rendered,
+                "(select * from (select * from my_db.my_schema.my_table limit 0) where event_date >= '2026-07-13T00:00:00+00:00' and event_date < '2026-07-14T00:00:00+00:00')"
             );
         }
     }

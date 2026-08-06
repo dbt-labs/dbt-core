@@ -430,24 +430,6 @@ impl Task for ExecuteAndCompare {
     }
 }
 
-pub struct NopTask;
-
-#[async_trait]
-impl Task for NopTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        Ok(())
-    }
-
-    fn is_counted(&self) -> bool {
-        true
-    }
-}
-
 pub struct FnTask<F> {
     func: F,
     counted: bool,

@@ -604,6 +604,17 @@ async fn accept_one_redirect(
     }
 }
 
+const MAX_ERROR_LEN: usize = 200;
+const MAX_ERROR_DESC_LEN: usize = 1000;
+
+/// Truncates `s` to at most `max_chars` characters, respecting UTF-8 boundaries.
+fn truncate_chars(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
 async fn handle_redirect(
     stream: TcpStream,
     expected_state: &str,
@@ -620,15 +631,21 @@ async fn handle_redirect(
     let query = parse_query(&target);
 
     if let Some(error) = query.get("error") {
+        let error = if error.is_empty() {
+            "unspecified error"
+        } else {
+            error.as_str()
+        };
         let description = query
             .get("error_description")
             .map(String::as_str)
-            .unwrap_or("");
-        let message = if description.is_empty() {
-            error.clone()
-        } else {
-            format!("{error}: {description}")
-        };
+            .filter(|d| !d.is_empty())
+            .unwrap_or("no description provided");
+        let message = format!(
+            "{}: {}",
+            truncate_chars(error, MAX_ERROR_LEN),
+            truncate_chars(description, MAX_ERROR_DESC_LEN),
+        );
         let _ = write_http_response(&mut write_half, 500, &error_html(&message)).await;
         return Err(AuthError::Interactive(message));
     }

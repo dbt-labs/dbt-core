@@ -1,6 +1,4 @@
-use crate::{
-    functions::register_base_functions, jinja_environment::JinjaEnv, utils::set_status_reporter,
-};
+use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
 use dbt_adapter::Adapter;
 use dbt_common::{
     ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err,
@@ -198,7 +196,7 @@ impl JinjaEnvBuilder {
         #[allow(unused_mut)]
         let mut internal_packages = get_internal_packages(adapter.adapter_type().as_ref());
         // Initialize all registries
-        let mut macro_namespace_registry = ValueMap::new(); // package_name → [macro_names]
+        let mut macro_namespace_registry = ValueMap::new(); // package_name → {macro_name → true}
         let mut macro_template_registry = ValueMap::new(); // template_name → macro_info
 
         let mut non_internal_packages: ValueMap = ValueMap::new(); // package_name → [macro_names]
@@ -208,15 +206,20 @@ impl JinjaEnvBuilder {
 
         // Process all macros
         for (package_name, macro_units) in macros.macros.clone() {
-            // Add package to namespace registry
+            // Add package to namespace registry.
+            //
+            // Stored as a map keyed by macro name rather than a sequence: the hot
+            // consumer is `DbtNamespace::get_property`, which membership-tests this on
+            // every `pkg.macro_name` access. A map makes that a hash lookup instead of a
+            // scan over the whole package. Iterating a minijinja map yields its keys, so
+            // consumers that walk this for macro names are unaffected.
+            let macro_names: ValueMap = macro_units
+                .iter()
+                .map(|m| (Value::from(m.info.name.clone()), Value::from(true)))
+                .collect();
             macro_namespace_registry.insert(
                 Value::from(package_name.clone()),
-                Value::from_serialize(
-                    macro_units
-                        .iter()
-                        .map(|m| m.info.name.clone())
-                        .collect::<Vec<_>>(),
-                ),
+                Value::from_object(macro_names),
             );
         }
         self.env.add_global(
@@ -402,8 +405,6 @@ impl JinjaEnvBuilder {
 
     /// Build the Minijinja Environment with all configured settings.
     pub fn build(mut self) -> JinjaEnv {
-        let status_reporter = self.io_args.status_reporter.as_ref().map(|x| x.clone());
-
         // Register filters (as_bool, as_number, as_native, as_text)
         // These are used to convert values to the appropriate type that might be
         // expected by the jinja template.
@@ -418,7 +419,7 @@ impl JinjaEnvBuilder {
         let function_registry = self.register_filter_types();
 
         // Register "base" dbt style functions.
-        register_base_functions(&mut self.env, self.io_args, self.warn_error_options);
+        register_base_functions(&mut self.env, self.warn_error_options);
 
         // Register all configured global values.
         // TODO (Ani) type the globals struct to validate we recieve all the globals we need
@@ -434,8 +435,6 @@ impl JinjaEnvBuilder {
         // Pull in the pycompat methods
         self.env
             .set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
-
-        set_status_reporter(&mut self.env, status_reporter);
 
         let mut jinja_env = JinjaEnv::new(self.env);
         if let Some(adapter) = self.adapter {
@@ -615,7 +614,6 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
-            None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(Arc::new(adapter) as Arc<Adapter>)
@@ -703,7 +701,6 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
-            None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(Arc::new(adapter) as Arc<Adapter>)
@@ -765,7 +762,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-            None,
             None,
         );
         let env = JinjaEnvBuilder::new()
@@ -915,7 +911,6 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
-            None,
         );
 
         // Root package has no macros
@@ -967,7 +962,6 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
-            None,
         );
 
         let globals = BTreeMap::from([(
@@ -1012,7 +1006,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-            None,
             None,
         );
 
@@ -1074,7 +1067,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-            None,
             None,
         );
 

@@ -63,19 +63,21 @@ impl RelationObject {
     ///
     /// This is used for microbatch execution to filter refs by event_time.
     pub fn with_filter(&self, run_filter: RunFilter, event_time: Option<String>) -> Self {
+        let empty = run_filter.empty || self.run_filter.as_ref().is_some_and(|f| f.empty);
         Self {
             relation: self.relation.clone(),
-            run_filter: Some(run_filter),
+            run_filter: Some(RunFilter {
+                empty,
+                ..run_filter
+            }),
             event_time,
         }
     }
 
-    /// Check if this relation has a filter applied.
     pub fn has_filter(&self) -> bool {
         self.run_filter.is_some()
     }
 
-    /// Get the event_time column name if configured.
     pub fn event_time(&self) -> Option<&str> {
         self.event_time.as_deref()
     }
@@ -767,7 +769,6 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         )
     }
 
-    /// Get the SCD arguments for the relation
     fn scd_args(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new("Relation.scd_args", &[], args);
         let primary_key = iter.next_kwarg::<Value>("primary_key")?;
@@ -775,7 +776,6 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         iter.finish()?;
 
         let mut scd_args = vec![];
-        // Check if minijinja value is a vector
         match primary_key.kind() {
             ValueKind::Seq => {
                 scd_args.extend(primary_key.try_iter()?.enumerate().map(|s| s.1.to_string()));

@@ -6,6 +6,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args::FsCommand;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_common::path::DbtPath;
 use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::event_info::store_event_attributes;
@@ -16,17 +17,20 @@ use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{
     NodeResolver, check_for_model_deprecations, resolve_dependencies,
 };
-use dbt_jinja_utils::phases::parse::build_resolve_context;
-use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
+use dbt_jinja_utils::phases::parse::{
+    build_docs_jinja_environment, build_docs_resolve_context, build_resolve_context,
+};
+use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
+use dbt_schemas::schemas::common::ComputePlatform;
 use dbt_schemas::schemas::common::{Access, DbtIncrementalStrategy};
 use dbt_schemas::schemas::macros::{DbtDocsMacro, build_macro_units};
 use dbt_schemas::schemas::properties::{
     FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL, FunctionKind,
-    MetricsProperties, ModelProperties,
+    ModelProperties,
 };
-use dbt_schemas::schemas::{InternalDbtNode, Nodes};
+use dbt_schemas::schemas::{DbtModel, InternalDbtNode, Nodes};
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
@@ -46,7 +50,6 @@ use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
 use minijinja::constants::CURRENT_PATH;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
@@ -55,6 +58,7 @@ use crate::resolve::resolve_functions::resolve_functions;
 use crate::resolve::resolve_macros::apply_macro_patches;
 use crate::resolve::resolve_macros::resolve_docs_macros;
 use crate::resolve::resolve_macros::resolve_macros;
+use crate::resolve::resolve_macros::typecheck_macros;
 use crate::resolve::resolve_metrics::resolve_metrics;
 use crate::resolve::resolve_models::resolve_models;
 use crate::resolve::resolve_properties;
@@ -72,7 +76,6 @@ use crate::resolve::resolve_selectors::{
     resolve_final_selectors, resolve_manifest_selectors, resolve_selectors_from_yaml,
 };
 use crate::unused_config_paths::check_unused_resource_config_paths;
-use dbt_yaml::Value as YmlValue;
 
 use crate::constants::DEFAULT_OVERVIEW_CONTENTS;
 
@@ -96,6 +99,7 @@ pub async fn resolve(
     dbt_state: Arc<DbtState>,
     macros: Macros,
     nodes: Nodes,
+    disabled_nodes: Nodes,
     get_relation_calls: GetRelationCalls,
     get_columns_in_relation_calls: GetColumnsInRelationCalls,
     patterned_dangling_sources: PatternedDanglingSources,
@@ -144,8 +148,8 @@ pub async fn resolve(
         .or_insert_with(|| DbtDocsMacro {
             name: "__overview__".to_string(),
             package_name: "dbt".to_string(),
-            path: PathBuf::from("overview.md"),
-            original_file_path: PathBuf::from("docs/overview.md"),
+            path: DbtPath::from("overview.md"),
+            original_file_path: DbtPath::from("docs/overview.md"),
             unique_id: overview_uid,
             block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
         });
@@ -191,10 +195,10 @@ pub async fn resolve(
     let mut all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>> = BTreeMap::new();
 
     // let mut nodes = Nodes::default();
-    let mut disabled_nodes = Nodes::default();
+    let mut disabled_nodes = disabled_nodes;
     resolver_hooks.pre_resolve(&arg.io, adapter_type, &mut nodes, root_project_quoting)?;
     let root_project_configs =
-        build_root_project_configs(arg, dbt_state.root_project(), root_project_quoting)?;
+        build_root_project_configs(dbt_state.root_project(), root_project_quoting)?;
     let root_project_configs = Arc::new(root_project_configs);
     // Process packages in topological order
 
@@ -258,37 +262,43 @@ pub async fn resolve(
         .map(|v| v.is_true())
         .unwrap_or(true);
 
-    // Apply macro patches from YAML schema files
+    // Macro properties render in the restricted documentation context, so a project macro
+    // cannot execute from a `description:`. From dbt-labs/dbt-core#14494.
+    let docs_jinja_env = build_docs_jinja_environment(&jinja_env);
     for (package_name, macro_properties) in all_macro_properties {
-        // Get the jinja env and base context for this package
+        // Get the base context for this package
         let package = dbt_state
             .packages
             .iter()
             .find(|p| p.dbt_project.name == package_name);
         if let Some(package) = package {
-            let namespace_keys: Vec<String> = jinja_env
-                .env
-                .get_macro_namespace_registry()
-                .map(|r| r.keys().map(|k| k.to_string()).collect())
-                .unwrap_or_default();
-            let base_ctx = build_resolve_context(
+            let docs_ctx = build_docs_resolve_context(
                 root_project_name,
                 package.dbt_project.name.as_str(),
                 &macros.docs_macros,
-                DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
-                namespace_keys,
-            );
+                &jinja_env,
+            )?;
             apply_macro_patches(
                 &arg.io,
                 &mut macros.macros,
                 &macro_properties,
                 &package_name,
-                &jinja_env,
-                &base_ctx,
+                &docs_jinja_env,
+                &docs_ctx,
+                (package_name != root_project_name).then_some(package_name.as_str()),
                 validate_macro_args,
             )?;
         }
     }
+
+    typecheck_macros(
+        &arg.io,
+        &mut macros.macros,
+        jinja_env.clone(),
+        adapter_type,
+        root_project_name,
+        minijinja::Value::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+    )?;
 
     // Ensure that there are no duplicate relations
     check_relation_uniqueness(&nodes)?;
@@ -296,7 +306,7 @@ pub async fn resolve(
     match nodes.warn_on_microbatch(adapter_type) {
         Ok(_) => {}
         Err(e) => {
-            emit_warn_log_from_fs_error(e.as_ref(), arg.io.status_reporter.as_ref());
+            emit_warn_log_from_fs_error(*e);
         }
     }
 
@@ -332,7 +342,6 @@ pub async fn resolve(
             &package.package_root_path,
             &arg.io.in_dir,
             &jinja_env,
-            &arg.io,
             arg.static_analysis,
             adapter_type,
             &dbt_state.dbt_profile.database,
@@ -352,33 +361,35 @@ pub async fn resolve(
     // take refs and sources, resolve them to a unique_id and put in depends_on
     // This returns a set of node IDs that had resolution errors (unresolved refs/sources)
     let nodes_with_resolution_errors = resolve_dependencies(
-        &arg.io,
         &mut nodes,
         &mut disabled_nodes,
         &mut operations,
         &node_resolver,
     );
     for warning in microbatch_model_no_event_time_inputs_warnings(&nodes) {
-        emit_warn_log_from_fs_error(&warning, arg.io.status_reporter.as_ref());
+        emit_warn_log_from_fs_error(warning);
     }
 
     // Check for model deprecation warnings
-    check_for_model_deprecations(&arg.io, &nodes);
+    check_for_model_deprecations(&nodes);
 
     check_unused_resource_config_paths(
-        &arg.io,
         &dbt_state.root_package().package_root_path,
         &nodes,
         &disabled_nodes,
         arg.skip_creating_generic_tests,
     )?;
 
+    // A model on a non-`default` compute platform requires each of its upstreams
+    // to be reachable through a catalog (see `check_compute_platform_upstreams`).
+    check_compute_platform_upstreams(&nodes)?;
+
     // Check access
-    let nodes_with_access_errors = check_access(arg, &nodes, &all_runtime_configs);
+    let nodes_with_access_errors = check_access(&nodes, &all_runtime_configs);
 
     // Validate function configuration against per-adapter capabilities:
     // JS UDF language support, JS-aggregate restrictions, default arguments.
-    validate_function_config(arg, &nodes, adapter_type);
+    validate_function_config(&nodes, adapter_type);
 
     resolver_hooks.post_resolve(
         &arg.io,
@@ -414,6 +425,7 @@ pub async fn resolve(
             macros,
             operations,
             dbt_profile: dbt_state.dbt_profile.clone(),
+            cloud_config: dbt_state.cloud_config.clone(),
             render_results: collector,
             run_started_at: dbt_state.run_started_at,
             nodes_with_resolution_errors,
@@ -438,7 +450,6 @@ pub async fn resolve(
 // Check that models accessing other models (dependecies) can do so.
 // Returns the set of unique_ids that have access violations.
 fn check_access(
-    arg: &ResolveArgs,
     nodes: &Nodes,
     all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
 ) -> HashSet<String> {
@@ -447,7 +458,6 @@ fn check_access(
     // Check access for models
     for (unique_id, node) in nodes.models.iter() {
         if check_node_access(
-            arg,
             unique_id,
             &node.base().depends_on.nodes_with_ref_location,
             &node.common().package_name,
@@ -465,7 +475,6 @@ fn check_access(
     // Check access for exposures
     for (unique_id, node) in nodes.exposures.iter() {
         if check_node_access(
-            arg,
             unique_id,
             &node.base().depends_on.nodes_with_ref_location,
             &node.common().package_name,
@@ -491,9 +500,8 @@ fn check_access(
 ///   arguments must form a trailing suffix of the argument list (mirrors
 ///   `expand_default_fields` in the SQL binder, which only peels trailing
 ///   defaults when expanding `CREATE FUNCTION` into candidate arities).
-fn validate_function_config(arg: &ResolveArgs, nodes: &Nodes, adapter_type: AdapterType) {
+fn validate_function_config(nodes: &Nodes, adapter_type: AdapterType) {
     use AdapterType::*;
-    let status_reporter = arg.io.status_reporter.as_ref();
     for function in nodes.functions.values() {
         let name = &function.__common_attr__.name;
         let language = function.__function_attr__.language.as_deref();
@@ -510,7 +518,7 @@ fn validate_function_config(arg: &ResolveArgs, nodes: &Nodes, adapter_type: Adap
                         name,
                         adapter_type,
                     );
-                    emit_error_log_from_fs_error(&err, status_reporter);
+                    emit_error_log_from_fs_error(*err);
                     continue;
                 }
             }
@@ -521,7 +529,7 @@ fn validate_function_config(arg: &ResolveArgs, nodes: &Nodes, adapter_type: Adap
                     name,
                     adapter_type,
                 );
-                emit_error_log_from_fs_error(&err, status_reporter);
+                emit_error_log_from_fs_error(*err);
                 continue;
             }
             // SQL / Python / unspecified: no per-adapter restrictions today.
@@ -546,7 +554,7 @@ fn validate_function_config(arg: &ResolveArgs, nodes: &Nodes, adapter_type: Adap
                             "Function '{}' has arguments with 'default_value' that are not at the end of the argument list. Defaulted arguments must form a trailing suffix.",
                             name,
                         );
-                        emit_error_log_from_fs_error(&err, status_reporter);
+                        emit_error_log_from_fs_error(*err);
                     }
                 }
                 _ => {
@@ -556,7 +564,7 @@ fn validate_function_config(arg: &ResolveArgs, nodes: &Nodes, adapter_type: Adap
                         name,
                         adapter_type,
                     );
-                    emit_error_log_from_fs_error(&err, status_reporter);
+                    emit_error_log_from_fs_error(*err);
                 }
             }
         }
@@ -596,7 +604,6 @@ fn has_event_time_input(nodes: &Nodes, model: &dyn InternalDbtNode) -> bool {
 /// Helper function to check access for a node referencing other models.
 /// Returns true if any access violation was found.
 fn check_node_access<F>(
-    arg: &ResolveArgs,
     unique_id: &str,
     node_dependencies: &[(String, dbt_common::CodeLocationWithFile)],
     node_package_name: &str,
@@ -605,7 +612,7 @@ fn check_node_access<F>(
     should_deny_private_access: F,
 ) -> bool
 where
-    F: Fn(&dbt_schemas::schemas::nodes::DbtModel, bool) -> bool,
+    F: Fn(&DbtModel, bool) -> bool,
 {
     let mut had_violation = false;
     for (target_unique_id, location) in node_dependencies {
@@ -628,7 +635,7 @@ where
                     target_unique_id,
                     target_node.__model_attr__.group.as_deref().unwrap_or(""),
                 );
-                emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*err);
                 had_violation = true;
             } else if target_node.__model_attr__.access == Access::Protected && diffent_packages {
                 let err = fs_err!(
@@ -639,7 +646,7 @@ where
                     target_unique_id,
                     target_node.common().package_name,
                 );
-                emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*err);
                 had_violation = true;
             }
         }
@@ -730,17 +737,14 @@ pub async fn resolve_inner(
             base_ctx
         };
 
-        // Extract metrics to be parsed separately, without full Jinja rendering.
-        // Metric fields like `filter` and `expr` contain MetricFlow DSL
-        // (e.g. `{{ Dimension('...') }}`) that must not be evaluated at parse time.
-        // The `description` field is rendered selectively in resolve_metrics.
-        let mut maybe_model_metrics_yml: Option<YmlValue> = None;
+        // Legacy semantic layer projects use a different `metrics` spec, so drop the key
+        // rather than deserializing it against the current schema.
         let mut model_yml = minimal_model_props.clone().schema_value;
-        if let Some(m) = model_yml.as_mapping_mut() {
-            maybe_model_metrics_yml = m.remove("metrics");
+        if semantic_layer_spec_is_legacy && let Some(m) = model_yml.as_mapping_mut() {
+            m.remove("metrics");
         }
 
-        let mut typed_model_props: ModelProperties = into_typed_with_jinja(
+        let typed_model_props: ModelProperties = into_typed_with_jinja(
             &arg.io,
             model_yml,
             false,
@@ -752,21 +756,6 @@ pub async fn resolve_inner(
             // do not show_errors_or_warnings because that will be done by resolve_models
             false,
         )?;
-
-        if !semantic_layer_spec_is_legacy {
-            // The caveat to parsing model.metrics separately is that any yaml errors will be reported with root path
-            // as `models.[$].metrics` meaning if there's an unexpected key such as `models.[$].metrics.[$].non_existent_key`
-            // it will report unexpected key at `.[$].non_existent_key`, when it should be `.metrics.[$].non_existent_key`
-            //
-            // This will be inconsistent with unexpected keys in `models.[$]` where for example an unexpected
-            // key in `models.[$].derived_semantics.made_up_key` will report unexpected key at
-            // `derived_semantics.[$].non_existent_key`
-            if let Some(model_metrics_yml) = maybe_model_metrics_yml {
-                let typed_model_metrics_props: Option<Vec<MetricsProperties>> =
-                    into_typed_with_error(&arg.io, model_metrics_yml, true, None, None)?;
-                typed_model_props.metrics = typed_model_metrics_props;
-            }
-        }
 
         typed_models_properties.insert(model_name.clone(), typed_model_props);
     }
@@ -860,6 +849,7 @@ pub async fn resolve_inner(
         dbt_state.root_package(),
         root_project_configs,
         &min_properties.models,
+        &macros.macros,
         // TODO: pass in typed_models_properties
         database,
         schema,
@@ -1054,6 +1044,61 @@ pub async fn resolve_inner(
         semantic_layer_spec_is_legacy,
         macro_properties,
     ))
+}
+
+/// Returns `true` if `upstream` is reachable as an input for a node running on a
+/// non-`default` compute platform: it targets a catalog (`catalog_name` set), is
+/// Iceberg-formatted, or itself runs on a non-`default` compute platform (and so
+/// writes to a catalog).
+fn upstream_is_catalog_reachable(upstream: &DbtModel) -> bool {
+    let attr = &upstream.__model_attr__;
+    attr.alt_compute
+        .is_some_and(|c| c != ComputePlatform::Default)
+        || attr.catalog_name.is_some()
+        || attr
+            .table_format
+            .as_deref()
+            .is_some_and(|f| f.eq_ignore_ascii_case("iceberg"))
+}
+
+/// WS1 rule 5: every `ref`/`source` upstream of a model on a non-`default` compute
+/// platform must be reachable through a catalog. A plain warehouse-native upstream
+/// is rejected with a precise error naming both nodes, since the compute target
+/// reads its inputs through attached catalogs rather than the warehouse.
+///
+/// Sources are external tables whose catalog reachability is validated elsewhere,
+/// so they are skipped here.
+pub fn check_compute_platform_upstreams(nodes: &Nodes) -> FsResult<()> {
+    for (unique_id, model) in nodes.models.iter() {
+        let on_alt_compute = model
+            .__model_attr__
+            .alt_compute
+            .is_some_and(|c| c != ComputePlatform::Default);
+        if !on_alt_compute {
+            continue;
+        }
+        for upstream_id in &model.__base_attr__.depends_on.nodes {
+            if upstream_id.starts_with("source.") {
+                continue;
+            }
+            let reachable = nodes
+                .models
+                .get(upstream_id)
+                .is_some_and(|up| upstream_is_catalog_reachable(up));
+            if !reachable {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "Model '{}' runs on alt_compute: 'alt' but its upstream '{}' is not \
+                     reachable through a catalog. Materialize '{}' into a catalog (set \
+                     'catalog_name') or place it on alt_compute: 'alt'.",
+                    unique_id,
+                    upstream_id,
+                    upstream_id
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Function to check models, seeds, and snapshots for relation uniqueness
@@ -1320,8 +1365,8 @@ async fn resolve_package_waves(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::path::PathBuf;
 
+    use dbt_common::path::DbtPath;
     use dbt_schemas::schemas::macros::DbtDocsMacro;
 
     use crate::constants::DEFAULT_OVERVIEW_CONTENTS;
@@ -1334,8 +1379,8 @@ mod tests {
             .or_insert_with(|| DbtDocsMacro {
                 name: "__overview__".to_string(),
                 package_name: "dbt".to_string(),
-                path: PathBuf::from("overview.md"),
-                original_file_path: PathBuf::from("docs/overview.md"),
+                path: DbtPath::from("overview.md"),
+                original_file_path: DbtPath::from("docs/overview.md"),
                 unique_id: overview_uid,
                 block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
             });
@@ -1369,8 +1414,8 @@ mod tests {
         let user_doc = DbtDocsMacro {
             name: "__overview__".to_string(),
             package_name: "my_project".to_string(),
-            path: PathBuf::from("models/overview.md"),
-            original_file_path: PathBuf::from("models/overview.md"),
+            path: DbtPath::from("models/overview.md"),
+            original_file_path: DbtPath::from("models/overview.md"),
             unique_id: uid.clone(),
             block_contents: "# My custom overview".to_string(),
         };
@@ -1475,5 +1520,108 @@ mod tests {
             .snapshots
             .insert(snapshot_uid.clone(), Arc::new(make_snapshot(None)));
         assert!(!has_event_time_input(&nodes, &model));
+    }
+
+    /// WS1 rule 5: an `alt_compute: alt` model requires each of its model
+    /// upstreams to be reachable through a catalog; a plain warehouse-native
+    /// upstream is rejected, while catalog-backed / Iceberg / alt upstreams pass.
+    #[test]
+    fn test_check_compute_platform_upstreams() {
+        use std::sync::Arc;
+
+        use dbt_schemas::schemas::CommonAttributes;
+        use dbt_schemas::schemas::common::ComputePlatform;
+        use dbt_schemas::schemas::{DbtModel, Nodes};
+
+        use super::check_compute_platform_upstreams;
+
+        // Build a model with the given placement and upstream config knobs.
+        let make_model = |uid: &str,
+                          alt_compute: Option<ComputePlatform>,
+                          catalog_name: Option<&str>,
+                          table_format: Option<&str>,
+                          upstreams: &[&str]| {
+            let mut model = DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: uid.to_string(),
+                    name: uid.rsplit('.').next().unwrap_or(uid).to_string(),
+                    package_name: "test".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            model.__model_attr__.alt_compute = alt_compute;
+            model.__model_attr__.catalog_name = catalog_name.map(str::to_string);
+            model.__model_attr__.table_format = table_format.map(str::to_string);
+            model.__base_attr__.depends_on.nodes =
+                upstreams.iter().map(|s| s.to_string()).collect();
+            model
+        };
+
+        let consumer_uid = "model.test.consumer";
+        let upstream_uid = "model.test.upstream";
+
+        // Helper: run the check with a `dbt` consumer reading `upstream`.
+        let run = |upstream: DbtModel| {
+            let consumer = make_model(
+                consumer_uid,
+                Some(ComputePlatform::Alt),
+                Some("horizon"),
+                None,
+                &[upstream_uid],
+            );
+            let mut nodes = Nodes::default();
+            nodes
+                .models
+                .insert(consumer_uid.to_string(), Arc::new(consumer));
+            nodes
+                .models
+                .insert(upstream_uid.to_string(), Arc::new(upstream));
+            check_compute_platform_upstreams(&nodes)
+        };
+
+        // Catalog-backed / Iceberg / dbt upstreams are reachable.
+        assert!(run(make_model(upstream_uid, None, Some("horizon"), None, &[])).is_ok());
+        assert!(run(make_model(upstream_uid, None, None, Some("iceberg"), &[])).is_ok());
+        assert!(
+            run(make_model(
+                upstream_uid,
+                Some(ComputePlatform::Alt),
+                Some("horizon"),
+                None,
+                &[]
+            ))
+            .is_ok()
+        );
+
+        // A plain warehouse-native upstream is rejected.
+        assert!(run(make_model(upstream_uid, None, None, None, &[])).is_err());
+
+        // A `default` consumer is unconstrained even with a warehouse-native upstream.
+        let consumer = make_model(consumer_uid, None, None, None, &[upstream_uid]);
+        let upstream = make_model(upstream_uid, None, None, None, &[]);
+        let mut nodes = Nodes::default();
+        nodes
+            .models
+            .insert(consumer_uid.to_string(), Arc::new(consumer));
+        nodes
+            .models
+            .insert(upstream_uid.to_string(), Arc::new(upstream));
+        assert!(check_compute_platform_upstreams(&nodes).is_ok());
+
+        // A `source.*` upstream is skipped (validated elsewhere), so no error even
+        // though it is not present in `nodes.models`.
+        let consumer = make_model(
+            consumer_uid,
+            Some(ComputePlatform::Alt),
+            Some("horizon"),
+            None,
+            &["source.test.raw"],
+        );
+        let mut nodes = Nodes::default();
+        nodes
+            .models
+            .insert(consumer_uid.to_string(), Arc::new(consumer));
+        assert!(check_compute_platform_upstreams(&nodes).is_ok());
     }
 }

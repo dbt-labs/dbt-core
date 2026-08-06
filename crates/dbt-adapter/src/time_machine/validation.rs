@@ -13,6 +13,7 @@ use dbt_sql_utils::sql_split_statements;
 use regex::Regex;
 use similar::{ChangeTag, TextDiff};
 
+use crate::AdapterType;
 use crate::sql::diff::PrivilegeStatement;
 use crate::sql::normalize::strip_sql_comments;
 use crate::time_machine::event::AdapterCallEvent;
@@ -233,6 +234,8 @@ pub struct TimeMachineEventValidationEngine {
     deviations: Vec<Box<dyn KnownDeviation>>,
     /// Registered SQL sanitizers
     sanitizers: Vec<Box<dyn SqlSanitizer>>,
+    /// Adapter type for non-SQL argument comparison
+    adapter_type: AdapterType,
 }
 
 impl Default for TimeMachineEventValidationEngine {
@@ -243,10 +246,13 @@ impl Default for TimeMachineEventValidationEngine {
 
 impl TimeMachineEventValidationEngine {
     /// Create a new validation engine with default rules.
+    ///
+    /// Defaults to `AdapterType::Snowflake`; call `with_adapter_type` to override.
     pub fn new() -> Self {
         let mut engine = Self {
             deviations: Vec::new(),
             sanitizers: Vec::new(),
+            adapter_type: AdapterType::Snowflake,
         };
 
         // Register deviations
@@ -267,6 +273,12 @@ impl TimeMachineEventValidationEngine {
         engine.register_sanitizer(Box::new(WhitespaceSanitizer));
 
         engine
+    }
+
+    /// Set the adapter type used for non-SQL argument comparison.
+    pub fn with_adapter_type(mut self, adapter_type: AdapterType) -> Self {
+        self.adapter_type = adapter_type;
+        self
     }
 
     /// Register a deviation rule.
@@ -307,14 +319,12 @@ impl TimeMachineEventValidationEngine {
         incoming: &IncomingEvent,
         recorded: &AdapterCallEvent,
     ) -> ValidationResult<'_> {
-        // 1. Check for known deviations first
         for deviation in &self.deviations {
             if let DeviationMatch::Matched(matched) = deviation.check(incoming, recorded) {
                 return ValidationResult::Skipped(matched);
             }
         }
 
-        // 2. Check method match
         if incoming.method != recorded.method {
             return ValidationResult::Mismatch(ValidationMismatch {
                 kind: MismatchKind::Method,
@@ -323,14 +333,17 @@ impl TimeMachineEventValidationEngine {
             });
         }
 
-        // 3. For SQL methods, do SQL comparison
         if is_sql_method(incoming.method) {
             return self.validate_sql_event(incoming, recorded);
         }
 
         // 4. For non SQL methods, compare args directly
-        if !super::event_replay::adapter_args_match(incoming.method, &recorded.args, incoming.args)
-        {
+        if !super::event_replay::adapter_args_match_for_type(
+            incoming.method,
+            &recorded.args,
+            incoming.args,
+            self.adapter_type,
+        ) {
             return ValidationResult::Mismatch(ValidationMismatch {
                 kind: MismatchKind::Args,
                 expected: recorded.args.to_string(),
@@ -386,7 +399,6 @@ impl TimeMachineEventValidationEngine {
     }
 }
 
-/// Check if a method executes SQL.
 fn is_sql_method(method: &str) -> bool {
     method == "execute" || method == "run_query" || method == "add_query"
 }

@@ -10,7 +10,7 @@ use std::borrow::Cow;
 
 pub use crate::impls::node::{
     AnyNodeOutcomeDetail, NodeEvent, get_cache_detail, get_freshness_detail,
-    get_node_outcome_detail, get_test_outcome, has_node_warning,
+    get_node_outcome_detail, get_test_outcome, has_node_warning, is_statically_checked_test,
     set_node_warning_outcome_no_warnings, set_node_warning_outcome_warned,
     update_dbt_core_event_code_for_node_processed_end,
 };

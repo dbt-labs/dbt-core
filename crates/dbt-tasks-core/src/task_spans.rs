@@ -21,8 +21,8 @@ use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_telemetry::{
     ExecutionPhase, NodeCacheDetail, NodeCacheReason, NodeErrorType, NodeEvaluated, NodeOutcome,
     NodeOutcomeDetail, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
-    PhaseExecuted, set_node_warning_outcome_no_warnings, set_node_warning_outcome_warned,
-    update_dbt_core_event_code_for_node_processed_end,
+    PhaseExecuted, TestEvaluationDetail, TestOutcome, set_node_warning_outcome_no_warnings,
+    set_node_warning_outcome_warned, update_dbt_core_event_code_for_node_processed_end,
 };
 use dbt_tracing::StaticName as _;
 use petgraph::graph::DiGraph;
@@ -92,6 +92,12 @@ fn update_node_outcome_from_legacy_status(event: &mut NodeEvaluated, status: Nod
         }
         NodeStatus::TestPassed => {
             // Handled inside the test task
+        }
+        NodeStatus::StaticallyCheckedDataTest => {
+            event.set_node_outcome(NodeOutcome::Success);
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+                TestEvaluationDetail::new(TestOutcome::Passed, 0, None, None, Some(true)),
+            ));
         }
         NodeStatus::TestWarned => {
             // Handled inside the test task
@@ -687,6 +693,36 @@ mod tests {
     }
 
     #[test]
+    fn statically_checked_data_test_sets_detail_and_processed_copies_it() {
+        let mut run = node_evaluated(ExecutionPhase::Run);
+
+        update_node_outcome_from_legacy_status(&mut run, NodeStatus::StaticallyCheckedDataTest);
+
+        assert_eq!(run.node_outcome(), NodeOutcome::Success);
+        match run.node_outcome_detail.as_ref() {
+            Some(NodeOutcomeDetail::NodeTestDetail(detail)) => {
+                assert_eq!(detail.test_outcome(), TestOutcome::Passed);
+                assert_eq!(detail.failing_rows, 0);
+                assert_eq!(detail.statically_checked, Some(true));
+            }
+            other => panic!("expected statically checked test detail, got {other:?}"),
+        }
+
+        let mut processed = node_processed();
+        update_node_processed_from_node_evaluated(&mut processed, &run);
+
+        assert_eq!(processed.node_outcome(), NodeOutcome::Success);
+        match processed.node_outcome_detail {
+            Some(ProcessedDetail::NodeTestDetail(detail)) => {
+                assert_eq!(detail.test_outcome(), TestOutcome::Passed);
+                assert_eq!(detail.failing_rows, 0);
+                assert_eq!(detail.statically_checked, Some(true));
+            }
+            other => panic!("expected processed statically checked test detail, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn cached_warning_test_run_outcome_overrides_prior_no_op_phase() {
         let mut processed = node_processed();
 
@@ -700,7 +736,7 @@ mod tests {
         run.set_node_outcome(NodeOutcome::Success);
         run.set_node_skip_reason(NodeSkipReason::Cached);
         run.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
-            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None),
         ));
 
         update_node_processed_from_node_evaluated(&mut processed, &run);
@@ -723,7 +759,7 @@ mod tests {
         run.set_node_outcome(NodeOutcome::Success);
         run.set_node_skip_reason(NodeSkipReason::Cached);
         run.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
-            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None),
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None),
         ));
 
         accumulate_node_processed_phase_duration(&mut processed, Some(250), Some(&run));

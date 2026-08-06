@@ -479,7 +479,9 @@ function Set-DbtAlias {
     )
 
     try {
-        $null = New-Item -ItemType File -Path $PROFILE -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -Path $PROFILE)) {
+            $null = New-Item -ItemType File -Path $PROFILE -Force -ErrorAction SilentlyContinue
+        }
         $aliasCommand = "Set-Alias -Name dbtf -Value '$InstallPath\dbt.exe'"
 
         if (-not (Select-String -Path $PROFILE -Pattern "Set-Alias.*dbtf.*dbt\.exe" -Quiet)) {

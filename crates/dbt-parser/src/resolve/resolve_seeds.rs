@@ -10,6 +10,7 @@ use crate::utils::{
 use crate::validation::check_node_static_analysis;
 use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -112,7 +113,6 @@ pub async fn resolve_seeds(
     let config_resolver =
         ProjectConfigResolver::build(root_project_configs.seeds.clone(), is_dependency, || {
             init_project_config(
-                io_args,
                 &package.dbt_project.seeds,
                 package_quoting,
                 dependency_package_name,
@@ -239,7 +239,6 @@ pub async fn resolve_seeds(
             arg.static_analysis,
             seed_name,
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
 
         // XXX: normalize column_types to uppercase if it is snowflake
@@ -291,7 +290,11 @@ pub async fn resolve_seeds(
         let columns = process_columns(
             seed.columns.as_ref(),
             properties_config.meta.clone(),
-            properties_config.tags.clone().map(|tags| tags.into()),
+            properties_config
+                .tags
+                .inner()
+                .clone()
+                .map(|tags| tags.into()),
         )?;
 
         validate_delimiter(&properties_config.delimiter)?;
@@ -306,15 +309,15 @@ pub async fn resolve_seeds(
             __common_attr__: CommonAttributes {
                 name: seed_name.to_owned(),
                 package_name: package_name.to_owned(),
-                path: path.to_owned(),
+                path: DbtPath::from(path.to_owned()),
                 name_span: dbt_common::Span::default(),
-                original_file_path: original_file_path.clone(),
+                original_file_path: DbtPath::from(&original_file_path),
                 checksum: DbtChecksum::seed_file_checksum(
                     &seed_file.base_path.join(&path),
                     &original_file_path.to_string_lossy(),
                     arg.maximum_seed_size_mib,
                 )?,
-                patch_path: patch_path.clone(),
+                patch_path: patch_path.as_ref().map(DbtPath::from),
                 unique_id: unique_id.clone(),
                 fqn,
                 // dbt-core: description is always default ''
@@ -325,8 +328,9 @@ pub async fn resolve_seeds(
                 language: None,
                 tags: properties_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: Default::default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),
@@ -388,7 +392,7 @@ pub async fn resolve_seeds(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(path.clone());
-                emit_error_log_from_fs_error(&err_with_loc, io_args.status_reporter.as_ref());
+                emit_error_log_from_fs_error(err_with_loc);
             }
         }
 
@@ -424,10 +428,10 @@ pub async fn resolve_seeds(
                 "Unused schema.yml entry for seed '{}'",
                 seed_name,
             );
-            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            emit_warn_log_from_fs_error(*err);
         }
     }
 
-    trigger_duplicate_errors(io_args, &mut duplicate_errors)?;
+    trigger_duplicate_errors(&mut duplicate_errors)?;
     Ok((seeds, disabled_seeds))
 }

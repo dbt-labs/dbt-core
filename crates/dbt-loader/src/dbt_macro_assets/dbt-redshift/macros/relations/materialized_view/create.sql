@@ -9,7 +9,7 @@
         {% if materialized_view.sort.sortkey %}sortkey ({{ ','.join(materialized_view.sort.sortkey) }}){% endif %}
         auto refresh {% if materialized_view.autorefresh %}yes{% else %}no{% endif %}
     as (
-        -- deviation from core: use rendered SQL directly instead of raw value from RedshiftMaterializedViewConfig
+        {# DIVERGENCE: compiled sql can be used directly instead of materialized_view.query (from RedshiftMaterializedViewConfig in v2) #}
         {{ sql }}
     )
 

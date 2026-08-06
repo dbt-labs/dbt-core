@@ -17,64 +17,27 @@ use minijinja::constants::CURRENT_PATH;
 use std::{collections::BTreeMap, path::Path};
 
 macro_rules! prune_section {
-    ($proj:expr, $io:expr, $field:ident, $name:expr, $ty:ty) => {
+    ($proj:expr, $field:ident, $name:expr, $ty:ty) => {
         if let Some(cfg) = $proj.$field.as_mut() {
-            prune_unexpected_nulls_in_section($io, $name, cfg, |c: &mut $ty| {
+            prune_unexpected_nulls_in_section($name, cfg, |c: &mut $ty| {
                 &mut c.__additional_properties__
             });
         }
     };
 }
 
-fn prune_sections(io_args: &IoArgs, dbt_project: &mut DbtProject) {
-    prune_section!(dbt_project, io_args, models, "models", ProjectModelConfig);
-    prune_section!(dbt_project, io_args, seeds, "seeds", ProjectSeedConfig);
+fn prune_sections(dbt_project: &mut DbtProject) {
+    prune_section!(dbt_project, models, "models", ProjectModelConfig);
+    prune_section!(dbt_project, seeds, "seeds", ProjectSeedConfig);
+    prune_section!(dbt_project, snapshots, "snapshots", ProjectSnapshotConfig);
+    prune_section!(dbt_project, sources, "sources", ProjectSourceConfig);
+    prune_section!(dbt_project, tests, "tests", ProjectDataTestConfig);
+    prune_section!(dbt_project, unit_tests, "unit_tests", ProjectUnitTestConfig);
+    prune_section!(dbt_project, exposures, "exposures", ProjectExposureConfig);
+    prune_section!(dbt_project, analyses, "analyses", ProjectAnalysisConfig);
+    prune_section!(dbt_project, functions, "functions", ProjectFunctionConfig);
     prune_section!(
         dbt_project,
-        io_args,
-        snapshots,
-        "snapshots",
-        ProjectSnapshotConfig
-    );
-    prune_section!(
-        dbt_project,
-        io_args,
-        sources,
-        "sources",
-        ProjectSourceConfig
-    );
-    prune_section!(dbt_project, io_args, tests, "tests", ProjectDataTestConfig);
-    prune_section!(
-        dbt_project,
-        io_args,
-        unit_tests,
-        "unit_tests",
-        ProjectUnitTestConfig
-    );
-    prune_section!(
-        dbt_project,
-        io_args,
-        exposures,
-        "exposures",
-        ProjectExposureConfig
-    );
-    prune_section!(
-        dbt_project,
-        io_args,
-        analyses,
-        "analyses",
-        ProjectAnalysisConfig
-    );
-    prune_section!(
-        dbt_project,
-        io_args,
-        functions,
-        "functions",
-        ProjectFunctionConfig
-    );
-    prune_section!(
-        dbt_project,
-        io_args,
         semantic_models,
         "semantic-models",
         ProjectSemanticModelConfig
@@ -82,7 +45,6 @@ fn prune_sections(io_args: &IoArgs, dbt_project: &mut DbtProject) {
 }
 
 fn prune_unexpected_nulls_in_children<T>(
-    io_args: &IoArgs,
     section_name: &str,
     current_path: &str,
     cfg: &mut T,
@@ -102,7 +64,6 @@ fn prune_unexpected_nulls_in_children<T>(
                     format!("{}.{}", current_path, child_key)
                 };
                 prune_unexpected_nulls_in_children::<T>(
-                    io_args,
                     section_name,
                     &next_path,
                     child_cfg,
@@ -132,7 +93,7 @@ fn prune_unexpected_nulls_in_children<T>(
                         suggestion,
                         yaml_path
                     );
-                    emit_warn_log_from_fs_error(&err, io_args.status_reporter.as_ref());
+                    emit_warn_log_from_fs_error(*err);
                     keys_to_remove.push(child_key.clone());
                 }
             }
@@ -145,12 +106,11 @@ fn prune_unexpected_nulls_in_children<T>(
 }
 
 fn prune_unexpected_nulls_in_section<T>(
-    io_args: &IoArgs,
     section_name: &str,
     section_cfg: &mut T,
     get_children_map: fn(&mut T) -> &mut BTreeMap<String, ShouldBe<T>>,
 ) {
-    prune_unexpected_nulls_in_children(io_args, section_name, "", section_cfg, get_children_map);
+    prune_unexpected_nulls_in_children(section_name, "", section_cfg, get_children_map);
 }
 
 pub fn load_project_yml(
@@ -176,7 +136,7 @@ pub fn load_project_yml(
     context.insert("var".to_string(), Value::from_object(Var::new(cli_vars)));
     context.insert(CURRENT_PATH.to_string(), Value::from(DBT_PROJECT_YML));
 
-    let raw_yml = value_from_file(io_args, dbt_project_path, true, dependency_package_name)?;
+    let raw_yml = value_from_file(dbt_project_path, true, dependency_package_name)?;
 
     // Parse the template without vars using Jinja
     let mut dbt_project: DbtProject = into_typed_with_jinja(
@@ -201,7 +161,7 @@ pub fn load_project_yml(
     }
 
     // Prune unexpected null keys (e.g. empty keys) early and emit warnings
-    prune_sections(io_args, &mut dbt_project);
+    prune_sections(&mut dbt_project);
 
     Ok((
         crate::load_packages::build_internal_dbt_project(dbt_project)?,

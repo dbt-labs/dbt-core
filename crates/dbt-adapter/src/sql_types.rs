@@ -51,7 +51,6 @@ impl SdfSchema {
 }
 
 pub trait TypeOps: Send + Sync {
-    /// Returns the adapter type this [TypeOps] instance is for.
     fn adapter_type(&self) -> AdapterType;
 
     /// Picks a SQL type for a given Arrow DataType and renders it as SQL.
@@ -119,12 +118,28 @@ pub trait TypeOps: Send + Sync {
         Ok(true)
     }
 
+    fn cast_from_quoted_string_literal_unsupported_for(&self, data_type: &DataType) -> bool {
+        use AdapterType::*;
+
+        match self.adapter_type() {
+            Bigquery => {
+                let is_struct = matches!(data_type, DataType::Struct(_));
+                let is_geography = matches!(
+                    data_type,
+                    DataType::FixedSizeList(field, 1) if field.name() == "geography"
+                );
+
+                is_struct || is_geography
+            }
+            _ => false,
+        }
+    }
+
     /// Format a SQL identifier, quoting it if necessary for this dialect.
     fn format_ident(&self, id: &str) -> String {
         crate::format_ident::format_ident(id, self.adapter_type())
     }
 
-    /// Determine whether a SQL identifier needs to be quoted for this dialect.
     fn need_quotes_for_ident(&self, id: &str) -> bool {
         need_quotes(self.adapter_type(), id)
     }
@@ -527,7 +542,7 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
         AdapterType::Salesforce => todo!(),
         AdapterType::Spark => todo!(),
         AdapterType::DuckDB => todo!(),
-        AdapterType::Fdcs => todo!(),
+        AdapterType::Alt => todo!(),
         AdapterType::Fabric => FABRIC_METADATA_SQL_TYPE_KEY,
         AdapterType::ClickHouse => CLICKHOUSE_METADATA_SQL_TYPE_KEY,
         AdapterType::Exasol => "DATA_TYPE",
@@ -579,7 +594,7 @@ impl SdfSchemaBuilder {
         let metadata = field.metadata();
         let comment = match self.adapter_type {
             Bigquery => metadata.get("Description"),
-            Redshift | Databricks | Spark | DuckDB | Fdcs => {
+            Redshift | Databricks | Spark | DuckDB | Alt => {
                 metadata.get(ARROW_FIELD_COMMENT_METADATA_KEY)
             }
             // no evidence that these drivers store comments in metadata, but just in case
@@ -620,7 +635,7 @@ impl SdfSchemaBuilder {
     pub fn build_sdf_schema(self, type_ops: &dyn TypeOps) -> AdapterResult<SdfSchema> {
         use AdapterType::*;
         match self.adapter_type {
-            Bigquery | Redshift | Databricks | Spark | DuckDB | Fdcs | Fabric | ClickHouse
+            Bigquery | Redshift | Databricks | Spark | DuckDB | Alt | Fabric | ClickHouse
             | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => {
                 let original_fields = self.original.fields();
                 let mut sdf_fields = Vec::with_capacity(original_fields.len());
@@ -628,9 +643,7 @@ impl SdfSchemaBuilder {
                     let sdf_field = self.convert_field(type_ops, field)?;
                     sdf_fields.push(sdf_field);
                 }
-                // preserve original metadata
                 let sdf_arrow_schema = Arc::new(Schema::new(sdf_fields));
-                // build the SdfSchema
                 let sdf_schema =
                     SdfSchema::from_sdf_arrow_schema(Some(self.original), sdf_arrow_schema);
                 Ok(sdf_schema)
@@ -641,7 +654,6 @@ impl SdfSchemaBuilder {
                 //
                 // TODO: move conversion logic for other adapters here
                 let sdf_arrow_schema = Arc::clone(&self.original);
-                // build the SdfSchema
                 let sdf_schema =
                     SdfSchema::from_sdf_arrow_schema(Some(self.original), sdf_arrow_schema);
                 Ok(sdf_schema)
@@ -944,7 +956,7 @@ pub const fn max_varchar_size(adapter_type: AdapterType) -> Option<usize> {
         // FIXME: Actual MAX is 134_217_728 - 16_777_216 is the default value
         Snowflake => Some(16_777_216),
         Redshift => Some(256),
-        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Fdcs | Fabric
+        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Alt | Fabric
         | ClickHouse | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => None,
     }
 }
@@ -955,7 +967,7 @@ pub const fn max_varbinary_size(adapter_type: AdapterType) -> Option<usize> {
         Snowflake => Some(16_777_216),
         Redshift => Some(65_535),
         // TODO: define limits for more systems
-        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Fdcs | Fabric
+        Postgres | Bigquery | Databricks | Salesforce | Spark | DuckDB | Alt | Fabric
         | ClickHouse | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => None,
     }
 }
@@ -1187,24 +1199,6 @@ pub fn numeric_precision_scale(
             Some((precision.into(), None))
         }
         // XXX: maybe numeric_precision must be extract in this case too?
-        // (Snowflake, dt) if snowflake::is_timestamp_ntz(dt).is_yes()
-        //     || snowflake::is_timestamp_ltz(dt).is_yes()
-        //     || snowflake::is_timestamp_tz(dt).is_yes() =>
-        // {
-        //     // For timestamp types, the precision is the fractional seconds precision
-        //     // For compatibility with dbt core column type rendering code, precision is stored as char_size
-        //     let time_precision = if snowflake::is_timestamp_ntz(dt).is_yes() {
-        //         snowflake::is_timestamp_ntz(dt).unwrap()
-        //     } else if snowflake::is_timestamp_ltz(dt).is_yes() {
-        //         snowflake::is_timestamp_ltz(dt).unwrap()
-        //     } else if snowflake::is_timestamp_tz(dt).is_yes() {
-        //         snowflake::is_timestamp_tz(dt).unwrap()
-        //     } else {
-        //         return None;
-        //     };
-        //     let char_size: u8 = time_precision.into();
-        //     Some(char_size as usize)
-        // }
 
         // Handle general timestamp types
         (Snowflake, DataType::Timestamp(unit, _)) => {

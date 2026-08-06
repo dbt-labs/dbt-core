@@ -10,11 +10,11 @@ use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, ResolvedCloudConfig},
     state::ResolverState,
 };
-pub use proto_rust::v1::public::events::fusion::LoginType;
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, Login, PackageInstall, ResourceCounts,
     RunModel, StaticAnalysisInvocation,
 };
+pub use proto_rust::v1::public::events::fusion::{LoginErrorCode, LoginType};
 use proto_rust::v1::public::fields::core_types::ObservabilityMetric;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -111,6 +111,7 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             distribution: self.dbt_distribution.to_string(),
             //  enrichment - toggle enrichment of message by vortex
             enrichment: None,
+            common_context: None,
         };
 
         let _ = log_proto(message);
@@ -126,6 +127,7 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             environment,
             // This field is a toggle to enable enrichment of the message by the Vortex service.
             enrichment: None,
+            common_context: None,
         };
 
         let _ = log_proto(message);
@@ -181,6 +183,7 @@ pub fn invocation_end_event(
         distribution: dbt_distribution.to_string(),
         //  enrichment - toggle enrichment of message by vortex
         enrichment: None,
+        common_context: None,
     };
 
     if shutdown {
@@ -268,6 +271,10 @@ pub fn run_model_event(
             skipped = true;
             skipped_reason = "reused_cloned_from_cache_still_fresh".to_string();
         }
+        NodeStatus::StaticallyCheckedDataTest => {
+            skipped = true;
+            skipped_reason = "statically_checked_data_test".to_string();
+        }
         NodeStatus::NoOp => {
             skipped = true;
             skipped_reason = "no-op".to_string();
@@ -324,6 +331,7 @@ pub fn run_model_event(
         table_format: table_format.unwrap_or_default(),
         catalog_name: catalog_name.unwrap_or_default(),
         catalog_type: catalog_type.unwrap_or_default(),
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -399,6 +407,7 @@ pub fn package_install_event(invocation_id: String, name: String, version: Strin
         version,
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -468,6 +477,7 @@ pub fn resource_counts_event(
         catalogs: catalog_count,
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -488,6 +498,7 @@ pub fn adapter_info_event(invocation_id: String, adapter_type: String, adapter_u
         adapter_unique_id,
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -516,6 +527,7 @@ pub fn adapter_info_v2_event() {
         model_adapter_details: HashMap::new(),
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -612,11 +624,15 @@ fn discover_project_id() -> Option<String> {
 /// on success it comes directly from the new session; on failure it can be
 /// read from the cached session on disk so that expired-JWT identity fields
 /// are still populated.
+///
+/// `error_code`/`error_message` should be populated whenever `success` is `false`.
 pub fn login_event(
     invocation_id: &Uuid,
     success: bool,
     login_type: LoginType,
     access_token: Option<&str>,
+    error_code: Option<LoginErrorCode>,
+    error_message: Option<String>,
 ) {
     let claims = access_token.and_then(extract_login_jwt_claims);
     let c = claims.as_ref();
@@ -638,6 +654,9 @@ pub fn login_event(
         platform_user_id: c.and_then(|x| x.platform_user_id),
         platform_account_id: c.and_then(|x| x.platform_account_id),
         platform_account_identifier: c.and_then(|x| x.platform_account_identifier.clone()),
+        error_code: error_code.map(|c| c as i32),
+        error_message,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -671,6 +690,7 @@ pub fn static_analysis_propagation_event(
         strict_node_count: strict_count as i32,
         baseline_node_count: baseline_count as i32,
         off_node_count: off_count as i32,
+        common_context: None,
     };
 
     let _ = log_proto(message);

@@ -30,7 +30,7 @@ pub async fn try_load_valid_dbt_packages_lock(
     if packages_lock_path.exists() {
         let yml_str = stdfs::read_to_string(&packages_lock_path)?;
         let rendered_yml: DbtPackagesLock =
-            match from_yaml_raw(io, &yml_str, Some(&packages_lock_path), true, None) {
+            match from_yaml_raw(&yml_str, Some(&packages_lock_path), true, None) {
                 Ok(rendered_yml) => rendered_yml,
                 Err(e) => {
                     if e.to_string()
@@ -70,7 +70,7 @@ async fn try_load_from_deprecated_dbt_packages_lock(
     jinja_env: &JinjaEnv,
     vars: &BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
-    match from_yaml_raw::<DeprecatedDbtPackagesLock>(io, yml_str, None, true, None) {
+    match from_yaml_raw::<DeprecatedDbtPackagesLock>(yml_str, None, true, None) {
         // Here, we need to do a fuzzy lookup on the old dbt_packages_lock.yml file
         Ok(DeprecatedDbtPackagesLock {
             packages: deprecated_packages,
@@ -79,14 +79,12 @@ async fn try_load_from_deprecated_dbt_packages_lock(
             emit_warn_log_message(
                 ErrorCode::FmtError,
                 "Old format package-lock.yml file found. Please provide package definitions.",
-                io.status_reporter.as_ref(),
             );
 
             if !dbt_packages_dir.exists() {
                 emit_warn_log_message(
                     ErrorCode::FmtError,
                     "Attempted to infer package name from package-lock.yml, but no packages directory found, skipping...",
-                    io.status_reporter.as_ref(),
                 );
 
                 return Ok(None);
@@ -109,7 +107,6 @@ async fn try_load_from_deprecated_dbt_packages_lock(
                             dbt_packages_dir.display(),
                             e
                         ),
-                        io.status_reporter.as_ref(),
                     );
 
                     return Ok(None);
@@ -145,7 +142,6 @@ async fn try_load_from_deprecated_dbt_packages_lock(
                                     package,
                                     dbt_packages_dir.display()
                                 ),
-                                io.status_reporter.as_ref(),
                             );
 
                             return Ok(None);
@@ -177,7 +173,6 @@ async fn try_load_from_deprecated_dbt_packages_lock(
                                     git,
                                     dbt_packages_dir.display()
                                 ),
-                                io.status_reporter.as_ref(),
                             );
 
                             return Ok(None);
@@ -250,7 +245,6 @@ async fn try_load_from_deprecated_dbt_packages_lock(
                                     private,
                                     dbt_packages_dir.display()
                                 ),
-                                io.status_reporter.as_ref(),
                             );
 
                             return Ok(None);
@@ -288,7 +282,6 @@ async fn try_load_from_deprecated_dbt_packages_lock(
                                     tarball,
                                     dbt_packages_dir.display()
                                 ),
-                                io.status_reporter.as_ref(),
                             );
 
                             return Ok(None);
@@ -306,11 +299,7 @@ async fn try_load_from_deprecated_dbt_packages_lock(
             if let Some(dbt_packages) = dbt_packages
                 && let Err(e) = validate_deprecated_hub_lock_hack(dbt_packages, &dbt_packages_lock)
             {
-                emit_warn_log_message(
-                    ErrorCode::InvalidConfig,
-                    e.to_string(),
-                    io.status_reporter.as_ref(),
-                );
+                emit_warn_log_message(ErrorCode::InvalidConfig, e.to_string());
                 return Ok(None);
             }
 
@@ -342,7 +331,7 @@ pub async fn load_dbt_packages_lock_without_validation(
 
     let yml_str = stdfs::read_to_string(&packages_lock_path)?;
     let rendered_yml: DbtPackagesLock =
-        match from_yaml_raw(io, &yml_str, Some(&packages_lock_path), true, None) {
+        match from_yaml_raw(&yml_str, Some(&packages_lock_path), true, None) {
             Ok(rendered_yml) => rendered_yml,
             Err(e) => {
                 if e.to_string()

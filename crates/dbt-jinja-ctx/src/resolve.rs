@@ -106,13 +106,12 @@ pub struct ResolveBaseCtx {
 ///    `ParseExecute`, `ParseMetricReference`, `MacroLookupContext`) live in
 ///    `dbt-jinja-utils`; this crate can't depend on them. A later PR moves
 ///    them here and tightens to `JinjaObject<…>`.
-/// 2. `model` and `builtins` are constructed via
+/// 2. `builtins` is constructed via
 ///    `Value::from_object(BTreeMap<String, MinijinjaValue>)` and downstream
-///    code (`compile_node_context`, `run_node_context`) downcasts via
-///    `.downcast_ref::<BTreeMap<String, MinijinjaValue>>()`. Going through
-///    serde would produce a `MutableMap<Value, Value>` instead and silently
-///    break the downcast — same trap PR 3 hit with `MACRO_DISPATCH_ORDER`'s
-///    `Vec<String>` values.
+///    code downcasts via `.downcast_ref::<BTreeMap<String, MinijinjaValue>>()`.
+///    Going through serde would produce a `MutableMap<Value, Value>` instead
+///    and silently break the downcast — same trap PR 3 hit with
+///    `MACRO_DISPATCH_ORDER`'s `Vec<String>` values.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ResolveModelCtx {
     /// `{{ this }}` — `ResolveThisFunction<T>` Object delegating to a
@@ -142,9 +141,9 @@ pub struct ResolveModelCtx {
     #[schemars(with = "serde_json::Value")]
     pub config: MinijinjaValue,
 
-    /// `{{ model.* }}` — `BTreeMap<String, MinijinjaValue>` Object backing
-    /// the parse-time stub model dict (built via `convert_yml_to_value_map`
-    /// plus a serialized merged config). Downstream adapter code reads via
+    /// `{{ model.* }}` — mutable dict-compatible Object backing the
+    /// parse-time stub model dict (built via `convert_yml_to_value_map` plus
+    /// a serialized merged config). Downstream adapter code reads via
     /// `state.lookup("model").get_attr(...)`.
     #[schemars(with = "serde_json::Value")]
     pub model: MinijinjaValue,

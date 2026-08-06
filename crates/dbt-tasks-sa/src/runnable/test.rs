@@ -27,6 +27,7 @@ use dbt_schemas::schemas::common::Severity;
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::pretty_table::from_pretty_table_error;
+use dbt_tasks_core::run_cache::run_cache_service::CachedTestExecutionResult;
 use dbt_tasks_core::span_manager::SpanTreeRequest;
 use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task, TaskOp};
@@ -41,8 +42,6 @@ use dbt_telemetry::{
 use minijinja::Value as MinijinjaValue;
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use parking_lot::Mutex;
-
-use tracing::error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TestExecutionStatus {
@@ -82,6 +81,7 @@ pub struct TestReportedResult {
     pub failures: usize,
     pub status: TestExecutionStatus,
     pub diff: Option<String>,
+    pub execution_result: Option<CachedTestExecutionResult>,
 }
 
 impl TestReportedResult {
@@ -110,18 +110,30 @@ pub fn status_with_warn_error_overrides(
     }
 }
 
-fn reported_test_verdict_from_materialize_result(
+pub fn reported_test_verdict_from_components(
     severity: Option<&Severity>,
-    test_result: &crate::materialize::TestResult,
+    should_warn: bool,
+    should_error: bool,
 ) -> TestExecutionStatus {
     let severity = severity.cloned().unwrap_or_default();
-    if matches!(severity, Severity::Error) && test_result.should_error {
+    if matches!(severity, Severity::Error) && should_error {
         TestExecutionStatus::Failed
-    } else if test_result.should_warn {
+    } else if should_warn {
         TestExecutionStatus::Warned
     } else {
         TestExecutionStatus::Passed
     }
+}
+
+fn reported_test_verdict_from_materialize_result(
+    severity: Option<&Severity>,
+    test_result: &crate::materialize::TestResult,
+) -> TestExecutionStatus {
+    reported_test_verdict_from_components(
+        severity,
+        test_result.should_warn,
+        test_result.should_error,
+    )
 }
 
 pub fn record_test_metric(status: TestExecutionStatus) {
@@ -151,18 +163,11 @@ pub fn insert_test_run_stat(
     );
 }
 
-pub fn record_test_span(test: &DbtTest, result: &TestReportedResult) {
-    record_test_span_with_skip_reason(test, result, None);
-}
-
-pub fn record_cached_test_span(test: &DbtTest, result: &TestReportedResult) {
-    record_test_span_with_skip_reason(test, result, Some(NodeSkipReason::Cached));
-}
-
-fn record_test_span_with_skip_reason(
-    test: &DbtTest,
+pub(super) fn record_test_span_with_detail(
     result: &TestReportedResult,
     skip_reason: Option<NodeSkipReason>,
+    store_failures: Option<bool>,
+    statically_checked: Option<bool>,
 ) {
     let test_outcome = result.test_outcome();
     let failures = result.failures.min(i32::MAX as usize) as i32;
@@ -178,7 +183,8 @@ fn record_test_span_with_skip_reason(
                 test_outcome,
                 failures,
                 diff,
-                test.deprecated_config.store_failures,
+                store_failures,
+                statically_checked,
             ),
         ))
     });
@@ -318,6 +324,15 @@ impl AggregatedTestRunRemoteTask {
                     failures,
                     status,
                     diff: None,
+                    execution_result: Some(CachedTestExecutionResult {
+                        failures: failures as i64,
+                        should_warn: column_result
+                            .map(|result| result.should_warn)
+                            .unwrap_or(false),
+                        should_error: column_result
+                            .map(|result| result.should_error)
+                            .unwrap_or(false),
+                    }),
                 },
             );
         }
@@ -438,6 +453,7 @@ impl AggregatedTestRunRemoteTask {
                         result.failures.min(i32::MAX as usize) as i32,
                         diff,
                         None,
+                        None,
                     ),
                 ));
             }
@@ -450,6 +466,11 @@ impl AggregatedTestRunRemoteTask {
             result.failures,
             result.status,
         );
+        if let Some(execution_result) = result.execution_result {
+            ctx.inner
+                .data_test_execution_results
+                .insert(unique_id.to_string(), execution_result);
+        }
 
         ctx.inner
             .span_manager()
@@ -562,8 +583,11 @@ fn execute_test_remote_inner(
     sql_instruction: &SqlInstruction,
     base_context: &BTreeMap<String, MinijinjaValue>,
 ) -> FsResult<TestReportedResult> {
-    let unique_id = &test.common().unique_id;
-
+    // Any render/execution error (including database errors) surfaces as a
+    // hard error, independent of severity — matching dbt Core and the sidecar
+    // path. The runner framework turns the returned Err into NodeStatus::Errored
+    // and records it. Severity is only consulted for successfully-returned
+    // results below.
     let (test_results, failing_rows_opt) = materialize_test(
         &sql_instruction.sql,
         test,
@@ -574,26 +598,7 @@ fn execute_test_remote_inner(
         ctx.env.clone(),
         base_context,
         &ctx.inner.arg.io,
-    )
-    .map_err(|e| {
-        if e.code.is_database_error() {
-            error!("Error materializing test {}. Treating as failing test.", e);
-        } else {
-            error!(
-                "Error materializing test {}: {}. Treating as failing test.",
-                unique_id, e
-            );
-        }
-    })
-    .unwrap_or((
-        vec![crate::materialize::TestResult {
-            column_name: None,
-            failures: 1,
-            should_warn: false,
-            should_error: true,
-        }],
-        None,
-    ));
+    )?;
     let test_result = test_results
         .into_iter()
         .next()
@@ -633,6 +638,11 @@ fn execute_test_remote_inner(
         failures: test_result.failures as usize,
         status: status_with_warn_error_overrides(status, &ctx.inner.arg.warn_error_options),
         diff,
+        execution_result: Some(CachedTestExecutionResult {
+            failures: test_result.failures,
+            should_warn: test_result.should_warn,
+            should_error: test_result.should_error,
+        }),
     })
 }
 
@@ -648,7 +658,7 @@ pub fn process_test_result(
 
     let node_status = result.node_status();
 
-    record_test_span(test, &result);
+    record_test_span_with_detail(&result, None, test.deprecated_config.store_failures, None);
 
     insert_test_run_stat(
         ctx,
@@ -657,6 +667,40 @@ pub fn process_test_result(
         result.failures,
         result.status,
     );
+    if let Some(execution_result) = result.execution_result {
+        ctx.inner
+            .data_test_execution_results
+            .insert(unique_id.clone(), execution_result);
+    }
 
     Ok(node_status)
+}
+
+pub fn process_statically_checked_test_result(
+    test: &DbtTest,
+    ctx: &TaskRunnerCtx,
+    start: SystemTime,
+) -> NodeStatus {
+    let result = TestReportedResult {
+        failures: 0,
+        status: TestExecutionStatus::Passed,
+        diff: None,
+        execution_result: None,
+    };
+    record_test_span_with_detail(&result, None, None, Some(true));
+
+    let unique_id = &test.common().unique_id;
+    ctx.inner.run_stats.insert(
+        unique_id.clone(),
+        Stat::new(
+            unique_id.clone(),
+            start,
+            Some(0),
+            NodeStatus::StaticallyCheckedDataTest,
+            None,
+            ctx.thread_id,
+        ),
+    );
+
+    NodeStatus::StaticallyCheckedDataTest
 }

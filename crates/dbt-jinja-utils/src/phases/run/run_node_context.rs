@@ -13,6 +13,7 @@ use dbt_common::ErrorCode;
 use dbt_common::io_args::IoArgs;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 
+use dbt_adapter::column::ColumnStatic;
 use dbt_adapter::load_store::ResultStore;
 use dbt_common::stdfs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
@@ -27,7 +28,8 @@ use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
 use serde::Serialize;
 
 use dbt_jinja_ctx::{
-    HookConfig, JinjaObject, LazyModelWrapper, MacroLookupContext, RunNodeCtx, to_jinja_btreemap,
+    CompileBaseCtx, HookConfig, JinjaObject, LazyModelWrapper, MacroLookupContext, RunNodeCtx,
+    to_jinja_btreemap, to_model_context_map,
 };
 
 use super::run_config::RunConfig;
@@ -50,6 +52,51 @@ struct ModelContextFields {
     config: MinijinjaValue,
     model: JinjaObject<LazyModelWrapper>,
     node: JinjaObject<LazyModelWrapper>,
+}
+
+fn model_context_alias_types(model: &YmlValue) -> bool {
+    model
+        .get("config")
+        .and_then(|config| config.get("contract"))
+        .and_then(|contract| contract.get("alias_types"))
+        .and_then(|alias_types| alias_types.as_bool())
+        .unwrap_or(true)
+}
+
+// reference: https://github.com/dbt-labs/dbt-core/blob/411b53897ea34f9d0bd789a540c5812363e26267/core/dbt/context/providers.py#L1710
+fn normalize_model_context_column_data_types(model: &mut YmlValue, adapter_type: AdapterType) {
+    if !model_context_alias_types(model) {
+        return;
+    }
+
+    let YmlValue::Mapping(model_map, _) = model else {
+        return;
+    };
+    let columns_key = YmlValue::string("columns".to_string());
+    let Some(YmlValue::Mapping(columns, _)) = model_map.get_mut(&columns_key) else {
+        return;
+    };
+
+    let column_static = ColumnStatic::new(adapter_type);
+    let data_type_key = YmlValue::string("data_type".to_string());
+    for column_map in columns.values_mut().filter_map(YmlValue::as_mapping_mut) {
+        let Some(data_type) = column_map.get_mut(&data_type_key) else {
+            continue;
+        };
+        let Some(data_type_str) = data_type.as_str().map(ToOwned::to_owned) else {
+            continue;
+        };
+
+        let translated = column_static.translate_type(&data_type_str);
+        if translated != data_type_str {
+            *data_type = YmlValue::string(translated);
+        }
+    }
+}
+
+fn normalized_model_context(mut model: YmlValue, adapter_type: AdapterType) -> YmlValue {
+    normalize_model_context_column_data_types(&mut model, adapter_type);
+    model
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -91,7 +138,6 @@ fn build_model_context_fields<S: Serialize>(
                 emit_warn_log_message(
                     ErrorCode::InvalidConfig,
                     format!("Unknown pre-hook type: {:?}", pre_hook),
-                    io_args.status_reporter.as_ref(),
                 );
                 vec![]
             }
@@ -114,7 +160,6 @@ fn build_model_context_fields<S: Serialize>(
                 emit_warn_log_message(
                     ErrorCode::InvalidConfig,
                     format!("Unknown post-hook type: {:?}", post_hook),
-                    io_args.status_reporter.as_ref(),
                 );
                 vec![]
             }
@@ -131,7 +176,7 @@ fn build_model_context_fields<S: Serialize>(
         config_map.insert("sql_header".to_string(), sql_header);
     }
 
-    let mut model_map = convert_yml_to_value_map(model);
+    let mut model_map = convert_yml_to_value_map(normalized_model_context(model, adapter_type));
 
     // We are reading the raw_sql here for snapshots and models
     let raw_sql_path = match resource_type {
@@ -147,7 +192,6 @@ fn build_model_context_fields<S: Serialize>(
             emit_warn_log_message(
                 ErrorCode::IoError,
                 format!("Failed to read raw_sql: {}", raw_sql_path.display()),
-                io_args.status_reporter.as_ref(),
             );
         };
     }
@@ -167,17 +211,23 @@ fn build_model_context_fields<S: Serialize>(
         }
     };
 
+    // Create the lazy wrappers for the model with the compiled path. All three
+    // share one mutable map so `{% do model.update(...) %}` in a
+    // materialization is observable through `model`, `node` and `config.model`
+    // alike.
+    let compiled_path =
+        node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
+    let shared_model_map = to_model_context_map(model_map);
+
     let node_config = RunConfig {
         model_config: config_map,
-        model: model_map.clone(),
+        model: shared_model_map.clone(),
+        model_compiled_path: compiled_path.clone(),
         valid_keys,
     };
 
-    // Create the lazy wrapper for the model with the compiled path
-    let compiled_path =
-        node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
-    let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path.clone());
-    let lazy_node = LazyModelWrapper::new(model_map, compiled_path);
+    let lazy_model = LazyModelWrapper::new(shared_model_map.clone(), compiled_path.clone());
+    let lazy_node = LazyModelWrapper::new(shared_model_map, compiled_path);
 
     ModelContextFields {
         this: this_relation,
@@ -262,19 +312,37 @@ pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
     );
 }
 
-/// Build a run context - parent function that orchestrates the context building
+/// Downcast a base context's `builtins` Object back to its concrete
+/// `BTreeMap<String, MinijinjaValue>` — same trap as `MACRO_DISPATCH_ORDER`.
+fn downcast_builtins_map(builtins: &MinijinjaValue) -> BTreeMap<String, MinijinjaValue> {
+    builtins
+        .as_object()
+        .unwrap()
+        .downcast_ref::<BTreeMap<String, MinijinjaValue>>()
+        .unwrap()
+        .clone()
+}
+
+/// Build the per-node run overlay ([`RunNodeCtx`]) with `base: None`.
+///
+/// Shared core of [`build_run_node_context`] and [`build_run_node_ctx`], which
+/// can't delegate to each other (one holds a `&BTreeMap`, the other a
+/// `&CompileBaseCtx`). `base_builtins` is that base's `builtins` map — already
+/// downcast by each caller via [`downcast_builtins_map`] — extended here with
+/// the per-node `RunConfig` before being re-wrapped as a `MinijinjaValue`
+/// Object (downstream macro code downcasts it back).
 #[allow(clippy::too_many_arguments)]
-pub fn build_run_node_context<S: Serialize>(
+fn build_run_node_overlay<S: Serialize>(
     node: &dyn InternalDbtNode,
     deprecated_config: &S,
     adapter_type: AdapterType,
     agate_table: Option<AgateTable>,
-    base_context: &BTreeMap<String, MinijinjaValue>,
+    base_builtins: Option<BTreeMap<String, MinijinjaValue>>,
     io_args: &IoArgs,
     phase: ExecutionPhase,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
-) -> BTreeMap<String, MinijinjaValue> {
+) -> RunNodeCtx {
     let common_attr = node.common();
     let resource_type = node.resource_type();
 
@@ -316,20 +384,12 @@ pub fn build_run_node_context<S: Serialize>(
         })
     });
 
-    // Builtins overlay: clone the compile-base map and insert the per-node
-    // RunConfig. The map underlying `builtins` MUST be
-    // `BTreeMap<String, MinijinjaValue>` exactly (downstream macro code
-    // downcasts to that type) — same trap as `MACRO_DISPATCH_ORDER`.
-    let mut base_builtins = if let Some(builtins) = base_context.get("builtins") {
-        builtins
-            .as_object()
-            .unwrap()
-            .downcast_ref::<BTreeMap<String, MinijinjaValue>>()
-            .unwrap()
-            .clone()
-    } else {
-        BTreeMap::new()
-    };
+    // Builtins overlay: take the caller-provided compile-base map and insert
+    // the per-node RunConfig, then re-wrap as an Object below. The map
+    // underlying `builtins` MUST be `BTreeMap<String, MinijinjaValue>` exactly
+    // (downstream macro code downcasts to that type) — same trap as
+    // `MACRO_DISPATCH_ORDER`.
+    let mut base_builtins = base_builtins.unwrap_or_default();
     let node_config = model_fields
         .config
         .as_object()
@@ -348,7 +408,8 @@ pub fn build_run_node_context<S: Serialize>(
         .map(|p| p.to_path_buf())
         .unwrap_or(abs_current_path);
 
-    let overlay = RunNodeCtx {
+    RunNodeCtx {
+        base: None,
         this: model_fields.this,
         database: model_fields.database,
         schema: model_fields.schema,
@@ -370,17 +431,167 @@ pub fn build_run_node_context<S: Serialize>(
         target_package_name: common_attr.package_name.clone(),
         current_path: relative_path.to_string_lossy().into_owned(),
         current_span: MinijinjaValue::from_serialize(Span::default()),
-    };
+    }
+}
 
-    // Today's caller still consumes `BTreeMap<String, MinijinjaValue>`. We
-    // serialize the typed overlay and `.extend(...)` onto a clone of the
-    // base — same last-write-wins shadowing semantic the original
-    // BTreeMap-based code produced. PR 9 (cleanup) flows the typed struct
-    // directly through `render_named_str<S: Serialize>` and drops the
-    // conversion.
+/// Build a run context as a `BTreeMap` overlaid onto `base_context`.
+///
+/// Legacy BTreeMap path: builds the typed [`RunNodeCtx`] overlay (`base:
+/// None`), serializes it, and `.extend(...)`s onto a clone of `base_context`
+/// — the same last-write-wins shadowing the original BTreeMap-based code
+/// produced. Callers that already hold a typed [`CompileBaseCtx`] should use
+/// [`build_run_node_ctx`] instead, which skips the `to_jinja_btreemap`
+/// round-trip.
+///
+/// TODO: remove once the remaining `&BTreeMap` callers (the `materialize_*`
+/// render path, LSP preview) are migrated to [`build_run_node_ctx`]; at that
+/// point [`build_run_node_overlay`] folds into `build_run_node_ctx`.
+#[allow(clippy::too_many_arguments)]
+pub fn build_run_node_context<S: Serialize>(
+    node: &dyn InternalDbtNode,
+    deprecated_config: &S,
+    adapter_type: AdapterType,
+    agate_table: Option<AgateTable>,
+    base_context: &BTreeMap<String, MinijinjaValue>,
+    io_args: &IoArgs,
+    phase: ExecutionPhase,
+    sql_header: Option<MinijinjaValue>,
+    packages: BTreeSet<String>,
+) -> BTreeMap<String, MinijinjaValue> {
+    // Downcast the base `builtins` Object to its concrete map here so the
+    // shared overlay builder receives a typed map (no downcast on its side).
+    let base_builtins = base_context.get("builtins").map(downcast_builtins_map);
+    let overlay = build_run_node_overlay(
+        node,
+        deprecated_config,
+        adapter_type,
+        agate_table,
+        base_builtins,
+        io_args,
+        phase,
+        sql_header,
+        packages,
+    );
+
     let mut context = base_context.clone();
     context.extend(to_jinja_btreemap(&overlay));
     context
+}
+
+/// Build a run context as a typed [`RunNodeCtx`] composed onto `base` via the
+/// `RunNodeCtx::base` flatten seam.
+///
+/// Typed path: the returned overlay carries `base: Some(base.clone())`, so it
+/// can be passed straight into `render_named_str` / `Expression::eval`
+/// (`S: Serialize`) with no intermediate `to_jinja_btreemap` — the base keys
+/// flatten in and the per-node fields shadow them. This is the composition
+/// seam the base-context migration moves callers onto incrementally.
+#[allow(clippy::too_many_arguments)]
+pub fn build_run_node_ctx<S: Serialize>(
+    node: &dyn InternalDbtNode,
+    deprecated_config: &S,
+    adapter_type: AdapterType,
+    agate_table: Option<AgateTable>,
+    base: &CompileBaseCtx,
+    io_args: &IoArgs,
+    phase: ExecutionPhase,
+    sql_header: Option<MinijinjaValue>,
+    packages: BTreeSet<String>,
+) -> RunNodeCtx {
+    // `CompileBaseCtx::builtins` is a `MinijinjaValue` (Jinja-facing Object
+    // slot), so downcast it to the concrete map for the shared overlay builder.
+    let base_builtins = downcast_builtins_map(&base.builtins);
+    let mut overlay = build_run_node_overlay(
+        node,
+        deprecated_config,
+        adapter_type,
+        agate_table,
+        Some(base_builtins),
+        io_args,
+        phase,
+        sql_header,
+        packages,
+    );
+    overlay.base = Some(base.clone());
+    overlay
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn column_data_type<'a>(model: &'a YmlValue, column_name: &str) -> &'a str {
+        model
+            .get("columns")
+            .and_then(|columns| columns.get(column_name))
+            .and_then(|column| column.get("data_type"))
+            .and_then(|data_type| data_type.as_str())
+            .expect("column data_type should exist")
+    }
+
+    #[test]
+    fn bigquery_model_context_alias_types_enabled_normalizes_column_data_types() {
+        let mut model = dbt_yaml::to_value(json!({
+            "config": {
+                "contract": {
+                    "alias_types": true
+                }
+            },
+            "columns": {
+                "float_col": {"name": "float_col", "data_type": "FLOAT"},
+                "integer_col": {"name": "integer_col", "data_type": "INTEGER"},
+                "text_col": {"name": "text_col", "data_type": "TEXT"},
+                "numeric_col": {"name": "numeric_col", "data_type": "NUMERIC"}
+            }
+        }))
+        .unwrap();
+
+        normalize_model_context_column_data_types(&mut model, AdapterType::Bigquery);
+
+        assert_eq!(column_data_type(&model, "float_col"), "FLOAT64");
+        assert_eq!(column_data_type(&model, "integer_col"), "INT64");
+        assert_eq!(column_data_type(&model, "text_col"), "STRING");
+        assert_eq!(column_data_type(&model, "numeric_col"), "NUMERIC");
+    }
+
+    #[test]
+    fn bigquery_model_context_alias_types_disabled_preserves_column_data_types() {
+        let mut model = dbt_yaml::to_value(json!({
+            "config": {
+                "contract": {
+                    "alias_types": false
+                }
+            },
+            "columns": {
+                "float_col": {"name": "float_col", "data_type": "FLOAT"}
+            }
+        }))
+        .unwrap();
+
+        normalize_model_context_column_data_types(&mut model, AdapterType::Bigquery);
+
+        assert_eq!(column_data_type(&model, "float_col"), "FLOAT");
+    }
+
+    #[test]
+    fn model_context_column_data_type_normalization_is_bigquery_only() {
+        let mut model = dbt_yaml::to_value(json!({
+            "config": {
+                "contract": {
+                    "alias_types": true
+                }
+            },
+            "columns": {
+                "float_col": {"name": "float_col", "data_type": "FLOAT"}
+            }
+        }))
+        .unwrap();
+
+        normalize_model_context_column_data_types(&mut model, AdapterType::Postgres);
+
+        assert_eq!(column_data_type(&model, "float_col"), "FLOAT");
+    }
 }
 
 fn parse_hook_item(item: &YmlValue) -> Option<HookConfig> {

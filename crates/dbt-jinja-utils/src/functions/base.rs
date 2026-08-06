@@ -11,8 +11,6 @@ use indexmap::IndexMap;
 use dbt_agate::AgateTable;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsError, fs_err,
-    io_args::IoArgs,
-    io_utils::StatusReporter,
     tracing::dbt_emit::{emit_warn_log_from_fs_error, emit_warn_log_message},
     tracing::emit::{emit_debug_event, emit_info_event},
     warn_error_options::{WarnErrorDecision, WarnErrorOptions},
@@ -35,7 +33,7 @@ use minijinja::{
     value::{Kwargs, Object},
 };
 type YmlValue = dbt_yaml::Value;
-use crate::utils::{ENV_VARS, get_status_reporter, node_metadata_from_state};
+use crate::utils::{ENV_VARS, node_metadata_from_state};
 
 use crate::functions::contract_error::get_contract_mismatches;
 use serde::Serialize;
@@ -89,18 +87,11 @@ fn to_json_string_python_style<T: Serialize>(value: &T) -> Result<String, serde_
 pub use dbt_jinja_vars::{LookupFn, SECRET_PLACEHOLDER, Var};
 
 /// Registers all the functions shared across all contexts
-pub fn register_base_functions(
-    env: &mut Environment,
-    io_args: IoArgs,
-    warn_error_options: WarnErrorOptions,
-) {
+pub fn register_base_functions(env: &mut Environment, warn_error_options: WarnErrorOptions) {
     env.add_global("dbt_version", Value::from(crate::utils::DBT_VERSION));
     env.add_global(
         "exceptions".to_owned(),
-        Value::from_object(Exceptions {
-            io_args,
-            warn_error_options,
-        }),
+        Value::from_object(Exceptions { warn_error_options }),
     );
     // dbt-core templates commonly use Python-ish constants (capitalized).
     // In Jinja2 the canonical values are `none/true/false`, but many dbt projects
@@ -148,8 +139,10 @@ pub fn silence_base_context(base_ctx: &mut BTreeMap<String, Value>) {
 /// A struct that represents a reusable doc object to be used in configuration contexts
 #[derive(Debug)]
 pub struct DocMacro {
-    /// The name of the current package being rendered
-    package_name: String,
+    /// Package precedence for unqualified doc references.
+    package_search_order: Vec<String>,
+    /// Core-compatible argument and missing-target checking.
+    strict: bool,
     /// The actual doc strings stored once to avoid duplication
     docs_content: Vec<String>,
     /// Maps (package_name, doc_name) to index in docs_content
@@ -161,6 +154,23 @@ pub struct DocMacro {
 impl DocMacro {
     /// Initializes the doc macro
     pub fn new(package_name: String, docs: BTreeMap<(String, String), String>) -> Self {
+        Self::new_internal(vec![package_name], docs, false)
+    }
+
+    /// Core's `DocsRuntimeContext` `doc()`: one or two positional strings, and a
+    /// missing target aborts rendering.
+    pub fn new_strict_with_search_order(
+        package_search_order: Vec<String>,
+        docs: BTreeMap<(String, String), String>,
+    ) -> Self {
+        Self::new_internal(package_search_order, docs, true)
+    }
+
+    fn new_internal(
+        package_search_order: Vec<String>,
+        docs: BTreeMap<(String, String), String>,
+        strict: bool,
+    ) -> Self {
         let mut docs_content = Vec::new();
         let mut package_doc_map = HashMap::new();
         let mut doc_name_map: HashMap<String, Vec<(String, usize)>> = HashMap::new();
@@ -179,7 +189,8 @@ impl DocMacro {
         }
 
         Self {
-            package_name,
+            package_search_order,
+            strict,
             docs_content,
             package_doc_map,
             doc_name_map,
@@ -213,50 +224,77 @@ impl Object for DocMacro {
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         let mut args = ArgParser::new(args, None);
-        let arg1 = args.get::<String>("");
-        let arg2 = args.get_optional::<String>("");
-
-        let (doc, target_package, doc_name) = match (&arg1, &arg2) {
-            // Two arguments: explicit package and doc name
-            (Ok(package_name), Some(doc_name)) => (
-                self.lookup_doc(package_name, doc_name),
-                package_name.clone(),
-                doc_name.clone(),
-            ),
-            // One argument: search in current package first, then others
-            (Ok(doc_name), None) => {
-                if let Some(doc) = self.lookup_doc(&self.package_name, doc_name) {
-                    (Some(doc), self.package_name.clone(), doc_name.clone())
-                } else {
-                    (
-                        self.lookup_doc_in_packages(doc_name),
-                        self.package_name.clone(),
-                        doc_name.clone(),
-                    )
-                }
-            }
-
-            _ => {
-                return Err(Error::new(
+        // Core's `doc(self, *args: str)`. Lenient mode keeps the historical tolerance,
+        // because model/source/column descriptions still render through it.
+        if self.strict && (args.kwargs_len() != 0 || !(1..=2).contains(&args.positional_len())) {
+            return Err(Error::new(
+                ErrorKind::InvalidOperation,
+                "doc() takes one or two positional string arguments",
+            ));
+        }
+        let (arg1, arg2) = if self.strict {
+            // Both args are annotated `str`, so no coercion either.
+            let package_or_name = args.get::<Arc<str>>("")?.to_string();
+            let name = if args.positional_len() == 0 {
+                None
+            } else {
+                Some(args.get::<Arc<str>>("")?.to_string())
+            };
+            (package_or_name, name)
+        } else {
+            let arg1 = args.get::<String>("").map_err(|_| {
+                Error::new(
                     ErrorKind::InvalidOperation,
                     "Invalid arguments to doc macro",
-                ));
+                )
+            })?;
+            (arg1, args.get_optional::<String>(""))
+        };
+
+        let (doc, target_package, doc_name) = match &arg2 {
+            // Two arguments: explicit package and doc name
+            Some(doc_name) => (
+                self.lookup_doc(&arg1, doc_name),
+                arg1.clone(),
+                doc_name.clone(),
+            ),
+            // One argument: search the configured package precedence, then any package
+            None => {
+                let doc = self
+                    .package_search_order
+                    .iter()
+                    .find_map(|package_name| self.lookup_doc(package_name, &arg1))
+                    .or_else(|| self.lookup_doc_in_packages(&arg1));
+                (
+                    doc,
+                    self.package_search_order
+                        .first()
+                        .cloned()
+                        .unwrap_or_default(),
+                    arg1,
+                )
             }
         };
 
         match doc {
             Some(content) => Ok(Value::from_serialize(content)),
+            // `DocTargetNotFoundError`
+            None if self.strict => Err(Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Documentation depends on doc '{doc_name}' which was not found"),
+            )),
             None => {
-                let status_reporter = get_status_reporter(state.env());
                 let current_span = state.current_span_of_context();
                 let current_file_path = state.current_path().clone();
-                let location = CodeLocationWithFile::new(
-                    current_span.start_line,
-                    current_span.start_col,
-                    current_span.start_offset,
-                    current_file_path,
-                );
-                self.warn_missing_doc(&target_package, &doc_name, location, status_reporter);
+                if !current_file_path.as_os_str().is_empty() {
+                    let location = CodeLocationWithFile::new(
+                        current_span.start_line,
+                        current_span.start_col,
+                        current_span.start_offset,
+                        current_file_path,
+                    );
+                    Self::warn_missing_doc(&target_package, &doc_name, location);
+                }
                 Ok(Value::from(Self::missing_doc_placeholder(
                     &target_package,
                     &doc_name,
@@ -267,20 +305,14 @@ impl Object for DocMacro {
 }
 
 impl DocMacro {
-    fn warn_missing_doc(
-        &self,
-        package_name: &str,
-        doc_name: &str,
-        location: CodeLocationWithFile,
-        status_reporter: Option<&Arc<dyn StatusReporter>>,
-    ) {
+    fn warn_missing_doc(package_name: &str, doc_name: &str, location: CodeLocationWithFile) {
         let code = ErrorCode::InvalidConfig;
         let message = format!(
             "doc macro reference '{}' not found for package '{}'",
             doc_name, package_name
         );
         let warning = fs_err!(code, "{}", message).with_location(location);
-        emit_warn_log_from_fs_error(&warning, status_reporter)
+        emit_warn_log_from_fs_error(warning)
     }
 
     fn missing_doc_placeholder(package_name: &str, doc_name: &str) -> String {
@@ -335,22 +367,9 @@ pub fn fromjson(_state: &State, args: &[Value]) -> Result<Value, Error> {
     let default = iter.next_kwarg::<Option<Value>>("default")?;
     iter.finish()?;
 
-    // Try strict JSON first
     match serde_json::from_str::<serde_json::Value>(string) {
         Ok(value) => Ok(Value::from_serialize(value)),
-        Err(json_err) => {
-            // Fall back to YAML to support unquoted scalars or simple mappings
-            match dbt_yaml::from_str::<dbt_yaml::Value>(string) {
-                Ok(yaml_value) => Ok(Value::from_serialize(yaml_value)),
-                Err(_) => match default {
-                    Some(default_value) => Ok(default_value),
-                    None => Err(Error::new(
-                        ErrorKind::InvalidOperation,
-                        format!("Failed to parse JSON: {json_err}"),
-                    )),
-                },
-            }
-        }
+        Err(_) => Ok(default.unwrap_or_else(|| Value::from(()))),
     }
 }
 
@@ -1009,7 +1028,6 @@ fn parse_dict_of_lists(dict: &Value) -> Result<IndexMap<String, Vec<String>>, Er
 /// A struct that represents the 'exceptions' object, which makes exceptions.warn() and...
 #[derive(Debug)]
 pub struct Exceptions {
-    io_args: IoArgs,
     warn_error_options: WarnErrorOptions,
 }
 
@@ -1051,13 +1069,13 @@ impl Object for Exceptions {
 
                 // Emit through the warn path even when warn-error upgrades it because tracing
                 // handles the event level upgrade for dbt-facing outputs.
-                emit_warn_log_from_fs_error(&warning, self.io_args.status_reporter.as_ref());
-
-                if self
+                let warn_error_decision = self
                     .warn_error_options
                     .decision_for_error_code(warning.code)
-                    == WarnErrorDecision::UpgradeToError
-                {
+                    == WarnErrorDecision::UpgradeToError;
+                emit_warn_log_from_fs_error(*warning);
+
+                if warn_error_decision {
                     return Err(Error::new(ErrorKind::ExitWithStatus, warn_string));
                 }
 
@@ -1257,11 +1275,7 @@ impl Object for Exceptions {
                     "Data type of {name_part} timestamp columns ({snapshot_time_data_type}) does not match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'.{location_hint}"
                 );
 
-                emit_warn_log_message(
-                    ErrorCode::SnapshotTimestampMismatch,
-                    warning,
-                    self.io_args.status_reporter.as_ref(),
-                );
+                emit_warn_log_message(ErrorCode::SnapshotTimestampMismatch, warning);
 
                 Ok(Value::UNDEFINED)
             }
@@ -1433,6 +1447,22 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
         Value::from("sources"),
         Value::from_serialize(sources_insert),
     );
+    let unit_tests_insert: BTreeMap<String, Value> = nodes
+        .unit_tests
+        .iter()
+        .map(|(unique_id, unit_test)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize(
+                    (Arc::as_ref(unit_test) as &dyn InternalDbtNode).serialize_keep_none(),
+                ),
+            )
+        })
+        .collect();
+    graph.insert(
+        Value::from("unit_tests"),
+        Value::from_serialize(unit_tests_insert),
+    );
     let exposures_insert: BTreeMap<String, Value> = nodes
         .exposures
         .iter()
@@ -1519,6 +1549,7 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_common::path::DbtPath;
     use minijinja::{Environment, Value};
     use minijinja_contrib::pycompat::unknown_method_callback;
 
@@ -1685,19 +1716,50 @@ mod tests {
             output.contains("<missing doc('unknown', package='pkg')>"),
             "expected placeholder, got {output}"
         );
+
+        // Only the documentation context is strict; model descriptions still tolerate these.
+        for (source, expected) in [
+            ("{{ doc(1) }}", "<missing doc('1', package='pkg')>"),
+            (
+                "{{ doc('a', 'b', 'extra') }}",
+                "<missing doc('b', package='a')>",
+            ),
+            (
+                "{{ doc('unknown', ignored='x') }}",
+                "<missing doc('unknown', package='pkg')>",
+            ),
+        ] {
+            let output = env
+                .template_from_str(source)
+                .unwrap()
+                .render(Value::UNDEFINED, &[])
+                .unwrap();
+            assert!(output.contains(expected), "{source} rendered {output}");
+        }
     }
 
     #[test]
-    fn test_fromjson_parses_plain_string_via_yaml_fallback() {
+    fn test_fromjson_returns_none_for_invalid_json() {
         let mut env = Environment::new();
         env.add_func_func("fromjson", fromjson);
 
-        // Should parse as a string via YAML fallback when JSON parsing fails
         let tmpl = env
-            .template_from_str("{{ fromjson('i_am_string') }}")
+            .template_from_str("{{ fromjson('plain: [tag') is none }}")
             .unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
-        assert_eq!(output.trim(), "i_am_string");
+        assert_eq!(output.trim(), "True");
+    }
+
+    #[test]
+    fn test_fromjson_returns_default_for_invalid_json() {
+        let mut env = Environment::new();
+        env.add_func_func("fromjson", fromjson);
+
+        let tmpl = env
+            .template_from_str("{{ fromjson('plain: [tag', default={'fallback': 1}) }}")
+            .unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "{'fallback': 1}");
     }
 
     fn make_env_with_var() -> minijinja::Environment<'static> {
@@ -1769,9 +1831,9 @@ mod tests {
     }
 
     #[test]
-    fn build_flat_graph_populates_semantic_models_metrics_saved_queries_and_groups() {
+    fn build_flat_graph_populates_semantic_models_metrics_saved_queries_groups_and_unit_tests() {
         use dbt_schemas::schemas::manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel};
-        use dbt_schemas::schemas::nodes::DbtGroup;
+        use dbt_schemas::schemas::nodes::{DbtGroup, DbtUnitTest};
 
         let mut nodes = Nodes::default();
 
@@ -1779,6 +1841,10 @@ mod tests {
         nodes.semantic_models.insert(
             "semantic_model.pkg.sm1".to_string(),
             Arc::new(DbtSemanticModel::default()),
+        );
+        nodes.unit_tests.insert(
+            "unit_test.pkg.ut1".to_string(),
+            Arc::new(DbtUnitTest::default()),
         );
         nodes.metrics.insert(
             "metric.pkg.m1".to_string(),
@@ -1808,7 +1874,13 @@ mod tests {
         let graph_val = Value::from_object(graph);
 
         // Each key should contain exactly one entry
-        for key in &["semantic_models", "metrics", "saved_queries", "groups"] {
+        for key in &[
+            "semantic_models",
+            "metrics",
+            "saved_queries",
+            "groups",
+            "unit_tests",
+        ] {
             let collection = graph_val.get_attr(key).unwrap();
             assert_ne!(
                 collection.len(),
@@ -1825,7 +1897,6 @@ mod tests {
     fn build_flat_graph_populates_defer_relation_for_deferrable_nodes() {
         use dbt_schemas::schemas::nodes::{CommonAttributes, NodeBaseAttributes};
         use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot};
-        use std::path::PathBuf;
 
         fn make_model(unique_id: &str, name: &str, alias: &str, schema: &str) -> Arc<DbtModel> {
             Arc::new(DbtModel {
@@ -1834,8 +1905,8 @@ mod tests {
                     name: name.to_string(),
                     package_name: "pkg".to_string(),
                     fqn: vec!["pkg".to_string(), name.to_string()],
-                    path: PathBuf::from(format!("{name}.sql")),
-                    original_file_path: PathBuf::from(format!("models/{name}.sql")),
+                    path: DbtPath::from(format!("{name}.sql")),
+                    original_file_path: DbtPath::from(format!("models/{name}.sql")),
                     ..Default::default()
                 },
                 __base_attr__: NodeBaseAttributes {

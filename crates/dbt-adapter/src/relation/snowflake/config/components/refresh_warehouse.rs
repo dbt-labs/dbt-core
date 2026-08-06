@@ -15,8 +15,8 @@ pub(crate) const TYPE_NAME: &str = "refresh_warehouse";
 /// This component exists for symmetry with the other warehouse fields so custom macros
 /// can read `dynamic_table.refresh_warehouse` and branch on whether the user opted in.
 ///
-/// It deliberately **does not participate in changeset diffing** (`diff_fn = immutable`):
-/// the *effective* `WAREHOUSE =` value lives on the `snowflake_warehouse` component,
+/// It deliberately does not participate in changeset diffing (`diff_fn = immutable`):
+/// the effective `WAREHOUSE =` value lives on the `snowflake_warehouse` component,
 /// whose `from_local_config` already folds `refresh_warehouse → snowflake_warehouse`.
 /// Letting this component also diff would emit a second, redundant ALTER for the same
 /// logical change. Snowflake's DESCRIBE output does not expose a separate

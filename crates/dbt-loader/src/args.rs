@@ -20,6 +20,8 @@ pub struct LoadArgs {
     pub profile: Option<String>,
     // The target within the profile to use for the dbt run
     pub target: Option<String>,
+    // The output to use for the alternate compute target (--x-alt-target)
+    pub x_alt_target: Option<String>,
     // Whether to update dependencies
     pub update_deps: bool,
     // The directory to load the dbt project from
@@ -72,6 +74,7 @@ impl LoadArgs {
             packages_install_path: arg.packages_install_path.clone(),
             internal_packages_install_path: arg.internal_packages_install_path.clone(),
             target: arg.target.clone(),
+            x_alt_target: arg.x_alt_target.clone(),
             update_deps: arg.update_deps,
             add_package: arg.add_package.clone(),
             upgrade: arg.upgrade,

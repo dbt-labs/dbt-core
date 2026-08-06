@@ -10,10 +10,14 @@
 //!   `dbt_common::constants::DBT_RUN_DIR_NAME`.
 
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
-use indexmap::IndexMap;
+use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, Value as MinijinjaValue};
+use minijinja::{Error as MinijinjaError, State};
+
+use crate::ModelContextMap;
 
 /// `{{ pre_hooks[i] }}` / `{{ post_hooks[i] }}` — single hook entry from
 /// the node's YAML config. Wraps the SQL string and the per-hook
@@ -54,15 +58,17 @@ impl std::fmt::Debug for HookConfig {
 /// render typically see identical bytes anyway.
 #[derive(Debug)]
 pub struct LazyModelWrapper {
-    /// The original model data as a map.
-    model_map: IndexMap<String, MinijinjaValue>,
+    /// The original model data as a map. Shared with the sibling `node`
+    /// wrapper so `model.update(...)` is visible through both slots.
+    model_map: ModelContextMap,
     /// Path to the compiled SQL file.
     compiled_path: PathBuf,
 }
 
 impl LazyModelWrapper {
-    /// Create a new lazy model wrapper.
-    pub fn new(model_map: IndexMap<String, MinijinjaValue>, compiled_path: PathBuf) -> Self {
+    /// Create a new lazy model wrapper over an already-built
+    /// [`ModelContextMap`] (see [`crate::to_model_context_map`]).
+    pub fn new(model_map: ModelContextMap, compiled_path: PathBuf) -> Self {
         Self {
             model_map,
             compiled_path,
@@ -84,7 +90,7 @@ impl Object for LazyModelWrapper {
                 // Both fields return the same compiled SQL content
                 self.load_compiled_sql().map(MinijinjaValue::from)
             }
-            _ => self.model_map.get(key_str).cloned(),
+            _ => self.model_map.get(key),
         }
     }
 
@@ -92,19 +98,34 @@ impl Object for LazyModelWrapper {
         // Only enumerate fields from model_map (not lazy-loaded fields) so
         // serialization includes all stable fields (e.g. `resource_type`)
         // but doesn't trigger a disk read at enumerate time.
-        let keys: Vec<MinijinjaValue> = self
-            .model_map
-            .keys()
-            .map(|k| MinijinjaValue::from(k.as_str()))
-            .collect();
+        let keys = self.model_map.keys();
 
         Enumerator::Iter(Box::new(keys.into_iter()))
+    }
+
+    /// Forward dict methods (`update`, `pop`, `get`, `items`, …) to the
+    /// backing map. Not redundant with the default `Object::call_method`:
+    /// that one only looks the method name up as a *key* and calls the value
+    /// it finds, so `model.update({...})` fails with `UnknownMethod`.
+    /// Only `MutableMap`'s own `call_method` implements the dict protocol.
+    /// Covered by `test_model_update_through_wrapper`.
+    fn call_method(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        method: &str,
+        args: &[MinijinjaValue],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        Object::call_method(&self.model_map, state, method, args, listeners)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use indexmap::IndexMap;
+
     use super::*;
+    use crate::to_model_context_map;
 
     #[test]
     fn test_lazy_model_wrapper_basic() {
@@ -113,7 +134,7 @@ mod tests {
         model_map.insert("version".to_string(), MinijinjaValue::from(2));
 
         let wrapper = Arc::new(LazyModelWrapper::new(
-            model_map,
+            to_model_context_map(model_map),
             PathBuf::from("/non/existent/path.sql"),
         ));
 
@@ -148,7 +169,10 @@ mod tests {
         let test_file = temp_dir.join("test_compiled_pr9.sql");
         std::fs::write(&test_file, "SELECT * FROM table").unwrap();
 
-        let wrapper = Arc::new(LazyModelWrapper::new(model_map, test_file.clone()));
+        let wrapper = Arc::new(LazyModelWrapper::new(
+            to_model_context_map(model_map),
+            test_file.clone(),
+        ));
 
         let compiled_code = wrapper.get_value(&MinijinjaValue::from("compiled_code"));
         assert_eq!(
@@ -163,5 +187,63 @@ mod tests {
         );
 
         std::fs::remove_file(&test_file).ok();
+    }
+
+    /// Run-phase counterpart of the `model_update.slt` parse/compile test:
+    /// at run scope `model` is a `LazyModelWrapper`, not a bare map, so the
+    /// dict protocol only reaches the backing map through the wrapper's
+    /// `call_method` forward. Without it this render fails with
+    /// `UnknownMethod`.
+    #[test]
+    fn test_model_update_through_wrapper() {
+        let mut model_map = IndexMap::new();
+        model_map.insert("description".to_string(), MinijinjaValue::from("original"));
+
+        let wrapper = LazyModelWrapper::new(
+            to_model_context_map(model_map),
+            PathBuf::from("/non/existent/path.sql"),
+        );
+
+        let env = minijinja::Environment::new();
+        let ctx = std::collections::BTreeMap::from([(
+            "model".to_string(),
+            MinijinjaValue::from_object(wrapper),
+        )]);
+
+        let rendered = env
+            .render_str(
+                r#"{% do model.update({"description": "runtime description"}) %}{{ model.description }}"#,
+                ctx,
+                &[],
+            )
+            .expect("model.update() must be callable at run scope");
+
+        assert_eq!(rendered, "runtime description");
+    }
+
+    /// `model` and `node` wrap the same node, so a mutation through one
+    /// (what `{% do model.update(...) %}` ends up doing) is visible via the
+    /// other — matching dbt Core, where both names refer to one dict.
+    #[test]
+    fn test_model_and_node_share_backing_map() {
+        let mut model_map = IndexMap::new();
+        model_map.insert("name".to_string(), MinijinjaValue::from("test_model"));
+        let shared = to_model_context_map(model_map);
+
+        let path = PathBuf::from("/non/existent/path.sql");
+        let model = Arc::new(LazyModelWrapper::new(shared.clone(), path.clone()));
+        let node = Arc::new(LazyModelWrapper::new(shared.clone(), path));
+
+        shared.insert(
+            MinijinjaValue::from("description"),
+            MinijinjaValue::from("runtime description"),
+        );
+
+        for wrapper in [&model, &node] {
+            assert_eq!(
+                wrapper.get_value(&MinijinjaValue::from("description")),
+                Some(MinijinjaValue::from("runtime description"))
+            );
+        }
     }
 }

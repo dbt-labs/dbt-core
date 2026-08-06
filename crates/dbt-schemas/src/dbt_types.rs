@@ -35,13 +35,16 @@ pub enum RelationType {
 
 impl RelationType {
     /// Convert a given type string for a given [AdapterType] to a dbt RelationType
+    // TODO: This should return an error instead of panicking.
     pub fn from_adapter_type(adapter_type: AdapterType, type_string: &str) -> Self {
         match adapter_type {
             // https://cloud.google.com/bigquery/docs/information-schema-tables
+            // Alternatively, if querying from the Google API:
+            // https://docs.cloud.google.com/bigquery/docs/reference/rest/v2/tables
             AdapterType::Bigquery => match type_string.to_uppercase().as_str() {
                 "BASE TABLE" | "CLONE" | "SNAPSHOT" | "TABLE" => RelationType::Table,
                 "VIEW" => RelationType::View,
-                "MATERIALIZED VIEW" => RelationType::MaterializedView,
+                "MATERIALIZED VIEW" | "MATERIALIZED_VIEW" => RelationType::MaterializedView,
                 "EXTERNAL" => RelationType::External,
                 _ => panic!("unknown table type: {type_string}"),
             },

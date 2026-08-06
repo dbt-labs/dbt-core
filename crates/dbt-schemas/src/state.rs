@@ -188,7 +188,14 @@ pub struct DbtProfile {
     pub target: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub defer_to_target: Option<String>,
+    /// The active target's `allow_clones` setting, read directly from its
+    /// `outputs.<target>` block in profiles.yml. Note that if omitted defaults to `true`
+    pub allow_clones: bool,
     pub db_config: DbConfig,
+    /// Connection config for the alternate compute target, from the profile's
+    /// `x_alt_target` output. `None` when the profile declares none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_target_db_config: Option<DbConfig>,
     pub schema: String,
     pub database: String,
     pub relative_profile_path: PathBuf,
@@ -596,6 +603,7 @@ pub struct ResolverState {
     pub macros: Macros,
     pub operations: Operations,
     pub dbt_profile: DbtProfile,
+    pub cloud_config: Option<ResolvedCloudConfig>,
     pub render_results: RenderResults,
     pub node_resolver: Arc<dyn NodeResolverTracker>,
     pub get_relation_calls: GetRelationCalls,

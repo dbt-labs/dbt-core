@@ -1,21 +1,22 @@
-use dbt_base::CancellationTokenSource;
+use sha2::{Digest, Sha256};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use uuid::Uuid;
 
-use crate::stdfs::{create_dir_all, diff_paths, read_to_string, remove_file};
+use crate::path::DbtPath;
+use crate::stdfs::{create_dir_all, read_to_string, remove_file};
 use crate::time::{current_time_micros, time_micros};
 use crate::tracing::dbt_emit::emit_info_log_message;
 use crate::{ErrorCode, FsError, FsResult};
 
-use std::path::{Component, Path};
+use std::path::Path;
 use std::{
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 
-pub struct Lease {
+struct Lease {
     id: String,
     expiry: u128,
     handler: Arc<LeaseHandler>,
@@ -26,7 +27,7 @@ pub struct Lease {
 /// will result in no timeout.
 struct LeaseHandler {
     path: PathBuf,
-    dir: String,
+    dir_display: String,
     timeout: Duration,
 }
 
@@ -41,31 +42,46 @@ impl LeaseData {
     }
 }
 
-/// Returns the lease file path for a given directory name:
-/// `<project_root>/<dir_name>/.dbt_lease_<dir_name>`.
-pub fn lease_file_path(project_root: &Path, dir_name: &str) -> PathBuf {
-    let dir_path = project_root.join(dir_name);
-    create_dir_all(&dir_path).ok();
-
-    dir_path.join(format!(".dbt_lease_{dir_name}"))
+/// Acquires a lease on the given directory and spawns a background renewal task.
+/// Returns a [`LeaseGuard`] that releases the lease when dropped.
+/// Uses default values for ttl and the renewal interval.
+pub async fn acquire_lease(project_dir: &Path, relative_dir: &Path) -> FsResult<LeaseGuard> {
+    // default ttl and renewal
+    let lease_ttl: Duration = Duration::from_millis(2000);
+    let renewal_interval: Duration = Duration::from_millis(500);
+    acquire_lease_with_renewal(project_dir, relative_dir, lease_ttl, renewal_interval).await
 }
 
-/// Extracts the first path component relative to the project root.
-pub fn dir_name_for_file_lease(project_root: &Path, path: &Path) -> Option<String> {
-    diff_paths(path, project_root).ok().and_then(|rel| {
-        rel.components()
-            .next()
-            .and_then(|comp| match comp {
-                Component::Normal(s) => s.to_str(),
-                _ => None,
-            })
-            .map(|s| s.to_string())
-    })
+/// Returns the lease file path for a given directory name:
+/// `~/.dbt/leases/.dbt_lease_{hash of <project_root>/<dir_name>/}`.
+fn lease_file_path(project_root: &Path, dir_name: &Path) -> PathBuf {
+    let dir_path = DbtPath::from(project_root.join(dir_name));
+
+    let home_dir = DbtPath::from(dirs::home_dir().expect("Unable to get home directory"));
+    debug_assert!(home_dir.is_absolute());
+
+    let dbt_leases_dir = home_dir.join(".dbt/leases");
+    create_dir_all(&dbt_leases_dir).ok();
+
+    // Hash the directory that we are holding a lease on.
+    let mut hasher = Sha256::new();
+    hasher.update(dir_path.to_string_lossy().as_bytes());
+    let hash = hasher.finalize();
+    let hex = format!("{:x}", hash);
+    let hash_string = hex[..10.min(hex.len())].to_string();
+
+    dbt_leases_dir
+        .join(format!(".dbt_lease_{hash_string}"))
+        .to_path_buf()
 }
 
 impl LeaseHandler {
-    fn new(path: PathBuf, dir: String, timeout: Duration) -> Self {
-        LeaseHandler { path, dir, timeout }
+    fn new(path: PathBuf, dir_display: String, timeout: Duration) -> Self {
+        LeaseHandler {
+            path,
+            dir_display,
+            timeout,
+        }
     }
 
     fn write(&self, lease_id: &str, expiry: u128) -> FsResult<()> {
@@ -124,7 +140,7 @@ impl LeaseHandler {
                     if !logged_wait {
                         emit_info_log_message(format!(
                             "Waiting for lease on '{}' directory",
-                            self.dir
+                            self.dir_display
                         ));
                         logged_wait = true;
                     }
@@ -168,8 +184,8 @@ impl LeaseHandler {
 }
 
 impl Lease {
-    pub fn new(path: PathBuf, dir: String, timeout: Duration) -> Lease {
-        let handler = LeaseHandler::new(path, dir, timeout);
+    pub fn new(path: PathBuf, dir_display: String, timeout: Duration) -> Lease {
+        let handler = LeaseHandler::new(path, dir_display, timeout);
 
         Lease {
             id: Uuid::new_v4().to_string(),
@@ -200,44 +216,55 @@ impl Drop for Lease {
 }
 
 pub struct LeaseGuard {
-    cts: CancellationTokenSource,
-    _handle: JoinHandle<()>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl LeaseGuard {
+    /// Not required to call.
+    /// While [LeaseGuard] implements [Drop],
+    /// this releases the lease explicitly and has the ability to await until the lease has been dropped.
+    pub async fn release(mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+    }
 }
 
 impl Drop for LeaseGuard {
     fn drop(&mut self) {
-        self.cts.cancel();
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
     }
 }
 
-pub fn spawn_lease_renewal(mut lease: Lease, ttl: Duration, interval: Duration) -> LeaseGuard {
-    let cts = CancellationTokenSource::new();
-    let ct = cts.token();
+fn spawn_lease_renewal(mut lease: Lease, ttl: Duration, interval: Duration) -> LeaseGuard {
     let handle = tokio::spawn(async move {
         loop {
             sleep(interval).await;
-            if ct.is_cancelled() {
-                break;
-            }
             lease.renew(ttl).ok();
         }
     });
     LeaseGuard {
-        cts,
-        _handle: handle,
+        handle: Some(handle),
     }
 }
 
 /// Acquires a lease on the given directory and spawns a background renewal task.
 /// Returns a [`LeaseGuard`] that releases the lease when dropped.
-pub async fn acquire_lease_with_renewal(
+async fn acquire_lease_with_renewal(
     project_dir: &Path,
-    dir_name: &str,
+    relative_dir: &Path,
     ttl: Duration,
     renewal_interval: Duration,
 ) -> FsResult<LeaseGuard> {
-    let lease_path = lease_file_path(project_dir, dir_name);
-    let mut lease = Lease::new(lease_path, dir_name.to_string(), Duration::ZERO);
+    let lease_path = lease_file_path(project_dir, relative_dir);
+    let mut lease = Lease::new(
+        lease_path,
+        relative_dir.display().to_string(),
+        Duration::ZERO,
+    );
     lease.acquire(ttl).await?;
     Ok(spawn_lease_renewal(lease, ttl, renewal_interval))
 }

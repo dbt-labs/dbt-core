@@ -19,6 +19,21 @@ pub fn resolve_cloud_config(
     resolve_cloud_config_with_env_reader(dbt_cloud_yml, project_dbt_cloud, non_empty_env)
 }
 
+/// Detects the misconfiguration where `dbt_project.yml` links a project via
+/// `dbt-cloud: project-id` but `dbt_cloud.yml` holds no token for that id.
+/// Returns the unlinked project id.
+pub fn detect_unlinked_project(
+    dbt_cloud_yml: Option<&DbtCloudConfig>,
+    project_dbt_cloud: Option<&ProjectDbtCloudConfig>,
+) -> Option<String> {
+    let dbt_cloud_yml = dbt_cloud_yml?;
+    let project_id = project_dbt_cloud?.project_id_str()?;
+    if dbt_cloud_yml.get_project_by_id(&project_id).is_some() {
+        return None;
+    }
+    Some(project_id)
+}
+
 /// Internal: same as [`resolve_cloud_config`] but with an injectable env reader
 /// for testing.
 fn resolve_cloud_config_with_env_reader(
@@ -32,20 +47,15 @@ fn resolve_cloud_config_with_env_reader(
     // fallback to the global context.active_project, so a bare login session
     // does not leak its credentials into unlinked projects.
     let active_project = dbt_cloud_yml.and_then(|config| {
-        let lookup_id = project_dbt_cloud
-            .and_then(|p| p.project_id.as_ref())
-            .map(|v| v.to_string())?;
+        let lookup_id = project_dbt_cloud.and_then(|p| p.project_id_str())?;
         config.get_project_by_id(&lookup_id)
     });
 
     // Resolve project_id first — needed for credential mixing guard.
     // Sources: DBT_CLOUD_PROJECT_ID env var, then the local dbt_project.yml
     // link only (no global active_project fallback).
-    let project_id = env_reader("DBT_CLOUD_PROJECT_ID").or_else(|| {
-        project_dbt_cloud
-            .and_then(|p| p.project_id.as_ref())
-            .map(|v| v.to_string())
-    });
+    let project_id =
+        env_reader("DBT_CLOUD_PROJECT_ID").or_else(|| project_dbt_cloud?.project_id_str());
 
     // Credential mixing guard: if env var overrides project_id to a different
     // project than dbt_cloud.yml, don't use dbt_cloud.yml credentials.
@@ -113,6 +123,12 @@ fn resolve_cloud_config_with_env_reader(
 
     let defer_job_id = env_reader("DBT_CLOUD_DEFER_JOB_ID");
 
+    let state_org_id = env_reader("DBT_CLOUD_STATE_ORG_ID").or_else(|| {
+        project_dbt_cloud
+            .and_then(|p| p.state_org_id.as_ref())
+            .map(|v| v.to_string())
+    });
+
     let job_id = env_reader("DBT_CLOUD_JOB_ID");
 
     let resolved = ResolvedCloudConfig {
@@ -122,6 +138,7 @@ fn resolve_cloud_config_with_env_reader(
         environment_id,
         defer_env_id,
         defer_job_id,
+        state_org_id,
         job_id,
     };
 
@@ -133,6 +150,7 @@ fn resolve_cloud_config_with_env_reader(
         environment_id: None,
         defer_env_id: None,
         defer_job_id: None,
+        state_org_id: None,
         job_id: None,
     } = &resolved
     {
@@ -147,6 +165,7 @@ mod tests {
     use super::*;
     use dbt_schemas::schemas::serde::StringOrInteger;
     use dbt_schemas::schemas::{DbtCloudContext, DbtCloudProject};
+    use dbt_yaml::Spanned;
     use std::collections::HashMap;
 
     /// Test env reader that filters empty strings (like non_empty_env).
@@ -183,11 +202,13 @@ mod tests {
         pid: Option<&str>,
         host: Option<&str>,
         defer: Option<&str>,
+        state_org_id: Option<&str>,
     ) -> ProjectDbtCloudConfig {
         ProjectDbtCloudConfig {
-            project_id: pid.map(|s| StringOrInteger::String(s.to_string())),
+            project_id: Spanned::new(pid.map(|s| StringOrInteger::String(s.to_string()))),
             account_host: host.map(|s| s.to_string()),
             defer_env_id: defer.map(|s| StringOrInteger::String(s.to_string())),
+            state_org_id: state_org_id.map(|s| StringOrInteger::String(s.to_string())),
             account_id: None,
             job_id: None,
             run_id: None,
@@ -244,7 +265,7 @@ mod tests {
         assert!(resolve_cloud_config_with_env_reader(Some(&yml), None, env(&[])).is_none());
 
         // Linked: the local dbt_project.yml link selects the session project.
-        let pc = project_cloud(Some("456"), None, None);
+        let pc = project_cloud(Some("456"), None, None, None);
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
         assert_eq!(r.project_id.as_deref(), Some("456"));
         let creds = r.credentials.unwrap();
@@ -255,7 +276,7 @@ mod tests {
 
     #[test]
     fn dbt_project_yml_only() {
-        let pc = project_cloud(Some("789"), Some("proj.dbt.com"), Some("def1"));
+        let pc = project_cloud(Some("789"), Some("proj.dbt.com"), Some("def1"), None);
         let r = resolve_cloud_config_with_env_reader(None, Some(&pc), env(&[])).unwrap();
         // No token source → no credentials
         assert!(r.credentials.is_none());
@@ -268,7 +289,7 @@ mod tests {
         // override the session host while the token still comes from the
         // matching session project.
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
-        let pc = project_cloud(Some("456"), None, None);
+        let pc = project_cloud(Some("456"), None, None, None);
         let r = resolve_cloud_config_with_env_reader(
             Some(&yml),
             Some(&pc),
@@ -286,7 +307,7 @@ mod tests {
     #[test]
     fn dbt_project_file_overrides_cloud_yml_host() {
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
-        let pc = project_cloud(Some("456"), Some("proj-override.dbt.com"), None);
+        let pc = project_cloud(Some("456"), Some("proj-override.dbt.com"), None, None);
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
         let creds = r.credentials.unwrap();
         assert_eq!(creds.host, "proj-override.dbt.com");
@@ -323,7 +344,7 @@ mod tests {
     #[test]
     fn empty_env_var_does_not_override() {
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
-        let pc = project_cloud(Some("456"), None, None); // linked
+        let pc = project_cloud(Some("456"), None, None, None); // linked
         let r = resolve_cloud_config_with_env_reader(
             Some(&yml),
             Some(&pc),
@@ -337,7 +358,7 @@ mod tests {
     fn defer_env_id_three_tier_precedence() {
         let mut yml = cloud_yml("456", "cloud.getdbt.com", "secret");
         yml.context.defer_env_id = Some("context-defer".to_string());
-        let pc = project_cloud(Some("456"), None, Some("proj-defer"));
+        let pc = project_cloud(Some("456"), None, Some("proj-defer"), None);
 
         // Env var wins over both
         let r = resolve_cloud_config_with_env_reader(
@@ -354,7 +375,7 @@ mod tests {
 
         // dbt_cloud.yml context is the last fallback, but ONLY for a linked
         // project (one whose local project_id matches a session project).
-        let linked = project_cloud(Some("456"), None, None);
+        let linked = project_cloud(Some("456"), None, None, None);
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&linked), env(&[])).unwrap();
         assert_eq!(r.defer_env_id.as_deref(), Some("context-defer"));
 
@@ -386,7 +407,7 @@ mod tests {
         // project AND inherits context.defer-env-id when it has none locally.
         let mut yml = cloud_yml("456", "cloud.getdbt.com", "secret");
         yml.context.defer_env_id = Some("context-defer".to_string());
-        let pc = project_cloud(Some("456"), None, None);
+        let pc = project_cloud(Some("456"), None, None, None);
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
         assert_eq!(r.project_id.as_deref(), Some("456"));
         let creds = r.credentials.unwrap();
@@ -398,7 +419,7 @@ mod tests {
     #[test]
     fn defer_job_id_two_tier_precedence() {
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
-        let pc = project_cloud(Some("456"), None, None);
+        let pc = project_cloud(Some("456"), None, None, None);
 
         // Env var set → field equals that value
         let r = resolve_cloud_config_with_env_reader(
@@ -427,7 +448,7 @@ mod tests {
     fn account_identifier_is_separate_from_account_id() {
         // account_identifier is a separate field, not a fallback for account_id
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
-        let pc = project_cloud(Some("456"), None, None); // linked
+        let pc = project_cloud(Some("456"), None, None, None); // linked
         let r = resolve_cloud_config_with_env_reader(
             Some(&yml),
             Some(&pc),
@@ -441,7 +462,7 @@ mod tests {
 
     #[test]
     fn host_prefers_tenant_hostname() {
-        let mut pc = project_cloud(Some("123"), None, None);
+        let mut pc = project_cloud(Some("123"), None, None, None);
         pc.account_host = Some("account-host.dbt.com".to_string());
         pc.tenant_hostname = Some("tenant.dbt.com".to_string());
 
@@ -450,5 +471,49 @@ mod tests {
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
         let creds = r.credentials.unwrap();
         assert_eq!(creds.host, "tenant.dbt.com"); // tenant_hostname preferred
+    }
+
+    #[test]
+    fn unlinked_project_detected_when_id_absent_from_cloud_yml() {
+        let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+        let pc = project_cloud(Some("999"), None, None, None);
+        let unlinked = detect_unlinked_project(Some(&yml), Some(&pc)).unwrap();
+        assert_eq!(unlinked, "999");
+    }
+
+    #[test]
+    fn unlinked_project_not_detected_for_matching_or_absent_link() {
+        let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+
+        let pc = project_cloud(Some("456"), None, None, None);
+        assert!(detect_unlinked_project(Some(&yml), Some(&pc)).is_none());
+
+        assert!(detect_unlinked_project(Some(&yml), None).is_none());
+        let no_id = project_cloud(None, None, None, None);
+        assert!(detect_unlinked_project(Some(&yml), Some(&no_id)).is_none());
+
+        let pc = project_cloud(Some("999"), None, None, None);
+        assert!(detect_unlinked_project(None, Some(&pc)).is_none());
+    }
+
+    #[test]
+    fn state_org_id_comes_from_dbt_project_yml() {
+        let pc = project_cloud(Some("123"), None, None, Some("org-from-project"));
+        let r = resolve_cloud_config_with_env_reader(None, Some(&pc), env(&[])).unwrap();
+
+        assert_eq!(r.state_org_id.as_deref(), Some("org-from-project"));
+    }
+
+    #[test]
+    fn state_org_id_env_overrides_dbt_project_yml() {
+        let pc = project_cloud(Some("123"), None, None, Some("org-from-project"));
+        let r = resolve_cloud_config_with_env_reader(
+            None,
+            Some(&pc),
+            env(&[("DBT_CLOUD_STATE_ORG_ID", "org-from-env")]),
+        )
+        .unwrap();
+
+        assert_eq!(r.state_org_id.as_deref(), Some("org-from-env"));
     }
 }

@@ -58,11 +58,8 @@ impl SqlLiteralFormatter {
         }
     }
 
-    /// ## Panics
-    /// If the value is not a bytes array
     pub fn format_bytes(&self, bytes_value: &Value) -> String {
         assert!(bytes_value.kind() == ValueKind::Bytes);
-        // uses what is defined by impl fmt::Display for Value
         format!("'{bytes_value}'")
     }
 
@@ -92,6 +89,11 @@ impl SqlLiteralFormatter {
     }
 }
 
+/// Splits `sql` on the dialect's binding placeholder (`?` for Fabric, `%s`
+/// otherwise) and interleaves it with `bindings`, formatted as SQL literals.
+/// The split is naive text splitting, not SQL-aware parsing: the first chunk
+/// (before any placeholder) is emitted as-is, then each subsequent chunk is
+/// preceded by the next formatted binding value.
 pub fn format_sql_with_bindings(
     adapter_type: AdapterType,
     sql: &str,
@@ -108,16 +110,13 @@ pub fn format_sql_with_bindings(
     let mut parts = sql.split(binding_char);
     let mut binding_iter = bindings.as_object().unwrap().try_iter().unwrap();
 
-    // Add the first part (before any %s)
     if let Some(first) = parts.next() {
         result.push_str(first);
     }
 
-    // For each remaining part, insert a binding value before it
     for part in parts {
         match binding_iter.next() {
             Some(value) => {
-                // Convert minijinja::Value to a SQL-safe string
                 match value.kind() {
                     ValueKind::String => {
                         result.push_str(&formatter.format_str(value.as_str().unwrap()))
@@ -147,7 +146,6 @@ pub fn format_sql_with_bindings(
         result.push_str(part);
     }
 
-    // Check if we used all bindings
     if binding_iter.next().is_some() {
         return Err(AdapterError::new(
             AdapterErrorKind::Configuration,

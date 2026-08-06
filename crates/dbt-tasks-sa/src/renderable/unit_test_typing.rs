@@ -162,6 +162,22 @@ impl SnowflakeTyping {
         IsTimestamp::No
     }
 
+    pub fn is_time(data_type: &DataType) -> IsTimestamp {
+        match data_type {
+            DataType::FixedSizeList(field, 1) if field.name().starts_with("time:") => {
+                IsTimestamp::Yes(TimePrecision::new_valid(
+                    field
+                        .name()
+                        .strip_prefix("time:")
+                        .expect("string prefix checked")
+                        .parse::<u8>()
+                        .expect("invalid serialized time precision"),
+                ))
+            }
+            _ => IsTimestamp::No,
+        }
+    }
+
     pub fn is_variant(data_type: &DataType) -> bool {
         matches!(data_type, DataType::FixedSizeList(field, 1) if field.name() == snowflake_variant_fixed_size_list_field().name())
     }

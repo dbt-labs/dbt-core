@@ -5,6 +5,7 @@ use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -66,14 +67,7 @@ pub async fn resolve_analyses(
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.analyses.clone(),
         dependency_package_name.is_some(),
-        || {
-            init_project_config(
-                &arg.io,
-                &package.dbt_project.analyses,
-                (),
-                dependency_package_name,
-            )
-        },
+        || init_project_config(&package.dbt_project.analyses, (), dependency_package_name),
     )?;
 
     let render_ctx = RenderCtx {
@@ -82,6 +76,7 @@ pub async fn resolve_analyses(
             root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
+            uses_snapshot_fqn: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -178,7 +173,7 @@ pub async fn resolve_analyses(
         let columns = process_columns(
             properties.columns.as_ref(),
             analysis_config.meta.clone(),
-            analysis_config.tags.clone().map(|tags| tags.into()),
+            analysis_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
 
         let is_enabled = matches!(status, ModelStatus::Enabled);
@@ -193,18 +188,19 @@ pub async fn resolve_analyses(
             __common_attr__: CommonAttributes {
                 name: analysis_name.to_owned(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.to_owned(),
+                path: DbtPath::from(dbt_asset.path.to_owned()),
                 name_span: dbt_common::Span::default(),
                 original_file_path,
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
-                patch_path,
+                patch_path: patch_path.map(DbtPath::from),
                 checksum: sql_file_info.checksum.clone(),
                 language: Some("sql".to_string()),
                 raw_code: Some(raw_code),
                 tags: analysis_config
                     .tags
+                    .inner()
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
@@ -306,7 +302,7 @@ pub async fn resolve_analyses(
                 "Unused schema.yml entry for analysis '{}'",
                 analysis_name,
             );
-            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            emit_warn_log_from_fs_error(*err);
         }
     }
 

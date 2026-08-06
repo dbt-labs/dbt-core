@@ -724,12 +724,19 @@ impl<'source> CodeGenerator<'source> {
                                 if let Some(udf) =
                                     signature.downcast_ref::<UserDefinedFunctionType>()
                                 {
-                                    let type_ = &udf.args[i].type_;
-                                    // the parameter has default value, so we need to exclude the none from arg type and check with the default
-                                    let type_ = type_.get_non_optional_type();
-                                    self.add(Instruction::LoadType(Value::from_object(type_)));
-                                    self.compile_expr(default)?;
-                                    self.add(Instruction::UnionType);
+                                    if let Some(arg) = udf.args.get(i) {
+                                        let type_ = arg.type_.get_non_optional_type();
+                                        // the parameter has default value, so we need to exclude the none from arg type and check with the default
+                                        self.add(Instruction::LoadType(Value::from_object(type_)));
+                                        self.compile_expr(default)?;
+                                        self.add(Instruction::UnionType);
+                                    } else {
+                                        self.add(Instruction::LoadType(Value::from_object(
+                                            Type::Any { hard: false },
+                                        )));
+                                        self.compile_expr(default)?;
+                                        self.add(Instruction::UnionType);
+                                    }
                                 } else {
                                     self.add(Instruction::LoadType(Value::from_object(
                                         Type::Any { hard: false },
@@ -758,8 +765,12 @@ impl<'source> CodeGenerator<'source> {
                 ) {
                     if let Some(signature) = function_registry.get(&macro_qualified_name) {
                         if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
-                            let type_ = &udf.args[i].type_;
-                            self.add(Instruction::LoadType(Value::from_object(type_.clone())));
+                            let type_ = udf
+                                .args
+                                .get(i)
+                                .map(|a| a.type_.clone())
+                                .unwrap_or(Type::Any { hard: false });
+                            self.add(Instruction::LoadType(Value::from_object(type_)));
                         } else {
                             self.add(Instruction::LoadType(Value::from_object(Type::Any {
                                 hard: false,
@@ -1311,15 +1322,23 @@ impl<'source> CodeGenerator<'source> {
             ast::CallType::Function(name) => {
                 let arg_count = self.compile_call_args(&c.args, 0, caller, span)?;
                 let ref_or_source_span = if name == "ref" || name == "source" {
+                    // Purely diagnostic: the span of the referenced literal, so errors can
+                    // point at the name rather than the whole call.
+                    //
+                    // A zero-argument `ref()` / `source()` is invalid, but raising that is the
+                    // function's job at call time (it already does — see `ResolveRefFunction`
+                    // in dbt-jinja-utils), not codegen's. There is simply no argument here to
+                    // take a span from, so don't index blindly: `&c.args[0]` and
+                    // `c.args.last().unwrap()` both panicked, taking down compilation of every
+                    // other node in the project along with the malformed one.
                     let arg = if name == "ref" {
-                        &c.args[0]
+                        c.args.first()
                     } else {
-                        c.args.last().unwrap()
+                        c.args.last()
                     };
-                    if let ast::CallArg::Pos(ast::Expr::Const(c)) = arg {
-                        Some(c.span().into())
-                    } else {
-                        None
+                    match arg {
+                        Some(ast::CallArg::Pos(ast::Expr::Const(c))) => Some(c.span().into()),
+                        _ => None,
                     }
                 } else {
                     None

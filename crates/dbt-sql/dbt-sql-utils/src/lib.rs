@@ -5,7 +5,8 @@ pub mod splitter;
 
 pub use input_streams::CaseInsensitiveInputStream;
 pub use splitter::{
-    is_empty_or_comment_only, jinja_sql_find_statement_spans, sql_split_statements,
+    is_empty_or_comment_only, jinja_sql_find_statement_spans, snowflake_terminal_flow_statement,
+    sql_split_statements,
 };
 
 /// List of [Dialect]s that are truly supported by this library.

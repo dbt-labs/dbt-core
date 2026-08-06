@@ -998,19 +998,29 @@ impl<'a> Parser<'a> {
                 BTreeMap::new(),
             )),
             #[cfg(feature = "macros")]
-            "docs" => ast::Stmt::Macro((
-                respan!(ok!(self.parse_doc())),
-                MacroKind::Doc,
-                BTreeMap::new(),
-            )),
+            // `parse_doc` consumes the closing `%}` itself, so `respan!` (which
+            // insists on `BlockEnd` next) must not be used here.
+            "docs" => {
+                let node = ok!(self.parse_doc());
+                let doc_span = self.stream.expand_span(span);
+                match node {
+                    Some(node) => ast::Stmt::Macro((
+                        Spanned::new(node, doc_span),
+                        MacroKind::Doc,
+                        BTreeMap::new(),
+                    )),
+                    // Malformed block name: skipped, but the file keeps parsing.
+                    None => ast::Stmt::Comment(Spanned::new(ast::Comment, doc_span)),
+                }
+            }
             #[cfg(feature = "macros")]
             "materialization" => {
-                let (macro_, adapter) = ok!(self.parse_materialization());
-                ast::Stmt::Macro((
-                    respan!(macro_),
-                    MacroKind::Materialization,
-                    BTreeMap::from([("adapter".to_string(), Value::from(adapter))]),
-                ))
+                let (macro_, adapter, supported_languages) = ok!(self.parse_materialization());
+                let mut meta = BTreeMap::from([("adapter".to_string(), Value::from(adapter))]);
+                if let Some(supported_languages) = supported_languages {
+                    meta.insert("supported_languages".to_string(), supported_languages);
+                }
+                ast::Stmt::Macro((respan!(macro_), MacroKind::Materialization, meta))
             }
             #[cfg(feature = "macros")]
             "call" => ast::Stmt::CallBlock(respan!(ok!(self.parse_call_block()))),
@@ -1817,12 +1827,14 @@ impl<'a> Parser<'a> {
         self.parse_snapshot_or_call_block_body(Some(macro_name), span)
     }
 
+    /// Returns `Ok(None)` for a doc block whose name is not a valid identifier —
+    /// the block is consumed and skipped, but the rest of the file still parses.
     #[cfg(feature = "macros")]
-    fn parse_doc(&mut self) -> Result<ast::Macro<'a>, Error> {
+    fn parse_doc(&mut self) -> Result<Option<ast::Macro<'a>>, Error> {
         // Doc names may start with a digit (e.g., `3_months_prior_date`).
         // dbt-core allows this; see https://github.com/dbt-labs/dbt-fusion/issues/998
         let (name, span) = match ok!(self.stream.next()) {
-            Some((Token::Ident(name), span)) => (name, span),
+            Some((Token::Ident(name), span)) => (Some(name), span),
             Some((Token::Int(n), span)) => {
                 let mut full_name = n.to_string();
                 let end_offset = span.end_offset;
@@ -1834,12 +1846,15 @@ impl<'a> Parser<'a> {
                         full_name.push_str(ident);
                     }
                 }
-                (self.intern_string(&full_name), span)
+                (Some(self.intern_string(&full_name)), span)
             }
-            Some((token, span)) => {
-                return Err(unexpected(token, "identifier")
-                    .with_span(&PathBuf::from(self.filename()), &span))
-            }
+            // dbt-core extracts doc blocks with a regex that only accepts an
+            // identifier as the block name, so a name it cannot match (e.g.
+            // `{% docs *** end of list *** %}`) yields an unreferenceable block
+            // while every other block in the file is still registered. Failing
+            // here would instead drop every doc in the file, which surfaces later
+            // as unresolved `doc()` calls.
+            Some((_, span)) => (None, span),
             None => return Err(unexpected_eof("identifier")),
         };
 
@@ -1861,19 +1876,48 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.parse_doc_or_call_block_body(Vec::new(), Vec::new(), Some(name), span)
+        // Always consume the body up to `{% enddocs %}`, even for a skipped block:
+        // leaving the closing tag in the stream would fail the whole file instead.
+        let body = ok!(self.parse_doc_or_call_block_body(
+            Vec::new(),
+            Vec::new(),
+            Some(name.unwrap_or_default()),
+            span
+        ));
+
+        // Drain the closing tag rather than requiring `%}` right after `enddocs`.
+        // dbt-core compares end tags by block type only, so it accepts a stray name
+        // in `{% enddocs my_doc %}`; rejecting it here would drop the whole file.
+        loop {
+            match self.stream.next() {
+                Ok(Some((Token::BlockEnd, _))) => break,
+                Ok(Some(_)) => continue,
+                Ok(None) => return Err(unexpected_eof("end of block")),
+                Err(_) => {
+                    self.stream.tokenizer.force_advance(1)?;
+                    continue;
+                }
+            }
+        }
+
+        Ok(name.map(|_| body))
     }
 
     #[cfg(feature = "macros")]
-    fn parse_materialization(&mut self) -> Result<(ast::Macro<'a>, String), Error> {
+    fn parse_materialization(&mut self) -> Result<(ast::Macro<'a>, String, Option<Value>), Error> {
         let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
         let mut supported_languages = None;
         let adapter = ok!(self.parse_materialization_adapter_languages(&mut supported_languages));
+        let supported_languages = supported_languages.and_then(|expr| match expr {
+            ast::Expr::List(list) => list.as_const(),
+            _ => None,
+        });
         // TODO: This can be cleaned up to add better error messages for miss-formatted materialization macros
         let macro_name = self.intern_string(&materialization_macro_name(name, &adapter));
         Ok((
             ok!(self.parse_materialization_or_call_block_body(Some(macro_name), span)),
             adapter,
+            supported_languages,
         ))
     }
 

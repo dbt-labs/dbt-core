@@ -98,14 +98,12 @@ pub use dbt_common::serde_utils::Omissible;
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 pub fn value_from_file(
-    io_args: &IoArgs,
     path: &Path,
     show_errors_or_warnings: bool,
     dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
     let input = try_read_yml_to_str(path)?;
     value_from_str(
-        io_args,
         dbt_sanitize_yml(&input),
         Some(path),
         show_errors_or_warnings,
@@ -115,14 +113,12 @@ pub fn value_from_file(
 
 /// Async variant of [`value_from_file`].
 pub async fn value_from_file_async(
-    io_args: &IoArgs,
     path: &Path,
     show_errors_or_warnings: bool,
     dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
     let input = tokiofs::read_to_string(path).await?;
     value_from_str(
-        io_args,
         dbt_sanitize_yml(&input),
         Some(path),
         show_errors_or_warnings,
@@ -199,7 +195,7 @@ where
 
     if show_errors_or_warnings {
         for error in errors {
-            emit_strict_parse_error(&error, dependency_package_name, io_args);
+            emit_strict_parse_error(error, dependency_package_name);
         }
     }
 
@@ -230,11 +226,11 @@ where
     let (res, errors) =
         into_typed_with_jinja_error(io_args, value, should_render_secrets, env, ctx, listeners)?;
 
-    if let Some(io_args) = io_args {
+    if io_args.is_some() {
         for error in errors {
             let context = error_context(&error);
             let error = error.with_context(context);
-            emit_strict_parse_error(&error, dependency_package_name, io_args);
+            emit_strict_parse_error(error, dependency_package_name);
         }
     }
 
@@ -243,7 +239,6 @@ where
 
 /// Deserializes a Yaml `Value` into a target `Deserialize` type T.
 pub fn into_typed_with_error<T>(
-    io_args: &IoArgs,
     value: Value,
     show_errors_or_warnings: bool,
     dependency_package_name: Option<&str>,
@@ -259,7 +254,7 @@ where
             let error = error.with_location(CodeLocationWithFile::from(
                 error_path.clone().unwrap_or_default(),
             ));
-            emit_strict_parse_error(&error, dependency_package_name, io_args);
+            emit_strict_parse_error(error, dependency_package_name);
         }
     }
 
@@ -271,7 +266,6 @@ where
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 pub fn from_yaml_raw<T>(
-    io_args: &IoArgs,
     input: &str,
     error_display_path: Option<&Path>,
     show_errors_or_warnings: bool,
@@ -281,7 +275,6 @@ where
     T: DeserializeOwned,
 {
     let value = value_from_str(
-        io_args,
         dbt_sanitize_yml(input),
         error_display_path,
         show_errors_or_warnings,
@@ -294,7 +287,7 @@ where
 
     if show_errors_or_warnings {
         for error in errors {
-            emit_strict_parse_error(&error, dependency_package_name, io_args);
+            emit_strict_parse_error(error, dependency_package_name);
         }
     }
 
@@ -337,7 +330,6 @@ fn dbt_sanitize_yml(input: &str) -> &str {
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 fn value_from_str(
-    io_args: &IoArgs,
     input: &str,
     error_display_path: Option<&Path>,
     show_errors_or_warnings: bool,
@@ -360,7 +352,7 @@ fn value_from_str(
         );
 
         if show_errors_or_warnings {
-            emit_strict_parse_error(&duplicate_key_error, dependency_package_name, io_args);
+            emit_strict_parse_error(*duplicate_key_error, dependency_package_name);
         }
         // last key wins:
         dbt_yaml::mapping::DuplicateKey::Overwrite
@@ -536,10 +528,7 @@ fn perform_typecheck<F>(
         BTreeMap<String, minijinja::Value>,
     ) -> FsResult<()>,
 {
-    if let Some(io_args) = io_args {
-        // Get status reporter from io_args
-        let status_reporter = io_args.status_reporter.clone();
-
+    if io_args.is_some() {
         // Get file path from yaml_span
         let path = yaml_span
             .filename
@@ -557,11 +546,7 @@ fn perform_typecheck<F>(
             end_offset: yaml_span.end.index as u32,
         };
 
-        let typecheck_listener = Rc::new(YamlTypecheckingEventListener::new(
-            status_reporter,
-            path,
-            minijinja_span,
-        ));
+        let typecheck_listener = Rc::new(YamlTypecheckingEventListener::new(path, minijinja_span));
 
         // Load builtins from the macro namespace registry
         let macro_namespace_registry = env.env.get_macro_namespace_registry();
@@ -635,10 +620,15 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
     true
 }
 
+/// The inner expression of a single `{{ expr }}` string accepted by
+/// `check_single_expression_without_whitepsace_control`, or `None`.
+pub fn single_expression_body(input: &str) -> Option<&str> {
+    check_single_expression_without_whitepsace_control(input).then(|| &input[2..input.len() - 2])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_common::io_args::IoArgs;
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {
@@ -695,9 +685,8 @@ mod tests {
     #[test]
     fn test_from_yaml_raw_strips_utf8_bom_and_parses_ok() {
         // \u{feff} is the UTF-8 BOM. BOM at start should be ignored and parsing should succeed.
-        let io = IoArgs::default();
         let input = "\u{feff}version: 2\nmodels:\n  - name: dim_bom_test\n";
-        let res = from_yaml_raw(&io, input, None, false, None);
+        let res = from_yaml_raw(input, None, false, None);
         assert!(
             res.is_ok(),
             "Expected BOM-prefixed YAML to parse successfully, got: {:?}",

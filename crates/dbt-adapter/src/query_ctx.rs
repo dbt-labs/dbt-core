@@ -10,7 +10,6 @@ use dbt_schemas::schemas::{
 use minijinja::{State, constants::CURRENT_EXECUTION_PHASE};
 use serde::Deserialize;
 
-/// Create a new instance from the current jinja state.
 pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
     // TODO: The following should really be an error, but
     // our tests (functional tests in particular) do not
@@ -43,7 +42,6 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
         })
         .ok()?;
 
-    // Try to deserialize as different node types
     if let Ok(model) = DbtModel::deserialize(&yaml_node) {
         Some(model.__common_attr__.unique_id)
     } else if let Ok(test) = DbtTest::deserialize(&yaml_node) {

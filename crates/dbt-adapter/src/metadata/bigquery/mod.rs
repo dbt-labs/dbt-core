@@ -10,6 +10,7 @@ use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::{AdapterEngine, AdapterResult};
 
+use arrow_array::cast::AsArray;
 use arrow_array::*;
 use arrow_schema::*;
 use dbt_adapter_core::AdapterType;
@@ -18,6 +19,7 @@ use dbt_adbc::*;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::*;
@@ -35,7 +37,7 @@ pub mod nested_projection;
 // See: https://docs.cloud.google.com/bigquery/docs/information-schema-intro#region_qualifier
 pub(crate) const BIGQUERY_REGION_PREFIX: &str = "region-";
 
-pub(crate) const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
+pub const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
     "_PARTITIONTIME",
     "_PARTITIONDATE",
     "_FILE_NAME",
@@ -45,6 +47,7 @@ pub(crate) const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
     "_CHANGE_SEQUENCE_NUMBER",
 ];
 
+#[allow(dead_code)]
 pub fn list_relations(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
@@ -87,6 +90,131 @@ FROM
             .with_quoting(engine.quoting()),
         ) as Arc<dyn BaseRelation>);
     }
+    Ok(result)
+}
+
+pub fn list_relations_via_adbc(
+    engine: &dyn AdapterEngine,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    // The driver expects unquoted values, so regardless of the adapter's config
+    // we need to strip quotes.
+    let (catalog, _) = normalize_quote(false, AdapterType::Bigquery, &db_schema.rendered_catalog);
+    let (schema, _) = normalize_quote(false, AdapterType::Bigquery, &db_schema.rendered_schema);
+
+    let reader = conn
+        .get_objects(
+            adbc_core::options::ObjectDepth::Tables,
+            Some(&catalog),
+            Some(&schema),
+            None,
+            None,
+            None,
+        )
+        .map_err(adbc_error_to_adapter_error)?;
+
+    let arrow_schema = reader.schema();
+    let batches = reader
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+    let batch = arrow::compute::concat_batches(&arrow_schema, &batches)
+        .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+
+    // The schema names are nested in the result of the get object call.
+    // The batch has the following shape at the top level:
+    // - catalog_name: utf8
+    // - catalog_db_schemas: list[struct]
+    //
+    // Each row of the column `catalog_db_schemas` is a list of elements
+    // with the shape:
+    //   - db_schema_name: utf8
+    //   - db_schema_tables: list
+    let catalog_db_schemas = batch
+        .column_by_name("catalog_db_schemas")
+        .and_then(|c| c.as_any().downcast_ref::<ListArray>())
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                "Missing or invalid 'catalog_db_schemas' column",
+            )
+        })?;
+
+    let schemas_struct = catalog_db_schemas
+        .values()
+        .as_any()
+        .downcast_ref::<StructArray>()
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                "Missing or invalid 'catalog_db_schemas' values",
+            )
+        })?;
+
+    // Each row of the column `db_schema_tables` is a list of elements
+    // with the shape:
+    //   - table_name: utf8
+    //   - table_type: utf8
+    //   - table_columns: list
+    //   - table_constraints: list
+    let db_schema_tables = schemas_struct
+        .column_by_name("db_schema_tables")
+        .and_then(|c| c.as_any().downcast_ref::<ListArray>())
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                "Missing or invalid 'db_schema_tables' column",
+            )
+        })?;
+
+    let tables_struct = db_schema_tables
+        .values()
+        .as_any()
+        .downcast_ref::<StructArray>()
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                "Missing or invalid 'db_schema_tables' values",
+            )
+        })?;
+
+    let table_names = tables_struct
+        .column_by_name("table_name")
+        .and_then(|c| c.as_any().downcast_ref::<StringArray>())
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                "Missing or invalid 'table_name' column",
+            )
+        })?;
+    let table_types = tables_struct
+        .column_by_name("table_type")
+        .and_then(|c| c.as_string_opt::<i32>())
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                "Missing or invalid 'table_type' column",
+            )
+        })?;
+
+    let mut result = Vec::with_capacity(tables_struct.len());
+    for j in 0..tables_struct.len() {
+        let identifier = table_names.value(j);
+        let relation_type =
+            RelationType::from_adapter_type(AdapterType::Bigquery, table_types.value(j));
+
+        result.push(Arc::new(
+            Relation::new(
+                AdapterType::Bigquery,
+                catalog.clone(),
+                schema.clone(),
+                identifier.to_string(),
+            )
+            .with_relation_type(relation_type)
+            .with_quoting(engine.quoting()),
+        ) as Arc<dyn BaseRelation>);
+    }
+
     Ok(result)
 }
 
@@ -196,24 +324,11 @@ impl TrieNode {
     }
 }
 
-/// Example:
-///
-///     columns: {
-///         "a": {"name": "a", "data_type": "string", "description": ...},
-///         "b.nested": {"name": "b.nested", "data_type": "string"},
-///         "b.nested2": {"name": "b.nested2", "data_type": "string"}
-///     }
-///     returns: {
-///         "a": {"name": "a", "data_type": "string"},
-///         "b": {"name": "b": "data_type": "struct<nested string, nested2 string>}
-///     }
-///
-/// arbitrarily nested struct/array types are allowed, for more details check out the
-/// tests/data/nest_column_data_types example
-/// reference: https://github.com/dbt-labs/dbt-core/blob/main/env/lib/python3.12/site-packages/dbt/adapters/bigquery/column.py#L131-L132
-/// The implementation is purely based on the pydoc and the limited observations of how dbt
-/// compile behehaves on the test example so there probably exist corner cases not handled
-/// properly
+/// Collapses dotted-path nested columns like `{"b.nested": ..., "b.nested2": ...}` into a
+/// single struct column `b: struct<nested ..., nested2 ...>`, arbitrarily deep (see
+/// tests/data/nest_column_data_types). Based on pydoc and observed dbt-core behavior
+/// (https://github.com/dbt-labs/dbt-core/blob/main/env/lib/python3.12/site-packages/dbt/adapters/bigquery/column.py#L131-L132),
+/// not a full spec, so corner cases may not be handled.
 ///
 /// When `constraints` is supplied (keyed by top-level column name), the rendered constraint
 /// clause is appended to the column's data type so that the resulting DDL emits e.g.
@@ -331,18 +446,13 @@ static QO_DS_OR_REGION_TF: QualifierOptions =
 ///
 /// NOTE: BY_PROJECT views have an alias stripping that suffix.
 ///
-/// NOTE: On the necessity of the `region` qualifier, per BigQuery's docs:
-/// - You MUST specify a region to query _some_ views in `INFORMATION_SCHEMA` [1]
-/// - Some other views (like `TABLES`) either need region or dataset [2]
-/// - Generally, if you don't specify a region, the engine defaults to
-///   the US macro location (which might be routed to any region within the US) [3]
+/// NOTE: on the `region` qualifier: some `INFORMATION_SCHEMA` views require it [1], others
+/// (like `TABLES`) accept region or dataset instead [2], and if omitted the engine defaults
+/// to the US macro location, which may route to any US region [3].
 ///
-/// On the ability to specify a project
 /// [1] https://cloud.google.com/bigquery/docs/information-schema-intro#syntax
 /// [2] https://cloud.google.com/bigquery/docs/information-schema-intro#dataset_qualifier
 /// [3] https://cloud.google.com/bigquery/docs/locations#specify_locations
-///
-/// See https://cloud.google.com/bigquery/docs/information-schema-intro
 fn qualifier_options_for_info_schema_view(
     sys_identifier: &str,
 ) -> Option<&'static QualifierOptions> {
@@ -535,16 +645,36 @@ pub fn build_relation_clauses_bigquery(
 /// reference: https://discuss.google.dev/t/information-schema-tables-monitoring-last-modified-time/125698
 fn build_tables_freshness_query(database: &str, where_clauses: &[String]) -> String {
     let joined_where_clauses = where_clauses.join(" OR ");
+    build_external_table_freshness_query(
+        &format!("{database}.__TABLES__"),
+        &format!("{database}.INFORMATION_SCHEMA.TABLES"),
+        &format!("\n             WHERE {joined_where_clauses}"),
+    )
+}
+
+fn build_schema_freshness_query(database: &str, schema: &str) -> String {
+    build_external_table_freshness_query(
+        &format!("`{database}`.`{schema}`.__TABLES__"),
+        &format!("`{database}`.`{schema}`.INFORMATION_SCHEMA.TABLES"),
+        "",
+    )
+}
+
+fn build_external_table_freshness_query(
+    legacy_tables_fqn: &str,
+    info_schema_tables_fqn: &str,
+    where_clause: &str,
+) -> String {
     format!(
         "SELECT
-                 dataset_id AS table_schema,
-                 table_id AS table_name,
-                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
-                 (type = 2) AS is_view
-             FROM {db}.__TABLES__
-             WHERE {joined_where_clauses}",
-        db = database,
-        joined_where_clauses = joined_where_clauses,
+                 legacy.dataset_id AS table_schema,
+                 legacy.table_id AS table_name,
+                 IF(info.table_type = 'EXTERNAL', NULL, TIMESTAMP_MILLIS(legacy.last_modified_time)) AS last_altered,
+                 (legacy.type = 2) AS is_view
+             FROM {legacy_tables_fqn} legacy
+             LEFT JOIN {info_schema_tables_fqn} info
+               ON info.table_schema = legacy.dataset_id
+              AND info.table_name = legacy.table_id{where_clause}",
     )
 }
 
@@ -573,6 +703,9 @@ fn accumulate_tables_freshness_from_batch(
     let is_views = batch.column_values::<BooleanArray>("is_view")?;
     let relations = &relations_by_database[database];
     for i in 0..batch.num_rows() {
+        if timestamps.is_null(i) {
+            continue;
+        }
         let schema = schemas.value(i);
         let table = tables.value(i);
         let timestamp = timestamps.value(i);
@@ -697,12 +830,51 @@ impl BigqueryMetadataAdapter {
                              _task: FreshnessTask,
                              res: AdapterResult<FreshnessTaskResult>|
               -> Result<(), Cancellable<AdapterError>> {
-            apply_freshness_task_result(acc, res?)?;
+            if let Ok(task_result) = res {
+                apply_freshness_task_result(acc, task_result)?;
+            }
             Ok(())
         };
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(tasks), token)
+    }
+
+    fn freshness_with_overrides_impl<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness(relations, token);
+        }
+
+        let mut override_targets = Vec::new();
+        let mut bulk_relations = Vec::new();
+        for relation in relations {
+            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
+                override_targets.push((Arc::clone(relation), ovr.clone()));
+            } else {
+                bulk_relations.push(Arc::clone(relation));
+            }
+        }
+
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
+        if !bulk_relations.is_empty() {
+            match bulk_freshness_tasks_from_relations(&bulk_relations) {
+                Ok(bulk_tasks) => tasks.extend(bulk_tasks),
+                Err(e) => {
+                    let future = async move { Err(Cancellable::Error(e)) };
+                    return Box::pin(future);
+                }
+            }
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(FreshnessTask::Override(relation, ovr));
+        }
+
+        self.freshness_mapreduce(tasks, token)
     }
 }
 
@@ -1034,10 +1206,10 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             let dataset = relation.schema_as_resolved_str()?;
             let table = relation.identifier_as_resolved_str()?;
 
-            // To download the schemas of the Information schema tables
-            // we cannot use `get_table_schema` (since the adbc connection, via the googleapi doesn't support this)
-            // and we cannot query a the COLUMNS INFORMATION_SCHEMA view either
-            // The workaround is to issue a query that returns the minimum data, then use returns the Arrow schema of the batch
+            // We can't use `get_table_schema` for INFORMATION_SCHEMA tables (the adbc
+            // connection's googleapi backend doesn't support it) or query the COLUMNS
+            // INFORMATION_SCHEMA view directly, so instead issue a query that returns the
+            // minimum data and read the Arrow schema off the resulting batch.
             // TODO(jason): This needs to be resolved within the driver itself - querying this way returns IPC directly from the
             // storage API within the driver where it's currently not annotated with the original type text
             if relation.is_system() {
@@ -1138,37 +1310,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         overrides: &'a BTreeMap<String, FreshnessOverride>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        if overrides.is_empty() {
-            return self.freshness(relations, token);
-        }
-
-        // Partition relations: those with overrides run their own targeted query;
-        // the rest go through the existing bulk `__TABLES__` path.
-        let mut override_targets = Vec::new();
-        let mut bulk_relations = Vec::new();
-        for relation in relations {
-            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
-                override_targets.push((Arc::clone(relation), ovr.clone()));
-            } else {
-                bulk_relations.push(Arc::clone(relation));
-            }
-        }
-
-        let mut tasks: Vec<FreshnessTask> = Vec::new();
-        if !bulk_relations.is_empty() {
-            match bulk_freshness_tasks_from_relations(&bulk_relations) {
-                Ok(bulk_tasks) => tasks.extend(bulk_tasks),
-                Err(e) => {
-                    let future = async move { Err(Cancellable::Error(e)) };
-                    return Box::pin(future);
-                }
-            }
-        }
-        for (relation, ovr) in override_targets {
-            tasks.push(FreshnessTask::Override(relation, ovr));
-        }
-
-        self.freshness_mapreduce(tasks, token)
+        self.freshness_with_overrides_impl(relations, overrides, token)
     }
 
     fn create_schemas_if_not_exists(
@@ -1235,11 +1377,11 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         &'a self,
         relations: &'a [Arc<dyn BaseRelation>],
         token: CancellationToken,
-    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
-        type Acc = Vec<ViewDefinition>;
+    ) -> AsyncAdapterResult<'a, ViewDefinitionFetchResult> {
+        type Acc = ViewDefinitionFetchResult;
 
         if relations.is_empty() {
-            return Box::pin(async { Ok(vec![]) });
+            return Box::pin(async { Ok(ViewDefinitionFetchResult::default()) });
         }
 
         let mut by_triple: HashMap<(String, String, String), Arc<dyn BaseRelation>> =
@@ -1329,7 +1471,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                     continue;
                 };
 
-                acc.push(ViewDefinition {
+                acc.definitions.push(ViewDefinition {
                     fqn: input_rel.semantic_fqn(),
                     definition: definition.to_string(),
                     dialect: AdapterType::Bigquery,
@@ -1363,14 +1505,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         // `RelationPath`. Quoting is only applied at render time via
         // `quote_policy`/`quote_part`, so these values are never pre-quoted
         // and the unconditional backticks here cannot double-quote them.
-        let sql = format!(
-            "SELECT
-                 dataset_id AS table_schema,
-                 table_id AS table_name,
-                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
-                 (type = 2) AS is_view
-             FROM `{database}`.`{schema}`.__TABLES__"
-        );
+        let sql = build_schema_freshness_query(database, schema);
         let relations = relations.to_vec();
         let adapter = self.adapter.clone();
         let factory = Box::new(AdapterConnectionFactory::new(
@@ -1397,6 +1532,9 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
             let is_views = batch.column_values::<BooleanArray>("is_view")?;
             for i in 0..batch.num_rows() {
+                if timestamps.is_null(i) {
+                    continue;
+                }
                 for fqn in find_matching_relation(schemas.value(i), tables.value(i), &relations)? {
                     acc.insert(
                         fqn,
@@ -1412,7 +1550,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     }
 }
 
-fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
+pub fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
     e.message().contains("Error 404: Not found:")
 }
 
@@ -1434,6 +1572,48 @@ fn is_bigquery_permission_error(e: &AdapterError) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bq_rel(project: &str, dataset: &str, table: &str) -> Arc<dyn BaseRelation> {
+        use crate::relation::Relation;
+        use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+        Arc::new(
+            Relation::new(
+                AdapterType::Bigquery,
+                project.to_string(),
+                dataset.to_string(),
+                table.to_string(),
+            )
+            .with_quoting(DEFAULT_RESOLVED_QUOTING),
+        )
+    }
+
+    fn freshness_batch(rows: &[(&str, &str, Option<i64>, bool)]) -> RecordBatch {
+        let schemas = rows.iter().map(|row| row.0).collect::<Vec<_>>();
+        let tables = rows.iter().map(|row| row.1).collect::<Vec<_>>();
+        let timestamps = rows.iter().map(|row| row.2).collect::<Vec<_>>();
+        let is_views = rows.iter().map(|row| row.3).collect::<Vec<_>>();
+
+        RecordBatch::try_new(
+            Arc::new(Schema::new(vec![
+                Field::new("table_schema", DataType::Utf8, false),
+                Field::new("table_name", DataType::Utf8, false),
+                Field::new(
+                    "last_altered",
+                    DataType::Timestamp(TimeUnit::Microsecond, None),
+                    true,
+                ),
+                Field::new("is_view", DataType::Boolean, false),
+            ])),
+            vec![
+                Arc::new(StringArray::from(schemas)),
+                Arc::new(StringArray::from(tables)),
+                Arc::new(TimestampMicrosecondArray::from(timestamps)),
+                Arc::new(BooleanArray::from(is_views)),
+            ],
+        )
+        .unwrap()
+    }
 
     #[test]
     fn test_generate_system_table_fqn_always_dataset_only() {
@@ -1571,6 +1751,37 @@ mod tests {
     }
 
     #[test]
+    fn test_format_top_level_columns_data_types_preserves_type_strings() {
+        // Test case 7: Type strings are preserved verbatim
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("float_col", Some(&"FLOAT".to_string()));
+            nested.insert("integer_col", Some(&"INTEGER".to_string()));
+            nested.insert("text_col", Some(&"TEXT".to_string()));
+            nested.insert("string_col", Some(&"STRING".to_string()));
+            nested.insert("int64_col", Some(&"INT64".to_string()));
+            nested.insert("numeric_col", Some(&"NUMERIC".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(result.get("float_col").unwrap(), "FLOAT");
+            assert_eq!(result.get("integer_col").unwrap(), "INTEGER");
+            assert_eq!(result.get("text_col").unwrap(), "TEXT");
+            assert_eq!(result.get("string_col").unwrap(), "STRING");
+            assert_eq!(result.get("int64_col").unwrap(), "INT64");
+            assert_eq!(result.get("numeric_col").unwrap(), "NUMERIC");
+        }
+
+        // Test case 8: Nested struct leaves preserve provided type strings
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("s.x", Some(&"FLOAT".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(result.get("s").unwrap(), "struct<x FLOAT>");
+        }
+    }
+
+    #[test]
     fn build_views_query_renders_basic_select() {
         let sql = build_views_query(
             "my-project",
@@ -1608,18 +1819,7 @@ mod tests {
     /// split `semantic_fqn()` on `.`.
     #[test]
     fn build_relation_clauses_bigquery_handles_dotted_project_id() {
-        use crate::relation::Relation;
-        use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
-
-        let rel = Arc::new(
-            Relation::new(
-                AdapterType::Bigquery,
-                "mycompany.io".to_string(),
-                "analytics".to_string(),
-                "orders".to_string(),
-            )
-            .with_quoting(DEFAULT_RESOLVED_QUOTING),
-        ) as Arc<dyn BaseRelation>;
+        let rel = bq_rel("mycompany.io", "analytics", "orders");
 
         let (where_by_db, rels_by_db) =
             build_relation_clauses_bigquery(std::slice::from_ref(&rel)).unwrap();
@@ -1632,6 +1832,57 @@ mod tests {
         );
         assert_eq!(where_by_db[db_key], vec!["table_id = 'orders'"]);
         assert_eq!(rels_by_db[db_key].len(), 1);
+    }
+
+    #[test]
+    fn tables_freshness_query_nulls_external_last_altered() {
+        let sql =
+            build_tables_freshness_query("`my-project`.analytics", &["table_id = 'orders'".into()]);
+
+        assert!(sql.contains("INFORMATION_SCHEMA.TABLES"), "got: {sql}");
+        assert!(sql.contains("table_type = 'EXTERNAL'"), "got: {sql}");
+        assert!(sql.contains("WHERE table_id = 'orders'"), "got: {sql}");
+        assert!(
+            sql.contains("NULL") && sql.contains("TIMESTAMP_MILLIS(legacy.last_modified_time)"),
+            "got: {sql}"
+        );
+    }
+
+    #[test]
+    fn schema_freshness_query_nulls_external_last_altered() {
+        let sql = build_schema_freshness_query("my-project", "analytics");
+
+        assert!(
+            sql.contains("`my-project`.`analytics`.INFORMATION_SCHEMA.TABLES"),
+            "got: {sql}"
+        );
+        assert!(sql.contains("table_type = 'EXTERNAL'"), "got: {sql}");
+        assert!(
+            sql.contains("NULL") && sql.contains("TIMESTAMP_MILLIS(legacy.last_modified_time)"),
+            "got: {sql}"
+        );
+    }
+
+    #[test]
+    fn accumulate_tables_freshness_skips_null_last_altered() {
+        let normal = bq_rel("my-project", "analytics", "orders");
+        let external = bq_rel("my-project", "analytics", "sheet_orders");
+        let database = "`my-project`.analytics";
+        let relations_by_database = BTreeMap::from([(
+            database.to_string(),
+            vec![Arc::clone(&normal), Arc::clone(&external)],
+        )]);
+        let batch = freshness_batch(&[
+            ("analytics", "orders", Some(1_700_000_000_000_000), false),
+            ("analytics", "sheet_orders", None, false),
+        ]);
+
+        let mut acc = BTreeMap::new();
+        accumulate_tables_freshness_from_batch(&mut acc, &batch, database, &relations_by_database)
+            .unwrap();
+
+        assert!(acc.contains_key(&normal.semantic_fqn()));
+        assert!(!acc.contains_key(&external.semantic_fqn()));
     }
 
     /// IAM and VPC Service Controls denials are permission errors; not-found

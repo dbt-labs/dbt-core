@@ -557,6 +557,12 @@ impl PartialEq for Value {
                         if a.is_same_object(b) {
                             return true;
                         }
+                        if let Some(ordering) = a
+                            .custom_cmp(b)
+                            .or_else(|| b.custom_cmp(a).map(Ordering::reverse))
+                        {
+                            return ordering == Ordering::Equal;
+                        }
                         match (a.repr(), b.repr()) {
                             (ObjectRepr::Map, ObjectRepr::Map) => {
                                 // only if we have known lengths can we compare the enumerators
@@ -646,8 +652,14 @@ impl Ord for Value {
                     if let (Some(a), Some(b)) = (self.as_object(), other.as_object()) {
                         if a.is_same_object(b) {
                             Ordering::Equal
+                        } else if let Some(ordering) = a
+                            .custom_cmp(b)
+                            .or_else(|| b.custom_cmp(a).map(Ordering::reverse))
+                        {
+                            ordering
                         } else {
                             match (a.repr(), b.repr()) {
+                                (ObjectRepr::Plain, ObjectRepr::Plain) => a.identity_cmp(b),
                                 (ObjectRepr::Map, ObjectRepr::Map) => {
                                     // This is not really correct.  Because the keys can be in arbitrary
                                     // order this could just sort really weirdly as a result.  However

@@ -16,7 +16,7 @@ use arrow_array::{
 };
 use arrow_schema::Schema;
 use dbt_adapter_core::ExecutionPhase;
-use dbt_adbc::{Connection, MapReduce, QueryCtx};
+use dbt_adbc::{Connection, ConnectionFactory, MapReduce, QueryCtx};
 use dbt_common::AsyncAdapterResult;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
@@ -48,52 +48,107 @@ fn metadata_warehouse_error(err: impl Display) -> AdapterError {
     AdapterError::new(AdapterErrorKind::Configuration, err.to_string())
 }
 
-fn with_metadata_warehouse_steps<T, C: ?Sized>(
-    ctx: &mut C,
-    metadata_warehouse: Option<&str>,
-    use_warehouse: impl FnOnce(&mut C, &str) -> AdapterResult<()>,
-    run_metadata: impl FnOnce(&mut C) -> AdapterResult<T>,
-    restore_warehouse: impl FnOnce(&mut C) -> AdapterResult<()>,
-) -> AdapterResult<T> {
-    let Some(warehouse) = metadata_warehouse.filter(|warehouse| !warehouse.is_empty()) else {
-        return run_metadata(ctx);
-    };
+/// Wraps a [ConnectionFactory] so a dedicated metadata warehouse is switched
+/// to once per *physical connection* rather than once per query.
+///
+/// `MapReduce` workers reuse a single connection across many tasks in a batch
+/// before recycling it, so switching the warehouse inside the per-task closure
+/// re-issues `use warehouse` before and after every task on a reused
+/// connection. Wrapping the factory instead moves
+/// the switch to `new_connection` (once, when the connection is first obtained
+/// for the batch) and the restore to `recycle_connection` (once, right before
+/// the connection is handed back).
+type UseWarehouseFn = Box<dyn Fn(&mut dyn Connection, &str) -> AdapterResult<()> + Send + Sync>;
+type RestoreWarehouseFn = Box<dyn Fn(&mut dyn Connection) -> AdapterResult<()> + Send + Sync>;
 
-    use_warehouse(ctx, warehouse)?;
-
-    let result = run_metadata(ctx);
-    let restore_result = restore_warehouse(ctx);
-
-    result.and_then(|value| restore_result.map(|()| value))
+struct MetadataWarehouseConnectionFactory {
+    metadata_warehouse: Option<String>,
+    use_warehouse: UseWarehouseFn,
+    restore_warehouse: RestoreWarehouseFn,
+    inner: Box<dyn ConnectionFactory<Error = Cancellable<AdapterError>>>,
 }
 
-fn with_metadata_warehouse<T>(
-    adapter: &AdapterImpl,
-    conn: &mut dyn Connection,
-    metadata_warehouse: Option<&str>,
-    token: &CancellationToken,
-    f: impl FnOnce(&mut dyn Connection) -> AdapterResult<T>,
-) -> AdapterResult<T> {
-    with_metadata_warehouse_steps(
-        conn,
-        metadata_warehouse,
-        |conn, warehouse| {
-            adapter
-                .use_warehouse(
-                    conn,
-                    warehouse.to_string(),
-                    SNOWFLAKE_METADATA_NODE_ID,
-                    token.clone(),
-                )
-                .map_err(metadata_warehouse_error)
-        },
-        |conn| f(conn),
-        |conn| {
+impl MetadataWarehouseConnectionFactory {
+    fn new(
+        adapter: AdapterImpl,
+        metadata_warehouse: Option<String>,
+        token: CancellationToken,
+        inner: Box<dyn ConnectionFactory<Error = Cancellable<AdapterError>>>,
+    ) -> Self {
+        let use_warehouse = {
+            let adapter = adapter.clone();
+            let token = token.clone();
+            Box::new(move |conn: &mut dyn Connection, warehouse: &str| {
+                adapter
+                    .use_warehouse(
+                        conn,
+                        warehouse.to_string(),
+                        SNOWFLAKE_METADATA_NODE_ID,
+                        token.clone(),
+                    )
+                    .map_err(metadata_warehouse_error)
+            }) as UseWarehouseFn
+        };
+        let restore_warehouse = Box::new(move |conn: &mut dyn Connection| {
             adapter
                 .restore_warehouse(conn, SNOWFLAKE_METADATA_NODE_ID, token.clone())
                 .map_err(metadata_warehouse_error)
-        },
-    )
+        }) as RestoreWarehouseFn;
+        Self::from_hooks(metadata_warehouse, use_warehouse, restore_warehouse, inner)
+    }
+
+    fn from_hooks(
+        metadata_warehouse: Option<String>,
+        use_warehouse: UseWarehouseFn,
+        restore_warehouse: RestoreWarehouseFn,
+        inner: Box<dyn ConnectionFactory<Error = Cancellable<AdapterError>>>,
+    ) -> Self {
+        Self {
+            metadata_warehouse,
+            use_warehouse,
+            restore_warehouse,
+            inner,
+        }
+    }
+
+    fn active_warehouse(&self) -> Option<&str> {
+        self.metadata_warehouse
+            .as_deref()
+            .filter(|warehouse| !warehouse.is_empty())
+    }
+}
+
+impl ConnectionFactory for MetadataWarehouseConnectionFactory {
+    type Error = Cancellable<AdapterError>;
+
+    fn new_connection(&self, node_id: Option<&str>) -> Result<Box<dyn Connection>, Self::Error> {
+        let mut conn = self.inner.new_connection(node_id)?;
+        if let Some(warehouse) = self.active_warehouse() {
+            (self.use_warehouse)(conn.as_mut(), warehouse).map_err(Cancellable::Error)?;
+        }
+        Ok(conn)
+    }
+
+    fn recycle_connection(&self, mut conn: Box<dyn Connection>) {
+        // These connections go back into the global recycling pool shared with
+        // unrelated jobs. A failed restore leaves the connection stuck on the
+        // metadata warehouse, so drop it instead of recycling it — otherwise an
+        // unrelated node could silently inherit the metadata warehouse. Mirrors
+        // `reset_node_overrides` in dbt-tasks-sa/src/materialize.rs.
+        if self.active_warehouse().is_some() {
+            if let Err(e) = (self.restore_warehouse)(conn.as_mut()) {
+                tracing::warn!(
+                    "failed to restore warehouse before recycling Snowflake metadata connection, dropping it instead: {e}"
+                );
+                return;
+            }
+        }
+        self.inner.recycle_connection(conn);
+    }
+
+    fn connection_limit(&self) -> u32 {
+        self.inner.connection_limit()
+    }
 }
 
 fn snowflake_metadata_query_plan(
@@ -258,6 +313,48 @@ fn lowercase_column_names(batch: &RecordBatch) -> RecordBatch {
         .expect("column name normalization preserves schema compatibility")
 }
 
+fn accumulate_view_definition_fetch_result(
+    acc: &mut ViewDefinitionFetchResult,
+    batch: &RecordBatch,
+) -> AdapterResult<()> {
+    let batch = lowercase_column_names(batch);
+    // Result schema: (fqn STRING, view_definition STRING, error STRING)
+    let fqns_arr = batch.column_values::<StringArray>("fqn")?;
+    let defs_arr = batch.column_values::<StringArray>("view_definition")?;
+
+    for i in 0..batch.num_rows() {
+        let fqn = fqns_arr.value(i).to_string();
+        if defs_arr.is_null(i) {
+            // A NULL definition means Snowflake could not return DDL for
+            // this relation. Treat it as unresolvable regardless of the
+            // exact GET_DDL error text so the query cache can fall back
+            // to freshness metadata for secure/data-share views.
+            acc.unresolvable.insert(fqn);
+            continue;
+        }
+        let definition = defs_arr.value(i);
+
+        if is_table_ddl(definition) {
+            continue;
+        }
+
+        let parsed = match Dialect::Snowflake.parse_fqn(&fqn) {
+            Ok(p) => p,
+            Err(_) => continue, // unparseable — skip
+        };
+
+        acc.definitions.push(ViewDefinition {
+            fqn,
+            definition: definition.to_string(),
+            dialect: AdapterType::Snowflake,
+            default_catalog: parsed.catalog().name().to_string(),
+            default_schema: parsed.schema().name().to_string(),
+        });
+    }
+
+    Ok(())
+}
+
 /// Helper to differentiate between tables and dynamic tables using the is_dynamic flag.
 /// TODO: When we implement iceberg tables, we might want to pass in the is_iceberg flag here.
 pub fn relation_type_from_table_flags(is_dynamic: &str) -> Result<RelationType, AdapterError> {
@@ -299,6 +396,10 @@ fn build_relations_from_show_objects(
             Some(relation_type_from_table_flags(is_dynamic)?)
         } else if table_kind.eq_ignore_ascii_case("view") {
             Some(RelationType::View)
+        } else if table_kind.eq_ignore_ascii_case("temporary") {
+            // Session-scoped temporary tables/views behave like regular tables for
+            // all supported dbt operations (SELECT *, DROP TABLE, etc.).
+            Some(RelationType::Table)
         } else {
             Some(RelationType::from(table_kind))
         };
@@ -399,47 +500,46 @@ impl SnowflakeMetadataAdapter {
 
         type Acc = BTreeMap<String, MetadataFreshness>;
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
+        let metadata_warehouse = options.warehouse.clone();
+        let factory = Box::new(MetadataWarehouseConnectionFactory::new(
+            self.adapter.clone(),
+            metadata_warehouse.clone(),
+            token.clone(),
+            Box::new(AdapterConnectionFactory::new(
+                self.adapter.engine().clone(),
+                self.adapter.engine().threads(),
+            )),
         ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
-        let metadata_warehouse = options.warehouse.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           database_and_where_clauses: &(String, Vec<String>)|
               -> AdapterResult<Arc<RecordBatch>> {
-            with_metadata_warehouse(
-                &adapter,
-                conn,
-                metadata_warehouse.as_deref(),
-                &token_clone,
-                |conn| {
-                    let (database, where_clauses) = &database_and_where_clauses;
-                    let sql = snowflake_freshness_sql(database, where_clauses)?;
+            let (database, where_clauses) = &database_and_where_clauses;
+            let sql = snowflake_freshness_sql(database, where_clauses)?;
 
-                    let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
-                    let metadata_sql = plan
-                        .statements
-                        .last()
-                        .expect("metadata query plan always includes metadata SQL");
+            let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
+            let metadata_sql = plan
+                .statements
+                .last()
+                .expect("metadata query plan always includes metadata SQL");
 
-                    let ctx = QueryCtx::default()
-                        .with_desc("Extracting freshness from information schema");
-                    let (_adapter_response, agate_table) =
-                        adapter.query(&ctx, conn, metadata_sql, None, token_clone.clone())?;
-                    let batch = agate_table.original_record_batch();
-                    Ok(batch)
-                },
-            )
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+            let (_adapter_response, agate_table) =
+                adapter.query(&ctx, conn, metadata_sql, None, token_clone.clone())?;
+            let batch = agate_table.original_record_batch();
+            Ok(batch)
         };
 
         let reduce_f = move |acc: &mut Acc,
                              database_and_where_clauses: (String, Vec<String>),
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
+            let Ok(batch) = batch_res else {
+                // Keep successful database batches; missing relations fall back downstream.
+                return Ok(());
+            };
             let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
             let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
             let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
@@ -497,7 +597,13 @@ impl SnowflakeMetadataAdapter {
         // Run the bulk and per-override queries through one MapReduce pass so
         // they share the same connection-factory threadpool — same parallelism
         // model as the plugin.
-        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+        let metadata_warehouse = options.warehouse.clone();
+        let factory = Box::new(MetadataWarehouseConnectionFactory::new(
+            self.adapter.clone(),
+            metadata_warehouse.clone(),
+            token.clone(),
+            Box::new(AdapterConnectionFactory::new(engine, threads)),
+        ));
         type Acc = BTreeMap<String, MetadataFreshness>;
 
         let mut tasks: Vec<FreshnessTask> = Vec::new();
@@ -510,88 +616,85 @@ impl SnowflakeMetadataAdapter {
 
         let token_clone = token.clone();
         let adapter_for_map = self.adapter.clone();
-        let metadata_warehouse = options.warehouse.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           task: &FreshnessTask|
               -> AdapterResult<FreshnessTaskResult> {
-            with_metadata_warehouse(
-                &adapter_for_map,
-                conn,
-                metadata_warehouse.as_deref(),
-                &token_clone,
-                |conn| match task {
-                    FreshnessTask::Bulk(bulk) => {
-                        let (where_clauses_by_database, relations_by_database) =
-                            build_relation_clauses(bulk)?;
-                        let mut acc: Acc = BTreeMap::new();
-                        for (database, where_clauses) in where_clauses_by_database {
-                            let sql = snowflake_freshness_sql(&database, &where_clauses)?;
-                            let plan =
-                                snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
-                            let metadata_sql = plan
-                                .statements
-                                .last()
-                                .expect("metadata query plan always includes metadata SQL");
-                            let ctx = QueryCtx::default()
-                                .with_desc("Extracting freshness from information schema");
-                            let (_resp, agate_table) = adapter_for_map.query(
-                                &ctx,
-                                conn,
-                                metadata_sql,
-                                None,
-                                token_clone.clone(),
-                            )?;
-                            let batch = agate_table.original_record_batch();
-                            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
-                            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
-                            let timestamps =
-                                batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
-                            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
-                            let relations = &relations_by_database[&database];
-                            for i in 0..batch.num_rows() {
-                                let schema = schemas.value(i);
-                                let table = tables.value(i);
-                                let timestamp = timestamps.value(i);
-                                let is_view = is_views.value(i);
-                                for table_name in find_matching_relation(schema, table, relations)?
-                                {
-                                    acc.insert(
-                                        table_name,
-                                        MetadataFreshness::from_millis(timestamp, is_view)?,
-                                    );
-                                }
-                            }
-                        }
-                        Ok(FreshnessTaskResult::Bulk(acc))
-                    }
-                    FreshnessTask::Override(relation, ovr) => {
-                        let semantic_fqn = relation.semantic_fqn();
-                        let sql = freshness_override_sql(relation, ovr);
-                        let plan = snowflake_freshness_override_query_plan(
-                            &sql,
-                            metadata_warehouse.as_deref(),
-                        );
+            match task {
+                FreshnessTask::Bulk(bulk) => {
+                    let (where_clauses_by_database, relations_by_database) =
+                        build_relation_clauses(bulk)?;
+                    let mut acc: Acc = BTreeMap::new();
+                    for (database, where_clauses) in where_clauses_by_database {
+                        let sql = snowflake_freshness_sql(&database, &where_clauses)?;
+                        let plan =
+                            snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
                         let metadata_sql = plan
                             .statements
                             .last()
                             .expect("metadata query plan always includes metadata SQL");
-                        run_override_sql(
-                            &adapter_for_map,
+                        let ctx = QueryCtx::default()
+                            .with_desc("Extracting freshness from information schema");
+                        let Ok((_resp, agate_table)) = adapter_for_map.query(
+                            &ctx,
                             conn,
-                            semantic_fqn,
                             metadata_sql,
+                            None,
                             token_clone.clone(),
-                        )
+                        ) else {
+                            // Keep successful database batches; missing relations fall back downstream.
+                            continue;
+                        };
+                        let batch = agate_table.original_record_batch();
+                        let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+                        let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+                        let timestamps =
+                            batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+                        let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+                        let relations = &relations_by_database[&database];
+                        for i in 0..batch.num_rows() {
+                            let schema = schemas.value(i);
+                            let table = tables.value(i);
+                            let timestamp = timestamps.value(i);
+                            let is_view = is_views.value(i);
+                            for table_name in find_matching_relation(schema, table, relations)? {
+                                acc.insert(
+                                    table_name,
+                                    MetadataFreshness::from_millis(timestamp, is_view)?,
+                                );
+                            }
+                        }
                     }
-                },
-            )
+                    Ok(FreshnessTaskResult::Bulk(acc))
+                }
+                FreshnessTask::Override(relation, ovr) => {
+                    let semantic_fqn = relation.semantic_fqn();
+                    let sql = freshness_override_sql(relation, ovr);
+                    let plan = snowflake_freshness_override_query_plan(
+                        &sql,
+                        metadata_warehouse.as_deref(),
+                    );
+                    let metadata_sql = plan
+                        .statements
+                        .last()
+                        .expect("metadata query plan always includes metadata SQL");
+                    run_override_sql(
+                        &adapter_for_map,
+                        conn,
+                        semantic_fqn,
+                        metadata_sql,
+                        token_clone.clone(),
+                    )
+                }
+            }
         };
 
         let reduce_f = move |acc: &mut Acc,
                              _task: FreshnessTask,
                              res: AdapterResult<FreshnessTaskResult>|
               -> Result<(), Cancellable<AdapterError>> {
-            apply_freshness_task_result(acc, res?)?;
+            if let Ok(task_result) = res {
+                apply_freshness_task_result(acc, task_result)?;
+            }
             Ok(())
         };
 
@@ -606,33 +709,30 @@ impl SnowflakeMetadataAdapter {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'static, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
+        let metadata_warehouse = options.warehouse.clone();
+        let factory = Box::new(MetadataWarehouseConnectionFactory::new(
+            self.adapter.clone(),
+            metadata_warehouse.clone(),
+            token.clone(),
+            Box::new(AdapterConnectionFactory::new(
+                self.adapter.engine().clone(),
+                self.adapter.engine().threads(),
+            )),
         ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
-        let metadata_warehouse = options.warehouse.clone();
 
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-            with_metadata_warehouse(
-                &adapter,
-                conn,
-                metadata_warehouse.as_deref(),
-                &token_clone,
-                |conn| {
-                    let plan = snowflake_list_relations_query_plan(metadata_warehouse.as_deref());
-                    let _metadata_operation = plan
-                        .statements
-                        .last()
-                        .expect("metadata query plan always includes metadata operation");
-                    let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
-                    adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
-                },
-            )
+            let plan = snowflake_list_relations_query_plan(metadata_warehouse.as_deref());
+            let _metadata_operation = plan
+                .statements
+                .last()
+                .expect("metadata query plan always includes metadata operation");
+            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
+            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
         };
 
         let reduce_f = move |acc: &mut Acc,
@@ -1000,10 +1100,10 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let table_names = relations
+        let keys: Vec<(String, String)> = relations
             .iter()
-            .map(|relation| relation.semantic_fqn())
-            .collect::<Vec<_>>();
+            .map(|relation| (relation.semantic_fqn(), relation.render_self_as_str()))
+            .collect();
 
         let factory = Box::new(AdapterConnectionFactory::new(
             self.adapter.engine().clone(),
@@ -1013,9 +1113,10 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
-                          table_name: &String|
+                          key: &(String, String)|
               -> AdapterResult<Arc<Schema>> {
-            let sql = format!("describe table {};", &table_name);
+            let (_, rendered) = key;
+            let sql = format!("describe table {};", rendered);
             let mut ctx = QueryCtx::new_metadata().with_desc("Get table schema");
             if let Some(node_id) = unique_id.clone() {
                 ctx = ctx.with_node_id(&node_id);
@@ -1029,14 +1130,15 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             Ok(schema)
         };
         let reduce_f = |acc: &mut Acc,
-                        table_name: String,
+                        key: (String, String),
                         schema: AdapterResult<Arc<Schema>>|
          -> Result<(), Cancellable<AdapterError>> {
-            acc.insert(table_name, schema);
+            let (semantic_fqn, _) = key;
+            acc.insert(semantic_fqn, schema);
             Ok(())
         };
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        map_reduce.run(Arc::new(table_names), token)
+        map_reduce.run(Arc::new(keys), token)
     }
 
     /// List relations schemas by patterns (use information schema query)
@@ -1210,33 +1312,29 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let metadata_warehouse = options.warehouse.clone();
         let token_clone = token.clone();
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            adapter.engine().clone(),
-            adapter.engine().threads(),
+        let factory = Box::new(MetadataWarehouseConnectionFactory::new(
+            adapter.clone(),
+            metadata_warehouse.clone(),
+            token_clone.clone(),
+            Box::new(AdapterConnectionFactory::new(
+                adapter.engine().clone(),
+                adapter.engine().threads(),
+            )),
         ));
         type Acc = BTreeMap<String, MetadataFreshness>;
 
         let map_f = move |conn: &'_ mut dyn Connection,
                           _: &()|
               -> AdapterResult<Arc<RecordBatch>> {
-            with_metadata_warehouse(
-                &adapter,
-                conn,
-                metadata_warehouse.as_deref(),
-                &token_clone,
-                |conn| {
-                    let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
-                    let metadata_sql = plan
-                        .statements
-                        .last()
-                        .expect("metadata query plan always includes metadata SQL");
-                    let ctx = QueryCtx::default()
-                        .with_desc("Extracting freshness from information schema");
-                    let (_resp, agate_table) =
-                        adapter.query(&ctx, conn, metadata_sql, None, token_clone.clone())?;
-                    Ok(agate_table.original_record_batch())
-                },
-            )
+            let plan = snowflake_metadata_query_plan(&sql, metadata_warehouse.as_deref());
+            let metadata_sql = plan
+                .statements
+                .last()
+                .expect("metadata query plan always includes metadata SQL");
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+            let (_resp, agate_table) =
+                adapter.query(&ctx, conn, metadata_sql, None, token_clone.clone())?;
+            Ok(agate_table.original_record_batch())
         };
 
         let reduce_f = move |acc: &mut Acc, _: (), batch_res: AdapterResult<Arc<RecordBatch>>| {
@@ -1328,11 +1426,11 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         &'a self,
         relations: &'a [Arc<dyn BaseRelation>],
         token: CancellationToken,
-    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
-        type Acc = Vec<ViewDefinition>;
+    ) -> AsyncAdapterResult<'a, ViewDefinitionFetchResult> {
+        type Acc = ViewDefinitionFetchResult;
 
         if relations.is_empty() {
-            return Box::pin(async { Ok(vec![]) });
+            return Box::pin(async { Ok(ViewDefinitionFetchResult::default()) });
         }
 
         // Dedupe FQNs while preserving an order; Snowflake fans them out itself.
@@ -1371,39 +1469,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                         batch_res: AdapterResult<Arc<RecordBatch>>|
          -> Result<(), Cancellable<AdapterError>> {
             let batch = batch_res?;
-            // Snowflake may uppercase result-set column names depending on
-            // account settings, even though the EXECUTE IMMEDIATE block aliases
-            // them lowercase. Normalize the schema before name-based lookups.
-            let batch = lowercase_column_names(&batch);
-            // Result schema: (fqn STRING, view_definition STRING, error STRING)
-            let fqns_arr = batch.column_values::<StringArray>("fqn")?;
-            let defs_arr = batch.column_values::<StringArray>("view_definition")?;
-
-            for i in 0..batch.num_rows() {
-                let fqn = fqns_arr.value(i).to_string();
-                if defs_arr.is_null(i) {
-                    continue;
-                }
-                let definition = defs_arr.value(i);
-
-                if is_table_ddl(definition) {
-                    continue;
-                }
-
-                let parsed = match Dialect::Snowflake.parse_fqn(&fqn) {
-                    Ok(p) => p,
-                    Err(_) => continue, // unparseable — skip
-                };
-
-                acc.push(ViewDefinition {
-                    fqn,
-                    definition: definition.to_string(),
-                    dialect: AdapterType::Snowflake,
-                    default_catalog: parsed.catalog().name().to_string(),
-                    default_schema: parsed.schema().name().to_string(),
-                });
-            }
-            Ok(())
+            accumulate_view_definition_fetch_result(acc, &batch).map_err(Cancellable::Error)
         };
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
@@ -1561,9 +1627,179 @@ fn build_schemas_from_information_schema(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::NoopConnection;
+    use arrow_schema::{DataType, Field};
+    use std::sync::Mutex;
 
-    fn test_adapter_error(message: &str) -> AdapterError {
-        AdapterError::new(AdapterErrorKind::UnexpectedResult, message)
+    struct FakeConnectionFactory {
+        recycled: Arc<Mutex<u32>>,
+    }
+
+    impl ConnectionFactory for FakeConnectionFactory {
+        type Error = Cancellable<AdapterError>;
+
+        fn new_connection(
+            &self,
+            _node_id: Option<&str>,
+        ) -> Result<Box<dyn Connection>, Self::Error> {
+            Ok(Box::new(NoopConnection))
+        }
+
+        fn recycle_connection(&self, _conn: Box<dyn Connection>) {
+            *self.recycled.lock().unwrap() += 1;
+        }
+
+        fn connection_limit(&self) -> u32 {
+            4
+        }
+    }
+
+    /// Builds a use/restore hook pair that records calls into `log`, so tests can
+    /// assert switch/restore ordering and frequency without a real connection.
+    fn recording_hooks(
+        log: Arc<Mutex<Vec<&'static str>>>,
+        fail_restore: bool,
+    ) -> (UseWarehouseFn, RestoreWarehouseFn) {
+        let use_log = log.clone();
+        let restore_log = log;
+        (
+            Box::new(move |_conn: &mut dyn Connection, _warehouse: &str| {
+                use_log.lock().unwrap().push("use");
+                Ok(())
+            }),
+            Box::new(move |_conn: &mut dyn Connection| {
+                restore_log.lock().unwrap().push("restore");
+                if fail_restore {
+                    Err(AdapterError::new(
+                        AdapterErrorKind::UnexpectedResult,
+                        "restore failed",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }),
+        )
+    }
+
+    #[test]
+    fn metadata_warehouse_factory_switches_once_per_connection() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let (use_warehouse, restore_warehouse) = recording_hooks(log.clone(), false);
+        let recycled = Arc::new(Mutex::new(0));
+        let inner = Box::new(FakeConnectionFactory {
+            recycled: recycled.clone(),
+        });
+        let factory = MetadataWarehouseConnectionFactory::from_hooks(
+            Some("metadata_wh".to_string()),
+            use_warehouse,
+            restore_warehouse,
+            inner,
+        );
+
+        let conn = factory.new_connection(None).expect("connection");
+        assert_eq!(*log.lock().unwrap(), vec!["use"]);
+
+        factory.recycle_connection(conn);
+        assert_eq!(*log.lock().unwrap(), vec!["use", "restore"]);
+        assert_eq!(*recycled.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn metadata_warehouse_factory_drops_connection_when_restore_fails() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let (use_warehouse, restore_warehouse) = recording_hooks(log.clone(), true);
+        let recycled = Arc::new(Mutex::new(0));
+        let inner = Box::new(FakeConnectionFactory {
+            recycled: recycled.clone(),
+        });
+        let factory = MetadataWarehouseConnectionFactory::from_hooks(
+            Some("metadata_wh".to_string()),
+            use_warehouse,
+            restore_warehouse,
+            inner,
+        );
+
+        let conn = factory.new_connection(None).expect("connection");
+        factory.recycle_connection(conn);
+
+        assert_eq!(*log.lock().unwrap(), vec!["use", "restore"]);
+        assert_eq!(
+            *recycled.lock().unwrap(),
+            0,
+            "connection must not be recycled after a failed restore"
+        );
+    }
+
+    #[test]
+    fn metadata_warehouse_factory_is_passthrough_without_metadata_warehouse() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let (use_warehouse, restore_warehouse) = recording_hooks(log.clone(), false);
+        let recycled = Arc::new(Mutex::new(0));
+        let inner = Box::new(FakeConnectionFactory {
+            recycled: recycled.clone(),
+        });
+        let factory = MetadataWarehouseConnectionFactory::from_hooks(
+            None,
+            use_warehouse,
+            restore_warehouse,
+            inner,
+        );
+
+        let conn = factory.new_connection(None).expect("connection");
+        factory.recycle_connection(conn);
+
+        assert!(
+            log.lock().unwrap().is_empty(),
+            "no warehouse switch expected when metadata warehouse is unset"
+        );
+        assert_eq!(*recycled.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn metadata_warehouse_factory_treats_empty_warehouse_as_unset() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let (use_warehouse, restore_warehouse) = recording_hooks(log.clone(), false);
+        let recycled = Arc::new(Mutex::new(0));
+        let inner = Box::new(FakeConnectionFactory {
+            recycled: recycled.clone(),
+        });
+        let factory = MetadataWarehouseConnectionFactory::from_hooks(
+            Some(String::new()),
+            use_warehouse,
+            restore_warehouse,
+            inner,
+        );
+
+        let conn = factory.new_connection(None).expect("connection");
+        factory.recycle_connection(conn);
+
+        assert!(log.lock().unwrap().is_empty());
+        assert_eq!(*recycled.lock().unwrap(), 1);
+    }
+
+    fn view_definition_batch(rows: Vec<(&str, Option<&str>, Option<&str>)>) -> RecordBatch {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("FQN", DataType::Utf8, false),
+            Field::new("VIEW_DEFINITION", DataType::Utf8, true),
+            Field::new("ERROR", DataType::Utf8, true),
+        ]));
+        let mut fqns = Vec::with_capacity(rows.len());
+        let mut definitions = Vec::with_capacity(rows.len());
+        let mut errors = Vec::with_capacity(rows.len());
+        for (fqn, definition, error) in rows {
+            fqns.push(fqn);
+            definitions.push(definition);
+            errors.push(error);
+        }
+        RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringArray::from(fqns)),
+                Arc::new(StringArray::from(definitions)),
+                Arc::new(StringArray::from(errors)),
+            ],
+        )
+        .expect("valid view-definition batch")
     }
 
     #[test]
@@ -1666,6 +1902,66 @@ mod tests {
     }
 
     #[test]
+    fn view_definition_fetch_result_marks_null_definition_unresolvable() {
+        let batch = view_definition_batch(vec![
+            (
+                r#""DB1"."SCHEMA1"."SECURE_VIEW""#,
+                None,
+                Some("Object does not exist or not authorized."),
+            ),
+            (
+                r#""DB1"."SCHEMA1"."TABLE1""#,
+                Some("CREATE TABLE table1 (id INT)"),
+                None,
+            ),
+        ]);
+        let mut result = ViewDefinitionFetchResult::default();
+
+        accumulate_view_definition_fetch_result(&mut result, &batch).expect("parse batch");
+
+        assert!(result.definitions.is_empty());
+        assert_eq!(
+            result.unresolvable,
+            BTreeSet::from([r#""DB1"."SCHEMA1"."SECURE_VIEW""#.to_string()])
+        );
+    }
+
+    #[test]
+    fn view_definition_fetch_result_accumulates_unresolvable_across_batches() {
+        let batch1 = view_definition_batch(vec![
+            (
+                r#""DB1"."SCHEMA1"."SECURE_VIEW""#,
+                None,
+                Some("not authorized"),
+            ),
+            (
+                r#""DB1"."SCHEMA1"."READABLE_VIEW""#,
+                Some(r#"CREATE VIEW readable_view AS SELECT * FROM "DB1"."SCHEMA1"."BASE_T""#),
+                None,
+            ),
+        ]);
+        let batch2 = view_definition_batch(vec![(
+            r#""DB1"."SCHEMA1"."BASE_T""#,
+            Some("CREATE TABLE base_t (id INT)"),
+            None,
+        )]);
+        let mut result = ViewDefinitionFetchResult::default();
+
+        accumulate_view_definition_fetch_result(&mut result, &batch1).expect("parse first batch");
+        accumulate_view_definition_fetch_result(&mut result, &batch2).expect("parse second batch");
+
+        assert_eq!(
+            result.unresolvable,
+            BTreeSet::from([r#""DB1"."SCHEMA1"."SECURE_VIEW""#.to_string()])
+        );
+        assert_eq!(result.definitions.len(), 1);
+        assert_eq!(
+            result.definitions[0].fqn,
+            r#""DB1"."SCHEMA1"."READABLE_VIEW""#
+        );
+    }
+
+    #[test]
     fn snowflake_metadata_query_plan_uses_metadata_warehouse_before_query() {
         let options = MetadataQueryOptions {
             warehouse: Some("metadata_wh".to_string()),
@@ -1715,107 +2011,6 @@ mod tests {
             vec![
                 "use warehouse metadata_wh".to_string(),
                 "list_relations".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn with_metadata_warehouse_steps_restores_after_metadata_query() {
-        let mut statements = Vec::new();
-
-        let result: AdapterResult<&str> = with_metadata_warehouse_steps(
-            &mut statements,
-            Some("metadata_wh"),
-            |statements, warehouse| {
-                statements.push(format!("use warehouse {warehouse}"));
-                Ok(())
-            },
-            |statements| {
-                statements.push("select * from db.information_schema.tables".to_string());
-                Ok("value")
-            },
-            |statements| {
-                statements.push("use warehouse compute_wh".to_string());
-                Ok(())
-            },
-        );
-
-        assert_eq!(result.unwrap(), "value");
-        assert_eq!(
-            statements,
-            vec![
-                "use warehouse metadata_wh".to_string(),
-                "select * from db.information_schema.tables".to_string(),
-                "use warehouse compute_wh".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn with_metadata_warehouse_steps_restores_after_metadata_query_error() {
-        let mut statements = Vec::new();
-
-        let result: AdapterResult<&str> = with_metadata_warehouse_steps(
-            &mut statements,
-            Some("metadata_wh"),
-            |statements, warehouse| {
-                statements.push(format!("use warehouse {warehouse}"));
-                Ok(())
-            },
-            |statements| {
-                statements.push("select * from db.information_schema.tables".to_string());
-                Err(AdapterError::new(
-                    AdapterErrorKind::UnexpectedResult,
-                    "metadata query failed",
-                ))
-            },
-            |statements| {
-                statements.push("use warehouse compute_wh".to_string());
-                Ok(())
-            },
-        );
-
-        let err = result.unwrap_err();
-        assert_eq!(err.message(), "metadata query failed");
-        assert_eq!(
-            statements,
-            vec![
-                "use warehouse metadata_wh".to_string(),
-                "select * from db.information_schema.tables".to_string(),
-                "use warehouse compute_wh".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn with_metadata_warehouse_steps_returns_metadata_error_when_restore_also_fails() {
-        let mut statements = Vec::new();
-
-        let err = with_metadata_warehouse_steps::<&str, _>(
-            &mut statements,
-            Some("metadata_wh"),
-            |statements, warehouse| {
-                statements.push(format!("use warehouse {warehouse}"));
-                Ok(())
-            },
-            |statements| {
-                statements.push("select * from db.information_schema.tables".to_string());
-                Err(test_adapter_error("metadata query failed"))
-            },
-            |statements| {
-                statements.push("use warehouse compute_wh".to_string());
-                Err(test_adapter_error("restore failed"))
-            },
-        )
-        .unwrap_err();
-
-        assert_eq!(err.message(), "metadata query failed");
-        assert_eq!(
-            statements,
-            vec![
-                "use warehouse metadata_wh".to_string(),
-                "select * from db.information_schema.tables".to_string(),
-                "use warehouse compute_wh".to_string(),
             ]
         );
     }

@@ -1,8 +1,7 @@
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
-use crate::engine::AdbcEngine;
-use crate::engine::query_comment::QueryCommentConfig;
+use crate::engine::{AdbcEngine, Options};
 use crate::errors::into_fs_error;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
@@ -11,7 +10,7 @@ use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::relation::factory::create_static_relation;
 use crate::relation::spark::DEFAULT_SPARK_DATABASE;
 use crate::relation::{Relation, RelationObject};
-use crate::render_constraint::render_model_constraint;
+use crate::render_constraint::{render_model_constraint, warn_constraint_support};
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::DefaultStmtSplitter;
@@ -20,13 +19,13 @@ use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
 
 use crate::auth::DefaultAuthWarningPrinter;
+use adbc_core::options::OptionValue;
 use dbt_adapter_core::AdapterType;
 use dbt_adbc::QueryCtx;
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
-use dbt_common::io_utils::StatusReporter;
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
@@ -56,7 +55,7 @@ use std::sync::Arc;
 pub mod adapter_factory;
 pub mod adapter_impl;
 pub use adapter_factory::*;
-pub use adapter_impl::{AdapterImpl, quote_component, quote_ident};
+pub use adapter_impl::{AdapterImpl, alias_types_from_state, quote_component, quote_ident};
 #[cfg(test)]
 mod tests;
 
@@ -87,31 +86,17 @@ pub enum NodeOverride {
     Warehouse,
 }
 
-/// Type bridge adapter
+/// Converts untyped (Value-based) method calls to typed calls, validating argument count
+/// and types along the way, and reproduces what method annotations do in the dbt Core
+/// Python implementation (e.g. returning simple values during the parsing phase).
 ///
-/// This adapter converts untyped method calls (those that use Value)
-/// to typed method calls, which we expect most adapters to implement.
-/// As inseperable part of this process, this adapter also checks
-/// arguments of all methods, their numbers, and types.
+/// Caches the thread's database connection in a thread-local so Jinja code doesn't have to
+/// pass connections explicitly.
 ///
-/// This adapter also takes care of what method annotations would do
-/// in the dbt Core Python implementation. Things like returning
-/// simple values during the parsing phase.
+/// Use [ConcreateAdapter::borrow_tlocal_connection], whose guard returns the connection to
+/// the thread-local on drop.
 ///
-/// # Connection Management
-///
-/// This adapter caches the database connection used by the thread in a
-/// thread-local. This allows Jinja code to use the connection without
-/// explicitly referring to database connections.
-///
-/// Use the [ConcreateAdapter::borrow_tlocal_connection] function, which returns
-/// a guard that can be dereferenced into a mutable [Box<dyn Connection>]. When
-/// the guard instance is destroyed, the connection returns to the thread-local
-/// variable.
-///
-/// # Relation Cache
-///
-/// The relation cache is now managed by the engine. Access via `engine().relation_cache()`.
+/// The relation cache lives on the engine now — access via `engine().relation_cache()`.
 #[derive(Clone)]
 pub struct Adapter {
     inner: InnerAdapter,
@@ -163,13 +148,11 @@ impl Adapter {
         }
     }
 
-    /// Create an instance of [Adapter] that operates in parse phase mode.
     pub fn new_parse_phase_adapter(
         adapter_type: AdapterType,
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
-        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Adapter {
         let state = Self::make_parse_adapter_state(
@@ -178,7 +161,6 @@ impl Adapter {
             package_quoting,
             type_ops,
             Arc::new(RelationCache::default()),
-            status_reporter,
             catalogs,
         );
         Adapter {
@@ -194,33 +176,32 @@ impl Adapter {
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,
-        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
 
-        let warning_printer = Box::new(DefaultAuthWarningPrinter::new(status_reporter))
-            as Box<dyn AuthWarningPrinter>;
+        let warning_printer =
+            Box::new(DefaultAuthWarningPrinter::new()) as Box<dyn AuthWarningPrinter>;
         let auth: Arc<dyn Auth> = auth_for_backend(warning_printer, backend).into();
         let adapter_config = AdapterConfig::new(config);
         let quoting = package_quoting
             .try_into()
             .expect("Failed to convert quoting to resolved quoting");
         let stmt_splitter = Arc::new(DefaultStmtSplitter {});
-        // No cloud config needed — bridge adapter is used for internal operations, not user-facing queries.
-        let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false, None);
 
-        let engine = AdbcEngine::new(
+        // Parse adapters carry dependencies (quoting, type ops, relation
+        // creation) but never run SQL during parse — see the note on
+        // `ParseAdapterState::engine`. Build a mock engine so a parse adapter can
+        // never open a real warehouse connection.
+        let engine = AdbcEngine::new_mock(
             adapter_type,
             auth,
             adapter_config,
             quoting,
-            query_comment,
             type_ops,
             stmt_splitter,
             relation_cache,
             BTreeMap::new(),
-            None,
         );
 
         Box::new(ParseAdapterState::new(
@@ -234,7 +215,6 @@ impl Adapter {
         self.cancellation_token.clone()
     }
 
-    /// Get a reference to the time machine, if enabled.
     pub fn time_machine(&self) -> Option<&TimeMachine> {
         self.time_machine.as_ref()
     }
@@ -327,11 +307,15 @@ impl Adapter {
         ctx: Option<&QueryCtx>,
         sql: &str,
         fetch: bool,
+        options: Option<Options>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let t_borrow = std::time::Instant::now();
                 let mut conn = adapter.borrow_tlocal_connection(None, None)?;
-                adapter.execute(
+                tracing::debug!("borrow_tlocal_connection() took {:?}", t_borrow.elapsed());
+                let t_execute = std::time::Instant::now();
+                let result = adapter.execute(
                     None,
                     conn.as_mut(),
                     ctx,
@@ -339,9 +323,14 @@ impl Adapter {
                     false,
                     fetch,
                     None,
-                    None,
+                    options,
                     self.cancellation_token.clone(),
-                )
+                );
+                tracing::debug!(
+                    "adapter.execute() (full call, incl. adbc_execute_with_options) took {:?}",
+                    t_execute.elapsed()
+                );
+                result
             }
             Parse(_) => Ok((AdapterResponse::default(), AgateTable::default())),
         }
@@ -356,31 +345,42 @@ impl Adapter {
     }
 
     pub async fn hydrate_relation_cache(&self, db_schemas: &[CatalogAndSchema]) -> FsResult<()> {
-        let collected_relations = if let Some(metadata_adapter) = self.metadata_adapter() {
-            metadata_adapter
-                .list_relations_in_parallel(db_schemas, self.cancellation_token())
-                .await
-                .map_err(into_fs_error)
-                .map(|r| {
-                    r.into_iter()
-                        .filter_map(|(k, v)| {
-                            if let Ok(relations) = v {
-                                Some((k, relations))
-                            } else {
-                                // XXX: Warnings are not shown right now since this is purely for performance
-                                None
-                            }
-                        })
-                        .collect::<BTreeMap<CatalogAndSchema, Vec<Arc<dyn BaseRelation>>>>()
-                })?
-        } else {
-            // No metadata adapter available
-            Default::default()
+        let Some(metadata_adapter) = self.metadata_adapter() else {
+            return Ok(());
         };
+        let collected_relations = metadata_adapter
+            .list_relations_in_parallel(db_schemas, self.cancellation_token())
+            .await
+            .map_err(into_fs_error)
+            .map(|r| {
+                r.into_iter()
+                    .filter_map(|(k, v)| {
+                        if let Ok(relations) = v {
+                            Some((k, relations))
+                        } else {
+                            // XXX: Warnings are not shown right now since this is purely for performance
+                            None
+                        }
+                    })
+                    .collect::<BTreeMap<CatalogAndSchema, Vec<Arc<dyn BaseRelation>>>>()
+            })?;
 
-        self.engine()
-            .relation_cache()
-            .insert_many(collected_relations);
+        let cache = self.engine().relation_cache();
+        cache.insert_many(collected_relations);
+
+        // Pull cross-relation dependency edges so cascade-drop can evict
+        // dependents (e.g. Redshift view rename-swap → `drop ... cascade`).
+        // Adapters without a pg_depend-style query return Ok(empty).
+        match metadata_adapter
+            .fetch_relation_dependency_links_inner(db_schemas, self.cancellation_token())
+            .await
+        {
+            Ok(links) => cache.add_links(links),
+            Err(e) => tracing::warn!(
+                "relation_cache: failed to fetch dependency links \
+                 (cascade evictions may miss dependents): {e:?}"
+            ),
+        }
         Ok(())
     }
 
@@ -769,6 +769,13 @@ impl Adapter {
                 }
                 let mut result = vec![];
                 for constraint in &raw_constraints {
+                    warn_constraint_support(
+                        adapter.adapter_type(),
+                        constraint.type_,
+                        adapter.get_constraint_support(constraint.type_),
+                        constraint.warn_unsupported,
+                        constraint.warn_unenforced,
+                    );
                     let rendered =
                         render_model_constraint(adapter.adapter_type(), constraint.clone());
                     if let Some(rendered) = rendered {
@@ -851,7 +858,7 @@ impl Adapter {
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
-        options: Option<HashMap<String, String>>,
+        options: Option<Options>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -1010,7 +1017,7 @@ impl Adapter {
                 adapter
                     .engine()
                     .relation_cache()
-                    .evict_relation(relation.as_ref() as &dyn BaseRelation);
+                    .drop_relation_cascade(relation.as_ref() as &dyn BaseRelation);
                 Ok(adapter.drop_relation(state, &relation)?)
             }
             Parse(_) => Ok(none_value()),
@@ -1209,8 +1216,6 @@ impl Adapter {
         }
     }
 
-    /// Gets the macro for the given incremental strategy.
-    ///
     /// Additionally some validations are done:
     /// 1. Assert that if the given strategy is a "builtin" strategy, then it must
     ///    also be defined as a "valid" strategy for the associated adapter
@@ -1314,8 +1319,6 @@ impl Adapter {
         }
     }
 
-    /// Get hard deletes behavior.
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1964
     ///
     /// ```python
@@ -1365,8 +1368,6 @@ impl Adapter {
         }
     }
 
-    /// Get relation.
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1014
     ///
     /// ```python
@@ -1456,11 +1457,20 @@ impl Adapter {
                             );
 
                             if let Ok(relations_list) = maybe_relations_list {
-                                let to_insert = Vec::from([(db_schema, relations_list)]);
-                                adapter
-                                    .engine()
-                                    .relation_cache()
-                                    .insert_many(to_insert.into_iter());
+                                let to_insert = Vec::from([(db_schema.clone(), relations_list)]);
+                                let cache = adapter.engine().relation_cache();
+                                cache.insert_many(to_insert.into_iter());
+                                match adapter.list_relation_dependency_links(
+                                    &query_ctx,
+                                    conn.as_mut(),
+                                    &db_schema,
+                                    self.cancellation_token.clone(),
+                                ) {
+                                    Ok(links) => cache.add_links(links),
+                                    Err(e) => tracing::warn!(
+                                        "relation_cache: list_relation_dependency_links failed: {e}"
+                                    ),
+                                }
 
                                 self.get_relation_value_from_cache(temp_relation.as_ref())
                                     .or(Some(none_value()))
@@ -1530,8 +1540,6 @@ impl Adapter {
         }
     }
 
-    /// Get a catalog relation object.
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L338
     ///
     /// ```python
@@ -1562,8 +1570,6 @@ impl Adapter {
         }
     }
 
-    /// Get missing columns.
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L852
     ///
     /// ```python
@@ -1598,8 +1604,6 @@ impl Adapter {
         }
     }
 
-    /// Get columns in relation.
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L741
     ///
     /// ```python
@@ -1667,8 +1671,6 @@ impl Adapter {
         }
     }
 
-    /// Get relations by pattern
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L858
     ///
     /// ```python
@@ -1716,7 +1718,6 @@ impl Adapter {
         }
     }
 
-    /// Get column schema from query
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_column_schema_from_query(
         &self,
@@ -1746,8 +1747,6 @@ impl Adapter {
         }
     }
 
-    /// Get columns in select sql
-    ///
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L443-L444
     /// Shares the same input and output as get_column_schema_from_query.
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -1840,19 +1839,15 @@ impl Adapter {
     ///
     /// Converts flat column definitions into nested structures.
     /// Only available with BigQuery adapter.
-    #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn nest_column_data_types(
-        &self,
-        state: &State,
-        args: &[Value],
-    ) -> Result<Value, minijinja::Error> {
+    #[tracing::instrument(skip(self), level = "trace")]
+    pub fn nest_column_data_types(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new("nest_column_data_types", &["columns"], args);
                 let columns = iter.next_arg::<&Value>()?;
                 iter.finish()?;
 
-                adapter.nest_column_data_types(state, columns)
+                adapter.nest_column_data_types(columns)
             }
             Parse(_) => Ok(empty_map_value()),
         }
@@ -2017,8 +2012,7 @@ impl Adapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L579-L586
     ///
-    /// # Panics
-    /// This method will panic if called on a non-BigQuery adapter
+    /// Panics if called on a non-BigQuery adapter.
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn parse_partition_by(
         &self,
@@ -2039,8 +2033,6 @@ impl Adapter {
         }
     }
 
-    /// Get table options
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/57b131a11ea24b79cfebda003c15456972892427/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L793
     ///
     /// ```python
@@ -2553,7 +2545,6 @@ impl Adapter {
         }
     }
 
-    /// Returns true if the adapter supports the given feature.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn has_feature(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -2915,10 +2906,8 @@ impl Adapter {
         }
     }
 
-    /// Resolve file format from model config.
-    ///
-    /// Returns the file_format from config, or adapter-specific default.
-    /// Databricks default: "delta". Used by clone materialization.
+    /// When config omits file_format, falls back to this adapter's default (Databricks
+    /// defaults to "delta"). Used by clone materialization.
     ///
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py
     /// DatabricksConfig has file_format: str = "delta"
@@ -3041,7 +3030,6 @@ impl Adapter {
         }
     }
 
-    /// Get the list of valid incremental strategies for this adapter.
     #[tracing::instrument(skip(self, _state), level = "trace")]
     pub fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -3052,9 +3040,20 @@ impl Adapter {
         }
     }
 
-    pub fn is_cluster(&self) -> Result<Value, minijinja::Error> {
+    pub fn is_cluster(&self, state: &State) -> Result<Value, minijinja::Error> {
         let is_cluster = match &self.inner {
-            Typed { adapter, .. } => adapter.is_cluster().map_err(minijinja::Error::from)?,
+            Typed { adapter, .. } => {
+                let recorded = match adapter.as_replay() {
+                    Some(replay_adapter) => replay_adapter
+                        .replay_is_cluster(state)
+                        .map_err(minijinja::Error::from)?,
+                    None => None,
+                };
+                match recorded {
+                    Some(is_cluster) => is_cluster,
+                    None => adapter.is_cluster().map_err(minijinja::Error::from)?,
+                }
+            }
             Parse(_) => false,
         };
         Ok(Value::from(is_cluster))
@@ -3098,8 +3097,6 @@ impl Adapter {
         }
     }
 
-    /// Get columns to persist documentation for.
-    ///
     /// Given existing columns and columns from the model, determines which columns
     /// to update and persist docs for. Only supported by Databricks.
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -3233,7 +3230,7 @@ impl Adapter {
                 let model_val = iter.next_arg::<&Value>()?;
                 iter.finish()?;
 
-                let node =
+                let mut node =
                     minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model_val.clone())
                         .map_err(|e| {
                             minijinja::Error::new(
@@ -3241,6 +3238,16 @@ impl Adapter {
                                 e.to_string(),
                             )
                         })?;
+
+                // The Jinja `model` object loads compiled SQL from disk on access and keeps it out
+                // of its enumeration, so it never survives the conversion above. Copy it over for
+                // the components that diff a relation's query against its applied definition.
+                if let InternalDbtNodeWrapper::Model(model) = &mut node
+                    && let Ok(compiled_code) = model_val.get_attr("compiled_code")
+                    && let Some(compiled_code) = compiled_code.as_str()
+                {
+                    model.__model_attr__.compiled_code = Some(compiled_code.to_string());
+                }
 
                 Ok(adapter.get_config_from_model(&node)?)
             }
@@ -3300,10 +3307,6 @@ impl Adapter {
     }
 
     /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement.
-    ///
-    /// # Returns
-    ///
-    /// Returns the required reset state if the warehouse was switched.
     #[tracing::instrument(skip(self), level = "trace")]
     pub fn use_warehouse(
         &self,
@@ -3550,8 +3553,6 @@ impl Adapter {
         }
     }
 
-    /// Get a catalog integration object.
-    ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L334
     ///
     /// ```python
@@ -3592,12 +3593,18 @@ impl Adapter {
                 let mut fetch = iter.next_kwarg::<Option<bool>>("fetch")?.unwrap_or(false);
                 let limit = iter.next_kwarg::<Option<i64>>("limit")?;
                 let options = if let Some(value) = iter.next_kwarg::<Option<Value>>("options")? {
-                    Some(HashMap::<String, String>::deserialize(value).map_err(|e| {
+                    let options = HashMap::<String, String>::deserialize(value).map_err(|e| {
                         minijinja::Error::new(
                             minijinja::ErrorKind::SerdeDeserializeError,
                             e.to_string(),
                         )
-                    })?)
+                    })?;
+                    Some(
+                        options
+                            .into_iter()
+                            .map(|(k, v)| (k, OptionValue::String(v)))
+                            .collect::<Options>(),
+                    )
                 } else {
                     None
                 };
@@ -3789,7 +3796,7 @@ impl Adapter {
             }
             // only available for BigQuery
             // columns: dict
-            "nest_column_data_types" => self.nest_column_data_types(state, args),
+            "nest_column_data_types" => self.nest_column_data_types(args),
             // partition_by: dict, columns: List[Column]
             // only available for BigQuery
             "get_struct_select_expression" => {
@@ -3848,11 +3855,10 @@ impl Adapter {
             "parse_index" => self.parse_index(state, args),
             // sql: str
             "redact_credentials" => self.redact_credentials(state, args),
-            "is_cluster" => self.is_cluster(),
+            "is_cluster" => self.is_cluster(state),
             // capability_name: str
             "has_dbr_capability" => self.has_dbr_capability(state, args),
             "table_format" => {
-                // Returns the table format for a relation's database (e.g. "ducklake", "iceberg", "default").
                 // relation: Relation
                 let iter = ArgsIter::new(name, &["relation"], args);
                 let relation_val = iter.next_arg::<&Value>()?;

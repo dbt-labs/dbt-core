@@ -84,6 +84,7 @@ pub enum MethodName {
     // new syntax: column:<node_id>.<column_name>
     // todo: maybe better?: column:<node_id>#<column_name>
     Column,
+    Selector,
 }
 
 impl MethodName {
@@ -1104,6 +1105,35 @@ mod tests {
         };
         assert_eq!(criteria_both.to_string(), "+fqn:model_a+");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_selector_method_cli_parse() -> FsResult<()> {
+        let result = parse_single_selector("selector:my_selector")?;
+        assert_eq!(result.method, MethodName::Selector);
+        assert_eq!(result.value, "my_selector");
+        assert_eq!(result.parents_depth, None);
+        assert_eq!(result.children_depth, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_selector_method_cli_parse_with_graph_ops() -> FsResult<()> {
+        let result = parse_single_selector("1+selector:my_selector+2")?;
+        assert_eq!(result.method, MethodName::Selector);
+        assert_eq!(result.value, "my_selector");
+        assert_eq!(result.parents_depth, Some(1));
+        assert_eq!(result.children_depth, Some(2));
+        Ok(())
+    }
+
+    #[test]
+    fn test_selector_method_cli_parse_at_operator() -> FsResult<()> {
+        let result = parse_single_selector("@selector:my_selector")?;
+        assert_eq!(result.method, MethodName::Selector);
+        assert_eq!(result.value, "my_selector");
+        assert!(result.childrens_parents);
         Ok(())
     }
 }

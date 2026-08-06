@@ -158,6 +158,36 @@ impl SqliteHandler {
         Ok(())
     }
 
+    pub fn write_objects(
+        &self,
+        unique_id: &str,
+        batches: &[RecordBatch],
+        schema: Arc<Schema>,
+    ) -> Result<(), RecordReplayError> {
+        let conn = self.connect()?;
+        let data_base64 = self.encode_arrow_ipc(batches, schema)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
+             VALUES (?1, 'get_objects', NULL, ?2, NULL)",
+            params![unique_id, data_base64],
+        )?;
+        Ok(())
+    }
+
+    pub fn write_objects_error(
+        &self,
+        unique_id: &str,
+        error_msg: &str,
+    ) -> Result<(), RecordReplayError> {
+        let conn = self.connect()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
+             VALUES (?1, 'get_objects', NULL, NULL, ?2)",
+            params![unique_id, error_msg],
+        )?;
+        Ok(())
+    }
+
     pub fn read_execute(
         &self,
         unique_id: &str,
@@ -184,6 +214,19 @@ impl SqliteHandler {
         let mut stmt = conn.prepare(
             "SELECT sql, data_base64, error FROM recordings
              WHERE unique_id = ?1 AND record_type = 'get_table_schema'",
+        )?;
+        stmt.query_row(params![unique_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .map_err(|e| RecordReplayError(format!("Could not query row: {e}")))
+        .and_then(|(sql, err, data)| RecordingEntry::try_from_sqlite_row(sql, err, data))
+    }
+
+    pub fn read_objects(&self, unique_id: &str) -> Result<RecordingEntry, RecordReplayError> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT sql, data_base64, error FROM recordings
+             WHERE unique_id = ?1 AND record_type = 'get_objects'",
         )?;
         stmt.query_row(params![unique_id], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))

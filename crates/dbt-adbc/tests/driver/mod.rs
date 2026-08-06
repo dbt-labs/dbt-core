@@ -126,7 +126,7 @@ mod tests {
                 builder.with_named_option("path", database_path)?;
                 Ok(builder)
             }
-            Backend::Fdcs => todo!("dbt Compute is WIP"),
+            Backend::Alt => unimplemented!("Alt backend database builder in tests"),
             Backend::ClickHouse => {
                 let mut builder = database::Builder::new(backend);
                 let uri = env::var("ADBC_CLICKHOUSE_URI")

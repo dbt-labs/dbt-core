@@ -1,10 +1,7 @@
-use std::sync::Arc;
-
 use dbt_error::ErrorCode;
 
 use crate::{
     io_args::StaticAnalysisKind,
-    io_utils::StatusReporter,
     tracing::dbt_emit::{emit_error_log_message, emit_error_log_message_package_scoped},
 };
 
@@ -59,7 +56,6 @@ pub fn check_deprecated_static_analysis_kind(
     kind: StaticAnalysisKind,
     origin: StaticAnalysisDeprecationOrigin<'_>,
     dependency_package_name: Option<&str>,
-    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
     if !is_deprecated_static_analysis_kind(kind) {
         return;
@@ -81,7 +77,6 @@ pub fn check_deprecated_static_analysis_kind(
             ErrorCode::DeprecatedStaticAnalysisValue,
             message,
             package_name,
-            status_reporter,
         );
         return;
     }
@@ -122,9 +117,5 @@ pub fn check_deprecated_static_analysis_kind(
         _ => return,
     };
 
-    emit_error_log_message(
-        ErrorCode::DeprecatedStaticAnalysisValue,
-        message,
-        status_reporter,
-    );
+    emit_error_log_message(ErrorCode::DeprecatedStaticAnalysisValue, message);
 }

@@ -200,7 +200,7 @@ pub async fn read_and_validate_dbt_project(
 
     // Try to deserialize only the package name for error reporting,
     // falling back to the path if deserialization fails
-    let dependency_package_name = value_from_file_async(io, &path_to_dbt_project, false, None)
+    let dependency_package_name = value_from_file_async(&path_to_dbt_project, false, None)
         .await
         .ok()
         .and_then(|value| {
@@ -224,7 +224,6 @@ pub async fn read_and_validate_dbt_project(
     into_typed_with_jinja(
         io,
         value_from_file_async(
-            io,
             &path_to_dbt_project,
             show_errors_or_warnings,
             Some(&dependency_package_name),

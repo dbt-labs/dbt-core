@@ -2,10 +2,7 @@
 
 #![allow(clippy::let_and_return)]
 
-use std::sync::Arc;
-
 use dbt_common::ErrorCode;
-use dbt_common::io_utils::StatusReporter;
 
 mod macro_exec;
 mod value;
@@ -74,9 +71,7 @@ pub use response::AdapterResponse;
 /// IMPORTANT: don't change this function to add a new adapter!!! Change the
 /// [NON_EXPERIMENTAL_ADAPTERS](dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS)
 /// instead.
-pub fn experimental_adapters_allowed(
-    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
-) -> bool {
+pub fn experimental_adapters_allowed() -> bool {
     use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 
     match dbt_env::env_var_bool("DBT_ALLOW_EXPERIMENTAL_ADAPTERS") {
@@ -87,7 +82,7 @@ pub fn experimental_adapters_allowed(
         }
         Ok(Some(allow)) => allow, // ...unless explicitly allowed.
         Err(msg) => {
-            emit_warn_log_message(ErrorCode::InvalidConfig, msg, status_reporter);
+            emit_warn_log_message(ErrorCode::InvalidConfig, msg);
             false // disable when variable value is malformed
         }
     }

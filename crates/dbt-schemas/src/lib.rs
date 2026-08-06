@@ -32,19 +32,21 @@ pub mod schemas {
     pub mod serde;
     mod sources;
     pub mod user_settings;
-    pub use prev_state::{ModificationType, OnManifestLoadFailure, StateArtifacts};
+    pub use prev_state::{
+        ModificationType, OnManifestLoadFailure, StateArtifacts, config_excluded_keys,
+    };
     pub use run_results::{
-        ContextRunResult, RunResultOutput, RunResultsArgs, RunResultsArtifact, RunResultsMetadata,
-        TimingInfo,
+        BatchResults, ContextRunResult, DbtCommandExecutionArtifacts, RunResultOutput,
+        RunResultsArgs, RunResultsArtifact, RunResultsMetadata, TimingInfo,
     };
     pub use user_settings::UserSettings;
 
     pub mod nodes;
     pub use nodes::{
-        AdapterAttr, CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure, DbtExposureAttr,
-        DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
-        DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
-        DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
+        AbsorbedOverload, AdapterAttr, CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure,
+        DbtExposureAttr, DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed,
+        DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr,
+        DbtUnitTest, DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
         InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, NodePathKind, Nodes,
         TestMetadata, TimeSpine, TimeSpinePrimaryColumn, deserialize_empty_string_as_none,
         serialize_none_as_empty_string,
@@ -127,13 +129,13 @@ pub mod schemas {
             pub mod analysis_config;
             pub mod common;
             pub mod config_keys;
+            pub mod config_merge;
+            pub mod config_merge_tests;
             pub mod data_test_config;
             pub mod exposure_config;
             pub mod function_config;
             pub mod metric_config;
             pub mod model_config;
-            pub mod omissible_utils;
-            pub mod omissible_utils_tests;
             pub mod saved_query_config;
             pub mod seed_config;
             pub mod semantic_model_config;
@@ -145,11 +147,9 @@ pub mod schemas {
         pub use configs::analysis_config::{
             AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,
         };
-        pub use configs::common::{
-            WarehouseSpecificNodeConfig, same_warehouse_config,
-            same_warehouse_config_with_unrendered,
-        };
+        pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
         pub use configs::config_keys::ConfigKeys;
+        pub use configs::config_merge::{DefaultTo, Packages, Tags};
         pub use configs::data_test_config::{
             DEFAULT_DATA_TEST_ERROR_IF, DEFAULT_DATA_TEST_FAIL_CALC, DEFAULT_DATA_TEST_SEVERITY,
             DEFAULT_DATA_TEST_WARN_IF, DataTestConfig, ProjectDataTestConfig,
@@ -211,6 +211,7 @@ pub mod schemas {
             FunctionReturnType, Volatility,
         };
         pub use metrics_properties::MetricsProperties;
+        pub use model_properties::DataTestState;
         pub use model_properties::ModelConstraint;
         pub use model_properties::ModelFreshness;
         pub use model_properties::ModelProperties;
@@ -226,7 +227,7 @@ pub mod schemas {
         pub use saved_queries_properties::SavedQueriesProperties;
         pub use seed_properties::SeedProperties;
         pub use snapshot_properties::SnapshotProperties;
-        pub use source_properties::{SourceProperties, Tables};
+        pub use source_properties::{SourceProperties, Tables, TablesConfig};
         pub use unit_test_properties::{UnitTestOverrides, UnitTestProperties};
     }
 

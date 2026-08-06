@@ -103,12 +103,16 @@ fn collect_binaries(dir: &Path) -> Result<Vec<Binary>> {
 }
 
 /// PEP 491 wheel filename; the single source of truth shared by `pack` and `sdist`.
+/// `python_tag`/`abi_tag` are the interpreter/ABI compatibility tags — `py3`/`none`
+/// for the binary CLI wheel, `cp310`/`abi3` for the maturin `dbt-core` extension.
 pub(crate) fn wheel_filename(
     dist_normalized: &str,
     version_pep440: &str,
+    python_tag: &str,
+    abi_tag: &str,
     platform_tag: &str,
 ) -> String {
-    format!("{dist_normalized}-{version_pep440}-py3-none-{platform_tag}.whl")
+    format!("{dist_normalized}-{version_pep440}-{python_tag}-{abi_tag}-{platform_tag}.whl")
 }
 
 /// Packs one binary into a wheel under `out_dir`, returning the wheel path.
@@ -122,7 +126,8 @@ fn pack_wheel(
     let platform_tag = target_to_platform_tag(&bin.target_triple)
         .ok_or_else(|| anyhow!("unsupported target triple {:?}", bin.target_triple))?;
     let dist = normalize_wheel_name(&spec.wheel_name);
-    let wheel_filename = wheel_filename(&dist, version_pep440, &platform_tag);
+    // The CLI wheel wraps a prebuilt binary — interpreter-agnostic, so `py3-none`.
+    let wheel_filename = wheel_filename(&dist, version_pep440, "py3", "none", &platform_tag);
     let wheel_path = out_dir.join(&wheel_filename);
     let dist_info = format!("{dist}-{version_pep440}.dist-info");
     let data_scripts = format!("{dist}-{version_pep440}.data/scripts");
@@ -298,6 +303,20 @@ mod tests {
         assert_eq!(normalize_wheel_name("DBT-SA-CLI"), "dbt_sa_cli");
         assert_eq!(normalize_wheel_name("dbt--sa..cli"), "dbt_sa_cli");
         assert_eq!(normalize_wheel_name("plain"), "plain");
+    }
+
+    #[test]
+    fn wheel_filename_carries_interpreter_and_abi_tags() {
+        // Binary CLI wheel: interpreter-agnostic.
+        assert_eq!(
+            wheel_filename("dbt", "2.0.0", "py3", "none", "manylinux_2_28_x86_64"),
+            "dbt-2.0.0-py3-none-manylinux_2_28_x86_64.whl"
+        );
+        // maturin abi3 extension wheel (the `dbt-core` package).
+        assert_eq!(
+            wheel_filename("dbt_core", "2.0.0", "cp310", "abi3", "macosx_11_0_arm64"),
+            "dbt_core-2.0.0-cp310-abi3-macosx_11_0_arm64.whl"
+        );
     }
 
     #[test]

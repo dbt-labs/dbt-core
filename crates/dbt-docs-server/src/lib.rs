@@ -28,6 +28,7 @@ mod assets;
 #[cfg(feature = "embed-ui")]
 mod embed;
 mod handlers;
+mod openapi;
 pub mod providers;
 mod server;
 pub mod state;

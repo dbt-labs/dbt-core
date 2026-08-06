@@ -35,7 +35,6 @@ fn make_duckdb_parse_adapter() -> Arc<Adapter> {
         DEFAULT_DBT_QUOTING,
         Arc::new(DefaultTypeOps::new(AdapterType::DuckDB)),
         None,
-        None,
     );
     Arc::new(adapter)
 }
@@ -323,7 +322,6 @@ fn test_location_exists_parse_mode_returns_false() {
         &[Value::from("/nonexistent/path")],
     )
     .unwrap();
-    // Parse-mode adapter always returns false
     assert_eq!(result, Value::from(false));
 }
 

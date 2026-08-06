@@ -132,9 +132,14 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Adapter
                     .map(|s| s.to_owned())
                     .unwrap_or_else(|| "".to_string()),
                 // Reference: https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_options.py#L129
+                // hours_to_expiration is loosely typed (may be a non-numeric
+                // string such as "null"); only a parseable integer yields a
+                // materialized-view expiration.
                 expiration: model_cfg
                     .hours_to_expiration
-                    .map(|v| Utc::now() + TimeDelta::hours(v as i64)),
+                    .as_ref()
+                    .and_then(|v| v.to_string().parse::<i64>().ok())
+                    .map(|v| Utc::now() + TimeDelta::hours(v)),
             }
         }
     };

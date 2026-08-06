@@ -4,6 +4,7 @@ package v1.public.events.fusion;
 
 import "dbtlabs/proto/public/v1/common/vortex_options.proto";
 import "dbtlabs/proto/public/v1/events/vortex.proto";
+import "dbtlabs/proto/public/v1/common/vortex_telemetry_contexts.proto";
 
 option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/fusion";
 
@@ -43,6 +44,7 @@ message AdapterInfo {
   // For supported warehouses, we create an MD5 hash of the connection string.
   // The specific string varies per adapter_type.
   string adapter_unique_id = 5;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 // Adapter Info V2 Event was created when we needed to collect more information
@@ -80,6 +82,7 @@ message AdapterInfoV2 {
   // that specific model) and the model_adapter_table_format (Iceberg or
   // something else).
   map<string, string> model_adapter_details = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // Invocation Event is emitted by dbt when a user runs a command and begins to
@@ -149,6 +152,7 @@ message Invocation {
 
   // The distribution of dbt that was used to run this command.
   string distribution = 11;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 12;
 }
 
 // Invocation Environment Event is the primary way we are able to associate
@@ -174,6 +178,7 @@ message InvocationEnv {
   // dbt Cloud activity and account. Different cloud services have used different
   // string formats and IDs provided.
   string environment = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Package Install Event is emitted when dbt deps (or other commands that
@@ -204,6 +209,7 @@ message PackageInstall {
   // either a semantic version of the package (if installed through the hub) or
   // a git commit hash (if installed through git).
   string version = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Resource Counts Events fire after an invocation event to give a count of all
@@ -269,6 +275,7 @@ message ResourceCounts {
 
   // total count of catalogs in the project.
   int32 catalogs = 18;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 19;
 }
 
 // Run Model Event will be emitted when Fusion runs a model or skips a model because
@@ -361,6 +368,7 @@ message RunModel {
   // this is the catalog backend kind, distinct from catalog_name (the user-chosen
   // catalog label). empty string when the model does not use catalogs.yml.
   string catalog_type = 23;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 24;
 }
 
 message Onboarding {
@@ -387,6 +395,7 @@ message Onboarding {
   // or token in the user's local directory which we use to maintain user information
   // across sessions. This is usually found in ~/.dbt/.user.yml.
   string user_id = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 enum OnboardingScreen {
@@ -463,12 +472,31 @@ message Login {
   // Platform account identifier from the "https://dbt.com/account_identifier" JWT claim.
   // Absent if no JWT is available or the claim is absent.
   optional string platform_account_identifier = 10;
+
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 11;
+
+  optional LoginErrorCode error_code = 12;
+  optional string error_message = 13;
 }
 
 enum LoginType {
   LOGIN_TYPE_UNSPECIFIED = 0;
   PLATFORM = 1;
   STATE = 2;
+}
+
+// LoginErrorCode should mirror dbt_platform_auth::AuthError in the fs codebase.
+// This enum need not track the internal "Aborted" variant of that error enum because
+// it is an internal variant that is only used to signal that either the platform or
+// dbt state login callback was aborted because the other callback completed.
+enum LoginErrorCode {
+    NOT_AUTHENTICATED = 0;
+    AUTHENTICATION_EXPIRED = 1;
+    INACCESSIBLE_SOURCE = 2;
+    MALFORMED_CONFIG = 3;
+    INTERACTIVE_FAILURE = 4;
+    INADEQUATE_SCOPES = 5;
+    REFRESH_FAILED = 6;
 }
 
 // StaticAnalysisInvocation is emitted once per invocation when static
@@ -505,4 +533,5 @@ message StaticAnalysisInvocation {
 
   // Count of nodes with static analysis off after propagation.
   int32 off_node_count = 9;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 10;
 }

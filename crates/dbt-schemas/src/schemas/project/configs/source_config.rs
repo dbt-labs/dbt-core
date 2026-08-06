@@ -10,20 +10,20 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use super::omissible_utils::handle_omissible_override;
-use crate::default_to;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{
     ClusterConfig, FreshnessDefinition, Schedule, SchemaOrigin, SyncConfig,
 };
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::default_meta_and_tags;
+use crate::schemas::project::configs::config_merge::Tags;
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
-    IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
-    f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, StringOrInteger,
+    bool_or_string_bool, f64_or_string_f64, hours_to_expiration_or_string_omissible,
+    u64_or_string_u64,
 };
+use dbt_proc_macros::DefaultTo;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -53,9 +53,9 @@ pub struct ProjectSourceConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -207,6 +207,12 @@ pub struct ProjectSourceConfig {
     // Postgres specific fields
     #[serde(default, rename = "+indexes")]
     pub indexes: IndexesConfig,
+    #[serde(
+        default,
+        rename = "+unlogged",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unlogged: Option<bool>,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
@@ -234,21 +240,20 @@ impl TypedRecursiveConfig for ProjectSourceConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema,
+)]
 pub struct SourceConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub event_time: Option<String>,
-    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
+    #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(default)]
     pub freshness: Omissible<Option<FreshnessDefinition>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Verbatim<Option<String>>,
     #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
@@ -275,7 +280,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
             event_time: config.event_time,
             meta: config.meta,
             freshness: config.freshness,
-            tags: config.tags,
+            tags: Tags(config.tags),
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
@@ -378,6 +383,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+                unlogged: config.unlogged,
 
                 // sources doesn't need this field
                 primary_key: PrimaryKeyConfig::default(),
@@ -394,7 +400,7 @@ impl From<SourceConfig> for ProjectSourceConfig {
             event_time: config.event_time,
             meta: config.meta,
             freshness: config.freshness,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
@@ -470,6 +476,7 @@ impl From<SourceConfig> for ProjectSourceConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             // Postgres Fields
             indexes: config.__warehouse_specific_config__.indexes,
+            unlogged: config.__warehouse_specific_config__.unlogged,
             // Schedule (Databricks streaming tables)
             schedule: config.__warehouse_specific_config__.schedule,
             __additional_properties__: BTreeMap::new(),
@@ -509,49 +516,7 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
     }
 
     fn default_to(&mut self, parent: &SourceConfig) {
-        let SourceConfig {
-            enabled,
-            event_time,
-            meta,
-            freshness,
-            tags,
-            loaded_at_field,
-            loaded_at_query,
-            static_analysis,
-            schema_origin,
-            sync,
-            external_location,
-            formatter,
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
-
-        // Handle flattened configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
-
-        // Handle Omissible fields for hierarchical overrides
-        handle_omissible_override(freshness, &parent.freshness);
-
-        default_to!(
-            parent,
-            [
-                enabled,
-                event_time,
-                loaded_at_field,
-                loaded_at_query,
-                static_analysis,
-                schema_origin,
-                sync,
-                external_location,
-                formatter,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 

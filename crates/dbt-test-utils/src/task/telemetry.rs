@@ -157,22 +157,6 @@ impl Task for ExecuteAndCompareTelemetry {
     }
 }
 
-#[async_trait]
-impl Task for Arc<ExecuteAndCompareTelemetry> {
-    async fn run(
-        &self,
-        project_env: &ProjectEnv,
-        test_env: &TestEnv,
-        task_index: usize,
-    ) -> TestResult<()> {
-        self.as_ref().run(project_env, test_env, task_index).await
-    }
-
-    fn is_counted(&self) -> bool {
-        true
-    }
-}
-
 /// Panics when a command vector already contains a flag owned by telemetry snapshot setup.
 fn assert_flag_absent(cmd_vec: &[String], flag: &str, message: &str) {
     if cmd_vec.iter().any(|arg| arg.contains(flag)) {
@@ -630,8 +614,17 @@ fn canonicalize_telemetry_ids(content: String) -> String {
         .join("\n")
 }
 
-/// Removes telemetry records whose event type is listed as unstable.
+/// Matches the `body` of ad hoc perf-debugging `tracing::debug!("... took {duration:?}")`
+/// log records, which embed a live-measured duration and can never reproduce byte-for-byte
+/// across runs.
+const PERF_TIMING_LOG_BODY_PATTERN: &str = r"took [0-9.]+(?:ns|µs|ms|s)$";
+
+/// Removes telemetry records whose event type is listed as unstable, and ad hoc
+/// perf-timing log records whose body embeds a live-measured, non-reproducible duration.
 fn remove_unstable_telemetry_records(content: String) -> String {
+    let timing_re = regex::Regex::new(PERF_TIMING_LOG_BODY_PATTERN)
+        .expect("Invalid perf-timing log body regex");
+
     content
         .lines()
         .filter_map(|line| {
@@ -645,10 +638,14 @@ fn remove_unstable_telemetry_records(content: String) -> String {
             if event_type
                 .is_some_and(|event_type| UNSTABLE_TELEMETRY_EVENT_TYPES.contains(&event_type))
             {
-                None
-            } else {
-                Some(line.to_string())
+                return None;
             }
+            if event_type == Some("v1.public.events.fusion.log.LogMessage")
+                && string_field(&json, "body").is_some_and(|body| timing_re.is_match(body))
+            {
+                return None;
+            }
+            Some(line.to_string())
         })
         .collect::<Vec<_>>()
         .join("\n")

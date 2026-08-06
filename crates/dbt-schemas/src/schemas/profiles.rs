@@ -49,7 +49,7 @@ pub enum DbConfig {
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
-    Fdcs(Box<DuckDbConfig>),
+    Alt(Box<AltConfig>),
     // Hive,
     Exasol(Box<ExasolDbConfig>),
     // Oracle,
@@ -120,7 +120,7 @@ impl DbConfig {
             DbConfig::Salesforce(config) => config.client_id.as_deref(),
             // DuckDB `path` is optional — attach-only profiles default to `:memory:`.
             DbConfig::DuckDB(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
-            DbConfig::Fdcs(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
+            DbConfig::Alt(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
             DbConfig::Spark(config) => config.host.as_deref(),
             DbConfig::Fabric(config) => config.host.as_deref(),
             DbConfig::Exasol(config) => config.host.as_deref(),
@@ -242,15 +242,14 @@ impl DbConfig {
                 "attach",
                 "motherduck_token",
             ],
-            DbConfig::Fdcs(_) => &[
+            DbConfig::Alt(_) => &[
                 "path",
                 "database",
                 "schema",
-                "extensions",
-                "settings",
-                "secrets",
-                "attach",
-                "motherduck_token",
+                "base_url",
+                "method",
+                "token",
+                "organization",
             ],
             // TODO(serramatutu): Spark connection keys
             DbConfig::Spark(_) => &[],
@@ -342,7 +341,7 @@ impl DbConfig {
             DbConfig::Spark(config) => dbt_yaml::to_value(config),
             DbConfig::Fabric(config) => dbt_yaml::to_value(config),
             DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
-            DbConfig::Fdcs(config) => dbt_yaml::to_value(config),
+            DbConfig::Alt(config) => dbt_yaml::to_value(config),
             DbConfig::Exasol(config) => dbt_yaml::to_value(config),
             DbConfig::ClickHouse(config) => dbt_yaml::to_value(config),
         }
@@ -363,7 +362,7 @@ impl DbConfig {
             DbConfig::Fabric(..) => AdapterType::Fabric,
             DbConfig::Exasol(..) => AdapterType::Exasol,
             DbConfig::ClickHouse(..) => AdapterType::ClickHouse,
-            DbConfig::Fdcs(..) => AdapterType::Fdcs,
+            DbConfig::Alt(..) => AdapterType::Alt,
         }
     }
 
@@ -382,7 +381,7 @@ impl DbConfig {
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
             DbConfig::ClickHouse(config) => config.database.as_ref(),
-            DbConfig::Fdcs(config) => config.database.as_ref(),
+            DbConfig::Alt(config) => config.database.as_ref(),
         }
     }
 
@@ -418,7 +417,7 @@ impl DbConfig {
             DbConfig::Databricks(config) => config.schema.as_ref(),
             DbConfig::Spark(config) => config.schema.as_ref(),
             DbConfig::DuckDB(config) => config.schema.as_ref(),
-            DbConfig::Fdcs(config) => config.schema.as_ref(),
+            DbConfig::Alt(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
             DbConfig::Fabric(config) => config.schema.as_ref(),
             DbConfig::Exasol(config) => config.schema.as_ref(),
@@ -441,7 +440,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => None,
             DbConfig::Exasol(config) => config.threads.as_ref(),
             DbConfig::ClickHouse(config) => config.threads.as_ref(),
-            DbConfig::Fdcs(config) => config.threads.as_ref(),
+            DbConfig::Alt(config) => config.threads.as_ref(),
         }
     }
 
@@ -460,7 +459,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => (),
             DbConfig::Exasol(config) => config.threads = threads,
             DbConfig::ClickHouse(config) => config.threads = threads,
-            DbConfig::Fdcs(config) => config.threads = threads,
+            DbConfig::Alt(config) => config.threads = threads,
         }
     }
 
@@ -555,6 +554,10 @@ impl Execute {
 pub struct DbTargets {
     #[serde(rename = "target", default = "default_target")]
     pub default_target: DefaultTargetName,
+    /// Optional output used for models on the alternate compute target (a peer of
+    /// `target`). Overridable with the `--x-alt-target` flag.
+    #[serde(default)]
+    pub x_alt_target: Option<TargetName>,
     pub outputs: HashMap<TargetName, YmlValue>,
 }
 
@@ -622,6 +625,12 @@ pub struct RedshiftDbConfig {
     pub cluster_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_serverless: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serverless_work_group: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serverless_acct_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -890,6 +899,12 @@ pub struct DatabricksDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_secret: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub azure_client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub azure_client_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub azure_tenant_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_redirect_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_scopes: Option<Vec<String>>,
@@ -1002,6 +1017,32 @@ pub struct DuckDbAttachment {
     pub is_ducklake: Option<bool>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
+#[serde(rename_all = "snake_case")]
+pub struct AltConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub organization: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threads: Option<StringOrInteger>,
+    /// Kind of catalog the queries target, e.g. "snowflake". Controls SQL
+    /// identifier-casing normalization on the dbt Compute service.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_catalog: Option<String>,
+}
+
 /// DuckDB adapter configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
@@ -1044,6 +1085,23 @@ pub struct DuckDbConfig {
     /// Root path for external materializations (defaults to ".")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_root: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub okta_auth_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub okta_token_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub okta_client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub organization: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
@@ -1969,9 +2027,9 @@ impl TryFrom<DbConfig> for TargetContext {
                     },
                     retry_all: false,
                     access_key_id: config.access_key_id,
-                    is_serverless: None,
-                    serverless_work_group: None,
-                    serverless_acct_id: None,
+                    is_serverless: config.is_serverless,
+                    serverless_work_group: config.serverless_work_group,
+                    serverless_acct_id: config.serverless_acct_id,
                     token_endpoint: config.token_endpoint,
                     idc_region: config.idc_region,
                     idc_client_display_name: config.idc_client_display_name,
@@ -2014,28 +2072,30 @@ impl TryFrom<DbConfig> for TargetContext {
                 },
             })),
 
-            DbConfig::Fdcs(config) => Ok(TargetContext::DuckDB(DuckDbTargetEnv {
-                path: config.path.clone(),
-                __common__: CommonTargetContext {
-                    // Derive database name from path if not explicitly set (same logic as get_database())
-                    database: config.database.clone().unwrap_or_else(|| {
-                        DuckDBPathInfo::parse_path(config.path.as_deref())
-                            .database
-                            .to_owned()
-                    }),
-                    schema: config.schema.unwrap_or_else(|| "main".to_string()),
-                    type_: adapter_type,
-                    threads: match config.threads {
-                        Some(StringOrInteger::String(threads)) => Some(
-                            threads
-                                .parse::<u16>()
-                                .map_err(|_| "threads must be a positive integer".to_string())?,
-                        ),
-                        Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
-                        None => None,
+            DbConfig::Alt(config) => {
+                Ok(TargetContext::DuckDB(DuckDbTargetEnv {
+                    path: config.path.clone(),
+                    __common__: CommonTargetContext {
+                        // Derive database name from path if not explicitly set (same logic as get_database())
+                        database: config.database.clone().unwrap_or_else(|| {
+                            DuckDBPathInfo::parse_path(config.path.as_deref())
+                                .database
+                                .to_owned()
+                        }),
+                        schema: config.schema.unwrap_or_else(|| "main".to_string()),
+                        type_: adapter_type,
+                        threads: match config.threads {
+                            Some(StringOrInteger::String(threads)) => {
+                                Some(threads.parse::<u16>().map_err(|_| {
+                                    "threads must be a positive integer".to_string()
+                                })?)
+                            }
+                            Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
+                            None => None,
+                        },
                     },
-                },
-            })),
+                }))
+            }
 
             DbConfig::Spark(config) => Ok(TargetContext::Spark(SparkTargetEnv {
                 method: config.method.ok_or_else(|| missing("method"))?,
@@ -2431,6 +2491,48 @@ extensions:
             .get(dbt_yaml::Value::from("drop_without_cascade"))
             .expect("drop_without_cascade should be present in connection mapping");
         assert_eq!(value.as_bool(), Some(true));
+    }
+
+    #[test]
+    fn test_redshift_serverless_fields_reach_connection_mapping() {
+        // #14621: is_serverless / serverless_work_group must survive into the
+        // connection mapping, since that is what the auth layer reads to select
+        // the serverless path. They used to be dropped on deserialization.
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: redshift\n\
+             method: iam\n\
+             host: 127.0.0.1\n\
+             port: 5439\n\
+             database: mydb\n\
+             schema: public\n\
+             region: us-east-1\n\
+             is_serverless: true\n\
+             serverless_work_group: my-workgroup",
+        )
+        .unwrap();
+
+        let DbConfig::Redshift(ref redshift_config) = config else {
+            panic!("Expected DbConfig::Redshift, got {config:?}");
+        };
+        assert_eq!(redshift_config.is_serverless, Some(true));
+        assert_eq!(
+            redshift_config.serverless_work_group.as_deref(),
+            Some("my-workgroup")
+        );
+
+        let mapping = config.to_connection_mapping().unwrap();
+        assert_eq!(
+            mapping
+                .get(dbt_yaml::Value::from("is_serverless"))
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            mapping
+                .get(dbt_yaml::Value::from("serverless_work_group"))
+                .and_then(|v| v.as_str()),
+            Some("my-workgroup")
+        );
     }
 
     #[test]

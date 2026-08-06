@@ -2,6 +2,7 @@ use crate::schemas::common::DocsConfig;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use dbt_common::serde_utils::Omissible;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
+use dbt_proc_macros::StringOrArrayNewtype;
 use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use minijinja::value::ValueKind;
@@ -93,10 +94,7 @@ pub fn yaml_to_fs_error(err: dbt_yaml::Error, filename: Option<&Path>) -> Box<Fs
 }
 
 /// Serialize an `Option<T>` as an empty map `{}` when `None`.
-pub fn serialize_option_as_empty_map<S, T>(
-    val: &Option<T>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
+pub fn serialize_none_as_empty_map<S, T>(val: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
     T: Serialize,
@@ -111,7 +109,7 @@ where
 /// Serialize an `Option<T>` as `T::default()` when `None`. Use for fields where
 /// dbt-core always emits a default value (e.g. `{}`, `[]`, default enum variant)
 /// instead of omitting/null.
-pub fn serialize_option_as_default<S, T>(val: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize_none_as_default<S, T>(val: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
     T: Default + Serialize,
@@ -120,6 +118,43 @@ where
         Some(v) => v.serialize(serializer),
         None => T::default().serialize(serializer),
     }
+}
+
+/// Deserialize inverse of [`serialize_none_as_default`]: deserialize a `T` and
+/// collapse it back to `None` when it equals `T::default()`.
+///
+/// Pair this with `serialize_none_as_default` on `Option<T>` fields so the value
+/// round-trips (`None -> default -> None`). Without it, a field serialized as its
+/// default (e.g. `""`, `{}`) reads back as `Some(default)` instead of `None`,
+/// which breaks typed `state:modified` comparisons. See dbt-core#15513.
+///
+/// Deserializes via `Option<T>` so an explicit `null` (produced by dbt-core and older
+/// Fusion manifests) also collapses to `None` rather than erroring.
+pub fn deserialize_default_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + PartialEq + Deserialize<'de>,
+{
+    let value = Option::<T>::deserialize(deserializer)?;
+    Ok(match value {
+        Some(v) if v == T::default() => None,
+        other => other,
+    })
+}
+
+/// Deserialize inverse of [`serialize_none_as_empty_map`] for `Option<IndexMap>`:
+/// collapse an empty map `{}` back to `None`.
+pub fn deserialize_empty_map_as_none<'de, D>(
+    deserializer: D,
+) -> Result<Option<IndexMap<String, YmlValue>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let map = Option::<IndexMap<String, YmlValue>>::deserialize(deserializer)?;
+    Ok(match map {
+        Some(m) if m.is_empty() => None,
+        other => other,
+    })
 }
 
 /// Serialize a `DocsConfig` always including `node_color` as an explicit null when absent.
@@ -149,7 +184,7 @@ where
 }
 
 /// Serialize an `Option<Vec<T>>` as an empty array `[]` when `None`.
-pub fn serialize_option_as_empty_vec<S, T>(
+pub fn serialize_none_as_empty_vec<S, T>(
     val: &Option<Vec<T>>,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
@@ -236,6 +271,40 @@ where
         .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok())))
 }
 
+/// Deserialize `hours_to_expiration`, distinguishing an omitted key (`Omitted`,
+/// inherits) from an explicit `null` (`Present(None)`, which clears a value
+/// inherited from a higher level of the `models:` hierarchy). Relies on
+/// `#[serde(default)]` to produce `Omitted` for absent keys. See dbt-core#15473.
+///
+/// A present-but-non-numeric value (e.g. the rendered string "null") is kept as a
+/// value rather than collapsed: dbt-core's `BigQueryAdapter.get_common_options`
+/// emits `expiration_timestamp` whenever the config is present and not Python
+/// `None`, interpolating `str(value)`, so "null" must survive to match. See
+/// dbt-labs/fs#11681.
+pub fn hours_to_expiration_or_string_omissible<'de, D>(
+    deserializer: D,
+) -> Result<Omissible<Option<StringOrInteger>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
+    match value {
+        dbt_yaml::Value::Null(_) => Ok(Omissible::Present(None)),
+        other => {
+            if let Some(i) = other.as_i64() {
+                Ok(Omissible::Present(Some(StringOrInteger::Integer(i))))
+            } else if let Some(s) = other.as_str() {
+                // Keeps the rendered "null" string as a value, distinct from null (#11681).
+                Ok(Omissible::Present(Some(StringOrInteger::from(
+                    s.to_string(),
+                ))))
+            } else {
+                Ok(Omissible::Present(None))
+            }
+        }
+    }
+}
+
 pub fn i64_or_string_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
 where
     D: Deserializer<'de>,
@@ -254,6 +323,19 @@ where
     Ok(value
         .as_f64()
         .or_else(|| value.as_str().and_then(|s| s.parse::<f64>().ok())))
+}
+
+pub fn string_or_number_to_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
+    match value {
+        dbt_yaml::Value::String(s, _) => Ok(Some(s)),
+        dbt_yaml::Value::Number(n, _) => Ok(Some(n.to_string())),
+        dbt_yaml::Value::Null(_) => Ok(None),
+        _ => Err(de::Error::custom("expected a string, number, or null")),
+    }
 }
 
 pub fn default_true() -> Option<bool> {
@@ -576,6 +658,45 @@ impl From<StringOrArrayOfStrings> for Vec<String> {
     }
 }
 
+/// Types that can be viewed as `&Option<StringOrArrayOfStrings>`, e.g. the type itself or a
+/// newtype wrapping it (like `Tags`/`Classifiers`). A local trait, since `AsRef` can't be
+/// implemented for the foreign `Option<StringOrArrayOfStrings>` type (orphan rule).
+pub trait AsStringOrArrayOfStrings {
+    fn as_string_or_array_of_strings(&self) -> &Option<StringOrArrayOfStrings>;
+}
+
+impl AsStringOrArrayOfStrings for Option<StringOrArrayOfStrings> {
+    fn as_string_or_array_of_strings(&self) -> &Option<StringOrArrayOfStrings> {
+        self
+    }
+}
+
+pub fn string_or_number_or_array_to_string_array<'de, D>(
+    deserializer: D,
+) -> Result<Option<StringOrArrayOfStrings>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
+    match value {
+        dbt_yaml::Value::String(s, _) => Ok(Some(StringOrArrayOfStrings::String(s))),
+        dbt_yaml::Value::Number(n, _) => Ok(Some(StringOrArrayOfStrings::String(n.to_string()))),
+        dbt_yaml::Value::Sequence(values, _) => values
+            .into_iter()
+            .map(|value| match value {
+                dbt_yaml::Value::String(s, _) => Ok(s),
+                dbt_yaml::Value::Number(n, _) => Ok(n.to_string()),
+                _ => Err(de::Error::custom("expected a string or number")),
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|values| Some(StringOrArrayOfStrings::ArrayOfStrings(values))),
+        dbt_yaml::Value::Null(_) => Ok(None),
+        _ => Err(de::Error::custom(
+            "expected a string, number, array, or null",
+        )),
+    }
+}
+
 /// External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`)
 /// or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).
 #[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, DbtSchema)]
@@ -603,7 +724,7 @@ pub struct DuckDbExtensionObject {
 }
 
 /// Wrapper that serializes `StringOrArrayOfStrings` as an array without allocation.
-struct AsArray<'a>(&'a StringOrArrayOfStrings);
+pub(crate) struct AsArray<'a>(pub(crate) &'a StringOrArrayOfStrings);
 
 impl Serialize for AsArray<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -812,8 +933,9 @@ impl Eq for StringOrArrayOfStrings {}
 /// // Input: ["id", "tenant_id"]
 /// // Serializes as: ["id", "tenant_id"]
 /// ```
-#[derive(Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
-pub struct PrimaryKeyConfig(Option<StringOrArrayOfStrings>);
+#[derive(Debug, Clone, Default, PartialEq, Eq, DbtSchema, StringOrArrayNewtype)]
+#[string_or_array(none_as_empty_list = false)]
+pub struct PrimaryKeyConfig(pub Option<StringOrArrayOfStrings>);
 
 impl PrimaryKeyConfig {
     /// Creates a new empty PrimaryKeyConfig
@@ -826,67 +948,14 @@ impl PrimaryKeyConfig {
         Self(Some(value))
     }
 
-    /// Consumes self and returns the inner value
-    pub fn into_inner(self) -> Option<StringOrArrayOfStrings> {
-        self.0
-    }
-
     /// Returns true if the primary key is empty or unset
     pub fn is_none(&self) -> bool {
         self.0.is_none()
     }
 
-    /// Returns true if the primary key is set
-    pub fn is_some(&self) -> bool {
-        self.0.is_some()
-    }
-
     /// Gets the primary key values as a Vec<String>
     pub fn to_strings(&self) -> Option<Vec<String>> {
         self.0.as_ref().map(|v| v.to_strings())
-    }
-}
-
-impl AsRef<Option<StringOrArrayOfStrings>> for PrimaryKeyConfig {
-    fn as_ref(&self) -> &Option<StringOrArrayOfStrings> {
-        &self.0
-    }
-}
-
-impl Serialize for PrimaryKeyConfig {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match &self.0 {
-            Some(value) => {
-                // Always serialize as array (the "listify" behavior)
-                AsArray(value).serialize(serializer)
-            }
-            None => serializer.serialize_none(),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for PrimaryKeyConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = Option::<StringOrArrayOfStrings>::deserialize(deserializer)?;
-        Ok(PrimaryKeyConfig(value))
-    }
-}
-
-impl From<Option<StringOrArrayOfStrings>> for PrimaryKeyConfig {
-    fn from(value: Option<StringOrArrayOfStrings>) -> Self {
-        PrimaryKeyConfig(value)
-    }
-}
-
-impl From<PrimaryKeyConfig> for Option<StringOrArrayOfStrings> {
-    fn from(config: PrimaryKeyConfig) -> Self {
-        config.0
     }
 }
 
@@ -1291,6 +1360,41 @@ mod tests {
         assert_eq!(
             NodeVersion::try_from(str_val).unwrap(),
             NodeVersion::String("2".to_string())
+        );
+    }
+
+    // dbt-core#15473: an omitted key must stay `Omitted` (inherit) while an
+    // explicit `null` becomes `Present(None)` (clear); the "null" string (#11681)
+    // stays a value.
+    #[test]
+    fn hours_to_expiration_or_string_omissible_distinguishes_null_from_omitted() {
+        use dbt_common::serde_utils::Omissible;
+
+        #[derive(Deserialize)]
+        struct W {
+            #[serde(default, deserialize_with = "hours_to_expiration_or_string_omissible")]
+            h: Omissible<Option<StringOrInteger>>,
+        }
+
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{}"#).unwrap().h,
+            Omissible::Omitted
+        );
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{"h":null}"#).unwrap().h,
+            Omissible::Present(None)
+        );
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{"h":12}"#).unwrap().h,
+            Omissible::Present(Some(StringOrInteger::Integer(12)))
+        );
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{"h":"12"}"#).unwrap().h,
+            Omissible::Present(Some(StringOrInteger::Integer(12)))
+        );
+        assert_eq!(
+            serde_json::from_str::<W>(r#"{"h":"null"}"#).unwrap().h,
+            Omissible::Present(Some(StringOrInteger::String("null".to_string())))
         );
     }
 }

@@ -1,18 +1,31 @@
 use std::collections::HashSet;
 
-use dbt_adapter_core::AdapterType;
+use dbt_adapter_core::{AdapterType, quote_char};
 use once_cell::sync::Lazy;
 
-pub fn format_ident(id: &str, adapter: AdapterType) -> String {
-    if need_quotes(id, adapter) {
-        match adapter {
-            AdapterType::Fabric => format!("[{}]", id),
-            AdapterType::Bigquery | AdapterType::ClickHouse => format!("`{id}`"),
-            _ => format!("\"{}\"", id),
+pub fn default_identifier_case(component: &str, adapter: AdapterType) -> String {
+    match adapter {
+        AdapterType::Salesforce | AdapterType::Bigquery | AdapterType::ClickHouse => {
+            component.to_string()
         }
-    } else {
-        id.to_string()
+        AdapterType::Snowflake => component.to_uppercase(),
+        _ => component.to_lowercase(),
     }
+}
+
+pub fn format_ident(id: &str, adapter: AdapterType) -> String {
+    if !need_quotes(id, adapter) {
+        return id.to_string();
+    }
+    // Fabric/T-SQL delimits identifiers with brackets, not a symmetric quote
+    // char. Everything else defers to `quote_char`, the single source of truth
+    // for the dialect's identifier delimiter (backtick for BigQuery/Databricks/
+    // Spark/ClickHouse, double quote otherwise).
+    if adapter == AdapterType::Fabric {
+        return format!("[{id}]");
+    }
+    let quote = quote_char(adapter);
+    format!("{quote}{id}{quote}")
 }
 
 pub fn need_quotes(id: &str, adapter: AdapterType) -> bool {
@@ -519,15 +532,25 @@ mod tests {
     }
 
     #[test]
-    fn test_format_ident_quoted_bigquery() {
-        let id = "my-project";
-        let formatted = format_ident(id, AdapterType::Bigquery);
-        assert_eq!(formatted, "`my-project`");
+    fn test_format_ident_quoted_bigquery_uses_backticks() {
+        // Regression for dbt-core#15561: BigQuery project ids with dashes must be
+        // backtick-quoted, matching `quote_char`, not double-quoted.
+        assert_eq!(
+            format_ident("my-gcp-project", AdapterType::Bigquery),
+            "`my-gcp-project`"
+        );
+    }
+
+    #[test]
+    fn test_format_ident_quoted_backtick_dialects() {
+        for adapter in [AdapterType::Databricks, AdapterType::Spark] {
+            assert_eq!(format_ident("a-b", adapter), "`a-b`");
+        }
     }
 
     #[test]
     fn test_format_ident_quoted_default() {
-        // Adapters without custom quoting use an empty keyword baseline, so reserved
+        // Non-Fabric/ClickHouse adapters use an empty keyword baseline, so reserved
         // words are not detected and the identifier comes back unquoted.
         let id = "select";
         assert_eq!(format_ident(id, AdapterType::Postgres), "select");

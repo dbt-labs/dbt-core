@@ -49,7 +49,7 @@ fn warn_error_options_middleware_updates_runtime_decisions() {
         })
         .entered();
 
-        emit_warn_log_message(ErrorCode::NoNodesSelected, "warn", None);
+        emit_warn_log_message(ErrorCode::NoNodesSelected, "warn");
 
         *options_handle
             .write()
@@ -59,7 +59,7 @@ fn warn_error_options_middleware_updates_runtime_decisions() {
             )],
             ..Default::default()
         };
-        emit_warn_log_message(ErrorCode::NoNodesSelected, "error", None);
+        emit_warn_log_message(ErrorCode::NoNodesSelected, "error");
 
         *options_handle
             .write()
@@ -69,7 +69,7 @@ fn warn_error_options_middleware_updates_runtime_decisions() {
             )],
             ..Default::default()
         };
-        emit_warn_log_message(ErrorCode::NoNodesSelected, "silence", None);
+        emit_warn_log_message(ErrorCode::NoNodesSelected, "silence");
 
         (
             get_metric(FusionMetricKey::InvocationMetric(

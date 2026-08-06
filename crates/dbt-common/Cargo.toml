@@ -36,6 +36,7 @@ chrono = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }
 dbt-yaml = { workspace = true }
+dialoguer = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }
 scc = { workspace = true }
@@ -54,6 +55,10 @@ pathdiff = { workspace = true }
 
 dbt-tui-progress = { workspace = true }
 rust-embed = { workspace = true }
+
+dirs = { workspace = true }
+
+sha2 = { workspace = true }
 
 # Tracing
 proto-rust = { workspace = true }

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
+use dbt_common::path::DbtPath;
 use dbt_common::string_utils::maybe_truncate_test_name;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
@@ -65,14 +66,9 @@ impl GenericTestAggregation {
     }
 }
 
-fn is_aggregatable_test(test: &DbtTest) -> bool {
-    let Some(macro_name) = get_macro_name(test) else {
-        return false;
-    };
-
+fn has_safe_data_test_config(test: &DbtTest) -> bool {
     let config = &test.deprecated_config;
     let enabled = config.enabled.is_none_or(|enabled| enabled);
-    let eligible = matches!(macro_name.as_str(), "unique" | "not_null");
     let safe = config
         .fail_calc
         .as_deref()
@@ -94,11 +90,36 @@ fn is_aggregatable_test(test: &DbtTest) -> bool {
         && config.store_failures_as.is_none()
         && config.where_.is_none();
 
-    eligible && enabled && safe
+    enabled && safe
+}
+
+fn is_data_test_aggregation_eligible(test: &DbtTest) -> bool {
+    get_macro_name(test)
+        .is_some_and(|macro_name| matches!(macro_name.as_str(), "unique" | "not_null"))
+        && has_safe_data_test_config(test)
+}
+
+/// True if the test resolves to dbt's built-in `test_<name>` macro (direct overrides only; dispatch targets not covered).
+fn depends_on_builtin_test_macro(test: &DbtTest, name: &str) -> bool {
+    // Built-in test macros are keyed `macro.dbt.test_<name>`.
+    let builtin = format!("macro.dbt.test_{name}");
+    test.__base_attr__.depends_on.macros.contains(&builtin)
+}
+
+pub fn is_data_test_static_analysis_eligible(test: &DbtTest) -> bool {
+    let Some(metadata) = test.__test_attr__.test_metadata.as_ref() else {
+        return false;
+    };
+    let eligible = matches!(
+        metadata.name.as_str(),
+        "unique" | "not_null" | "accepted_values"
+    ) && depends_on_builtin_test_macro(test, &metadata.name);
+
+    eligible && has_safe_data_test_config(test)
 }
 
 fn get_test_group_key(test: &DbtTest) -> Option<(String, String)> {
-    if !is_aggregatable_test(test) {
+    if !is_data_test_aggregation_eligible(test) {
         return None;
     }
 
@@ -346,9 +367,9 @@ fn create_aggregated_test(
 
     test.__common_attr__.name = test_group_name.to_string();
     test.__common_attr__.unique_id = test_group_id.to_string();
-    test.__common_attr__.path = path;
-    test.__common_attr__.original_file_path = absolute_path.clone();
-    test.manifest_original_file_path = absolute_path;
+    test.__common_attr__.path = DbtPath::from(path);
+    test.__common_attr__.original_file_path = DbtPath::from(&absolute_path);
+    test.manifest_original_file_path = DbtPath::from(&absolute_path);
     test.__common_attr__.raw_code = Some(raw_code.clone());
     test.__common_attr__.checksum = DbtChecksum::hash(raw_code.trim().as_bytes());
     test.__common_attr__.fqn = vec![
@@ -420,6 +441,8 @@ mod tests {
         test.__common_attr__.package_name = "pkg".to_string();
         test.__base_attr__.schema = "dbt_test__audit".to_string();
         test.__base_attr__.alias = unique_id.replace('.', "_");
+        // Represent a built-in generic test: its resolved macro is dbt's `test_<name>`.
+        test.__base_attr__.depends_on.macros = vec![format!("macro.dbt.test_{macro_name}")];
         test.__test_attr__ = DbtTestAttr {
             column_name: Some(column_name.to_string()),
             attached_node: Some("model.pkg.orders".to_string()),
@@ -531,8 +554,8 @@ mod tests {
             );
             resolved_default_config(&mut test_a);
             resolved_default_config(&mut test_b);
-            assert!(is_aggregatable_test(&test_a));
-            assert!(is_aggregatable_test(&test_b));
+            assert!(is_data_test_aggregation_eligible(&test_a));
+            assert!(is_data_test_aggregation_eligible(&test_b));
 
             let (schedule, nodes) = schedule_and_nodes(vec![test_a, test_b]);
             let temp_dir = tempfile::tempdir().expect("temp dir");
@@ -595,10 +618,112 @@ mod tests {
             resolved_default_config(&mut test);
             mutate(&mut test);
             assert!(
-                !is_aggregatable_test(&test),
+                !is_data_test_aggregation_eligible(&test),
                 "{name} should make the test ineligible"
             );
         }
+    }
+
+    #[test]
+    fn accepted_values_is_only_eligible_for_static_analysis() {
+        let mut test = test_node(
+            "test.pkg.accepted_values_orders_status",
+            "accepted_values",
+            "status",
+        );
+        resolved_default_config(&mut test);
+
+        assert!(is_data_test_static_analysis_eligible(&test));
+        assert!(!is_data_test_aggregation_eligible(&test));
+        assert!(get_test_group_key(&test).is_none());
+    }
+
+    #[test]
+    fn custom_config_prevents_accepted_values_static_analysis() {
+        let cases: Vec<(&str, fn(&mut DbtTest))> = vec![
+            ("severity", |test| {
+                test.deprecated_config.severity = Some(Severity::Warn)
+            }),
+            ("fail_calc", |test| {
+                test.deprecated_config.fail_calc = Some("sum(failures)".to_string())
+            }),
+            ("error_if", |test| {
+                test.deprecated_config.error_if = Some("> 10".to_string())
+            }),
+            ("warn_if", |test| {
+                test.deprecated_config.warn_if = Some("> 0".to_string())
+            }),
+            ("limit", |test| test.deprecated_config.limit = Some(1)),
+            ("where", |test| {
+                test.deprecated_config.where_ = Some("status is not null".to_string())
+            }),
+            ("store_failures", |test| {
+                test.deprecated_config.store_failures = Some(false)
+            }),
+            ("store_failures_as", |test| {
+                test.deprecated_config.store_failures_as = Some(StoreFailuresAs::Table)
+            }),
+        ];
+
+        for (name, mutate) in cases {
+            let mut test = test_node(
+                &format!("test.pkg.accepted_values_orders_{name}"),
+                "accepted_values",
+                "status",
+            );
+            resolved_default_config(&mut test);
+            mutate(&mut test);
+            assert!(
+                !is_data_test_static_analysis_eligible(&test),
+                "{name} should make the test ineligible"
+            );
+        }
+    }
+
+    #[test]
+    fn static_analysis_eligibility_requires_builtin_test_macro() {
+        // Build a safe-config test node whose resolved macro dependency is `dep`.
+        // Note: namespace is no longer consulted; the depends_on id alone decides.
+        let make = |name: &str, dep: String| {
+            let mut test = test_node("test.pkg.orders_status", name, "status");
+            resolved_default_config(&mut test);
+            test.__base_attr__.depends_on.macros = vec![dep];
+            test
+        };
+
+        for name in ["accepted_values", "unique", "not_null"] {
+            // 1. Built-in macro (macro.dbt.test_<name>) is eligible.
+            let builtin = make(name, format!("macro.dbt.test_{name}"));
+            assert!(
+                is_data_test_static_analysis_eligible(&builtin),
+                "built-in {name} should be eligible"
+            );
+
+            // 2. Root-project override (no package prefix) is not eligible.
+            let overridden = make(name, format!("macro.my_project.test_{name}"));
+            assert!(
+                !is_data_test_static_analysis_eligible(&overridden),
+                "overridden {name} should not be eligible"
+            );
+        }
+
+        // 3. Namespaced package version (e.g. dbt_utils) is not eligible.
+        let namespaced = make(
+            "accepted_values",
+            "macro.dbt_utils.test_accepted_values".to_string(),
+        );
+        assert!(
+            !is_data_test_static_analysis_eligible(&namespaced),
+            "namespaced accepted_values should not be eligible"
+        );
+
+        // 4. Empty depends_on.macros: conservative fallback, not eligible.
+        let mut empty = make("accepted_values", String::new());
+        empty.__base_attr__.depends_on.macros = Vec::new();
+        assert!(
+            !is_data_test_static_analysis_eligible(&empty),
+            "unconfirmable built-in should not be eligible"
+        );
     }
 
     #[test]

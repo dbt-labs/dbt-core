@@ -10,8 +10,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
-    AnalysesProperties, DbtPropertiesFileValues, MacrosProperties, MinimalSchemaValue,
-    MinimalTableValue, MinimalUnitTestValue,
+    AnalysesProperties, DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
+    MinimalUnitTestValue,
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
@@ -201,7 +201,6 @@ impl MinimalProperties {
                                     properties_path.display(),
                                     existing_entry.relative_path.display()
                                 ),
-                                io_args.status_reporter.as_ref(),
                             );
                         } else {
                             self.source_tables.insert(
@@ -226,7 +225,6 @@ impl MinimalProperties {
                             source.name,
                             properties_path.display()
                         ),
-                        io_args.status_reporter.as_ref(),
                     );
                 }
             }
@@ -547,7 +545,9 @@ impl MinimalProperties {
         }
         if let Some(macros) = other.macros {
             for macro_value in macros {
-                let macro_props = into_typed_with_jinja::<MacrosProperties, _>(
+                // Only `name` is needed here. The full `MacrosProperties` renders every string
+                // field and discards it, double-rendering what `apply_macro_patches` renders.
+                let macro_props = into_typed_with_jinja::<MinimalSchemaValue, _>(
                     io_args,
                     macro_value.clone(),
                     false,
@@ -618,7 +618,6 @@ pub fn resolve_minimal_properties(
         is_dependency,
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.semantic_models,
                 (),
                 Some(package.dbt_project.name.as_str()),
@@ -649,12 +648,11 @@ pub fn resolve_minimal_properties(
             None
         };
 
-        let result = {
+        {
             let _guard = span.enter();
             let input = try_read_yml_to_str(&absolute_path)?;
 
-            match from_yaml_raw::<DbtPropertiesFileValues>(
-                &arg.io,
+            let result = match from_yaml_raw::<DbtPropertiesFileValues>(
                 &input,
                 Some(&absolute_path),
                 true,
@@ -689,7 +687,6 @@ pub fn resolve_minimal_properties(
                                     "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
                                     &package.dbt_project.name,
                                 ),
-                                arg.io.status_reporter.as_ref(),
                             );
 
                             minimal_resolved_properties.semantic_layer_spec_is_legacy = true;
@@ -698,17 +695,16 @@ pub fn resolve_minimal_properties(
 
                     Ok(())
                 }
-                Err(e) => {
-                    // Emit error and save it to apply to span, but continue processing other files
-                    emit_strict_parse_error(&e, dependency_package_name, &arg.io);
-                    Err(e)
-                }
-            }
-        };
+                Err(e) => Err(e),
+            };
 
-        // Record both success and failure statuses to the span, but continue processing
-        // regardless of outcome
-        let _ = result.record_status(&span);
+            // Record both success and failure statuses to the span, but continue processing
+            // regardless of outcome.
+            let _ = result.as_ref().record_status(&span);
+            if let Err(e) = result {
+                emit_strict_parse_error(*e, dependency_package_name);
+            }
+        }
     }
     Ok(minimal_resolved_properties)
 }

@@ -128,3 +128,37 @@ pub fn has_top_level_key_parsed_file(path: &Path, key: &str) -> FsResult<bool> {
     let content = fs::read_to_string(path)?;
     Ok(has_top_level_key_parsed_str(&content, key))
 }
+
+/// Return all top-level mapping key names from a YAML string, preserving document order.
+///
+/// Uses the same text-scan approach as `has_top_level_key` so that it is tolerant of
+/// non-standard formatting and avoids a full parse round-trip.
+pub fn list_top_level_keys(content: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        // Only consider zero-indent, non-blank, non-comment lines.
+        if indent != 0 || trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(colon_pos) = trimmed.find(':') {
+            let key = trimmed[..colon_pos].trim();
+            // Reject keys that contain spaces (those would be values, not mapping keys).
+            if !key.is_empty() && !key.contains(' ') {
+                keys.push(key.to_string());
+            }
+        }
+    }
+    keys
+}
+
+/// Return all top-level mapping key names from a YAML file.
+/// Returns an empty vec if the file does not exist.
+pub fn list_top_level_keys_from_file(path: &Path) -> FsResult<Vec<String>> {
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let content = fs::read_to_string(path)?;
+    Ok(list_top_level_keys(&content))
+}

@@ -6,14 +6,13 @@ use dbt_common::collections::DashMap;
 use dbt_common::io_args::FsCommand;
 use dbt_common::stats::Stat;
 use dbt_common::tracing::dbt_emit::{
-    emit_error_log_from_fs_error, emit_error_log_message, emit_warn_log_message,
+    emit_error_log_from_fs_error, emit_warn_log_from_fs_error, emit_warn_log_message,
 };
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{
-    ErrorCode, FsResult,
+    ErrorCode, FsError, FsResult,
     cancellation::CancellationToken,
     err, fs_err,
-    io_args::IoArgs,
     node_selector::{IndirectSelection, SelectExpression, convert_column_selectors_to_fqn},
 };
 use dbt_dag::{
@@ -25,11 +24,16 @@ use dbt_dag::{
 };
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtMaterialization;
-use dbt_schemas::schemas::selectors::ResolvedSelector;
+use dbt_schemas::schemas::selectors::{ResolvedSelector, SelectorEntry};
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes, StateArtifacts};
 
-use crate::{args::SchedulerArgs, node_selector::filter_select_criteria};
+use std::collections::HashMap;
+
+use crate::{
+    args::SchedulerArgs,
+    node_selector::{filter_select_criteria, fnmatch},
+};
 
 /// Schedule nodes based on selection criteria and dependencies.
 ///
@@ -80,13 +84,13 @@ pub fn build_schedule(
     let converted_selectors = ResolvedSelector {
         include: converted_include,
         exclude: converted_exclude,
+        selector_definitions: resolved_selectors.selector_definitions.clone(),
     };
 
     if include_had_columns || exclude_had_columns {
         emit_warn_log_message(
             ErrorCode::InvalidColumnSelector,
             "Column selectors are unsupported at runtime; use node-level selection instead.",
-            arg.io.status_reporter.as_ref(),
         );
     }
 
@@ -185,6 +189,7 @@ fn schedule_graph(
                 nodes,
                 previous_state,
                 adapter_type,
+                &resolved_selectors.selector_definitions,
             )?
         }
         None => nodes.materializable_keys().cloned().collect(),
@@ -192,7 +197,14 @@ fn schedule_graph(
 
     // Get fully expanded excluded nodes
     let excluded_nodes = match &resolved_selectors.exclude {
-        Some(exclude) => expand_selector(exclude, deps, nodes, previous_state, adapter_type)?,
+        Some(exclude) => expand_selector(
+            exclude,
+            deps,
+            nodes,
+            previous_state,
+            adapter_type,
+            &resolved_selectors.selector_definitions,
+        )?,
         None => BTreeSet::new(),
     };
 
@@ -301,8 +313,8 @@ fn schedule_graph(
         });
 
     // Expand selected nodes to include all ephemeral upstream dependencies
-    // Skip this when the command is "list" or "show" as ephemeral nodes are not wanted
-    if args.command != FsCommand::List && args.command != FsCommand::Show {
+    // Skip this when the command is "list" as ephemeral nodes are not wanted.
+    if args.command != FsCommand::List {
         let mut ephemeral_to_add = BTreeSet::new();
         for node_id in &filtered_selected_nodes {
             collect_ephemeral_upstream(node_id, deps, nodes, &mut ephemeral_to_add);
@@ -331,7 +343,13 @@ fn schedule_graph(
     sorted_nodes.extend(frontier_nodes.iter().cloned());
 
     // Check for cycles in the selected nodes only
-    find_and_report_cycles(&selected_deps, nodes, &args.io);
+    let (cycle_warnings, cycle_errors) = find_cycle_diagnostics(&selected_deps, nodes);
+    for warning in cycle_warnings {
+        emit_warn_log_from_fs_error(warning);
+    }
+    for error in cycle_errors {
+        emit_error_log_from_fs_error(error);
+    }
 
     // Compute overlapping sources: sources whose relation_name matches a SELECTED seed's relation_name
     // Only skip hydration when the seed is selected in the current command, ensuring the seed runs
@@ -380,7 +398,7 @@ fn schedule_graph(
 // ------------------------------------------------------------------------------------------------
 // Recursive selector evaluation with scoped `exclude:` handling
 // ------------------------------------------------------------------------------------------------
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct EvalResult {
     include: BTreeSet<String>,
     exclude: BTreeSet<String>,
@@ -457,13 +475,24 @@ fn eval_selector(
     nodes: &Nodes,
     previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
+    selector_defs: &HashMap<String, SelectorEntry>,
+    resolution_stack: &mut Vec<String>,
 ) -> FsResult<EvalResult> {
     use SelectExpression::*;
+    use dbt_common::node_selector::MethodName;
     match expr {
         Or(children) => {
             let mut acc = EvalResult::default();
             for c in children {
-                acc = acc.merge_or(eval_selector(c, deps, nodes, previous_state, adapter_type)?);
+                acc = acc.merge_or(eval_selector(
+                    c,
+                    deps,
+                    nodes,
+                    previous_state,
+                    adapter_type,
+                    selector_defs,
+                    resolution_stack,
+                )?);
             }
             Ok(acc)
         }
@@ -472,15 +501,39 @@ fn eval_selector(
             let Some(first) = iter.next() else {
                 return Ok(EvalResult::default());
             };
-            let mut acc = eval_selector(first, deps, nodes, previous_state, adapter_type)?;
+            let mut acc = eval_selector(
+                first,
+                deps,
+                nodes,
+                previous_state,
+                adapter_type,
+                selector_defs,
+                resolution_stack,
+            )?;
             for c in iter {
-                acc = acc.merge_and(eval_selector(c, deps, nodes, previous_state, adapter_type)?);
+                acc = acc.merge_and(eval_selector(
+                    c,
+                    deps,
+                    nodes,
+                    previous_state,
+                    adapter_type,
+                    selector_defs,
+                    resolution_stack,
+                )?);
             }
             Ok(acc)
         }
         Exclude(child) => {
-            let excl =
-                eval_selector(child, deps, nodes, previous_state, adapter_type)?.into_final();
+            let excl = eval_selector(
+                child,
+                deps,
+                nodes,
+                previous_state,
+                adapter_type,
+                selector_defs,
+                resolution_stack,
+            )?
+            .into_final();
             Ok(EvalResult {
                 include: BTreeSet::new(),
                 exclude: excl,
@@ -488,6 +541,18 @@ fn eval_selector(
             })
         }
         Atom(criteria) => {
+            if criteria.method == MethodName::Selector {
+                return eval_selector_method(
+                    criteria,
+                    deps,
+                    nodes,
+                    previous_state,
+                    adapter_type,
+                    selector_defs,
+                    resolution_stack,
+                );
+            }
+
             // 1️⃣ base filter
             let mut selected =
                 filter_select_criteria(nodes, criteria, previous_state, adapter_type)?;
@@ -526,8 +591,16 @@ fn eval_selector(
 
             // 4️⃣ nested exclude inside this atom
             if let Some(ex) = &criteria.exclude {
-                let excl_set =
-                    eval_selector(ex, deps, nodes, previous_state, adapter_type)?.into_final();
+                let excl_set = eval_selector(
+                    ex,
+                    deps,
+                    nodes,
+                    previous_state,
+                    adapter_type,
+                    selector_defs,
+                    resolution_stack,
+                )?
+                .into_final();
                 selected.retain(|n| !excl_set.contains(n));
             }
 
@@ -540,14 +613,120 @@ fn eval_selector(
     }
 }
 
+/// Resolve a `selector:` method atom at runtime.
+fn eval_selector_method(
+    criteria: &dbt_common::node_selector::SelectionCriteria,
+    deps: &BTreeMap<String, BTreeSet<String>>,
+    nodes: &Nodes,
+    previous_state: Option<&StateArtifacts>,
+    adapter_type: AdapterType,
+    selector_defs: &HashMap<String, SelectorEntry>,
+    resolution_stack: &mut Vec<String>,
+) -> FsResult<EvalResult> {
+    let pattern = &criteria.value;
+
+    // fnmatch lookup: supports wildcards like `selector:model_*`
+    let matching: Vec<(&String, &SelectorEntry)> = selector_defs
+        .iter()
+        .filter(|(name, _)| fnmatch(pattern, name))
+        .collect();
+
+    if matching.is_empty() {
+        return err!(ErrorCode::SelectorError, "Unknown selector `{}`", pattern);
+    }
+
+    // Evaluate each matching selector, unioning results
+    let mut combined = EvalResult::default();
+    for (name, entry) in &matching {
+        if resolution_stack.contains(name) {
+            let cycle: Vec<_> = resolution_stack
+                .iter()
+                .skip_while(|n| n != name)
+                .cloned()
+                .collect();
+            return err!(
+                ErrorCode::SelectorError,
+                "Circular selector reference: {} -> {}",
+                cycle.join(" -> "),
+                name
+            );
+        }
+        resolution_stack.push((*name).clone());
+        let result = eval_selector(
+            &entry.include,
+            deps,
+            nodes,
+            previous_state,
+            adapter_type,
+            selector_defs,
+            resolution_stack,
+        )?;
+        resolution_stack.pop();
+        combined = combined.merge_or(result);
+    }
+
+    let mut selected = combined.into_final();
+
+    // Apply graph operators on the combined result
+    if criteria.parents_depth.is_some() || criteria.children_depth.is_some() {
+        let mut expanded = selected.clone();
+        if let Some(depth) = criteria.parents_depth {
+            expanded.extend(multi_source_bfs(deps, &selected, depth));
+        }
+        if let Some(depth) = criteria.children_depth {
+            let rev_deps = reverse(deps);
+            expanded.extend(multi_source_bfs(&rev_deps, &selected, depth));
+        }
+        selected = expanded;
+    } else if criteria.childrens_parents {
+        selected = collect_childrens_parents(deps, &selected);
+    }
+
+    // Indirect selection
+    let mode = criteria.indirect.unwrap_or(IndirectSelection::Eager);
+    let (expanded, indirect) = expand_selection(&selected, mode, deps, nodes);
+    let mut selected = incorporate_indirect_nodes(expanded, indirect, deps, nodes, mode);
+
+    // Nested exclude
+    if let Some(ex) = &criteria.exclude {
+        let excl_set = eval_selector(
+            ex,
+            deps,
+            nodes,
+            previous_state,
+            adapter_type,
+            selector_defs,
+            resolution_stack,
+        )?
+        .into_final();
+        selected.retain(|n| !excl_set.contains(n));
+    }
+
+    Ok(EvalResult {
+        include: selected,
+        exclude: BTreeSet::new(),
+        exclude_operand: false,
+    })
+}
+
 pub fn expand_selector(
     selector: &SelectExpression,
     deps: &BTreeMap<String, BTreeSet<String>>,
     nodes: &Nodes,
     previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
+    selector_defs: &HashMap<String, SelectorEntry>,
 ) -> FsResult<BTreeSet<String>> {
-    let res = eval_selector(selector, deps, nodes, previous_state, adapter_type)?;
+    let mut resolution_stack = Vec::new();
+    let res = eval_selector(
+        selector,
+        deps,
+        nodes,
+        previous_state,
+        adapter_type,
+        selector_defs,
+        &mut resolution_stack,
+    )?;
     Ok(res.into_final())
 }
 
@@ -577,70 +756,72 @@ fn with_indirect_selection(expr: SelectExpression, mode: IndirectSelection) -> S
     }
 }
 
-/// Identifies cycles and reports them as errors to the provided io
-/// generates an error per cycle, and an error per node in the cycle with the exact location
-fn find_and_report_cycles(deps: &BTreeMap<String, BTreeSet<String>>, nodes: &Nodes, io: &IoArgs) {
+/// Identifies cycles and returns a diagnostic per cycle and per dependency reference.
+fn find_cycle_diagnostics(
+    deps: &BTreeMap<String, BTreeSet<String>>,
+    nodes: &Nodes,
+) -> (Vec<FsError>, Vec<FsError>) {
     let (cycles, _, _) = find_and_cut_cycles(deps, |_| true);
+    let warnings = Vec::new();
+    let mut errors = Vec::new();
 
-    // Report cycle errors
-    if !cycles.is_empty() {
-        for (i, cycle) in cycles.iter().enumerate() {
-            // show the full cycle
-            let mut cycle_with_first = cycle.clone();
-            cycle_with_first.push(cycle[0].clone());
-            let cycle_str = cycle_with_first
-                .iter()
-                .map(|node| format!("[{node}]"))
-                .collect::<Vec<_>>()
-                .join(" -> ");
+    for (i, cycle) in cycles.iter().enumerate() {
+        // Show the full cycle.
+        let mut cycle_with_first = cycle.clone();
+        cycle_with_first.push(cycle[0].clone());
+        let cycle_str = cycle_with_first
+            .iter()
+            .map(|node| format!("[{node}]"))
+            .collect::<Vec<_>>()
+            .join(" -> ");
 
-            emit_error_log_message(
-                ErrorCode::CyclicDependency,
-                format!("Cycle detected: {}", cycle_str),
-                io.status_reporter.as_ref(),
-            );
+        errors.push(FsError::new(
+            ErrorCode::CyclicDependency,
+            format!("Cycle detected: {cycle_str}"),
+        ));
 
-            // Show each dependency in the cycle with its location
-            for window in cycle.windows(2) {
-                let from = &window[0];
-                let to = &window[1];
-                if let Some(node) = nodes.get_node(from) {
-                    // Report all references to this dependency
-                    for (dep, location) in node.base().depends_on.nodes_with_ref_location.iter() {
-                        if dep == to {
-                            let err = fs_err!(
-                                code => ErrorCode::CyclicDependency,
-                                loc => location.clone(),
-                                "   Cycle {}:  [{}] depends on [{}]",
-                                i + 1,
-                                from,
-                                to
-                            );
-                            emit_error_log_from_fs_error(&err, io.status_reporter.as_ref());
-                        }
-                    }
-                }
-            }
-
-            // Last node -> First node in cycle
-            if let Some(node) = nodes.get_node(cycle.last().unwrap()) {
-                // Report all references to the first node
+        // Show each dependency in the cycle with its location.
+        for window in cycle.windows(2) {
+            let from = &window[0];
+            let to = &window[1];
+            if let Some(node) = nodes.get_node(from) {
+                // Report all references to this dependency.
                 for (dep, location) in node.base().depends_on.nodes_with_ref_location.iter() {
-                    if dep == cycle.first().unwrap() {
+                    if dep == to {
                         let err = fs_err!(
                             code => ErrorCode::CyclicDependency,
                             loc => location.clone(),
                             "   Cycle {}:  [{}] depends on [{}]",
-                            i+1,
-                            cycle.last().unwrap(),
-                            cycle.first().unwrap()
+                            i + 1,
+                            from,
+                            to
                         );
-                        emit_error_log_from_fs_error(&err, io.status_reporter.as_ref());
+                        errors.push(*err);
                     }
                 }
             }
         }
+
+        // Last node -> First node in cycle.
+        if let Some(node) = nodes.get_node(cycle.last().unwrap()) {
+            // Report all references to the first node.
+            for (dep, location) in node.base().depends_on.nodes_with_ref_location.iter() {
+                if dep == cycle.first().unwrap() {
+                    let err = fs_err!(
+                        code => ErrorCode::CyclicDependency,
+                        loc => location.clone(),
+                        "   Cycle {}:  [{}] depends on [{}]",
+                        i+1,
+                        cycle.last().unwrap(),
+                        cycle.first().unwrap()
+                    );
+                    errors.push(*err);
+                }
+            }
+        }
     }
+
+    (warnings, errors)
 }
 
 /// Recursively collect all ephemeral models upstream of a given node.
@@ -1021,19 +1202,26 @@ fn collect_childrens_parents(
         let descendants = downstream(deps, node, u32::MAX);
         desc.extend(descendants);
     }
-    // 2. find leaf nodes (nodes with no children) and get all their ancestors
-    let leaf_nodes: Vec<String> = desc
+    // 2. find leaf nodes (nodes with no children) and get all their ancestors.
+    // A node is its own descendant, so the selected nodes are themselves leaf
+    // candidates: when a selected node has no children it produces no descendant
+    // edges in `desc` and would otherwise be dropped entirely (see #15280).
+    let leaf_nodes: BTreeSet<String> = desc
         .keys()
         .chain(desc.values().flatten())
+        .chain(selected_nodes)
         .filter(|node| {
             // A node is a leaf if it has no outgoing dependencies in the descendant graph
             !desc.contains_key(*node) || desc.get(*node).is_none_or(|children| children.is_empty())
         })
         .cloned()
         .collect();
-    // Get upstream of all leaf nodes
+    // Get each leaf plus all of its ancestors. The leaf is inserted explicitly
+    // because `upstream` only returns edges, which omit a leaf that has no
+    // ancestors (e.g. an isolated node).
     for leaf in leaf_nodes {
         add_nodes(upstream(deps, &leaf, u32::MAX), &mut selected);
+        selected.insert(leaf);
     }
     selected
 }
@@ -1142,7 +1330,7 @@ pub fn summarize_stats(schedule: &Schedule<String>, stats: &DashMap<String, Stat
 mod tests {
     use dbt_adapter_core::AdapterType;
     use dbt_common::cancellation::never_cancels;
-    use dbt_common::io_args::FsCommand;
+    use dbt_common::io_args::{FsCommand, IoArgs};
     use dbt_common::node_selector::SelectionCriteria;
     use dbt_common::{
         CodeLocationWithFile,
@@ -1276,8 +1464,10 @@ mod tests {
                         primary_key: vec![],
                         event_time: None,
                         catalog_name: None,
+                        alt_compute: None,
                         table_format: None,
                         sync: None,
+                        compiled_code: None,
                     },
                     __adapter_attr__: AdapterAttr::default(),
                     deprecated_config: ModelConfig::default(),
@@ -1330,6 +1520,7 @@ mod tests {
                             introspection: IntrospectionKind::None,
                             original_name: None,
                             group: None,
+                            state: None,
                         },
                         __adapter_attr__: Default::default(),
                         __other__: Default::default(),
@@ -1444,6 +1635,7 @@ mod tests {
         let resolved_selectors = ResolvedSelector {
             include: Some(select.clone()),
             exclude: None,
+            ..Default::default()
         };
 
         let args = SchedulerArgs {
@@ -1496,6 +1688,7 @@ mod tests {
         let resolved_selectors = ResolvedSelector {
             include: Some(select.clone()),
             exclude: Some(exclude.clone()),
+            ..Default::default()
         };
 
         let args = SchedulerArgs {
@@ -1550,6 +1743,55 @@ mod tests {
         let select = create_select_expression("@b");
         let result = schedule_test_graph(&graph, &select);
         assert_eq!(result, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_schedule_graph_at_operator_on_leaf() {
+        // Regression test for https://github.com/dbt-labs/dbt-core/issues/15280
+        // `@` on a leaf node (one with no children) should return the node plus
+        // its ancestors. A node is its own descendant, so for a leaf the
+        // descendant set is just the node itself.
+        let builder = TestGraphBuilder::new()
+            .add_edge("a", "b")
+            .add_edge("b", "c");
+        let graph = builder.build_graph();
+
+        // `c` is the leaf of the chain a -> b -> c.
+        let select = create_select_expression("@c");
+        let result = schedule_test_graph(&graph, &select);
+        assert_eq!(result, vec!["a", "b", "c"]);
+
+        // A leaf with a single ancestor.
+        let builder = TestGraphBuilder::new().add_edge("a", "b");
+        let graph = builder.build_graph();
+        let select = create_select_expression("@b");
+        let result = schedule_test_graph(&graph, &select);
+        assert_eq!(result, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn test_collect_childrens_parents_leaf_and_isolated() {
+        // `deps` maps each node to its parents (upstream dependencies).
+        // Chain a -> b -> c.
+        let deps = BTreeMap::from([
+            ("a".to_string(), BTreeSet::new()),
+            ("b".to_string(), BTreeSet::from(["a".to_string()])),
+            ("c".to_string(), BTreeSet::from(["b".to_string()])),
+        ]);
+
+        // `@c` on the leaf `c` -> the leaf plus all of its ancestors.
+        let selected = BTreeSet::from(["c".to_string()]);
+        let result = collect_childrens_parents(&deps, &selected);
+        assert_eq!(
+            result,
+            BTreeSet::from(["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+
+        // An isolated node (leaf with no ancestors) -> just itself.
+        let deps = BTreeMap::from([("a".to_string(), BTreeSet::new())]);
+        let selected = BTreeSet::from(["a".to_string()]);
+        let result = collect_childrens_parents(&deps, &selected);
+        assert_eq!(result, BTreeSet::from(["a".to_string()]));
     }
 
     #[test]
@@ -2058,8 +2300,10 @@ mod tests {
                     primary_key: vec![],
                     event_time: None,
                     catalog_name: None,
+                    alt_compute: None,
                     table_format: None,
                     sync: None,
+                    compiled_code: None,
                 },
                 __adapter_attr__: AdapterAttr::default(),
                 deprecated_config: ModelConfig::default(),
@@ -2168,6 +2412,7 @@ mod tests {
         let resolved_selectors = ResolvedSelector {
             include: Some(select),
             exclude: None,
+            ..Default::default()
         };
 
         let args = SchedulerArgs {
@@ -2780,7 +3025,7 @@ mod resource_type_filtering_tests {
     use super::*;
     use dbt_common::{
         cancellation::never_cancels,
-        io_args::{ClapResourceType, FsCommand, StaticAnalysisKind},
+        io_args::{ClapResourceType, FsCommand, IoArgs, StaticAnalysisKind},
     };
     use dbt_schemas::schemas::{
         CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtTest, DbtUnitTest,
@@ -2873,6 +3118,7 @@ mod resource_type_filtering_tests {
         let resolved_selectors = ResolvedSelector {
             include: None,
             exclude: None,
+            ..Default::default()
         };
         let args = SchedulerArgs {
             command: FsCommand::Test,
@@ -2942,8 +3188,10 @@ mod resource_type_filtering_tests {
                     state: None,
                     event_time: None,
                     catalog_name: None,
+                    alt_compute: None,
                     table_format: None,
                     sync: None,
+                    compiled_code: None,
                 },
                 deprecated_config: ModelConfig::default(),
                 __other__: BTreeMap::new(),
@@ -3013,6 +3261,7 @@ mod resource_type_filtering_tests {
         let resolved_selectors = ResolvedSelector {
             include: None,
             exclude: None,
+            ..Default::default()
         };
         let schedule = build_schedule(
             &args,
@@ -3080,6 +3329,7 @@ mod resource_type_filtering_tests {
         let resolved_selectors = ResolvedSelector {
             include: None,
             exclude: None,
+            ..Default::default()
         };
 
         let schedule = build_schedule(
@@ -3115,6 +3365,7 @@ mod resource_type_filtering_tests {
         let resolved_selectors = ResolvedSelector {
             include: None,
             exclude: None,
+            ..Default::default()
         };
         let schedule = build_schedule(
             &args,
@@ -3138,6 +3389,7 @@ mod resource_type_filtering_tests {
         let resolved_selectors = ResolvedSelector {
             include: None,
             exclude: None,
+            ..Default::default()
         };
         let schedule = build_schedule(
             &args,
@@ -3161,6 +3413,7 @@ mod resource_type_filtering_tests {
         let resolved_selectors = ResolvedSelector {
             include: None,
             exclude: None,
+            ..Default::default()
         };
         let schedule = build_schedule(
             &args,
@@ -3185,6 +3438,7 @@ mod resource_type_filtering_tests {
         let resolved_selectors = ResolvedSelector {
             include: None,
             exclude: None,
+            ..Default::default()
         };
         let schedule = build_schedule(
             &args,
@@ -3203,48 +3457,19 @@ mod resource_type_filtering_tests {
 mod cycle_detection_tests {
     use super::*;
     use dbt_common::CodeLocationWithFile;
-    use dbt_common::io_args::{FsCommand, StaticAnalysisKind, StaticAnalysisOffReason};
-    use dbt_common::io_utils::StatusReporter;
-    use dbt_common::path::DbtPath;
+    use dbt_common::io_args::{FsCommand, StaticAnalysisKind};
+    use dbt_common::node_selector::{MethodName, SelectionCriteria};
     use dbt_schemas::schemas::common::{
         Access, DbtMaterialization, NodeDependsOn, ResolvedQuoting,
     };
     use dbt_schemas::schemas::nodes::AdapterAttr;
     use dbt_schemas::schemas::project::ModelConfig;
-    use dbt_schemas::schemas::telemetry::NodeOutcome;
     use dbt_schemas::schemas::{
         CommonAttributes, DbtModel, DbtModelAttr, IntrospectionKind, NodeBaseAttributes,
     };
     use dbt_test_primitives::assert_contains;
-    use dbt_yaml::Span;
     use indexmap::IndexMap;
-    use std::sync::{Arc, Mutex};
-
-    // Used to check for errors sent to io via show_error macro
-    struct MockStatusReporter {
-        errors: Arc<Mutex<Vec<(String, CodeLocationWithFile)>>>,
-    }
-    impl StatusReporter for MockStatusReporter {
-        fn collect_error(&self, error: &dbt_common::FsError) {
-            self.errors.lock().unwrap().push((
-                error.to_string(),
-                error.location.clone().unwrap_or_default(),
-            ));
-        }
-        fn collect_warning(&self, _warning: &dbt_common::FsError) {}
-        fn show_progress(&self, _action: &str, _target: &str, _description: Option<&str>) {}
-        fn bulk_publish_empty(&self, _file_paths: Vec<DbtPath>) {}
-        fn collect_node_evaluation(
-            &self,
-            _unique_id: &str,
-            _execution_phase: ExecutionPhase,
-            _node_outcome: NodeOutcome,
-            _upstream_target: Option<(String, String, bool)>,
-            _static_analysis: StaticAnalysisKind,
-            _static_analysis_off_reason: (Option<StaticAnalysisOffReason>, Span),
-        ) {
-        }
-    }
+    use std::sync::Arc;
 
     // helper func to create nodes with dependencies
     fn create_test_node(
@@ -3291,8 +3516,10 @@ mod cycle_detection_tests {
                 state: None,
                 event_time: None,
                 catalog_name: None,
+                alt_compute: None,
                 table_format: None,
                 sync: None,
+                compiled_code: None,
             },
             __adapter_attr__: AdapterAttr::default(),
             deprecated_config: ModelConfig::default(),
@@ -3319,34 +3546,28 @@ mod cycle_detection_tests {
         deps.insert(id_a.clone(), BTreeSet::from([id_b.clone()]));
         deps.insert(id_b, BTreeSet::from([id_a]));
 
-        let error_output = Arc::new(Mutex::new(Vec::new()));
-        let reporter = MockStatusReporter {
-            errors: error_output.clone(),
-        };
-        let io = IoArgs {
-            status_reporter: Some(Arc::new(reporter)),
-            ..Default::default()
-        };
+        let (warnings, errors) = find_cycle_diagnostics(&deps, &nodes);
 
-        find_and_report_cycles(&deps, &nodes, &io);
-
-        let error_output = error_output.lock().unwrap();
-        assert_eq!(error_output.len(), 3); // One for cycle detection, two for dependencies
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 3); // One for cycle detection, two for dependencies
         assert_contains!(
-            error_output[0].0,
+            errors[0].to_string(),
             "Cycle detected: [model.a] -> [model.b] -> [model.a]"
         );
-        assert_eq!(error_output[0].1, CodeLocationWithFile::default());
+        assert_eq!(
+            errors[0].location.clone().unwrap_or_default(),
+            CodeLocationWithFile::default()
+        );
         assert_contains!(
-            error_output[1].0,
+            errors[1].to_string(),
             "Cycle 1:  [model.a] depends on [model.b]"
         );
-        assert_eq!(error_output[1].1, loc1);
+        assert_eq!(errors[1].location.as_ref(), Some(&loc1));
         assert_contains!(
-            error_output[2].0,
+            errors[2].to_string(),
             "Cycle 1:  [model.b] depends on [model.a]"
         );
-        assert_eq!(error_output[2].1, loc2);
+        assert_eq!(errors[2].location.as_ref(), Some(&loc2));
     }
 
     #[test]
@@ -3371,39 +3592,33 @@ mod cycle_detection_tests {
         deps.insert(id_a.clone(), BTreeSet::from([id_b.clone()]));
         deps.insert(id_b, BTreeSet::from([id_a]));
 
-        let error_output = Arc::new(Mutex::new(Vec::new()));
-        let reporter = MockStatusReporter {
-            errors: error_output.clone(),
-        };
-        let io = IoArgs {
-            status_reporter: Some(Arc::new(reporter)),
-            ..Default::default()
-        };
+        let (warnings, errors) = find_cycle_diagnostics(&deps, &nodes);
 
-        find_and_report_cycles(&deps, &nodes, &io);
-
-        let error_output = error_output.lock().unwrap();
-        assert_eq!(error_output.len(), 4);
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 4);
         assert_contains!(
-            error_output[0].0,
+            errors[0].to_string(),
             "Cycle detected: [model.a] -> [model.b] -> [model.a]"
         );
-        assert_eq!(error_output[0].1, CodeLocationWithFile::default());
+        assert_eq!(
+            errors[0].location.clone().unwrap_or_default(),
+            CodeLocationWithFile::default()
+        );
         assert_contains!(
-            error_output[1].0,
+            errors[1].to_string(),
             "Cycle 1:  [model.a] depends on [model.b]"
         );
-        assert_eq!(error_output[1].1, loc1_a);
+        assert_eq!(errors[1].location.as_ref(), Some(&loc1_a));
         assert_contains!(
-            error_output[2].0,
+            errors[2].to_string(),
             "Cycle 1:  [model.a] depends on [model.b]"
         );
-        assert_eq!(error_output[2].1, loc2_a);
+        assert_eq!(errors[2].location.as_ref(), Some(&loc2_a));
         assert_contains!(
-            error_output[3].0,
+            errors[3].to_string(),
             "Cycle 1:  [model.b] depends on [model.a]"
         );
-        assert_eq!(error_output[3].1, loc3);
+        assert_eq!(errors[3].location.as_ref(), Some(&loc3));
     }
 
     #[test]
@@ -3424,31 +3639,28 @@ mod cycle_detection_tests {
         let mut deps = BTreeMap::new();
         deps.insert(id_a.clone(), BTreeSet::from([id_a]));
 
-        let error_output = Arc::new(Mutex::new(Vec::new()));
-        let reporter = MockStatusReporter {
-            errors: error_output.clone(),
-        };
-        let io = IoArgs {
-            status_reporter: Some(Arc::new(reporter)),
-            ..Default::default()
-        };
+        let (warnings, errors) = find_cycle_diagnostics(&deps, &nodes);
 
-        find_and_report_cycles(&deps, &nodes, &io);
-
-        let error_output = error_output.lock().unwrap();
-        assert_eq!(error_output.len(), 3);
-        assert_contains!(error_output[0].0, "Cycle detected: [model.a] -> [model.a]");
-        assert_eq!(error_output[0].1, CodeLocationWithFile::default());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 3);
         assert_contains!(
-            error_output[1].0,
+            errors[0].to_string(),
+            "Cycle detected: [model.a] -> [model.a]"
+        );
+        assert_eq!(
+            errors[0].location.clone().unwrap_or_default(),
+            CodeLocationWithFile::default()
+        );
+        assert_contains!(
+            errors[1].to_string(),
             "Cycle 1:  [model.a] depends on [model.a]"
         );
-        assert_eq!(error_output[1].1, loc1);
+        assert_eq!(errors[1].location.as_ref(), Some(&loc1));
         assert_contains!(
-            error_output[2].0,
+            errors[2].to_string(),
             "Cycle 1:  [model.a] depends on [model.a]"
         );
-        assert_eq!(error_output[2].1, loc2);
+        assert_eq!(errors[2].location.as_ref(), Some(&loc2));
     }
 
     #[test]
@@ -3478,50 +3690,47 @@ mod cycle_detection_tests {
         deps.insert(id_c.clone(), BTreeSet::from([id_d.clone()]));
         deps.insert(id_d, BTreeSet::from([id_c]));
 
-        let error_output = Arc::new(Mutex::new(Vec::new()));
-        let reporter = MockStatusReporter {
-            errors: error_output.clone(),
-        };
-        let io = IoArgs {
-            status_reporter: Some(Arc::new(reporter)),
-            ..Default::default()
-        };
+        let (warnings, errors) = find_cycle_diagnostics(&deps, &nodes);
 
-        find_and_report_cycles(&deps, &nodes, &io);
-
-        let error_output = error_output.lock().unwrap();
-        assert_eq!(error_output.len(), 6);
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 6);
         assert_contains!(
-            error_output[0].0,
+            errors[0].to_string(),
             "Cycle detected: [model.a] -> [model.b] -> [model.a]"
         );
-        assert_eq!(error_output[0].1, CodeLocationWithFile::default());
+        assert_eq!(
+            errors[0].location.clone().unwrap_or_default(),
+            CodeLocationWithFile::default()
+        );
         assert_contains!(
-            error_output[1].0,
+            errors[1].to_string(),
             "Cycle 1:  [model.a] depends on [model.b]"
         );
-        assert_eq!(error_output[1].1, loc1);
+        assert_eq!(errors[1].location.as_ref(), Some(&loc1));
         assert_contains!(
-            error_output[2].0,
+            errors[2].to_string(),
             "Cycle 1:  [model.b] depends on [model.a]"
         );
-        assert_eq!(error_output[2].1, loc2);
+        assert_eq!(errors[2].location.as_ref(), Some(&loc2));
         // Second cycle
         assert_contains!(
-            error_output[3].0,
+            errors[3].to_string(),
             "Cycle detected: [model.c] -> [model.d] -> [model.c]"
         );
-        assert_eq!(error_output[3].1, CodeLocationWithFile::default());
+        assert_eq!(
+            errors[3].location.clone().unwrap_or_default(),
+            CodeLocationWithFile::default()
+        );
         assert_contains!(
-            error_output[4].0,
+            errors[4].to_string(),
             "Cycle 2:  [model.c] depends on [model.d]"
         );
-        assert_eq!(error_output[4].1, loc3);
+        assert_eq!(errors[4].location.as_ref(), Some(&loc3));
         assert_contains!(
-            error_output[5].0,
+            errors[5].to_string(),
             "Cycle 2:  [model.d] depends on [model.c]"
         );
-        assert_eq!(error_output[5].1, loc4);
+        assert_eq!(errors[5].location.as_ref(), Some(&loc4));
     }
 
     #[test]
@@ -3561,8 +3770,10 @@ mod cycle_detection_tests {
                 state: None,
                 event_time: None,
                 catalog_name: None,
+                alt_compute: None,
                 table_format: None,
                 sync: None,
+                compiled_code: None,
             },
             __adapter_attr__: AdapterAttr::default(),
             deprecated_config: ModelConfig::default(),
@@ -3608,8 +3819,10 @@ mod cycle_detection_tests {
                 state: None,
                 event_time: None,
                 catalog_name: None,
+                alt_compute: None,
                 table_format: None,
                 sync: None,
+                compiled_code: None,
             },
             __adapter_attr__: AdapterAttr::default(),
             deprecated_config: ModelConfig::default(),
@@ -3635,6 +3848,7 @@ mod cycle_detection_tests {
         let resolved_selectors = ResolvedSelector {
             include: None, // Select all
             exclude: None,
+            ..Default::default()
         };
 
         let args = SchedulerArgs {
@@ -3664,6 +3878,166 @@ mod cycle_detection_tests {
         assert_contains!(schedule.frontier_nodes, "model.extended");
     }
 
+    fn make_model_with_materialization(
+        uid: &str,
+        materialized: DbtMaterialization,
+        deps: &[&str],
+    ) -> Arc<DbtModel> {
+        Arc::new(DbtModel {
+            __common_attr__: CommonAttributes {
+                unique_id: uid.to_string(),
+                tags: vec![],
+                meta: IndexMap::new(),
+                ..Default::default()
+            },
+            __base_attr__: NodeBaseAttributes {
+                depends_on: NodeDependsOn {
+                    nodes_with_ref_location: deps
+                        .iter()
+                        .map(|d| ((*d).to_string(), CodeLocationWithFile::default()))
+                        .collect(),
+                    ..Default::default()
+                },
+                materialized,
+                quoting: ResolvedQuoting::trues(),
+                enabled: true,
+                extended_model: false,
+                static_analysis: StaticAnalysisKind::Strict.into(),
+                ..Default::default()
+            },
+            __model_attr__: DbtModelAttr {
+                access: Access::Protected,
+                group: None,
+                introspection: IntrospectionKind::None,
+                version: None,
+                latest_version: None,
+                constraints: vec![],
+                deprecation_date: None,
+                primary_key: vec![],
+                time_spine: None,
+                contract: None,
+                incremental_strategy: None,
+                freshness: None,
+                state: None,
+                event_time: None,
+                catalog_name: None,
+                alt_compute: None,
+                table_format: None,
+                sync: None,
+                compiled_code: None,
+            },
+            __adapter_attr__: AdapterAttr::default(),
+            deprecated_config: ModelConfig::default(),
+            __other__: BTreeMap::new(),
+        })
+    }
+
+    /// Run `show -s <select>` (by fqn) against the given nodes/deps and return the schedule.
+    fn show_schedule(
+        nodes: &Nodes,
+        deps: &BTreeMap<String, BTreeSet<String>>,
+        select: &str,
+    ) -> Schedule<String> {
+        let resolved_selectors = ResolvedSelector {
+            include: Some(SelectExpression::Atom(SelectionCriteria::new(
+                MethodName::Fqn,
+                vec![],
+                select.to_string(),
+                false,
+                None,
+                None,
+                None,
+                None,
+            ))),
+            exclude: None,
+            ..Default::default()
+        };
+        let args = SchedulerArgs {
+            command: FsCommand::Show,
+            io: Default::default(),
+            resource_types: vec![],
+            exclude_resource_types: vec![],
+            exclude_unique_ids: Default::default(),
+        };
+        schedule_graph(
+            deps,
+            nodes,
+            None,
+            &resolved_selectors,
+            &args,
+            AdapterType::Bigquery,
+        )
+        .unwrap()
+    }
+
+    /// Nodes pulled in only by ephemeral-ancestor expansion: `selected_nodes - all_selected_nodes`.
+    fn expansion_only_nodes(schedule: &Schedule<String>) -> BTreeSet<String> {
+        schedule
+            .selected_nodes
+            .difference(&schedule.all_selected_nodes)
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn test_show_expands_ephemeral_ancestor_but_marks_it_as_expansion_only() {
+        // `show -s tbl` where `tbl` refs an ephemeral model `eph` must pull `eph` into
+        // selected_nodes (so it gets rendered/written to target/ephemeral/eph.sql), but `eph`
+        // must be tracked as expansion-only so it doesn't trip the show single-node check or
+        // get a Show phase task.
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.eph".to_string(),
+            make_model_with_materialization("model.eph", DbtMaterialization::Ephemeral, &[]),
+        );
+        nodes.models.insert(
+            "model.tbl".to_string(),
+            make_model_with_materialization("model.tbl", DbtMaterialization::Table, &["model.eph"]),
+        );
+
+        let deps = BTreeMap::from([
+            (
+                "model.tbl".to_string(),
+                BTreeSet::from(["model.eph".to_string()]),
+            ),
+            ("model.eph".to_string(), BTreeSet::new()),
+        ]);
+
+        let schedule = show_schedule(&nodes, &deps, "model.tbl");
+
+        assert_contains!(schedule.selected_nodes, "model.tbl");
+        assert_contains!(schedule.selected_nodes, "model.eph");
+        let expansion_only = expansion_only_nodes(&schedule);
+        assert!(
+            !expansion_only.contains("model.tbl"),
+            "directly-selected node must not be marked as expansion-only"
+        );
+        assert_contains!(expansion_only, "model.eph");
+    }
+
+    #[test]
+    fn test_show_directly_selected_ephemeral_is_not_expansion_only() {
+        // `show -s eph` selecting the ephemeral model directly should keep full behavior
+        // (e.g. a Show phase task), since it wasn't pulled in only to satisfy a downstream ref.
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.eph".to_string(),
+            make_model_with_materialization("model.eph", DbtMaterialization::Ephemeral, &[]),
+        );
+
+        let deps = BTreeMap::from([("model.eph".to_string(), BTreeSet::new())]);
+
+        let schedule = show_schedule(&nodes, &deps, "model.eph");
+
+        assert_contains!(schedule.selected_nodes, "model.eph");
+        // A directly selected ephemeral node is in `all_selected_nodes`, so it must not appear
+        // among the expansion-only nodes.
+        assert!(
+            !expansion_only_nodes(&schedule).contains("model.eph"),
+            "directly-selected ephemeral node must not be marked as expansion-only"
+        );
+    }
+
     #[test]
     fn test_no_cycles() {
         let mut nodes = Nodes::default();
@@ -3680,19 +4054,350 @@ mod cycle_detection_tests {
         deps.insert(id_a, BTreeSet::from([id_b.clone()]));
         deps.insert(id_b, BTreeSet::new());
 
-        let error_output = Arc::new(Mutex::new(Vec::new()));
-        let reporter = MockStatusReporter {
-            errors: error_output.clone(),
-        };
-        let io = IoArgs {
-            status_reporter: Some(Arc::new(reporter)),
-            ..Default::default()
-        };
+        let (warnings, errors) = find_cycle_diagnostics(&deps, &nodes);
 
-        find_and_report_cycles(&deps, &nodes, &io);
+        assert!(warnings.is_empty());
+        assert!(errors.is_empty());
+    }
+}
 
-        let error_output = error_output.lock().unwrap();
-        assert!(error_output.is_empty());
+#[cfg(test)]
+mod selector_method_tests {
+    use super::*;
+    use dbt_common::{
+        io_args::StaticAnalysisKind,
+        node_selector::{MethodName, SelectionCriteria},
+    };
+    use dbt_schemas::schemas::{
+        CommonAttributes, DbtModel, DbtModelAttr, IntrospectionKind, NodeBaseAttributes,
+        common::{Access, DbtMaterialization, ResolvedQuoting},
+        nodes::AdapterAttr,
+        project::ModelConfig,
+        selectors::SelectorEntry,
+    };
+    use indexmap::IndexMap;
+    use std::sync::Arc;
+
+    fn make_tagged_model(unique_id: &str, tags: Vec<&str>) -> (String, Arc<DbtModel>) {
+        (
+            unique_id.to_string(),
+            Arc::new(DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: unique_id.to_string(),
+                    name: unique_id.to_string(),
+                    package_name: "package".to_string(),
+                    tags: tags.into_iter().map(String::from).collect(),
+                    meta: IndexMap::new(),
+                    ..Default::default()
+                },
+                __base_attr__: NodeBaseAttributes {
+                    database: "db".to_string(),
+                    schema: "schema".to_string(),
+                    materialized: DbtMaterialization::View,
+                    quoting: ResolvedQuoting::trues(),
+                    enabled: true,
+                    extended_model: false,
+                    static_analysis: StaticAnalysisKind::Strict.into(),
+                    ..Default::default()
+                },
+                __model_attr__: DbtModelAttr {
+                    introspection: IntrospectionKind::None,
+                    access: Access::Protected,
+                    ..Default::default()
+                },
+                __adapter_attr__: AdapterAttr::default(),
+                deprecated_config: ModelConfig::default(),
+                __other__: BTreeMap::new(),
+            }),
+        )
+    }
+
+    fn tagged_nodes() -> Nodes {
+        let mut nodes = Nodes::default();
+        let (id, m) = make_tagged_model("model.a", vec!["nightly", "core"]);
+        nodes.models.insert(id, m);
+        let (id, m) = make_tagged_model("model.b", vec!["nightly"]);
+        nodes.models.insert(id, m);
+        let (id, m) = make_tagged_model("model.c", vec!["core"]);
+        nodes.models.insert(id, m);
+        let (id, m) = make_tagged_model("model.d", vec![]);
+        nodes.models.insert(id, m);
+        nodes
+    }
+
+    fn make_deps() -> BTreeMap<String, BTreeSet<String>> {
+        let mut deps = BTreeMap::new();
+        // model.a -> model.b -> model.d
+        // model.a -> model.c
+        deps.insert(
+            "model.a".to_string(),
+            BTreeSet::from(["model.b".to_string(), "model.c".to_string()]),
+        );
+        deps.insert(
+            "model.b".to_string(),
+            BTreeSet::from(["model.d".to_string()]),
+        );
+        deps.insert("model.c".to_string(), BTreeSet::new());
+        deps.insert("model.d".to_string(), BTreeSet::new());
+        deps
+    }
+
+    fn selector_atom(name: &str) -> SelectExpression {
+        SelectExpression::Atom(SelectionCriteria::new(
+            MethodName::Selector,
+            vec![],
+            name.to_string(),
+            false,
+            None,
+            None,
+            None,
+            None,
+        ))
+    }
+
+    fn selector_atom_with_parents(name: &str, depth: u32) -> SelectExpression {
+        SelectExpression::Atom(SelectionCriteria::new(
+            MethodName::Selector,
+            vec![],
+            name.to_string(),
+            false,
+            Some(depth),
+            None,
+            None,
+            None,
+        ))
+    }
+
+    fn tag_selector(tag: &str) -> SelectExpression {
+        SelectExpression::Atom(SelectionCriteria::new(
+            MethodName::Tag,
+            vec![],
+            tag.to_string(),
+            false,
+            None,
+            None,
+            Some(IndirectSelection::Eager),
+            None,
+        ))
+    }
+
+    #[test]
+    fn test_selector_method_basic_resolution() {
+        let nodes = tagged_nodes();
+        let deps = make_deps();
+        let mut sel_defs = HashMap::new();
+        sel_defs.insert(
+            "nightly_models".to_string(),
+            SelectorEntry {
+                include: tag_selector("nightly"),
+                is_default: false,
+                description: None,
+            },
+        );
+
+        let mut stack = Vec::new();
+        let result = eval_selector(
+            &selector_atom("nightly_models"),
+            &deps,
+            &nodes,
+            None,
+            AdapterType::Bigquery,
+            &sel_defs,
+            &mut stack,
+        )
+        .unwrap();
+
+        let selected = result.into_final();
+        assert!(selected.contains("model.a"));
+        assert!(selected.contains("model.b"));
+        assert!(!selected.contains("model.c"));
+        assert!(!selected.contains("model.d"));
+    }
+
+    #[test]
+    fn test_selector_method_with_graph_operators() {
+        let nodes = tagged_nodes();
+        let deps = make_deps();
+        let mut sel_defs = HashMap::new();
+        // "core_models" selects tag:core → {model.a, model.c}
+        sel_defs.insert(
+            "core_models".to_string(),
+            SelectorEntry {
+                include: tag_selector("core"),
+                is_default: false,
+                description: None,
+            },
+        );
+
+        let mut stack = Vec::new();
+        // 1+selector:core_models — should include parents of {model.a, model.c}
+        let result = eval_selector(
+            &selector_atom_with_parents("core_models", 1),
+            &deps,
+            &nodes,
+            None,
+            AdapterType::Bigquery,
+            &sel_defs,
+            &mut stack,
+        )
+        .unwrap();
+
+        let selected = result.into_final();
+        // model.a and model.c are selected by tag:core
+        assert!(selected.contains("model.a"));
+        assert!(selected.contains("model.c"));
+        // model.a depends on model.b and model.c, so model.b and model.c are parents of model.a
+        // model.c has no parents
+        // With depth=1 parents from {model.a, model.c}: model.b, model.c (parents of model.a)
+        assert!(selected.contains("model.b"));
+    }
+
+    #[test]
+    fn test_selector_method_unknown_selector_error() {
+        let nodes = tagged_nodes();
+        let deps = make_deps();
+        let sel_defs = HashMap::new();
+
+        let mut stack = Vec::new();
+        let result = eval_selector(
+            &selector_atom("nonexistent"),
+            &deps,
+            &nodes,
+            None,
+            AdapterType::Bigquery,
+            &sel_defs,
+            &mut stack,
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, ErrorCode::SelectorError);
+        assert!(err.to_string().contains("Unknown selector"));
+    }
+
+    #[test]
+    fn test_selector_method_circular_reference() {
+        let nodes = tagged_nodes();
+        let deps = make_deps();
+        let mut sel_defs = HashMap::new();
+        // alpha references beta, beta references alpha
+        sel_defs.insert(
+            "alpha".to_string(),
+            SelectorEntry {
+                include: selector_atom("beta"),
+                is_default: false,
+                description: None,
+            },
+        );
+        sel_defs.insert(
+            "beta".to_string(),
+            SelectorEntry {
+                include: selector_atom("alpha"),
+                is_default: false,
+                description: None,
+            },
+        );
+
+        let mut stack = Vec::new();
+        let result = eval_selector(
+            &selector_atom("alpha"),
+            &deps,
+            &nodes,
+            None,
+            AdapterType::Bigquery,
+            &sel_defs,
+            &mut stack,
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, ErrorCode::SelectorError);
+        assert!(err.to_string().contains("Circular selector reference"));
+    }
+
+    #[test]
+    fn test_selector_method_wildcard() {
+        let nodes = tagged_nodes();
+        let deps = make_deps();
+        let mut sel_defs = HashMap::new();
+        sel_defs.insert(
+            "nightly_models".to_string(),
+            SelectorEntry {
+                include: tag_selector("nightly"),
+                is_default: false,
+                description: None,
+            },
+        );
+        sel_defs.insert(
+            "nightly_seeds".to_string(),
+            SelectorEntry {
+                include: tag_selector("core"),
+                is_default: false,
+                description: None,
+            },
+        );
+
+        let mut stack = Vec::new();
+        // selector:nightly_* matches both nightly_models and nightly_seeds
+        let result = eval_selector(
+            &selector_atom("nightly_*"),
+            &deps,
+            &nodes,
+            None,
+            AdapterType::Bigquery,
+            &sel_defs,
+            &mut stack,
+        )
+        .unwrap();
+
+        let selected = result.into_final();
+        // union of tag:nightly and tag:core = {model.a, model.b, model.c}
+        assert!(selected.contains("model.a"));
+        assert!(selected.contains("model.b"));
+        assert!(selected.contains("model.c"));
+        assert!(!selected.contains("model.d"));
+    }
+
+    #[test]
+    fn test_selector_method_transitive_resolution() {
+        let nodes = tagged_nodes();
+        let deps = make_deps();
+        let mut sel_defs = HashMap::new();
+        sel_defs.insert(
+            "base".to_string(),
+            SelectorEntry {
+                include: tag_selector("nightly"),
+                is_default: false,
+                description: None,
+            },
+        );
+        // "derived" references "base"
+        sel_defs.insert(
+            "derived".to_string(),
+            SelectorEntry {
+                include: selector_atom("base"),
+                is_default: false,
+                description: None,
+            },
+        );
+
+        let mut stack = Vec::new();
+        let result = eval_selector(
+            &selector_atom("derived"),
+            &deps,
+            &nodes,
+            None,
+            AdapterType::Bigquery,
+            &sel_defs,
+            &mut stack,
+        )
+        .unwrap();
+
+        let selected = result.into_final();
+        // derived -> base -> tag:nightly = {model.a, model.b}
+        assert!(selected.contains("model.a"));
+        assert!(selected.contains("model.b"));
+        assert!(!selected.contains("model.c"));
     }
 }
 

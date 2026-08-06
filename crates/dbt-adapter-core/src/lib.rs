@@ -81,8 +81,8 @@ pub enum AdapterType {
     Dremio,
     /// Oracle
     Oracle,
-    /// Fdcs
-    Fdcs,
+    /// Alt
+    Alt,
 }
 
 impl AdapterType {
@@ -111,7 +111,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Redshift => '"',
         Postgres | Salesforce => '"',
         Fabric => '"',
-        DuckDB | Fdcs => '"',
+        DuckDB | Alt => '"',
         Athena | Trino | Starburst => '"',
         Datafusion => '"',
         // https://clickhouse.com/docs/sql-reference/syntax#identifiers
@@ -172,7 +172,7 @@ mod tests {
             ("sTarburst", AdapterType::Starburst),
             ("tRino", AdapterType::Trino),
             ("dAtafusion", AdapterType::Datafusion),
-            ("fDcs", AdapterType::Fdcs),
+            ("aLt", AdapterType::Alt),
         ];
         for (input, expected) in cases {
             let res = input.parse::<AdapterType>();
@@ -219,7 +219,7 @@ mod tests {
                 (AdapterType::Datafusion, "datafusion"),
                 (AdapterType::Dremio, "dremio"),
                 (AdapterType::Oracle, "oracle"),
-                (AdapterType::Fdcs, "fdcs"),
+                (AdapterType::Alt, "alt"),
             ]
         );
     }
@@ -241,7 +241,7 @@ mod tests {
             AdapterType::Salesforce,
             AdapterType::Fabric,
             AdapterType::DuckDB,
-            AdapterType::Fdcs,
+            AdapterType::Alt,
             AdapterType::Athena,
             AdapterType::Trino,
             AdapterType::Starburst,

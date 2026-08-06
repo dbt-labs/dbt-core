@@ -195,12 +195,11 @@ impl SemanticCategory {
         }
     }
 
-    /// Returns true if this category represents an operation that mutates state.
     pub fn is_mutating(&self) -> bool {
         matches!(self, SemanticCategory::Write)
     }
 
-    /// Returns true if this category represents a database I/O operation.
+    /// True for both reads and writes, i.e. anything that talks to the database.
     pub fn is_db_io(&self) -> bool {
         matches!(
             self,

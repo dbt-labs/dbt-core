@@ -15,7 +15,7 @@ use dbt_state::service_config::{
     DEFAULT_OAUTH_AUTH_URL, DEFAULT_OAUTH_CLIENT_ID, DEFAULT_OAUTH_TOKEN_URL,
 };
 use uuid::Uuid;
-use vortex_events::{LoginType, login_event};
+use vortex_events::{LoginErrorCode, LoginType, login_event};
 
 use crate::LoginHooks;
 use crate::state_guidance::{run_state_guidance, run_state_guidance_after_state_login};
@@ -48,6 +48,25 @@ fn read_cached_access_token() -> Option<String> {
         .into_iter()
         .find(|s| s.client_id == OAUTH_CLIENT_ID)
         .map(|s| s.access_token)
+}
+
+/// Maps a platform login failure to its `LoginErrorCode` and, when available,
+/// an error message. `AuthError::Aborted` is excluded because it signals that
+/// the *other* login callback (dbt State) completed first, not a login failure —
+/// call sites must handle it separately and never reach this function with it.
+fn login_error_fields(e: &AuthError) -> (LoginErrorCode, Option<String>) {
+    match e {
+        AuthError::NotAuthenticated => (LoginErrorCode::NotAuthenticated, None),
+        AuthError::AuthenticationExpired => (LoginErrorCode::AuthenticationExpired, None),
+        AuthError::InaccessibleSource(_) => (LoginErrorCode::InaccessibleSource, None),
+        AuthError::Malformed(_) => (LoginErrorCode::MalformedConfig, None),
+        AuthError::Interactive(message) => {
+            (LoginErrorCode::InteractiveFailure, Some(message.clone()))
+        }
+        AuthError::Aborted => unreachable!("AuthError::Aborted is handled before this is called"),
+        AuthError::InadequateScopes { .. } => (LoginErrorCode::InadequateScopes, None),
+        AuthError::RefreshFailed(_) => (LoginErrorCode::RefreshFailed, None),
+    }
 }
 
 pub async fn execute_login(
@@ -140,6 +159,8 @@ pub async fn execute_login(
         redirect_port: LOOPBACK_PORT,
         opener: state_opener,
         abort_signal: Mutex::new(Some(state_abort_rx)),
+        // `dbt login` is an explicitly interactive command; always attempt it.
+        available: true,
     };
 
     let env_scopes = std::env::var("DBT_OAUTH_SCOPES").ok();
@@ -199,7 +220,7 @@ pub async fn execute_login(
                 None => println!("dbt State login successful."),
             }
             // State login has no platform JWT; identity fields will be absent.
-            login_event(invocation_id, true, LoginType::State, None);
+            login_event(invocation_id, true, LoginType::State, None, None, None);
         }
         result = platform_resolver.resolve() => {
             let cred = match result {
@@ -211,11 +232,14 @@ pub async fn execute_login(
                         console::style("dbt login").bold()
                     );
                     let cached_token = read_cached_access_token();
+                    let (error_code, error_message) = login_error_fields(&e);
                     login_event(
                         invocation_id,
                         false,
                         LoginType::Unspecified,
                         cached_token.as_deref(),
+                        Some(error_code),
+                        error_message,
                     );
                     return Err(fs_err!(ErrorCode::AuthFailed, "authentication failed"));
                 }
@@ -237,7 +261,14 @@ pub async fn execute_login(
             } else {
                 None
             };
-            login_event(invocation_id, true, LoginType::Platform, access_token);
+            login_event(
+                invocation_id,
+                true,
+                LoginType::Platform,
+                access_token,
+                None,
+                None,
+            );
         }
     }
 

@@ -8,7 +8,7 @@ use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_common::{dashmap::DashMap, serde_utils::convert_yml_to_value_map};
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::{
-    schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
+    schemas::{InternalDbtNodeAttributes, common::DbtMaterialization, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
 use minijinja::constants::{CURRENT_EXECUTION_PHASE, CURRENT_PATH, CURRENT_SPAN};
@@ -19,7 +19,9 @@ use std::{
     sync::Arc,
 };
 
-use dbt_jinja_ctx::{CompileNodeCtx, JinjaObject, MacroLookupContext, to_jinja_btreemap};
+use dbt_jinja_ctx::{
+    CompileNodeCtx, JinjaObject, MacroLookupContext, to_jinja_btreemap, to_model_context_map,
+};
 
 use crate::phases::compile_and_run_context::{FunctionFunction, SourceFunction};
 use dbt_schemas::schemas::project::ConfigKeys;
@@ -212,6 +214,27 @@ where
                     .unwrap(),
                 ))
                 .into_value()
+            } else if matches!(model.materialized(), DbtMaterialization::Ephemeral) {
+                // Build `this` directly as the physical relation
+                // (database.schema.identifier) rather than using the relation the
+                // resolver stores for this node. The stored relation is typed so
+                // that `ref()` to this node inlines it as a `__dbt__cte__<name>`
+                // CTE; reusing it here would make bare `{{ this }}` render as that
+                // same self-referential CTE. Constructing a fresh relation with no
+                // type keeps `ref()` untouched and mirrors how the run phase builds
+                // `this`.
+                dbt_adapter::relation::RelationObject::new(Arc::from(
+                    dbt_adapter::relation::do_create_relation(
+                        adapter_type,
+                        model.base().database.clone(),
+                        model.base().schema.clone(),
+                        Some(model.base().alias.clone()),
+                        None,
+                        model.base().quoting,
+                    )
+                    .unwrap(),
+                ))
+                .into_value()
             } else {
                 let (_, this_relation, _, deferred_relation) = node_resolver
                     .lookup_ref(
@@ -335,12 +358,12 @@ where
 
     // Build the typed per-node overlay. Object-typed slots are wrapped via
     // `MinijinjaValue::from_object(...)` HERE rather than typed as concrete
-    // types in `CompileNodeCtx`, because going through serde would change
-    // `model` and `builtins` from `BTreeMap<String, MinijinjaValue>` Objects
-    // (which downstream code downcasts back to that exact concrete type)
-    // into a `MutableMap<Value, Value>` and silently break the downcast —
-    // same shape trap PR 3 hit with `MACRO_DISPATCH_ORDER`'s `Vec<String>`.
+    // types in `CompileNodeCtx`, because going through serde can change the
+    // underlying Object's concrete type. `builtins` must keep its BTreeMap
+    // shape for downstream downcasts, while `model` is intentionally mutable
+    // to match dbt Core's dict behavior.
     let overlay = CompileNodeCtx {
+        base: None,
         this: this_relation,
         database: model.base().database.to_string(),
         schema: model.base().schema.to_string(),
@@ -350,7 +373,7 @@ where
         source: source_value,
         function: function_value,
         builtins: MinijinjaValue::from_object(base_builtins),
-        model: MinijinjaValue::from_serialize(MinijinjaValue::from_object(model_map)),
+        model: MinijinjaValue::from_dyn_object(to_model_context_map(model_map)),
         store_result: MinijinjaValue::from_function(result_store.store_result()),
         load_result: MinijinjaValue::from_function(result_store.load_result()),
         store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),

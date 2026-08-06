@@ -43,6 +43,11 @@ pub trait RecordBatchExt {
         on_disambiguate: Option<impl FnOnce(&[RenamedColumn<'_>])>,
     ) -> RecordBatch;
     fn jsonify_nested_columns(self) -> RecordBatch;
+    /// Lowercase all column names in the RecordBatch schema.
+    ///
+    /// This is used for database commands whose result column names are defined
+    /// as lowercase even when a driver reports them in uppercase.
+    fn lowercase_column_names(self) -> RecordBatch;
 }
 
 impl RecordBatchExt for RecordBatch {
@@ -205,6 +210,32 @@ impl RecordBatchExt for RecordBatch {
         ));
         RecordBatch::try_new(new_schema, new_columns)
             .expect("jsonify_nested_columns: rewritten schema and columns are consistent")
+    }
+
+    fn lowercase_column_names(self) -> RecordBatch {
+        let schema = self.schema();
+        let fields = schema.fields();
+
+        if fields.iter().all(|f| {
+            f.name()
+                .chars()
+                .all(|c| c.is_lowercase() || !c.is_alphabetic())
+        }) {
+            return self;
+        }
+
+        let new_fields: Vec<_> = fields
+            .iter()
+            .map(|f| Arc::new(f.as_ref().clone().with_name(f.name().to_lowercase())))
+            .collect();
+
+        let new_schema = Arc::new(Schema::new_with_metadata(
+            new_fields,
+            schema.metadata().clone(),
+        ));
+
+        RecordBatch::try_new(new_schema, self.columns().to_vec())
+            .expect("lowercase_column_names: schema and columns should be compatible")
     }
 }
 
@@ -1011,5 +1042,84 @@ mod tests {
         let col = column_as_string(&result, "m");
         let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
         assert_eq!(row0, serde_json::json!({"[1,2]": 10, "[3]": 20}));
+    }
+
+    #[test]
+    fn lowercase_column_names_already_lowercase_is_noop() {
+        let schema = Schema::new(vec![
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("data_type", DataType::Utf8, false),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["id"])) as ArrayRef,
+                Arc::new(StringArray::from(vec!["integer"])) as ArrayRef,
+            ],
+        )
+        .unwrap();
+
+        let original_ptr = Arc::as_ptr(batch.schema_ref());
+        let result = batch.lowercase_column_names();
+        // Schema should be the same object (no rebuild needed)
+        assert_eq!(Arc::as_ptr(result.schema_ref()), original_ptr);
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["column_name", "data_type"]);
+    }
+
+    #[test]
+    fn lowercase_column_names_snowflake_uppercase() {
+        // Simulates what the Snowflake ADBC driver returns for SHOW / system queries.
+        // dbt_constraints accesses columns["column_name"].values() (lowercase).
+        // Without lowercasing, columns["column_name"] returns undefined.
+        let schema = Schema::new(vec![
+            Field::new("COLUMN_NAME", DataType::Utf8, false),
+            Field::new("DATA_TYPE", DataType::Utf8, false),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["id", "name"])) as ArrayRef,
+                Arc::new(StringArray::from(vec!["integer", "varchar"])) as ArrayRef,
+            ],
+        )
+        .unwrap();
+
+        let result = batch.lowercase_column_names();
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["column_name", "data_type"]);
+
+        // Data should be preserved unchanged.
+        let col = result
+            .column_by_name("column_name")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(col.value(0), "id");
+        assert_eq!(col.value(1), "name");
+    }
+
+    #[test]
+    fn lowercase_column_names_mixed_case() {
+        let schema = Schema::new(vec![
+            Field::new("Column_Name", DataType::Utf8, false),
+            Field::new("id_42", DataType::Int32, false),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["x"])) as ArrayRef,
+                Arc::new(Int32Array::from(vec![1])) as ArrayRef,
+            ],
+        )
+        .unwrap();
+
+        let result = batch.lowercase_column_names();
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["column_name", "id_42"]);
     }
 }

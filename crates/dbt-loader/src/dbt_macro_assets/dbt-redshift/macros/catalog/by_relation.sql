@@ -6,10 +6,7 @@
     {#-- Compute a left-outer join in memory. Some Redshift queries are
       -- leader-only, and cannot be joined to other compute-based queries
       -- TODO: https://github.com/dbt-labs/fs/issues/6859#issue-3648357670 #}
-
-    {#- DIVERGENCE BEGIN: upstream uses redshift__use_show_apis(); Fusion uses adapter.has_feature("datasharing") -#}
-    {% if adapter.has_feature("datasharing") %}
-    {#- DIVERGENCE END -#}
+    {% if redshift__use_show_apis() %}
         {% set catalog = _redshift__get_base_catalog_by_relation_show(dbschema.database, relations) %}
     {% else %}
         {#-- Compute a left-outer join in memory. Some Redshift queries are
@@ -48,27 +45,6 @@
 {%- endmacro %}
 
 
-{# Datasharing catalog path: uses SHOW TABLES plus SVV_REDSHIFT_COLUMNS because
-   system catalog queries cannot see shared cross-database objects. #}
-{% macro _redshift__get_base_catalog_by_relation_show(database, relations) -%}
-    {% set schemas = [] %}
-    {% for relation in relations %}
-        {% if relation.schema not in schemas %}
-            {% do schemas.append(relation.schema) %}
-        {% endif %}
-    {% endfor %}
-
-    {% set columns_filter %}
-        {%- for relation in relations -%}
-            (schema_name = lower('{{ relation.schema }}') and table_name = lower('{{ relation.identifier }}'))
-            {%- if not loop.last %} or {% endif -%}
-        {%- endfor -%}
-    {% endset %}
-
-    {{ return(_redshift__get_base_catalog_show(database, schemas, columns_filter)) }}
-{%- endmacro %}
-
-
 {% macro _redshift__get_late_binding_by_relation_sql(relations) %}
     {{ redshift__get_late_binding_sql() }}
     where (
@@ -95,6 +71,25 @@
         {%- endfor -%}
     )
 {% endmacro %}
+
+
+{% macro _redshift__get_base_catalog_by_relation_show(database, relations) -%}
+    {% set schemas = [] %}
+    {% for relation in relations %}
+        {% if relation.schema not in schemas %}
+            {% do schemas.append(relation.schema) %}
+        {% endif %}
+    {% endfor %}
+
+    {% set columns_filter %}
+        {%- for relation in relations -%}
+            (schema_name = lower('{{ relation.schema }}') and table_name = lower('{{ relation.identifier }}'))
+            {%- if not loop.last %} or {% endif -%}
+        {%- endfor -%}
+    {% endset %}
+
+    {{ return(_redshift__get_base_catalog_show(database, schemas, columns_filter)) }}
+{%- endmacro %}
 
 
 {% macro _redshift__get_extended_catalog_by_relation(relations) %}

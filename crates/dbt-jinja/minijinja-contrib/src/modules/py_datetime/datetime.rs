@@ -3,8 +3,10 @@ use std::fmt;
 use std::sync::Arc;
 
 use chrono::{
-    offset::Offset, DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone,
-    Timelike, Utc, Weekday,
+    format::{Fixed, Item, StrftimeItems},
+    offset::Offset,
+    DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc,
+    Weekday,
 };
 use chrono_tz::Tz;
 use minijinja::arg_utils::ArgsIter;
@@ -594,6 +596,21 @@ impl Object for PyDateTimeClass {
 //
 // Implementation of PyDateTime object
 //
+fn is_timezone_item(item: &Item<'_>) -> bool {
+    matches!(
+        item,
+        Item::Fixed(
+            Fixed::TimezoneName
+                | Fixed::TimezoneOffsetColon
+                | Fixed::TimezoneOffsetDoubleColon
+                | Fixed::TimezoneOffsetTripleColon
+                | Fixed::TimezoneOffsetColonZ
+                | Fixed::TimezoneOffset
+                | Fixed::TimezoneOffsetZ
+        )
+    )
+}
+
 impl PyDateTime {
     // convenience "naive" constructor
     pub fn new_naive(dt: NaiveDateTime) -> Self {
@@ -668,12 +685,20 @@ impl PyDateTime {
                 "strftime requires one string argument",
             )
         })?;
-        let s = match &self.state {
-            DateTimeState::Naive(ndt) => ndt.format(fmt).to_string(),
-            DateTimeState::Aware(adt) => adt.format(fmt).to_string(),
-            DateTimeState::FixedOffset(fdt) => fdt.format(fmt).to_string(),
+        let mut formatted = String::new();
+        let result = match &self.state {
+            DateTimeState::Naive(ndt) => {
+                // Python renders timezone directives as empty strings for naive datetimes.
+                let items = StrftimeItems::new(fmt)
+                    .filter(|item| !is_timezone_item(item))
+                    .collect::<Vec<_>>();
+                ndt.format_with_items(items.iter()).write_to(&mut formatted)
+            }
+            DateTimeState::Aware(adt) => adt.format(fmt).write_to(&mut formatted),
+            DateTimeState::FixedOffset(fdt) => fdt.format(fmt).write_to(&mut formatted),
         };
-        Ok(Value::from(s))
+        result.map_err(|_| Error::new(ErrorKind::InvalidArgument, "invalid strftime format"))?;
+        Ok(Value::from(formatted))
     }
 
     /// Format with a custom date/time separator. `sep == 'T'` produces the
@@ -1621,6 +1646,15 @@ mod tests {
     fn test_str_naive_with_microseconds_uses_space() {
         let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T12:30:45.123456")).unwrap();
         assert_eq!(render_dt(dt), "2024-01-01 12:30:45.123456");
+    }
+
+    #[test]
+    fn test_strftime_naive_omits_timezone_directives() {
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T12:30:45.123456")).unwrap();
+        let formatted = dt
+            .strftime(&[Value::from("%Y-%m-%d %H:%M:%S %z %Z")])
+            .unwrap();
+        assert_eq!(formatted.as_str(), Some("2024-01-01 12:30:45  "));
     }
 
     #[test]

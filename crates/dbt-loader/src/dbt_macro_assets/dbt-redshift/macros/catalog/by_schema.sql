@@ -6,9 +6,7 @@
       -- leader-only, and cannot be joined to other compute-based queries 
       -- TODO: https://github.com/dbt-labs/fs/issues/6859#issue-3648357670 #}
 
-    {#- DIVERGENCE BEGIN: upstream uses redshift__use_show_apis(); Fusion uses adapter.has_feature("datasharing") -#}
-    {% if adapter.has_feature("datasharing") %}
-    {#- DIVERGENCE END -#}
+    {% if redshift__use_show_apis() %}
         {% set catalog = _redshift__get_base_catalog_by_schema_show(dbschema.database, schemas) %}
     {% else %}
         {#-- Compute a left-outer join in memory. Some Redshift queries are
@@ -48,17 +46,6 @@
 {%- endmacro %}
 
 
-{# Datasharing catalog path: uses SHOW TABLES plus SVV_REDSHIFT_COLUMNS because
-   system catalog queries cannot see shared cross-database objects. #}
-{% macro _redshift__get_base_catalog_by_schema_show(database, schemas) -%}
-    {% set columns_filter %}
-        {%- for schema in schemas -%}
-            schema_name = lower('{{ schema }}'){%- if not loop.last %} or {% endif -%}
-        {%- endfor -%}
-    {% endset %}
-
-    {{ return(_redshift__get_base_catalog_show(database, schemas, columns_filter)) }}
-{%- endmacro %}
 
 
 {% macro _redshift__get_late_binding_by_schema_sql(schemas) %}
@@ -79,6 +66,17 @@
         {%- endfor -%}
     )
 {% endmacro %}
+
+
+{% macro _redshift__get_base_catalog_by_schema_show(database, schemas) -%}
+    {% set columns_filter %}
+        {%- for schema in schemas -%}
+            schema_name = lower('{{ schema }}'){%- if not loop.last %} or {% endif -%}
+        {%- endfor -%}
+    {% endset %}
+
+    {{ return(_redshift__get_base_catalog_show(database, schemas, columns_filter)) }}
+{%- endmacro %}
 
 
 {% macro _redshift__get_extended_catalog_by_schema(schemas) %}

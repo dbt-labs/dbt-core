@@ -18,6 +18,7 @@ use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 
+use dbt_common::path::DbtPath;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -76,14 +77,7 @@ pub fn resolve_unit_tests(
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.unit_tests.clone(),
         dependency_package_name.is_some(),
-        || {
-            init_project_config(
-                &arg.io,
-                &package.dbt_project.unit_tests,
-                (),
-                dependency_package_name,
-            )
-        },
+        || init_project_config(&package.dbt_project.unit_tests, (), dependency_package_name),
     )?
     .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
@@ -150,7 +144,6 @@ pub fn resolve_unit_tests(
             arg.static_analysis,
             &base_unique_id,
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
         validate_unit_test_compute(properties_config.compute, &mpe.relative_path)?;
         // Sidecar needs a bound LP. Upgrade baseline to strict like the CLI
@@ -246,8 +239,8 @@ pub fn resolve_unit_tests(
             __common_attr__: CommonAttributes {
                 name: unit_test_name.to_owned(),
                 package_name: package_name.to_owned(),
-                original_file_path: mpe.relative_path.clone(),
-                path: mpe.relative_path.clone(),
+                original_file_path: DbtPath::from(&mpe.relative_path),
+                path: DbtPath::from(&mpe.relative_path),
                 name_span: dbt_common::Span::default(),
                 unique_id: base_unique_id.clone(),
                 fqn,
@@ -259,8 +252,9 @@ pub fn resolve_unit_tests(
                 language: Some("sql".to_string()),
                 tags: properties_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: Default::default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),
@@ -287,9 +281,11 @@ pub fn resolve_unit_tests(
                 compute: properties_config.compute,
                 columns: vec![],
                 metrics: vec![],
-                // TODO: populate unrendered_config for unit tests. dbt-core never does this
-                // (unit_tests.py has no reference to unrendered_config), so empty matches
-                // Core parity today, but it is an omission there too.
+                // In future: populate unrendered_config for unit tests -- after dbt-core starts
+                // comparing unit-test config.
+                // For now, it is intentionally left empty to match dbt-core's current behavior:
+                // unit_tests.py never populates it, unit tests are compared Structurally/by
+                // checksum, and check_configs_modified treats NodeType::UnitTest as a non-trigger.
                 unrendered_config: Default::default(),
             },
             __unit_test_attr__: DbtUnitTestAttr {

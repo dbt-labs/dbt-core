@@ -325,11 +325,11 @@ mod builtins {
                 "cannot create range with step of 0",
             )),
             positive if positive > 0 => to_result((lower..upper).step_by(positive as usize)),
-            negative => to_result(
-                (upper + 1..lower + 1)
-                    .step_by(negative.unsigned_abs() as usize)
-                    .rev(),
-            ),
+            negative => {
+                let abs_step = negative.unsigned_abs() as i32;
+                let start = upper + 1 + (lower - upper - 1) % abs_step;
+                to_result((start..lower + 1).step_by(abs_step as usize).rev())
+            }
         }
     }
 
@@ -504,6 +504,31 @@ mod tests {
             values.push(result.get_item_by_index(idx).unwrap().as_i64().unwrap());
         }
         assert_eq!(values, vec![5, 4, 3, 2, 1]);
+    }
+
+    #[test]
+    fn test_range_negative_step_with_remainder() {
+        fn collect(result: Value) -> Vec<i64> {
+            let mut values = vec![];
+            for idx in 0..result.len().unwrap_or_default() {
+                values.push(result.get_item_by_index(idx).unwrap().as_i64().unwrap());
+            }
+            values
+        }
+
+        // Regression: negative step where (lower - upper) is not a multiple of
+        // the step used to miss `lower` and be offset by one.
+        assert_eq!(
+            collect(range(10, Some(0), Some(-2)).unwrap()),
+            vec![10, 8, 6, 4, 2]
+        );
+        assert_eq!(collect(range(10, Some(4), Some(-3)).unwrap()), vec![10, 7]);
+
+        // Cases that align exactly were already correct; keep them covered.
+        assert_eq!(
+            collect(range(10, Some(0), Some(-3)).unwrap()),
+            vec![10, 7, 4, 1]
+        );
     }
 
     #[test]

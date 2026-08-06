@@ -39,6 +39,7 @@ use super::super::{
         progress::format_progress_message,
         query_log::format_query_log,
     },
+    fs_error_log::get_log_message,
 };
 
 use crate::io_args::FsCommand;
@@ -457,9 +458,14 @@ impl JsonCompatLayer {
             true,
         );
 
+        let code = log_msg
+            .dbt_core_event_code
+            .clone()
+            .or_else(|| log_msg.code.map(|c| c.to_string()));
+
         let info_json = serde_json::to_value(self.build_core_event_info(
-            None,
-            None,
+            code.as_deref(),
+            log_msg.code_name.as_deref(),
             &log_record.severity_text,
             formatted_message,
         ))
@@ -1347,7 +1353,7 @@ impl TelemetryConsumer for JsonCompatLayer {
 
     fn on_log_record(&self, log_record: &LogRecordInfo, _data_provider: &mut DataProvider<'_>) {
         // Dispatch to LogMessage handler
-        if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
+        if let Some(log_msg) = get_log_message(&log_record.attributes) {
             self.emit_log_message(log_msg, log_record);
             return;
         }

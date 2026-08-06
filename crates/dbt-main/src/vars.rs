@@ -1,10 +1,11 @@
+use dbt_common::{io_args::SKIP_REDUNDANT_TESTS_ENV, tracing::dbt_emit::emit_warn_log_message};
 use dbt_init::{ErrorCode, FsResult, fs_err};
 
 const ENGINE_ENV_PREFIX: &str = "DBT_ENGINE_";
 
 /// Environment variables from dbt-clap-core that can be aliased with DBT_ENGINE_ prefix.
-/// For each entry, if DBT_ENGINE_<SUFFIX> is set and DBT_<SUFFIX> is not,
-/// we copy the value to DBT_<SUFFIX> before CLI parsing.
+/// For each entry, if DBT_ENGINE_<SUFFIX> is set, we copy the value to
+/// DBT_<SUFFIX> before CLI parsing.
 const ALIASABLE_ENV_VARS: &[&str] = &[
     "DBT_BETA_USE_QUERY_CACHE",
     "DBT_BUILD_CACHE_CAS_URL",
@@ -106,6 +107,7 @@ const KNOWN_UNUSED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_UPLOAD_TO_ARTIFACTS_INGEST_API",
     "DBT_ENGINE_USE_EXPERIMENTAL_JOB_HEALTH_MONITOR",
     "DBT_ENGINE_USE_EXPERIMENTAL_SKIP_NODES_SYNCHRONOUSLY",
+    "DBT_ENGINE_USE_V2_PARSER",
     "DBT_ENGINE_VORTEX_EVENT_FORWARDING_ENABLED",
     "DBT_ENGINE_WRITE_SQL_QUERY_DATA",
 ];
@@ -123,6 +125,7 @@ const USED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_RECORDER_MODE",
     "DBT_ENGINE_RECORDER_ROW_LIMIT",
     "DBT_ENGINE_RECORDER_TYPES",
+    SKIP_REDUNDANT_TESTS_ENV,
     "DBT_ENGINE_STATE_API_URL",
     "DBT_ENGINE_STATE_AUTH_URL",
     "DBT_ENGINE_STATE_EMIT_REUSED_STATUS",
@@ -160,8 +163,8 @@ static KNOWN_ENGINE_ENV_VARS: std::sync::LazyLock<std::collections::HashSet<Stri
 
 /// Applies DBT_ENGINE_* environment variable aliases.
 ///
-/// For each variable in `ALIASABLE_ENV_VARS`, if `DBT_ENGINE_<SUFFIX>` is set
-/// and `DBT_<SUFFIX>` is not, copies the value to `DBT_<SUFFIX>`.
+/// For each variable in `ALIASABLE_ENV_VARS`, if `DBT_ENGINE_<SUFFIX>` is set,
+/// copies the value to `DBT_<SUFFIX>`, overriding the legacy variable.
 ///
 /// This allows users to use `DBT_ENGINE_FAIL_FAST=true` instead of `DBT_FAIL_FAST=true`,
 /// which is useful in environments where the `DBT_` prefix conflicts with dbt-core.
@@ -179,14 +182,11 @@ pub fn apply_engine_env_var_aliases() {
 
         let engine_var = format!("DBT_ENGINE_{}", suffix);
 
-        // Only set DBT_* if DBT_ENGINE_* is set and DBT_* is not
-        if std::env::var(dbt_var).is_err() {
-            if let Ok(value) = std::env::var(&engine_var) {
-                // SAFETY: Called before any threads are spawned
-                #[allow(clippy::disallowed_methods)]
-                unsafe {
-                    std::env::set_var(dbt_var, value);
-                }
+        if let Ok(value) = std::env::var(&engine_var) {
+            // SAFETY: Called before any threads are spawned
+            #[allow(clippy::disallowed_methods)]
+            unsafe {
+                std::env::set_var(dbt_var, value);
             }
         }
     }
@@ -203,9 +203,9 @@ pub fn warn_unused_engine_env_vars() -> Vec<String> {
         .collect();
 
     for var in &unused {
-        eprintln!(
-            "Warning: {} is not supported by fusion and will have no effect.",
-            var
+        emit_warn_log_message(
+            ErrorCode::UnsupportedFusionFeature,
+            format!("{var} is not supported by fusion and will have no effect."),
         );
     }
 
@@ -299,6 +299,24 @@ mod tests {
     }
 
     #[test]
+    fn validate_engine_env_vars_allows_test_optimization_vars() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var(SKIP_REDUNDANT_TESTS_ENV, "1");
+        }
+        let result = validate_engine_env_vars();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var(SKIP_REDUNDANT_TESTS_ENV);
+        }
+        assert!(
+            result.is_ok(),
+            "test optimization engine env vars should not error"
+        );
+    }
+
+    #[test]
     fn apply_engine_env_var_aliases_sets_dbt_var_from_engine_var() {
         let _lock = ENV_MUTEX.lock().unwrap();
         // Clean up any existing vars first
@@ -332,37 +350,37 @@ mod tests {
     }
 
     #[test]
-    fn apply_engine_env_var_aliases_does_not_override_existing() {
+    fn apply_engine_env_var_aliases_prefers_engine_var() {
         let _lock = ENV_MUTEX.lock().unwrap();
         // Clean up any existing vars first
         unsafe {
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_QUIET");
+            std::env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS");
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_ENGINE_QUIET");
+            std::env::remove_var("DBT_ENGINE_SEND_ANONYMOUS_USAGE_STATS");
         }
 
-        // Set both variants - DBT_ should take precedence
+        // Set both variants - DBT_ENGINE_ should take precedence
         unsafe {
             #[allow(clippy::disallowed_methods)]
-            std::env::set_var("DBT_QUIET", "original");
+            std::env::set_var("DBT_SEND_ANONYMOUS_USAGE_STATS", "true");
             #[allow(clippy::disallowed_methods)]
-            std::env::set_var("DBT_ENGINE_QUIET", "should_not_override");
+            std::env::set_var("DBT_ENGINE_SEND_ANONYMOUS_USAGE_STATS", "false");
         }
 
         // Apply aliases
         apply_engine_env_var_aliases();
 
-        // Verify DBT_QUIET retains original value
-        let result = std::env::var("DBT_QUIET");
-        assert_eq!(result.ok(), Some("original".to_string()));
+        // Verify the engine-prefixed value overrides the legacy value
+        let result = std::env::var("DBT_SEND_ANONYMOUS_USAGE_STATS");
+        assert_eq!(result.ok(), Some("false".to_string()));
 
         // Clean up
         unsafe {
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_QUIET");
+            std::env::remove_var("DBT_SEND_ANONYMOUS_USAGE_STATS");
             #[allow(clippy::disallowed_methods)]
-            std::env::remove_var("DBT_ENGINE_QUIET");
+            std::env::remove_var("DBT_ENGINE_SEND_ANONYMOUS_USAGE_STATS");
         }
     }
 
@@ -393,6 +411,42 @@ mod tests {
             #[allow(clippy::disallowed_methods)]
             std::env::remove_var("DBT_ENGINE_SQLPARSE");
         }
+    }
+
+    #[test]
+    fn use_v2_parser_is_a_recognized_no_op() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        // Clean up first
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_USE_V2_PARSER");
+        }
+
+        // Set the no-op engine env var
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("DBT_ENGINE_USE_V2_PARSER", "1");
+        }
+
+        // It must be recognized (not rejected as an unknown reserved-prefix var)...
+        let validate = validate_engine_env_vars();
+        // ...and reported as unused (it is a no-op in fusion).
+        let unused = warn_unused_engine_env_vars();
+
+        // Clean up before asserting so a failure doesn't leak the var
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_USE_V2_PARSER");
+        }
+
+        assert!(
+            validate.is_ok(),
+            "DBT_ENGINE_USE_V2_PARSER should be a recognized engine env var"
+        );
+        assert!(
+            unused.contains(&"DBT_ENGINE_USE_V2_PARSER".to_string()),
+            "DBT_ENGINE_USE_V2_PARSER should be treated as a no-op (unused) var"
+        );
     }
 
     #[test]

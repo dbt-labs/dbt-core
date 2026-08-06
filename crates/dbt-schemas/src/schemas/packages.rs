@@ -63,7 +63,7 @@ pub struct HubPackage {
     #[serde(rename = "version", skip_serializing_if = "Option::is_none")]
     pub version: Option<PackageVersion>,
     /// Allow installation of pre-release versions when resolving `version`.
-    #[serde(rename = "install-prerelease", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "install_prerelease", skip_serializing_if = "Option::is_none")]
     pub install_prerelease: Option<bool>,
 }
 

@@ -9,15 +9,17 @@ use std::sync::Arc;
 use minijinja::Value;
 
 use dbt_adapter_core::AdapterType;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 
+use crate::relation::RelationObject;
 use crate::time_machine::AdapterCallEvent;
 
 use super::event::{MetadataCallArgs, SaoEvent};
 use super::event_recorder::EventRecorder;
-use super::event_replay::{Recording, ReplayError, ReplayMode};
+use super::event_replay::{Recording, ReplayError, ReplayMode, is_read_only_execute_call};
 use super::semantic::SemanticCategory;
-use super::serde::{ReplayContext, json_to_value_with_context};
+use super::serde::{ReplayCallContext, ReplayContext, json_to_value_with_context};
 use super::validation::{IncomingEvent, TimeMachineEventValidationEngine, ValidationResult};
 
 /// Unified time machine for recording or replaying adapter calls.
@@ -40,22 +42,14 @@ impl TimeMachine {
         Self::Replay(replayer)
     }
 
-    /// Check if this is in recording mode.
     pub fn is_recording(&self) -> bool {
         matches!(self, Self::Record(_))
     }
 
-    /// Check if this is in replay mode.
     pub fn is_replaying(&self) -> bool {
         matches!(self, Self::Replay(_))
     }
 
-    /// Try to get a replay result for an adapter call.
-    ///
-    /// Returns:
-    /// - `Some(Ok(value))` - Use this recorded result instead of calling the real adapter
-    /// - `Some(Err(e))` - The recorded call failed with this error
-    /// - `None` - Not in replay mode
     pub fn try_replay(
         &self,
         node_id: &str,
@@ -133,7 +127,8 @@ impl EventReplayer {
                 adapter_type,
                 quoting: ResolvedQuoting::default(),
             },
-            validation_engine: TimeMachineEventValidationEngine::new(),
+            validation_engine: TimeMachineEventValidationEngine::new()
+                .with_adapter_type(adapter_type),
         }
     }
 
@@ -180,12 +175,39 @@ impl EventReplayer {
         let call_category = SemanticCategory::from_adapter_method(method);
         let serialized_args = super::serde::serialize_args(args);
 
+        // Detect execute/run_query calls whose SQL is read-only (SELECT, SHOW, ...).
+        // These are compile-time probe queries from dbt macros (e.g. dbt_utils.date_spine
+        // runs `SELECT datediff(...)` to compute n_periods). Python dbt records them after
+        // SHOW PARAMETERS, but Fusion emits them earlier during Jinja compilation, causing
+        // an ordering mismatch. We match them globally as unordered reads in both modes.
+        let is_ro_exec =
+            call_category.is_mutating() && is_read_only_execute_call(method, &serialized_args);
+
         // Dispatch to the appropriate matching strategy
         let event = match self.replay_mode {
             ReplayMode::Strict => {
-                self.get_result_strict(node_id, method, &serialized_args, call_category)?
+                if is_ro_exec {
+                    // Use global unordered matching so the sequential position is not
+                    // corrupted by out-of-order probe queries.
+                    self.recording
+                        .take_ro_exec_read(node_id, method, &serialized_args)
+                        .ok_or_else(|| ReplayCallError {
+                            message: format!(
+                                "No recorded event for read-only {} call '{}' on node '{}'. \
+                                 The recording may be outdated or this probe was not captured.",
+                                call_category, method, node_id
+                            ),
+                            recorded_error: None,
+                        })?
+                } else {
+                    self.get_result_strict(node_id, method, &serialized_args, call_category)?
+                }
             }
             ReplayMode::Semantic => {
+                // In semantic mode, take_semantic_match handles the read-only execute
+                // redirect internally (Write category with SELECT SQL → untracked read).
+                // The effective category passed here is the original call_category; the
+                // redirect happens inside take_semantic_match.
                 match self.get_result_semantic(node_id, method, &serialized_args, call_category) {
                     Ok(event) => event,
                     Err(_)
@@ -263,12 +285,9 @@ impl EventReplayer {
             .expect("event should exist after peek"))
     }
 
-    /// Get result using semantic segment-based matching.
-    ///
-    /// Semantic mode has relaxed matching constraints:
-    /// - **Writes**: Must match the next write barrier in sequence (error if mismatch)
-    /// - **Reads**: Can match any read in segment with matching args, same read can match 0 or more times.
-    ///   If no matching read found, returns error (can't service the request).
+    /// Writes must match the next write barrier in sequence; reads can match any read in
+    /// the current segment with matching args (and the same recorded read can satisfy
+    /// multiple calls).
     fn get_result_semantic(
         &self,
         node_id: &str,
@@ -298,7 +317,6 @@ impl EventReplayer {
 
     /// Convert a matched event to a replay result.
     fn convert_event_to_result(&self, event: &AdapterCallEvent) -> Result<Value, ReplayCallError> {
-        // Check if the recorded call succeeded
         if !event.success {
             return Err(ReplayCallError {
                 message: "Recorded call failed".to_string(),
@@ -307,24 +325,19 @@ impl EventReplayer {
         }
 
         // Convert the recorded result back to a Value
-        let value = json_to_value_with_context(&event.result, &self.replay_ctx);
+        let call_ctx = build_replay_call_context(&self.replay_ctx, event);
+        let value = json_to_value_with_context(&event.result, &call_ctx);
         Ok(value)
     }
 
-    /// Get the result for a metadata adapter call.
-    ///
-    /// Returns:
-    /// - `Some(Ok(json))` - The recorded result as JSON
-    /// - `Some(Err(e))` - The recorded call failed
-    /// - `None` - No recorded event found for this call
+    /// Falls back from `caller_id` to "global" because recording and replay can see
+    /// different node IDs for what's semantically the same call.
     pub fn get_metadata_result(
         &self,
         caller_id: &str,
         method: &str,
         args: &MetadataCallArgs,
     ) -> Option<Result<serde_json::Value, ReplayCallError>> {
-        // Try exact caller_id first, then fall back to "global"
-        // This handles cases where recording used "global" but replay uses specific node IDs
         let caller_ids_to_try = if caller_id == "global" {
             vec![caller_id]
         } else {
@@ -406,16 +419,9 @@ impl EventReplayer {
         self.convert_metadata_event_to_result(event)
     }
 
-    /// Internal helper to try getting a metadata result using semantic matching.
-    ///
-    /// Same semantics as adapter calls:
-    /// - Writes must match in order (error if no match)
-    /// - Reads can match 0 or more times with matching args
-    ///
-    /// Returns:
-    /// - `Some(Ok(...))` - Found matching event
-    /// - `Some(Err(...))` - Caller has events but no match
-    /// - `None` - Caller has no events
+    /// Same write/read matching semantics as [`get_result_semantic`]. A caller with no
+    /// recorded events at all is treated as a non-match so the search can fall back to
+    /// other callers, rather than as an error.
     fn try_get_metadata_result_semantic(
         &self,
         caller_id: &str,
@@ -462,7 +468,6 @@ impl EventReplayer {
         &self,
         event: &super::event::MetadataCallEvent,
     ) -> Option<Result<serde_json::Value, ReplayCallError>> {
-        // Check if the recorded call succeeded
         if !event.success {
             return Some(Err(ReplayCallError {
                 message: "Recorded metadata call failed".to_string(),
@@ -473,7 +478,6 @@ impl EventReplayer {
         Some(Ok(event.result.clone()))
     }
 
-    /// Check if there are any metadata events recorded.
     pub fn has_metadata_events(&self) -> bool {
         self.recording.total_metadata_events() > 0
     }
@@ -486,7 +490,6 @@ impl EventReplayer {
         self.recording.get_sao_event(node_id)
     }
 
-    /// Check if a node has a recorded SAO skip event.
     pub fn has_sao_event(&self, node_id: &str) -> bool {
         self.recording.has_sao_event(node_id)
     }
@@ -550,6 +553,42 @@ impl EventReplayer {
             node_count: self.recording.node_ids().count(),
             metadata_caller_count: self.recording.metadata_caller_ids().count(),
         }
+    }
+}
+
+/// Extends replay context with additional per-call context extracted from arguments for events
+/// that require it.
+fn build_replay_call_context(
+    replay_ctx: &ReplayContext,
+    event: &AdapterCallEvent,
+) -> ReplayCallContext {
+    let call_ctx = replay_ctx.clone().into();
+    let relation_type = match event.method.as_str() {
+        "get_relation_config" => GetRelationConfig::try_from((&event.args, &call_ctx))
+            .ok()
+            .and_then(|args| args.relation_type),
+        _ => None,
+    };
+    call_ctx.with_relation_type(relation_type)
+}
+
+struct GetRelationConfig {
+    relation_type: Option<RelationType>,
+}
+
+impl TryFrom<(&serde_json::Value, &ReplayCallContext)> for GetRelationConfig {
+    type Error = ();
+
+    fn try_from(
+        (args, ctx): (&serde_json::Value, &ReplayCallContext),
+    ) -> Result<Self, Self::Error> {
+        let relation = args.as_array().and_then(|args| args.first()).ok_or(())?;
+        let relation = json_to_value_with_context(relation, ctx)
+            .downcast_object::<RelationObject>()
+            .ok_or(())?;
+        Ok(Self {
+            relation_type: relation.relation_type(),
+        })
     }
 }
 

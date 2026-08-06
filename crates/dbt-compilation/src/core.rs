@@ -79,7 +79,6 @@ async fn load_phase(
         .map(|x| x.dbt_state.clone())
     {
         load_args.prev_dbt_state = Some(prev_dbt_state);
-        load_args.install_deps = false;
     }
 
     // Load dbt project
@@ -112,8 +111,7 @@ async fn resolve_phase(
     resolver_hooks: Arc<dyn ResolverHooks>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     use dbt_parser::resolver::resolve;
-    use dbt_schemas::schemas::Nodes;
-    use dbt_schemas::state::Macros;
+    use dbt_schemas::state::ResolvedNodes;
 
     let io = &resolve_args.io;
     let dbt_state = loaded_project.dbt_state.clone();
@@ -128,18 +126,16 @@ async fn resolve_phase(
         dbt_state
     };
 
-    // Get cached macros and nodes if available
-    let macros = if let Some(cache) = cache_state {
-        cache.unimpacted_resolved_nodes.macros.clone()
-    } else {
-        Macros::default()
-    };
-
-    let nodes = if let Some(cache) = cache_state {
-        cache.unimpacted_resolved_nodes.nodes.clone()
-    } else {
-        Nodes::default()
-    };
+    // Get cached macros and nodes if available. `operations` is intentionally not seeded
+    // here; `add_all_unchanged_nodes` below owns restoring it after resolution.
+    let ResolvedNodes {
+        nodes,
+        disabled_nodes,
+        macros,
+        operations: _,
+    } = cache_state
+        .map(|c| c.unimpacted_resolved_nodes.clone())
+        .unwrap_or_default();
 
     let get_relation_calls = if let Some(cache) = cache_state {
         cache.unimpacted_get_relation_calls.clone()
@@ -166,6 +162,7 @@ async fn resolve_phase(
         dbt_state.clone(),
         macros,
         nodes,
+        disabled_nodes,
         get_relation_calls,
         get_columns_in_relation_calls,
         patterned_dangling_sources,
@@ -334,7 +331,7 @@ async fn compute_file_changeset(
                     let package_root = &current_dbt_state.packages[0].package_root_path;
                     let relative_path = current
                         .0
-                        .get_relative_path(&DbtPath::from_path(package_root))
+                        .get_relative_path(package_root)
                         .map(|p| p.to_str().unwrap_or_default().to_string())
                         .unwrap_or_else(|| current.0.to_str().unwrap_or_default().to_string());
                     changed.push(relative_path);
@@ -387,6 +384,13 @@ async fn load_cache(
     token: &CancellationToken,
 ) -> FsResult<Option<CacheState>> {
     if let Some((prev_loaded_project, prev_resolved_state)) = prev_resolved_state {
+        if !io.out_dir.exists() {
+            return Err(fs_err!(
+                ErrorCode::CacheError,
+                "Target directory does not exist",
+            ));
+        }
+
         let prev_dbt_state = prev_loaded_project.dbt_state();
         if let Some(cache_state) = try_load_cache_state_and_changeset_by_last_write(
             io,
@@ -576,6 +580,7 @@ impl DbtLoadedProject {
         token: &CancellationToken,
         sidecar_client: Option<Arc<dyn SidecarClient>>,
         execute: Execute,
+        infer_schemas: bool,
     ) -> FsResult<Arc<Adapter>> {
         let adapter_factory = self.adapter_factory.clone();
         let type_ops_factory = self.type_ops_factory.clone();
@@ -614,8 +619,9 @@ impl DbtLoadedProject {
         // recording. Route those runs through the factory so it builds a replay
         // adapter instead; sidecar execution still goes through the db_runner.
         let is_mantle_replay = matches!(&replay_mode, Some(ReplayMode::MantleReplay(_)));
-        let executes_locally =
-            !introspect_enabled || matches!(execute, Execute::Sidecar | Execute::Service);
+        let executes_locally = !introspect_enabled
+            || infer_schemas
+            || matches!(execute, Execute::Sidecar | Execute::Service);
         let use_local_mock_adapter = executes_locally && !is_mantle_replay;
         let adapter = if adapter_type == AdapterType::DuckDB {
             adapter_factory
@@ -665,12 +671,39 @@ impl DbtLoadedProject {
                 Arc::new(Adapter::new(Arc::new(adapter_impl), None, token.clone()))
             } else {
                 // Fallback: use mock adapter
-                let mock = AdapterImpl::new_mock(
+                let metadata_fallback_engine = if infer_schemas {
+                    match adapter_factory.create_adapter(
+                        adapter_type,
+                        db_config,
+                        Arc::clone(&type_ops_factory),
+                        replay_mode,
+                        flags.project_flags(),
+                        schema_store,
+                        root_project_quoting,
+                        query_comment,
+                        token.clone(),
+                        cloud_config,
+                        threads,
+                    ) {
+                        Ok(adapter) => Some(Arc::clone(adapter.engine())),
+                        Err(e) => {
+                            tracing::warn!(
+                                "infer-schemas: failed to build metadata fallback adapter, \
+                                 continuing with mock-only metadata: {e:?}"
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+                let mock = AdapterImpl::new_mock_with_metadata_fallback(
                     adapter_type,
                     flags.project_flags(),
                     root_project_quoting,
                     type_ops,
                     adapter_factory.stmt_splitter(),
+                    metadata_fallback_engine,
                 );
                 Arc::new(Adapter::new(Arc::new(mock), None, token.clone()))
             }

@@ -21,6 +21,10 @@ default = ["embed-ui"]
 # read from `web/dist/` (committed in-repo; rebuild from dbt-ui and copy
 # in as needed).
 embed-ui = ["dep:rust-embed", "dep:mime_guess"]
+# Serve interactive Swagger UI at /api/v1/docs, backed by the generated
+# OpenAPI spec at /api/v1/openapi.json (always served, regardless of this
+# feature). Optional because it pulls in vendored Swagger UI assets.
+openapi-ui = ["dep:utoipa-swagger-ui"]
 
 [dependencies]
 dbt-docs-core = { workspace = true }
@@ -45,6 +49,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 ureq = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]

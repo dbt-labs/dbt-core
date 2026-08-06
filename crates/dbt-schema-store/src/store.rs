@@ -15,6 +15,7 @@ use arrow::{
 };
 use arrow_schema::{ArrowError, Schema, SchemaRef};
 use bimap::BiMap;
+use dbt_common::path::is_file_system_reserved_character;
 use futures::StreamExt;
 use parquet::arrow::{
     ArrowWriter as ParquetArrowWriter,
@@ -114,6 +115,38 @@ impl SchemaEntryWrapper {
     pub fn timestamp(&self) -> u128 {
         self.timestamp
     }
+}
+
+/// Sanitizes a path segment by replacing file-system reserved characters with `__{n}__`.
+///
+/// Prevents directory creation errors when identifiers contain special characters
+/// like `*`, `/`, or other filesystem-reserved characters.
+fn sanitize_path_segment(input: impl AsRef<str>) -> String {
+    let input = input.as_ref();
+    let mut sanitized = String::with_capacity(input.len());
+    for ch in input.chars() {
+        if is_file_system_reserved_character(ch) {
+            let n = ch as u32;
+            sanitized.push_str(&format!("__{n}__"));
+        } else {
+            sanitized.push(ch);
+        }
+    }
+    if sanitized.is_empty() {
+        "____".to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn get_path_to_data_by_fqn(store_dir: &Path, cfqn: &CanonicalFqn) -> PathBuf {
+    // XXX: Normalize to lowercase to ensure case-insensitive lookups work on
+    // case-sensitive filesystems. Using file paths to encode case sensitivity is volatile
+    store_dir
+        .join(sanitize_path_segment(cfqn.catalog().to_ascii_lowercase()))
+        .join(sanitize_path_segment(cfqn.schema().to_ascii_lowercase()))
+        .join(sanitize_path_segment(cfqn.table().to_ascii_lowercase()))
+        .join("output.parquet")
 }
 
 /// Interior mutable state shared by [`SchemaStore`].
@@ -481,9 +514,9 @@ impl SchemaStoreState {
             LookupEntry::Frontier(cfqn) => cache_dir
                 .join(REMOTE_DIR_NAME)
                 .join(INTERNAL_DIR_NAME)
-                .join(cfqn.catalog())
-                .join(cfqn.schema())
-                .join(cfqn.table())
+                .join(sanitize_path_segment(cfqn.catalog()))
+                .join(sanitize_path_segment(cfqn.schema()))
+                .join(sanitize_path_segment(cfqn.table()))
                 .join("output.parquet"),
             LookupEntry::Selected(unique_id) => cache_dir
                 .join(ANALYZED_DIR_NAME)
@@ -492,22 +525,22 @@ impl SchemaStoreState {
             LookupEntry::Deferred(cfqn) => cache_dir
                 .join(REMOTE_DIR_NAME)
                 .join(DEFERRED_DIR_NAME)
-                .join(cfqn.catalog())
-                .join(cfqn.schema())
-                .join(cfqn.table())
+                .join(sanitize_path_segment(cfqn.catalog()))
+                .join(sanitize_path_segment(cfqn.schema()))
+                .join(sanitize_path_segment(cfqn.table()))
                 .join("output.parquet"),
             LookupEntry::External(cfqn) => cache_dir
                 .join(REMOTE_DIR_NAME)
                 .join(EXTERNAL_DIR_NAME)
-                .join(cfqn.catalog())
-                .join(cfqn.schema())
-                .join(cfqn.table())
+                .join(sanitize_path_segment(cfqn.catalog()))
+                .join(sanitize_path_segment(cfqn.schema()))
+                .join(sanitize_path_segment(cfqn.table()))
                 .join("output.parquet"),
             LookupEntry::Local(cfqn) => cache_dir
                 .join(LOCAL_DIR_NAME)
-                .join(cfqn.catalog())
-                .join(cfqn.schema())
-                .join(cfqn.table())
+                .join(sanitize_path_segment(cfqn.catalog()))
+                .join(sanitize_path_segment(cfqn.schema()))
+                .join(sanitize_path_segment(cfqn.table()))
                 .join("output.parquet"),
         }
     }
@@ -1063,13 +1096,7 @@ impl DataStoreTrait for DataStore {
     }
 
     fn get_path_to_data(&self, cfqn: &CanonicalFqn) -> PathBuf {
-        // XXX: Normalize to lowercase to ensure case-insensitive lookups work on
-        // case-sensitive filesystems. Using file paths to encode case sensitivity is volatile
-        self.store_dir
-            .join(cfqn.catalog().to_ascii_lowercase())
-            .join(cfqn.schema().to_ascii_lowercase())
-            .join(cfqn.table().to_ascii_lowercase())
-            .join("output.parquet")
+        get_path_to_data_by_fqn(&self.store_dir, cfqn)
     }
 }
 
@@ -1335,4 +1362,54 @@ fn get_timestamp(path: &Path) -> Option<u128> {
                 .as_millis()
         })
         .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use dbt_common::path::DbtPath;
+    use dbt_ident::Ident;
+
+    use super::*;
+
+    #[test]
+    fn fqn_with_asterisk_should_be_normalized() {
+        let fqn = CanonicalFqn::new(
+            &Ident::Owned("best$data_*"),
+            &Ident::Owned("events_/"),
+            &Ident::Owned("best-table_\\"),
+        );
+        let store_dir = DbtPath::from("C:/tmp/");
+
+        let entry = LookupEntry::Local(fqn.clone());
+        let path = DbtPath::from(SchemaStoreState::resolve_entry_path(&store_dir, &entry));
+        let str = path.to_string_lossy().to_string();
+        assert_eq!(
+            "C:/tmp/defined_local/best$data___42__/events___47__/best-table___92__/output.parquet",
+            str
+        );
+
+        let store_dir = DbtPath::from("C:/tmp/defined_local/");
+        let path = DbtPath::from(get_path_to_data_by_fqn(&store_dir, &fqn));
+        let str = path.to_string_lossy().to_string();
+        assert_eq!(
+            "C:/tmp/defined_local/best$data___42__/events___47__/best-table___92__/output.parquet",
+            str
+        );
+    }
+
+    #[test]
+    fn fqn_with_empty_string_should_be_normalized() {
+        let fqn = CanonicalFqn::new(&Ident::Owned(""), &Ident::Owned(""), &Ident::Owned(""));
+        let store_dir = DbtPath::from("C:/tmp/");
+
+        let entry = LookupEntry::Local(fqn.clone());
+        let path = DbtPath::from(SchemaStoreState::resolve_entry_path(&store_dir, &entry));
+        let str = path.to_string_lossy().to_string();
+        assert_eq!("C:/tmp/defined_local/____/____/____/output.parquet", str);
+
+        let store_dir = DbtPath::from("C:/tmp/defined_local/");
+        let path = DbtPath::from(get_path_to_data_by_fqn(&store_dir, &fqn));
+        let str = path.to_string_lossy().to_string();
+        assert_eq!("C:/tmp/defined_local/____/____/____/output.parquet", str);
+    }
 }

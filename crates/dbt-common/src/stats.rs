@@ -21,6 +21,7 @@ pub enum NodeStatus {
     ReusedStillFresh(String, u64, u64),
     ReusedStillFreshNoChanges(String),
     ReusedCloned(Option<u64>),
+    StaticallyCheckedDataTest,
     NoOp,
 }
 
@@ -31,6 +32,7 @@ impl NodeStatus {
             NodeStatus::ReusedStillFresh(message, _, _) => Some(message.clone()),
             NodeStatus::ReusedStillFreshNoChanges(message) => Some(message.clone()),
             NodeStatus::ReusedCloned(_) => Some(self.default_message()),
+            NodeStatus::StaticallyCheckedDataTest => Some(self.default_message()),
             _ => None,
         }
     }
@@ -51,6 +53,7 @@ impl NodeStatus {
             NodeStatus::ReusedCloned(Some(_)) => {
                 "Cloned from cached relation within freshness tolerance".to_string()
             }
+            NodeStatus::StaticallyCheckedDataTest => "Statically checked".to_string(),
             NodeStatus::SucceededWithWarning => "Warn".to_string(),
             NodeStatus::NoOp => "Skipped".to_string(),
         }
@@ -69,6 +72,7 @@ impl From<NodeStatus> for NodeOutcome {
             NodeStatus::ReusedStillFresh(_, _, _) => NodeOutcome::Skipped,
             NodeStatus::ReusedStillFreshNoChanges(_) => NodeOutcome::Skipped,
             NodeStatus::ReusedCloned(_) => NodeOutcome::Skipped,
+            NodeStatus::StaticallyCheckedDataTest => NodeOutcome::Success,
             NodeStatus::NoOp => NodeOutcome::Skipped,
         }
     }
@@ -133,6 +137,8 @@ impl Stat {
             }
         } else if self.status == NodeStatus::SucceededWithWarning {
             "Warn".to_string()
+        } else if self.status == NodeStatus::StaticallyCheckedDataTest {
+            "Passed".to_string()
         } else {
             format!("{:?}", self.status)
         }
@@ -170,6 +176,7 @@ impl Stat {
             NodeStatus::ReusedStillFresh(_, _, _) => "reused".to_string(),
             NodeStatus::ReusedStillFreshNoChanges(_) => "reused".to_string(),
             NodeStatus::ReusedCloned(_) => "reused".to_string(),
+            NodeStatus::StaticallyCheckedDataTest => "pass".to_string(),
             NodeStatus::NoOp => "skipped".to_string(),
         }
     }
@@ -252,6 +259,10 @@ mod tests {
         assert_eq!(
             NodeStatus::SkippedUpstreamFailed.default_message(),
             "Skipped"
+        );
+        assert_eq!(
+            NodeStatus::StaticallyCheckedDataTest.default_message(),
+            "Statically checked"
         );
         assert_eq!(NodeStatus::NoOp.default_message(), "Skipped");
         assert_eq!(

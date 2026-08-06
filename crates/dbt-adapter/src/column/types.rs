@@ -525,8 +525,6 @@ impl Column {
     /// can be `BOOL` or `BOOLEAN`. However, dbt Core always represents them consistently with
     /// an opinionated choice. This method normalizes dtype names to this consistent
     /// representation.
-    ///
-    /// Returns (dtype, data_type).
     fn make_degenerate_types(
         adapter_type: AdapterType,
         original_sql_str: &str,
@@ -614,7 +612,6 @@ impl Column {
         }
     }
 
-    /// Get a columns from a jinja value that returns the column in dbt Core format
     pub fn from_jinja_value(
         adapter_type: AdapterType,
         value: Value,
@@ -627,7 +624,6 @@ impl Column {
         Ok(Self::from_dbt_core(adapter_type, core_col))
     }
 
-    /// Get a vec of columns from a jinja value that returns columns in dbt Core format
     pub fn vec_from_jinja_value(
         _adapter_type: AdapterType,
         value: Value,
@@ -1090,12 +1086,7 @@ impl Column {
         }
     }
 
-    /// Returns True if this column can be expanded to the size of the other column
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/column.py#L102-L103
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if the column is not a string.
     pub fn can_expand_to(&self, other: &Column) -> Result<bool, minijinja::Error> {
         Ok(self.is_string()
             && other.is_string()

@@ -6,6 +6,7 @@ option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/litellm_g
 import "google/protobuf/timestamp.proto";
 import "dbtlabs/proto/public/v1/common/vortex_options.proto";
 import "dbtlabs/proto/public/v1/events/vortex.proto";
+import "dbtlabs/proto/public/v1/common/vortex_telemetry_contexts.proto";
 
 // Emitted on every LLM request completion (success or failure) by the litellm gateway.
 message LiteLlmRequestCompleted {
@@ -34,6 +35,7 @@ message LiteLlmRequestCompleted {
   optional LiteLlmClassification classification = 13;
   // "local" (BYOK sidecar) or "hosted" (Helm-deployed proxy).
   string deployment_mode = 14;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 15;
 }
 
 message LiteLlmActor {

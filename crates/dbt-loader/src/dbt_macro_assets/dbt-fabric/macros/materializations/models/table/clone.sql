@@ -13,7 +13,11 @@
     {%- set relations = {'relations': []} -%}
     {%- if not defer_relation -%}
         -- nothing to do
-        {{ log("No relation found in state manifest for " ~ model.unique_id, info=True) }}
+        {%- if model.config.materialized == 'ephemeral' -%}
+            {{ log("Skipping clone for ephemeral model " ~ model.unique_id, info=True) }}
+        {%- else -%}
+            {{ log("No relation found in state manifest for " ~ model.unique_id, info=True) }}
+        {%- endif -%}
         {{ return(relations) }}
     {%- endif -%}
 

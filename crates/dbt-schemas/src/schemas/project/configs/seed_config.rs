@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
@@ -28,17 +27,16 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::default_column_types;
-use crate::schemas::project::configs::common::default_hooks;
-use crate::schemas::project::configs::common::default_meta_and_tags;
-use crate::schemas::project::configs::common::default_quoting;
-use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::project::configs::config_merge::Tags;
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, StringOrInteger, f64_or_string_f64,
+    hours_to_expiration_or_string_omissible, u64_or_string_u64,
 };
+use dbt_common::serde_utils::Omissible;
+use dbt_proc_macros::DefaultTo;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -138,9 +136,9 @@ pub struct ProjectSeedConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -285,6 +283,12 @@ pub struct ProjectSeedConfig {
     // Postgres specific fields
     #[serde(default, rename = "+indexes")]
     pub indexes: IndexesConfig,
+    #[serde(
+        default,
+        rename = "+unlogged",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unlogged: Option<bool>,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
@@ -304,7 +308,9 @@ impl TypedRecursiveConfig for ProjectSeedConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema,
+)]
 pub struct SeedConfig {
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(alias = "project", alias = "data_space")]
@@ -333,11 +339,8 @@ pub struct SeedConfig {
     pub post_hook: Verbatim<Option<Hooks>>,
     #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
     pub materialized: Option<DbtMaterialization>,
@@ -366,7 +369,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
-            tags: config.tags,
+            tags: Tags(config.tags),
             quoting: config.quoting,
             materialized: Some(DbtMaterialization::Seed),
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
@@ -463,6 +466,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+                unlogged: config.unlogged,
 
                 // seed is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
@@ -492,7 +496,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
             static_analysis: config.static_analysis,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             quoting: config.quoting,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
@@ -585,6 +589,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
 
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
+            unlogged: config.__warehouse_specific_config__.unlogged,
             schedule: config.__warehouse_specific_config__.schedule,
             __additional_properties__: BTreeMap::new(),
         }
@@ -621,70 +626,7 @@ impl ResolvableConfig<SeedConfig> for SeedConfig {
     }
 
     fn default_to(&mut self, parent: &SeedConfig) {
-        // Handle simple fields - using a pattern that ensures all fields are covered
-        let SeedConfig {
-            post_hook,
-            pre_hook,
-            meta,
-            tags,
-            quoting,
-            column_types,
-            database,
-            schema,
-            alias,
-            catalog_name,
-            docs,
-            enabled,
-            grants,
-            quote_columns,
-            delimiter,
-            event_time,
-            full_refresh,
-            group,
-            persist_docs,
-            materialized,
-            static_analysis,
-            // Adapter specific configs
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
-
-        // Handle adapter-specific configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-
-        #[allow(unused, clippy::let_unit_value)]
-        let pre_hook = default_hooks(pre_hook, &parent.pre_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let post_hook = default_hooks(post_hook, &parent.post_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let column_types = default_column_types(column_types, &parent.column_types);
-        #[allow(unused, clippy::let_unit_value)]
-        let grants = default_to_grants(grants, &parent.grants);
-
-        default_to!(
-            parent,
-            [
-                database,
-                schema,
-                alias,
-                catalog_name,
-                docs,
-                enabled,
-                quote_columns,
-                delimiter,
-                event_time,
-                full_refresh,
-                group,
-                persist_docs,
-                static_analysis,
-                materialized,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 

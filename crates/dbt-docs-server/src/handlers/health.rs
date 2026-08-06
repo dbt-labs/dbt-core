@@ -3,17 +3,27 @@ use axum::extract::State;
 use axum::http::{StatusCode, header};
 use axum::response::Response;
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::state::SharedState;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct HealthResponse {
     pub ok: bool,
     pub version: &'static str,
+    /// Whether a dbt project (parquet index) is currently loaded.
     pub project_loaded: bool,
+    /// Present only when a project is loaded; identifies the loaded index generation.
     pub generation: Option<String>,
 }
 
+/// Report server liveness and whether a project index is currently loaded.
+#[utoipa::path(
+    get,
+    path = "/api/v1/health",
+    responses((status = 200, description = "Server is healthy", body = HealthResponse)),
+    tag = "health"
+)]
 pub async fn get_health(State(state): State<SharedState>) -> Response {
     let resp = HealthResponse {
         ok: true,

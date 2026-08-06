@@ -171,6 +171,12 @@ message DocsSiteOpened {
 
   // number of resources in the project
   int64 project_resource_count = 5;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Fired when a resource is viewed (list or detail).
@@ -200,6 +206,12 @@ message ResourceViewed {
 
   // opaque resource identifier (no PII)
   string resource_id = 6;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // Fired when lineage is viewed for a resource.
@@ -228,6 +240,12 @@ message LineageViewed {
 
   // opaque resource identifier (no PII)
   string resource_id = 6;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // Fired when a search is performed.
@@ -253,6 +271,12 @@ message SearchPerformed {
 
   // number of results returned for the query
   int64 result_count = 5;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Fired when a filter is applied to a resource list.
@@ -280,6 +304,12 @@ message FilterApplied {
 
   // value applied for the filter
   string filter_value = 6;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // Fired when an upsell prompt is displayed.
@@ -308,6 +338,12 @@ message UpsellPromptDisplayed {
 
   // location in the UI where the prompt was shown
   string prompt_location = 6;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // Fired when an upsell prompt is clicked.
@@ -336,6 +372,12 @@ message UpsellPromptClicked {
 
   // referral code attached to the CTA
   string referral_code = 6;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }
 
 // Fired when an upsell prompt is dismissed.
@@ -361,6 +403,12 @@ message UpsellPromptDismissed {
 
   // how the prompt was dismissed; see DismissMethod for possible values
   string dismiss_method = 5;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Fired when a referral link is clicked.
@@ -385,6 +433,12 @@ message ReferralLinkClicked {
 
   // destination of the referral link; see LinkDestination for possible values
   string link_destination = 5;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Fired when an account logs in.
@@ -409,6 +463,12 @@ message AccountLoggedIn {
 
   // upsell campaign track that triggered the login; see UpsellTrack for possible values
   string upsell_track = 5;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Fired when an error is encountered.
@@ -437,4 +497,10 @@ message ErrorEncountered {
 
   // name of the field associated with the error, if any
   string field_name = 6;
+
+  // name of the running dbt distribution serving docs v2 (e.g. "oss").
+  // Mirrors DistInfo.name from the docs server GET /api/v1/distribution
+  // endpoint. (required: producer must populate)
+  string distribution = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }

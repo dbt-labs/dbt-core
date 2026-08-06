@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::Hash;
@@ -225,6 +226,12 @@ pub trait Object: fmt::Debug + Send + Sync {
     /// while mutable sequences are rendered as lists (e.g. "[1, 2]").
     fn is_mutable(self: &Arc<Self>) -> bool {
         false
+    }
+
+    /// Compares this object with another object by value when supported.
+    fn custom_cmp(self: &Arc<Self>, other: &DynObject) -> Option<Ordering> {
+        let _ = other;
+        None
     }
 
     /// The engine calls this to invoke the object itself.
@@ -680,6 +687,8 @@ type_erase! {
 
         fn is_mutable(&self) -> bool;
 
+        fn custom_cmp(&self, other: &DynObject) -> Option<Ordering>;
+
         fn enumerator_len(&self) -> Option<usize>;
 
         fn call(
@@ -721,6 +730,12 @@ impl DynObject {
     /// Checks if this dyn object is the same as another.
     pub(crate) fn is_same_object(&self, other: &DynObject) -> bool {
         self.ptr == other.ptr && self.vtable == other.vtable
+    }
+
+    pub(crate) fn identity_cmp(&self, other: &DynObject) -> Ordering {
+        self.type_name()
+            .cmp(other.type_name())
+            .then_with(|| self.ptr.cmp(&other.ptr))
     }
 }
 

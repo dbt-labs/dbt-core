@@ -65,7 +65,7 @@ pub async fn upload_artifacts_ingest_if_enabled(
         return Ok(());
     }
 
-    let Some(config) = resolve_upload_config(dbt_cloud_config, io) else {
+    let Some(config) = resolve_upload_config(dbt_cloud_config) else {
         return Ok(());
     };
     emit_debug_log_message(format!(
@@ -90,7 +90,6 @@ pub async fn upload_artifacts_ingest_if_enabled(
         Ok(bytes) => bytes,
         Err(err) => {
             emit_skip_warning(
-                io,
                 ErrorCode::IoError,
                 format!(
                     "Skipping artifact ingest upload: failed to build ZIP payload: {}",
@@ -101,44 +100,38 @@ pub async fn upload_artifacts_ingest_if_enabled(
         }
     };
 
-    emit_info_progress_message(
-        ProgressMessage::new_from_action_and_target(
-            "Uploading".to_string(),
-            format!(
-                "artifacts ingest bundle (environment {})",
-                config.environment_id
-            ),
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        "Uploading".to_string(),
+        format!(
+            "artifacts ingest bundle (environment {})",
+            config.environment_id
         ),
-        io.status_reporter.as_ref(),
-    );
+    ));
 
     let Some(cloud_client) = build_cloud_api_client(&config, io) else {
         return Ok(());
     };
     let upload_client = build_retry_client(reqwest::Client::new());
 
-    let Some(create_result) = create_ingest_request(&cloud_client, &config, io).await else {
+    let Some(create_result) = create_ingest_request(&cloud_client, &config).await else {
         return Ok(());
     };
 
-    if !upload_ingest_zip(&upload_client, &create_result.upload_url, zip_bytes, io).await {
+    if !upload_ingest_zip(&upload_client, &create_result.upload_url, zip_bytes).await {
         return Ok(());
     }
 
-    if !complete_ingest_request(&cloud_client, &config, &create_result.ingest_id, io).await {
+    if !complete_ingest_request(&cloud_client, &config, &create_result.ingest_id).await {
         return Ok(());
     }
 
-    emit_info_progress_message(
-        ProgressMessage::new_from_action_and_target(
-            "Uploaded".to_string(),
-            format!(
-                "artifacts ingest bundle (environment {})",
-                config.environment_id
-            ),
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        "Uploaded".to_string(),
+        format!(
+            "artifacts ingest bundle (environment {})",
+            config.environment_id
         ),
-        io.status_reporter.as_ref(),
-    );
+    ));
 
     Ok(())
 }
@@ -169,17 +162,13 @@ fn is_truthy_env_var(var_name: &str) -> bool {
         .is_some_and(|value| is_truthy_value(&value))
 }
 
-fn resolve_upload_config(
-    dbt_cloud_config: &Option<ResolvedCloudConfig>,
-    io: &IoArgs,
-) -> Option<UploadConfig> {
+fn resolve_upload_config(dbt_cloud_config: &Option<ResolvedCloudConfig>) -> Option<UploadConfig> {
     let creds = dbt_cloud_config
         .as_ref()
         .and_then(|c| c.credentials.as_ref());
 
     let tenant_hostname = required_value(
         creds.map(|c| c.host.clone()).filter(|h| !h.is_empty()),
-        io,
         ErrorCode::InvalidConfig,
         "Skipping artifact ingest upload: no dbt Cloud host configured",
     )?;
@@ -188,14 +177,12 @@ fn resolve_upload_config(
         creds
             .map(|c| c.account_id.clone())
             .filter(|id| !id.is_empty()),
-        io,
         ErrorCode::CredentialMissing,
         "Skipping artifact ingest upload: no dbt Cloud account ID configured",
     )?;
 
     let cloud_token = required_value(
         creds.map(|c| c.token.clone()).filter(|t| !t.is_empty()),
-        io,
         ErrorCode::CredentialMissing,
         "Skipping artifact ingest upload: no dbt Cloud token configured",
     )?;
@@ -204,7 +191,6 @@ fn resolve_upload_config(
         dbt_cloud_config
             .as_ref()
             .and_then(|c| c.environment_id.clone()),
-        io,
         ErrorCode::CredentialMissing,
         "Skipping artifact ingest upload: no dbt Cloud environment ID configured",
     )?;
@@ -216,7 +202,6 @@ fn resolve_upload_config(
             Ok(v) => Some(v),
             Err(_) => {
                 emit_skip_warning(
-                    io,
                     ErrorCode::InvalidConfig,
                     format!("DBT_CLOUD_JOB_ID '{}' is not a valid integer, ignoring", id),
                 );
@@ -235,12 +220,11 @@ fn resolve_upload_config(
 
 fn required_value(
     value: Option<String>,
-    io: &IoArgs,
     error_code: ErrorCode,
     message: impl Into<String>,
 ) -> Option<String> {
     if value.is_none() {
-        emit_skip_warning(io, error_code, message);
+        emit_skip_warning(error_code, message);
     }
     value
 }
@@ -252,7 +236,6 @@ async fn resolve_artifact_paths(io: &IoArgs, write_catalog: bool) -> Option<Arti
         || tokiofs::metadata(&run_results_path).await.is_err()
     {
         emit_skip_warning(
-            io,
             ErrorCode::FileNotFound,
             format!(
                 "Skipping artifact ingest upload: required artifacts are missing ({} and/or {})",
@@ -288,7 +271,6 @@ fn build_cloud_api_client(config: &UploadConfig, io: &IoArgs) -> Option<ClientWi
         Ok(client) => Some(client),
         Err(err) => {
             emit_skip_warning(
-                io,
                 ErrorCode::NetworkError,
                 format!(
                     "Skipping artifact ingest upload: failed to build cloud HTTP client: {}",
@@ -303,7 +285,6 @@ fn build_cloud_api_client(config: &UploadConfig, io: &IoArgs) -> Option<ClientWi
 async fn create_ingest_request(
     client: &ClientWithMiddleware,
     config: &UploadConfig,
-    io: &IoArgs,
 ) -> Option<IngestCreateResult> {
     let mut body = serde_json::Map::new();
     if let Some(job_id) = config.job_id {
@@ -317,7 +298,6 @@ async fn create_ingest_request(
         Ok(response) => response,
         Err(err) => {
             emit_upload_failure_warning(
-                io,
                 ErrorCode::NetworkError,
                 format!("create step failed: {}", err),
             );
@@ -327,7 +307,6 @@ async fn create_ingest_request(
 
     if create_response.status().as_u16() != 200 {
         emit_upload_failure_warning(
-            io,
             error_code_from_status(create_response.status()),
             format!("create step returned HTTP {}", create_response.status()),
         );
@@ -338,7 +317,6 @@ async fn create_ingest_request(
         Ok(value) => value,
         Err(err) => {
             emit_upload_failure_warning(
-                io,
                 ErrorCode::SerializationError,
                 format!("failed to parse create response: {}", err),
             );
@@ -350,7 +328,6 @@ async fn create_ingest_request(
         Some(values) => values,
         None => {
             emit_upload_failure_warning(
-                io,
                 ErrorCode::SerializationError,
                 "create response did not include upload_url and id",
             );
@@ -368,13 +345,11 @@ async fn upload_ingest_zip(
     client: &ClientWithMiddleware,
     upload_url: &str,
     zip_bytes: Vec<u8>,
-    io: &IoArgs,
 ) -> bool {
     let upload_response = match client.put(upload_url).body(zip_bytes).send().await {
         Ok(response) => response,
         Err(err) => {
             emit_upload_failure_warning(
-                io,
                 ErrorCode::NetworkError,
                 format!("upload step failed: {}", err),
             );
@@ -387,7 +362,6 @@ async fn upload_ingest_zip(
     }
 
     emit_upload_failure_warning(
-        io,
         error_code_from_status(upload_response.status()),
         format!("upload step returned HTTP {}", upload_response.status()),
     );
@@ -398,7 +372,6 @@ async fn complete_ingest_request(
     client: &ClientWithMiddleware,
     config: &UploadConfig,
     ingest_id: &str,
-    io: &IoArgs,
 ) -> bool {
     let complete_response = match client
         .patch(format!("{}{}/", config.ingest_url(), ingest_id))
@@ -409,7 +382,6 @@ async fn complete_ingest_request(
         Ok(response) => response,
         Err(err) => {
             emit_upload_failure_warning(
-                io,
                 ErrorCode::NetworkError,
                 format!("complete step failed: {}", err),
             );
@@ -422,7 +394,6 @@ async fn complete_ingest_request(
     }
 
     emit_upload_failure_warning(
-        io,
         error_code_from_status(complete_response.status()),
         format!("complete step returned HTTP {}", complete_response.status()),
     );
@@ -484,7 +455,6 @@ async fn resolve_publication_path(io: &IoArgs) -> Option<PathBuf> {
                     "Artifact ingest upload will continue without publication artifact; file not found at {}",
                     path.display()
                 ),
-                io.status_reporter.as_ref(),
             );
             fallback
         }
@@ -603,18 +573,17 @@ fn error_code_from_status(status: reqwest::StatusCode) -> ErrorCode {
     }
 }
 
-fn emit_skip_warning(io: &IoArgs, error_code: ErrorCode, message: impl Into<String>) {
-    emit_warn_log_message(error_code, message.into(), io.status_reporter.as_ref());
+fn emit_skip_warning(error_code: ErrorCode, message: impl Into<String>) {
+    emit_warn_log_message(error_code, message.into());
 }
 
-fn emit_upload_failure_warning(io: &IoArgs, error_code: ErrorCode, message: impl Into<String>) {
+fn emit_upload_failure_warning(error_code: ErrorCode, message: impl Into<String>) {
     emit_warn_log_message(
         error_code,
         format!(
             "Artifact ingest upload failed: {}. Continuing without upload.",
             message.into()
         ),
-        io.status_reporter.as_ref(),
     );
 }
 
@@ -637,6 +606,7 @@ mod tests {
             environment_id: Some("216".to_string()),
             defer_env_id: None,
             defer_job_id: None,
+            state_org_id: None,
             job_id: None,
         })
     }
@@ -941,9 +911,8 @@ mod tests {
 
     #[test]
     fn test_resolve_upload_config_with_full_config() {
-        let io = IoArgs::default();
         let cloud_config = sample_upload_cloud_config();
-        let config = resolve_upload_config(&cloud_config, &io).unwrap();
+        let config = resolve_upload_config(&cloud_config).unwrap();
 
         assert_eq!(config.account_id, "123");
         assert_eq!(config.cloud_token, "config-token");
@@ -953,7 +922,6 @@ mod tests {
 
     #[test]
     fn test_resolve_upload_config_requires_environment_id() {
-        let io = IoArgs::default();
         let cloud_config = Some(ResolvedCloudConfig {
             credentials: Some(CloudCredentials {
                 account_id: "123".to_string(),
@@ -963,56 +931,51 @@ mod tests {
             environment_id: None,
             ..Default::default()
         });
-        let config = resolve_upload_config(&cloud_config, &io);
+        let config = resolve_upload_config(&cloud_config);
         assert!(config.is_none());
     }
 
     #[test]
     fn test_resolve_upload_config_requires_credentials() {
-        let io = IoArgs::default();
         let cloud_config = Some(ResolvedCloudConfig {
             credentials: None,
             environment_id: Some("216".to_string()),
             ..Default::default()
         });
-        let config = resolve_upload_config(&cloud_config, &io);
+        let config = resolve_upload_config(&cloud_config);
         assert!(config.is_none());
     }
 
     #[test]
     fn test_resolve_upload_config_none_config() {
-        let io = IoArgs::default();
-        let config = resolve_upload_config(&None, &io);
+        let config = resolve_upload_config(&None);
         assert!(config.is_none());
     }
 
     #[test]
     fn test_resolve_upload_config_with_job_id() {
-        let io = IoArgs::default();
         let cloud_config = Some(ResolvedCloudConfig {
             job_id: Some("42".to_string()),
             ..sample_upload_cloud_config().unwrap()
         });
-        let config = resolve_upload_config(&cloud_config, &io).unwrap();
+        let config = resolve_upload_config(&cloud_config).unwrap();
         assert_eq!(config.job_id, Some(42u64));
     }
 
     #[test]
     fn test_resolve_upload_config_ignores_invalid_job_id() {
-        let io = IoArgs::default();
         let cloud_config = Some(ResolvedCloudConfig {
             job_id: Some("not_a_number".to_string()),
             ..sample_upload_cloud_config().unwrap()
         });
-        let config = resolve_upload_config(&cloud_config, &io).unwrap();
+        let config = resolve_upload_config(&cloud_config).unwrap();
         assert_eq!(config.job_id, None);
     }
 
     #[test]
     fn test_resolve_upload_config_without_job_id() {
-        let io = IoArgs::default();
         let cloud_config = sample_upload_cloud_config();
-        let config = resolve_upload_config(&cloud_config, &io).unwrap();
+        let config = resolve_upload_config(&cloud_config).unwrap();
         assert_eq!(config.job_id, None);
     }
 

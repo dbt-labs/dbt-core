@@ -9,7 +9,8 @@ use std::{
 };
 
 use arrow::array::{
-    Array, DictionaryArray, LargeStringArray, StringArray, StringViewArray, StructArray,
+    Array, AsArray, DictionaryArray, GenericListArray, LargeStringArray, StringArray,
+    StringViewArray, StructArray,
 };
 use arrow::datatypes::{
     DataType, Int8Type, Int16Type, Int32Type, Int64Type, UInt8Type, UInt16Type, UInt32Type,
@@ -33,6 +34,28 @@ use std::io::Cursor;
 
 use crate::task::utils::iter_files_recursively;
 use crate::task::{ProjectEnv, Task, TestEnv, TestResult};
+
+/// Canonicalize non-deterministic dbt temp-table identifiers to stable forms,
+/// so recorded SQL is byte-stable across re-record runs.
+///
+/// Mirrors `dbt_adapter::sql::normalize::normalize_dbt_tmp_name` — keep the two
+/// patterns in sync (this crate cannot depend on `dbt-adapter`). Two producers:
+/// - `adapter.generate_unique_temporary_table_suffix` (base) →
+///   `dbt_tmp_<UUIDv4-with-underscores>` → collapse to `dbt_tmp_`.
+/// - `postgres__make_relation_with_suffix` (Postgres/Redshift) and
+///   `bigquery__make_relation_with_suffix` (BigQuery) →
+///   `<base>__dbt_tmp<digits>` from `strftime("%H%M%S%f")` → collapse to
+///   `<base>__dbt_tmp`.
+pub(crate) fn canonicalize_dbt_tmp_identifiers(content: &str) -> String {
+    use std::sync::LazyLock;
+    static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
+    });
+    static TIMESTAMP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__dbt_tmp\d+").unwrap());
+
+    let step1 = UUID_RE.replace_all(content, "dbt_tmp_");
+    TIMESTAMP_RE.replace_all(&step1, "__dbt_tmp").to_string()
+}
 
 pub struct FileWriteTask {
     file_path: String,
@@ -64,33 +87,9 @@ impl Task for FileWriteTask {
     }
 }
 
-/// Task to touch a file.
-pub struct TouchTask {
-    path: String,
-}
-
-impl TouchTask {
-    pub fn new(path: impl Into<String>) -> TouchTask {
-        TouchTask { path: path.into() }
-    }
-}
-
-#[async_trait]
-impl Task for TouchTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        touch(PathBuf::from(&self.path))?;
-        Ok(())
-    }
-}
-
 // Touch is here simulate by read followed by write -- the basic touch
 // is only available via its nightly
-fn touch(file: PathBuf) -> FsResult<()> {
+pub(crate) fn touch(file: PathBuf) -> FsResult<()> {
     let res = stdfs::read(&file).expect("read to succeed");
     stdfs::remove_file(&file)?;
     let mut file = File::create(&file)?;
@@ -152,30 +151,6 @@ impl Task for CpFromTargetTask {
         }
 
         stdfs::copy(&src_path, &dest_path)?;
-        Ok(())
-    }
-}
-
-/// Task to remove a file.
-pub struct RmTask {
-    path: String,
-}
-
-impl RmTask {
-    pub fn new(path: impl Into<String>) -> RmTask {
-        RmTask { path: path.into() }
-    }
-}
-
-#[async_trait]
-impl Task for RmTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        stdfs::remove_file(&self.path).expect("could not remove a file");
         Ok(())
     }
 }
@@ -296,6 +271,36 @@ pub fn rebuild_string_like_arrays(
                     array.clone()
                 }
                 _ => array.clone(),
+            }
+        }
+        DataType::List(field) => {
+            let list = array.as_list::<i32>();
+            let values = list.values();
+            let new_values = rebuild_string_like_arrays(values, replace_fn);
+            if Arc::ptr_eq(values, &new_values) {
+                array.clone()
+            } else {
+                Arc::new(GenericListArray::<i32>::new(
+                    field.clone(),
+                    list.offsets().clone(),
+                    new_values,
+                    list.nulls().cloned(),
+                ))
+            }
+        }
+        DataType::LargeList(field) => {
+            let list = array.as_list::<i64>();
+            let values = list.values();
+            let new_values = rebuild_string_like_arrays(values, replace_fn);
+            if Arc::ptr_eq(values, &new_values) {
+                array.clone()
+            } else {
+                Arc::new(GenericListArray::<i64>::new(
+                    field.clone(),
+                    list.offsets().clone(),
+                    new_values,
+                    list.nulls().cloned(),
+                ))
             }
         }
         // non-string-like type columns, keep as is
@@ -536,6 +541,10 @@ impl Task for SedTask {
                         .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
                 };
                 update_sqlite_recordings_sql_only(path, &warehouse_replace)?;
+
+                let tmp_name_replace =
+                    |content: &str| -> String { canonicalize_dbt_tmp_identifiers(content) };
+                update_sqlite_recordings_sql_only(path, &tmp_name_replace)?;
 
                 // Apply Time Elapsed regex removal
                 let re_time_elapsed = Regex::new(r"Time Elapsed:.*").unwrap();
@@ -845,4 +854,51 @@ fn normalize_blank_lines(lines: &[&str]) -> Vec<String> {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::array::{ArrayRef, GenericListArray, StringArray, StructArray};
+    use arrow::buffer::OffsetBuffer;
+    use arrow::datatypes::{Field, Fields};
+    use std::sync::Arc;
+
+    #[test]
+    fn rebuild_rewrites_strings_nested_in_list() {
+        let inner = StringArray::from(vec![Some("REPLACE_ME")]);
+        let struct_fields: Fields = vec![Field::new("cool_struct", DataType::Utf8, true)].into();
+        let struct_arr = StructArray::new(
+            struct_fields.clone(),
+            vec![Arc::new(inner) as ArrayRef],
+            None,
+        );
+        let list_field = Arc::new(Field::new("item", DataType::Struct(struct_fields), true));
+        let offsets = OffsetBuffer::new(vec![0, 1].into());
+        let list = GenericListArray::<i32>::new(
+            list_field,
+            offsets,
+            Arc::new(struct_arr) as ArrayRef,
+            None,
+        );
+        let array: ArrayRef = Arc::new(list);
+
+        let out = rebuild_string_like_arrays(&array, &|s: &str| s.replace("REPLACE_ME", "DONE"));
+
+        let out_list = out
+            .as_any()
+            .downcast_ref::<GenericListArray<i32>>()
+            .unwrap();
+        let out_struct = out_list
+            .values()
+            .as_any()
+            .downcast_ref::<StructArray>()
+            .unwrap();
+        let out_str = out_struct
+            .column(0)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(out_str.value(0), "DONE");
+    }
 }

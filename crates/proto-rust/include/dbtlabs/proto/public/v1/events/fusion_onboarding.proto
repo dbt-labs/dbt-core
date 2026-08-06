@@ -24,4 +24,5 @@ message ReadinessDebugSessionOpened {
   //   "debug_in_studio_with_copilot" — "Debug in Studio with Copilot" button
   // Additional values may be added as new debug options are introduced.
   string action = 3;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 4;
 }

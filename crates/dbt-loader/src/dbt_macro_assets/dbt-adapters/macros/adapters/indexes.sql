@@ -16,7 +16,7 @@
 
 -- funcsign: (relation) -> string
 {% macro default__create_indexes(relation) -%}
-  {#- DIVERGENCE: v2-parser stores unset `indexes` as null in the manifest, so
+  {#- DIVERGENCE: FIXME: v2-parser stores unset `indexes` as null in the manifest, so
       `config.get('indexes', default=[])` returns None under dbt-core (1.x) and the
       for-loop blows up with "NoneType is not iterable". Coalesce to []. -#}
   {%- set _indexes = config.get('indexes', default=[]) or [] -%}

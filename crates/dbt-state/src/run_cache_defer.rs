@@ -16,8 +16,7 @@ use dbt_common::{
     warn_error_options::WarnErrorOptions,
 };
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv, phases::build_compile_and_run_base_context,
-    register_base_functions,
+    jinja_environment::JinjaEnv, phases::build_operation_context_btreemap, register_base_functions,
 };
 use dbt_parser::utils::{RelationComponents, update_node_relation_components};
 use dbt_profile::{
@@ -30,7 +29,7 @@ use dbt_schemas::{
         profiles::{DbConfig, Execute, TargetContext},
         serde::yaml_to_fs_error,
     },
-    state::ResolverState,
+    state::{DbtProfile, ResolverState},
 };
 
 use minijinja::Value;
@@ -51,11 +50,7 @@ impl RunCacheProfileResolver {
         resolved_state: &ResolverState,
         jinja_env: &JinjaEnv,
     ) -> FsResult<Option<Nodes>> {
-        let Some(auto_defer) = run_cache_auto_defer_config(
-            arg,
-            &resolved_state.dbt_profile.target,
-            resolved_state.dbt_profile.defer_to_target.as_deref(),
-        ) else {
+        let Some(auto_defer) = run_cache_auto_defer_config(arg, &resolved_state.dbt_profile) else {
             return Ok(None);
         };
 
@@ -78,7 +73,6 @@ impl RunCacheProfileResolver {
         };
 
         let defer_jinja_env = jinja_env_for_run_cache_target(
-            arg,
             jinja_env,
             &resolved_state.dbt_profile.profile,
             &auto_defer.defer_to_target,
@@ -107,13 +101,9 @@ struct RunCacheAutoDeferConfig {
 
 fn run_cache_auto_defer_config(
     arg: &EvalArgs,
-    active_target: &str,
-    profile_defer_to_target: Option<&str>,
+    active_profile: &DbtProfile,
 ) -> Option<RunCacheAutoDeferConfig> {
-    if !run_cache_auto_defer_requested(
-        arg,
-        RunCacheServiceConfig::is_explicitly_requested_from_env(),
-    ) {
+    if !run_cache_auto_defer_requested(arg) {
         return None;
     }
 
@@ -125,32 +115,21 @@ fn run_cache_auto_defer_config(
                 format!(
                     "dbt State auto-deferral config failed: {err}; continuing without synthesized defer state"
                 ),
-                None,
             );
             return None;
         }
     };
 
-    let defer_to_target = select_run_cache_defer_to_target(profile_defer_to_target, &config);
-
-    if !config.enabled || active_target == defer_to_target {
+    if !config.enabled || config.is_defer_to_target(active_profile) {
         return None;
     }
 
-    Some(RunCacheAutoDeferConfig { defer_to_target })
+    Some(RunCacheAutoDeferConfig {
+        defer_to_target: config.defer_to_target(active_profile),
+    })
 }
 
-fn select_run_cache_defer_to_target(
-    profile_defer_to_target: Option<&str>,
-    config: &RunCacheServiceConfig,
-) -> String {
-    profile_defer_to_target
-        .filter(|target| !target.is_empty())
-        .unwrap_or(&config.defer_to)
-        .to_string()
-}
-
-fn run_cache_auto_defer_requested(arg: &EvalArgs, env_requested: bool) -> bool {
+fn run_cache_auto_defer_requested(arg: &EvalArgs) -> bool {
     if !run_cache_auto_defer_command(arg.command) {
         return false;
     }
@@ -165,7 +144,10 @@ fn run_cache_auto_defer_requested(arg: &EvalArgs, env_requested: bool) -> bool {
     if !arg.defer {
         return false;
     }
-    arg.run_cache_service || env_requested
+    // `run_cache_service` already folds in DBT_ENGINE_MANAGE_STATE; consulting the
+    // environment again here would let the env var dbt platform injects on
+    // production deployments override an explicit `--no-manage-state`.
+    arg.run_cache_service
 }
 
 fn run_cache_auto_defer_command(command: FsCommand) -> bool {
@@ -188,7 +170,7 @@ fn resolve_run_cache_defer_target_profile(
 ) -> Result<DbConfig, ProfileError> {
     let profile_path = find_profiles_path(arg.profiles_dir.as_deref())?;
     let mut penv = ProfileEnvironment::new(arg.vars.clone());
-    register_base_functions(&mut penv.env, arg.io.clone(), WarnErrorOptions::default());
+    register_base_functions(&mut penv.env, WarnErrorOptions::default());
     let resolved: ResolvedProfile =
         resolve_with_env(&penv, &profile_path, profile_name, Some(defer_to_target))?;
 
@@ -201,7 +183,6 @@ fn resolve_run_cache_defer_target_profile(
 }
 
 fn jinja_env_for_run_cache_target(
-    arg: &EvalArgs,
     jinja_env: &JinjaEnv,
     profile_name: &str,
     target_name: &str,
@@ -213,7 +194,6 @@ fn jinja_env_for_run_cache_target(
             "The `execute:` field in profiles.yml is no longer supported and will be ignored. \
              Use the `--compute inline|sidecar|service|remote` CLI flag instead. \
              Please remove `execute:` from your profile.",
-            arg.io.status_reporter.as_ref(),
         );
     }
 
@@ -265,13 +245,14 @@ fn run_cache_defer_base_context(
         .map(|registry| registry.keys().map(|key| key.to_string()).collect())
         .unwrap_or_default();
 
-    build_compile_and_run_base_context(
+    build_operation_context_btreemap(
         resolved_state.node_resolver.clone(),
         &resolved_state.root_project_name,
         &resolved_state.nodes,
         resolved_state.defer_nodes.as_ref(),
         resolved_state.runtime_config.clone(),
         namespace_keys,
+        None,
     )
 }
 
@@ -488,31 +469,4 @@ fn set_run_cache_default_relation_target(
     let base = node.base_mut();
     base.database = default_database.to_string();
     base.schema = default_schema.to_string();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn profile_defer_to_target_overrides_legacy_env_config() {
-        let mut config = RunCacheServiceConfig::disabled();
-        config.defer_to = "legacy_prod".to_string();
-
-        assert_eq!(
-            select_run_cache_defer_to_target(Some("prod"), &config),
-            "prod"
-        );
-    }
-
-    #[test]
-    fn legacy_defer_to_remains_fallback() {
-        let mut config = RunCacheServiceConfig::disabled();
-        config.defer_to = "legacy_prod".to_string();
-
-        assert_eq!(
-            select_run_cache_defer_to_target(None, &config),
-            "legacy_prod"
-        );
-    }
 }

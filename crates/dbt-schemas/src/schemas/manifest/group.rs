@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use dbt_common::path::DbtPath;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -16,8 +15,8 @@ pub struct ManifestGroup {
     #[serialize_always]
     pub description: Option<String>,
     pub package_name: String,
-    pub path: PathBuf,
-    pub original_file_path: PathBuf,
+    pub path: DbtPath,
+    pub original_file_path: DbtPath,
     pub unique_id: String,
     pub owner: DbtOwner,
     #[serde(default)]

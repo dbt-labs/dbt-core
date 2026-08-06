@@ -7,6 +7,7 @@ use crate::utils::{
 };
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -84,7 +85,6 @@ pub async fn resolve_saved_queries(
         is_dependency,
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.saved_queries,
                 (),
                 dependency_package_name,
@@ -105,7 +105,7 @@ pub async fn resolve_saved_queries(
                     "Saved query name '{}' can only contain letters, numbers, and underscores.",
                     saved_query_name
                 );
-                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
 
                 continue;
             }
@@ -153,6 +153,7 @@ pub async fn resolve_saved_queries(
                 group_by: props_query_params.group_by.clone().unwrap_or_default(),
                 where_: props_query_params
                     .where_
+                    .0
                     .clone()
                     .map(|where_clause| where_clause.into()),
                 order_by: vec![],
@@ -242,7 +243,7 @@ pub async fn resolve_saved_queries(
                 __common_attr__: CommonAttributes {
                     name: saved_query_name.clone(),
                     package_name: package_name.to_string(),
-                    path: mpe.relative_path.clone(),
+                    path: DbtPath::from(&mpe.relative_path),
                     original_file_path: get_original_file_path(
                         &package.package_root_path,
                         &arg.io.in_dir,
@@ -252,7 +253,7 @@ pub async fn resolve_saved_queries(
                         mpe.name_span.clone(),
                         mpe.relative_path.clone(),
                     ),
-                    patch_path: Some(mpe.relative_path.clone()),
+                    patch_path: Some(DbtPath::from(&mpe.relative_path)),
                     unique_id: unique_id.clone(),
                     fqn,
                     description: saved_query_props.description,
@@ -261,8 +262,9 @@ pub async fn resolve_saved_queries(
                     language: None,
                     tags: saved_query_config
                         .tags
+                        .inner()
                         .clone()
-                        .map(|tags| tags.into())
+                        .map(Into::into)
                         .unwrap_or_default(),
                     classifiers: Default::default(),
                     meta: saved_query_config.meta.clone().unwrap_or_default(),

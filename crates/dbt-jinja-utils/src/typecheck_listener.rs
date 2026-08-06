@@ -1,13 +1,11 @@
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
-use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, io_utils::StatusReporter};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsError};
 use minijinja::TypecheckingEventListener;
 use minijinja::machinery::Span;
 use std::path::PathBuf;
-use std::sync::Arc;
 
-/// A TypecheckingEventListener that emits warnings using StatusReporter
+/// A typechecking listener that emits warnings through tracing.
 pub struct YamlTypecheckingEventListener {
-    status_reporter: Option<Arc<dyn StatusReporter>>,
     current_path: PathBuf,
     current_span: Span,
 }
@@ -17,16 +15,10 @@ impl YamlTypecheckingEventListener {
     ///
     /// # Arguments
     ///
-    /// * `status_reporter` - Optional status reporter for emitting warnings
     /// * `current_path` - The path to the current file being typechecked
     /// * `current_span` - The span context for error reporting
-    pub fn new(
-        status_reporter: Option<Arc<dyn StatusReporter>>,
-        current_path: PathBuf,
-        current_span: Span,
-    ) -> Self {
+    pub fn new(current_path: PathBuf, current_span: Span) -> Self {
         Self {
-            status_reporter,
             current_path,
             current_span,
         }
@@ -53,7 +45,7 @@ impl TypecheckingEventListener for YamlTypecheckingEventListener {
 
         let fs_error =
             FsError::new(ErrorCode::JinjaError, message.to_string()).with_location(location);
-        emit_warn_log_from_fs_error(&fs_error, self.status_reporter.as_ref());
+        emit_warn_log_from_fs_error(fs_error);
     }
 
     fn set_span(&self, _span: &Span) {
