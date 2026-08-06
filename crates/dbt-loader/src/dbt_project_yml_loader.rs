@@ -8,8 +8,8 @@ use dbt_jinja_utils::{Var, jinja_environment::JinjaEnv, phases::parse::build_res
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::{
     ProjectAnalysisConfig, ProjectDataTestConfig, ProjectExposureConfig, ProjectFunctionConfig,
-    ProjectModelConfig, ProjectSeedConfig, ProjectSemanticModelConfig, ProjectSnapshotConfig,
-    ProjectSourceConfig, ProjectUnitTestConfig,
+    ProjectModelConfig, ProjectSeedConfig, ProjectSemanticModelConfig, ProjectSkillConfig,
+    ProjectSnapshotConfig, ProjectSourceConfig, ProjectUnitTestConfig,
 };
 use dbt_yaml::{ShouldBe, Value as YmlValue};
 use minijinja::Value;
@@ -35,6 +35,7 @@ fn prune_sections(dbt_project: &mut DbtProject) {
     prune_section!(dbt_project, unit_tests, "unit_tests", ProjectUnitTestConfig);
     prune_section!(dbt_project, exposures, "exposures", ProjectExposureConfig);
     prune_section!(dbt_project, analyses, "analyses", ProjectAnalysisConfig);
+    prune_section!(dbt_project, skills, "skills", ProjectSkillConfig);
     prune_section!(dbt_project, functions, "functions", ProjectFunctionConfig);
     prune_section!(
         dbt_project,

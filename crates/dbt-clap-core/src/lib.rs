@@ -1674,6 +1674,19 @@ pub struct CommonArgs {
     #[arg(global = true, long, value_parser = check_key_value_cli_arg, help_heading = help_headings::PROJECT, hide_short_help = true)]
     pub vars: Option<BTreeMap<String, YValue>>,
 
+    /// The AI coding agent(s) to install package skills for, e.g. 'claude'.
+    /// Accepts a comma-separated list. Skills are only installed when this is set.
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_AI_PROVIDER",
+        num_args(1..),
+        value_delimiter = ',',
+        help_heading = help_headings::PROJECT,
+        hide_short_help = true
+    )]
+    pub ai_provider: Option<Vec<String>>,
+
     /// Select nodes to run
     // has no ENV_VAR
     #[arg(global = true, long, short = 's', value_parser = check_selector, num_args(1..), value_delimiter = ' ', group = "selector_or_select", help_heading = help_headings::SELECTION, hide_short_help = true)]
@@ -2584,6 +2597,7 @@ impl CommonArgs {
             x_alt_target: self.x_alt_target.clone(),
             update_deps: false,
             vars: self.vars.clone().unwrap_or_default(),
+            ai_provider: self.ai_provider.clone(),
             phase: self.phase.clone().unwrap_or(Phases::All),
             format: DEFAULT_FORMAT,
             limit: if arg.command == FsCommand::Extension("sl") {

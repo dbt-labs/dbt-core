@@ -64,6 +64,7 @@ members = [
   "crates/dbt-adbc",
   "crates/adbc-record-replay",
   "crates/dbt-deps",
+  "crates/dbt-skills",
   "crates/vortex-client",
   "crates/vortex-events",
   "crates/proto-rust",
@@ -277,6 +278,7 @@ dbt-metadata = { path = "crates/dbt-metadata" }
 dbt-metadata-parquet = { path = "crates/dbt-metadata-parquet" }
 dbt-schema-store = { path = "crates/dbt-schema-store" }
 dbt-schemas = { path = "crates/dbt-schemas" }
+dbt-skills = { path = "crates/dbt-skills" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
 dbt-tasks-core = { path = "crates/dbt-tasks-core" }
 dbt-tasks-sa = { path = "crates/dbt-tasks-sa" }

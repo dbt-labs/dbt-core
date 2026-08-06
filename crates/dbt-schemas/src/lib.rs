@@ -140,6 +140,7 @@ pub mod schemas {
             pub mod saved_query_config;
             pub mod seed_config;
             pub mod semantic_model_config;
+            pub mod skill_config;
             pub mod snapshot_config;
             pub mod source_config;
             pub mod unit_test_config;
@@ -180,6 +181,7 @@ pub mod schemas {
         pub use configs::semantic_model_config::{
             ProjectSemanticModelConfig, ResolvedSemanticModelConfig, SemanticModelConfig,
         };
+        pub use configs::skill_config::{ProjectSkillConfig, ResolvedSkillConfig, SkillConfig};
         pub use configs::snapshot_config::{
             ProjectSnapshotConfig, ResolvedSnapshotConfig, SnapshotConfig, SnapshotMetaColumnNames,
         };
@@ -188,8 +190,9 @@ pub mod schemas {
             ProjectUnitTestConfig, ResolvedUnitTestConfig, UnitTestConfig,
         };
         pub use dbt_project::{
-            DbtProject, DbtProjectNameOnly, DbtProjectSimplified, ProjectDbtCloudConfig,
-            QueryComment, ResolvableConfig, ResolvedConfig, TypedRecursiveConfig,
+            DEFAULT_SKILL_PATH, DbtProject, DbtProjectNameOnly, DbtProjectSimplified,
+            ProjectDbtCloudConfig, QueryComment, ResolvableConfig, ResolvedConfig,
+            TypedRecursiveConfig,
         };
     }
 

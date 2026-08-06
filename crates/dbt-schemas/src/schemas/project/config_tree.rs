@@ -10,8 +10,8 @@ use crate::schemas::{common::DbtQuoting, project::DbtProject};
 use crate::schemas::{
     project::{
         AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
-        ResolvableConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig,
-        SourceConfig, TypedRecursiveConfig, UnitTestConfig,
+        ResolvableConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SkillConfig,
+        SnapshotConfig, SourceConfig, TypedRecursiveConfig, UnitTestConfig,
     },
     serde::yaml_to_fs_error,
 };
@@ -363,6 +363,8 @@ pub struct RootProjectConfigs {
     pub analyses: DbtProjectConfig<AnalysesConfig>,
     /// Function configs
     pub functions: DbtProjectConfig<FunctionConfig>,
+    /// Skill configs
+    pub skills: DbtProjectConfig<SkillConfig>,
 }
 
 /// Build the [RootProjectConfigs] from a [DbtProject]
@@ -393,6 +395,7 @@ pub fn build_root_project_configs(
         saved_queries: init_project_config(&root_project.saved_queries, (), None)?,
         analyses: init_project_config(&root_project.analyses, (), None)?,
         functions: init_project_config(&root_project.functions, root_project_quoting, None)?,
+        skills: init_project_config(&root_project.skills, (), None)?,
     })
 }
 
