@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import pytest
 import yaml
 
-from dbt.clients.jinja import _hook_count, get_rendered, get_template
+from dbt.clients.jinja import _hook_count, _hook_span_name, get_rendered, get_template
 from dbt_common.exceptions import JinjaRenderingError
 
 
@@ -449,3 +449,33 @@ class TestHookCount:
         # run_hooks is reachable from user and adapter macros, so an unfamiliar
         # payload must disable instrumentation rather than raise.
         assert _hook_count(hooks, True) == 0
+
+
+class TestHookSpanName:
+    def test_names_each_of_the_four_materialization_calls(self):
+        # Every materialization hands `run_hooks` the context list itself, once per
+        # transaction phase, which is the only thing separating pre from post.
+        pre = [{"sql": "select 1", "transaction": True}]
+        post = [{"sql": "select 2", "transaction": True}]
+        context = {"pre_hooks": pre, "post_hooks": post}
+        assert _hook_span_name(pre, context, False) == "hooks.pre_hook.outside_transaction"
+        assert _hook_span_name(pre, context, True) == "hooks.pre_hook.inside_transaction"
+        assert _hook_span_name(post, context, True) == "hooks.post_hook.inside_transaction"
+        assert _hook_span_name(post, context, False) == "hooks.post_hook.outside_transaction"
+
+    def test_identical_hooks_are_still_told_apart(self):
+        # Equality cannot resolve the phase when both lists hold the same SQL.
+        hook = [{"sql": "select 1", "transaction": True}]
+        context = {"pre_hooks": hook, "post_hooks": list(hook)}
+        assert _hook_span_name(hook, context, True) == "hooks.pre_hook.inside_transaction"
+        assert (
+            _hook_span_name(context["post_hooks"], context, True)
+            == "hooks.post_hook.inside_transaction"
+        )
+
+    @pytest.mark.parametrize("context", [None, {}, {"pre_hooks": [], "post_hooks": []}])
+    def test_falls_back_to_the_transaction_phase_for_other_callers(self, context):
+        # A macro that builds its own hook list has no phase to report.
+        hooks = [{"sql": "select 1", "transaction": True}]
+        assert _hook_span_name(hooks, context, True) == "hooks.inside_transaction"
+        assert _hook_span_name(hooks, context, False) == "hooks.outside_transaction"

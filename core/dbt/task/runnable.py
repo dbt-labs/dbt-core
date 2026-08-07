@@ -98,10 +98,15 @@ def _rows_affected(adapter_response: Dict[str, Any]) -> Optional[int]:
     # Adapters report -1 for statements with no row count (DDL, and every DBAPI
     # cursor whose rowcount is undefined). Emitting that as a metric reads as a real
     # count, so drop it and leave the attribute off entirely.
-    rows_affected = adapter_response.get("rows_affected")
-    if rows_affected is None or rows_affected < 0:
+    #
+    # The value is not reliably an int -- materialized_view_execute_no_op stores the
+    # string "-1" -- so coerce before comparing, and drop anything that will not
+    # convert rather than let instrumentation break execution.
+    try:
+        rows_affected = int(adapter_response.get("rows_affected"))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
         return None
-    return rows_affected
+    return rows_affected if rows_affected >= 0 else None
 
 
 class GraphRunnableMode(StrEnum):

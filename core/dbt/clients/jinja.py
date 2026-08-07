@@ -10,6 +10,7 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 from opentelemetry import trace
+from opentelemetry.trace import StatusCode
 
 from dbt.artifacts.resources.types import FunctionLanguage
 from dbt.contracts.graph.nodes import GenericTestNode
@@ -48,6 +49,24 @@ def _hook_count(hooks: Any, inside_transaction: bool) -> int:
         return sum(1 for hook in hooks if hook["transaction"] == inside_transaction)
     except (TypeError, KeyError, IndexError):
         return 0
+
+
+def _hook_span_name(
+    hooks: Any, context: Optional[Dict[str, Any]], inside_transaction: bool
+) -> str:
+    """Name a `run_hooks` span after the phase it is running.
+
+    Nothing in the arguments separates pre-hooks from post-hooks -- both are lists of
+    the same shape -- but every materialization passes the context's `pre_hooks` or
+    `post_hooks` straight through, so identity against the context tells them apart.
+    Equality would not: a node whose pre- and post-hook SQL match satisfies both.
+    Callers that build their own list fall back to the transaction phase alone.
+    """
+    transaction = "inside" if inside_transaction else "outside"
+    for phase in ("pre", "post"):
+        if context is not None and hooks is context.get(f"{phase}_hooks"):
+            return f"hooks.{phase}_hook.{transaction}_transaction"
+    return f"hooks.{transaction}_transaction"
 
 
 class MacroStack(threading.local):
@@ -102,20 +121,24 @@ class MacroGenerator(CallableMacroGenerator):
     def _hook_span(
         self, args: Tuple[Any, ...], kwargs: Dict[str, Any]
     ) -> Generator[None, None, None]:
+        hooks = args[0] if args else None
         inside_transaction = kwargs.get("inside_transaction", args[1] if len(args) > 1 else True)
-        hook_count = _hook_count(args[0] if args else None, inside_transaction)
+        hook_count = _hook_count(hooks, inside_transaction)
         if not hook_count:
             yield
             return
 
-        phase = "inside" if inside_transaction else "outside"
-        with _TRACER.start_as_current_span(f"hooks.{phase}_transaction") as span:
+        span_name = _hook_span_name(hooks, self.context, bool(inside_transaction))
+        with _TRACER.start_as_current_span(span_name) as span:
             span.set_attribute("inside_transaction", bool(inside_transaction))
             span.set_attribute("hook_count", hook_count)
             unique_id = getattr(self.node, "unique_id", None)
             if unique_id is not None:
                 span.set_attribute("unique_id", unique_id)
             yield
+            # Set OK explicitly rather than leaving a successful span UNSET; a hook
+            # that raises leaves the span ERROR via set_status_on_exception.
+            span.set_status(StatusCode.OK)
 
     # this makes MacroGenerator objects callable like functions
     def __call__(self, *args, **kwargs) -> Any:

@@ -2,6 +2,7 @@ import os
 from unittest import mock
 
 import pytest
+from opentelemetry.trace import StatusCode
 
 from dbt.adapters.factory import FACTORY, reset_adapters
 from dbt.cli.exceptions import DbtUsageException
@@ -208,9 +209,9 @@ class TestDbtRunnerHooks:
         # hooks on `models` run; only model2's pre-hook does, since it fails.
         assert span_names == [
             "dbt.invocation",
-            "hooks.inside_transaction",
-            "hooks.inside_transaction",
-            "hooks.inside_transaction",
+            "hooks.post_hook.inside_transaction",
+            "hooks.pre_hook.inside_transaction",
+            "hooks.pre_hook.inside_transaction",
             "metadata.setup",
             "model.test.model2",
             "model.test.models",
@@ -273,6 +274,21 @@ class TestDbtRunnerHooks:
         for hook_span in hook_spans:
             assert hook_span.attributes["inside_transaction"] is True
             assert hook_span.attributes["hook_count"] >= 1
+
+        # Both of `models`' hooks run, in separate phases, and both succeed.
+        models_hooks = [s for s in hook_spans if s.attributes["unique_id"] == "model.test.models"]
+        assert sorted(s.name for s in models_hooks) == [
+            "hooks.post_hook.inside_transaction",
+            "hooks.pre_hook.inside_transaction",
+        ]
+        assert all(s.status.status_code == StatusCode.OK for s in models_hooks)
+
+        # model2's pre-hook raises, so that span records the failure and the
+        # post-hook never runs.
+        model2_hooks = [s for s in hook_spans if s.attributes["unique_id"] == "model.test.model2"]
+        assert [s.name for s in model2_hooks] == ["hooks.pre_hook.inside_transaction"]
+        assert model2_hooks[0].attributes["hook_count"] == 2
+        assert model2_hooks[0].status.status_code == StatusCode.ERROR
 
         assert len(model2_span.links) == 1
         assert model2_span.links[0].attributes["upstream.name"] == "model.test.models"

@@ -31,6 +31,7 @@ from dbt.events.types import LogModelResult
 from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
 from dbt.task.run import MicrobatchModelRunner, ModelRunner, RunTask, _get_adapter_info
+from dbt.task.runnable import _rows_affected
 from dbt.tests.util import safe_set_invocation_context
 from dbt.version import __version__
 from dbt_common.events.base_types import EventLevel
@@ -1240,3 +1241,30 @@ class TestRunTask:
         assert captured["name"] == "dbt.invocation"
         assert captured["span_id"] == invocation_span.context.span_id
         assert captured["trace_id"] == invocation_span.context.trace_id
+
+
+class TestRowsAffected:
+    """Adapters do not agree on the type or the sentinel, and instrumentation must
+    never raise on either."""
+
+    @pytest.mark.parametrize("value", [0, 1, 42, "7"])
+    def test_keeps_real_counts(self, value):
+        assert _rows_affected({"rows_affected": value}) == int(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            -1,
+            # materialized_view_execute_no_op stores the sentinel as a string.
+            "-1",
+        ],
+    )
+    def test_drops_the_no_row_count_sentinel(self, value):
+        assert _rows_affected({"rows_affected": value}) is None
+
+    @pytest.mark.parametrize("value", [None, "", "abc", object()])
+    def test_drops_values_that_are_not_numbers(self, value):
+        assert _rows_affected({"rows_affected": value}) is None
+
+    def test_drops_a_missing_key(self):
+        assert _rows_affected({}) is None
