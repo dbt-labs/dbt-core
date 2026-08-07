@@ -282,8 +282,9 @@ pub fn extend_base_context_stateful_fn(
 }
 
 /// Replace the statement-result-store closures (`store_result`/`load_result`/
-/// `store_raw_result`) in an existing run context with a fresh, isolated
-/// [`ResultStore`].
+/// `store_raw_result`) in an existing run context with a [`ResultStore`] —
+/// a fresh, isolated one by default, or a caller-supplied one via
+/// `result_store`.
 ///
 /// `build_run_node_context` bakes a single `ResultStore` into the context. That
 /// store is fine when a context is used once, but microbatch builds the context
@@ -294,10 +295,19 @@ pub fn extend_base_context_stateful_fn(
 /// or `run_query_statement` on Snowflake), so a batch can `load` a result a peer
 /// already consumed and hit `MacroResultAlreadyLoadedError`.
 ///
-/// Calling this on each per-batch context gives every batch its own registry,
-/// mirroring dbt-core where each batch runner builds its own model context.
-pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
-    let result_store = ResultStore::default();
+/// Calling this on each per-batch context with `result_store: None` gives every
+/// batch its own registry, mirroring dbt-core where each batch runner builds its
+/// own model context. Callers that need to read adapter responses back out
+/// after rendering (e.g. an embedder building its own execution pipeline on
+/// top of these context builders) pass their own `ResultStore` instead, so the
+/// closures baked into the context write into a store they can inspect
+/// afterward — without this, embedders have to allocate and discard a store
+/// they can never observe, then re-inject their own from scratch.
+pub fn reset_result_store(
+    context: &mut BTreeMap<String, MinijinjaValue>,
+    result_store: Option<ResultStore>,
+) {
+    let result_store = result_store.unwrap_or_default();
     context.insert(
         "store_result".to_owned(),
         MinijinjaValue::from_function(result_store.store_result()),
