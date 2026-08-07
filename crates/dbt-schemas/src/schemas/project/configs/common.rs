@@ -245,6 +245,15 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default)]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // ClickHouse
+    // materialized-view materialization
+    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub catchup: Option<bool>,
+    pub mv_on_schema_change: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub repopulate_from_mvs_on_full_refresh: Option<bool>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -447,6 +456,11 @@ pub fn same_warehouse_config(
     let indexes_eq = self_wh.indexes == other_wh.indexes;
     let primary_key_eq = self_wh.primary_key == other_wh.primary_key;
     let category_eq = self_wh.category == other_wh.category;
+    let refreshable_eq = self_wh.refreshable == other_wh.refreshable;
+    let catchup_eq = self_wh.catchup == other_wh.catchup;
+    let mv_on_schema_change_eq = self_wh.mv_on_schema_change == other_wh.mv_on_schema_change;
+    let repopulate_from_mvs_on_full_refresh_eq =
+        self_wh.repopulate_from_mvs_on_full_refresh == other_wh.repopulate_from_mvs_on_full_refresh;
 
     let result = partition_by_eq
         && cluster_by_eq
@@ -517,7 +531,11 @@ pub fn same_warehouse_config(
         && table_type_eq
         && indexes_eq
         && primary_key_eq
-        && category_eq;
+        && category_eq
+        && refreshable_eq
+        && catchup_eq
+        && mv_on_schema_change_eq
+        && repopulate_from_mvs_on_full_refresh_eq;
 
     if !result {
         log_state_mod_diff(
@@ -1082,6 +1100,38 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.category),
                         format!("{:?}", &other_wh.category),
+                    )),
+                ),
+                (
+                    "refreshable",
+                    refreshable_eq,
+                    Some((
+                        format!("{:?}", &self_wh.refreshable),
+                        format!("{:?}", &other_wh.refreshable),
+                    )),
+                ),
+                (
+                    "catchup",
+                    catchup_eq,
+                    Some((
+                        format!("{:?}", &self_wh.catchup),
+                        format!("{:?}", &other_wh.catchup),
+                    )),
+                ),
+                (
+                    "mv_on_schema_change",
+                    mv_on_schema_change_eq,
+                    Some((
+                        format!("{:?}", &self_wh.mv_on_schema_change),
+                        format!("{:?}", &other_wh.mv_on_schema_change),
+                    )),
+                ),
+                (
+                    "repopulate_from_mvs_on_full_refresh",
+                    repopulate_from_mvs_on_full_refresh_eq,
+                    Some((
+                        format!("{:?}", &self_wh.repopulate_from_mvs_on_full_refresh),
+                        format!("{:?}", &other_wh.repopulate_from_mvs_on_full_refresh),
                     )),
                 ),
             ],

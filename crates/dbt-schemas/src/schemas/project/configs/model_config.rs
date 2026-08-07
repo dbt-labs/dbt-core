@@ -516,6 +516,21 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+sync")]
     pub sync: Option<SyncConfig>,
 
+    // ClickHouse
+    // materialized-view materialization
+    #[serde(rename = "+refreshable")]
+    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    #[serde(default, rename = "+catchup", deserialize_with = "bool_or_string_bool")]
+    pub catchup: Option<bool>,
+    #[serde(rename = "+mv_on_schema_change")]
+    pub mv_on_schema_change: Option<String>,
+    #[serde(
+        default,
+        rename = "+repopulate_from_mvs_on_full_refresh",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub repopulate_from_mvs_on_full_refresh: Option<bool>,
+
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -821,6 +836,11 @@ impl From<ProjectModelConfig> for ModelConfig {
 
                 primary_key: config.primary_key,
                 category: config.category,
+
+                refreshable: config.refreshable,
+                catchup: config.catchup,
+                mv_on_schema_change: config.mv_on_schema_change,
+                repopulate_from_mvs_on_full_refresh: config.repopulate_from_mvs_on_full_refresh,
             },
             // Python-specific fields - initialized to None here, set during Python AST analysis
             config_keys_used: None,
@@ -1012,6 +1032,12 @@ impl From<ModelConfig> for ProjectModelConfig {
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,
+            refreshable: config.__warehouse_specific_config__.refreshable,
+            catchup: config.__warehouse_specific_config__.catchup,
+            mv_on_schema_change: config.__warehouse_specific_config__.mv_on_schema_change,
+            repopulate_from_mvs_on_full_refresh: config
+                .__warehouse_specific_config__
+                .repopulate_from_mvs_on_full_refresh,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -2007,6 +2033,82 @@ __additional_properties__: {}
                 "numpy".to_string(),
                 "matplotlib".to_string(),
             ])))
+        );
+    }
+
+    #[test]
+    fn test_clickhouse_mv_project_config_keys_parse_with_plus_prefix() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++refreshable:
+  interval: EVERY 1 MINUTE
++catchup: false
++mv_on_schema_change: append_new_columns
++repopulate_from_mvs_on_full_refresh: true
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let refreshable = config.refreshable.as_ref().expect("+refreshable should parse");
+        assert_eq!(
+            refreshable.get("interval").and_then(|v| v.as_str()),
+            Some("EVERY 1 MINUTE")
+        );
+        assert_eq!(config.catchup, Some(false));
+        assert_eq!(
+            config.mv_on_schema_change.as_deref(),
+            Some("append_new_columns")
+        );
+        assert_eq!(config.repopulate_from_mvs_on_full_refresh, Some(true));
+
+        // bool_or_string_bool accepts string booleans for the bool-typed keys
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++catchup: "true"
++repopulate_from_mvs_on_full_refresh: "false"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.catchup, Some(true));
+        assert_eq!(config.repopulate_from_mvs_on_full_refresh, Some(false));
+    }
+
+    #[test]
+    fn test_clickhouse_mv_config_keys_roundtrip_through_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++refreshable:
+  interval: EVERY 10 MINUTE
+  randomize: 5 MINUTE
++catchup: true
++mv_on_schema_change: fail
++repopulate_from_mvs_on_full_refresh: false
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        // ProjectModelConfig -> ModelConfig lands the keys in the warehouse config
+        let model_config: ModelConfig = project_config.clone().into();
+        let wh = &model_config.__warehouse_specific_config__;
+        assert_eq!(wh.refreshable, project_config.refreshable);
+        assert_eq!(wh.catchup, Some(true));
+        assert_eq!(wh.mv_on_schema_change.as_deref(), Some("fail"));
+        assert_eq!(wh.repopulate_from_mvs_on_full_refresh, Some(false));
+
+        // ModelConfig -> ProjectModelConfig restores them
+        let roundtripped: ProjectModelConfig = model_config.into();
+        assert_eq!(roundtripped.refreshable, project_config.refreshable);
+        assert_eq!(roundtripped.catchup, project_config.catchup);
+        assert_eq!(
+            roundtripped.mv_on_schema_change,
+            project_config.mv_on_schema_change
+        );
+        assert_eq!(
+            roundtripped.repopulate_from_mvs_on_full_refresh,
+            project_config.repopulate_from_mvs_on_full_refresh
         );
     }
 }
