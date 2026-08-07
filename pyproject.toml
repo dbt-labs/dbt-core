@@ -5,7 +5,7 @@ description = "Build analytics the way engineers build applications"
 authors = [{ name = "dbt Labs", email = "info@dbtlabs.com" }]
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Rust",
   "Development Status :: 3 - Alpha",

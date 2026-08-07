@@ -73,14 +73,26 @@
 # out; clean these up periodically.
 #
 # **Test-PyPI-only mode** (`inputs.dry_run_with_test_pypi = true`)
-# Everything dry-run skips, this skips too — tag, GitHub Release, Homebrew,
-# winget, changelog backport, and the mirror version bump all get
-# `if: !inputs.dry_run && !inputs.dry_run_with_test_pypi` — plus it actually
-# publishes to Test PyPI on top of that (dry-run's build + pack still just
-# leave artifacts sitting in the run). Since there's no GitHub Release for
-# publish-pypi to fetch wheels from in this mode, it uploads the `pack`
-# job's `release-assets` artifact directly via `--dist` instead of the
-# usual download-at-install sdist.
+# Homebrew, winget, changelog backport, and the mirror version bump are all
+# skipped (`if: !inputs.dry_run && !inputs.dry_run_with_test_pypi`), same as
+# dry-run. Unlike dry-run, though, tag, github-release, and publish-pypi DO
+# run — under a distinct `v{version}-test-pypi` tag instead of the real
+# `v{version}` one, and publish-pypi runs `--environment test-pypi` against
+# `TEST_PYPI_API_TOKEN` instead of prod. github-release always marks this
+# release pre-release/not-Latest, regardless of the version's own SemVer.
+#
+# Publishing a real (if clearly test-only) GitHub Release here — rather
+# than skipping github-release like dry-run does, or using a draft release
+# — means publish-pypi exercises the *exact* same download-at-install sdist
+# mechanism prod uses. Draft release assets aren't downloadable without
+# authentication, which would break both the sdist-assembly fetch and, more
+# importantly, a real `pip install` from Test PyPI by anyone testing this.
+# slack-notification is skipped here too — announcing "released!" to
+# #core-releases for what's just a Test PyPI rehearsal would be misleading.
+#
+# prepare-release still gets `dry_run: true` in this mode, so it cuts a
+# throwaway `release/dry-run/v…-<run_id>` branch instead of a real
+# `release/vX.Y.Z` one — no branch to remember to clean up afterward.
 
 name: Release dbt Core V2
 run-name: >-
@@ -103,7 +115,7 @@ on:
         type: boolean
         default: false
       dry_run_with_test_pypi:
-        description: "Dry Run + Test PyPI Publish. Works like dry_run (skips tag, GitHub Release, Homebrew, winget, changelog backport, mirror version bump) but additionally publishes the built wheels to Test PyPI."
+        description: "Dry Run + Test PyPI Publish. Tags and creates a pre-release GitHub Release under a distinct v{version}-test-pypi tag, and publishes to Test PyPI instead of prod. Skips Homebrew, winget, changelog backport, and the mirror version bump."
         required: false
         type: boolean
         default: false
@@ -151,7 +163,10 @@ jobs:
     uses: ./.github/workflows/release-prep-v2.yml
     with:
       version: ${{ inputs.version }}
-      dry_run: ${{ inputs.dry_run }}
+      # dry_run_with_test_pypi still cuts a throwaway release/dry-run/...
+      # branch (not a real release/vX.Y.Z one) — it's a rehearsal, not a
+      # branch anyone should have to remember to clean up.
+      dry_run: ${{ inputs.dry_run || inputs.dry_run_with_test_pypi }}
       source_ref: ${{ inputs.source_ref }}
 
   # ------------------------------------------------------------------
@@ -672,13 +687,18 @@ jobs:
   # everything downstream hangs off. Skipped on dry-run — the throwaway
   # `release/dry-run/...` branch isn't worth tagging, and the upstream
   # `prepare-release` step already rejects pre-existing tags.
+  #
+  # dry_run_with_test_pypi DOES tag (github-release/publish-pypi need a
+  # real tag to hang a GitHub Release off of), just under a distinct
+  # `-test-pypi` suffix so it never collides with a real release tag.
+  #
   # Idempotent: re-running a successful tag job is a no-op; pointing
   # at a different SHA than the existing tag fails loudly.
   # ------------------------------------------------------------------
   tag:
     name: Tag release commit
     needs: [prepare-release, pack]
-    if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi }}
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -694,7 +714,7 @@ jobs:
 
       - name: Tag branch HEAD
         env:
-          TAG: ${{ needs.prepare-release.outputs.tag }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}${{ inputs.dry_run_with_test_pypi && '-test-pypi' || '' }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
           HEAD_SHA=$(git rev-parse HEAD)
@@ -707,40 +727,29 @@ jobs:
           git push origin "$TAG"
 
   # ------------------------------------------------------------------
-  # Publish to PyPI. Skipped on dry-run. Two modes, both gated by
-  # `inputs.dry_run_with_test_pypi`:
+  # Publish the download-at-install sdist to PyPI. Skipped on dry-run.
+  # Runs after `github-release` in both prod and `inputs.dry_run_with_test_pypi`
+  # modes — dry_run_with_test_pypi publishes a real (not draft) GitHub
+  # Release too (see github-release's comment) specifically so this job
+  # exercises the exact same sdist/download-at-install mechanism prod uses,
+  # just against a distinct `-test-pypi`-suffixed tag and Test PyPI instead
+  # of prod PyPI.
   #
-  #   prod (default): runs after `github-release` and publishes a
-  #   download-at-install sdist (not wheels). Points `cargo ci pypi publish`
-  #   at the GitHub Release download URL via `--download-base-url`, which
-  #   fetches each platform wheel (one per `--target`), hashes the live
-  #   bytes, and assembles an sdist pinning those filenames + sha256s; pip
-  #   fetches the matching wheel from the Release at install time. Runs with
-  #   `--environment prod`, authenticating with the repo-level
-  #   `PYPI_API_TOKEN` secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`).
-  #
-  #   dry_run_with_test_pypi: no GitHub Release exists in this mode, so instead of
-  #   fetching wheels from a download URL, it downloads the `pack` job's
-  #   `release-assets` artifact and uploads those wheels directly via
-  #   `--dist`. Runs with `--environment test-pypi`, authenticating with
-  #   the repo-level `TEST_PYPI_API_TOKEN` secret (`DBT_PYPI_TEST_TOKEN`).
-  #
+  # Points `cargo ci pypi publish` at the GitHub Release download URL via
+  # `--download-base-url`, which fetches each platform wheel (one per
+  # `--target`), hashes the live bytes, and assembles an sdist pinning
+  # those filenames + sha256s; pip fetches the matching wheel from the
+  # Release at install time. Authenticates with the repo-level
+  # `PYPI_API_TOKEN`/`TEST_PYPI_API_TOKEN` secret depending on mode
+  # (passed to the tool as `DBT_PYPI_PROD_TOKEN`/`DBT_PYPI_TEST_TOKEN`).
   # `release_target` selects which of the two distributions (`dbt-core`,
   # `dbt-core-experimental-parser`) to publish, in both modes.
-  #
-  # `if: !failure() && !cancelled()` (instead of the usual `needs.*.result
-  # == 'success'` implied by a plain `if: !inputs.dry_run`) lets this job
-  # run when `github-release` was skipped (dry_run_with_test_pypi) as well as when
-  # it succeeded (prod) — a skipped dependency isn't a success, so the
-  # default `if` would otherwise skip this job too.
   # ------------------------------------------------------------------
   publish-pypi:
     name: Publish to PyPI
-    # pack + tag are transitive via github-release; prepare-release stays for
-    # its outputs. pack is listed explicitly too since dry_run_with_test_pypi reads
-    # its `release-assets` artifact directly, without going through github-release.
-    needs: [prepare-release, pack, github-release]
-    if: ${{ !inputs.dry_run && !failure() && !cancelled() }}
+    # pack + tag are transitive via github-release; prepare-release stays for its outputs.
+    needs: [prepare-release, github-release]
+    if: ${{ !inputs.dry_run }}
     runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
     permissions:
       contents: read
@@ -748,9 +757,11 @@ jobs:
       CARGO_INCREMENTAL: 0
       RUSTC_WRAPPER: sccache
       # GitHub Release download URL hosting this version's wheels; the sdist
-      # backend fetches the matching wheel from here at install time. Only
-      # used in prod mode.
-      BASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.prepare-release.outputs.tag }}
+      # backend fetches the matching wheel from here at install time. The
+      # `-test-pypi` suffix must match the tag job's.
+      BASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.prepare-release.outputs.tag }}${{ inputs.dry_run_with_test_pypi && '-test-pypi' || '' }}
+      DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      DBT_PYPI_TEST_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
@@ -770,37 +781,23 @@ jobs:
         with:
           version: "v0.12.0"
 
-      # dry_run_with_test_pypi only: pulls the wheels `pack` already built instead of
-      # fetching them from a GitHub Release (there isn't one in this mode).
-      - name: Download release assets (test-pypi-only)
-        if: inputs.dry_run_with_test_pypi
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: dist
-
-      # Both modes read the distribution name from pyproject's [project].name
-      # — sdist mode to build the wheel filenames it downloads from BASE_URL,
-      # --dist mode to filter which wheels in dist/ to upload — so to publish
+      # sdist mode reads the distribution name from pyproject's [project].name
+      # to build the wheel filenames it downloads from BASE_URL, so to publish
       # both distributions we publish once, swap pyproject in place, then
       # publish again. Mirrors the pack-job pattern.
       #
       # One --target per wheel uploaded to the Release; keep in lockstep with
       # the `build` job's matrix — each target's wheel is fetched and hashed.
-      # Prod mode only (dry_run_with_test_pypi's --dist upload doesn't need --target).
       #
       # dbt-core's wheels are maturin abi3 extension wheels (cp311-abi3), not
-      # the binary CLI wheel (py3-none) `cargo ci pypi pack` produces — prod
-      # mode passes the matching python/abi tags so the sdist manifest's
-      # filenames match what's actually sitting at BASE_URL. dry_run_with_test_pypi's
-      # --dist mode uploads the actual wheel files, so it doesn't need them.
-      - name: Publish (dbt-core, prod)
-        if: ${{ inputs.release_target != 'parser' && !inputs.dry_run_with_test_pypi }}
-        env:
-          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      # the binary CLI wheel (py3-none) `cargo ci pypi pack` produces — pass
+      # the matching python/abi tags so the sdist manifest's filenames match
+      # what's actually sitting at BASE_URL.
+      - name: Publish (dbt-core)
+        if: inputs.release_target != 'parser'
         run: |
           cargo ci pypi publish \
-            --environment prod \
+            --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --download-base-url "$BASE_URL" \
             --python-tag cp311 \
@@ -811,29 +808,17 @@ jobs:
             --target aarch64-apple-darwin \
             --target x86_64-pc-windows-msvc
 
-      - name: Publish (dbt-core, test-pypi-only)
-        if: ${{ inputs.release_target != 'parser' && inputs.dry_run_with_test_pypi }}
-        env:
-          DBT_PYPI_TEST_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: |
-          cargo ci pypi publish \
-            --environment test-pypi \
-            --version "${{ needs.prepare-release.outputs.version }}" \
-            --dist dist
-
       - name: Rename pyproject for parser publish
         if: inputs.release_target != 'core'
         run: |
           sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
           grep '^name = ' pyproject.toml
 
-      - name: Publish (dbt-core-experimental-parser, prod)
-        if: ${{ inputs.release_target != 'core' && !inputs.dry_run_with_test_pypi }}
-        env:
-          DBT_PYPI_PROD_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish (dbt-core-experimental-parser)
+        if: inputs.release_target != 'core'
         run: |
           cargo ci pypi publish \
-            --environment prod \
+            --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --download-base-url "$BASE_URL" \
             --target x86_64-unknown-linux-gnu \
@@ -842,16 +827,6 @@ jobs:
             --target aarch64-apple-darwin \
             --target x86_64-pc-windows-msvc
 
-      - name: Publish (dbt-core-experimental-parser, test-pypi-only)
-        if: ${{ inputs.release_target != 'core' && inputs.dry_run_with_test_pypi }}
-        env:
-          DBT_PYPI_TEST_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: |
-          cargo ci pypi publish \
-            --environment test-pypi \
-            --version "${{ needs.prepare-release.outputs.version }}" \
-            --dist dist
-
       - name: Restore pyproject name after parser publish
         if: ${{ always() && inputs.release_target != 'core' }}
         run: |
@@ -859,9 +834,17 @@ jobs:
           grep '^name = ' pyproject.toml
 
   # ------------------------------------------------------------------
-  # Create the GitHub Release with all assets. Skipped on dry-run and on
-  # dry_run_with_test_pypi (no GitHub Release involved in that mode — publish-pypi
-  # uploads the pack job's wheels directly instead).
+  # Create the GitHub Release with all assets. Skipped on dry-run.
+  #
+  # dry_run_with_test_pypi creates one too — under the distinct
+  # `-test-pypi`-suffixed tag, always marked pre-release — so publish-pypi
+  # can exercise the exact same download-at-install sdist mechanism prod
+  # uses. A *draft* release was considered instead of a real one, but draft
+  # release assets aren't downloadable without authentication, which would
+  # break both this job's own asset upload flow and, more importantly, a
+  # real end user's `pip install` from Test PyPI — defeating the point of
+  # testing the actual install path.
+  #
   # Idempotent: if the release already exists, re-uploads assets with
   # --clobber so a flaky asset upload can be retried without manual
   # cleanup.
@@ -869,7 +852,7 @@ jobs:
   github-release:
     name: Create GitHub Release
     needs: [prepare-release, pack, tag]
-    if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi }}
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -887,8 +870,11 @@ jobs:
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.prepare-release.outputs.tag }}
+          # Must match the tag job's — dry_run_with_test_pypi tags under a
+          # distinct suffix so this release never collides with a real one.
+          TAG: ${{ needs.prepare-release.outputs.tag }}${{ inputs.dry_run_with_test_pypi && '-test-pypi' || '' }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
+          DRY_RUN_WITH_TEST_PYPI: ${{ inputs.dry_run_with_test_pypi }}
         run: |
           shopt -s nullglob
           ASSETS=(dist/*.whl dist/*.tar.gz dist/*.zip)
@@ -897,10 +883,14 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; re-uploading assets."
           else
-            # Pre-release versions (SemVer with a pre-release segment) shouldn't
-            # surface as "Latest" on the Releases page.
             CREATE_ARGS=(--title "$TAG")
-            [[ "$VERSION" == *-* ]] && CREATE_ARGS+=(--prerelease)
+            # Pre-release versions (SemVer with a pre-release segment)
+            # shouldn't surface as "Latest" on the Releases page — and a
+            # dry_run_with_test_pypi release never should, regardless of
+            # its version.
+            if [[ "$VERSION" == *-* ]] || [ "$DRY_RUN_WITH_TEST_PYPI" = "true" ]; then
+              CREATE_ARGS+=(--prerelease)
+            fi
 
             NOTES=".changes/${VERSION}.md"
             if [ -f "$NOTES" ]; then
@@ -1104,6 +1094,9 @@ jobs:
   publish-winget:
     needs: [prepare-release, github-release]
     # if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
+    # dry_run cascades via github-release being skipped; dry_run_with_test_pypi
+    # needs an explicit guard since github-release now runs in that mode too.
+    if: ${{ !inputs.dry_run_with_test_pypi }}
     uses: ./.github/workflows/publish-winget.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
@@ -1122,8 +1115,9 @@ jobs:
   # ------------------------------------------------------------------
   slack-notification:
     name: Slack Notification
-    # dry_run_with_test_pypi doesn't create a GitHub Release, so there's nothing for
-    # this announcement (and its RELEASE_URL) to correctly point at.
+    # dry_run_with_test_pypi does create a real GitHub Release now, but
+    # announcing "dbt Core vX has been released!" to #core-releases would
+    # be misleading for what's actually just a Test PyPI rehearsal.
     if: ${{ success() && !inputs.dry_run && !inputs.dry_run_with_test_pypi }}
     needs:
       [
