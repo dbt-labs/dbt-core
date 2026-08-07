@@ -76,6 +76,7 @@ pub async fn execute_deps_command(
         None, // replay_mode
         token,
         use_v2_compatible_package_downloads,
+        load_args.ai_provider.as_deref(),
     )
     .await?;
 

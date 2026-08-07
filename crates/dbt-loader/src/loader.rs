@@ -497,6 +497,7 @@ pub async fn load(
         iarg.replay.as_ref(),
         token,
         use_v2_compatible_package_downloads,
+        arg.ai_provider.as_deref(),
     )
     .await?;
 

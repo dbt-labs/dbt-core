@@ -31,9 +31,13 @@ use super::ProjectFunctionConfig;
 use super::ProjectMetricConfigs;
 use super::ProjectModelConfig;
 use super::ProjectSeedConfig;
+use super::ProjectSkillConfig;
 use super::ProjectSnapshotConfig;
 use super::ProjectSourceConfig;
 use super::ProjectUnitTestConfig;
+
+/// Default `skill-paths` when the project does not set one.
+pub const DEFAULT_SKILL_PATH: &str = "skills";
 
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectDbtCloudConfig {
@@ -141,6 +145,8 @@ pub struct DbtProject {
     pub test_paths: Option<Vec<String>>,
     #[serde(rename = "docs-paths")]
     pub docs_paths: Option<Vec<String>>,
+    #[serde(rename = "skill-paths")]
+    pub skill_paths: Option<Vec<String>>,
     #[serde(rename = "target-path")]
     pub target_path: Option<TargetPath>,
     #[serde(rename = "log-path")]
@@ -159,6 +165,7 @@ pub struct DbtProject {
     pub data_tests: Option<ProjectDataTestConfig>,
     pub exposures: Option<ProjectExposureConfig>,
     pub analyses: Option<ProjectAnalysisConfig>,
+    pub skills: Option<ProjectSkillConfig>,
     #[serde(rename = "saved-queries")]
     pub saved_queries: Option<ProjectSavedQueryConfig>,
     #[serde(rename = "semantic-models")]
@@ -202,6 +209,7 @@ impl Default for DbtProject {
             snapshot_paths: None,
             test_paths: None,
             docs_paths: None,
+            skill_paths: None,
             target_path: None,
             log_path: None,
             packages_install_path: None,
@@ -216,6 +224,7 @@ impl Default for DbtProject {
             data_tests: None,
             exposures: None,
             analyses: None,
+            skills: None,
             saved_queries: None,
             semantic_models: None,
             clean_targets: None,
@@ -272,8 +281,18 @@ impl DbtProject {
         if let Some(ref test_paths) = self.test_paths {
             paths.extend(test_paths.clone());
         }
+        if let Some(ref skill_paths) = self.skill_paths {
+            paths.extend(skill_paths.clone());
+        }
 
         paths
+    }
+
+    /// `skill-paths`, falling back to the default of `skills/`.
+    pub fn skill_paths_or_default(&self) -> Vec<String> {
+        self.skill_paths
+            .clone()
+            .unwrap_or_else(|| vec![DEFAULT_SKILL_PATH.to_string()])
     }
 }
 
@@ -399,6 +418,7 @@ mod tests {
             snapshot_paths: Some(vec![]),
             test_paths: Some(vec![]),
             docs_paths: Some(vec![]),
+            skill_paths: Some(vec![]),
             target_path: Some(TargetPath::Target),
             log_path: Some(LogPath::Logs),
             packages_install_path: Some("packages".to_string()),
@@ -415,6 +435,7 @@ mod tests {
             semantic_models: None,
             exposures: None,
             analyses: None,
+            skills: None,
             clean_targets: None,
             config_version: None,
             dbt_cloud: None,

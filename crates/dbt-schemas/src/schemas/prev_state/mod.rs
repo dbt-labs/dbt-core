@@ -682,10 +682,11 @@ impl StateArtifacts {
             | NodeType::SavedQuery => !current_node.has_same_config(previous_node, adapter_type),
 
             // Never returned by any `InternalDbtNode::resource_type()` impl (see nodes.rs) —
-            // `DocsMacro`/`Operation` describe non-node telemetry concepts and `Unspecified` is a
+            // `DocsMacro`/`Operation` describe non-node telemetry concepts, `Skill` is
+            // non-executable and carries no config that affects a relation, and `Unspecified` is a
             // protobuf default. Listed only for match exhaustiveness; treated like Approach B if
             // ever reached.
-            NodeType::DocsMacro | NodeType::Operation | NodeType::Unspecified => {
+            NodeType::DocsMacro | NodeType::Operation | NodeType::Skill | NodeType::Unspecified => {
                 !current_node.has_same_config(previous_node, adapter_type)
             }
         }
