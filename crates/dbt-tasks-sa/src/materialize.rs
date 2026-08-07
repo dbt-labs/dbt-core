@@ -1295,8 +1295,10 @@ fn get_test_results(table: &AgateTable) -> FsResult<Vec<TestResult>> {
         let should_error = columns.get(2).unwrap().get_item_by_index(0).ok();
 
         let failures_val = failures.and_then(|v| v.as_i64()).unwrap_or(-1);
-        let should_warn_val = should_warn.map(|v| v.is_true()).unwrap_or(false);
-        let should_error_val = should_error.map(|v| v.is_true()).unwrap_or(false);
+        let should_warn_val = should_warn.map(|v| value_to_test_bool(&v)).unwrap_or(false);
+        let should_error_val = should_error
+            .map(|v| value_to_test_bool(&v))
+            .unwrap_or(false);
 
         Ok(vec![TestResult {
             column_name: None,
@@ -1323,11 +1325,11 @@ fn get_column_test_result(
         .unwrap_or(0);
 
     let should_warn = get_cell_value(values, row, should_warn_idx)
-        .map(|v| v.is_true())
+        .map(|v| value_to_test_bool(&v))
         .unwrap_or(false);
 
     let should_error = get_cell_value(values, row, should_error_idx)
-        .map(|v| v.is_true())
+        .map(|v| value_to_test_bool(&v))
         .unwrap_or(false);
 
     TestResult {
@@ -1335,6 +1337,16 @@ fn get_column_test_result(
         failures,
         should_warn,
         should_error,
+    }
+}
+
+/// Interprets a `should_warn`/`should_error` cell as a boolean, parsing
+/// text `'true'`/`'false'` explicitly before falling back to `is_true()`.
+fn value_to_test_bool(v: &Value) -> bool {
+    match v.as_str() {
+        Some(s) if s.eq_ignore_ascii_case("false") => false,
+        Some(s) if s.eq_ignore_ascii_case("true") => true,
+        _ => v.is_true(),
     }
 }
 

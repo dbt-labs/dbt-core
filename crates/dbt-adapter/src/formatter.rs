@@ -20,7 +20,7 @@ impl SqlLiteralFormatter {
 
     pub fn format_bool(&self, b: bool) -> String {
         match self.adapter_type {
-            AdapterType::Fabric => {
+            AdapterType::Fabric | AdapterType::SqlServer => {
                 if b {
                     "1".to_string()
                 } else {
@@ -102,7 +102,7 @@ pub fn format_sql_with_bindings(
     let formatter = SqlLiteralFormatter::new(adapter_type);
     let mut result = String::with_capacity(sql.len());
     // this placeholder char is seen from `get_binding_char` macro
-    let binding_char = if adapter_type == AdapterType::Fabric {
+    let binding_char = if matches!(adapter_type, AdapterType::Fabric | AdapterType::SqlServer) {
         "?"
     } else {
         "%s"
