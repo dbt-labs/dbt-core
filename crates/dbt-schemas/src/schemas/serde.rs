@@ -651,9 +651,15 @@ pub enum StringOrArrayOfStrings {
 
 impl From<StringOrArrayOfStrings> for Vec<String> {
     fn from(value: StringOrArrayOfStrings) -> Self {
-        match value {
-            StringOrArrayOfStrings::String(s) => vec![s],
-            StringOrArrayOfStrings::ArrayOfStrings(a) => a,
+        value.normalize()
+    }
+}
+
+impl StringOrArrayOfStrings {
+    pub fn normalize(&self) -> Vec<String> {
+        match self {
+            Self::String(s) => vec![s.clone()],
+            Self::ArrayOfStrings(a) => a.clone(),
         }
     }
 }

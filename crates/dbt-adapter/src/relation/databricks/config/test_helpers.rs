@@ -25,11 +25,7 @@ pub(crate) struct TestModelColumn {
 
 #[derive(Default)]
 pub(crate) struct TestModelConfig {
-    // This will be used once we actually implement liquid clustering
-    #[expect(dead_code)]
     pub auto_cluster: bool,
-    // This will be used once we actually implement liquid clustering
-    #[expect(dead_code)]
     pub cluster_by: Vec<String>,
     pub columns: Vec<TestModelColumn>,
     pub cron: Option<String>,
@@ -93,6 +89,16 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
         depends_on: NodeDependsOn::default(),
     };
 
+    let liquid_clustered_by = if cfg.cluster_by.is_empty() {
+        None
+    } else {
+        Some(dbt_schemas::schemas::serde::StringOrArrayOfStrings::ArrayOfStrings(
+            cfg.cluster_by,
+        ))
+    };
+
+    let auto_liquid_cluster = if cfg.auto_cluster { Some(true) } else { None };
+
     let wh_config = WarehouseSpecificNodeConfig {
         tblproperties: Some(
             cfg.tbl_properties
@@ -111,6 +117,8 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
                 .map(|(k, v)| (k, YmlValue::from(v)))
                 .collect(),
         ),
+        liquid_clustered_by,
+        auto_liquid_cluster,
         ..Default::default()
     };
 
