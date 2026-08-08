@@ -5725,7 +5725,11 @@ pub struct DatabricksAttr {
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
+    )]
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,

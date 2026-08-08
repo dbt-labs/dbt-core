@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use dbt_common::FsResult;
 use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize};
@@ -49,7 +49,11 @@ pub struct DbtColumn {
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<String>>,
     pub classifiers: Option<Vec<String>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
+    )]
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     #[serde(default, rename = "config")]
@@ -122,7 +126,11 @@ pub struct ColumnProperties {
     pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
     pub classifiers: Option<Vec<String>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
+    )]
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
@@ -148,7 +156,11 @@ pub struct VersionColumnProperties {
     pub data_tests: Option<Vec<DataTests>>,
     pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
+    )]
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
@@ -185,7 +197,11 @@ pub struct ColumnConfig {
     #[serde(default)]
     pub tags: Option<StringOrArrayOfStrings>,
     pub meta: Option<IndexMap<String, YmlValue>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::project::configs::databricks::deserialize_databricks_tags"
+    )]
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub policy_tags: Option<Vec<String>>,
 }
 

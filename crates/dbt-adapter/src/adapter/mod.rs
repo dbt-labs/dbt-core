@@ -6,7 +6,9 @@ use crate::errors::into_fs_error;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
+use crate::relation::config_v2::RelationConfig;
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
+use crate::relation::databricks::config::components::relation_tags;
 use crate::relation::factory::create_static_relation;
 use crate::relation::spark::DEFAULT_SPARK_DATABASE;
 use crate::relation::{Relation, RelationObject};
@@ -105,6 +107,12 @@ pub struct Adapter {
     time_machine: Option<TimeMachine>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
+}
+
+fn should_fetch_relation_tags(model_config: Option<&Value>) -> bool {
+    model_config
+        .and_then(|config| config.downcast_object_ref::<RelationConfig>())
+        .is_none_or(relation_tags::requires_server_metadata_for_diff)
 }
 
 impl fmt::Debug for Adapter {
@@ -3196,17 +3204,21 @@ impl Adapter {
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let iter = ArgsIter::new("get_relation_config", &["relation"], args);
+                let iter =
+                    ArgsIter::new("get_relation_config", &["relation", "model_config"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let model_config = iter.next_arg::<Option<Value>>()?;
                 iter.finish()?;
 
+                let fetch_relation_tags = should_fetch_relation_tags(model_config.as_ref());
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let config = adapter.get_relation_config(
                     state,
                     conn.as_mut(),
                     &relation,
+                    fetch_relation_tags,
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from_object(config))
@@ -3644,7 +3656,7 @@ impl Adapter {
                 // needs_information: bool = False
                 let iter = ArgsIter::new(name, &["database", "schema", "identifier"], args);
                 // dbt-core's `BaseAdapter.get_relation`
-                // (~/git/dbt-adapters/dbt-adapters/src/dbt/adapters/base/impl.py:1084)
+                // (dbt-adapters/dbt/adapters/base/impl.py:1084)
                 // declares its args as `str` but does no runtime validation — a
                 // Python `None` (e.g. from `RuntimeConfigObject.get('database')` for
                 // an unset key at compile) flows through `list_relations` and

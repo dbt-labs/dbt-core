@@ -5,6 +5,9 @@ All adapter macros are currently maintained in:
 
 ## Changelog
 
+### [2026-08-02]
+  - dbt-databricks: commit 50dd33424b97e1c45dff582bbdcbfe4b971e3558 (`relations/tags.sql` whitespace parity; retaining the documented Fusion relation-type rendering divergence)
+
 ### [2026-03-04]
   - dbt-databricks: v1.11.5 (commit 24325a3195171d36972804e545b2ccf967ab575d)
 

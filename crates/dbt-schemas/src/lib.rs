@@ -132,6 +132,7 @@ pub mod schemas {
             pub mod config_merge;
             pub mod config_merge_tests;
             pub mod data_test_config;
+            pub(crate) mod databricks;
             pub mod exposure_config;
             pub mod function_config;
             pub mod metric_config;

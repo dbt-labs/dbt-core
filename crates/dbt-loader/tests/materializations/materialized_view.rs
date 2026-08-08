@@ -5,6 +5,7 @@ use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
 use dbt_schemas::dbt_types::RelationType;
+use indexmap::IndexMap;
 use minijinja::Value;
 
 use crate::macro_test_harness::{MacroTestHarness, assert_executed_contains, default_mock_config};
@@ -235,6 +236,42 @@ mod databricks {
         assert!(
             result.to_uppercase().contains("ALTER MATERIALIZED VIEW"),
             "Expected ALTER statement, got: {result}",
+        );
+    }
+
+    #[test]
+    fn alter_tags_preserves_reverse_lexical_config_order() {
+        let h = build_harness();
+        let set_tags = IndexMap::from([
+            ("z_tag".to_string(), Value::from("first")),
+            ("a_tag".to_string(), Value::from("second")),
+        ]);
+        let tags = Value::from_serialize(IndexMap::from([(
+            "set_tags".to_string(),
+            Value::from_serialize(set_tags),
+        )]));
+        let changes = config_changes_mock(
+            false,
+            BTreeMap::from([("refresh", Value::UNDEFINED), ("tags", tags)]),
+        );
+
+        let result = render_alter(&h, changes);
+        let z_position = result
+            .find("'z_tag' = 'first'")
+            .expect("SET TAGS SQL should contain z_tag");
+        let a_position = result
+            .find("'a_tag' = 'second'")
+            .expect("SET TAGS SQL should contain a_tag");
+        let normalized = result.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(result.contains("SET TAGS"));
+        assert!(
+            normalized.contains("SET TAGS ( 'z_tag' = 'first'"),
+            "SET TAGS should preserve the v1 space after the opening parenthesis: {result}"
+        );
+        assert!(
+            z_position < a_position,
+            "configured insertion order must be preserved in SET TAGS SQL: {result}"
         );
     }
 

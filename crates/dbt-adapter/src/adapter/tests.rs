@@ -3,13 +3,115 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::adapter::Adapter;
 use crate::adapter::adapter_impl::AdapterImpl;
+use crate::relation::config_v2::{ComponentConfigChange, RelationConfig};
+use crate::relation::databricks::config::components::RelationTagsLoader;
+use crate::relation::{Relation, RelationObject};
 use crate::sql_types::DefaultTypeOps;
 use crate::stmt_splitter::DefaultStmtSplitter;
 use dbt_adapter_core::AdapterType;
 
 use dbt_common::cancellation::never_cancels;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
 use indexmap::IndexMap;
+use minijinja_contrib::testing::jinja_assert;
+
+fn never_full_refresh(_: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
+    false
+}
+
+fn model_config_value(tags: IndexMap<String, String>) -> Value {
+    Value::from_object(RelationConfig::new(
+        AdapterType::Databricks,
+        [RelationTagsLoader::new_component_type_erased(tags)],
+        never_full_refresh,
+    ))
+}
+
+#[test]
+fn test_relation_tag_metadata_planning_at_adapter_boundary() {
+    let tagged = model_config_value(IndexMap::from_iter([(
+        "deployment".to_string(),
+        "DBT".to_string(),
+    )]));
+    let empty = model_config_value(IndexMap::new());
+
+    assert!(should_fetch_relation_tags(Some(&tagged)));
+    assert!(!should_fetch_relation_tags(Some(&empty)));
+    assert!(should_fetch_relation_tags(None));
+    assert!(should_fetch_relation_tags(Some(&Value::from(42))));
+}
+
+#[derive(Debug)]
+struct GetRelationConfigFixture {
+    adapter: Arc<Adapter>,
+    relation: Value,
+    tagged: Value,
+    empty: Value,
+}
+
+impl Object for GetRelationConfigFixture {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
+            "adapter" => Some(Value::from_object(self.adapter.as_ref().clone())),
+            "relation" => Some(self.relation.clone()),
+            "tagged" => Some(self.tagged.clone()),
+            "empty" => Some(self.empty.clone()),
+            _ => None,
+        }
+    }
+}
+
+fn get_relation_config_fixture() -> GetRelationConfigFixture {
+    let relation = Relation::new(
+        AdapterType::Databricks,
+        "main".to_string(),
+        "test_schema".to_string(),
+        "test_mv".to_string(),
+    )
+    .with_relation_type(RelationType::MaterializedView)
+    .with_quoting(DEFAULT_RESOLVED_QUOTING);
+    GetRelationConfigFixture {
+        adapter: make_mock_adapter(AdapterType::Databricks),
+        relation: Value::from_object(RelationObject::new(Arc::new(relation))),
+        tagged: model_config_value(IndexMap::from_iter([(
+            "deployment".to_string(),
+            "DBT".to_string(),
+        )])),
+        empty: model_config_value(IndexMap::new()),
+    }
+}
+
+#[test]
+fn test_get_relation_config_typed_adapter_jinja_value_contract() {
+    let template = r#"
+        {% set tagged = obj.adapter.get_relation_config(obj.relation, obj.tagged) %}
+        {% set empty = obj.adapter.get_relation_config(obj.relation, obj.empty) %}
+        {% set missing = obj.adapter.get_relation_config(obj.relation) %}
+        {% set wrong_type = obj.adapter.get_relation_config(obj.relation, 42) %}
+        {{ tagged is not none and empty is not none and missing is not none and wrong_type is not none }}
+    "#;
+
+    jinja_assert(get_relation_config_fixture(), template, "True");
+}
+
+#[test]
+fn test_get_relation_config_typed_adapter_rejects_excess_jinja_arguments() {
+    let mut env = minijinja::Environment::new();
+    env.add_global("obj", Value::from_object(get_relation_config_fixture()));
+    let error = env
+        .render_str(
+            "{{ obj.adapter.get_relation_config(obj.relation, obj.tagged, 42) }}",
+            BTreeMap::<String, String>::new(),
+            &[],
+        )
+        .unwrap_err();
+
+    assert!(
+        error.to_string().contains("too many arguments"),
+        "unexpected error: {error}"
+    );
+}
 
 /// Helper to call [Adapter::call_method_impl] with jinja-valued arguments.
 fn dispatch_test(

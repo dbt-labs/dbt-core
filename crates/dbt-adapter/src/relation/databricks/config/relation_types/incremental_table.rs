@@ -38,7 +38,7 @@ mod tests {
     };
     use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
-        test_helpers::{TestModelColumn, TestModelConfig, run_test_cases},
+        test_helpers::{TestModelColumn, TestModelConfig, expected_tbl_properties, run_test_cases},
     };
     use crate::relation::test_helpers::TestCase;
     use dbt_schemas::schemas::common::{Constraint, ConstraintType};
@@ -198,10 +198,10 @@ mod tests {
                         components::TblPropertiesLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::TblPropertiesLoader::new_component_type_erased(
-                                IndexMap::from_iter([
-                                    ("customKey".to_string(), "new".to_string()),
-                                    ("customKey2".to_string(), "value".to_string()),
-                                ]),
+                                expected_tbl_properties(
+                                    "my_new_pipeline",
+                                    [("customKey", "new"), ("customKey2", "value")],
+                                ),
                             ),
                         ),
                     ),
