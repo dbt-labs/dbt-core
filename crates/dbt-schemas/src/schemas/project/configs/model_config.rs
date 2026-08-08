@@ -1804,6 +1804,67 @@ mod tests {
     use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
+    use crate::schemas::serde::StringOrArrayOfStrings;
+
+    #[test]
+    fn test_model_clustered_by_accepts_string_and_ordered_list() {
+        let string_config: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  clustered_by: nation
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            string_config.__warehouse_specific_config__.clustered_by,
+            Some(StringOrArrayOfStrings::String("nation".to_string()))
+        );
+
+        let list_config: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  clustered_by: [nation, region]
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            list_config.__warehouse_specific_config__.clustered_by,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "nation".to_string(),
+                "region".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_project_model_clustered_by_accepts_string_and_ordered_list() {
+        let string_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++clustered_by: nation
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            string_config.clustered_by,
+            Some(StringOrArrayOfStrings::String("nation".to_string()))
+        );
+
+        let list_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++clustered_by: [nation, region]
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            list_config.clustered_by,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "nation".to_string(),
+                "region".to_string(),
+            ]))
+        );
+    }
 
     #[test]
     fn test_classifiers_merge_in_default_to() {
