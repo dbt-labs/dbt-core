@@ -8,7 +8,7 @@
 {% endmacro %}
 
 {% macro databricks__get_incremental_append_sql(arg_dict) %}
-  {% do return(get_insert_into_sql(arg_dict["temp_relation"], arg_dict["target_relation"])) %}
+  {% do return(databricks__get_insert_into_sql(arg_dict["temp_relation"], arg_dict["target_relation"])) %}
 {% endmacro %}
 
 {% macro databricks__get_incremental_replace_where_sql(arg_dict) %}
@@ -217,7 +217,7 @@ where {{ incremental_predicates }}
 {% endmacro %}
 
 
-{% macro get_insert_into_sql(source_relation, target_relation) %}
+{% macro databricks__get_insert_into_sql(source_relation, target_relation) %}
     {%- set source_columns = adapter.get_columns_in_relation(source_relation) | map(attribute="name") | list -%}
     {%- set dest_columns = adapter.get_columns_in_relation(target_relation) | map(attribute="name") | list -%}
     {{ insert_into_sql_impl(target_relation, dest_columns, source_relation, source_columns) }}
