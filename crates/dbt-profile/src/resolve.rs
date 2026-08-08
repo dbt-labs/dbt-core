@@ -406,26 +406,39 @@ fn render_value_recursive<S: Serialize>(
     match value {
         dbt_yaml::Value::String(s, span) => {
             let has_jinja = s.contains("{{") || s.contains("{%");
-            let rendered = if has_jinja {
-                env.render_str(s, ctx, listeners)
-                    .map_err(ProfileError::Jinja)?
-            } else {
-                s.clone()
-            };
-            let resolved = render_secrets(&rendered)?;
-            if !has_jinja && resolved == rendered {
-                Ok(value.clone())
-            } else {
-                match dbt_yaml::from_str::<dbt_yaml::Value>(&resolved) {
-                    Ok(parsed) => match &parsed {
-                        dbt_yaml::Value::String(_, _) => {
-                            Ok(dbt_yaml::Value::String(resolved, span.clone()))
-                        }
-                        _ => Ok(parsed),
-                    },
-                    Err(_) => Ok(dbt_yaml::Value::String(resolved, span.clone())),
-                }
+            if !has_jinja {
+                return Ok(value.clone());
             }
+
+            if is_single_jinja_expression(s) {
+                let expression = env
+                    .compile_expression(&s[2..s.len() - 2])
+                    .map_err(ProfileError::Jinja)?;
+                let evaluated = expression
+                    .eval(ctx, listeners)
+                    .map_err(ProfileError::Jinja)?;
+                let rendered = dbt_yaml::to_value(evaluated).map_err(|error| {
+                    ProfileError::Other(format!(
+                        "failed to convert rendered profile value to YAML: {error}"
+                    ))
+                })?;
+
+                return match rendered {
+                    dbt_yaml::Value::String(rendered, _) => Ok(dbt_yaml::Value::String(
+                        render_secrets(&rendered)?,
+                        span.clone(),
+                    )),
+                    _ => Ok(rendered.with_span(span.clone())),
+                };
+            }
+
+            let rendered = env
+                .render_str(s, ctx, listeners)
+                .map_err(ProfileError::Jinja)?;
+            Ok(dbt_yaml::Value::String(
+                render_secrets(&rendered)?,
+                span.clone(),
+            ))
         }
         dbt_yaml::Value::Mapping(map, span) => {
             let mut new_map = dbt_yaml::Mapping::new();
@@ -443,6 +456,35 @@ fn render_value_recursive<S: Serialize>(
         }
         _ => Ok(value.clone()),
     }
+}
+
+/// Return whether `input` consists of exactly one Jinja expression.
+///
+/// Whole expressions are evaluated natively so explicit filters such as
+/// `as_number` keep their type. Mixed templates are rendered as strings,
+/// matching dbt's profile renderer and avoiding accidental YAML coercion.
+fn is_single_jinja_expression(input: &str) -> bool {
+    let Some(body) = input
+        .strip_prefix("{{")
+        .and_then(|input| input.strip_suffix("}}"))
+    else {
+        return false;
+    };
+
+    if body.starts_with('-') {
+        return false;
+    }
+    if body.ends_with('-') {
+        return false;
+    }
+    if body.ends_with('}') {
+        return false;
+    }
+
+    const NESTED_DELIMITERS: [&str; 6] = ["{{", "}}", "{%", "%}", "{#", "#}"];
+    !NESTED_DELIMITERS
+        .iter()
+        .any(|delimiter| body.contains(delimiter))
 }
 
 // ---------------------------------------------------------------------------
