@@ -3262,6 +3262,12 @@
             }
           ]
         },
+        "+engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+event_time": {
           "type": [
             "string",
@@ -3716,6 +3722,16 @@
             }
           ]
         },
+        "+order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+packages": {
           "anyOf": [
             {
@@ -3824,6 +3840,15 @@
             "string",
             "null"
           ]
+        },
+        "+query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+query_tag": {
           "anyOf": [
@@ -3955,6 +3980,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "+settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+skip_matched_step": {
           "anyOf": [
@@ -4159,6 +4193,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "+ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+unique_key": {
