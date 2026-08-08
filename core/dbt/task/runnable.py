@@ -10,8 +10,8 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Generator,
     Iterable,
-    Iterator,
     List,
     Optional,
     Set,
@@ -92,6 +92,21 @@ def _otel_enabled() -> bool:
 def _set_span_attr(span: Span, key: str, value: Any) -> None:
     if value is not None:
         span.set_attribute(key, value)
+
+
+def _rows_affected(adapter_response: Dict[str, Any]) -> Optional[int]:
+    # Adapters report -1 for statements with no row count (DDL, and every DBAPI
+    # cursor whose rowcount is undefined). Emitting that as a metric reads as a real
+    # count, so drop it and leave the attribute off entirely.
+    #
+    # The value is not reliably an int -- materialized_view_execute_no_op stores the
+    # string "-1" -- so coerce before comparing, and drop anything that will not
+    # convert rather than let instrumentation break execution.
+    try:
+        rows_affected = int(adapter_response.get("rows_affected"))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return rows_affected if rows_affected >= 0 else None
 
 
 class GraphRunnableMode(StrEnum):
@@ -278,7 +293,7 @@ class GraphRunnableTask(ConfiguredTask):
     @contextmanager
     def _node_span(
         self, node_info: Dict[str, Any], parent_context: Optional[Context], links: List[Link]
-    ) -> Iterator[Span]:
+    ) -> Generator[Span, None, None]:
         # When OTel is disabled, yield the no-op INVALID_SPAN so the instrumented
         # body's set_status/set_attribute calls are harmless no-ops and no span or
         # context-mapping entry is created.
@@ -294,7 +309,7 @@ class GraphRunnableTask(ConfiguredTask):
             yield trace.INVALID_SPAN
 
     @contextmanager
-    def _maybe_span(self, name: str) -> Iterator[Span]:
+    def _maybe_span(self, name: str) -> Generator[Span, None, None]:
         # A named span that becomes a no-op INVALID_SPAN when OTel is disabled.
         if _otel_enabled():
             with self.dbt_tracer.start_as_current_span(name) as span:
@@ -369,7 +384,7 @@ class GraphRunnableTask(ConfiguredTask):
                         node_span, "relative_path", getattr(node, "original_file_path", None)
                     )
                     _set_span_attr(
-                        node_span, "rows_affected", result.adapter_response.get("rows_affected")
+                        node_span, "rows_affected", _rows_affected(result.adapter_response)
                     )
                     _set_span_attr(node_span, "query_id", result.adapter_response.get("query_id"))
                     try:
@@ -734,7 +749,7 @@ class GraphRunnableTask(ConfiguredTask):
         # We set up a context manager here with "task_contextvars" because we
         # need the project_root in runtime_initialize.
         with task_contextvars(project_root=self.config.project_root), self._maybe_span(
-            "dbt invocation"
+            "dbt.invocation"
         ) as invocation_span:
             # Root span for the run. Node and hook spans nest under it because
             # _submit captures context.get_current() while this span is active.
