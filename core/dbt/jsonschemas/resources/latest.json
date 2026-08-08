@@ -1270,6 +1270,12 @@
             }
           ]
         },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "error_if": {
           "type": [
             "string",
@@ -1581,6 +1587,16 @@
             }
           ]
         },
+        "order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -1624,6 +1640,15 @@
               "$ref": "#/definitions/PrimaryKeyConfig"
             }
           ]
+        },
+        "query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "query_tag": {
           "anyOf": [
@@ -1742,6 +1767,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "severity": {
           "anyOf": [
@@ -1962,6 +1996,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "unlogged": {
@@ -3399,6 +3439,12 @@
             }
           ]
         },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "entry_point": {
           "type": [
             "string",
@@ -3673,6 +3719,16 @@
             "null"
           ]
         },
+        "order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "packages": {
           "anyOf": [
             {
@@ -3726,6 +3782,15 @@
               "$ref": "#/definitions/PrimaryKeyConfig"
             }
           ]
+        },
+        "query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "query_tag": {
           "anyOf": [
@@ -3850,6 +3915,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "skip_matched_step": {
           "anyOf": [
@@ -4029,6 +4103,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "type": {
@@ -5498,6 +5578,12 @@
             }
           ]
         },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "event_time": {
           "type": [
             "string",
@@ -5943,6 +6029,16 @@
             }
           ]
         },
+        "order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "packages": {
           "anyOf": [
             {
@@ -6050,6 +6146,15 @@
             "string",
             "null"
           ]
+        },
+        "query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "query_tag": {
           "anyOf": [
@@ -6177,6 +6282,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "skip_matched_step": {
           "anyOf": [
@@ -6385,6 +6499,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "unique_key": {
@@ -7751,6 +7871,12 @@
             }
           ]
         },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "event_time": {
           "type": [
             "string",
@@ -8048,6 +8174,16 @@
             }
           ]
         },
+        "order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -8121,6 +8257,15 @@
               "$ref": "#/definitions/PrimaryKeyConfig"
             }
           ]
+        },
+        "query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "query_tag": {
           "anyOf": [
@@ -8254,6 +8399,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "skip_matched_step": {
           "anyOf": [
@@ -8423,6 +8577,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "unlogged": {
@@ -8933,6 +9093,12 @@
             }
           ]
         },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "event_time": {
           "type": [
             "string",
@@ -9256,6 +9422,16 @@
             }
           ]
         },
+        "order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -9329,6 +9505,15 @@
               "$ref": "#/definitions/PrimaryKeyConfig"
             }
           ]
+        },
+        "query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "query_tag": {
           "anyOf": [
@@ -9462,6 +9647,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "skip_matched_step": {
           "anyOf": [
@@ -9680,6 +9874,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "unique_key": {
@@ -10177,6 +10377,12 @@
             }
           ]
         },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "event_time": {
           "type": [
             "string",
@@ -10471,6 +10677,16 @@
             }
           ]
         },
+        "order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -10514,6 +10730,15 @@
               "$ref": "#/definitions/PrimaryKeyConfig"
             }
           ]
+        },
+        "query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "query_tag": {
           "anyOf": [
@@ -10627,6 +10852,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "skip_matched_step": {
           "anyOf": [
@@ -10807,6 +11041,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "unlogged": {
@@ -11586,6 +11826,12 @@
             }
           ]
         },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "external_volume": {
           "type": [
             "string",
@@ -11839,6 +12085,16 @@
             }
           ]
         },
+        "order_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -11882,6 +12138,15 @@
               "$ref": "#/definitions/PrimaryKeyConfig"
             }
           ]
+        },
+        "query_settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "query_tag": {
           "anyOf": [
@@ -11984,6 +12249,15 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "skip_matched_step": {
           "anyOf": [
@@ -12153,6 +12427,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "unlogged": {
