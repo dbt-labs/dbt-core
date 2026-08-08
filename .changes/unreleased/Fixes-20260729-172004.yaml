@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'ClickHouse: implement constraint_support (check constraints enforced at the model level; not_null/unique/primary_key/foreign_key marked not supported, matching the legacy Python adapter). Fixes a hard panic when a ClickHouse model declares a `constraints` block.'
+time: 2026-07-29T17:20:04.090446-04:00
+custom:
+    author: jecolvin
+    issue: "14651"
+    project: dbt-core

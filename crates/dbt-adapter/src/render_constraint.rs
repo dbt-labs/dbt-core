@@ -124,6 +124,21 @@ pub fn render_model_constraint(
             }
             _ => None,
         },
+        // ClickHouse: `render_raw_model_constraints` already warns via
+        // `warn_constraint_support` before calling this function, using text that says the
+        // constraint "will be ignored" for any NotSupported type. That's only true if this
+        // function actually skips it — otherwise the constraint still gets rendered here and
+        // embedded in the CREATE TABLE column list. PrimaryKey/ForeignKey are safe to still
+        // render as-is even though NotSupported: ClickHouse accepts a bare `primary key (cols)`
+        // item there (it becomes a real, non-unique-enforcing PRIMARY KEY clause) and a bare
+        // `foreign key ... references ...` item there (ClickHouse parses and silently drops
+        // it — a no-op, not an error). But `unique (cols)` in that position is a genuine
+        // SYNTAX_ERROR (verified against a live server) — ClickHouse has no such clause at
+        // all — so it must not be rendered, or the whole CREATE TABLE statement fails.
+        AdapterType::ClickHouse => match constraint.type_ {
+            ConstraintType::Unique => None,
+            _ => Some(rendered),
+        },
         _ => Some(rendered),
     })
 }
@@ -270,6 +285,53 @@ mod tests {
                 None
             ),
             Some(ErrorCode::ConstraintNotEnforced)
+        );
+    }
+
+    fn clickhouse_model_constraint(type_: ConstraintType) -> ModelConstraint {
+        ModelConstraint {
+            type_,
+            expression: None,
+            name: Some("my_constraint".to_string()),
+            to: Some("id".to_string().into()),
+            to_columns: Some(vec!["id".to_string()]),
+            columns: Some(vec!["x".to_string()]),
+            warn_unsupported: None,
+            warn_unenforced: None,
+        }
+    }
+
+    // Regression test: `unique (cols)` in the position ClickHouse embeds model-level
+    // constraints (a bare item in the CREATE TABLE column list) is a real SYNTAX_ERROR,
+    // verified against a live ClickHouse 26.7 server — there is no UNIQUE clause in
+    // ClickHouse at all. Must not be rendered.
+    #[test]
+    fn render_model_constraint_clickhouse_unique_returns_none() {
+        let constraint = clickhouse_model_constraint(ConstraintType::Unique);
+        assert!(render_model_constraint(AdapterType::ClickHouse, constraint).is_none());
+    }
+
+    // `primary key (cols)` in that same position is accepted by ClickHouse and hoisted into
+    // a real `PRIMARY KEY (cols)` clause (confirmed via SHOW CREATE TABLE) — it just doesn't
+    // enforce uniqueness. Valid SQL, so it's fine to still render it.
+    #[test]
+    fn render_model_constraint_clickhouse_primary_key_still_renders() {
+        let constraint = clickhouse_model_constraint(ConstraintType::PrimaryKey);
+        assert_eq!(
+            render_model_constraint(AdapterType::ClickHouse, constraint),
+            Some("constraint my_constraint primary key (x)".to_string())
+        );
+    }
+
+    // `foreign key (cols) references ...` in that position is accepted by ClickHouse's
+    // parser but silently dropped entirely (not even present in SHOW CREATE TABLE) —
+    // confirmed live. A no-op, not an error, so it's fine to still render it.
+    #[test]
+    fn render_model_constraint_clickhouse_foreign_key_still_renders() {
+        let constraint = clickhouse_model_constraint(ConstraintType::ForeignKey);
+        assert_eq!(
+            render_model_constraint(AdapterType::ClickHouse, constraint),
+            Some("constraint my_constraint foreign key (x) references id (id)".to_string())
         );
     }
 }
