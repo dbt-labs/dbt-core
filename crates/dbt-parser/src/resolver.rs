@@ -50,6 +50,7 @@ use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
 use minijinja::constants::CURRENT_PATH;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
@@ -715,6 +716,9 @@ pub async fn resolve_inner(
     let macro_properties = std::mem::take(&mut min_properties.macros);
 
     let mut collected_generic_tests: Vec<GenericTestAsset> = Vec::new();
+    // Paths of emitted generic-test SQL assets, used to disambiguate name collisions
+    // (see generic_test_asset_path). Scoped per package, like collected_generic_tests.
+    let mut seen_generic_test_paths: HashSet<PathBuf> = HashSet::new();
 
     let dbt_tests_dir = arg.io.out_dir.join(DBT_GENERIC_TESTS_DIR_NAME);
     stdfs::create_dir_all(&dbt_tests_dir)?;
@@ -772,6 +776,7 @@ pub async fn resolve_inner(
         &jinja_env,
         &mut collected_generic_tests,
         test_name_truncations,
+        &mut seen_generic_test_paths,
         &mut node_resolver,
     )
     .await?;
@@ -794,6 +799,7 @@ pub async fn resolve_inner(
         &base_ctx,
         &mut collected_generic_tests,
         test_name_truncations,
+        &mut seen_generic_test_paths,
         &mut node_resolver,
     )
     .await?;
@@ -821,6 +827,7 @@ pub async fn resolve_inner(
         &mut node_resolver,
         &mut collected_generic_tests,
         test_name_truncations,
+        &mut seen_generic_test_paths,
         token,
     )
     .await?;
@@ -857,6 +864,7 @@ pub async fn resolve_inner(
         runtime_config.clone(),
         &mut collected_generic_tests,
         test_name_truncations,
+        &mut seen_generic_test_paths,
         &mut node_resolver,
         token,
         jinja_type_checking_event_listener_factory.clone(),

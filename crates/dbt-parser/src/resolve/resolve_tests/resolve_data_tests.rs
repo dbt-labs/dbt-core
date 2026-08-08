@@ -497,13 +497,19 @@ pub async fn resolve_data_tests(
             format!("test.{package_name}.{test_name}")
         };
 
-        // Use test_name (the truncated/file-stem form) as the lookup key, because that is
-        // what the renderer used when it called create_listener — see resolve_model_context.rs
-        // where unique_id = "{package_name}.{model_name}" and model_name = file stem = test_name.
+        // Use the file stem as the lookup key, because that is what the renderer used
+        // when it called create_listener — see resolve_model_context.rs where
+        // unique_id = "{package_name}.{model_name}" and model_name = file stem.
         // Using fqn_name here caused a key miss when the name was truncated, leaving
-        // depends_on.macros empty. (dbt-core#15308)
+        // depends_on.macros empty (dbt-core#15308). The stem usually equals test_name,
+        // but diverges for name-collided generic tests whose file carries a hash suffix.
+        let renderer_name = dbt_asset
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&test_name);
         jinja_type_checking_event_listener_factory
-            .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
+            .update_unique_id(&format!("{package_name}.{renderer_name}"), &unique_id);
         let mut macro_depends_on =
             jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
         filter_core_builtin_test_macro_dependencies(
