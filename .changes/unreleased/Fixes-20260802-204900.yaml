@@ -1,0 +1,9 @@
+kind: Fixes
+body: Emit `ENDPOINT_TYPE` into the DuckDB catalog `ATTACH` statement. `config.duckdb.endpoint_type`
+    was validated by the catalogs.yml v2 schema and then silently discarded, so AWS
+    Glue and Amazon S3 Tables catalogs could not attach.
+time: 2026-08-02T20:49:00.000000+02:00
+custom:
+    author: AndreaBozzo
+    issue: "15725"
+    project: dbt-core
