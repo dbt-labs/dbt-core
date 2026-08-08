@@ -1,0 +1,7 @@
+kind: Fixes
+body: Preserve complete Databricks streaming-table configuration on rerun and omit empty column comments from create SQL.
+time: 2026-07-30T18:52:26+05:30
+custom:
+    author: sd-db
+    issue: "14612"
+    project: dbt-core
