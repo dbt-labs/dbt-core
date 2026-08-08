@@ -116,6 +116,37 @@ fn try_to_int_col(col: &arrow_array::Float64Array) -> bool {
     })
 }
 
+/// Tracks results from a loop over a multi-statement query batch: the
+/// literal last statement's batch (for `AdapterResponse`'s rows_affected /
+/// query_id, which should always reflect what actually ran last), and
+/// separately the last batch that has columns (for the returned
+/// `AgateTable`, when a result is being fetched) — so a trailing no-op
+/// cleanup statement (e.g. `DROP VIEW`) can't clobber a real result that
+/// came earlier in the batch.
+#[derive(Default)]
+struct LastBatchTracker {
+    last: Option<RecordBatch>,
+    last_with_columns: Option<RecordBatch>,
+}
+
+impl LastBatchTracker {
+    fn record(&mut self, batch: RecordBatch, fetch: bool) {
+        if fetch && batch.num_columns() > 0 {
+            self.last_with_columns = Some(batch.clone());
+        }
+        self.last = Some(batch);
+    }
+
+    fn last(&self) -> Option<&RecordBatch> {
+        self.last.as_ref()
+    }
+
+    /// The batch that should feed the returned `AgateTable`.
+    fn into_fetched(self) -> Option<RecordBatch> {
+        self.last_with_columns.or(self.last)
+    }
+}
+
 fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColumn<'_>]) {
     use std::fmt::Write;
 
@@ -1060,9 +1091,9 @@ impl AdapterImpl {
             _ => {}
         }
 
-        let mut last_batch = None;
+        let mut tracker = LastBatchTracker::default();
         for sql in statements {
-            last_batch = Some(execute_query_with_retry(
+            let batch = execute_query_with_retry(
                 engine.clone(),
                 state,
                 conn,
@@ -1072,19 +1103,28 @@ impl AdapterImpl {
                 &options,
                 fetch,
                 token.clone(),
-            )?);
+            )?;
+            tracker.record(batch, fetch);
         }
 
-        let last_batch = last_batch.expect("last_batch should never be None");
-
-        let rows_affected = last_batch.rows_affected(self.adapter_type());
+        let rows_affected = tracker
+            .last()
+            .expect("tracker should have recorded at least one batch")
+            .rows_affected(self.adapter_type());
         let mut response = AdapterResponse::new()
             .with_message(format!("SUCCESS {}", rows_affected))
             .with_code("SUCCESS")
             .with_rows_affected(rows_affected);
-        if let Some(query_id) = last_batch.query_id(self.adapter_type()) {
+        if let Some(query_id) = tracker
+            .last()
+            .and_then(|batch| batch.query_id(self.adapter_type()))
+        {
             response = response.with_query_id(query_id);
         }
+
+        let last_batch = tracker
+            .into_fetched()
+            .expect("tracker should have recorded at least one batch");
 
         // Deduplicate column names to match dbt-core's behavior, which renames
         // duplicate columns to `col_2`, `col_3`, etc.
@@ -6415,6 +6455,57 @@ mod tests {
         let schema = Arc::new(Schema::new(vec![Field::new(name, DataType::Utf8, false)]));
         let array = Arc::new(StringArray::from(values)) as ArrayRef;
         Arc::new(RecordBatch::try_new(schema, vec![array]).unwrap())
+    }
+
+    fn empty_batch() -> RecordBatch {
+        RecordBatch::new_empty(Arc::new(Schema::empty()))
+    }
+
+    #[test]
+    fn last_batch_tracker_prefers_last_batch_with_columns_when_fetching() {
+        // Mirrors a CREATE VIEW-based test macro: create view (no result) ->
+        // select count(*) ... (the real result) -> drop view (no result).
+        let real_result = (*record_batch_with_string_column("failures", vec!["0"])).clone();
+
+        let mut tracker = LastBatchTracker::default();
+        tracker.record(empty_batch(), true);
+        tracker.record(real_result.clone(), true);
+        tracker.record(empty_batch(), true);
+
+        assert_eq!(
+            tracker.last().unwrap().num_columns(),
+            0,
+            "the literal last statement's response must still be used for \
+             AdapterResponse (rows_affected/query_id)"
+        );
+        assert_eq!(
+            tracker.into_fetched().unwrap(),
+            real_result,
+            "the returned table must come from the last statement that \
+             actually had columns, not the trailing no-op cleanup statement"
+        );
+    }
+
+    #[test]
+    fn last_batch_tracker_falls_back_to_last_batch_when_nothing_has_columns() {
+        let mut tracker = LastBatchTracker::default();
+        tracker.record(empty_batch(), true);
+        tracker.record(empty_batch(), true);
+
+        assert_eq!(tracker.into_fetched().unwrap().num_columns(), 0);
+    }
+
+    #[test]
+    fn last_batch_tracker_ignores_columns_when_not_fetching() {
+        // fetch=false: even a batch with columns must not be preferred, to
+        // match execute_inner's pre-existing behavior for non-fetch calls.
+        let with_columns = (*record_batch_with_string_column("id", vec!["1"])).clone();
+
+        let mut tracker = LastBatchTracker::default();
+        tracker.record(with_columns, false);
+        tracker.record(empty_batch(), false);
+
+        assert_eq!(tracker.into_fetched().unwrap().num_columns(), 0);
     }
 
     #[test]
