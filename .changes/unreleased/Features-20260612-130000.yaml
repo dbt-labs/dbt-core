@@ -1,0 +1,7 @@
+kind: Features
+body: 'Add Exasol adapter (Phase 1): connection/auth with TLS and timeout profile options, metadata adapter, agate/seed type conversion (incl. HASHTYPE) and typed SQL literals, reserved-keyword auto-quoting, and the full macro bundle — materializations (table/view/incremental append·merge·delete+insert·microbatch), snapshots (timestamp/check, hard deletes), model contracts and constraints, on_schema_change, grants, persist_docs for tables and views, catalog generation, source-freshness, cross-database utils (dateadd/datediff/last_day/hash/bool_or/listagg/safe_cast/equals/split_part), distribute_by/partition_by/primary_key configs, and interactive dbt init setup'
+time: 2026-06-12T13:00:00.000000-04:00
+custom:
+    author: mikhail-zhadanov
+    issue: ""
+    project: dbt-fusion
