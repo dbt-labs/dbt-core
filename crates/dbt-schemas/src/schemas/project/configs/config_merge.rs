@@ -288,6 +288,9 @@ impl ReplaceIfNone for f64 {}
 
 // dbt_yaml types
 impl<T: Clone> ReplaceIfNone for Spanned<T> {}
+// Free-form YmlValue fields (e.g. ClickHouse dictionary `lifetime`/`range`/`update_lag`)
+// replace wholesale — no deep merge.
+impl ReplaceIfNone for YmlValue {}
 
 // std collections used as replace-if-none fields.
 // BTreeMap<String, YmlValue> (replace-if-none) is distinct from
