@@ -1,0 +1,134 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+  RUST_MIN_STACK: "16777216"
+  RUSTC_WRAPPER: sccache
+
+jobs:
+  test:
+    name: Test workspace (no warehouse)
+    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          key: sa-cli-tests
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+
+      - name: Install Protocol Buffer Compiler
+        run: |
+          if command -v protoc &> /dev/null; then
+            echo "protoc already installed: $(protoc --version)"
+            exit 0
+          fi
+          PB_VERSION="29.4"
+          case "$(uname -m)" in
+            x86_64) PB_ARCH="x86_64" ;;
+            aarch64|arm64) PB_ARCH="aarch_64" ;;
+            *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
+          curl -LsSf $PB_URL -o /tmp/protoc.zip
+          rm -rf /tmp/protoc
+          unzip -o /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> $GITHUB_PATH
+          /tmp/protoc/bin/protoc --version
+          rm /tmp/protoc.zip
+
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run tests (default profile; live warehouse tests excluded)
+        run: cargo nextest run --profile default --workspace
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true
+
+  warehouse-tests:
+    name: Test live warehouse
+    # Live tests need real Snowflake/Redshift credentials, so skip PRs (incl.
+    # forks with no secrets); run on main and manual dispatch.
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
+        with:
+          key: sa-cli-tests
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.12.0"
+
+      - name: Install Protocol Buffer Compiler
+        run: |
+          if command -v protoc &> /dev/null; then
+            echo "protoc already installed: $(protoc --version)"
+            exit 0
+          fi
+          PB_VERSION="29.4"
+          case "$(uname -m)" in
+            x86_64) PB_ARCH="x86_64" ;;
+            aarch64|arm64) PB_ARCH="aarch_64" ;;
+            *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v$PB_VERSION/protoc-$PB_VERSION-linux-$PB_ARCH.zip"
+          curl -LsSf $PB_URL -o /tmp/protoc.zip
+          rm -rf /tmp/protoc
+          unzip -o /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> $GITHUB_PATH
+          /tmp/protoc/bin/protoc --version
+          rm /tmp/protoc.zip
+
+      - name: Provision ~/.dbt/profiles.yml
+        id: creds
+        env:
+          DBT_FUSION_TESTS_PROFILE: ${{ secrets.DBT_FUSION_TESTS_PROFILE }}
+        run: |
+          if [ -z "$DBT_FUSION_TESTS_PROFILE" ]; then
+            echo "::warning::DBT_FUSION_TESTS_PROFILE secret not set; skipping live warehouse tests"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p ~/.dbt
+          printf '%s' "$DBT_FUSION_TESTS_PROFILE" > ~/.dbt/profiles.yml
+
+      - name: Install cargo-nextest
+        if: steps.creds.outputs.skip != 'true'
+        run: cargo install cargo-nextest --locked
+
+      - name: Run live warehouse tests (warehouse profile)
+        if: steps.creds.outputs.skip != 'true'
+        run: cargo nextest run --profile warehouse --workspace
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true

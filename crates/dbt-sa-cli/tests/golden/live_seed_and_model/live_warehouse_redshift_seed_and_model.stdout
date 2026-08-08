@@ -1,0 +1,10 @@
+dbt-fusion 
+   Loading profiles.yml
+   Parsing models/m1.sql
+   Parsing models/m2.sql
+   Running ../scratch/target/run/live_seed_and_model/seeds/counter_table.sql
+ Succeeded [duration] seed  fusion_tests_schema__replaced.counter_table (table)
+==================== Execution Summary =====================
+Finished 'seed' successfully for target 'redshift' [duration]
+Processed: 1 seed
+Summary: 1 total | 1 success

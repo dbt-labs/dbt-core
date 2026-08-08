@@ -1,0 +1,11 @@
+dbt-fusion 
+   Loading profiles.yml
+   Parsing models/m1.sql
+   Parsing models/m2.sql
+ Rendering models/m2.sql
+   Running models/m2.sql
+ Succeeded [duration] model main.m2 (view)
+==================== Execution Summary =====================
+Finished 'run' successfully for target 'dev' [duration]
+Processed: 1 model
+Summary: 1 total | 1 success
