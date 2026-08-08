@@ -15,6 +15,7 @@ use std::{thread, time::Duration};
 mod adapter_engine;
 pub use adapter_engine::AdapterEngine;
 pub use adapter_engine::Options;
+pub(crate) use adapter_engine::bigquery_job_labels_option;
 
 pub mod query_comment;
 pub mod retry;
