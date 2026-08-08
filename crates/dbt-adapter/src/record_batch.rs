@@ -79,7 +79,19 @@ impl RecordBatchExt for RecordBatch {
         match adapter_type {
             AdapterType::Snowflake => meta.get("SNOWFLAKE_QUERY_ID").cloned(),
             AdapterType::Bigquery => meta.get("BIGQUERY:query_id").cloned(),
-            AdapterType::Databricks => meta.get("DATABRICKS_QUERY_ID").cloned(),
+            AdapterType::Databricks => {
+                [
+                    "DATABRICKS_QUERY_ID",
+                    "databricks_query_id",
+                    "databricks.query_id",
+                    "adbc.databricks.query_id",
+                    "adbc.statement.id",
+                    "statement_id",
+                    "query_id",
+                ]
+                .iter()
+                .find_map(|key| meta.get(*key).cloned())
+            }
             _ => None,
         }
     }
