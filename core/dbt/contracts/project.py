@@ -358,6 +358,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
+    snowflake_projects_otel: Optional[bool] = None
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
