@@ -1,0 +1,9 @@
+kind: Fixes
+body: 'Fix the `@` graph operator (and the equivalent `childrens_parents` YAML selector)
+    returning an empty set when applied to a leaf node. It now correctly returns the
+    node together with its ancestors.'
+time: 2026-07-16T09:35:58.694328882-07:00
+custom:
+    author: AndreaBozzo
+    issue: "15280"
+    project: dbt-core

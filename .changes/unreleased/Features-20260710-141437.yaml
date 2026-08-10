@@ -1,0 +1,7 @@
+kind: Features
+body: Add --infer-schemas, --skip-type-checking, and --show-sources flags for catalog-free binding to bind SQL without introspection.
+time: 2026-07-10T14:14:37.991662-07:00
+custom:
+    author: maxmalkin
+    issue: ""
+    project: fusion

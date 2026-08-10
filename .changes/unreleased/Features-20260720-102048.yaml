@@ -1,0 +1,7 @@
+kind: Features
+body: Support dbt node selection (--select/--exclude/--selector) for lint and format in both symbolic and rendered render modes
+time: 2026-07-20T10:20:48.620945163-07:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

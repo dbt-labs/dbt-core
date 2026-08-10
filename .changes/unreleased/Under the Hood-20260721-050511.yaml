@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Migrate Redshift dbt-auth to the standard IR/pipeline configuration architecture used by other adapters
+time: 2026-07-21T05:05:11.914974-07:00
+custom:
+    author: VersusFacit
+    issue: ""
+    project: fusion

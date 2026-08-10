@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: 'dbt State: port persist_docs semantic extra'
+time: 2026-07-31T13:37:57.412836+12:00
+custom:
+    author: erindru
+    issue: ""
+    project: fusion

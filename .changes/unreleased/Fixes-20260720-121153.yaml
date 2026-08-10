@@ -1,0 +1,7 @@
+kind: Fixes
+body: Database (and other execution-time) errors during test execution now always surface as a run error, independent of the test's severity config; severity only governs successfully-returned test results, matching dbt Core
+time: 2026-07-20T12:11:53.620701551-07:00
+custom:
+    author: akbog
+    issue: "15514"
+    project: dbt-core

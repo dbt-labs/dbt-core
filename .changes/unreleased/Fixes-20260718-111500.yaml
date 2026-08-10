@@ -1,0 +1,7 @@
+kind: Fixes
+body: Align inherited +tags order with dbt-core (parent then child, no alphabetical sort)
+time: 2026-07-18T11:15:00.000000+05:30
+custom:
+    author: benhurstephen
+    issue: "15590"
+    project: dbt-core

@@ -1,0 +1,7 @@
+kind: Features
+body: When a Snowflake metadata warehouse is configured, dbt State now fetches table last-modified freshness metadata with one query per schema in parallel (bounded by the configured thread count), instead of running the per-schema dumps sequentially
+time: 2026-07-24T14:05:24.880937-07:00
+custom:
+    author: ""
+    issue: "11908"
+    project: fusion

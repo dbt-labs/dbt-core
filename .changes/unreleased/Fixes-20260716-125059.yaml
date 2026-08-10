@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'dbt retry now runs exactly the nodes recorded as retryable in run_results.json, matching dbt-core, instead of re-expanding that selection with eager indirect selection. It no longer pulls in tests the original command never ran: data tests attached to a retried model when retrying dbt run, already-passed unit tests, or tests excluded by the original --indirect-selection / --exclude (which could also turn a passing retry into a failure when the excluded test had a second, unbuilt parent).'
+time: 2026-07-16T12:50:59.75798753-07:00
+custom:
+    author: lottaquestions
+    issue: "14536"
+    project: fusion

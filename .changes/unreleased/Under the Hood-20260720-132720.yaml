@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Centralize BigQuery unit-test cast check in reusable TypeOps method
+time: 2026-07-20T13:27:20.43721+05:30
+custom:
+    author: ragesh-g
+    issue: ""
+    project: fusion

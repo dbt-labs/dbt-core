@@ -1,0 +1,7 @@
+kind: Fixes
+body: Retire the last unrendered-enhanced key comparisons in state:modified (in function nodes)
+time: 2026-07-13T22:54:31.164966-07:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

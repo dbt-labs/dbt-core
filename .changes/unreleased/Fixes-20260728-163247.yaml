@@ -1,0 +1,7 @@
+kind: Fixes
+body: (fix adapters/databricks) don't treat empty tokens as PATs
+time: 2026-07-28T16:32:47.395594361-07:00
+custom:
+    author: xuliangs
+    issue: ""
+    project: dbt-core

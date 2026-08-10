@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix macro nodes always having empty depends_on.macros in manifest
+time: 2026-07-22T14:53:35.249435-06:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

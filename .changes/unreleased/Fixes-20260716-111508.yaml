@@ -1,0 +1,7 @@
+kind: Fixes
+body: Count failed unit tests correctly in interactive progress output
+time: 2026-07-16T11:15:08.811914-04:00
+custom:
+    author: mach-kernel
+    issue: "14471"
+    project: fusion

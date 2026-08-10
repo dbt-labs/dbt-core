@@ -1,0 +1,7 @@
+kind: Fixes
+body: Render a source's loaded_at_query through Jinja during dbt State prefetch so macros (and {{ this }}) resolve before the freshness query reaches the warehouse
+time: 2026-07-23T13:51:05.38273-07:00
+custom:
+    author: itsannbat
+    issue: "15499"
+    project: dbt-core

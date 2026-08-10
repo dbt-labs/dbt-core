@@ -1,0 +1,7 @@
+kind: Fixes
+body: Skip static analysis for models with a custom materialization.
+time: 2026-07-18T11:11:34.313604-07:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

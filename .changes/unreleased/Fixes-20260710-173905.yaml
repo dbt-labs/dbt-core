@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix config precedence bug where +schema: null or +database: null in dbt_project.yml incorrectly overrode schema/database values set in schema.yml properties files'
+time: 2026-07-10T17:39:05.091333-06:00
+custom:
+    author: aiguofer
+    issue: ""
+    project: fusion

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Use dispatch-based custom-materialization detection in the run cache (model execution type and parse-failure dependency extraction), so models whose built-in materialization is shadowed by a user-defined macro are consistently treated as custom.
+time: 2026-07-29T08:59:03.736710118-07:00
+custom:
+    author: lottaquestions
+    issue: "14486"
+    project: fusion

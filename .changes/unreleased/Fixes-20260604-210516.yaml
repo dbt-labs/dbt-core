@@ -1,0 +1,7 @@
+kind: Fixes
+body: Always show a fallback line in the Test Failures summary for failed tests, even when no diff table or stored failures relation is available
+time: 2026-06-04T21:05:16.414327-07:00
+custom:
+    author: eliasdefaria
+    issue: ""
+    project: dbt-fusion

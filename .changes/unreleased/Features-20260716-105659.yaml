@@ -1,0 +1,7 @@
+kind: Features
+body: Add the dbt.import_ctes (DBT01) lint rule, requiring every ref()/source() to be imported through a top-level CTE
+time: 2026-07-16T10:56:59.820295769-07:00
+custom:
+    author: zhong
+    issue: "15309"
+    project: fusion

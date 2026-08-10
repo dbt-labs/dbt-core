@@ -1,0 +1,7 @@
+kind: Fixes
+body: Generic tests with auto-truncated names now correctly set config.alias and unrendered_config.alias in the manifest, matching dbt-core behavior
+time: 2026-07-09T10:47:45.271848-06:00
+custom:
+    author: aiguofer
+    issue: "11634"
+    project: fusion

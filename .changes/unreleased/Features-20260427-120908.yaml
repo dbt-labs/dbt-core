@@ -1,0 +1,7 @@
+kind: Features
+body: Provide option of using default profile.yml during init
+time: 2026-04-27T12:09:08.473190894-07:00
+custom:
+    author: lottaquestions
+    issue: "465"
+    project: dbt-fusion

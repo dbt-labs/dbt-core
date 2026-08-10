@@ -1,0 +1,7 @@
+kind: Fixes
+body: '[BigQuery] Drop Storage API permission requirement when listing schemas'
+time: 2026-07-13T11:14:10.783676-04:00
+custom:
+    author: ajhlee-dbt
+    issue: "14631"
+    project: dbt-core

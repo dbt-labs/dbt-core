@@ -1,0 +1,7 @@
+kind: Fixes
+body: Render {{ this }} as the physical relation instead of a self-referential CTE for ephemeral models, matching dbt-core
+time: 2026-07-20T21:24:10.208734835-07:00
+custom:
+    author: ""
+    issue: "13961"
+    project: dbt-core

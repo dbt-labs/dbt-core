@@ -1,0 +1,7 @@
+kind: Fixes
+body: BigQuery driver used to crash whenever the resulting dataset contained INT64 pseudocolumns.
+time: 2026-07-21T15:41:44.779047+02:00
+custom:
+    author: serramatutu
+    issue: "15464"
+    project: dbt-core

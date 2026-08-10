@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Complete the move from local LiteLLM to native provider routing with privacy-safe telemetry.
+time: 2026-07-18T06:36:31.21365482Z
+custom:
+    author: ""
+    issue: ""
+    project: fusion

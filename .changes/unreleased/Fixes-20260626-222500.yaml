@@ -1,0 +1,7 @@
+kind: Fixes
+body: on-run-end hooks can now call datetime methods such as .replace(tzinfo=...) and .strftime(...) on result.timing[*].started_at and .completed_at fields.
+time: 2026-06-26T22:25:00.000000+00:00
+custom:
+    author: mishamsk
+    issue: "11531"
+    project: fusion

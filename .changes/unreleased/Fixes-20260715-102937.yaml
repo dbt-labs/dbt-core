@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix dbt State schema-level freshness dump returning empty for Snowflake schemas with lowercase names in dbt_project.yml, causing an unnecessary fallback to per-relation freshness queries.
+time: 2026-07-15T10:29:37.645431-07:00
+custom:
+    author: ""
+    issue: "15304"
+    project: fusion

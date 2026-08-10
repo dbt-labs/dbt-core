@@ -1,0 +1,7 @@
+kind: Features
+body: Support pseudocolumns (e.g. BigQuery's _FILE_NAME) in unit tests
+time: 2026-07-14T14:44:48.493411-07:00
+custom:
+  author: katieclaiborne-duet
+  issue: ""
+  project: fusion

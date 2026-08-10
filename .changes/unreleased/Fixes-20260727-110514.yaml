@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix unit test overrides.macros.run_started_at raising unknown method strftime errors
+time: 2026-07-27T11:05:14.225525-04:00
+custom:
+    author: mach-kernel
+    issue: "12271"
+    project: fusion

@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add a run-cache unit test pinning that a model materialized as a built-in name (e.g. table) whose materialization macro is shadowed by a user-defined macro is classified as a custom (DBT_CUSTOM) execution type.
+time: 2026-07-29T17:44:31.608135151-07:00
+custom:
+    author: lottaquestions
+    issue: ""
+    project: fusion

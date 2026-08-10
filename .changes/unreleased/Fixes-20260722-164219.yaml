@@ -1,0 +1,7 @@
+kind: Fixes
+body: Preserve default schema on dbt State enriched SQL requests, including data tests without target tables.
+time: 2026-07-22T16:42:19.14326-05:00
+custom:
+    author: kczimm
+    issue: "12211"
+    project: fusion

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix source table-level config incorrectly overriding root project overlay for dependency package sources
+time: 2026-07-22T11:36:23.372706-06:00
+custom:
+    author: aiguofer
+    issue: ""
+    project: fusion

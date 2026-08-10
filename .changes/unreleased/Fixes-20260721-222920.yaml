@@ -1,0 +1,7 @@
+kind: Fixes
+body: Support ConstraintNotEnforced and ConstraintNotSupported in warn_error_options, and emit these warnings when an adapter does not enforce or support a model/column constraint
+time: 2026-07-21T22:29:20.885105112-07:00
+custom:
+    author: akbog
+    issue: "15517"
+    project: fusion
