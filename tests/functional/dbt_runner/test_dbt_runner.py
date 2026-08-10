@@ -2,11 +2,7 @@ import os
 from unittest import mock
 
 import pytest
-from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 
 from dbt.adapters.factory import FACTORY, reset_adapters
 from dbt.cli.exceptions import DbtUsageException
@@ -199,27 +195,23 @@ class TestDbtRunnerHooks:
         dbt.invoke(["run", "--select", "models"])
         assert get_node_info() == {}
 
-    def test_dbt_runner_spans(self, project):
-        tracer_provider = TracerProvider(resource=Resource.get_empty())
-        span_exporter = InMemorySpanExporter()
-        trace.set_tracer_provider(tracer_provider)
-        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+    def test_dbt_runner_spans(self, project, otel_spans):
         dbt = dbtRunner()
         dbt.invoke(["--snowflake-projects-otel", "run", "--select", "models", "model2"])
         assert get_node_info() == {}
-        exported_spans = span_exporter.get_finished_spans()
-        assert len(exported_spans) == 12
+        exported_spans = otel_spans.get_finished_spans()
         assert exported_spans[0].instrumentation_scope.name == "dbt.runner"
         span_names = [span.name for span in exported_spans]
         span_names.sort()
+        # `run_hooks` is called four times per model -- pre and post, each for the
+        # inside- and outside-transaction phase -- but filters by `transaction`
+        # internally, so only the calls that actually run a hook get a span. Both
+        # hooks on `models` run; only model2's pre-hook does, since it fails.
         assert span_names == [
-            "dbt invocation",
-            "hook_span",
-            "hook_span",
-            "hook_span",
-            "hook_span",
-            "hook_span",
-            "hook_span",
+            "dbt.invocation",
+            "hooks.post_hook.inside_transaction",
+            "hooks.pre_hook.inside_transaction",
+            "hooks.pre_hook.inside_transaction",
             "metadata.setup",
             "model.test.model2",
             "model.test.models",
@@ -237,7 +229,7 @@ class TestDbtRunnerHooks:
                 models_span = span
             if span.name == "metadata.setup":
                 metadata_span = span
-            if span.name == "dbt invocation":
+            if span.name == "dbt.invocation":
                 invocation_span = span
 
         assert models_span is not None
@@ -273,20 +265,41 @@ class TestDbtRunnerHooks:
         assert "identifier" in models_span.attributes
         assert "relative_path" in models_span.attributes
 
+        # Hook spans carry enough context to attribute them to a node and phase.
+        hook_spans = [s for s in exported_spans if s.name.startswith("hooks.")]
+        assert {s.attributes["unique_id"] for s in hook_spans} == {
+            "model.test.models",
+            "model.test.model2",
+        }
+        for hook_span in hook_spans:
+            assert hook_span.attributes["inside_transaction"] is True
+            assert hook_span.attributes["hook_count"] >= 1
+
+        # Both of `models`' hooks run, in separate phases, and both succeed.
+        models_hooks = [s for s in hook_spans if s.attributes["unique_id"] == "model.test.models"]
+        assert sorted(s.name for s in models_hooks) == [
+            "hooks.post_hook.inside_transaction",
+            "hooks.pre_hook.inside_transaction",
+        ]
+        assert all(s.status.status_code == StatusCode.OK for s in models_hooks)
+
+        # model2's pre-hook raises, so that span records the failure and the
+        # post-hook never runs.
+        model2_hooks = [s for s in hook_spans if s.attributes["unique_id"] == "model.test.model2"]
+        assert [s.name for s in model2_hooks] == ["hooks.pre_hook.inside_transaction"]
+        assert model2_hooks[0].attributes["hook_count"] == 2
+        assert model2_hooks[0].status.status_code == StatusCode.ERROR
+
         assert len(model2_span.links) == 1
         assert model2_span.links[0].attributes["upstream.name"] == "model.test.models"
         assert model2_span.links[0].context.span_id == models_span.context.span_id
         assert model2_span.links[0].context.trace_id == models_span.context.trace_id
 
-    def test_dbt_runner_no_spans_when_flag_off(self, project):
+    def test_dbt_runner_no_spans_when_flag_off(self, project, otel_spans):
         # With the default (--no-snowflake-projects-otel), no spans are emitted.
-        tracer_provider = TracerProvider(resource=Resource.get_empty())
-        span_exporter = InMemorySpanExporter()
-        trace.set_tracer_provider(tracer_provider)
-        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
         dbt = dbtRunner()
         dbt.invoke(["run", "--select", "models", "model2"])
-        assert len(span_exporter.get_finished_spans()) == 0
+        assert len(otel_spans.get_finished_spans()) == 0
 
 
 class TestDbtRunnerUnitTestSpans:
@@ -313,18 +326,14 @@ unit_tests:
 """,
         }
 
-    def test_build_with_unit_tests_shares_one_trace(self, project):
-        tracer_provider = TracerProvider(resource=Resource.get_empty())
-        span_exporter = InMemorySpanExporter()
-        trace.set_tracer_provider(tracer_provider)
-        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(span_exporter))
+    def test_build_with_unit_tests_shares_one_trace(self, project, otel_spans):
         dbt = dbtRunner()
         dbt.invoke(["--snowflake-projects-otel", "build"])
 
-        exported_spans = span_exporter.get_finished_spans()
+        exported_spans = otel_spans.get_finished_spans()
         by_name = {span.name: span for span in exported_spans}
 
-        invocation_span = by_name["dbt invocation"]
+        invocation_span = by_name["dbt.invocation"]
         model_span = by_name["model.test.my_model"]
         unit_test_span = by_name["unit_test.test.my_model.test_my_model"]
 
