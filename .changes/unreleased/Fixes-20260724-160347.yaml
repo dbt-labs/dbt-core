@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix BigQuery snapshot `ALTER TABLE ... ADD COLUMN` to include the database qualifier
-time: 2026-07-24T16:03:47.040366+05:30
-custom:
-    author: ragesh-g
-    issue: "15618"
-    project: fusion

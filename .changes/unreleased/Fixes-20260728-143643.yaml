@@ -1,7 +1,0 @@
-kind: Fixes
-body: Skip static analysis for custom materializations that shadow a built-in name (e.g. table, incremental), matching the existing behavior for novel-named custom materializations. Fixes malformed SQL when such a materialization guards graph.nodes introspection behind {% if execute %}.
-time: 2026-07-28T14:36:43.14487449-07:00
-custom:
-    author: lottaquestions
-    issue: "14486"
-    project: fusion

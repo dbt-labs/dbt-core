@@ -1,7 +1,0 @@
-kind: Fixes
-body: Normalize deprecation_date to a timezone-aware timestamp in manifest.json so dbt Core consumers can parse it without a TypeError
-time: 2026-07-21T23:48:46.876235031-07:00
-custom:
-    author: akbog
-    issue: "14563"
-    project: fusion

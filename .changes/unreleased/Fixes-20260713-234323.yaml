@@ -1,7 +1,0 @@
-kind: Fixes
-body: (adapters/redshift) relation cache tracks relations' dependencies; bring the view materialization in sync with v1
-time: 2026-07-13T23:43:23.680156721-07:00
-custom:
-    author: xuliangs
-    issue: "15467"
-    project: dbt-core

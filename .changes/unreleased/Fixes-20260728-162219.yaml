@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Databricks: detect a changed view definition so that view_update_via_alter runs ALTER VIEW ... AS before COMMENT ON COLUMN when a new column is added'
-time: 2026-07-28T16:22:19.213987-07:00
-custom:
-    author: ""
-    issue: "15583"
-    project: dbt-core

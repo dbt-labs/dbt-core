@@ -1,7 +1,0 @@
-kind: Features
-body: Allow continue running children on parent error
-time: 2026-05-03T22:01:44.961307+05:30
-custom:
-    author: ash2shukla
-    issue: "9850"
-    project: dbt-fusion

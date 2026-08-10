@@ -1,7 +1,0 @@
-kind: Fixes
-body: Keep dbt State initialization available when schema metadata prefetch fails by caching unknown freshness for the affected schema group.
-time: 2026-07-21T13:12:12.882134-05:00
-custom:
-    author: kczimm
-    issue: "12109"
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Exclude the Fusion-only `static_analysis` config from `state:modified` comparisons for sources, snapshots, functions, and analyses, matching dbt-core (which has no such field)
-time: 2026-07-28T17:53:16.120112371-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

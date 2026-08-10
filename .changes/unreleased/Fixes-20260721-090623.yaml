@@ -1,7 +1,0 @@
-kind: Fixes
-body: Prefer DBT_ENGINE_* environment variables over their legacy DBT_* aliases when both are set
-time: 2026-07-21T09:06:23.215433589-07:00
-custom:
-    author: mishamsk
-    issue: "15592"
-    project: fusion

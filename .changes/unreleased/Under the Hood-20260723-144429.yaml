@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Replace per-struct helper functions in config DefaultTo impls with a DefaultTo trait and ReplaceIfNone marker, eliminating default_hooks, default_quoting, default_docs, default_meta_and_tags, default_classifiers, default_packages, default_column_types, and default_to_grants helpers
-time: 2026-07-23T14:44:29.758343-06:00
-custom:
-    author: ""
-    issue: ""
-    project: internal

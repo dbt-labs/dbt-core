@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Parse the DBT_ENGINE_USE_V2_PARSER environment variable as a recognized no-op
-time: 2026-07-13T10:41:56.669997-07:00
-custom:
-    author: eliasdefaria
-    issue: ""
-    project: fusion

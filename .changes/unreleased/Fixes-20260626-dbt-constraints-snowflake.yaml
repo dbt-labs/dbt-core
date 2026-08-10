@@ -1,7 +1,0 @@
-kind: Fixes
-body: Preserve lowercase Snowflake SHOW and DESCRIBE result column names so dbt_constraints can access run_query columns and rows.
-time: 2026-06-26T00:00:00.000000-05:00
-custom:
-    author: ""
-    issue: "11529"
-    project: fusion
