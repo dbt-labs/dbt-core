@@ -1,8 +1,0 @@
-kind: Features
-body: Report the dbt invocation ID (and dbt platform run ID when present) with dbt
-  State telemetry so runs can be correlated end to end
-time: 2026-07-23T12:10:00.315871-07:00
-custom:
-  author: colin-rogers-dbt
-  issue: ""
-  project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Support Redshift statement cancellation. Now pressing Ctrl-C during a dbt run will abort the statements server-side and early exit.
-time: 2026-07-15T17:07:51.293755-03:00
-custom:
-    author: serramatutu
-    issue: "15494"
-    project: dbt-core

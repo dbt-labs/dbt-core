@@ -1,7 +1,0 @@
-kind: Fixes
-body: Windows install script no longer overwrites an existing PowerShell $PROFILE with an empty file when setting the dbt alias
-time: 2026-07-20T11:40:30.671428936-07:00
-custom:
-    author: akbog
-    issue: "14012"
-    project: fusion

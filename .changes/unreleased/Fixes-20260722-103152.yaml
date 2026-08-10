@@ -1,7 +1,0 @@
-kind: Fixes
-body: Preserve cached dbt State data test warning outcomes when replaying reused test results.
-time: 2026-07-22T10:31:52.555149-05:00
-custom:
-    author: kczimm
-    issue: "12162"
-    project: fusion

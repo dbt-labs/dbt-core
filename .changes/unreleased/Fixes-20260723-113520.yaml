@@ -1,7 +1,0 @@
-kind: Fixes
-body: Submit standard incremental models that use a custom incremental_strategy macro to dbt State as DBT_CUSTOM instead of warning and forfeiting caching
-time: 2026-07-23T11:35:20.485614-07:00
-custom:
-    author: itsannbat
-    issue: "#15576"
-    project: fusion

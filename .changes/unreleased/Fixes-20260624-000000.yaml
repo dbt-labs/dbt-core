@@ -1,7 +1,0 @@
-kind: Fixes
-body: "model.batch.event_time_start and model.batch.event_time_end are now datetime objects in Jinja context, enabling .strftime() and other datetime methods to work as in dbt Core"
-time: 2026-06-24T00:00:00Z
-custom:
-    author: mishamsk
-    issue: "14636"
-    project: fusion

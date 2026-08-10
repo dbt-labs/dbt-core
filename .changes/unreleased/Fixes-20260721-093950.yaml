@@ -1,7 +1,0 @@
-kind: Fixes
-body: Always emit the full set of per-node keys in run_results.json (including `failures` as null for skipped nodes), matching dbt Core and fixing downstream consumers such as the dbt-artifacts package
-time: 2026-07-21T09:39:50.519323041-07:00
-custom:
-    author: akbog
-    issue: "14554"
-    project: dbt-fusion

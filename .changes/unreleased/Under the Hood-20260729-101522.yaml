@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Standardize listify-newtype serialization by generating Serialize/Deserialize impls via macro instead of per-field serde attributes
-time: 2026-07-29T10:15:22.982895-06:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Restore write-barrier consumption by method name only in Time Machine semantic replay; SQL content validation happens downstream via the existing sanitizer-aware check, avoiding false-positive "no recorded event" failures for writes with legitimate dynamic content (e.g. audit-log timestamps)
-time: 2026-07-28T18:05:40.286713508-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

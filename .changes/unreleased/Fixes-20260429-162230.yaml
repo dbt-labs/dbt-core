@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fixed file-system reserved characters in FQNs from being included in paths by replacing them with double underscores.
-time: 2026-04-29T16:22:30.78345-07:00
-custom:
-    author: '@tanukifk'
-    issue: "1217"
-    project: dbt-fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Clear stale dbt State final metadata after successful no-confirmation executions so downstream misses use the planned prefetch path, including BigQuery schema prefetch.
-time: 2026-07-17T18:53:08.367708-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: fusion

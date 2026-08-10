@@ -1,7 +1,0 @@
-kind: Features
-body: 'dbt State: speculatively submit models, snapshots, and data tests while the dependency last-modified prefetch is still in flight, so nodes no longer block on the full prefetch before a cache decision'
-time: 2026-07-22T15:34:44.076821-07:00
-custom:
-    author: izeigerman
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Make dbt State disable itself and continue when accounts are disabled or locked, while keeping user-actionable auth errors fatal.
-time: 2026-07-01T13:27:41.941377-05:00
-custom:
-    author: kczimm
-    issue: "11087"
-    project: fusion

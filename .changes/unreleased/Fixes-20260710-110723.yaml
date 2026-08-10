@@ -1,7 +1,0 @@
-kind: Fixes
-body: Accept Core manifest value shapes.
-time: 2026-07-10T11:07:23.294518-04:00
-custom:
-    author: mach-kernel
-    issue: 15169 14570
-    project: dbt-core

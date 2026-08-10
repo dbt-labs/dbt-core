@@ -1,7 +1,0 @@
-kind: Features
-body: Support overloaded UDFs via overrides block in function YAML
-time: 2026-06-03T14:30:00.000000000-07:00
-custom:
-    author: aahel
-    issue: "10802"
-    project: dbt-fusion

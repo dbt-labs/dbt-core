@@ -1,7 +1,0 @@
-kind: Fixes
-body: Force dbt State cache misses for BigQuery external table sources whose metadata timestamps do not reflect backing data changes.
-time: 2026-07-08T11:30:07.523334-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: fusion
