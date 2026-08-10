@@ -4,7 +4,10 @@ import dbt.deprecations as deprecations
 from dbt.events import ALL_EVENT_NAMES
 from dbt.events.types import DeprecationsSummary, ProjectFlagsMovedDeprecation
 from dbt_common.events.event_catcher import EventCatcher
-from dbt_common.events.event_manager_client import add_callback_to_manager, get_event_manager
+from dbt_common.events.event_manager_client import (
+    add_callback_to_manager,
+    get_event_manager,
+)
 from dbt_common.events.types import Note
 from dbt_common.exceptions import EventCompilationError
 from dbt_common.helper_types import WarnErrorOptionsV2
