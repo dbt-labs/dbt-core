@@ -40,6 +40,7 @@ pub(crate) struct TestModelConfig {
     /// definition.
     pub query: Option<String>,
     pub relation_comment: Option<String>,
+    pub raw_tags: Option<IndexMap<String, YmlValue>>,
     pub tags: IndexMap<String, String>,
     pub tbl_properties: IndexMap<String, String>,
     pub table_format: Option<String>,
@@ -105,12 +106,12 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
             cron: cfg.cron,
             time_zone_value: cfg.time_zone,
         })),
-        databricks_tags: Some(
+        databricks_tags: Some(cfg.raw_tags.unwrap_or_else(|| {
             cfg.tags
                 .into_iter()
                 .map(|(k, v)| (k, YmlValue::from(v)))
-                .collect(),
-        ),
+                .collect()
+        })),
         ..Default::default()
     };
 
@@ -182,4 +183,24 @@ pub(crate) fn run_test_cases(
     test_cases: Vec<test_helpers::TestCase<DatabricksRelationMetadata, TestModelConfig>>,
 ) {
     test_helpers::run_test_cases(test_cases, create_mock_dbt_model)
+}
+
+pub(crate) fn expected_tbl_properties<K, V>(
+    pipeline_id: &str,
+    custom_properties: impl IntoIterator<Item = (K, V)>,
+) -> IndexMap<String, String>
+where
+    K: Into<String>,
+    V: Into<String>,
+{
+    let mut properties = IndexMap::from_iter([
+        ("delta.enableRowTracking".to_string(), "true".to_string()),
+        ("pipelines.pipelineId".to_string(), pipeline_id.to_string()),
+    ]);
+    properties.extend(
+        custom_properties
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into())),
+    );
+    properties
 }

@@ -14,15 +14,14 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
     // - liquid clustering
-    // - relation tags
     // - query
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 6] = [
         // Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::PartitionByLoader),
         // Box::new(components::QueryLoader),
         Box::new(components::RefreshLoader),
-        // Box::new(components::RelationTagsLoader),
+        Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::ColumnMasksLoader),
     ];
@@ -39,7 +38,7 @@ mod tests {
     };
     use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
-        test_helpers::{TestModelConfig, run_test_cases},
+        test_helpers::{TestModelConfig, expected_tbl_properties, run_test_cases},
     };
     use crate::relation::test_helpers::TestCase;
     use indexmap::IndexMap;
@@ -84,10 +83,10 @@ mod tests {
                             components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
-                                    IndexMap::from_iter([(
-                                        "custom.key".to_string(),
-                                        "new".to_string(),
-                                    )]),
+                                    expected_tbl_properties(
+                                        "my_old_pipeline",
+                                        [("custom.key", "new")],
+                                    ),
                                 ),
                             ),
                         ),
@@ -139,7 +138,10 @@ mod tests {
                 desired_state: TestModelConfig {
                     cron: Some("*/60 * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
-                    tags: IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
+                    tags: IndexMap::from_iter([
+                        ("z_tag".to_string(), "first".to_string()),
+                        ("a_tag".to_string(), "second".to_string()),
+                    ]),
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
@@ -154,13 +156,17 @@ mod tests {
                                 ),
                             ),
                         ),
-                        // TODO: re-add tags
-                        // (
-                        //     components::RelationTagsLoader.type_name(),
-                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new_component_type_erased(
-                        //         IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
-                        //     )),
-                        // ),
+                        (
+                            components::RelationTagsLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::RelationTagsLoader::new_component_type_erased(
+                                    IndexMap::from_iter([
+                                        ("z_tag".to_string(), "first".to_string()),
+                                        ("a_tag".to_string(), "second".to_string()),
+                                    ]),
+                                ),
+                            ),
+                        ),
                     ],
                     requires_full_refresh,
                 ),
@@ -176,6 +182,16 @@ mod tests {
         True
     </is_altered>
 </refresh>
+<tags>
+    <set_tags>
+        <z_tag>
+            first
+        </z_tag>
+        <a_tag>
+            second
+        </a_tag>
+    </set_tags>
+</tags>
                     ",
                 requires_full_refresh: false,
             },

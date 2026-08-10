@@ -149,8 +149,12 @@ pub struct ProjectModelConfig {
     pub database: Omissible<Option<String>>,
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
-    #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    #[serde(
+        default,
+        rename = "+databricks_tags",
+        deserialize_with = "super::databricks::deserialize_databricks_tags"
+    )]
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+submission_method")]
     pub submission_method: Option<String>,
     #[serde(rename = "+job_cluster_config")]
