@@ -230,6 +230,7 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # Swatinem/rust-cache@v2.9.1
         with:
           key: ${{ matrix.target }}
+          cache-bin: "false"
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # mozilla-actions/sccache-action@v0.0.9
