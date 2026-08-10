@@ -1,0 +1,7 @@
+kind: Fixes
+body: Defer semantic model relations to production when only the semantic model's YAML changed but its underlying model was not rebuilt
+time: 2026-07-31T12:17:50.584255-06:00
+custom:
+    author: aiguofer
+    issue: "15640"
+    project: fusion

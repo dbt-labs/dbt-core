@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix dbt State clearing a table's cached last-modified epoch after its own submit decision (even when reused/skipped), which caused a spurious per-node freshness fallback query and StateServiceWarn (dbt1410) warning for any downstream model that ref()s it directly, on every build.
+time: 2026-07-27T10:26:51.23606-05:00
+custom:
+    author: kczimm
+    issue: "12335"
+    project: fusion

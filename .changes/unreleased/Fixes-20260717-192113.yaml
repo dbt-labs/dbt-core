@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix state:modified false positives for semantic models and metrics: restore the SemanticEntity/semantic-model-config manifest round-trip, load previous-state metrics for comparison, and align metric content comparison with dbt-core.'
+time: 2026-07-17T19:21:13.803256-07:00
+custom:
+    author: vgapeyev
+    issue: "15513"
+    project: fusion

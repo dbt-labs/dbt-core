@@ -1,0 +1,7 @@
+kind: Fixes
+body: dbt-sa-cli force defer introspective nodes on compile
+time: 2026-07-15T20:37:32.292259-05:00
+custom:
+    author: j-clemons
+    issue: "15569"
+    project: dbt-core

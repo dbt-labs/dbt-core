@@ -1,0 +1,7 @@
+kind: Fixes
+body: Support --resource-type and --exclude-resource-type filters for dbt test.
+time: 2026-07-22T14:13:06.779118687-07:00
+custom:
+    author: mishamsk
+    issue: "14544"
+    project: fusion

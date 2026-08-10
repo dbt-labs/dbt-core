@@ -1,0 +1,7 @@
+kind: Fixes
+body: Jinja in a macro's description is now evaluated in dbt Core's restricted documentation context, so calling a project macro from a description is an error instead of being executed and inlined into the description
+time: 2026-07-30T10:19:20.000974-04:00
+custom:
+    author: mach-kernel
+    issue: "14494"
+    project: fusion

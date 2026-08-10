@@ -1,0 +1,7 @@
+kind: Fixes
+body: Recognize `constraints` as a valid model `config()` key (previously rejected as an unrecognized key), matching dbt-core's behavior of accepting it without enforcing it — only the schema.yml `constraints:` model property is enforced. Cache-invalidation systems like dbt State/Run Cache now correctly react to constraint changes authored either way.
+time: 2026-07-30T11:30:54.258505-05:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

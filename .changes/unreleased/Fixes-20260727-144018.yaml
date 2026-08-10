@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'dbt State: Start sending `clone_chain_depth_limit` to the server to help make correct clone decisions'
+time: 2026-07-27T14:40:18.955356+12:00
+custom:
+    author: erindru
+    issue: "12224"
+    project: fusion

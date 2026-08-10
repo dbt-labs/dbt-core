@@ -1,0 +1,7 @@
+kind: Fixes
+body: Snowflake Horizon (built-in) iceberg tables no longer fail to compile when a resolved `transient` config is present., whether inherited from a project-wide default or set explicitly on the model.
+time: 2026-07-21T06:30:11.24088-07:00
+custom:
+    author: VersusFacit
+    issue: "15427"
+    project: fusion

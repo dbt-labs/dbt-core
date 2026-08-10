@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Refactor CompileBaseCtx to remove the DummyConfig config slot; introduce OperationCtx and typed builders build_compile_base_ctx / build_operation_context
+time: 2026-07-15T15:15:53.221445-07:00
+custom:
+    author: itsannbat
+    issue: '#11755'
+    project: fusion

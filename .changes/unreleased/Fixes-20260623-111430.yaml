@@ -1,0 +1,7 @@
+kind: Fixes
+body: Allow state-org-id in the dbt-cloud block of dbt_project.yml.
+time: 2026-06-23T11:14:30.260005-05:00
+custom:
+    author: kczimm
+    issue: "11398"
+    project: fusion

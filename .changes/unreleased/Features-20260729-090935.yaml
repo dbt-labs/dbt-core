@@ -1,0 +1,7 @@
+kind: Features
+body: '[BigQuery] Link to docs for Storage API errors'
+time: 2026-07-29T09:09:35.664255902-07:00
+custom:
+    author: ajhlee-dbt
+    issue: 15544 13600
+    project: dbt-core

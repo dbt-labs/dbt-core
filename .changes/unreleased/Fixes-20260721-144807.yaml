@@ -1,0 +1,7 @@
+kind: Fixes
+body: Naive Python datetime values now render %z and %Z as empty strings in strftime(), matching Python behavior.
+time: 2026-07-21T14:48:07.295248465-07:00
+custom:
+    author: mishamsk
+    issue: "11531"
+    project: fusion

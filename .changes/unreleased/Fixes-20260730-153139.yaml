@@ -1,0 +1,7 @@
+kind: Fixes
+body: Match read-only compile-time probes such as dbt_utils.date_spine out of order during Mantle replay, and widen the Databricks probe handling
+time: 2026-07-30T15:31:39.454981687-07:00
+custom:
+    author: ChenyuLInx
+    issue: ""
+    project: fusion

@@ -1,0 +1,10 @@
+kind: Fixes
+body: '[Redshift] Honor the `is_serverless` profile flag (plus `serverless_work_group`
+    and `serverless_acct_id`) so Serverless workgroups reached via a non-serverless
+    host (e.g. an SSM port-forward) are treated as Serverless and no longer require
+    `cluster_id`, matching dbt Core.'
+time: 2026-07-09T00:00:00.000000-07:00
+custom:
+    author: r-jais
+    issue: "14621"
+    project: fusion

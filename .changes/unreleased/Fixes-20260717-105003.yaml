@@ -1,0 +1,7 @@
+kind: Fixes
+body: Skip post-success warehouse metadata refreshes for dbt State executions without confirmation tokens when a heuristic timestamp is available.
+time: 2026-07-17T10:50:03.651573-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: fusion

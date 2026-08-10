@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix stale sourced_remote schema cache for DuckDB adapter causing unit test fixture column mismatches after model schema changes
+time: 2026-04-01T09:30:14.505222+02:00
+custom:
+    author: b-per
+    issue: ""
+    project: dbt-fusion

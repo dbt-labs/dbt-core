@@ -1,0 +1,7 @@
+kind: Fixes
+body: '[BigQuery] Allow get_relation to find tables in hidden datasets'
+time: 2026-07-16T13:20:34.191213075-07:00
+custom:
+    author: ajhlee-dbt
+    issue: "14635"
+    project: dbt-core

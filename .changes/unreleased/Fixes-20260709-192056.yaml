@@ -1,0 +1,7 @@
+kind: Fixes
+body: Match dbt-core by ignoring the legacy tests alias on versioned model versions.
+time: 2026-07-09T19:20:56.678909-05:00
+custom:
+    author: kczimm
+    issue: "11024"
+    project: fusion

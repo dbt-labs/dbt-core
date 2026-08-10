@@ -1,0 +1,7 @@
+kind: Features
+body: Add `cargo xtask apply-ci-goldies` to fetch CI logs via `gh` and apply golden-file patches onto the current worktree.
+time: 2026-07-03T15:06:52.543987483-04:00
+custom:
+    author: "sadboy"
+    issue: ""
+    project: internal

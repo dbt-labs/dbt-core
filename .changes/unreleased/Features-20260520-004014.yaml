@@ -1,0 +1,7 @@
+kind: Features
+body: Implement selector selector method
+time: 2026-05-20T00:40:14.722422+05:30
+custom:
+    author: ash2shukla
+    issue: "10277"
+    project: dbt-fusion

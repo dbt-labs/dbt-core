@@ -1,0 +1,7 @@
+kind: Features
+body: Add unit tests to the Jinja graph object
+time: 2026-07-21T22:01:22.259138254-07:00
+custom:
+    author: akbog
+    issue: "14208"
+    project: fusion

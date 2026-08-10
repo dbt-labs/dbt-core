@@ -1,0 +1,9 @@
+kind: Features
+body: 'Support Databricks Azure service principal (Microsoft Entra ID) authentication
+    via `azure_client_id`/`azure_client_secret` (auth_type `azure-client-secret`),
+    matching dbt-core/dbt-databricks'
+time: 2026-07-06T17:35:55.000000+05:30
+custom:
+    author: r-jais
+    issue: "13986"
+    project: fusion

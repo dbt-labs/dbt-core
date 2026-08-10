@@ -1,0 +1,7 @@
+kind: Fixes
+body: Preserve unit test CTE closures after trailing SQL line comments.
+time: 2026-08-03T09:53:53.53921-04:00
+custom:
+    author: mach-kernel
+    issue: "12361"
+    project: fusion

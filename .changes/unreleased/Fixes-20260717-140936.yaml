@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix BigQuery unit test CTE aliases for quoted project identifiers.
+time: 2026-07-17T14:09:36.767935-04:00
+custom:
+    author: mach-kernel
+    issue: "15561"
+    project: fusion

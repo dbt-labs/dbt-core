@@ -1,0 +1,7 @@
+kind: Fixes
+body: Honor the project segment when resolving 3-part ADO private packages (org/project/repo) so the correct provider configuration is selected when multiple projects share an org
+time: 2026-07-21T22:32:02.868352892-07:00
+custom:
+    author: akbog
+    issue: "12989"
+    project: dbt-core

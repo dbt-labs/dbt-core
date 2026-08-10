@@ -1,0 +1,7 @@
+kind: Features
+body: Skip provably redundant accepted-values data tests
+time: 2026-07-23T21:30:12.256718-05:00
+custom:
+    author: HannanNaeem
+    issue: ""
+    project: fusion

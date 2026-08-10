@@ -1,0 +1,7 @@
+kind: Fixes
+body: reject incremental models with contract enforcement and invalid on_schema_change
+time: 2026-07-20T16:25:24.061258-07:00
+custom:
+    author: itsannbat
+    issue: '#14572'
+    project: dbt-core

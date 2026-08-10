@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Versioned models: per-version docs (show/node_color) now override top-level model docs, matching dbt-core behavior'
+time: 2026-07-07T16:39:38.889737-06:00
+custom:
+    author: aiguofer
+    issue: "10069"
+    project: fusion

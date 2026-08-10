@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fixed cancelled models sometimes being reported as Passed or Succeeded
+time: 2026-07-20T18:29:22.389606-07:00
+custom:
+    author: ""
+    issue: "15574"
+    project: fusion

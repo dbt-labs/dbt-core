@@ -1,0 +1,7 @@
+kind: Features
+body: Add error_code and error_message fields to the dbt login Vortex telemetry event
+time: 2026-07-22T13:08:55.7977-06:00
+custom:
+    author: kendru
+    issue: ""
+    project: fusion

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Populate warning/error code and name in legacy Core-compat JSON log output
+time: 2026-07-09T15:23:30.848141-04:00
+custom:
+    author: chrispasakarnis
+    issue: ""
+    project: fusion

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix dbt State run-cache extraction treating a custom materialization's compiled SQL as having zero upstream dependencies when it is a bare qualified relation reference (e.g. some BigQuery custom materializations), causing the node to be skipped forever instead of being invalidated by real upstream changes
+time: 2026-07-30T11:40:54.374774-05:00
+custom:
+    author: "kczimm"
+    issue: ""
+    project: fusion

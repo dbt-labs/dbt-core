@@ -1,0 +1,7 @@
+kind: Fixes
+body: Name the undefined argument when a `config()` value is undefined
+time: 2026-07-31T09:41:06.650635-04:00
+custom:
+    author: mach-kernel
+    issue: "14419"
+    project: fusion

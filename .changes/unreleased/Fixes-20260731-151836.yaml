@@ -1,0 +1,7 @@
+kind: Fixes
+body: Speed up package-qualified macro name resolution (`elementary.foo`, `dbt_utils.bar`). Membership in a package's macro list was a linear scan on every access, so the cost grew with the number of macros in the package; it is now a hash lookup. On a project using elementary (~1000 macros), this takes an `on-run-end` hook that iterates the graph from ~1.6x slower than dbt Core to parity.
+time: 2026-07-31T15:18:36.983517033-07:00
+custom:
+    author: lottaquestions
+    issue: "14455"
+    project: dbt-core

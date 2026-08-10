@@ -1,0 +1,7 @@
+kind: Fixes
+body: Jinja-render semantic layer YAML (metrics, saved queries) like other schema.yml properties, excluding only metric `filter` and `saved_queries.query_params.where`, which stay verbatim for MetricFlow
+time: 2026-07-28T09:36:39.297185-07:00
+custom:
+    author: itsannbat
+    issue: "14468"
+    project: dbt-core

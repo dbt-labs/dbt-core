@@ -1,0 +1,7 @@
+kind: Fixes
+body: Preserved successful Snowflake freshness metadata when another database batch is inaccessible
+time: 2026-07-15T14:54:54.370933-05:00
+custom:
+    author: ""
+    issue: "11995"
+    project: fusion

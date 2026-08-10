@@ -1,0 +1,7 @@
+kind: Features
+body: Add undocumented `dbt internal get-distribution-info` command for resolving dbt release-channel and distribution info, falling back to `<dbt> --version` to infer generation and distribution when a target `dbt` doesn't support the command itself. `--all` now discovers every `dbt` on `PATH` concurrently and skips the doomed `internal` probe for non-native (script) installs, cutting multi-install discovery time substantially. Each probe is now bounded by a wait/graceful-terminate/forceful-kill timeout so a hung or badly-behaved `dbt` on `PATH` can't stall or block discovery indefinitely. When a Homebrew-tap conflict identifies an already-installed dbt Cloud CLI, `get-distribution-info` now also reports its uninstall command
+time: 2026-07-24T02:18:37.939167-06:00
+custom:
+    author: kendru
+    issue: ""
+    project: fusion

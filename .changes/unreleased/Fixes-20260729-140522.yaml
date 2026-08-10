@@ -1,0 +1,7 @@
+kind: Fixes
+body: state:modified no longer reports a phantom `meta` change when a config key was relocated into `+meta` between the previous-state manifest and the current project (e.g. by dbt-autofix, when a config key has no field on Fusion's typed config struct)
+time: 2026-07-29T14:05:22.23820627-07:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

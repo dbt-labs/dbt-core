@@ -1,0 +1,7 @@
+kind: Features
+body: Add machine-readable JSON output for dbt --format json --version
+time: 2026-07-15T16:22:21.707204-05:00
+custom:
+    author: kczimm
+    issue: "12002"
+    project: fusion

@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: add typed flatten composition seam to node ctxs
+time: 2026-07-16T12:04:05.481365-07:00
+custom:
+    author: itsannbat
+    issue: '#11755'
+    project: fusion

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Jinja in macro YAML properties is now evaluated once per parse instead of twice, so a description or meta value that calls something with a side effect (e.g. log()) no longer runs it twice.
+time: 2026-07-30T09:50:33.673532-04:00
+custom:
+    author: mach-kernel
+    issue: "14494"
+    project: fusion

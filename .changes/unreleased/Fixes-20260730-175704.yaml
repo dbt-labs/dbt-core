@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'The as_bool filter now passes its value through unchanged when rendering text (SQL, macros), matching dbt-core: "true" | as_bool renders true instead of True, and an expression such as `target.name in [''dev''] | as_bool` — which Jinja parses as a containment check against the filtered list — no longer fails with "cannot perform a containment check on this value"'
+time: 2026-07-30T17:57:04.326991-07:00
+custom:
+    author: ""
+    issue: ""
+    project: fusion

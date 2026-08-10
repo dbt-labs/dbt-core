@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix state modified selection for hook and test alias diffs
+time: 2026-06-25T11:06:30.457506-05:00
+custom:
+    author: kczimm
+    issue: ""
+    project: fusion

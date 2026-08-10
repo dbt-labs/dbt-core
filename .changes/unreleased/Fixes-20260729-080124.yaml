@@ -1,0 +1,7 @@
+kind: Fixes
+body: '[BigQuery] Allow list_relations to list relations under hidden datasets'
+time: 2026-07-29T08:01:24.274667121-07:00
+custom:
+    author: ajhlee-dbt
+    issue: ""
+    project: dbt-core

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fixed a TOCTOU race in dbt-loader that could panic when a dbt project was loaded concurrently from multiple threads, by initializing DISPATCH_CONFIG with get_or_init instead of a check-then-set
+time: 2026-07-14T18:09:23.999828-07:00
+custom:
+    author: akbog
+    issue: "14550"
+    project: fusion

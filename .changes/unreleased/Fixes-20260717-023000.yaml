@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix range() returning incorrect values when using negative steps.
+time: 2026-07-17T02:30:00.000000+05:30
+custom:
+    author: "arijitroy003"
+    issue: '15585'
+    project: dbt-core
