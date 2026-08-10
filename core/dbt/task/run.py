@@ -21,7 +21,6 @@ from typing import (
     cast,
 )
 
-from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
 from dbt import tracking, utils
@@ -1008,9 +1007,6 @@ class RunTask(CompileTask):
         self.batch_map = batch_map
         self.overload_map: Optional[Dict[str, OverloadResults]] = None
         self.original_invocation_started_at: Optional[datetime] = None
-        # Tracer handle is created unconditionally; it is inert (creates no spans)
-        # until the --snowflake-projects-otel gate opens a span via _maybe_span.
-        self.dbt_tracer = trace.get_tracer("dbt.runner")
 
     def raise_on_first_error(self) -> bool:
         return False
@@ -1175,7 +1171,7 @@ class RunTask(CompileTask):
         failed = False
         num_hooks = len(ordered_hooks)
 
-        with self._maybe_span(hook_type) as hook_span:
+        with self._maybe_span(hook_type.value) as hook_span:
             hook_span.set_attribute("hook_type", hook_type.value)
             for idx, hook in enumerate(ordered_hooks, 1):
                 with log_contextvars(node_info=hook.node_info), self._maybe_span(
@@ -1265,6 +1261,11 @@ class RunTask(CompileTask):
                             node_info=hook.node_info,
                         )
                     )
+
+            if not failed:
+                # Match the node and per-hook spans, which set OK explicitly rather
+                # than leaving a successful span UNSET.
+                hook_span.set_status(StatusCode.OK)
 
         if hook_type == RunHookType.Start and ordered_hooks:
             fire_event(Formatting(""))
