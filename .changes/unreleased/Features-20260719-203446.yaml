@@ -1,7 +1,0 @@
-kind: Features
-body: Add opt-in Redshift grants support for groups and roles
-time: 2026-07-19T20:34:46.859319+05:30
-custom:
-    author: ragesh-g
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Avoid panicking on out-of-range timestamps (e.g. far-future TIMESTAMP_NTZ sentinel values) when converting Arrow timestamp arrays to Jinja values; treat them as null, consistent with other date/time converters
-time: 2026-07-28T22:54:32.832107041-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

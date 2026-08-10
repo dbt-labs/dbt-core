@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fail fast instead of hanging for 300s when dbt State needs to authenticate but no interactive terminal is available (CI, batch replay); this now surfaces as a graceful skip like other dbt State unavailability cases instead of a hard AuthFailed error
-time: 2026-07-29T09:35:39.031060008-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: '[BigQuery] Detect cluster_by order changes only when fields change'
-time: 2026-07-22T09:09:01.786106058-07:00
-custom:
-    author: ajhlee-dbt
-    issue: "9923"
-    project: dbt-core

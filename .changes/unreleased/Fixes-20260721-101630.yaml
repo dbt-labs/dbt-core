@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fixed empty flag issue where no real data is being written
-time: 2026-07-21T10:16:30.833255-07:00
-custom:
-    author: itsannbat
-    issue: '#15604'
-    project: fusion

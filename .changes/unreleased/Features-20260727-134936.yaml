@@ -1,7 +1,0 @@
-kind: Features
-body: Support dbt State configs on snapshots and data tests
-time: 2026-07-27T13:49:36.419858-05:00
-custom:
-    author: HannanNaeem
-    issue: ""
-    project: fusion

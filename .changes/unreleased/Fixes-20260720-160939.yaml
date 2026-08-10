@@ -1,7 +1,0 @@
-kind: Fixes
-body: Emit unsupported engine environment variable and source status warnings through structured tracing
-time: 2026-07-20T16:09:39.72737437-07:00
-custom:
-    author: mishamsk
-    issue: "12125"
-    project: fusion

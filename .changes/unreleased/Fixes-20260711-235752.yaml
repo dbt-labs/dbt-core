@@ -1,7 +1,0 @@
-kind: Fixes
-body: Do not use unit test configs for state:modified determination
-time: 2026-07-11T23:57:52.16255-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

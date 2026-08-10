@@ -1,7 +1,0 @@
-kind: Fixes
-body: Added DBT_RESOURCE_TYPES / DBT_EXCLUDE_RESOURCE_TYPES env variables to dbt build --help
-time: 2026-07-15T14:20:14.264258-07:00
-custom:
-    author: itsannbat
-    issue: '#15341'
-    project: fusion

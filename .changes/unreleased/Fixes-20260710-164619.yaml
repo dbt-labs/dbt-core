@@ -1,7 +1,0 @@
-kind: Fixes
-body: '(dbt-auth): Bigquery: Better error handling and messages to guide uses using api_endpoint with emulators and other strict hosts'
-time: 2026-07-10T16:46:19.837427-07:00
-custom:
-    author: versusfacit
-    issue: "14615"
-    project: dbt-core

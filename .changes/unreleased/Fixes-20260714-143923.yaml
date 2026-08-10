@@ -1,7 +1,0 @@
-kind: Fixes
-body: Match dbt-core unique filter behavior for modules.datetime.date values.
-time: 2026-07-14T14:39:23.644841-06:00
-custom:
-    author: ""
-    issue: "15416"
-    project: fusion

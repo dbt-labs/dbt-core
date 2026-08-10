@@ -1,7 +1,0 @@
-kind: Fixes
-body: A failed on-run-end hook no longer records successfully-materialized models as error in run_results.json. Models that materialized keep their success status, and each on-run-end hook is now recorded as its own operation.<project>.<name> node (matching dbt-core). As a result dbt retry finds nothing to retry after an on-run-end failure instead of rebuilding the entire project.
-time: 2026-07-30T08:35:05.797058652-07:00
-custom:
-    author: lottaquestions
-    issue: "12418"
-    project: fusion

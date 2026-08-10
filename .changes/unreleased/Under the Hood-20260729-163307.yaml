@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: 'dbt State: port `DbtNodeState` submission from Python to Rust'
-time: 2026-07-29T16:33:07.117271+12:00
-custom:
-    author: erindru
-    issue: "12222"
-    project: fusion

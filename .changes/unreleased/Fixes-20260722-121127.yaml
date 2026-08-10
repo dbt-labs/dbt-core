@@ -1,7 +1,0 @@
-kind: Fixes
-body: Show with ephemermal ref missing rendered ephemeral node
-time: 2026-07-22T12:11:27.261276-05:00
-custom:
-    author: j-clemons
-    issue: "15260"
-    project: dbt-core

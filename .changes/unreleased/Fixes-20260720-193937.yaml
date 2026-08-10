@@ -1,7 +1,0 @@
-kind: Fixes
-body: Match dbt Core's fromjson fallback behavior by returning the default value, or None, when JSON parsing fails
-time: 2026-07-20T19:39:37.842184024-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: '`AdapterResponse` is now backed by a `ValueMap`. This paves the way to adding arbitrary keys to `AdapterResponse`.'
-time: 2026-07-27T15:49:07.064476+02:00
-custom:
-    author: serramatutu
-    issue: ""
-    project: dbt-core

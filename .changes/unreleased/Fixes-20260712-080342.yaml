@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix macro manifest parity for materialization supported languages.
-time: 2026-07-12T08:03:42.387823-05:00
-custom:
-    author: kczimm
-    issue: "10084"
-    project: fusion
