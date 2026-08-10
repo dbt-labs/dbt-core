@@ -1473,8 +1473,7 @@ impl Adapter {
                                     ),
                                 }
 
-                                self.get_relation_value_from_cache(temp_relation.as_ref())
-                                    .or(Some(none_value()))
+                                self.get_cached_relation_after_listing(temp_relation.as_ref())
                             } else {
                                 None
                             }
@@ -4241,14 +4240,23 @@ impl Object for Adapter {
 }
 
 impl Adapter {
+    fn get_cached_relation_after_listing(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
+        let cache_result = self.get_relation_value_from_cache(temp_relation);
+        if cache_result.is_some() || self.adapter_type() == AdapterType::Databricks {
+            // Databricks schema listings can lag recent creates.
+            cache_result
+        } else {
+            Some(none_value())
+        }
+    }
+
     fn get_relation_value_from_cache(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
         let relation_cache = self.engine().relation_cache();
         if let Some(cached_entry) = relation_cache.get_relation(temp_relation) {
             Some(RelationObject::new(cached_entry.relation()).into_value())
-        }
-        // If we have captured the entire schema previously, we can check for non-existence
-        // In these cases, return early with a None value
-        else if relation_cache.contains_full_schema_for_relation(temp_relation) {
+        } else if relation_cache.contains_full_schema_for_relation(temp_relation)
+            && self.adapter_type() != AdapterType::Databricks
+        {
             Some(none_value())
         } else {
             None
