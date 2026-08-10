@@ -1,7 +1,0 @@
-kind: Security
-body: Warn when a package tarball contains symlink, hard link, or device entries; these will stop being extracted in a future release. Also upgrade astral-tokio-tar from 0.5.6 to 0.6.4 (RUSTSEC-2026-0066, RUSTSEC-2026-0112, RUSTSEC-2026-0113, RUSTSEC-2026-0145)
-time: 2026-08-06T23:43:08.682785+05:30
-custom:
-    author: joshuataylor tauhid621
-    issue: ""
-    project: fusion

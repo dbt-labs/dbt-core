@@ -1,7 +1,0 @@
-kind: Fixes
-body: Support model.update() in dbt Jinja model contexts.
-time: 2026-07-22T11:34:57.74556-07:00
-custom:
-    author: ""
-    issue: "14495"
-    project: fusion

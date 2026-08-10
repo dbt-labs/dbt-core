@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix `timedelta.total_seconds()` truncating to whole seconds, so sub-second durations no longer return `0.0`. Also makes non-zero sub-second timedeltas truthy and normalizes `days`/`seconds`/`microseconds` and `str()` for negative durations, matching Python.
-time: 2026-07-31T09:05:35.314981546-07:00
-custom:
-    author: lottaquestions
-    issue: "15756"
-    project: dbt-core

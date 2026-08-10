@@ -1,7 +1,0 @@
-kind: Fixes
-body: Correct the naming of install_prerelease field in packages.yml
-time: 2026-07-17T15:25:05.396136-07:00
-custom:
-    author: chayac
-    issue: ""
-    project: dbt-core

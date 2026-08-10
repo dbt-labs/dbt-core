@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Parse the --use-v2-parser / --no-use-v2-parser CLI flags as a recognized no-op
-time: 2026-07-20T14:06:12.022959-07:00
-custom:
-    author: eliasdefaria
-    issue: ""
-    project: fusion

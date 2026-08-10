@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'BigQuery: emit the `expiration_timestamp` relation option (and render options in dbt-core''s insertion order) when `hours_to_expiration` is present but renders to a non-numeric value such as `null`, matching dbt Core instead of dropping the option'
-time: 2026-07-10T08:50:44.172803438-07:00
-custom:
-    author: lottaquestions
-    issue: "11681"
-    project: fusion

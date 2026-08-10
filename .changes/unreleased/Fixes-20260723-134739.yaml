@@ -1,7 +1,0 @@
-kind: Fixes
-body: Bring dbt-state's semantic-extras key list up to parity with the Python query-cache client, wiring the newly-added model/snapshot/test config keys (contract, constraints, cluster_by, unique_key, grants, event_time, sql_header, lookback, partition_by, table_format, and dialect-specific attributes) into the actual cache-key extraction so config changes to these fields trigger re-execution instead of a stale NO-OP
-time: 2026-07-23T13:47:39.076014+12:00
-custom:
-    author: erindru
-    issue: "11584"
-    project: fusion

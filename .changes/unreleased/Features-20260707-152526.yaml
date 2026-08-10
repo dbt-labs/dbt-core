@@ -1,7 +1,0 @@
-kind: Features
-body: Add Docker and docker compose support for self-hosting the dbt docs server (dbt docs serve)
-time: 2026-07-07T15:25:26.489905-04:00
-custom:
-    author: jcserv
-    issue: ""
-    project: fusion

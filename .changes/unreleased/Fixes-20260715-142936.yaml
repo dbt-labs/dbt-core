@@ -1,7 +1,0 @@
-kind: Fixes
-body: (state:modified) Stop treating function tags/group changes as config modifications on the sparse-fallback comparison path
-time: 2026-07-15T14:29:36.398632-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

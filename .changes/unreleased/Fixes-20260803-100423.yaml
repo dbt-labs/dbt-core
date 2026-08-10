@@ -1,7 +1,0 @@
-kind: Fixes
-body: Report a clean, located error for a zero-argument `ref()` or `source()` instead of panicking during compilation. Because the panic happened at compile time, one malformed call previously took down parsing for every other model and macro in the project.
-time: 2026-08-03T10:04:23.537015218-07:00
-custom:
-    author: lottaquestions
-    issue: "15759"
-    project: fusion

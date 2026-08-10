@@ -1,7 +1,0 @@
-kind: Fixes
-body: Preserve microbatch event-time filtering when ref and source are overridden through the builtins namespace
-time: 2026-07-22T14:22:00.562914933-07:00
-custom:
-    author: mishamsk
-    issue: "15548"
-    project: fusion

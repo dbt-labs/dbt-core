@@ -1,7 +1,0 @@
-kind: Fixes
-body: Evict a node's cached last-modified epoch and existence after it executes without a confirmed dbt State request because the request failed, so downstream nodes in the same invocation are not incorrectly skipped based on stale freshness
-time: 2026-07-27T11:00:43.093538-07:00
-custom:
-    author: izeigerman
-    issue: "12227"
-    project: fusion

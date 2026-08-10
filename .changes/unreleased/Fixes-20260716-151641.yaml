@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'LSP: Fixed LSP panic when a ''dbt clean'' was invoked'
-time: 2026-07-16T15:16:41.67397-07:00
-custom:
-    author: ""
-    issue: "15408"
-    project: fusion

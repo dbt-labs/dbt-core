@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Fix dbt State on production deployments: exclude exposures from the freshness prefetch, which generated invalid metadata SQL from their empty database and schema; honor an explicit opt-out over DBT_ENGINE_MANAGE_STATE so --no-manage-state and flags.manage_state: false take effect; and resolve dbt State on dbt compile and dbt show, which previously ignored the flag'
-time: 2026-07-28T12:33:57.672282-07:00
-custom:
-    author: itsannbat
-    issue: "15374"
-    project: dbt-core

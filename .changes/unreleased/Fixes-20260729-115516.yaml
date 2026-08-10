@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'dbt retry now treats a warn node as retryable only when the retry invocation passes --warn-error, matching dbt-core. Previously retry always re-ran warned nodes, so a severity: warn test that kept warning was re-run on every retry and --warn-error had no effect. The ''Retrying N nodes'' banner also no longer describes retried nodes as failed.'
-time: 2026-07-29T11:55:16.486468097-07:00
-custom:
-    author: lottaquestions
-    issue: "12417"
-    project: fusion

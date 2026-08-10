@@ -1,7 +1,0 @@
-kind: Fixes
-body: (adapters/redshift) sync v1 Jinja macros using https://github.com/dbt-labs/dbt-adapters/commit/9fce78f44db248ba33832c0f65c884a5139c0169
-time: 2026-07-13T11:04:20.525605469-07:00
-custom:
-    author: xuliangs
-    issue: https://github.com/dbt-labs/dbt-core/issues/15467
-    project: fusion

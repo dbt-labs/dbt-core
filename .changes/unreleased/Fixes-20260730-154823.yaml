@@ -1,7 +1,0 @@
-kind: Fixes
-body: A docs block whose name is not a valid identifier no longer discards every other docs block in the same file
-time: 2026-07-30T15:48:23.077797053-07:00
-custom:
-    author: ChenyuLInx
-    issue: ""
-    project: fusion

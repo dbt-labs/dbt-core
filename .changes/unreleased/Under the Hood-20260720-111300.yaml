@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: add typed build_run_node_ctx seam and migrate dbt-freshness onto it
-time: 2026-07-20T11:13:00.100786-07:00
-custom:
-    author: itsannbat
-    issue: '#11755'
-    project: fusion

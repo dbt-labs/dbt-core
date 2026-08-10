@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix SQL mismatch false positives for dbt_date and dbt_utils macros (e.g. date_spine) in Time Machine replay by treating read-only execute calls (SELECT/SHOW) as unordered across segment boundaries, and removing hardcoded AdapterType::Snowflake from replay argument matching
-time: 2026-07-23T16:31:54.654194-07:00
-custom:
-    author: zhong-xu
-    issue: "12203"
-    project: fusion

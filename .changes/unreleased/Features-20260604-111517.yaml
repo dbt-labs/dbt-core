@@ -1,7 +1,0 @@
-kind: Features
-body: Implement dbt state explain in Fusion
-time: 2026-06-04T11:15:17.750894-05:00
-custom:
-    author: kczimm
-    issue: ""
-    project: dbt-fusion

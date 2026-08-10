@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix spurious UnusedResourceConfigPath warning for models disabled via dbt_project.yml on incremental/partial-parse runs, caused by disabled nodes not being seeded from the parse cache before the unused-config check ran.
-time: 2026-07-27T14:59:25.712999-06:00
-custom:
-    author: ""
-    issue: "15348"
-    project: dbt-core

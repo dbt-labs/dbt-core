@@ -1,8 +1,0 @@
-kind: Fixes
-body: Treat Snowflake TEMPORARY relations as tables in list_relations to prevent a
-  panic when SHOW OBJECTS returns a session-scoped temp table
-time: 2026-07-17T09:20:14.719600704-07:00
-custom:
-  author: "j-clemons"
-  issue: ""
-  project: fusion

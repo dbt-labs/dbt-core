@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: (snowflake, redshift) respect quoting configs literally when building the metadata queries
-time: 2026-07-28T15:37:04.012478273-07:00
-custom:
-    author: "xuliangs"
-    issue: ""
-    project: dbt-core

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Omit BASE_LOCATION on Snowflake iceberg and dynamic iceberg tables when the resolved external_volume is unset or explicitly set to the reserved 'SNOWFLAKE_MANAGED' value, so managed-storage Iceberg tables no longer fail with a BASE_LOCATION compilation error
-time: 2026-07-28T11:40:51.551737+05:30
-custom:
-    author: debrin-og
-    issue: "15659"
-    project: fusion

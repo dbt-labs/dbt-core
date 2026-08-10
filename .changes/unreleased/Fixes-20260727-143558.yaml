@@ -1,7 +1,0 @@
-kind: Fixes
-body: Unit test fixtures with invalid columns now error instead of warning and passing
-time: 2026-07-27T14:35:58.101068-04:00
-custom:
-    author: mach-kernel
-    issue: "14350"
-    project: fusion

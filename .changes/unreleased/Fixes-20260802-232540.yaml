@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fault-isolate per-macro typecheck calls so a single macro body that panics inside the type-inference VM no longer crashes the whole parse/run
-time: 2026-08-02T23:25:40.511307-06:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fold the microbatch event-time window into the run-cache key so re-running a microbatch model over an unchanged window is a whole-model no-op while a different window executes
-time: 2026-07-22T10:27:11.388425-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

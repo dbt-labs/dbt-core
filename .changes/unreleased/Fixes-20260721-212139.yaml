@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fixed agate tuple rendering in Jinja output to avoid an extra trailing comma before the closing parenthesis.
-time: 2026-07-21T21:21:39.051877002-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Avoid an unnecessary speculative dbt State request when the dependency last-modified prefetch completes during view-definition traversal; readiness is re-checked at the last responsible moment so the node submits non-speculatively with resolved epochs instead.
-time: 2026-07-30T10:19:06.13116-07:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

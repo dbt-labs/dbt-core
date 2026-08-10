@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Introduce DefaultTo trait and derive macro for config inheritance
-time: 2026-07-28T22:49:17.592874-06:00
-custom:
-    author: aiguofer
-    issue: ""
-    project: fusion

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Report a mismatch between the dbt-cloud project-id in dbt_project.yml and ~/.dbt/dbt_cloud.yml up front, naming the project-id and pointing at the offending line, instead of failing later with a generic missing-configuration error
-time: 2026-07-30T14:27:25.534549-07:00
-custom:
-    author: itsannbat
-    issue: "14454"
-    project: dbt-core

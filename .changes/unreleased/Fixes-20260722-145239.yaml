@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix cross-package macro attribute-access calls missing from depends_on.macros
-time: 2026-07-22T14:52:39.387177-06:00
-custom:
-    author: ""
-    issue: ""
-    project: fusion

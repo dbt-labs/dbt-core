@@ -1,7 +1,0 @@
-kind: Fixes
-body: INT64 partitioned tables now use the proper partition bucket names.
-time: 2026-07-21T15:39:43.946659+02:00
-custom:
-    author: serramatutu
-    issue: "15464"
-    project: dbt-core
