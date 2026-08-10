@@ -3087,6 +3087,15 @@
             }
           ]
         },
+        "+connection_overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+constraints": {
           "type": [
             "array",
@@ -3291,7 +3300,22 @@
             "null"
           ]
         },
+        "+fields": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+format": {
           "type": [
             "string",
             "null"
@@ -3531,6 +3555,22 @@
           "anyOf": [
             {
               "$ref": "#/definitions/LatestVersionPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+layout": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+lifetime": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
             },
             {
               "type": "null"
@@ -3870,6 +3910,16 @@
             }
           ]
         },
+        "+range": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+refresh_interval_minutes": {
           "anyOf": [
             {
@@ -4054,6 +4104,12 @@
             "null"
           ]
         },
+        "+source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+sql_header": {
           "type": [
             "string",
@@ -4107,6 +4163,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+table": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+table_format": {
@@ -4224,6 +4286,28 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "+update_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+update_lag": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+url": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+use_anonymous_sproc": {
