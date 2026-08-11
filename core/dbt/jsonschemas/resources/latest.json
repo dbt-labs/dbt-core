@@ -696,7 +696,8 @@
           "description": "Run computations in a separate, ephemeral worker process",
           "type": "string",
           "enum": [
-            "sidecar"
+            "sidecar",
+            "local"
           ]
         },
         {
@@ -1099,6 +1100,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "catchup": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "category": {
@@ -1610,6 +1625,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "mv_on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "not_matched_by_source_action": {
           "type": [
             "string",
@@ -1762,6 +1783,29 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "refreshable": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "repopulate_from_mvs_on_full_refresh": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "require_partition_filter": {
@@ -3355,6 +3399,20 @@
             "null"
           ]
         },
+        "catchup": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "category": {
           "anyOf": [
             {
@@ -3820,6 +3878,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "mv_on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "not_matched_by_source_action": {
           "type": [
             "string",
@@ -3988,6 +4052,29 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "refreshable": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "repopulate_from_mvs_on_full_refresh": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "require_partition_filter": {
@@ -5518,6 +5605,20 @@
             "null"
           ]
         },
+        "catchup": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "category": {
           "anyOf": [
             {
@@ -6215,6 +6316,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "mv_on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "not_matched_by_source_action": {
           "type": [
             "string",
@@ -6461,6 +6568,29 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "refreshable": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "repopulate_from_mvs_on_full_refresh": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "require_partition_filter": {
@@ -7964,6 +8094,20 @@
             "null"
           ]
         },
+        "catchup": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "category": {
           "anyOf": [
             {
@@ -8474,6 +8618,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "mv_on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "not_matched_by_source_action": {
           "type": [
             "string",
@@ -8671,6 +8821,29 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "refreshable": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "repopulate_from_mvs_on_full_refresh": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "require_partition_filter": {
@@ -9259,6 +9432,20 @@
             "null"
           ]
         },
+        "catchup": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "category": {
           "anyOf": [
             {
@@ -9806,6 +9993,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "mv_on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "not_matched_by_source_action": {
           "type": [
             "string",
@@ -10003,6 +10196,29 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "refreshable": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "repopulate_from_mvs_on_full_refresh": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "require_partition_filter": {
@@ -10669,6 +10885,20 @@
             "null"
           ]
         },
+        "catchup": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "category": {
           "anyOf": [
             {
@@ -11145,6 +11375,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "mv_on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "not_matched_by_source_action": {
           "type": [
             "string",
@@ -11287,6 +11523,29 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "refreshable": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "repopulate_from_mvs_on_full_refresh": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "require_partition_filter": {
@@ -12193,6 +12452,20 @@
             "null"
           ]
         },
+        "catchup": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "category": {
           "anyOf": [
             {
@@ -12637,6 +12910,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "mv_on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "not_matched_by_source_action": {
           "type": [
             "string",
@@ -12779,6 +13058,29 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "refreshable": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "repopulate_from_mvs_on_full_refresh": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "require_partition_filter": {
