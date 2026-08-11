@@ -3,9 +3,11 @@
 //! Files are baked into the binary at build time via `rust-embed`,
 //! gated on the `embed-ui` feature.
 //!
-//! The dbt-ui Vite build emits assets with `--base=./`, so `index.html`
-//! references them as `./assets/*` and the browser resolves them relative
-//! to the page URL. The server lookup just trims the leading `/`.
+//! The Vite build uses an absolute base, so `index.html` references assets as
+//! `/assets/*`. The server lookup just trims the leading `/`. The base has to be
+//! absolute because the SPA uses real paths (`/details/:id/`, not hash routes) and
+//! `serve_assets` answers unknown paths with `index.html`; relative asset URLs
+//! would resolve against the current route and 404 on a deep-link reload.
 
 use axum::{
     body::Body,

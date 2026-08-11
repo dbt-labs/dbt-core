@@ -56,6 +56,13 @@ pub(crate) const INCLUDE_RECURSION_COST: usize = 10;
 #[cfg(feature = "macros")]
 pub(crate) const MACRO_RECURSION_COST: usize = 4;
 
+// Marker text substituted in place of a value a listener overrode via
+// `RenderingEventListener::override_value` when it's emitted (see
+// `Instruction::Emit`). Keep in sync with `sdf_linter::skeleton::HOLE_MARKER`
+// (crates/sdf-linter/src/skeleton.rs) so Turbo and listener-driven overrides
+// produce visually identical hole markers.
+pub(crate) const VALUE_OVERRIDE_MARKER: &str = "{{}}";
+
 /// Helps to evaluate something.
 #[cfg_attr(feature = "internal_debug", derive(Debug))]
 pub struct Vm<'env> {
@@ -380,6 +387,10 @@ impl<'env> Vm<'env> {
             }
             crate::OutputTracker::new(&mut rv)
         };
+        // Cloned before `out` borrows `output_tracker` mutably so the current
+        // output position can still be read (via the shared `RefCell`s) when
+        // substituting a value-override marker (see `VALUE_OVERRIDE_MARKER`).
+        let output_location = output_tracker.location.clone();
         let mut out = Output::with_write(&mut output_tracker);
 
         let initial_auto_escape = state.auto_escape;
@@ -391,6 +402,7 @@ impl<'env> Vm<'env> {
         let mut current_macro_name: Option<String> = None;
         let mut is_caller_return = false;
         let mut is_explicit_return = false;
+        let override_listener = crate::listener::find_override_listener(listeners);
 
         // If we are extending we are holding the instructions of the target parent
         // template here.  This is used to detect multiple extends and the evaluation
@@ -448,24 +460,35 @@ impl<'env> Vm<'env> {
             };
             state.pc = pc;
 
+            // If a listener wants to override either operand of a
+            // binary/comparison operator (see
+            // `RenderingEventListener::override_value`), the real operator is
+            // never evaluated -- the overridden operand is propagated as the
+            // result unchanged, so an override survives arithmetic, string
+            // concatenation, and comparisons alike.
             macro_rules! func_binop {
                 ($method:ident, $obj_method:expr, $span:expr) => {{
                     let b = stack.pop();
                     let a = stack.pop();
-                    stack.push(match ops::$method(&a, &b) {
-                        Ok(rv) => rv,
-                        Err(e) if e.kind() == ErrorKind::InvalidOperation => {
-                            match call_wrapper(listeners, || {
-                                a.call_method(state, $obj_method, &[b], listeners)
-                            }) {
-                                Ok(rv) => rv,
-                                Err(e2) if e2.kind() == ErrorKind::UnknownMethod => {
-                                    return Err(state.with_span_error(e, &$span));
+                    let overridden = override_listener
+                        .and_then(|l| l.override_value(&a).or_else(|| l.override_value(&b)));
+                    stack.push(match overridden {
+                        Some(v) => v,
+                        None => match ops::$method(&a, &b) {
+                            Ok(rv) => rv,
+                            Err(e) if e.kind() == ErrorKind::InvalidOperation => {
+                                match call_wrapper(listeners, || {
+                                    a.call_method(state, $obj_method, &[b], listeners)
+                                }) {
+                                    Ok(rv) => rv,
+                                    Err(e2) if e2.kind() == ErrorKind::UnknownMethod => {
+                                        return Err(state.with_span_error(e, &$span));
+                                    }
+                                    Err(e2) => return Err(state.with_span_error(e2, &$span)),
                                 }
-                                Err(e2) => return Err(state.with_span_error(e2, &$span)),
                             }
-                        }
-                        Err(e) => return Err(state.with_span_error(e, &$span)),
+                            Err(e) => return Err(state.with_span_error(e, &$span)),
+                        },
                     });
                 }};
             }
@@ -474,13 +497,20 @@ impl<'env> Vm<'env> {
                 ($op:tt, $obj_method:expr, $span:expr) => {{
                     let b = stack.pop();
                     let a = stack.pop();
-                    let naive_result = Value::from(a $op b);
-                    let rv = match call_wrapper(listeners, || {
-                        a.call_method(state, $obj_method, &[b], listeners)
-                    }) {
-                        Ok(rv) => rv,
-                        Err(e) if e.kind() == ErrorKind::UnknownMethod => naive_result,
-                        Err(e) => return Err(state.with_span_error(e, &$span))
+                    let overridden = override_listener
+                        .and_then(|l| l.override_value(&a).or_else(|| l.override_value(&b)));
+                    let rv = match overridden {
+                        Some(v) => v,
+                        None => {
+                            let naive_result = Value::from(a $op b);
+                            match call_wrapper(listeners, || {
+                                a.call_method(state, $obj_method, &[b], listeners)
+                            }) {
+                                Ok(rv) => rv,
+                                Err(e) if e.kind() == ErrorKind::UnknownMethod => naive_result,
+                                Err(e) => return Err(state.with_span_error(e, &$span))
+                            }
+                        }
                     };
                     stack.push(rv);
                 }};
@@ -526,9 +556,38 @@ impl<'env> Vm<'env> {
                             .iter()
                             .for_each(|listener| listener.on_emit_start(source_span));
                     }
-                    self.env
-                        .format(&stack.pop(), state, &mut out)
-                        .map_err(|e| state.with_span_error(e, span))?;
+                    let value = stack.pop();
+                    if override_listener
+                        .and_then(|l| l.override_value(&value))
+                        .is_some()
+                    {
+                        let expanded_start = (
+                            output_location.line(),
+                            output_location.col(),
+                            output_location.index(),
+                        );
+                        out.write_str(VALUE_OVERRIDE_MARKER).map_err(|e| {
+                            let e: Error = e.into();
+                            state.with_span_error(e, span)
+                        })?;
+                        if let Some(source_span) = &source_span {
+                            let expanded_span = Span {
+                                start_line: expanded_start.0,
+                                start_col: expanded_start.1,
+                                start_offset: expanded_start.2,
+                                end_line: output_location.line(),
+                                end_col: output_location.col(),
+                                end_offset: output_location.index(),
+                            };
+                            listeners.iter().for_each(|listener| {
+                                listener.on_value_override(source_span, &expanded_span)
+                            });
+                        }
+                    } else {
+                        self.env
+                            .format(&value, state, &mut out)
+                            .map_err(|e| state.with_span_error(e, span))?;
+                    }
                     if let Some(source_span) = &source_span {
                         listeners
                             .iter()
@@ -755,28 +814,55 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::Not(_span) => {
                     let a = stack.pop();
-                    stack.push(Value::from(!a.is_true()));
+                    let overridden = override_listener.and_then(|l| l.override_value(&a));
+                    stack.push(match overridden {
+                        Some(v) => v,
+                        None => Value::from(!a.is_true()),
+                    });
                 }
                 Instruction::StringConcat(_span) => {
                     let a = stack.pop();
                     let b = stack.pop();
-                    stack.push(ops::string_concat(b, &a));
+                    let overridden = override_listener
+                        .and_then(|l| l.override_value(&a).or_else(|| l.override_value(&b)));
+                    stack.push(match overridden {
+                        Some(v) => v,
+                        None => ops::string_concat(b, &a),
+                    });
                 }
                 Instruction::In(span) => {
                     let a = stack.pop();
                     let b = stack.pop();
-                    // the in-operator can fail if the value is undefined and
-                    // we are in strict mode.
-                    state.undefined_behavior().assert_iterable(&a)?;
-                    stack.push(ops::contains(&a, &b).map_err(|e| state.with_span_error(e, span))?);
+                    let overridden = override_listener
+                        .and_then(|l| l.override_value(&a).or_else(|| l.override_value(&b)));
+                    match overridden {
+                        Some(v) => stack.push(v),
+                        None => {
+                            // the in-operator can fail if the value is undefined and
+                            // we are in strict mode.
+                            state.undefined_behavior().assert_iterable(&a)?;
+                            stack.push(
+                                ops::contains(&a, &b)
+                                    .map_err(|e| state.with_span_error(e, span))?,
+                            );
+                        }
+                    }
                 }
                 Instruction::Neg(span) => {
                     let a = stack.pop();
-                    stack.push(ops::neg(&a).map_err(|e| state.with_span_error(e, span))?);
+                    let overridden = override_listener.and_then(|l| l.override_value(&a));
+                    stack.push(match overridden {
+                        Some(v) => v,
+                        None => ops::neg(&a).map_err(|e| state.with_span_error(e, span))?,
+                    });
                 }
                 Instruction::Pos(span) => {
                     let a = stack.pop();
-                    stack.push(ops::pos(&a).map_err(|e| state.with_span_error(e, span))?);
+                    let overridden = override_listener.and_then(|l| l.override_value(&a));
+                    stack.push(match overridden {
+                        Some(v) => v,
+                        None => ops::pos(&a).map_err(|e| state.with_span_error(e, span))?,
+                    });
                 }
                 Instruction::PushWith(span) => {
                     state
@@ -849,10 +935,14 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::JumpIfFalse(jump_target, span) => {
                     let a = stack.pop();
-                    if !undefined_behavior
-                        .is_true(&a)
-                        .map_err(|e| state.with_span_error(e, span))?
-                    {
+                    let take_then_branch =
+                        match override_listener.and_then(|l| l.override_branch(&a)) {
+                            Some(overridden) => overridden,
+                            None => undefined_behavior
+                                .is_true(&a)
+                                .map_err(|e| state.with_span_error(e, span))?,
+                        };
+                    if !take_then_branch {
                         pc = *jump_target;
                         continue;
                     }
@@ -928,9 +1018,17 @@ impl<'env> Vm<'env> {
                     .map_err(|e| state.with_span_error(e, span))?;
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
-                    let a = filter
-                        .apply_to(state, args)
-                        .map_err(|e| state.with_span_error(e, span))?;
+                    // An overridden argument (including the piped-in value)
+                    // short-circuits the real filter: the filter never sees
+                    // the original value, and the override is passed through.
+                    let overridden = override_listener
+                        .and_then(|l| args.iter().find_map(|v| l.override_value(v)));
+                    let a = match overridden {
+                        Some(v) => v,
+                        None => filter
+                            .apply_to(state, args)
+                            .map_err(|e| state.with_span_error(e, span))?,
+                    };
                     stack.drop_top(arg_count);
                     stack.push(a);
                 }
@@ -944,9 +1042,21 @@ impl<'env> Vm<'env> {
                     .map_err(|e| state.with_span_error(e, span))?;
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
-                    let rv = test.perform(state, args)?;
+                    // Same rule as filters: an overridden argument
+                    // short-circuits the real test, propagating the override
+                    // instead of a bool. `{% if %}` branching
+                    // (`RenderingEventListener::override_branch`) checks with
+                    // the listener before treating this as a real boolean, so
+                    // this is safe even though the pushed value isn't
+                    // actually a bool.
+                    let overridden = override_listener
+                        .and_then(|l| args.iter().find_map(|v| l.override_value(v)));
+                    let rv = match overridden {
+                        Some(v) => v,
+                        None => Value::from(test.perform(state, args)?),
+                    };
                     stack.drop_top(arg_count);
-                    stack.push(Value::from(rv));
+                    stack.push(rv);
                 }
                 Instruction::CallFunction(name, arg_count, _, this_span, _) => {
                     // reset_span is a special function that resets the current span
@@ -1142,6 +1252,19 @@ impl<'env> Vm<'env> {
                     } else {
                         rv
                     };
+                    // A function/macro's own body may lose track of an
+                    // overridden argument (e.g. absorbing it into a plain
+                    // list via `namespace()`/`.append()` before emitting the
+                    // joined result) -- same "any overridden input overrides
+                    // the output" rule as binary operators/filters/tests,
+                    // applied at the call boundary so it holds regardless of
+                    // what the callee does internally.
+                    let rv = override_listener
+                        .and_then(|l| {
+                            l.override_value(&rv)
+                                .or_else(|| args.iter().find_map(|v| l.override_value(v)))
+                        })
+                        .unwrap_or(rv);
                     let arg_count = args.len();
                     stack.drop_top(arg_count);
                     stack.push(rv);
@@ -1194,6 +1317,15 @@ impl<'env> Vm<'env> {
                             }
                         }
                     };
+                    // See the matching comment in `Instruction::CallFunction`:
+                    // an overridden argument overrides the result even if the
+                    // callee's own body loses track of it internally.
+                    let a = override_listener
+                        .and_then(|l| {
+                            l.override_value(&a)
+                                .or_else(|| args[1..].iter().find_map(|v| l.override_value(v)))
+                        })
+                        .unwrap_or(a);
                     stack.drop_top(arg_count);
                     stack.push(a);
                 }
@@ -1203,6 +1335,13 @@ impl<'env> Vm<'env> {
                     state.record_pending_call_site(listeners, span);
                     let a = call_wrapper(listeners, || args[0].call(state, &args[1..], listeners))
                         .map_err(|e| state.with_span_error(e, span))?;
+                    // See the matching comment in `Instruction::CallFunction`.
+                    let a = override_listener
+                        .and_then(|l| {
+                            l.override_value(&a)
+                                .or_else(|| args[1..].iter().find_map(|v| l.override_value(v)))
+                        })
+                        .unwrap_or(a);
                     stack.drop_top(arg_count);
                     stack.push(a);
                 }

@@ -133,6 +133,50 @@ docker run --rm -p 8580:8580 \
 
 > **Coming soon.**
 
+## 🎨 The web UI
+
+The SPA lives in `web/`. Its built output, `web/dist/`, is **committed to the repo**
+and embedded into the binary at compile time by `rust-embed`.
+
+That means **building the server needs no JavaScript toolchain at all**:
+
+```bash
+cargo build -p dbt-cli   # embeds the committed web/dist/ as-is
+```
+
+### Rebuilding the UI
+
+Only needed if you change anything under `web/`.
+
+The SPA depends on the dbt Labs design-system packages (`@dbt-labs/sourdough`,
+`@dbt-labs/dbt-dag`, `@dbt-labs/biga`), which are published to GitHub Packages
+rather than the public npm registry. Installing them needs a token with the
+`read:packages` scope:
+
+```bash
+export GITHUB_TOKEN=<a PAT with read:packages>
+cd crates/dbt-docs-server/web
+pnpm install
+pnpm build          # writes web/dist/
+```
+
+Other useful commands, all from `web/`:
+
+```bash
+pnpm dev            # vite dev server on :3002, proxying /api to :8580
+pnpm test           # vitest
+pnpm typecheck
+pnpm lint           # eslint + prettier
+```
+
+> [!IMPORTANT]
+> **Always rebuild `web/dist/` and commit it in the same change as any `web/` source
+> edit.** This is a manual step — nothing in CI or in a git hook rebuilds or checks
+> the bundle, so a source-only commit will silently ship a stale UI.
+
+If you do not have access to the private packages, you can still work on the Rust
+side: `cargo build` uses the committed bundle and never invokes `pnpm`.
+
 ## 🤝 Contributing
 
 Development happens in the [`dbt-labs/dbt-core`](https://github.com/dbt-labs/dbt-core) monorepo, under `crates/dbt-docs-server`.

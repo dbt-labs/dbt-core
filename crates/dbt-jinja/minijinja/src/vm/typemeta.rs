@@ -25,6 +25,41 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::{fmt, vec};
 
+/// Adapter methods whose `Parse`-mode implementation independently fabricates
+/// relation/table/column/schema-shaped data (rather than returning a trivial
+/// `bool`/`none` placeholder). Used both at runtime (`dbt-adapter`'s
+/// `Adapter::call_method`, which owns the canonical copy of this exact list)
+/// to taint the returned value, and statically here (`Instruction::CallMethod`
+/// handling, via `on_introspective_call`) to flag which macros transitively
+/// reach an introspective call, so a whole macro call can be treated as an
+/// opaque taint boundary regardless of which internal branch a given render
+/// actually takes. Keep in sync with `dbt_adapter::adapter::INTROSPECTIVE_METHODS`.
+///
+/// TODO: fs#12847 -- this list is matched by method name only, regardless of
+/// receiver (the `adapter` global has no static type today, so there's
+/// nothing to check the receiver against). Most of these names are
+/// dbt/adapter-specific enough that a collision with an unrelated object's
+/// method is very unlikely, but `execute` is generic enough to be a real, if
+/// low-probability, false-positive risk. Revisit scoping this to the actual
+/// `adapter` receiver.
+pub const INTROSPECTIVE_METHOD_NAMES: &[&str] = &[
+    "execute",
+    "get_relation",
+    "get_columns_in_relation",
+    "get_missing_columns",
+    "get_relations_by_pattern",
+    "list_schemas",
+    "get_column_schema_from_query",
+    "get_columns_in_select_sql",
+    "build_catalog_from_show_tables_and_svv_columns",
+    "get_relation_config",
+    "get_relations_without_caching",
+    "list_relations_without_caching",
+    "get_bq_table",
+    "describe_relation",
+    "get_partitions_metadata",
+];
+
 #[derive(Clone, Debug)]
 struct TypeWithConstraint {
     inner: Type,
@@ -1681,6 +1716,14 @@ impl<'src> TypeChecker<'src> {
                 Instruction::CallMethod(name, arg_count, identifier_span, span, _) => {
                     // TYPECHECK: NO? (Maybe add method check later)
                     listener.set_span(span);
+
+                    // See `on_introspective_call`'s doc comment: this is a
+                    // name-only, receiver-type-independent check (the
+                    // `adapter` global has no static type today), which is
+                    // intentionally conservative.
+                    if INTROSPECTIVE_METHOD_NAMES.contains(name) {
+                        listener.on_introspective_call(name);
+                    }
 
                     let count = arg_count.unwrap_or(0);
                     if count > 0 {

@@ -448,7 +448,8 @@ impl DatabricksMetadataAdapter {
             | RelationType::PointerTable
             | RelationType::DynamicTable
             | RelationType::MetricView
-            | RelationType::Function => {
+            | RelationType::Function
+            | RelationType::Dictionary => {
                 return Err(AdapterError::new(
                     AdapterErrorKind::NotSupported,
                     format!(
@@ -1228,6 +1229,10 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(fqns), token)
+    }
+
+    fn supports_bulk_freshness_dump(&self) -> bool {
+        true
     }
 
     fn freshness_all_in_schema<'a>(

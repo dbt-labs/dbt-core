@@ -457,7 +457,11 @@ pub async fn resolve_sources(
                 unique_id: unique_id.to_owned(),
                 fqn,
                 description: Some(table.description.clone().unwrap_or_default()),
-                patch_path: Some(DbtPath::from(&mpe.relative_path)),
+                // Core only sets patch_path for sources in the rare cross-package
+                // source-override case, which Fusion doesn't implement:
+                // https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/parser/sources.py#L116
+                // For the normal (un-overridden) case it defaults to None.
+                patch_path: None,
                 meta: source_config.meta.clone().unwrap_or_default(),
                 tags: source_config
                     .tags

@@ -1,0 +1,1858 @@
+{
+  "detail": {
+    "unique_id": "model.fishtown_internal_analytics._5x_daily_user_counts",
+    "name": "_5x_daily_user_counts",
+    "resource_type": "model",
+    "package_name": "fishtown_internal_analytics",
+    "materialized": "view",
+    "description": "This model is a secure view that is shared with 5x. The goal of this view is to give insight into how daily users are currently on a 5x managed team account or trial account. This will be used as the source of truth for their billing to their clients as well as us billing them.\n",
+    "database_name": "staging",
+    "schema_name": "shared_partner_managed_cloud",
+    "relation_name": "staging.shared_partner_managed_cloud._5x_daily_user_counts",
+    "identifier": null,
+    "original_file_path": "models/shares/5x/_5x_daily_user_counts.sql",
+    "access_level": null,
+    "group_name": null,
+    "raw_code": null,
+    "compiled_code": null,
+    "contract_enforced": false,
+    "tags": [],
+    "fqn": [
+      "fishtown_internal_analytics",
+      "shares",
+      "5x",
+      "_5x_daily_user_counts"
+    ],
+    "columns": [],
+    "depends_on": [
+      {
+        "unique_id": "model.fishtown_internal_analytics.fct_cloud_accounts",
+        "edge_type": "ref"
+      },
+      {
+        "unique_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities",
+        "edge_type": "ref"
+      }
+    ],
+    "referenced_by": [
+      {
+        "unique_id": "exposure.fishtown_internal_analytics.5x_S3_bucket",
+        "edge_type": "ref"
+      },
+      {
+        "unique_id": "test.fishtown_internal_analytics.dbt_utils_unique_combination_of_columns__5x_daily_user_counts_account_id__date_day.c42bde3cbe",
+        "edge_type": "ref"
+      }
+    ],
+    "execution_info": null,
+    "catalog": null
+  },
+  "lineage": {
+    "status": 200,
+    "body": {
+      "root": "model.fishtown_internal_analytics._5x_daily_user_counts",
+      "max_depth": 3,
+      "nodes": [
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "all_days",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.all_days"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "base__cloud_accounts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.base__cloud_accounts"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "base__cloud_accounts_snapshot",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.base__cloud_accounts_snapshot"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "base__cloud_userpermissions_snapshot",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.base__cloud_userpermissions_snapshot"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "cloud_account_mappings",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "context_core__plugin_nodes",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.context_core__plugin_nodes"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "context_core__rpc_request",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.context_core__rpc_request"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "country_to_region_mappings",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.country_to_region_mappings"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "dbt_cloud_runtime_image_versions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dbt_cloud_runtime_image_versions"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "dbt_model_summary",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dbt_model_summary"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "dim_all_learners",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dim_all_learners"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "dim_cloud_environments",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dim_cloud_environments"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "dim_cloud_jobs",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dim_cloud_jobs"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "dim_cloud_outbound_webhooks",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dim_cloud_outbound_webhooks"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "dim_cloud_tenants",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dim_cloud_tenants"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "dim_dbt_versions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dim_dbt_versions"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__canvas_draft_action",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__canvas_draft_action"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__canvas_git_action",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__canvas_git_action"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__dbt_docs",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__dbt_docs"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__ide_invocation",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__ide_invocation"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__ide_refresh_lifecycle",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__ide_refresh_lifecycle"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__ide_sql_operation",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__ide_sql_operation"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__ide_tab_view",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__ide_tab_view"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_cloud__model_bottleneck_interactions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_cloud__model_bottleneck_interactions"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_core__invocation_enriched",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_core__invocation_enriched"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_eventbus__dbt_copilot_generation_complete",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_eventbus__dbt_copilot_generation_complete"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_eventbus__dbt_copilot_user_acceptance",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_eventbus__dbt_copilot_user_acceptance"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "event_eventbus__metadata_api_requests",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_eventbus__metadata_api_requests"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "fct_cloud_ide_interaction_timing",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_ide_interaction_timing"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "fct_cloud_jobs_daily",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_jobs_daily"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "fct_cloud_run_metrics",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_run_metrics"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "fct_cloud_user_account_mappings",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "fct_metronome_line_items",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_metronome_line_items"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "fct_notion_channel_mapping",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_notion_channel_mapping"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "fct_web_attribution_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_web_attribution_sessions"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "fct_web_conversions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_web_conversions"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "fct_web_pageviews",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int__customer_account_single_tenant_migration",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int__customer_account_single_tenant_migration"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud__account_plan_history",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__account_plan_history"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud__accounts_with_cloud_joins",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud__connections_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__connections_joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud__develop_requests",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__develop_requests"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud__partner_connect_signups_unioned",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__partner_connect_signups_unioned"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_cloud__runs_with_cloud_joins",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__runs_with_cloud_joins"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud__user_account_licenses",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__user_account_licenses"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud__users_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__users_joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud_account__multicell_migrations_current",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud_account_mappings__primaries",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud_account_mappings__primaries"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud_ide_refreshes",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud_ide_refreshes"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_cloud_job_version_enriched",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud_job_version_enriched"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_core__invocations_cloud_cli",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_core__invocations_cloud_cli"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_core__invocations_mesh",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_core__invocations_mesh"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_ide_dag_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_ide_dag_sessions"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_salesforce__accounts_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_salesforce__accounts_joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_salesforce__opportunities_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_salesforce__opportunities_joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_salesforce__opportunity_line_items_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_salesforce__opportunity_line_items_joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_semantic_layer__jobs_unioned",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_semantic_layer__jobs_unioned"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_snowplow_page_views",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_snowplow_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow_sessions"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_stripe__customers_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_stripe__customers_joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_stripe__invoices_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_stripe__invoices_joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_vscode_extension__lsp_compile_resolved",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_vscode_extension__lsp_compile_resolved"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_vscode_extension__registration_events_resolved",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_vscode_extension__registration_events_resolved"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "metadata_daily_user_activity",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.metadata_daily_user_activity"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__account_entitlement_configurations",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__account_entitlement_configurations"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__accounts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__accounts"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__auth_provider",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__auth_provider"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__develop_requests",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__develop_requests"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__environments",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__environments"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__private_link_endpoints",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__private_link_endpoints"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__projects",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__projects"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__repos",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__repos"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "stg_cloud__runs",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__runs"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__scim_configuration",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__scim_configuration"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__service_token",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__service_token"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__user_feature_flags",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__user_feature_flags"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__user_licenses",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_cloud__users",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__users"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_cloud_webhooks__events",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud_webhooks__events"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_cloud_webhooks__response_receipts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud_webhooks__response_receipts"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_cloud_webhooks__subscriptions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud_webhooks__subscriptions"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_launchdarkly__rule_clauses",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_launchdarkly__rule_clauses"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_semantic_layer__configurations",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_semantic_layer__configurations"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_semantic_layer__create_query_raw_sql_jobs",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_semantic_layer__create_query_raw_sql_jobs"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_semantic_layer__jobs",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_semantic_layer__jobs"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_zendesk__organization",
+          "resource_type": "model",
+          "unique_id": "model.zendesk.stg_zendesk__organization"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_quickbooks__account_id_map",
+          "resource_type": "seed",
+          "unique_id": "seed.fishtown_internal_analytics.stg_quickbooks__account_id_map"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_seed__cloud_job_dbt_versions_cleaned",
+          "resource_type": "seed",
+          "unique_id": "seed.fishtown_internal_analytics.stg_seed__cloud_job_dbt_versions_cleaned"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "top_level_domains",
+          "resource_type": "seed",
+          "unique_id": "seed.dbt_tld.top_level_domains"
+        },
+        {
+          "depth": -3,
+          "materialized": "external",
+          "name": "audit_log",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.cloud_postgres_au.audit_log"
+        },
+        {
+          "depth": -3,
+          "materialized": "external",
+          "name": "audit_log",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.cloud_postgres_emea.audit_log"
+        },
+        {
+          "depth": -3,
+          "materialized": "external",
+          "name": "audit_log",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.cloud_postgres.audit_log"
+        },
+        {
+          "depth": -3,
+          "materialized": "external",
+          "name": "openai_key",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.cloud_postgres_au.openai_key"
+        },
+        {
+          "depth": -3,
+          "materialized": "external",
+          "name": "openai_key",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.cloud_postgres.openai_key"
+        },
+        {
+          "depth": -3,
+          "materialized": "external",
+          "name": "openai_key",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.cloud_postgres_emea.openai_key"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "dbt_docs_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dbt_docs_sessions"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_cloud_canvas_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_canvas_sessions"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_cloud_ide_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_cloud_insights_queries",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_insights_queries"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_cloud_users",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_dbt_copilot_generations",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_dbt_copilot_generations"
+        },
+        {
+          "depth": -2,
+          "materialized": "incremental",
+          "name": "fct_dbt_invocations",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_opportunities_line_items",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_opportunities_line_items"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_semantic_layer_queries",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_semantic_layer_queries"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_vscode_extension_lsp_compiles_daily",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_vscode_extension_lsp_compiles_daily"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_vscode_extension_registrations",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_vscode_extension_registrations"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_web_attribution",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_web_attribution"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "int_cloud__fusion_enabled_accounts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud__fusion_enabled_accounts"
+        },
+        {
+          "depth": -2,
+          "materialized": "incremental",
+          "name": "int_core__cloud_cli_daily",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_core__cloud_cli_daily"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "int_core__cloud_user_accounts_mesh_daily",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_core__cloud_user_accounts_mesh_daily"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "metadata_account_usage",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.metadata_account_usage"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "stg_cloud__accounts_snapshot_daily",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__accounts_snapshot_daily"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "stg_cloud__audit_logs",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__audit_logs"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "stg_cloud__openai_keys",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__openai_keys"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "stg_cloud__user_licenses_snapshot_daily",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses_snapshot_daily"
+        },
+        {
+          "depth": -1,
+          "materialized": "table",
+          "name": "fct_cloud_accounts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "depth": -1,
+          "materialized": "table",
+          "name": "fct_cloud_user_account_activities",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "depth": 0,
+          "materialized": "view",
+          "name": "_5x_daily_user_counts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics._5x_daily_user_counts"
+        },
+        {
+          "depth": 1,
+          "name": "5x_S3_bucket",
+          "resource_type": "exposure",
+          "unique_id": "exposure.fishtown_internal_analytics.5x_S3_bucket"
+        },
+        {
+          "depth": 1,
+          "materialized": "test",
+          "name": "dbt_utils_unique_combination_of_columns__5x_daily_user_counts_account_id__date_day",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.dbt_utils_unique_combination_of_columns__5x_daily_user_counts_account_id__date_day.c42bde3cbe"
+        }
+      ],
+      "edges": [
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics._5x_daily_user_counts",
+          "to_id": "exposure.fishtown_internal_analytics.5x_S3_bucket"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics._5x_daily_user_counts",
+          "to_id": "test.fishtown_internal_analytics.dbt_utils_unique_combination_of_columns__5x_daily_user_counts_account_id__date_day.c42bde3cbe"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.all_days",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.all_days",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__opportunities_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.all_days",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__accounts_snapshot_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.all_days",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses_snapshot_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base__cloud_accounts",
+          "to_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base__cloud_accounts",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base__cloud_accounts_snapshot",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__accounts_snapshot_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base__cloud_userpermissions_snapshot",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses_snapshot_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.cloud_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.cloud_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.cloud_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.cloud_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.cloud_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__accounts_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.cloud_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__opportunities_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.context_core__plugin_nodes",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.context_core__rpc_request",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.country_to_region_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.country_to_region_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__accounts_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dbt_cloud_runtime_image_versions",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dbt_cloud_runtime_image_versions",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__runs_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dbt_cloud_runtime_image_versions",
+          "to_id": "model.fishtown_internal_analytics.int_cloud_job_version_enriched"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dbt_docs_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dbt_model_summary",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_all_learners",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_cloud_environments",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_cloud_jobs",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_cloud_jobs",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_cloud_outbound_webhooks",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_cloud_outbound_webhooks",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_cloud_tenants",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_cloud_tenants",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_dbt_versions",
+          "to_id": "model.fishtown_internal_analytics.dbt_cloud_runtime_image_versions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_dbt_versions",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__canvas_draft_action",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_canvas_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__canvas_git_action",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_canvas_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__dbt_docs",
+          "to_id": "model.fishtown_internal_analytics.dbt_docs_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__ide_invocation",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__ide_refresh_lifecycle",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__ide_sql_operation",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__ide_tab_view",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_cloud__model_bottleneck_interactions",
+          "to_id": "model.fishtown_internal_analytics.metadata_daily_user_activity"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_core__invocation_enriched",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_eventbus__dbt_copilot_generation_complete",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_copilot_generations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_eventbus__dbt_copilot_user_acceptance",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_copilot_generations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_eventbus__metadata_api_requests",
+          "to_id": "model.fishtown_internal_analytics.metadata_daily_user_activity"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_accounts",
+          "to_id": "model.fishtown_internal_analytics._5x_daily_user_counts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_canvas_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_ide_interaction_timing",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_insights_queries",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_jobs_daily",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_jobs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_jobs_daily",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__runs_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_run_metrics",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities",
+          "to_id": "model.fishtown_internal_analytics._5x_daily_user_counts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_web_attribution"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_vscode_extension__lsp_compile_resolved"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_vscode_extension__registration_events_resolved"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_cloud_users",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_dbt_copilot_generations",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_dbt_invocations",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_dbt_invocations",
+          "to_id": "model.fishtown_internal_analytics.int_core__invocations_cloud_cli"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_dbt_invocations",
+          "to_id": "model.fishtown_internal_analytics.int_core__invocations_mesh"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_metronome_line_items",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_notion_channel_mapping",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_opportunities_line_items",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_semantic_layer_queries",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_vscode_extension_lsp_compiles_daily",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_vscode_extension_registrations",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_attribution",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_attribution_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_attribution"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_conversions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_attribution_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_conversions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_pageviews",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_pageviews",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int__customer_account_single_tenant_migration",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__account_plan_history",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__account_plan_history",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_insights_queries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__fusion_enabled_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__connections_joined",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__develop_requests",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__develop_requests",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_run_metrics"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__develop_requests",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__fusion_enabled_accounts",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__partner_connect_signups_unioned",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__partner_connect_signups_unioned",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__runs_with_cloud_joins",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__user_account_licenses",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_insights_queries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__user_account_licenses",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__user_account_licenses",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__partner_connect_signups_unioned"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__users_joined",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__users_joined",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud__users_joined",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__user_account_licenses"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__account_entitlement_configurations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__audit_logs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__auth_provider"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__environments"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__openai_keys"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__private_link_endpoints"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__projects"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__repos"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__runs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__scim_configuration"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__service_token"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account__multicell_migrations_current",
+          "to_id": "model.fishtown_internal_analytics.stg_semantic_layer__configurations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_account_mappings__primaries",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_ide_refreshes",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_job_version_enriched",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_jobs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_core__cloud_cli_daily",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_core__cloud_user_accounts_mesh_daily",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_core__cloud_user_accounts_mesh_daily",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_core__invocations_cloud_cli",
+          "to_id": "model.fishtown_internal_analytics.int_core__cloud_cli_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_core__invocations_mesh",
+          "to_id": "model.fishtown_internal_analytics.int_core__cloud_user_accounts_mesh_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_ide_dag_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_ide_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_salesforce__accounts_joined",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_salesforce__opportunities_joined",
+          "to_id": "model.fishtown_internal_analytics.fct_opportunities_line_items"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_salesforce__opportunity_line_items_joined",
+          "to_id": "model.fishtown_internal_analytics.fct_opportunities_line_items"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_salesforce__opportunity_line_items_joined",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__opportunities_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_semantic_layer__jobs_unioned",
+          "to_id": "model.fishtown_internal_analytics.fct_semantic_layer_queries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_page_views",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_page_views",
+          "to_id": "model.fishtown_internal_analytics.int_cloud_ide_refreshes"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_sessions",
+          "to_id": "model.fishtown_internal_analytics.dbt_docs_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_stripe__customers_joined",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_stripe__customers_joined",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_stripe__invoices_joined",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_stripe__invoices_joined",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_vscode_extension__lsp_compile_resolved",
+          "to_id": "model.fishtown_internal_analytics.fct_vscode_extension_lsp_compiles_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_vscode_extension__registration_events_resolved",
+          "to_id": "model.fishtown_internal_analytics.fct_vscode_extension_registrations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.metadata_account_usage",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.metadata_daily_user_activity",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.metadata_daily_user_activity",
+          "to_id": "model.fishtown_internal_analytics.metadata_account_usage"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__account_entitlement_configurations",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_outbound_webhooks"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts",
+          "to_id": "model.fishtown_internal_analytics.int_cloud_account_mappings__primaries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts_snapshot_daily",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__accounts_snapshot_daily",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__account_plan_history"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__audit_logs",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__auth_provider",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__develop_requests",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__develop_requests",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__develop_requests",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__develop_requests"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__environments",
+          "to_id": "model.fishtown_internal_analytics.fct_semantic_layer_queries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__openai_keys",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__private_link_endpoints",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__projects",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__repos",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__runs",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_jobs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__runs",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_run_metrics"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__runs",
+          "to_id": "model.fishtown_internal_analytics.fct_dbt_invocations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__runs",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__runs_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__scim_configuration",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__service_token",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__user_feature_flags",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__user_account_licenses"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses_snapshot_daily",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_user_account_activities"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__users",
+          "to_id": "model.fishtown_internal_analytics.fct_web_attribution"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__users",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__users_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud__users",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__user_licenses_snapshot_daily"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud_webhooks__events",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_outbound_webhooks"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud_webhooks__response_receipts",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_outbound_webhooks"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_cloud_webhooks__subscriptions",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_outbound_webhooks"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_launchdarkly__rule_clauses",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__fusion_enabled_accounts"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_semantic_layer__configurations",
+          "to_id": "model.fishtown_internal_analytics.int_cloud__accounts_with_cloud_joins"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_semantic_layer__create_query_raw_sql_jobs",
+          "to_id": "model.fishtown_internal_analytics.fct_semantic_layer_queries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_semantic_layer__jobs",
+          "to_id": "model.fishtown_internal_analytics.fct_semantic_layer_queries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.zendesk.stg_zendesk__organization",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.zendesk.stg_zendesk__organization",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__accounts_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "seed.dbt_tld.top_level_domains",
+          "to_id": "model.fishtown_internal_analytics.fct_cloud_users"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "seed.fishtown_internal_analytics.stg_quickbooks__account_id_map",
+          "to_id": "model.fishtown_internal_analytics.cloud_account_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "seed.fishtown_internal_analytics.stg_seed__cloud_job_dbt_versions_cleaned",
+          "to_id": "model.fishtown_internal_analytics.dim_cloud_jobs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.cloud_postgres.audit_log",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__audit_logs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.cloud_postgres.openai_key",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__openai_keys"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.cloud_postgres_au.audit_log",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__audit_logs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.cloud_postgres_au.openai_key",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__openai_keys"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.cloud_postgres_emea.audit_log",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__audit_logs"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.cloud_postgres_emea.openai_key",
+          "to_id": "model.fishtown_internal_analytics.stg_cloud__openai_keys"
+        }
+      ]
+    }
+  },
+  "columnLineage": {
+    "status": 412,
+    "body": {
+      "code": "column_lineage_unavailable",
+      "message": "Column-level lineage is not available in this distribution + artifact set.",
+      "upgrade_path": "Run `dbt --use-index <run|build|compile>` with static analysis enabled, in a distribution that ships the column-lineage provider."
+    }
+  }
+}

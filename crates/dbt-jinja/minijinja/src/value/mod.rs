@@ -230,6 +230,7 @@ pub(crate) mod argtypes;
 #[cfg(feature = "deserialization")]
 mod deserialize;
 pub mod function_object;
+pub mod introspective;
 pub(crate) mod merge_object;
 pub(crate) mod namespace_object;
 mod object;
@@ -1331,6 +1332,13 @@ impl Value {
             ValueRepr::Object(ref dy) => Some(dy),
             _ => None,
         }
+    }
+
+    /// Returns `true` if this value is a stand-in for an unknowable value
+    /// produced by an introspective (warehouse-dependent) call evaluated
+    /// without a real connection. See [`Object::is_introspective_stub`].
+    pub fn is_introspective_stub(&self) -> bool {
+        self.as_object().is_some_and(|o| o.is_introspective_stub())
     }
 
     /// Returns the length of the contained value.

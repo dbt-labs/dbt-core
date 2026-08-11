@@ -1,5 +1,7 @@
 use crate::adapter::adapter_impl::AdapterImpl;
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult};
+use crate::errors::{
+    AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult, into_fs_error,
+};
 use crate::macro_exec::execute_macro;
 use crate::relation::{RelationObject, create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
@@ -12,7 +14,9 @@ use crate::{AdapterEngine, metadata::*};
 
 use arrow::array::RecordBatch;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_common::ErrorCode;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
@@ -27,9 +31,22 @@ use std::sync::Arc;
 
 // XXX: we should unify relation representation as Arrow schemas across the codebase
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MetadataQueryOptions {
     pub warehouse: Option<String>,
+    /// Whether the adaptive broad-vs-sequential freshness prefetch is enabled.
+    /// Only the Snowflake no-metadata-warehouse strategy consults it; other
+    /// adapters ignore it. Defaults to `true` (adaptive on).
+    pub adaptive_metadata_fetch: bool,
+}
+
+impl Default for MetadataQueryOptions {
+    fn default() -> Self {
+        Self {
+            warehouse: None,
+            adaptive_metadata_fetch: true,
+        }
+    }
 }
 
 /// `(parent, child)` pair for the relation cache dependency graph.
@@ -332,14 +349,15 @@ pub trait MetadataAdapter: Send + Sync {
     /// `table_schema IN (...)` filter rather than per-table predicates.  For
     /// large projects the per-table OR-predicate on `INFORMATION_SCHEMA.TABLES`
     /// can be slower than a plain schema dump; adapters that have validated
-    /// this approach should override this method.
+    /// this approach override this method (and `supports_bulk_freshness_dump`).
     ///
     /// `relations` is the subset of input relations in this (database, schema)
     /// group; adapters use `find_matching_relation` on the dump results to key
     /// the returned map by the same semantic FQN as `relation.semantic_fqn()`.
     ///
-    /// The default implementation returns an empty map, signalling to the
-    /// caller that it should fall back to `freshness_with_overrides_and_options`.
+    /// The default implementation returns an empty map; it is only reached by
+    /// adapters that do not implement a bulk dump, which never route through this
+    /// method (see `supports_bulk_freshness_dump`).
     fn freshness_all_in_schema<'a>(
         &'a self,
         _database: &'a str,
@@ -351,69 +369,72 @@ pub trait MetadataAdapter: Send + Sync {
         Box::pin(async move { Ok(BTreeMap::new()) })
     }
 
-    /// Fetch freshness for all tables across several schemas of a database in a
-    /// single broad `table_schema IN (...)` scan.
+    /// Whether this adapter implements a bulk per-schema freshness dump
+    /// (`freshness_all_in_schema`).
     ///
-    /// This is the multi-schema counterpart of `freshness_all_in_schema` and
-    /// mirrors the plugin's pre-adaptive
-    /// `_fetch_last_modified_epochs_from_schemas_in_catalog` (which issues one
-    /// broad `table_schema IN (...)` fetch per catalog). The adaptive prefetch
-    /// uses it for databases small enough that a single broad scan is cheaper
-    /// than one pruned point query per schema.
-    ///
-    /// The set of schemas to scan is derived from `relations` themselves (using
-    /// the same resolution `find_matching_relation` uses to key results), so the
-    /// `table_schema IN (...)` predicate and the result matching can never drift
-    /// apart. `relations` is the subset of input relations in this database
-    /// (spanning one or more schemas); adapters use `find_matching_relation` on
-    /// the scan results to key the returned map by the same semantic FQN as
-    /// `relation.semantic_fqn()`.
-    ///
-    /// Unlike `freshness_all_in_schema` — a general per-schema path several
-    /// adapters share, whose empty default deliberately signals "fall back to
-    /// the per-table query" — the broad scan is only ever selected by adapters
-    /// whose prefetch orchestration opts into it (currently Snowflake only). A
-    /// call reaching this base default therefore means the adapter does not
-    /// support the broad scan, so it raises `NotSupported` rather than silently
-    /// returning empty.
-    fn freshness_all_in_schemas<'a>(
-        &'a self,
-        _database: &'a str,
-        _relations: &'a [Arc<dyn BaseRelation>],
-        _options: &'a MetadataQueryOptions,
-        _token: CancellationToken,
-    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        Box::pin(async move {
-            Err(Cancellable::Error(AdapterError::new(
-                AdapterErrorKind::NotSupported,
-                "freshness_all_in_schemas (broad multi-schema INFORMATION_SCHEMA scan) is not \
-                 supported by this adapter",
-            )))
-        })
+    /// Governs which single path `freshness_all_in_schemas` takes: `true` →
+    /// per-schema dumps; `false` → the per-table bulk query. An adapter uses
+    /// exactly the one path it supports. Must be `true` for exactly the adapters
+    /// that override `freshness_all_in_schema`.
+    fn supports_bulk_freshness_dump(&self) -> bool {
+        false
     }
 
-    /// Count the schemas in `database`, capped at `limit` rows.
+    /// Fetch freshness for the given relations using the adapter's bulk strategy.
     ///
-    /// A cheap, constant-cost probe used by the adaptive freshness prefetch to
-    /// choose between one broad `table_schema IN (...)` scan and per-schema point
-    /// queries, without listing the whole database. Implementations return
-    /// `min(actual_schema_count, limit)`; the caller treats `observed == limit`
-    /// as "the database has at least `limit` schemas".
+    /// This is *the* freshness-prefetch entry point: the run-cache orchestration
+    /// hands over all non-override relations (which may span several databases
+    /// and schemas) and lets the adapter bulk-load their freshness in as few
+    /// queries as it can. The returned map is keyed by `relation.semantic_fqn()`;
+    /// relations whose freshness the bulk query did not return are simply absent
+    /// (the caller caches them as unknown). Prefetch is strictly a bulk load: any
+    /// relation the bulk query does not cover is resolved by the per-node path at
+    /// submit time, not re-queried per-relation here.
     ///
-    /// The probe query is engine-specific (Snowflake uses
-    /// `SHOW TERSE SCHEMAS IN DATABASE ... LIMIT`), so the base default is
-    /// `NotSupported`; callers gate this behind the adapters that implement it.
-    fn count_schemas_up_to<'a>(
+    /// The default implementation dispatches on `supports_bulk_freshness_dump`:
+    /// adapters with a bulk dump group by resolved `(database, schema)` and issue
+    /// one `freshness_all_in_schema` dump per group (fail-open per group); adapters
+    /// without one use the batched per-table `freshness_with_overrides_and_options`.
+    /// Adapters with a warehouse-specific strategy (Snowflake) override this method.
+    ///
+    /// Grouping uses each relation's *resolved* (normalized-if-unquoted)
+    /// database/schema so that, e.g., Snowflake's uppercase folding lines up with
+    /// the `WHERE table_schema = '...'` clause `freshness_all_in_schema` builds.
+    fn freshness_all_in_schemas<'a>(
         &'a self,
-        _database: &'a str,
-        _limit: usize,
-        _token: CancellationToken,
-    ) -> AsyncAdapterResult<'a, usize> {
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
         Box::pin(async move {
-            Err(Cancellable::Error(AdapterError::new(
-                AdapterErrorKind::NotSupported,
-                "count_schemas_up_to (schema-count probe) is not supported by this adapter",
-            )))
+            if !self.supports_bulk_freshness_dump() {
+                // No bulk per-schema dump — the per-table bulk query (one batched
+                // statement) is this adapter's bulk path.
+                let no_overrides = BTreeMap::new();
+                return self
+                    .freshness_with_overrides_and_options(relations, &no_overrides, options, token)
+                    .await;
+            }
+
+            let mut groups: BTreeMap<(String, String), Vec<Arc<dyn BaseRelation>>> =
+                BTreeMap::new();
+            for relation in relations {
+                let database = relation.database_as_resolved_str().unwrap_or_default();
+                let schema = relation.schema_as_resolved_str().unwrap_or_default();
+                groups
+                    .entry((database, schema))
+                    .or_default()
+                    .push(Arc::clone(relation));
+            }
+
+            let mut result: BTreeMap<String, MetadataFreshness> = BTreeMap::new();
+            for ((database, schema), group) in groups {
+                result.extend(
+                    freshness_group_dump(self, &database, &schema, &group, options, token.clone())
+                        .await,
+                );
+            }
+            Ok(result)
         })
     }
 
@@ -562,6 +583,46 @@ pub trait MetadataAdapter: Send + Sync {
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'a, Vec<ParentChildPair>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+/// Fetch freshness for one already-grouped `(database, schema)` set of relations
+/// via [`MetadataAdapter::freshness_all_in_schema`], with per-group fail-open.
+///
+/// Never returns an error: on a dump failure it warns and returns an empty map,
+/// so a single bad schema never aborts the whole prefetch. An empty result means
+/// "unknown freshness" for the group; prefetch is a bulk load, so uncovered
+/// relations are resolved by the per-node path at submit time rather than
+/// re-queried per-table here. Shared by the generic
+/// [`MetadataAdapter::freshness_all_in_schemas`] dump path and the Snowflake
+/// per-schema strategy paths.
+pub(crate) async fn freshness_group_dump<A: MetadataAdapter + ?Sized>(
+    adapter: &A,
+    database: &str,
+    schema: &str,
+    relations: &[Arc<dyn BaseRelation>],
+    options: &MetadataQueryOptions,
+    token: CancellationToken,
+) -> BTreeMap<String, MetadataFreshness> {
+    match adapter
+        .freshness_all_in_schema(database, schema, relations, options, token)
+        .await
+    {
+        Ok(dump) => dump,
+        Err(err) => {
+            // Metadata prefetch failures should not disable dbt State; unknown
+            // freshness keeps downstream decisions conservative.
+            let err = into_fs_error(err);
+            emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "dbt State schema-level freshness dump failed for {database}.{schema}: {err}; \
+                     omitting freshness for {} relations",
+                    relations.len()
+                ),
+            );
+            BTreeMap::new()
+        }
     }
 }
 

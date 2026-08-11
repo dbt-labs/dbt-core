@@ -714,39 +714,52 @@ impl<'source> CodeGenerator<'source> {
                         typecheck_resolved_context,
                     ) => {
                         let mut attempts = Vec::new();
-                        if let Some(macro_qualified_name) = macro_namespace_template_resolver(
+                        let resolved_signature = macro_namespace_template_resolver(
                             typecheck_resolved_context,
                             function_registry.clone(),
                             macro_decl.name,
                             &mut attempts,
-                        ) {
-                            if let Some(signature) = function_registry.get(&macro_qualified_name) {
-                                if let Some(udf) =
-                                    signature.downcast_ref::<UserDefinedFunctionType>()
-                                {
-                                    if let Some(arg) = udf.args.get(i) {
-                                        let type_ = arg.type_.get_non_optional_type();
-                                        // the parameter has default value, so we need to exclude the none from arg type and check with the default
-                                        self.add(Instruction::LoadType(Value::from_object(type_)));
-                                        self.compile_expr(default)?;
-                                        self.add(Instruction::UnionType);
-                                    } else {
-                                        self.add(Instruction::LoadType(Value::from_object(
-                                            Type::Any { hard: false },
-                                        )));
-                                        self.compile_expr(default)?;
-                                        self.add(Instruction::UnionType);
-                                    }
-                                } else {
-                                    self.add(Instruction::LoadType(Value::from_object(
-                                        Type::Any { hard: false },
-                                    )));
-                                }
-                            } else {
-                                panic!(
-                                    "Function signature not found for macro {}",
-                                    macro_decl.name
-                                );
+                        )
+                        .and_then(|macro_qualified_name| {
+                            function_registry.get(&macro_qualified_name).cloned()
+                        });
+                        match resolved_signature.as_ref().and_then(|signature| {
+                            signature.downcast_ref::<UserDefinedFunctionType>()
+                        }) {
+                            Some(udf) => {
+                                let type_ = udf
+                                    .args
+                                    .get(i)
+                                    .map(|arg| arg.type_.get_non_optional_type())
+                                    .unwrap_or(Type::Any { hard: false });
+                                // the parameter has default value, so we need to exclude the none from arg type and check with the default
+                                self.add(Instruction::LoadType(Value::from_object(type_)));
+                                self.compile_expr(default)?;
+                                self.add(Instruction::UnionType);
+                            }
+                            None => {
+                                // No statically-known signature for this macro
+                                // (e.g. it has no docstring `funcsign` -- the
+                                // common case for most macros -- or, until
+                                // recently, `macro_namespace_template_resolver`
+                                // couldn't resolve a package macro's own
+                                // qualified name at all when typechecking it in
+                                // isolation without a `target_package_name`).
+                                // Fall back to `Any` for the declared type, but
+                                // still compile the default expression and
+                                // union it in -- omitting either one leaves
+                                // this argument's assignment with nothing to
+                                // pop off the stack (a stack underflow once
+                                // typechecking reaches it), and skipping
+                                // `compile_expr(default)` would also silently
+                                // stop the type checker from ever visiting
+                                // calls made inside the default expression
+                                // itself.
+                                self.add(Instruction::LoadType(Value::from_object(Type::Any {
+                                    hard: false,
+                                })));
+                                self.compile_expr(default)?;
+                                self.add(Instruction::UnionType);
                             }
                         }
                     }

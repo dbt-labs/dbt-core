@@ -219,12 +219,24 @@ pub struct DefaultJinjaTypeCheckEventListenerFactory {
     /// all macro depends on
     /// NOTE(felipecrv): this should probably be changed to an `im` data-structure
     all_depends_on: Arc<RwLock<BTreeMap<String, BTreeSet<String>>>>,
+    /// unique-ids of macros observed *directly* calling a method named like
+    /// one of `minijinja::INTROSPECTIVE_METHOD_NAMES` during type-checking
+    /// (see `DagExtractListener::on_introspective_call`). Callers combine
+    /// this with `all_depends_on` to compute the *transitive* set of macros
+    /// that reach an introspective call, for `JinjaRenderMode::Symbolic`.
+    direct_introspective: Arc<RwLock<BTreeSet<String>>>,
 }
 
 impl DefaultJinjaTypeCheckEventListenerFactory {
     /// Lock the depends_on graph for reading.
     pub fn depends_on(&self) -> RwLockReadGuard<'_, BTreeMap<String, BTreeSet<String>>> {
         self.all_depends_on.read().unwrap()
+    }
+
+    /// Lock the set of macros observed directly calling an introspective
+    /// adapter method for reading.
+    pub fn direct_introspective(&self) -> RwLockReadGuard<'_, BTreeSet<String>> {
+        self.direct_introspective.read().unwrap()
     }
 }
 
@@ -258,6 +270,11 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
                         .insert(definition);
                 }
             }
+            if dag_extract_listener.introspective_call.get()
+                && let Ok(mut direct_introspective) = self.direct_introspective.write()
+            {
+                direct_introspective.insert(dag_extract_listener.unique_id.clone());
+            }
         }
     }
 
@@ -267,6 +284,11 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
             && let Some(depends_on) = all_depends_on.remove(old_unique_id)
         {
             all_depends_on.insert(new_unique_id.to_string(), depends_on);
+        }
+        if let Ok(mut direct_introspective) = self.direct_introspective.write()
+            && direct_introspective.remove(old_unique_id)
+        {
+            direct_introspective.insert(new_unique_id.to_string());
         }
     }
 
@@ -287,6 +309,10 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
 struct DagExtractListener {
     unique_id: String,
     depends_on: RefCell<Vec<(String, String)>>, // (ref, def)
+    /// Set if this macro was observed directly calling a method named like
+    /// one of `minijinja::INTROSPECTIVE_METHOD_NAMES` (see
+    /// `on_introspective_call`).
+    introspective_call: Cell<bool>,
 }
 
 impl DagExtractListener {
@@ -294,6 +320,7 @@ impl DagExtractListener {
         Self {
             unique_id: unique_id.to_string(),
             depends_on: RefCell::new(vec![]),
+            introspective_call: Cell::new(false),
         }
     }
 }
@@ -327,6 +354,10 @@ impl TypecheckingEventListener for DagExtractListener {
         self.depends_on
             .borrow_mut()
             .push((self.unique_id.clone(), def_unique_id.to_string()));
+    }
+
+    fn on_introspective_call(&self, _method_name: &str) {
+        self.introspective_call.set(true);
     }
 }
 
@@ -857,5 +888,312 @@ impl RenderingEventListener for DefaultRenderingEventListener {
                 ),
             );
         }
+    }
+}
+
+/// Function registry (to resolve a macro's qualified name to a dbt
+/// unique-id) plus the statically computed set of introspective unique-ids
+/// (see `JinjaEnv::introspective_macros`), as supplied to
+/// [`SymbolicRenderingEventListener::with_macro_registry`].
+type IntrospectiveMacroRegistry = (
+    Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+    Arc<RwLock<HashSet<String>>>,
+);
+
+/// Listener used exclusively by `JinjaRenderMode::Symbolic`'s render path
+/// (`sdf_linter::rendered_linter::render_symbolic_lint_targets`). Wraps a
+/// [`DefaultRenderingEventListener`] for the macro-span-tracking behavior
+/// every render mode needs, adding only the introspective-taint-specific
+/// state (opting into `RenderingEventListener::wants_introspective_holes`
+/// unconditionally). Keeping this state and behavior off
+/// `DefaultRenderingEventListener` itself means every other render path
+/// (dbt run/compile, Turbo/Rendered lint, LSP, ...) can't accidentally
+/// depend on or be affected by it.
+#[derive(Debug)]
+pub struct SymbolicRenderingEventListener {
+    inner: DefaultRenderingEventListener,
+
+    /// Per-ordinal forced branch decisions for tainted `{% if %}`
+    /// conditions, consulted by `resolve_introspective_branch`. Set once at
+    /// construction time (via
+    /// [`with_branch_overrides`](Self::with_branch_overrides)) so each
+    /// render pass explores one specific alternate branch.
+    introspective_branch_overrides: HashMap<usize, bool>,
+
+    /// Counts calls to `resolve_introspective_branch` during this render
+    /// pass, which doubles as the stable ordinal assigned to each tainted
+    /// `{% if %}` decision encountered (in evaluation order).
+    introspective_branch_ordinal: Cell<usize>,
+
+    /// Macro qualified-name (`"package.macro_name"`, matching
+    /// `Macro::call`'s own `qualified_name`) lookup used by
+    /// `is_known_introspective_macro`, backed by the function registry (to
+    /// resolve a qualified name to a dbt unique-id) and the statically
+    /// computed set of introspective unique-ids (see
+    /// `JinjaEnv::introspective_macros`). `None` means "don't know" (the
+    /// check always answers `false`).
+    introspective_macro_registry: Option<IntrospectiveMacroRegistry>,
+}
+
+impl SymbolicRenderingEventListener {
+    /// Creates a new listener.
+    pub fn new(quiet: bool) -> Self {
+        Self {
+            inner: DefaultRenderingEventListener::new(quiet),
+            introspective_branch_overrides: HashMap::new(),
+            introspective_branch_ordinal: Cell::new(0),
+            introspective_macro_registry: None,
+        }
+    }
+
+    /// The macro spans accumulated by the wrapped
+    /// [`DefaultRenderingEventListener`] during this render.
+    pub fn macro_spans(&self) -> std::cell::Ref<'_, MacroSpans> {
+        self.inner.macro_spans.borrow()
+    }
+
+    /// Forces the tainted `{% if %}` decision at each given ordinal (in
+    /// evaluation order, 0-based) to the given branch for this render pass;
+    /// any tainted decision not present takes the default ("then") branch.
+    /// Used to explore one alternate branch per render pass, mirroring
+    /// Turbo's static `{% if %}/{% else %}` variant generation.
+    pub fn with_branch_overrides(mut self, overrides: HashMap<usize, bool>) -> Self {
+        self.introspective_branch_overrides = overrides;
+        self
+    }
+
+    /// Number of tainted `{% if %}` decisions encountered during this render
+    /// pass, i.e. the number of distinct ordinals a caller could override in
+    /// a subsequent pass.
+    pub fn branch_count(&self) -> usize {
+        self.introspective_branch_ordinal.get()
+    }
+
+    /// Supplies the data `is_known_introspective_macro` needs to answer:
+    /// `jinja_env.jinja_function_registry` (to resolve a macro's qualified
+    /// name to its dbt unique-id) and `jinja_env.introspective_macros` (the
+    /// statically-computed set of unique-ids known to reach an introspective
+    /// adapter call), so a whole macro call can be treated as an opaque
+    /// taint boundary.
+    pub fn with_macro_registry(
+        mut self,
+        function_registry: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+        introspective_macros: Arc<RwLock<HashSet<String>>>,
+    ) -> Self {
+        self.introspective_macro_registry = Some((function_registry, introspective_macros));
+        self
+    }
+}
+
+impl RenderingEventListener for SymbolicRenderingEventListener {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "SymbolicRenderingEventListener"
+    }
+
+    fn create_output_tracker<'a>(
+        &self,
+        w: &'a mut (dyn std::fmt::Write + 'a),
+    ) -> Option<OutputTracker<'a>> {
+        self.inner.create_output_tracker(w)
+    }
+
+    fn on_macro_start(&self, file_path: Option<&Path>, line: &u32, col: &u32, offset: &u32) {
+        self.inner.on_macro_start(file_path, line, col, offset)
+    }
+
+    fn on_macro_stop(&self, file_path: Option<&Path>, line: &u32, col: &u32, offset: &u32) {
+        self.inner.on_macro_stop(file_path, line, col, offset)
+    }
+
+    fn on_raw_emit(&self, raw: &str, source_span: &Span) {
+        self.inner.on_raw_emit(raw, source_span)
+    }
+
+    fn on_malicious_return(&self, location: &CodeLocation) {
+        self.inner.on_malicious_return(location)
+    }
+
+    fn on_function_start(&self) {
+        self.inner.on_function_start()
+    }
+
+    fn on_function_end(&self) {
+        self.inner.on_function_end()
+    }
+
+    fn wants_introspective_holes(&self) -> bool {
+        true
+    }
+
+    fn on_value_override(&self, source_span: &Span, expanded_span: &Span) {
+        self.inner
+            .macro_spans
+            .borrow_mut()
+            .push(*source_span, *expanded_span);
+    }
+
+    fn resolve_introspective_branch(&self) -> bool {
+        let ordinal = self.introspective_branch_ordinal.get();
+        self.introspective_branch_ordinal.set(ordinal + 1);
+        self.introspective_branch_overrides
+            .get(&ordinal)
+            .copied()
+            .unwrap_or(true)
+    }
+
+    fn is_known_introspective_macro(&self, qualified_name: &str) -> bool {
+        let Some((function_registry, introspective_macros)) = &self.introspective_macro_registry
+        else {
+            return false;
+        };
+        let Some(unique_id) = function_registry
+            .get(qualified_name)
+            .and_then(|funcsign| funcsign.get_unique_id())
+        else {
+            return false;
+        };
+        introspective_macros.read().unwrap().contains(&unique_id)
+    }
+}
+
+#[cfg(test)]
+mod introspective_hole_tests {
+    use super::*;
+    use dbt_adapter::introspective_taint::IntrospectiveValue;
+    use minijinja::{Environment, Value, context};
+
+    #[test]
+    fn tainted_emit_is_substituted_with_hole_when_enabled() {
+        let env = Environment::new();
+        let listener: Rc<dyn RenderingEventListener> =
+            Rc::new(SymbolicRenderingEventListener::new(true));
+        let out = env
+            .render_str(
+                "select {{ col }} from t",
+                context! { col => IntrospectiveValue::wrap(Value::from("real_col")) },
+                std::slice::from_ref(&listener),
+            )
+            .unwrap();
+        assert_eq!(out, "select {{}} from t");
+
+        let symbolic_listener = listener
+            .as_any()
+            .downcast_ref::<SymbolicRenderingEventListener>()
+            .unwrap();
+        assert!(!symbolic_listener.macro_spans().items.is_empty());
+    }
+
+    #[test]
+    fn tainted_emit_is_rendered_normally_on_the_default_listener() {
+        let env = Environment::new();
+        let listener: Rc<dyn RenderingEventListener> =
+            Rc::new(DefaultRenderingEventListener::new(true));
+        let out = env
+            .render_str(
+                "select {{ col }} from t",
+                context! { col => IntrospectiveValue::wrap(Value::from("real_col")) },
+                &[listener],
+            )
+            .unwrap();
+        assert_eq!(out, "select real_col from t");
+    }
+
+    #[test]
+    fn untainted_emit_is_unaffected_when_holes_enabled() {
+        let env = Environment::new();
+        let listener: Rc<dyn RenderingEventListener> =
+            Rc::new(SymbolicRenderingEventListener::new(true));
+        let out = env
+            .render_str(
+                "select {{ col }} from t",
+                context! { col => Value::from("real_col") },
+                &[listener],
+            )
+            .unwrap();
+        assert_eq!(out, "select real_col from t");
+    }
+
+    #[test]
+    fn tainted_if_condition_defaults_to_then_branch_and_counts_one_decision() {
+        let env = Environment::new();
+        let listener: Rc<dyn RenderingEventListener> =
+            Rc::new(SymbolicRenderingEventListener::new(true));
+        let out = env
+            .render_str(
+                "{% if rel %}A{% else %}B{% endif %}",
+                context! { rel => IntrospectiveValue::wrap(Value::from(())) },
+                std::slice::from_ref(&listener),
+            )
+            .unwrap();
+        assert_eq!(out, "A");
+
+        let symbolic_listener = listener
+            .as_any()
+            .downcast_ref::<SymbolicRenderingEventListener>()
+            .unwrap();
+        assert_eq!(symbolic_listener.branch_count(), 1);
+    }
+
+    #[test]
+    fn overriding_the_ordinal_forces_the_else_branch() {
+        let env = Environment::new();
+        let listener: Rc<dyn RenderingEventListener> = Rc::new(
+            SymbolicRenderingEventListener::new(true)
+                .with_branch_overrides(HashMap::from([(0, false)])),
+        );
+        let out = env
+            .render_str(
+                "{% if rel %}A{% else %}B{% endif %}",
+                context! { rel => IntrospectiveValue::wrap(Value::from(())) },
+                &[listener],
+            )
+            .unwrap();
+        assert_eq!(out, "B");
+    }
+
+    #[test]
+    fn untainted_if_condition_is_unaffected() {
+        let env = Environment::new();
+        let listener: Rc<dyn RenderingEventListener> =
+            Rc::new(SymbolicRenderingEventListener::new(true));
+        let out = env
+            .render_str(
+                "{% if flag %}A{% else %}B{% endif %}",
+                context! { flag => Value::from(false) },
+                std::slice::from_ref(&listener),
+            )
+            .unwrap();
+        assert_eq!(out, "B");
+        let symbolic_listener = listener
+            .as_any()
+            .downcast_ref::<SymbolicRenderingEventListener>()
+            .unwrap();
+        assert_eq!(symbolic_listener.branch_count(), 0);
+    }
+
+    #[test]
+    fn two_tainted_decisions_get_sequential_ordinals_overridable_independently() {
+        let env = Environment::new();
+        let listener: Rc<dyn RenderingEventListener> = Rc::new(
+            SymbolicRenderingEventListener::new(true)
+                .with_branch_overrides(HashMap::from([(1, false)])),
+        );
+        let out = env
+            .render_str(
+                "{% if a %}1{% else %}0{% endif %}-{% if b %}1{% else %}0{% endif %}",
+                context! {
+                    a => IntrospectiveValue::wrap(Value::from(())),
+                    b => IntrospectiveValue::wrap(Value::from(())),
+                },
+                &[listener],
+            )
+            .unwrap();
+        // First tainted decision (ordinal 0) has no override -> default "then"
+        // branch. Second (ordinal 1) is forced to the "else" branch.
+        assert_eq!(out, "1-0");
     }
 }

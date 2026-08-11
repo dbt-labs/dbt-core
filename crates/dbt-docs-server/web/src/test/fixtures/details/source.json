@@ -1,0 +1,248 @@
+{
+  "detail": {
+    "unique_id": "source.fishtown_internal_analytics.meetup._dlt_loads",
+    "name": "_dlt_loads",
+    "resource_type": "source",
+    "package_name": "fishtown_internal_analytics",
+    "description": "The dltHub metadata as ran through Prefect.",
+    "original_file_path": "models/staging/meetup/_meetup__sources.yml",
+    "file_path": "models/staging/meetup/_meetup__sources.yml",
+    "tags": [],
+    "fqn": [
+      "fishtown_internal_analytics",
+      "staging",
+      "meetup",
+      "meetup",
+      "_dlt_loads"
+    ],
+    "database_name": "raw",
+    "schema_name": "meetup_data",
+    "identifier": null,
+    "source_name": null,
+    "source_description": null,
+    "loader": null,
+    "meta": null,
+    "referenced_by": [
+      {
+        "unique_id": "model.fishtown_internal_analytics.base_meetup__dlt_loads",
+        "edge_type": "ref"
+      },
+      {
+        "unique_id": "test.fishtown_internal_analytics.source_not_null_meetup__dlt_loads_load_id.977f0e0764",
+        "edge_type": "ref"
+      },
+      {
+        "unique_id": "test.fishtown_internal_analytics.source_unique_meetup__dlt_loads_load_id.e60902c4d6",
+        "edge_type": "ref"
+      }
+    ],
+    "columns": [
+      {
+        "name": "load_id",
+        "index": 0,
+        "data_type": null,
+        "declared_type": null,
+        "inferred_type": null,
+        "catalog_type": null,
+        "description": "The ID of the Prefect/dltHub load.",
+        "label": null,
+        "granularity": null
+      }
+    ],
+    "freshness": {
+      "status": "skipped",
+      "snapshotted_at": null,
+      "max_loaded_at": null,
+      "max_loaded_at_time_ago": null,
+      "criteria": null
+    },
+    "catalog": null
+  },
+  "lineage": {
+    "status": 200,
+    "body": {
+      "root": "source.fishtown_internal_analytics.meetup._dlt_loads",
+      "max_depth": 3,
+      "nodes": [
+        {
+          "depth": 0,
+          "materialized": "external",
+          "name": "_dlt_loads",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.meetup._dlt_loads"
+        },
+        {
+          "depth": 1,
+          "materialized": "view",
+          "name": "base_meetup__dlt_loads",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.base_meetup__dlt_loads"
+        },
+        {
+          "depth": 1,
+          "materialized": "test",
+          "name": "source_not_null_meetup__dlt_loads_load_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.source_not_null_meetup__dlt_loads_load_id.977f0e0764"
+        },
+        {
+          "depth": 1,
+          "materialized": "test",
+          "name": "source_unique_meetup__dlt_loads_load_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.source_unique_meetup__dlt_loads_load_id.e60902c4d6"
+        },
+        {
+          "depth": 2,
+          "materialized": "view",
+          "name": "stg_meetup__events",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_meetup__events"
+        },
+        {
+          "depth": 2,
+          "materialized": "view",
+          "name": "stg_meetup__surveys",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_meetup__surveys"
+        },
+        {
+          "depth": 2,
+          "materialized": "test",
+          "name": "not_null_base_meetup__dlt_loads_load_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_base_meetup__dlt_loads_load_id.e44b53e4a4"
+        },
+        {
+          "depth": 2,
+          "materialized": "test",
+          "name": "unique_base_meetup__dlt_loads_load_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.unique_base_meetup__dlt_loads_load_id.69a481ac1c"
+        },
+        {
+          "depth": 3,
+          "materialized": "table",
+          "name": "dim_meetup_events",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.dim_meetup_events"
+        },
+        {
+          "depth": 3,
+          "materialized": "table",
+          "name": "fct_meetup_registrations",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_meetup_registrations"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "not_null_stg_meetup__events_event_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_stg_meetup__events_event_id.ede0aa9fcb"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "not_null_stg_meetup__surveys_survey_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_stg_meetup__surveys_survey_id.b96bf09182"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "unique_stg_meetup__events_event_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.unique_stg_meetup__events_event_id.23962a6e53"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "unique_stg_meetup__surveys_survey_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.unique_stg_meetup__surveys_survey_id.8e172a6464"
+        }
+      ],
+      "edges": [
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base_meetup__dlt_loads",
+          "to_id": "model.fishtown_internal_analytics.stg_meetup__events"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base_meetup__dlt_loads",
+          "to_id": "model.fishtown_internal_analytics.stg_meetup__surveys"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base_meetup__dlt_loads",
+          "to_id": "test.fishtown_internal_analytics.not_null_base_meetup__dlt_loads_load_id.e44b53e4a4"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.base_meetup__dlt_loads",
+          "to_id": "test.fishtown_internal_analytics.unique_base_meetup__dlt_loads_load_id.69a481ac1c"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.dim_meetup_events",
+          "to_id": "model.fishtown_internal_analytics.fct_meetup_registrations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_meetup__events",
+          "to_id": "model.fishtown_internal_analytics.dim_meetup_events"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_meetup__events",
+          "to_id": "test.fishtown_internal_analytics.not_null_stg_meetup__events_event_id.ede0aa9fcb"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_meetup__events",
+          "to_id": "test.fishtown_internal_analytics.unique_stg_meetup__events_event_id.23962a6e53"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_meetup__surveys",
+          "to_id": "model.fishtown_internal_analytics.fct_meetup_registrations"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_meetup__surveys",
+          "to_id": "test.fishtown_internal_analytics.not_null_stg_meetup__surveys_survey_id.b96bf09182"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_meetup__surveys",
+          "to_id": "test.fishtown_internal_analytics.unique_stg_meetup__surveys_survey_id.8e172a6464"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.meetup._dlt_loads",
+          "to_id": "model.fishtown_internal_analytics.base_meetup__dlt_loads"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.meetup._dlt_loads",
+          "to_id": "test.fishtown_internal_analytics.source_not_null_meetup__dlt_loads_load_id.977f0e0764"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.meetup._dlt_loads",
+          "to_id": "test.fishtown_internal_analytics.source_unique_meetup__dlt_loads_load_id.e60902c4d6"
+        }
+      ]
+    }
+  },
+  "columnLineage": {
+    "status": 412,
+    "body": {
+      "code": "column_lineage_unavailable",
+      "message": "Column-level lineage is not available in this distribution + artifact set.",
+      "upgrade_path": "Run `dbt --use-index <run|build|compile>` with static analysis enabled, in a distribution that ships the column-lineage provider."
+    }
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "detail": {
+    "unique_id": "saved_query.fishtown_internal_analytics.cm_metrics_by_month",
+    "name": "cm_metrics_by_month",
+    "resource_type": "saved_query",
+    "package_name": "fishtown_internal_analytics",
+    "description": "Metrics for Refreshing Corporate Metrics (RCM) Dashboard.\n",
+    "original_file_path": "models/saved_queries/company_metrics/company_metrics.yml",
+    "label": "RCM metrics by month",
+    "file_path": "models/saved_queries/company_metrics/company_metrics.yml",
+    "fqn": [],
+    "tags": [],
+    "group_name": null,
+    "created_at": 1780422801.0,
+    "query_params": {
+      "group_by": [
+        "TimeDimension('metric_time', 'month')"
+      ],
+      "limit": null,
+      "metrics": [
+        "arr_cancelled_self_serve",
+        "arr_current",
+        "arr_current_managed",
+        "arr_current_self_serve",
+        "arr_downsell_self_serve",
+        "arr_enterprise_upgrade_self_serve",
+        "arr_exit",
+        "arr_exit_managed",
+        "arr_exit_self_serve",
+        "arr_expansion_self_serve",
+        "arr_land_self_serve",
+        "arr_reactivation_self_serve",
+        "average_deal_size_expand_won_reported",
+        "average_deal_size_land_won_reported",
+        "cloud_users_active",
+        "cloud_users_active_cloud_cli",
+        "cloud_users_active_enterprise",
+        "cloud_users_active_ide",
+        "count_of_opportunities_expand_won_reported",
+        "count_of_opportunities_land_won_reported",
+        "expand_pipeline_count",
+        "finance_live_forecast_cash_burn",
+        "finance_live_forecast_corp_ctb",
+        "finance_live_forecast_free_cash_flow",
+        "finance_live_forecast_g_and_a_opex",
+        "finance_live_forecast_gross_margin",
+        "finance_live_forecast_gross_margin_percent",
+        "finance_live_forecast_marketing_ctb",
+        "finance_live_forecast_pst_gross_margin",
+        "finance_live_forecast_pst_gross_margin_percent",
+        "finance_live_forecast_r_and_d_opex",
+        "finance_live_forecast_revenue",
+        "finance_live_forecast_sales_ctb",
+        "finance_live_forecast_self_serve_net_current_arr",
+        "finance_live_forecast_subs_gross_margin",
+        "finance_live_forecast_subs_gross_margin_percent",
+        "finance_live_forecast_total_ctb",
+        "land_pipeline_count",
+        "lead_to_mql_conversion_rate",
+        "marketing_leads",
+        "marketing_qualified_leads",
+        "new_logos_won_from_core_reported",
+        "opportunity_at_bat_renewal_rate",
+        "opportunity_delta_average_arr_expand_won_reported",
+        "opportunity_delta_average_arr_land_won_reported",
+        "opportunity_net_average_arr_won_reported",
+        "opportunity_pipeline_arr",
+        "opportunity_pipeline_arr_expand",
+        "opportunity_pipeline_arr_land",
+        "opportunity_pipeline_count",
+        "pwa_active",
+        "sales_qualified_leads",
+        "sales_qualified_leads_won_reported",
+        "total_vscode_extension_downloads",
+        "uptime_admin_api",
+        "uptime_cloud_cli",
+        "uptime_cloud_ide",
+        "uptime_discovery_api",
+        "uptime_explorer",
+        "uptime_runs",
+        "uptime_scheduler",
+        "uptime_sl",
+        "web_sessions"
+      ],
+      "order_by": [],
+      "where": {
+        "where_filters": [
+          {
+            "where_sql_template": "{{ TimeDimension('metric_time', 'month') }} is not null and {{ TimeDimension('metric_time', 'month') }} >= '2023-02-01'"
+          }
+        ]
+      }
+    },
+    "exports": [
+      {
+        "config": {
+          "alias": "cm_metrics_by_month",
+          "database": "staging",
+          "export_as": "table",
+          "schema_name": "dbt_jcserv"
+        },
+        "name": "cm_metrics_by_month",
+        "unrendered_config": {
+          "export_as": "table"
+        }
+      }
+    ],
+    "depends_on": [],
+    "referenced_by": []
+  },
+  "lineage": {
+    "status": 200,
+    "body": {
+      "root": "saved_query.fishtown_internal_analytics.cm_metrics_by_month",
+      "max_depth": 3,
+      "nodes": [
+        {
+          "depth": 0,
+          "materialized": null,
+          "name": "cm_metrics_by_month",
+          "resource_type": "saved_query",
+          "unique_id": "saved_query.fishtown_internal_analytics.cm_metrics_by_month"
+        }
+      ],
+      "edges": []
+    }
+  },
+  "columnLineage": {
+    "status": 412,
+    "body": {
+      "code": "column_lineage_unavailable",
+      "message": "Column-level lineage is not available in this distribution + artifact set.",
+      "upgrade_path": "Run `dbt --use-index <run|build|compile>` with static analysis enabled, in a distribution that ships the column-lineage provider."
+    }
+  }
+}

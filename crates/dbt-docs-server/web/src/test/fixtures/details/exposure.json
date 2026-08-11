@@ -1,0 +1,544 @@
+{
+  "detail": {
+    "unique_id": "exposure.fishtown_internal_analytics.2025_California_Web_Visitors",
+    "name": "2025_California_Web_Visitors",
+    "resource_type": "exposure",
+    "package_name": "fishtown_internal_analytics",
+    "description": "",
+    "original_file_path": "models/omni_exposures/2a55306d-cc65-45d6-9eb1-95121307e138.yml",
+    "file_path": "models/omni_exposures/2a55306d-cc65-45d6-9eb1-95121307e138.yml",
+    "tags": [],
+    "fqn": [],
+    "label": "2025 California Web Visitors",
+    "exposure_type": "dashboard",
+    "maturity": null,
+    "url": "https://dbtlabs.omniapp.co/dashboards/d43a385f",
+    "owner_name": "Allyson Larson",
+    "owner_email": "allyson.larson@dbtlabs.com",
+    "meta": null,
+    "depends_on": [],
+    "created_at": null
+  },
+  "lineage": {
+    "status": 200,
+    "body": {
+      "root": "exposure.fishtown_internal_analytics.2025_California_Web_Visitors",
+      "max_depth": 3,
+      "nodes": [
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "country_to_region_mappings",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.country_to_region_mappings"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_current_web_conversions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_current_web_conversions"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_historical_web_conversions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_historical_web_conversions"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_snowplow__web_events_scroll_depth",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow__web_events_scroll_depth"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_snowplow__web_events_time",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow__web_events_time"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_snowplow__web_timing_context",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow__web_timing_context"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_snowplow_page_views",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_snowplow_sessions_tmp",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow_sessions_tmp"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_snowplow_unioned__web",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow_unioned__web"
+        },
+        {
+          "depth": -3,
+          "materialized": "incremental",
+          "name": "int_snowplow_web_events",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow_web_events"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_web_blog_metadata__joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_web_blog_metadata__joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "int_web_experiments__joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_web_experiments__joined"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "snowplow_id_mappings",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.snowplow_id_mappings"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_hubspot__contact",
+          "resource_type": "model",
+          "unique_id": "model.hubspot.stg_hubspot__contact"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_notion__databases",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_notion__databases"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_salesforce__contacts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_salesforce__contacts"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_salesforce__territories",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_salesforce__territories"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_salesforce__territory_countries",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_salesforce__territory_countries"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_salesforce__territory_states",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_salesforce__territory_states"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_salesforce__territory_zipcodes",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_salesforce__territory_zipcodes"
+        },
+        {
+          "depth": -3,
+          "materialized": "view",
+          "name": "stg_salesforce__touchpoints",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_salesforce__touchpoints"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_seed__clearbit_country_mapping",
+          "resource_type": "seed",
+          "unique_id": "seed.fishtown_internal_analytics.stg_seed__clearbit_country_mapping"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "stg_seed__country_to_region",
+          "resource_type": "seed",
+          "unique_id": "seed.fishtown_internal_analytics.stg_seed__country_to_region"
+        },
+        {
+          "depth": -3,
+          "materialized": "table",
+          "name": "website_conversion_exceptions",
+          "resource_type": "seed",
+          "unique_id": "seed.fishtown_internal_analytics.website_conversion_exceptions"
+        },
+        {
+          "depth": -3,
+          "materialized": "external",
+          "name": "account",
+          "resource_type": "source",
+          "unique_id": "source.fishtown_internal_analytics.salesforce.account"
+        },
+        {
+          "depth": -2,
+          "materialized": "incremental",
+          "name": "event_web__submit_form",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.event_web__submit_form"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_notion_channel_mapping",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_notion_channel_mapping"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "fct_web_conversions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_web_conversions"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "int_cloud_ide_refreshes",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_cloud_ide_refreshes"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "int_salesforce__contacts_joined",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_salesforce__contacts_joined"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "int_salesforce__territory_mappings",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_salesforce__territory_mappings"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "int_snowplow_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_snowplow_sessions"
+        },
+        {
+          "depth": -2,
+          "materialized": "table",
+          "name": "int_web_experiment_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_web_experiment_sessions"
+        },
+        {
+          "depth": -2,
+          "materialized": "view",
+          "name": "stg_salesforce__accounts",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.stg_salesforce__accounts"
+        },
+        {
+          "depth": -1,
+          "materialized": "incremental",
+          "name": "fct_web_pageviews",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "depth": -1,
+          "materialized": "incremental",
+          "name": "fct_web_sessions",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "depth": 0,
+          "name": "2025_California_Web_Visitors",
+          "resource_type": "exposure",
+          "unique_id": "exposure.fishtown_internal_analytics.2025_California_Web_Visitors"
+        }
+      ],
+      "edges": [
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.country_to_region_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.country_to_region_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__contacts_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.country_to_region_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__territory_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_web__submit_form",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.event_web__submit_form",
+          "to_id": "model.fishtown_internal_analytics.int_historical_web_conversions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_notion_channel_mapping",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_notion_channel_mapping",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_conversions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_pageviews",
+          "to_id": "exposure.fishtown_internal_analytics.2025_California_Web_Visitors"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.fct_web_sessions",
+          "to_id": "exposure.fishtown_internal_analytics.2025_California_Web_Visitors"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_cloud_ide_refreshes",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_current_web_conversions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_conversions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_historical_web_conversions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_conversions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_salesforce__contacts_joined",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_salesforce__contacts_joined",
+          "to_id": "model.fishtown_internal_analytics.snowplow_id_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_salesforce__territory_mappings",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow__web_events_scroll_depth",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow__web_events_time",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow__web_timing_context",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_page_views",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_page_views",
+          "to_id": "model.fishtown_internal_analytics.int_cloud_ide_refreshes"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_page_views",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_sessions_tmp"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_page_views",
+          "to_id": "model.fishtown_internal_analytics.int_web_experiment_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_pageviews"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_sessions",
+          "to_id": "model.fishtown_internal_analytics.int_current_web_conversions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_sessions",
+          "to_id": "model.fishtown_internal_analytics.int_historical_web_conversions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_sessions_tmp",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_unioned__web",
+          "to_id": "model.fishtown_internal_analytics.event_web__submit_form"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_unioned__web",
+          "to_id": "model.fishtown_internal_analytics.int_historical_web_conversions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_web_events",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_snowplow_web_events",
+          "to_id": "model.fishtown_internal_analytics.snowplow_id_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_web_blog_metadata__joined",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_web_experiment_sessions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_web_experiments__joined",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_page_views"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.snowplow_id_mappings",
+          "to_id": "model.fishtown_internal_analytics.int_snowplow_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_notion__databases",
+          "to_id": "model.fishtown_internal_analytics.fct_notion_channel_mapping"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_salesforce__accounts",
+          "to_id": "model.fishtown_internal_analytics.fct_web_sessions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_salesforce__contacts",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__contacts_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_salesforce__territories",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__territory_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_salesforce__territory_countries",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__territory_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_salesforce__territory_states",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__territory_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_salesforce__territory_zipcodes",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__territory_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.stg_salesforce__touchpoints",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__contacts_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.hubspot.stg_hubspot__contact",
+          "to_id": "model.fishtown_internal_analytics.int_salesforce__contacts_joined"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "seed.fishtown_internal_analytics.stg_seed__clearbit_country_mapping",
+          "to_id": "model.fishtown_internal_analytics.country_to_region_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "seed.fishtown_internal_analytics.stg_seed__country_to_region",
+          "to_id": "model.fishtown_internal_analytics.country_to_region_mappings"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "seed.fishtown_internal_analytics.website_conversion_exceptions",
+          "to_id": "model.fishtown_internal_analytics.fct_web_conversions"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "source.fishtown_internal_analytics.salesforce.account",
+          "to_id": "model.fishtown_internal_analytics.stg_salesforce__accounts"
+        }
+      ]
+    }
+  },
+  "columnLineage": {
+    "status": 412,
+    "body": {
+      "code": "column_lineage_unavailable",
+      "message": "Column-level lineage is not available in this distribution + artifact set.",
+      "upgrade_path": "Run `dbt --use-index <run|build|compile>` with static analysis enabled, in a distribution that ships the column-lineage provider."
+    }
+  }
+}

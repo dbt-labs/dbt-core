@@ -243,26 +243,30 @@ pub async fn run_operation_on_run(
     let listener_factory = listener_factory.unwrap_or(&default_listener_factory);
 
     // First, wrap the raw_code with reset_span and render it.
-    // Skip reset_span when the span is invalid (e.g. after deserialization from JSON
-    // in partial-parse mode, where the dbt_yaml Spanned wrapper loses its source span).
+    // `name_span` is a plain field on `CommonAttributes` (unlike the outer
+    // `Spanned<DbtOperation>`'s own span, which is lost when the operation is
+    // round-tripped through the `--partial-parse` JSON cache), so it stays
+    // valid across cold and warm runs alike. Skip reset_span only when it was
+    // never populated (e.g. an empty hook body).
     let raw_code = operation
         .__common_attr__
         .raw_code
         .as_ref()
         .expect("raw_code is required in operation");
-    let raw_code_with_reset_span = if operation.span().is_valid() {
+    let name_span = &operation.__common_attr__.name_span;
+    let raw_code_with_reset_span = if name_span.start.line > 0 {
         format!(
             "{{% do reset_span('{}', {}, {}, {}, {}, {}, {}) %}}\n{}",
             operation
                 .__common_attr__
                 .original_file_path
                 .to_string_lossy(),
-            operation.span().start.line as u32,
-            operation.span().start.column as u32,
-            operation.span().start.index as u32,
-            operation.span().end.line as u32,
-            operation.span().end.column as u32,
-            operation.span().end.index as u32,
+            name_span.start.line,
+            name_span.start.col,
+            name_span.start.index,
+            name_span.stop.line,
+            name_span.stop.col,
+            name_span.stop.index,
             raw_code,
         )
     } else {

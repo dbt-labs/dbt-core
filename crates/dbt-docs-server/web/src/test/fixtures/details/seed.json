@@ -1,0 +1,237 @@
+{
+  "detail": {
+    "unique_id": "seed.fishtown_internal_analytics.adp_worker_base_remuneration_snapshot_exceptions",
+    "name": "adp_worker_base_remuneration_snapshot_exceptions",
+    "resource_type": "seed",
+    "package_name": "fishtown_internal_analytics",
+    "description": "",
+    "original_file_path": "data/exceptions/adp_worker_base_remuneration_snapshot_exceptions.csv",
+    "file_path": "data/exceptions/adp_worker_base_remuneration_snapshot_exceptions.csv",
+    "patch_path": null,
+    "tags": [],
+    "fqn": [
+      "fishtown_internal_analytics",
+      "exceptions",
+      "adp_worker_base_remuneration_snapshot_exceptions"
+    ],
+    "database_name": "staging",
+    "schema_name": "dbt_jcserv",
+    "identifier": "adp_worker_base_remuneration_snapshot_exceptions",
+    "meta": null,
+    "columns": [
+      {
+        "name": "WORKER_ASSIGNMENT_ID",
+        "index": 0,
+        "data_type": null,
+        "declared_type": null,
+        "inferred_type": "Utf8",
+        "catalog_type": null,
+        "description": null,
+        "label": null,
+        "granularity": null
+      },
+      {
+        "name": "ANNUAL_RATE_AMOUNT_CURRENCY_CODE",
+        "index": 1,
+        "data_type": null,
+        "declared_type": null,
+        "inferred_type": "Utf8",
+        "catalog_type": null,
+        "description": null,
+        "label": null,
+        "granularity": null
+      },
+      {
+        "name": "COMMENT",
+        "index": 2,
+        "data_type": null,
+        "declared_type": null,
+        "inferred_type": "Utf8",
+        "catalog_type": null,
+        "description": null,
+        "label": null,
+        "granularity": null
+      }
+    ],
+    "referenced_by": [
+      {
+        "unique_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration_snapshot_adj",
+        "edge_type": "ref"
+      }
+    ],
+    "execution_info": null,
+    "catalog": {
+      "type": "TABLE",
+      "owner": null,
+      "row_count_stat": null,
+      "bytes_stat": null,
+      "stats": [
+        {
+          "id": "row_count",
+          "label": "Row Count",
+          "value": "1",
+          "description": "Row count derived from seed data parquet",
+          "include": true
+        }
+      ]
+    }
+  },
+  "lineage": {
+    "status": 200,
+    "body": {
+      "root": "seed.fishtown_internal_analytics.adp_worker_base_remuneration_snapshot_exceptions",
+      "max_depth": 3,
+      "nodes": [
+        {
+          "depth": 0,
+          "materialized": "table",
+          "name": "adp_worker_base_remuneration_snapshot_exceptions",
+          "resource_type": "seed",
+          "unique_id": "seed.fishtown_internal_analytics.adp_worker_base_remuneration_snapshot_exceptions"
+        },
+        {
+          "depth": 1,
+          "materialized": "table",
+          "name": "int_adp_worker_base_remuneration_snapshot_adj",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration_snapshot_adj"
+        },
+        {
+          "depth": 2,
+          "materialized": "table",
+          "name": "int_adp_worker_base_remuneration",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration"
+        },
+        {
+          "depth": 3,
+          "materialized": "table",
+          "name": "int_adp_worker_timeseries",
+          "resource_type": "model",
+          "unique_id": "model.fishtown_internal_analytics.int_adp_worker_timeseries"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "data_sequence_test_int_adp_worker_base_remuneration_worker_assignment_sk",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.data_sequence_test_int_adp_worker_base_remuneration_worker_assignment_sk.620eb51746"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "dbt_utils_unique_combination_of_columns_int_adp_worker_base_remuneration_worker_assignment_sk__valid_from",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.dbt_utils_unique_combination_of_columns_int_adp_worker_base_remuneration_worker_assignment_sk__valid_from.8f4c462c01"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "not_null_int_adp_worker_base_remuneration_valid_from",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_valid_from.0658f334ed"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "not_null_int_adp_worker_base_remuneration_valid_to",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_valid_to.06fe92c90f"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "not_null_int_adp_worker_base_remuneration_worker_assignment_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_worker_assignment_id.cdda302edf"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "not_null_int_adp_worker_base_remuneration_worker_assignment_sk",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_worker_assignment_sk.9698fc7423"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "not_null_int_adp_worker_base_remuneration_worker_id",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_worker_id.4747ee257d"
+        },
+        {
+          "depth": 3,
+          "materialized": "test",
+          "name": "unique_int_adp_worker_base_remuneration_worker_assignment_sk",
+          "resource_type": "test",
+          "unique_id": "test.fishtown_internal_analytics.unique_int_adp_worker_base_remuneration_worker_assignment_sk.089e67d6ca"
+        }
+      ],
+      "edges": [
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "model.fishtown_internal_analytics.int_adp_worker_timeseries"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.data_sequence_test_int_adp_worker_base_remuneration_worker_assignment_sk.620eb51746"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.dbt_utils_unique_combination_of_columns_int_adp_worker_base_remuneration_worker_assignment_sk__valid_from.8f4c462c01"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_valid_from.0658f334ed"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_valid_to.06fe92c90f"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_worker_assignment_id.cdda302edf"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_worker_assignment_sk.9698fc7423"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.not_null_int_adp_worker_base_remuneration_worker_id.4747ee257d"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration",
+          "to_id": "test.fishtown_internal_analytics.unique_int_adp_worker_base_remuneration_worker_assignment_sk.089e67d6ca"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration_snapshot_adj",
+          "to_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration"
+        },
+        {
+          "edge_type": "ref",
+          "from_id": "seed.fishtown_internal_analytics.adp_worker_base_remuneration_snapshot_exceptions",
+          "to_id": "model.fishtown_internal_analytics.int_adp_worker_base_remuneration_snapshot_adj"
+        }
+      ]
+    }
+  },
+  "columnLineage": {
+    "status": 412,
+    "body": {
+      "code": "column_lineage_unavailable",
+      "message": "Column-level lineage is not available in this distribution + artifact set.",
+      "upgrade_path": "Run `dbt --use-index <run|build|compile>` with static analysis enabled, in a distribution that ships the column-lineage provider."
+    }
+  }
+}

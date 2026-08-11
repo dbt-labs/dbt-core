@@ -1,0 +1,122 @@
+import { FC, memo, ReactNode, useState } from 'react';
+
+import { Badge, FloatingTabs } from '@dbt-labs/sourdough';
+
+export const tabTypes = [
+  'general',
+  'code',
+  'columns',
+  'performance',
+  'evaluator',
+  'arguments',
+  'dimensions',
+  'measures',
+  'queryExports',
+  'tables',
+  'views',
+  'relationships',
+] as const;
+
+export type TabType = (typeof tabTypes)[number];
+
+export type TabInfo = {
+  type: TabType;
+  count?: number;
+};
+
+export const tabNameMap: Record<TabType, string> = {
+  general: 'General',
+  code: 'Code',
+  columns: 'Columns',
+  performance: 'Performance',
+  evaluator: 'Recommendations',
+  arguments: 'Arguments',
+  dimensions: 'Dimensions',
+  measures: 'Measures',
+  queryExports: 'Query Exports',
+  tables: 'Tables',
+  views: 'Views',
+  relationships: 'Relationships',
+};
+
+export const tabAnnotationMap: Partial<Record<TabType, string>> = {
+  relationships: 'alpha',
+};
+
+export const isTabType = (input: string | undefined | null): input is TabType => {
+  return !!input && (tabTypes as readonly string[]).includes(input);
+};
+
+type TabsParams = {
+  tabs: TabInfo[];
+  children: (tabType: TabType) => ReactNode;
+  show: boolean;
+  /** Controlled active tab — when provided, caller owns state (e.g. URL sync). */
+  activeTab?: TabType | null;
+  /** Called when user clicks a tab. Required when `activeTab` is provided. */
+  onTabChange?: (tab: TabType) => void;
+};
+
+const DetailTabs: FC<TabsParams> = ({
+  tabs,
+  show,
+  children,
+  activeTab,
+  onTabChange,
+}) => {
+  const [internalTab, setInternalTab] = useState<TabType | null>(null);
+
+  const isControlled = activeTab !== undefined;
+  const resolvedTab: TabInfo = isControlled
+    ? { type: activeTab ?? tabs[0]?.type }
+    : { type: internalTab ?? tabs[0]?.type };
+
+  const handleTabChange = (tab: TabType) => {
+    if (isControlled) {
+      onTabChange?.(tab);
+    } else {
+      setInternalTab(tab);
+    }
+  };
+
+  return (
+    <div
+      className={`${show ? 'opacity-100' : 'opacity-0'} duration-300 motion-reduce:duration-0`}
+    >
+      {tabs.length > 1 && (
+        <div className="overflow-x-auto">
+          <FloatingTabs testId="resource-view-tabs">
+            {tabs.map((tabDetails) => (
+              <FloatingTabs.Tab
+                key={tabNameMap[tabDetails.type]}
+                id={tabDetails.type}
+                isActive={resolvedTab.type === tabDetails.type}
+                onClick={(tab: TabType) => {
+                  handleTabChange(tab);
+                }}
+                count={tabDetails.count}
+                testId={`resource-view-tabs-${tabDetails.type}`}
+              >
+                <span className="flex items-center gap-1.5">
+                  {tabNameMap[tabDetails.type]}
+                  {tabAnnotationMap[tabDetails.type] &&
+                    tabDetails.count === undefined && (
+                      <Badge
+                        text={tabAnnotationMap[tabDetails.type]!}
+                        type="purple"
+                        size="xs"
+                      />
+                    )}
+                </span>
+              </FloatingTabs.Tab>
+            ))}
+          </FloatingTabs>
+        </div>
+      )}
+      <>{resolvedTab.type && children(resolvedTab.type)}</>
+    </div>
+  );
+};
+
+export { DetailTabs };
+export default memo(DetailTabs);

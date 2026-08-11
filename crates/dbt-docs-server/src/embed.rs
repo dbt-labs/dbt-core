@@ -8,8 +8,8 @@ use rust_embed::RustEmbed;
 
 use crate::assets::{asset_response, normalize_path};
 
-// Path resolved at build time by `build.rs` from `web/dist/` (a
-// developer-managed symlink to a built `dbt-ui/apps/metadata/dbt-docs-v2/dist`).
+// Path resolved at build time by `build.rs` from `web/dist/`, a committed build of
+// the SPA whose source lives in `web/src/`.
 #[derive(RustEmbed)]
 #[folder = "$DOCS_SERVER_WEB_DIST/"]
 struct Assets;

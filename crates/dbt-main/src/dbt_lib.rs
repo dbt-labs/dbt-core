@@ -1202,6 +1202,7 @@ impl<'a> AllPhasesExecutor<'a> {
                                     .collect(),
                                 nodes: Some(compilation.nodes().clone()),
                                 batch_results: Default::default(),
+                                compiled_code: Default::default(),
                             };
 
                             // Prepare artifact

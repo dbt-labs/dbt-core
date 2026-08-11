@@ -228,6 +228,19 @@ pub trait Object: fmt::Debug + Send + Sync {
         false
     }
 
+    /// Returns `true` if this value is a stand-in for an unknowable value
+    /// produced by an introspective (warehouse-dependent) call evaluated
+    /// without a real connection.
+    ///
+    /// Defaults to `false` for every object. A single wrapper type is
+    /// expected to override this to `true`; the VM checks this flag at a
+    /// small number of choke points (emit, loop iteration, branching, binary
+    /// operators) to decide whether to substitute a hole marker instead of
+    /// treating the value as real.
+    fn is_introspective_stub(self: &Arc<Self>) -> bool {
+        false
+    }
+
     /// Compares this object with another object by value when supported.
     fn custom_cmp(self: &Arc<Self>, other: &DynObject) -> Option<Ordering> {
         let _ = other;
@@ -687,6 +700,8 @@ type_erase! {
 
         fn is_mutable(&self) -> bool;
 
+        fn is_introspective_stub(&self) -> bool;
+
         fn custom_cmp(&self, other: &DynObject) -> Option<Ordering>;
 
         fn enumerator_len(&self) -> Option<usize>;
@@ -1119,6 +1134,16 @@ pub mod mutable_vec {
     #[derive(Debug)]
     pub struct MutableVec<T> {
         inner: RwLock<Vec<T>>,
+        // Set once an introspective-stub value (see `Object::is_introspective_stub`)
+        // is ever pushed/inserted into this vector, and never cleared. A
+        // container built up across a loop (`{% do include_cols.append(col)
+        // %}`) is otherwise indistinguishable from an ordinary one once even
+        // a single tainted element has been absorbed into it -- the taint on
+        // that one element doesn't make the *container* report tainted on
+        // its own, so a later `{{ include_cols }}`/`.join()`/hash of the
+        // whole container would silently look fully-known. This flag is
+        // read by `is_introspective_stub` below.
+        tainted: std::sync::atomic::AtomicBool,
     }
 
     impl<T> MutableVec<T>
@@ -1129,6 +1154,7 @@ pub mod mutable_vec {
         pub fn new() -> Self {
             MutableVec {
                 inner: RwLock::new(Vec::new()),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1137,6 +1163,7 @@ pub mod mutable_vec {
         pub fn with_capacity(capacity: usize) -> Self {
             MutableVec {
                 inner: RwLock::new(Vec::with_capacity(capacity)),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1224,6 +1251,10 @@ pub mod mutable_vec {
 
         fn is_mutable(self: &Arc<Self>) -> bool {
             true
+        }
+
+        fn is_introspective_stub(self: &Arc<Self>) -> bool {
+            self.tainted.load(std::sync::atomic::Ordering::Relaxed)
         }
 
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
@@ -1315,8 +1346,11 @@ pub mod mutable_vec {
         T: Into<Value> + Clone + Send + Sync + fmt::Debug + 'static,
     {
         fn from(val: Vec<T>) -> Self {
+            let values: Vec<Value> = val.into_iter().map(Into::into).collect();
+            let tainted = values.iter().any(|v| v.is_introspective_stub());
             MutableVec {
-                inner: RwLock::new(val.into_iter().map(Into::into).collect()),
+                inner: RwLock::new(values),
+                tainted: std::sync::atomic::AtomicBool::new(tainted),
             }
         }
     }
@@ -1326,8 +1360,11 @@ pub mod mutable_vec {
         T: Into<Value> + Clone + Send + Sync + fmt::Debug + 'static,
     {
         fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+            let values: Vec<Value> = iter.into_iter().map(Into::into).collect();
+            let tainted = values.iter().any(|v| v.is_introspective_stub());
             MutableVec {
-                inner: RwLock::new(iter.into_iter().map(Into::into).collect()),
+                inner: RwLock::new(values),
+                tainted: std::sync::atomic::AtomicBool::new(tainted),
             }
         }
     }
@@ -1341,6 +1378,10 @@ pub mod mutable_vec {
     fn append_impl(vec: &Arc<MutableVec<Value>>, args: &[Value]) -> Result<Value, Error> {
         match args {
             [value] => {
+                if value.is_introspective_stub() {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 vec.push(value.clone());
                 Ok(ValueRepr::None.into())
             }
@@ -1361,6 +1402,10 @@ pub mod mutable_vec {
     fn extend_impl(vec: &Arc<MutableVec<Value>>, args: &[Value]) -> Result<Value, Error> {
         match args {
             [iter] => {
+                if iter.is_introspective_stub() {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 let iter = ok!(iter
                     .as_object()
                     .and_then(|x| x.try_iter())
@@ -1370,7 +1415,12 @@ pub mod mutable_vec {
                             "extend() expects an iterable as argument, but given argument is not iterable"
                     )));
 
-                vec.extend(iter);
+                let items: Vec<Value> = iter.collect();
+                if items.iter().any(|v| v.is_introspective_stub()) {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                vec.extend(items);
                 Ok(Value::from_dyn_object(vec.clone()))
             }
             _ if args.len() > 1 => Err(Error::new(
@@ -1401,6 +1451,10 @@ pub mod mutable_vec {
                         ErrorKind::InvalidOperation,
                         format!("insert() index {idx} is out of bounds for list of length {len}"),
                     ));
+                }
+                if value.is_introspective_stub() {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 inner.insert(idx, value.clone());
                 drop(inner);
@@ -1524,12 +1578,20 @@ pub mod mutable_map {
     #[derive(Debug)]
     pub struct MutableMap {
         inner: RwLock<ValueMap>,
+        // See `MutableVec`'s `tainted` field for why this exists: a value
+        // absorbed via `.update()`/`.insert()`/`setdefault()` can be
+        // individually tainted without the map itself reporting tainted,
+        // silently hiding unknowable data from a later `{{ map }}`/hash/etc.
+        tainted: std::sync::atomic::AtomicBool,
     }
 
     impl Clone for MutableMap {
         fn clone(&self) -> Self {
             MutableMap {
                 inner: RwLock::new(lock_read!(self).clone()),
+                tainted: std::sync::atomic::AtomicBool::new(
+                    self.tainted.load(std::sync::atomic::Ordering::Relaxed),
+                ),
             }
         }
     }
@@ -1539,6 +1601,7 @@ pub mod mutable_map {
         pub fn new() -> Self {
             MutableMap {
                 inner: RwLock::new(ValueMap::new()),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1546,6 +1609,7 @@ pub mod mutable_map {
         pub fn with_capacity(capacity: usize) -> Self {
             MutableMap {
                 inner: RwLock::new(value_map_with_capacity(capacity)),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1566,11 +1630,22 @@ pub mod mutable_map {
 
         /// Insert a key-value pair into the map.
         pub fn insert(&self, key: Value, value: Value) {
+            if key.is_introspective_stub() || value.is_introspective_stub() {
+                self.tainted
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             lock_write!(self).insert(key, value);
         }
 
         /// Update the map with the contents of another map.
         pub fn update(&self, other: &ValueMap) {
+            if other
+                .iter()
+                .any(|(k, v)| k.is_introspective_stub() || v.is_introspective_stub())
+            {
+                self.tainted
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             lock_write!(self).extend(other.clone());
         }
 
@@ -1599,6 +1674,10 @@ pub mod mutable_map {
 
         fn is_mutable(self: &Arc<Self>) -> bool {
             true
+        }
+
+        fn is_introspective_stub(self: &Arc<Self>) -> bool {
+            self.tainted.load(std::sync::atomic::Ordering::Relaxed)
         }
 
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
@@ -1681,8 +1760,12 @@ pub mod mutable_map {
 
     impl From<ValueMap> for MutableMap {
         fn from(val: ValueMap) -> Self {
+            let tainted = val
+                .iter()
+                .any(|(k, v)| k.is_introspective_stub() || v.is_introspective_stub());
             MutableMap {
                 inner: RwLock::new(val),
+                tainted: std::sync::atomic::AtomicBool::new(tainted),
             }
         }
     }

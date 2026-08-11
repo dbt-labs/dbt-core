@@ -79,6 +79,8 @@ pub fn generate_run_results(
 
     let batch_results = stats.batch_results.get(&stat.unique_id).cloned();
 
+    let compiled_code = stats.compiled_code.get(&stat.unique_id).cloned();
+
     ContextRunResult {
         status,
         timing,
@@ -90,6 +92,7 @@ pub fn generate_run_results(
         node: node_arc,
         unique_id: stat.unique_id.clone(),
         batch_results,
+        compiled_code,
         static_analysis_off_reason,
     }
 }

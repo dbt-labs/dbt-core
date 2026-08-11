@@ -63,10 +63,28 @@ Never assume a gated field is present; always branch on the capability flag.
 ## Tech stack
 
 **Frontend** — paths relative to `crates/dbt-docs-server/web/`:
-- React 18 + TypeScript + Vite
-- **Plain CSS** with sourdough CSS custom properties (`var(--fgMain)`, `var(--bgMainHover)`, …) — NOT Tailwind
-- All styles in `src/app.css`; grep by BEM-style class prefix (e.g. `locate-pane__`)
+- React 19 + TypeScript + Vite, standalone pnpm project (not part of any workspace)
+- Routing: `react-router-dom` `BrowserRouter` with **real paths** (`/details/:dbtUniqueId/`),
+  not hash routes. The server answers unknown paths with `index.html`, and the Vite
+  base is absolute (`/`) so deep-link reloads resolve assets correctly.
+- Data: `@tanstack/react-query` over the `MetadataDataSource` adapter in `src/shared/`
+  (`createRestDataSource` maps `/api/v1/*` onto domain types). `src/api.ts` is a
+  thin legacy surface that survives for `api.nodes`.
+- Styling: Tailwind (configured in `tailwind.config.cjs`, with the sourdough and
+  dbt-dag presets) **plus** hand-written CSS in `src/app.css` keyed by BEM-style
+  class prefixes (e.g. `locate-pane__`). Both are in use — check `app.css` before
+  adding a utility-class-only solution, and prefer sourdough CSS custom properties
+  (`var(--fgMain)`, `var(--bgMainHover)`, …) over literal colors.
 - Icons: `@dbt-labs/sourdough` (Ryecon) and `@dbt-labs/dbt-dag` (`DbtResourceIcon`)
+- `src/shared/` is a **fork** of the docs-v2 slice of `@dbt-labs/metadata-shared`
+  (dbt-ui). It mirrors upstream's layout and barrel so the two can be diffed. Treat
+  it as vendored: prefer additive local changes, and expect upstream drift.
+- Private deps (`@dbt-labs/sourdough`, `dbt-dag`, `biga`) come from GitHub Packages,
+  so `pnpm install` needs `GITHUB_TOKEN` with `read:packages`. `cargo build` does
+  not — `web/dist/` is committed.
+- **After any `web/` source edit, run `pnpm build` and commit `web/dist/` in the same
+  change.** Nothing enforces this — no CI job, no git hook — so a source-only commit
+  silently ships a stale UI.
 
 **Backend** — paths relative to `crates/dbt-docs-server/`:
 - Rust: `axum` + `tokio` + `arrow-array` + `rust-embed`
@@ -80,11 +98,16 @@ All paths relative to `crates/dbt-docs-server/`.
 
 | File | Role |
 |---|---|
-| `web/src/api.ts` | TypeScript API client — authoritative list of endpoints and response types |
+| `web/src/api.ts` | Thin legacy REST surface; `api.nodes` is the one load-bearing caller left |
+| `web/src/shared/index.ts` | Barrel for the forked `metadata-shared` layer — mirrors upstream, pruned |
+| `web/src/shared/data-sources/rest/` | `createRestDataSource` + `fromRest` mapper: `/api/v1/*` → domain types. **The REST contract lives here**, with ~107 tests |
+| `web/src/shared/typings/domain/` | Domain types (`Asset`, `ModelSummary`, `Capabilities`, …) |
+| `web/src/shared/typings/discoveryEnums.ts` | Enums transcribed from the Discovery API schema in place of upstream's GraphQL codegen |
 | `web/src/lib/resourceType.tsx` | Resource type order, labels, icons, badge colors — single source of truth |
 | `web/src/components/LocatePane.tsx` | Sidebar: AssetMode, TreeMode, FilterMode |
 | `web/src/components/ModelFilterView.tsx` | Server-side paginated model list with filters |
-| `web/src/app.css` | All CSS |
+| `web/src/app.css` | Hand-written CSS (alongside Tailwind utilities in the TSX) |
+| `web/dist/` | Committed build embedded by `rust-embed`; regenerate with `pnpm build` |
 | `src/server.rs` | axum router — complete route list |
 | `src/handlers/` | One file per endpoint group |
 | `src/state.rs` | AppState: backend + providers |

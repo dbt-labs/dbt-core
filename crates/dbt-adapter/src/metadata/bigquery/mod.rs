@@ -46,8 +46,29 @@ pub const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
     "_CHANGE_SEQUENCE_NUMBER",
 ];
 
-#[allow(dead_code)]
 pub fn list_relations(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let relations = list_relations_via_adbc(engine, conn, db_schema)?;
+    let connection_project = engine
+        .config("execution_project")
+        .or_else(|| engine.config("project"))
+        .or_else(|| engine.config("database"));
+    let (target_project, _) =
+        normalize_quote(false, AdapterType::Bigquery, &db_schema.rendered_catalog);
+    let is_cross_project =
+        connection_project.is_some_and(|project| project.as_ref() != target_project);
+
+    verify_empty_adbc_listing(relations, is_cross_project, || {
+        list_relations_via_information_schema(engine, ctx, conn, db_schema, token)
+    })
+}
+
+fn list_relations_via_information_schema(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -92,7 +113,27 @@ FROM
     Ok(result)
 }
 
-pub fn list_relations_via_adbc(
+fn verify_empty_adbc_listing<F>(
+    relations: Vec<Arc<dyn BaseRelation>>,
+    is_cross_project: bool,
+    fallback: F,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>>
+where
+    F: FnOnce() -> AdapterResult<Vec<Arc<dyn BaseRelation>>>,
+{
+    // BigQuery GetObjects exposes only the connection project as a catalog, so a
+    // different target project produces an empty result. Verify emptiness with
+    // the target-qualified metadata query before the caller records the schema
+    // as complete.
+    // https://github.com/dbt-labs/bigquery-adbc/blob/c87c401a934c71783862dface246252d84f9d2e6/go/connection.go#L106-L123
+    if is_cross_project && relations.is_empty() {
+        fallback()
+    } else {
+        Ok(relations)
+    }
+}
+
+fn list_relations_via_adbc(
     engine: &dyn AdapterEngine,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
@@ -1462,6 +1503,10 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         map_reduce.run(Arc::new(keys), token)
     }
 
+    fn supports_bulk_freshness_dump(&self) -> bool {
+        true
+    }
+
     fn freshness_all_in_schema<'a>(
         &'a self,
         database: &'a str,
@@ -1593,6 +1638,65 @@ mod tests {
             )
             .with_quoting(DEFAULT_RESOLVED_QUOTING),
         )
+    }
+
+    #[test]
+    fn cross_project_adbc_miss_uses_target_qualified_fallback() {
+        let relations = verify_empty_adbc_listing(Vec::new(), true, || {
+            Ok(vec![bq_rel(
+                "target-project",
+                "analytics",
+                "existing_table",
+            )])
+        })
+        .unwrap();
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].database_as_str().unwrap(), "target-project");
+        assert_eq!(relations[0].schema_as_str().unwrap(), "analytics");
+        assert_eq!(relations[0].identifier_as_str().unwrap(), "existing_table");
+    }
+
+    #[test]
+    fn same_project_empty_adbc_relation_listing_remains_authoritative() {
+        let relations = verify_empty_adbc_listing(Vec::new(), false, || {
+            panic!("same-project listing should not use the fallback")
+        })
+        .unwrap();
+
+        assert!(relations.is_empty());
+    }
+
+    #[test]
+    fn nonempty_adbc_relation_listing_remains_authoritative() {
+        let relations = verify_empty_adbc_listing(
+            vec![bq_rel("connection-project", "analytics", "adbc_table")],
+            true,
+            || {
+                Ok(vec![bq_rel(
+                    "connection-project",
+                    "analytics",
+                    "fallback_table",
+                )])
+            },
+        )
+        .unwrap();
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].identifier_as_str().unwrap(), "adbc_table");
+    }
+
+    #[test]
+    fn empty_adbc_relation_listing_returns_fallback_error() {
+        let error = verify_empty_adbc_listing(Vec::new(), true, || {
+            Err(AdapterError::new(
+                AdapterErrorKind::SqlExecution,
+                "target-qualified metadata is unavailable",
+            ))
+        })
+        .expect_err("fallback error should be returned");
+
+        assert_eq!(error.kind(), AdapterErrorKind::SqlExecution);
     }
 
     fn freshness_batch(rows: &[(&str, &str, Option<i64>, bool)]) -> RecordBatch {

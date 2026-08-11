@@ -78,32 +78,35 @@ fn new_component(properties: IndexMap<String, String>) -> TblProperties {
     }
 }
 
-/// Takes the diff between two `TblProperties` by comparing the non-ignored keys.
+/// Takes the diff between two `TblProperties`, matching the Python dbt-databricks
+/// `TblPropertiesConfig.get_diff` semantics:
 ///
-/// Matches the Python dbt-databricks `TblPropertiesConfig.__eq__` semantics: both dicts are
-/// filtered by `EQ_IGNORE_LIST`, then compared for full equality. If they differ (including
-/// when the current state has extra non-ignored keys absent from the desired state), a diff
-/// is reported. The returned value is the full desired state (matching Python's `get_diff`
-/// which returns `self`).
+/// ```python
+/// def get_diff(self, other):
+///     if self.tblproperties.items() - other.tblproperties.items():
+///         return self
+///     return None
+/// ```
+///
+/// This is an asymmetric, one-directional comparison: a diff is reported only when the
+/// *desired* state has a non-ignored key/value pair that is missing or different in the
+/// *current* state. Keys present only in the current state (e.g. server-managed properties
+/// Databricks sets automatically) are ignored — a model that declares no opinion on
+/// `tblproperties` never produces a diff, regardless of what's already on the relation.
+/// The returned value is the full desired state (matching Python's `get_diff` returning `self`).
 fn diff(
     desired_state: &IndexMap<String, String>,
     current_state: &IndexMap<String, String>,
 ) -> Option<IndexMap<String, String>> {
-    let filtered_desired: IndexMap<&String, &String> = desired_state
-        .iter()
-        .filter(|(k, _)| !EQ_IGNORE_LIST.contains(&k.as_str()))
-        .collect();
+    let has_diff = desired_state.iter().any(|(k, v)| {
+        !EQ_IGNORE_LIST.contains(&k.as_str())
+            && current_state.get(k).map(|cv| cv != v).unwrap_or(true)
+    });
 
-    let filtered_current: IndexMap<&String, &String> = current_state
-        .iter()
-        .filter(|(k, _)| !EQ_IGNORE_LIST.contains(&k.as_str()))
-        .collect();
-
-    if filtered_desired == filtered_current {
-        None
-    } else {
-        // Match Python: get_diff returns self (the full desired config)
+    if has_diff {
         Some(desired_state.clone())
+    } else {
+        None
     }
 }
 
@@ -285,16 +288,15 @@ mod tests {
     /// The existing table (SHOW TBLPROPERTIES) has those plus a few other properties
     /// like delta.checkpoint.*, delta.parquet.*, etc.
     ///
-    /// Python dbt-databricks does a full-dict equality check (__eq__) after filtering the ignore
-    /// list from both sides. Since the desired dict (1 key after filtering) differs from the
-    /// current dict (6+ keys), __eq__ returns False, and get_diff returns the desired config.
-    ///
-    /// The Rust diff function currently does per-key comparison and returns None because every
-    /// key present in the desired state matches the current state. This is a behavioral
-    /// divergence — we should match Python and report a diff when the current state has extra
-    /// non-ignored keys not present in the desired state.
+    /// Python dbt-databricks's `get_diff` is a one-directional set difference
+    /// (`self.tblproperties.items() - other.tblproperties.items()`): it only reports a
+    /// diff when the *desired* state has a non-ignored key/value pair missing or different
+    /// in current. Extra keys present only in current (server-managed properties the model
+    /// never declared an opinion on) must be ignored. Here every non-ignored desired key
+    /// (`delta.columnMapping.mode`) matches current, so there is no diff even though current
+    /// has additional keys.
     #[test]
-    fn test_diff_extra_current_keys_should_report_change() {
+    fn test_diff_extra_current_keys_are_ignored() {
         // Desired state: what from_local_config produces from the model config.
         // Note: delta.enableChangeDataFeed is in the model config but will be
         // filtered by EQ_IGNORE_LIST in the diff function.
@@ -322,13 +324,38 @@ mod tests {
             ),
         ]);
 
-        // Python dbt-databricks reports a diff here because the filtered dicts are unequal
-        // (desired has 1 non-ignored key, current has 4 keys). We must match that behavior.
+        // No diff: the only non-ignored desired key/value pair (delta.columnMapping.mode =
+        // "name") is present and identical in current. Extra current-only keys don't count.
         let result = diff(&desired, &current);
         assert!(
-            result.is_some(),
-            "Expected diff when current state has extra non-ignored keys not in desired state"
+            result.is_none(),
+            "Extra non-ignored keys present only in current state must not trigger a diff"
         );
+    }
+
+    /// A model that declares no tblproperties opinion at all must never report a diff,
+    /// even when the existing relation already has server-managed properties set
+    /// (regression test for the bug that triggered spurious `apply_tblproperties` calls,
+    /// e.g. unnecessary `adapter.is_uniform` checks, for models that never configured
+    /// tblproperties).
+    #[test]
+    fn test_diff_empty_desired_never_reports_change() {
+        let desired = IndexMap::new();
+
+        let current = IndexMap::from_iter([
+            (
+                "delta.checkpoint.writeStatsAsJson".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "delta.checkpoint.writeStatsAsStruct".to_string(),
+                "true".to_string(),
+            ),
+            ("delta.minReaderVersion".to_string(), "1".to_string()),
+            ("delta.minWriterVersion".to_string(), "2".to_string()),
+        ]);
+
+        assert!(diff(&desired, &current).is_none());
     }
 
     #[test]

@@ -3,13 +3,15 @@
 //! Serves an embedded SPA plus a JSON API backed by parquet artifacts
 //! produced by `dbt --use-index`. The SA crate itself depends on no
 //! proprietary code: all surfaces that interact with the artifact store or
-//! perform proprietary analysis (column lineage, sample data, etc.) sit
-//! behind dyn-compatible traits in [`providers`]. The proprietary
-//! distribution wires in DuckDB-backed implementations via
-//! `dbt-docs-server-impl`.
+//! perform richer analysis (column lineage, sample data, etc.) sit behind
+//! dyn-compatible traits in [`providers`]. Implementations are injected by the
+//! caller at startup, so this crate never names one.
 //!
-//! The CLI entry is `dbt docs serve`; see `crates/dbt-cli/src/main.rs` for
-//! how this crate is invoked.
+//! The CLI entry is `dbt docs serve`; see `run_docs_serve` in
+//! `crates/dbt-main/src/dbt_lib.rs` for how this crate is invoked.
+//!
+//! The SPA served alongside the API lives in `web/`; `web/dist/` is a committed
+//! build embedded at compile time. See the crate README for how to rebuild it.
 
 use std::path::PathBuf;
 use std::sync::Arc;

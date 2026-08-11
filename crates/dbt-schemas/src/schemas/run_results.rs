@@ -93,6 +93,8 @@ pub struct ContextRunResult {
     /// Results specific to batch processing, if applicable.
     #[serde(default)]
     pub batch_results: Option<BatchResults>,
+    /// Compiled SQL code for the node.
+    pub compiled_code: Option<String>,
     /// Reason why static analysis was disabled for this node (Fusion-only; omitted when absent).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
@@ -121,7 +123,7 @@ impl From<ContextRunResult> for RunResultOutput {
             failures: result.failures,
             unique_id,
             compiled: None, // TODO: Handle compiled i think its a deprecated field
-            compiled_code: None, // TODO: Handle compiled_code i think its a deprecated field
+            compiled_code: result.compiled_code,
             relation_name,
             batch_results: result.batch_results,
             static_analysis_off_reason: result.static_analysis_off_reason,
@@ -234,7 +236,7 @@ mod tests {
     /// Build a `RunResultOutput` representing a skipped node: every optional per-node field is
     /// `None`, mirroring what Fusion produces for a skipped test/model (e.g. during Selective
     /// Apply Optimization model reuse).
-    fn skipped_run_result_output() -> RunResultOutput {
+    pub fn skipped_run_result_output() -> RunResultOutput {
         RunResultOutput {
             status: "skipped".to_string(),
             timing: vec![],
@@ -299,6 +301,7 @@ mod tests {
             node: None,
             unique_id: "test.test.not_null_view_model_id.c9346154f2".to_string(),
             batch_results: None,
+            compiled_code: None,
             static_analysis_off_reason: None,
         };
 

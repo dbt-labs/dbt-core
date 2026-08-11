@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use super::*;
 use crate::adapter::Adapter;
@@ -20,6 +21,39 @@ fn dispatch_test(
     let env = minijinja::Environment::new();
     let state = State::new_for_env(&env);
     adapter.call_method_impl(&state, name, args, &[])
+}
+
+/// Minimal listener that opts into introspective-hole rendering, standing in
+/// for `dbt_jinja_utils::listener::SymbolicRenderingEventListener` (which
+/// this crate doesn't depend on): `Adapter::call_method`'s Parse-mode
+/// taint-wrapping is gated on a listener like this being present, so tests
+/// asserting a result *is* tainted need one, matching how only
+/// `JinjaRenderMode::Symbolic` behaves in production.
+#[derive(Debug)]
+struct TaintGateListener;
+
+impl RenderingEventListener for TaintGateListener {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "TaintGateListener"
+    }
+
+    fn on_macro_start(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+
+    fn on_macro_stop(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+
+    fn on_malicious_return(&self, _location: &minijinja::CodeLocation) {}
+
+    fn on_function_start(&self) {}
+
+    fn on_function_end(&self) {}
+
+    fn wants_introspective_holes(&self) -> bool {
+        true
+    }
 }
 
 /// Create a Typed-phase DuckDB adapter backed by MockEngine.
@@ -409,4 +443,102 @@ fn test_get_relation_dispatch_spark_absent_database() {
     )
     .unwrap();
     assert!(!result.is_none() && !result.is_undefined());
+}
+
+// -- introspective taint wiring --------------------------------------------
+//
+// `Adapter::call_method` (the `Object` trait method, as opposed to
+// `call_method_impl` which `dispatch_test` above calls directly and which
+// bypasses this wrapping) taints the return value of every method in
+// `INTROSPECTIVE_METHODS` when running in `Parse` mode. This is what lets
+// `JinjaRenderMode::Symbolic` hole-punch introspective results instead of
+// silently rendering the Parse-mode stub as if it were real.
+
+fn call_method_test(
+    adapter: &Arc<Adapter>,
+    name: &str,
+    args: &[Value],
+) -> Result<Value, minijinja::Error> {
+    let env = minijinja::Environment::new();
+    let state = State::new_for_env(&env);
+    let listener: Rc<dyn RenderingEventListener> = Rc::new(TaintGateListener);
+    adapter.call_method(&state, name, args, &[listener])
+}
+
+#[test]
+fn test_parse_mode_execute_result_is_tainted() {
+    let adapter = make_duckdb_parse_adapter();
+    let result = call_method_test(&adapter, "execute", &[Value::from("select 1")]).unwrap();
+    assert!(result.is_introspective_stub());
+}
+
+#[test]
+fn test_parse_mode_execute_result_is_not_tainted_without_an_opted_in_listener() {
+    // Regression test: taint-wrapping is gated on a listener actually
+    // wanting introspective holes (only `JinjaRenderMode::Symbolic`'s does).
+    // Wrapping unconditionally changes the value's `ValueRepr` from
+    // whatever primitive it really is (e.g. `None`) to `Object` for *every*
+    // render mode, which silently broke plain `{% if not
+    // adapter.get_relation(...) %}`/`is none`-style checks that never touch
+    // taint at all -- `Value::is_none()` can't see through an `Object`
+    // wrapper no matter what `IntrospectiveValue` overrides.
+    let adapter = make_duckdb_parse_adapter();
+    let env = minijinja::Environment::new();
+    let state = State::new_for_env(&env);
+    let result = adapter
+        .call_method(&state, "execute", &[Value::from("select 1")], &[])
+        .unwrap();
+    assert!(!result.is_introspective_stub());
+}
+
+#[test]
+fn test_parse_mode_get_columns_in_relation_result_is_tainted() {
+    let adapter = make_duckdb_parse_adapter();
+    let relation = dispatch_test(
+        &adapter,
+        "get_relation",
+        &[
+            Value::from("db"),
+            Value::from("schema"),
+            Value::from("my_table"),
+        ],
+    )
+    .unwrap();
+    let result = call_method_test(&adapter, "get_columns_in_relation", &[relation]).unwrap();
+    assert!(result.is_introspective_stub());
+}
+
+#[test]
+fn test_parse_mode_get_relation_result_is_tainted() {
+    let adapter = make_duckdb_parse_adapter();
+    let result = call_method_test(
+        &adapter,
+        "get_relation",
+        &[
+            Value::from("db"),
+            Value::from("schema"),
+            Value::from("my_table"),
+        ],
+    )
+    .unwrap();
+    assert!(result.is_introspective_stub());
+}
+
+#[test]
+fn test_parse_mode_non_introspective_method_is_not_tainted() {
+    let adapter = make_duckdb_parse_adapter();
+    let result = call_method_test(
+        &adapter,
+        "check_schema_exists",
+        &[Value::from("db"), Value::from("schema")],
+    )
+    .unwrap();
+    assert!(!result.is_introspective_stub());
+}
+
+#[test]
+fn test_typed_mode_execute_result_is_not_tainted() {
+    let adapter = make_duckdb_adapter();
+    let result = call_method_test(&adapter, "execute", &[Value::from("select 1")]).unwrap();
+    assert!(!result.is_introspective_stub());
 }

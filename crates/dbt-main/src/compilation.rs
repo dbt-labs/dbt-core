@@ -550,6 +550,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
                         batch_results: Default::default(),
+                        compiled_code: Default::default(),
                     };
                     if self.arg.write_json {
                         write_run_results_json_or_warn(
@@ -1778,8 +1779,6 @@ impl DbtProjectCompilation {
                 &arg.io.out_dir,
                 self.resolved_state.adapter_type,
                 extra_frontier_unique_ids,
-                arg.io.use_parquet_schema_store,
-                arg.io.verify_parquet_schema_store,
             )?)
         };
 
@@ -2067,6 +2066,7 @@ impl DbtProjectCompilation {
                 stats: vec![stat],
                 nodes: Some(resolved_state.nodes),
                 batch_results: Default::default(),
+                compiled_code: Default::default(),
             };
             if arg.write_json {
                 // TODO: should also be captured by the caller?

@@ -55,6 +55,7 @@ pub fn summarize_task_runner_stats(
         stats: summarize_stats(schedule, &ctx.inner.analyze_stats),
         nodes: None,
         batch_results: Default::default(),
+        compiled_code: Default::default(),
     };
     let batch_results = ctx
         .inner
@@ -62,10 +63,17 @@ pub fn summarize_task_runner_stats(
         .iter()
         .map(|entry| (entry.key().clone(), entry.value().clone()))
         .collect();
+    let compiled_code = ctx
+        .inner
+        .rendered_sql
+        .iter()
+        .map(|entry| (entry.key().clone(), entry.value().sql.clone()))
+        .collect();
     let run = Stats {
         stats: summarize_stats(schedule, &ctx.inner.run_stats),
         nodes: Some(resolved_state.nodes.clone()),
         batch_results,
+        compiled_code,
     };
     TaskRunnerStats { compile, run }
 }

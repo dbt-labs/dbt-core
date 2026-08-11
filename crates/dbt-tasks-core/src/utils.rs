@@ -128,6 +128,7 @@ mod tests {
             stats: vec![],
             nodes: None,
             batch_results: Default::default(),
+            compiled_code: Default::default(),
         };
         write_run_results_json(
             &build_run_results_artifact(&stats, &HashMap::new(), &arg),

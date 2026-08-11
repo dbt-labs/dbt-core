@@ -14,6 +14,7 @@ use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, fs_err};
 use dbt_jinja_utils::phases::run::{build_run_node_context, reset_result_store};
 use dbt_jinja_utils::utils::add_task_context;
+use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtMaterialization};
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes};
@@ -88,29 +89,7 @@ pub fn prepare_microbatch_batches(
         )
     })?);
 
-    let batch_builder = MicrobatchBuilder::from_config(
-        model.deprecated_config.batch_size.clone(),
-        model.deprecated_config.begin.as_deref(),
-        model.deprecated_config.lookback,
-    )?;
-
-    // Model-level `full_refresh` config overrides the CLI `--full-refresh` flag.
-    // Matches dbt-core's `_is_incremental` function
-    // https://github.com/dbt-labs/dbt-core/blob/ecefc59e660eae4b34194ee4150fd4302836f4ea/core/dbt/task/run.py#L745-L746
-    let full_refresh = model
-        .deprecated_config
-        .full_refresh
-        .unwrap_or(ctx.inner.arg.full_refresh);
-    let is_incremental = is_incremental(model, full_refresh, ctx.adapter_type(), ctx.env.clone());
-
-    // Keep this window derivation in sync with `resolve_microbatch_window`, which
-    // recomputes the same `(start, end)` for the run-cache key in the submit path.
-    let end_time = batch_builder.build_end_time(ctx.inner.arg.event_time_end.clone())?;
-    let start_time = batch_builder.build_start_time(
-        Some(end_time),
-        ctx.inner.arg.event_time_start.clone(),
-        is_incremental,
-    )?;
+    let (batch_builder, start_time, end_time, is_incremental) = resolve_batch_window(model, ctx)?;
     let batches = batch_builder.build_batches(start_time, end_time);
 
     if batches.is_empty() {
@@ -174,23 +153,34 @@ pub fn prepare_microbatch_batches(
 /// set: `end` comes from `--event-time-end` (else `now`), and `start` from
 /// `--event-time-start`, or — for an incremental run — by offsetting back from
 /// `end` by the model's `lookback` batches (bounded below by `begin`), all keyed
-/// off the model's `batch_size`. The run cache folds it into the model-level cache
-/// key so re-running an unchanged window is a whole-model no-op while a different
+/// off the model's `batch_size`. `--sample`, if passed, further clamps the window
+/// to its bounds. The run cache folds it into the model-level cache key so
+/// re-running an unchanged window is a whole-model no-op while a different
 /// window executes. Mirrors the dbt-core plugin's `_resolve_microbatch_window`.
-///
-/// Keep the window derivation here in sync with `prepare_microbatch_batches`.
 pub fn resolve_microbatch_window(
     model: &DbtModel,
     ctx: &TaskRunnerCtx,
 ) -> FsResult<(DateTime<Utc>, DateTime<Utc>)> {
+    let (_, start_time, end_time, _) = resolve_batch_window(model, ctx)?;
+    Ok((start_time, end_time))
+}
+
+/// Compute the `(start, end)` batch window for a microbatch model, clamped to
+/// `--sample`'s bounds if passed. Shared by `prepare_microbatch_batches` and
+/// `resolve_microbatch_window` so the two stay in sync by construction.
+fn resolve_batch_window(
+    model: &DbtModel,
+    ctx: &TaskRunnerCtx,
+) -> FsResult<(MicrobatchBuilder, DateTime<Utc>, DateTime<Utc>, bool)> {
     let batch_builder = MicrobatchBuilder::from_config(
         model.deprecated_config.batch_size.clone(),
         model.deprecated_config.begin.as_deref(),
         model.deprecated_config.lookback,
     )?;
 
-    // Model-level `full_refresh` config overrides the CLI `--full-refresh` flag,
-    // matching dbt-core's `_is_incremental`.
+    // Model-level `full_refresh` config overrides the CLI `--full-refresh` flag.
+    // Matches dbt-core's `_is_incremental` function
+    // https://github.com/dbt-labs/dbt-core/blob/ecefc59e660eae4b34194ee4150fd4302836f4ea/core/dbt/task/run.py#L745-L746
     let full_refresh = model
         .deprecated_config
         .full_refresh
@@ -204,7 +194,35 @@ pub fn resolve_microbatch_window(
         is_incremental,
     )?;
 
-    Ok((start_time, end_time))
+    // `--sample` bounds the batch window the same way it bounds the SQL-level
+    // event-time filter for non-microbatch refs (see `RunFilter::sample_times`).
+    let sample = RunFilter::try_from(false, ctx.inner.arg.sample.clone())?;
+    let (start_time, end_time) = clamp_to_sample(&batch_builder, start_time, end_time, &sample);
+
+    Ok((batch_builder, start_time, end_time, is_incremental))
+}
+
+/// Clamp a batch window to `sample`'s bounds, if any are set. `sample_start` floors
+/// to the batch boundary it falls in (inclusive); `sample_end` ceils to the next
+/// boundary (exclusive), mirroring `build_start_time`/`build_end_time`'s own rounding.
+fn clamp_to_sample(
+    batch_builder: &MicrobatchBuilder,
+    start_time: DateTime<Utc>,
+    end_time: DateTime<Utc>,
+    sample: &RunFilter,
+) -> (DateTime<Utc>, DateTime<Utc>) {
+    let (sample_start, sample_end) = sample.sample_times();
+
+    let start_time = match sample_start {
+        Some(sample_start) => start_time.max(batch_builder.truncate_timestamp(sample_start)),
+        None => start_time,
+    };
+    let end_time = match sample_end {
+        Some(sample_end) => end_time.min(batch_builder.ceiling_timestamp(sample_end)),
+        None => end_time,
+    };
+
+    (start_time, end_time)
 }
 
 /// Execute a single microbatch task.
@@ -330,5 +348,81 @@ pub fn execute_model_remote(
         Ok(NodeStatus::SucceededWithWarning)
     } else {
         Ok(NodeStatus::Succeeded)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+    use dbt_schemas::filter::Sample;
+    use dbt_schemas::schemas::common::DbtBatchSize;
+
+    fn dt(year: i32, month: u32, day: u32) -> DateTime<Utc> {
+        DateTime::<Utc>::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(year, month, day)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            Utc,
+        )
+    }
+
+    fn sample(start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>) -> RunFilter {
+        RunFilter {
+            empty: false,
+            sample: Some(Sample { start, end }),
+        }
+    }
+
+    #[test]
+    fn no_sample_leaves_window_untouched() {
+        let builder = MicrobatchBuilder::new(DbtBatchSize::Day, dt(2024, 1, 1), 1);
+        let (start, end) = clamp_to_sample(
+            &builder,
+            dt(2024, 8, 4),
+            dt(2026, 8, 5),
+            &RunFilter::default(),
+        );
+        assert_eq!(start, dt(2024, 8, 4));
+        assert_eq!(end, dt(2026, 8, 5));
+    }
+
+    #[test]
+    fn sample_narrows_a_wide_begin_to_now_window() {
+        // Regression for #15798: a `begin`-to-now window spanning ~2 years must be
+        // narrowed to roughly the `--sample` bound, not built in full.
+        let builder = MicrobatchBuilder::new(DbtBatchSize::Day, dt(2024, 8, 4), 1);
+        let filter = sample(Some(dt(2026, 7, 6)), Some(dt(2026, 8, 5)));
+
+        let (start, end) = clamp_to_sample(&builder, dt(2024, 8, 4), dt(2026, 8, 5), &filter);
+
+        assert_eq!(start, dt(2026, 7, 6));
+        assert_eq!(end, dt(2026, 8, 5));
+    }
+
+    #[test]
+    fn sample_bound_outside_window_has_no_effect() {
+        // A sample window wider than the computed window must not widen it back out.
+        let builder = MicrobatchBuilder::new(DbtBatchSize::Day, dt(2024, 8, 4), 1);
+        let filter = sample(Some(dt(2020, 1, 1)), Some(dt(2030, 1, 1)));
+
+        let (start, end) = clamp_to_sample(&builder, dt(2026, 7, 1), dt(2026, 8, 1), &filter);
+
+        assert_eq!(start, dt(2026, 7, 1));
+        assert_eq!(end, dt(2026, 8, 1));
+    }
+
+    #[test]
+    fn sample_end_ceils_to_next_batch_boundary() {
+        // A sample end mid-batch must still include that batch, matching
+        // `build_end_time`'s own ceiling of `now()`.
+        let builder = MicrobatchBuilder::new(DbtBatchSize::Day, dt(2024, 1, 1), 1);
+        let mid_batch_end = dt(2026, 7, 15) + chrono::Duration::hours(6);
+        let filter = sample(None, Some(mid_batch_end));
+
+        let (_, end) = clamp_to_sample(&builder, dt(2024, 1, 1), dt(2026, 8, 5), &filter);
+
+        assert_eq!(end, dt(2026, 7, 16));
     }
 }
