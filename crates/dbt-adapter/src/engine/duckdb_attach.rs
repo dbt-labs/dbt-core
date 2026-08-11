@@ -279,18 +279,22 @@ fn push_default_opts(
     // attach read-write by default; a user-supplied `read_only` config overrides.
     let read_only = duckdb_get_bool(duckdb, "read_only")?.unwrap_or(false);
     opts.push(format!("READ_ONLY {read_only}"));
-    for (config_key, default_clause) in catalog_attach_defaults(catalog_type) {
-        // `endpoint_type` already implies an authorization type inside DuckDB,
-        // which rejects the pair outright ("'authorization_type' can not be
-        // combined with 'endpoint_type'"). Presetting one here would turn a
-        // valid config into a failed ATTACH.
-        if *config_key == "authorization_type" && endpoint_type.is_some() {
-            continue;
-        }
-        if !duckdb_has_key(duckdb, config_key) {
-            opts.push((*default_clause).to_string());
-        }
-    }
+    opts.extend(
+        catalog_attach_defaults(catalog_type)
+            .iter()
+            .filter(|(config_key, _)| {
+                // An explicit user value always wins over dbt's preset.
+                if duckdb_has_key(duckdb, config_key) {
+                    return false;
+                }
+                // `endpoint_type` already implies an authorization type inside
+                // DuckDB, which rejects the pair outright ("'authorization_type'
+                // can not be combined with 'endpoint_type'"). Presetting one
+                // here would turn a valid config into a failed ATTACH.
+                !(*config_key == "authorization_type" && endpoint_type.is_some())
+            })
+            .map(|(_, default_clause)| (*default_clause).to_string()),
+    );
     if duckdb_get_bool(duckdb, "encode_entire_prefix")?.unwrap_or(false) {
         opts.push("ENCODE_ENTIRE_PREFIX true".to_string());
     }
