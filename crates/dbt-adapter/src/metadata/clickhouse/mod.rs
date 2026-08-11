@@ -7,7 +7,7 @@ use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{AdapterResult, errors::AsyncAdapterResult, metadata::*};
 use arrow_schema::Schema;
 
-use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};
+use arrow_array::{Array, RecordBatch, StringArray, UInt64Array};
 
 use dbt_adapter_core::ExecutionPhase;
 use dbt_adbc::{Connection, MapReduce, QueryCtx};
@@ -138,7 +138,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
         let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
 
         let column_names = stats_sql_result.column_values::<StringArray>("column_name")?;
-        let column_indices = stats_sql_result.column_values::<Decimal128Array>("column_index")?;
+        let column_indices = stats_sql_result.column_values::<UInt64Array>("column_index")?;
         let column_types = stats_sql_result.column_values::<StringArray>("column_type")?;
         let column_comments = stats_sql_result.column_values::<StringArray>("column_comment")?;
 
@@ -158,7 +158,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
 
             let column = ColumnMetadata {
                 name: column_name.to_string(),
-                index: column_index,
+                index: column_index as i128,
                 data_type: column_type.to_string(),
                 comment: match column_comment {
                     "" => None,
