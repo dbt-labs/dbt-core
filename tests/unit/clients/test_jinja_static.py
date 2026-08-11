@@ -85,40 +85,154 @@ class TestStaticallyParseUnrenderedConfig:
     @pytest.mark.parametrize(
         "expression,expected_unrendered_config",
         [
+            # plain string — returned without quotes at the top level
             (
                 "{{ config(materialized='view') }}",
-                {"materialized": "Keyword(key='materialized', value=Const(value='view'))"},
+                {"materialized": "view"},
             ),
+            (
+                '{{ config(materialized="view") }}',
+                {"materialized": "view"},
+            ),
+            # multiple kwargs
             (
                 "{{ config(materialized='view', enabled=True) }}",
                 {
-                    "materialized": "Keyword(key='materialized', value=Const(value='view'))",
-                    "enabled": "Keyword(key='enabled', value=Const(value=True))",
+                    "materialized": "view",
+                    "enabled": "True",
                 },
             ),
+            # macro call — string args keep repr() quoting
             (
                 "{{ config(materialized=env_var('test')) }}",
-                {
-                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[], dyn_args=None, dyn_kwargs=None))"
-                },
+                {"materialized": "env_var('test')"},
             ),
+            # nested keyword arg in macro call
             (
                 "{{ config(materialized=env_var('test', default='default')) }}",
-                {
-                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[Keyword(key='default', value=Const(value='default'))], dyn_args=None, dyn_kwargs=None))"
-                },
+                {"materialized": "env_var('test', default='default')"},
             ),
+            # doubly nested macro calls
             (
                 "{{ config(materialized=env_var('test', default=env_var('default'))) }}",
-                {
-                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[Keyword(key='default', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='default')], kwargs=[], dyn_args=None, dyn_kwargs=None))], dyn_args=None, dyn_kwargs=None))"
-                },
+                {"materialized": "env_var('test', default=env_var('default'))"},
+            ),
+            # var() call
+            (
+                "{{ config(enabled=var('is_enabled')) }}",
+                {"enabled": "var('is_enabled')"},
+            ),
+            # integer constant
+            (
+                "{{ config(hours_to_expiration=24) }}",
+                {"hours_to_expiration": "24"},
+            ),
+            # None / Jinja2 `none`
+            (
+                "{{ config(full_refresh=none) }}",
+                {"full_refresh": "None"},
+            ),
+            # list literal
+            (
+                "{{ config(tags=['t1', 't2']) }}",
+                {"tags": "['t1', 't2']"},
+            ),
+            # dict literal
+            (
+                "{{ config(meta={'owner': 'alice'}) }}",
+                {"meta": "{'owner': 'alice'}"},
+            ),
+            # attribute access
+            (
+                "{{ config(alias=target.name) }}",
+                {"alias": "target.name"},
+            ),
+            # comparison expression
+            (
+                "{{ config(full_refresh=target.name == 'prod') }}",
+                {"full_refresh": "target.name == 'prod'"},
+            ),
+            # ~ string concatenation
+            (
+                "{{ config(alias='prefix_' ~ target.schema) }}",
+                {"alias": "'prefix_' ~ target.schema"},
+            ),
+            # not operator
+            (
+                "{{ config(enabled=not true) }}",
+                {"enabled": "not True"},
+            ),
+            # config call with surrounding SQL
+            (
+                "{{ config(materialized='table') }}\nselect 1 as id",
+                {"materialized": "table"},
+            ),
+            # empty config call
+            (
+                "{{ config() }}",
+                {},
+            ),
+            # False boolean
+            (
+                "{{ config(enabled=false) }}",
+                {"enabled": "False"},
+            ),
+            # float constant
+            (
+                "{{ config(some_ratio=0.5) }}",
+                {"some_ratio": "0.5"},
+            ),
+            # negative number (Neg node)
+            (
+                "{{ config(hours_to_expiration=-1) }}",
+                {"hours_to_expiration": "-1"},
+            ),
+            # != comparison
+            (
+                "{{ config(full_refresh=target.name != 'prod') }}",
+                {"full_refresh": "target.name != 'prod'"},
+            ),
+            # in operator with list
+            (
+                "{{ config(enabled=target.name in ['prod', 'staging']) }}",
+                {"enabled": "target.name in ['prod', 'staging']"},
+            ),
+            # and operator
+            (
+                "{{ config(enabled=var('x') and true) }}",
+                {"enabled": "var('x') and True"},
+            ),
+            # or operator
+            (
+                "{{ config(enabled=var('x') or false) }}",
+                {"enabled": "var('x') or False"},
+            ),
+            # list of dicts (BigQuery grants pattern)
+            (
+                "{{ config(grant_access_to=[{'project': 'p', 'dataset': 'd'}]) }}",
+                {"grant_access_to": "[{'project': 'p', 'dataset': 'd'}]"},
+            ),
+            # getitem access
+            (
+                "{{ config(alias=var('aliases')['my_model']) }}",
+                {"alias": "var('aliases')['my_model']"},
             ),
         ],
     )
     def test_statically_parse_unrendered_config(self, expression, expected_unrendered_config):
         unrendered_config = statically_parse_unrendered_config(expression)
         assert unrendered_config == expected_unrendered_config
+
+    @pytest.mark.parametrize(
+        "expression",
+        [
+            "select 1 as id",
+            "{{ ref('my_model') }}",
+            "{% set x = 1 %}",
+        ],
+    )
+    def test_statically_parse_unrendered_config_no_config_call(self, expression):
+        assert statically_parse_unrendered_config(expression) is None
 
 
 @pytest.mark.parametrize(

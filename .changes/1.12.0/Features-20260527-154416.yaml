@@ -1,6 +1,0 @@
-kind: Features
-body: Add support for user settings with flags reading writing
-time: 2026-05-27T15:44:16.231909+05:30
-custom:
-    Author: ash2shukla
-    Issue: "13031"

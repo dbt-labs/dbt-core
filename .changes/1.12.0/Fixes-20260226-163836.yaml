@@ -1,6 +1,0 @@
-kind: Fixes
-body: Better error formatting for semantic manifest validation errors
-time: 2026-02-26T16:38:36.858458+05:30
-custom:
-    Author: sriramr98
-    Issue: "9849"

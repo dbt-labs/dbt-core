@@ -3,12 +3,15 @@ from typing import Optional
 import pytz
 from click import Choice, Context, Parameter, ParamType
 
-from dbt.config.utils import normalize_warn_error_options, parse_cli_yaml_string
+from dbt.config.utils import (
+    build_warn_error_options_v2,
+    normalize_warn_error_options,
+    parse_cli_yaml_string,
+)
 from dbt.event_time.sample_window import SampleWindow
 from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import OptionNotYamlDictError, ValidationError
 from dbt_common.exceptions import DbtValidationError
-from dbt_common.helper_types import WarnErrorOptionsV2
 
 
 class YAML(ParamType):
@@ -57,12 +60,7 @@ class WarnErrorOptionsType(YAML):
         warn_error_options = super().convert(value, param, ctx)
         normalize_warn_error_options(warn_error_options)
 
-        return WarnErrorOptionsV2(
-            error=warn_error_options.get("error", []),
-            warn=warn_error_options.get("warn", []),
-            silence=warn_error_options.get("silence", []),
-            valid_error_names=ALL_EVENT_NAMES,
-        )
+        return build_warn_error_options_v2(warn_error_options, ALL_EVENT_NAMES)
 
 
 class SqlParseOptionsType(YAML):

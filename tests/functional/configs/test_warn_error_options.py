@@ -344,3 +344,56 @@ class TestRequireAllWarningsHandledByWarnErrorBehaviorFlag:
 
         assert len(microbatch_warning_catcher.caught_events) == 0
         assert len(microbatch_error_catcher.caught_events) == 1
+
+
+class TestWarnErrorOptionsToleratesFusionFromCLI(BaseTestWarnErrorOptions):
+    """dbt-core should ignore (not error on) Fusion-only warn_error_options names."""
+
+    def test_fusion_only_name_is_ignored_not_errored(
+        self, project, catcher: EventCatcher, runner: dbtRunner
+    ) -> None:
+        # 'StaticAnalysis' is specific to the dbt Fusion engine. dbt-core should
+        # ignore it rather than raise, while still honoring the real 'DeprecatedModel'.
+        result = runner.invoke(
+            ["run", "--warn-error-options", "{'silence': ['StaticAnalysis', 'DeprecatedModel']}"]
+        )
+        assert result.success
+        assert len(catcher.caught_events) == 0  # DeprecatedModel was silenced as requested
+
+    def test_unknown_name_still_errors(self, project, runner: dbtRunner) -> None:
+        result = runner.invoke(
+            ["run", "--warn-error-options", "{'silence': ['TotallyBogusName']}"]
+        )
+        assert not result.success
+        assert result.exception is not None
+        assert "not a valid dbt error name" in str(result.exception)
+
+
+class TestWarnErrorOptionsToleratesFusionFromProject(BaseTestWarnErrorOptionsFromProject):
+    def test_fusion_only_name_is_ignored_not_errored(
+        self, project, clear_project_flags, project_root, runner: dbtRunner
+    ) -> None:
+        # A Fusion-only name in dbt_project.yml should be ignored (with a Note,
+        # see the convert_config unit test) rather than raising. Here we assert
+        # the resulting behavior: the run succeeds and the name is stripped from
+        # the resolved options. (The Note is emitted during Flags construction,
+        # before the runner attaches its callbacks, so it can't be caught here.)
+        options: Dict[str, Any] = {"flags": {"warn_error_options": {"error": ["StaticAnalysis"]}}}
+        update_config_file(options, project_root, "dbt_project.yml")
+
+        result = runner.invoke(["run"])
+        assert result.success
+        assert get_flags().warn_error_options.error == []
+
+    def test_unknown_name_still_errors(
+        self, project, clear_project_flags, project_root, runner: dbtRunner
+    ) -> None:
+        options: Dict[str, Any] = {
+            "flags": {"warn_error_options": {"error": ["TotallyBogusName"]}}
+        }
+        update_config_file(options, project_root, "dbt_project.yml")
+
+        result = runner.invoke(["run"])
+        assert not result.success
+        assert result.exception is not None
+        assert "not a valid dbt error name" in str(result.exception)

@@ -7,7 +7,19 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from itertools import chain
-from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import jinja2
 import msgpack
@@ -104,6 +116,7 @@ from dbt.exceptions import (
     scrub_secrets,
 )
 from dbt.flags import get_flags
+from dbt.hints import HintType, show_hint
 from dbt.mp_context import get_mp_context
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
@@ -149,6 +162,18 @@ from dbt_common.helper_types import PathSet
 from dbt_common.ui import error_tag
 
 PERF_INFO_FILE_NAME = "perf_info.json"
+
+# Parses slower than this (in seconds) are slow enough to suggest the v2 parser.
+LONG_PARSING_THRESHOLD_SECONDS = 30
+
+
+def _maybe_show_long_parsing_hint(load_all_elapsed: Optional[float]) -> None:
+    if (
+        load_all_elapsed is not None
+        and load_all_elapsed > LONG_PARSING_THRESHOLD_SECONDS
+        and not get_flags().USE_V2_PARSER
+    ):
+        show_hint(HintType.LONG_PARSING_WITHOUT_V2_PARSER)
 
 
 def extended_mashumaro_encoder(data):
@@ -345,6 +370,10 @@ class ManifestLoader:
         loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
         loader.track_project_load()
 
+        # If parsing was slow and we're still on the legacy parser, nudge the user
+        # toward the v2 parser.
+        _maybe_show_long_parsing_hint(loader._perf_info.load_all_elapsed)
+
         if write_perf_info:
             loader.write_perf_info(config.project_target_path)
 
@@ -498,7 +527,7 @@ class ManifestLoader:
             start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name, self.root_project.dependencies)
-            self.process_unit_tests(self.root_project.project_name)
+            self.process_unit_tests()
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
@@ -923,27 +952,10 @@ class ManifestLoader:
     # Loop through macros in the manifest and statically parse
     # the 'macro_sql' to find depends_on.macros
     def macro_depends_on(self):
-        macro_ctx = generate_macro_context(self.root_project)
-        macro_namespace = TestMacroNamespace(self.macro_resolver, {}, None, MacroStack(), [])
-        adapter = get_adapter(self.root_project)
-        db_wrapper = ParseProvider().DatabaseWrapper(adapter, macro_namespace)
-        for macro in self.manifest.macros.values():
-            if macro.created_at < self.started_at:
-                continue
-            possible_macro_calls = statically_extract_macro_calls(
-                macro.macro_sql, macro_ctx, db_wrapper
-            )
-            for macro_name in possible_macro_calls:
-                # adapter.dispatch calls can generate a call with the same name as the macro
-                # it ought to be an adapter prefix (postgres_) or default_
-                if macro_name == macro.name:
-                    continue
-                package_name = macro.package_name
-                if "." in macro_name:
-                    package_name, macro_name = macro_name.split(".")
-                dep_macro_id = self.macro_resolver.get_macro_id(package_name, macro_name)
-                if dep_macro_id:
-                    macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
+        macros = [
+            macro for macro in self.manifest.macros.values() if macro.created_at >= self.started_at
+        ]
+        resolve_macro_depends_on(self.root_project, self.macro_resolver, macros)
 
     def write_manifest_for_partial_parse(self):
         if get_flags().USE_V2_PARSER:
@@ -1468,7 +1480,7 @@ class ManifestLoader:
     # Loops through all nodes, for each element in
     # 'unit_test' array finds the node and updates the
     # 'depends_on.nodes' array with the unique id
-    def process_unit_tests(self, current_project: str):
+    def process_unit_tests(self):
         models_to_versions = None
         unit_test_unique_ids = list(self.manifest.unit_tests.keys())
         for unit_test_unique_id in unit_test_unique_ids:
@@ -1482,9 +1494,7 @@ class ManifestLoader:
                 continue
             if not models_to_versions:
                 models_to_versions = _build_model_names_to_versions(self.manifest)
-            process_models_for_unit_test(
-                self.manifest, current_project, unit_test, models_to_versions
-            )
+            process_models_for_unit_test(self.manifest, unit_test, models_to_versions)
 
     # Loops through all nodes, for each element in
     # 'functions' array finds the node and updates the
@@ -2512,6 +2522,36 @@ def _process_functions_for_node(
             continue
 
         node.depends_on.add_node(target_function.unique_id)
+
+
+# Statically parse the 'macro_sql' of each given macro to find macro-to-macro
+# calls and populate 'depends_on.macros' accordingly.
+def resolve_macro_depends_on(
+    root_project: RuntimeConfig,
+    macro_resolver: MacroResolver,
+    macros: Iterable[Macro],
+) -> None:
+    macro_ctx = generate_macro_context(root_project)
+    macro_namespace = TestMacroNamespace(macro_resolver, {}, None, MacroStack(), [])
+    adapter = get_adapter(root_project)
+    db_wrapper = ParseProvider().DatabaseWrapper(
+        adapter, macro_namespace  # type: ignore[arg-type]
+    )
+    for macro in macros:
+        possible_macro_calls = statically_extract_macro_calls(
+            macro.macro_sql, macro_ctx, db_wrapper
+        )
+        for macro_name in possible_macro_calls:
+            # adapter.dispatch calls can generate a call with the same name as the macro
+            # it ought to be an adapter prefix (postgres_) or default_
+            if macro_name == macro.name:
+                continue
+            package_name = macro.package_name
+            if "." in macro_name:
+                package_name, macro_name = macro_name.split(".")
+            dep_macro_id = macro_resolver.get_macro_id(package_name, macro_name)
+            if dep_macro_id:
+                macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is

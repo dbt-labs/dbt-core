@@ -1,6 +1,0 @@
-kind: Fixes
-body: ':bug: :snowman: Fix false positive deprecation warning of pre/post-hook SQL configs'
-time: 2025-12-02T13:37:05.012112-05:00
-custom:
-    Author: michelleark
-    Issue: "12244"

@@ -1110,6 +1110,38 @@ class MixedManifestTest(unittest.TestCase):
                 self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
         self.assertEqual(compiled_count, 2)
 
+    def test_flat_graph_msgpack(self):
+        """Ensure the manifest still serializes to msgpack after flat_graph has
+        been populated with the lazy FlatGraphMapping views (flat_graph itself is
+        not serialized and is rebuilt on deserialization)."""
+        from dbt.parser.manifest import (
+            extended_mashumaro_encoder,
+            extended_mashumuro_decoder,
+        )
+
+        nodes = deepcopy(self.nested_nodes)
+        manifest = Manifest(
+            nodes=nodes,
+            sources={},
+            functions={},
+            macros={},
+            docs={},
+            disabled={},
+            selectors={},
+            files={},
+            exposures={},
+            semantic_models={},
+            saved_queries={},
+        )
+        manifest.build_flat_graph()
+
+        manifest_mp = manifest.to_msgpack(encoder=extended_mashumaro_encoder)
+        roundtripped = Manifest.from_msgpack(manifest_mp, decoder=extended_mashumuro_decoder)
+
+        # flat_graph is not serialized, but __post_deserialize__ rebuilds it.
+        assert set(roundtripped.flat_graph) == set(manifest.flat_graph)
+        assert set(roundtripped.flat_graph["nodes"]) == set(manifest.flat_graph["nodes"])
+
     def test_merge_from_artifact(self):
         original_nodes = deepcopy(self.nested_nodes)
         other_nodes = deepcopy(self.nested_nodes)

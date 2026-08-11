@@ -1,6 +1,0 @@
-kind: Features
-body: Support partial parsing for function nodes
-time: 2025-10-06T14:03:52.258104-05:00
-custom:
-  Author: QMalcolm
-  Issue: "12072"

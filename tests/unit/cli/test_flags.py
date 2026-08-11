@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import List, Optional
-from unittest import mock
 
 import click
 import pytest
@@ -43,8 +42,7 @@ class TestFlags:
 
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):
-        with mock.patch("dbt.cli.flags.get_user_setting_flags", return_value={}):
-            flags = Flags(run_context)
+        flags = Flags(run_context)
 
         if "DEPRECATED_" in param.name.upper():
             assert not hasattr(flags, param.name.upper())
@@ -563,3 +561,38 @@ class TestFusionParserFlags:
         ctx = self.make_dbt_context("run", ["--no-use-v2-parser", "run"])
         flags = Flags(ctx, project_flags)
         assert flags.USE_V2_PARSER is False
+
+
+class TestSnowflakeProjectsOtelFlag:
+    def make_dbt_context(
+        self, context_name: str, args: List[str], parent: Optional[click.Context] = None
+    ) -> click.Context:
+        return cli.make_context(context_name, args.copy(), parent)
+
+    def test_default_off(self):
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is False
+
+    def test_cli_arg_enables(self):
+        ctx = self.make_dbt_context("run", ["--snowflake-projects-otel", "run"])
+        flags = Flags(ctx)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is True
+
+    def test_env_var_enables(self, monkeypatch):
+        monkeypatch.setenv("DBT_ENGINE_SNOWFLAKE_PROJECTS_OTEL", "True")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is True
+
+    def test_project_flags_enables(self):
+        project_flags = ProjectFlags(snowflake_projects_otel=True)
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is True
+
+    def test_cli_overrides_project_flags(self):
+        project_flags = ProjectFlags(snowflake_projects_otel=True)
+        ctx = self.make_dbt_context("run", ["--no-snowflake-projects-otel", "run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.SNOWFLAKE_PROJECTS_OTEL is False

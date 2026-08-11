@@ -9,6 +9,7 @@ import yaml
 import dbt_common.events.functions
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
+from dbt.artifacts.resources.v1.macro import MacroArgument
 from dbt.artifacts.resources.v1.model import (
     ModelBuildAfter,
     ModelFreshnessUpdatesOnOptions,
@@ -1992,6 +1993,7 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize("macros/macro.sql"),
             path=normalize("macros/macro.sql"),
             macro_sql=raw_code,
+            arguments=[MacroArgument(name="a"), MacroArgument(name="b")],
         )
         assertEqualNodes(macro, expected)
         file_id = "snowplow://" + normalize("macros/macro.sql")
@@ -2015,6 +2017,7 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize("macros/macro.sql"),
             path=normalize("macros/macro.sql"),
             macro_sql="{% macro bar(c, d) %}c + d{% endmacro %}",
+            arguments=[MacroArgument(name="c"), MacroArgument(name="d")],
         )
         expected_foo = Macro(
             name="foo",
@@ -2024,6 +2027,7 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize("macros/macro.sql"),
             path=normalize("macros/macro.sql"),
             macro_sql="{% macro foo(a, b) %}a ~ b{% endmacro %}",
+            arguments=[MacroArgument(name="a"), MacroArgument(name="b")],
         )
         assertEqualNodes(macros[0], expected_bar)
         assertEqualNodes(macros[1], expected_foo)

@@ -5,7 +5,13 @@ import pytest
 
 import dbt_common.exceptions
 from dbt.tests.fixtures.project import write_project_files
-from dbt.tests.util import check_relations_equal, get_manifest, run_dbt
+from dbt.tests.util import (
+    check_relations_equal,
+    get_manifest,
+    get_project_config,
+    run_dbt,
+    set_project_config,
+)
 from tests.functional.macros.fixtures import (
     dbt_project__incorrect_dispatch,
     macros__config_sql,
@@ -347,3 +353,17 @@ class TestMacroMetaDocsMerge:
         assert macro.docs.node_color == expected_docs_node_color
         assert macro.config.docs.show == expected_docs_show
         assert macro.config.docs.node_color == expected_docs_node_color
+
+
+class TestVarUsingProjectVarValue:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": "select * from pg_type where {{ var('truncate_timestamp_to') }} <= {{ var('truncate_timestamp_to') }} limit 1"
+        }
+
+    def test_var_using_project_var_value(self, project):
+        config = get_project_config(project)
+        config["vars"] = {"truncate_timestamp_to": "{{ current_timestamp() }}"}
+        set_project_config(project, config)
+        run_dbt(["parse"])

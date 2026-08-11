@@ -1,7 +1,0 @@
-kind: Fixes
-body: ':bug: :snowman: Improve `dbt deps --add-package` duplicate detection with better
-  cross-source matching and word boundaries'
-time: 2025-11-28T16:31:44.344099-05:00
-custom:
-  Author: emmyoop
-  Issue: "12239"

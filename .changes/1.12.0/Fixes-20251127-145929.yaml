@@ -1,7 +1,0 @@
-kind: Fixes
-body: ':bug: :snowman: Fixed issue where changing data type size/precision/scale (e.g.,
-  varchar(3) to varchar(10)) incorrectly triggered a breaking change error fo'
-time: 2025-11-27T14:59:29.256274-05:00
-custom:
-  Author: emmyoop
-  Issue: "11186"

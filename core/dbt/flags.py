@@ -70,6 +70,7 @@ def get_flag_dict():
         "invocation_command",
         "empty",
         "maximum_seed_size_mib",
+        "hints_enabled",
     }
     return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 

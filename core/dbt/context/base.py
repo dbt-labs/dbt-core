@@ -149,12 +149,12 @@ class Var:
 
     def __init__(
         self,
-        context: Mapping[str, Any],
+        context: BaseContext,
         cli_vars: Mapping[str, Any],
         node: Optional[Resource] = None,
         require_vars: bool = True,
     ) -> None:
-        self._context: Mapping[str, Any] = context
+        self._context: BaseContext = context
         self._cli_vars: Mapping[str, Any] = cli_vars
         self._node: Optional[Resource] = node
         self._require_vars: bool = require_vars
@@ -185,7 +185,7 @@ class Var:
         if not isinstance(raw, str):
             return raw
 
-        return get_rendered(raw, dict(self._context))
+        return get_rendered(raw, self._context._ctx)
 
     def __call__(self, var_name: str, default: Any = _VAR_NOTSET) -> Any:
         if self.has_var(var_name):
@@ -330,7 +330,7 @@ class BaseContext(metaclass=ContextMeta):
             from events
             where event_type = '{{ var("event_type", "activation") }}'
         """
-        return Var(self._ctx, self.cli_vars, require_vars=self.require_vars)
+        return Var(self, self.cli_vars, require_vars=self.require_vars)
 
     @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:

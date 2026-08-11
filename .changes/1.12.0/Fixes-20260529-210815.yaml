@@ -1,6 +1,0 @@
-kind: Fixes
-body: Write manage_state user_settings in all platform login flows unless explicitly disabled
-time: 2026-05-29T21:08:15.352105+05:30
-custom:
-    Author: ash2shukla
-    Issue: "13032"

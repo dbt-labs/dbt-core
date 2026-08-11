@@ -342,21 +342,18 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
+    hints_enabled: Optional[bool] = None
     indirect_selection: Optional[str] = None
     log_format: Optional[str] = None
     log_format_file: Optional[str] = None
     log_level: Optional[str] = None
     log_level_file: Optional[str] = None
     maximum_seed_size_mib: Optional[int] = None
-    # Opt-in for the bundled dbt-state plugin. Default None defers to the CLI/env-var
-    # default (False). Set true in dbt_project.yml's `flags:` block (or profiles.yml's
-    # `config:` block) to enable plugin auto-discovery. Also settable via
-    # `--manage-state/--no-manage-state` and `DBT_ENGINE_MANAGE_STATE`.
-    manage_state: Optional[bool] = None
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
+    snowflake_projects_otel: Optional[bool] = None
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
@@ -369,18 +366,18 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     write_json: Optional[bool] = None
 
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
-    require_batched_execution_for_custom_microbatch_strategy: bool = False
+    require_batched_execution_for_custom_microbatch_strategy: bool = True
     require_event_names_in_deprecations: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = True
     source_freshness_run_project_hooks: bool = True
-    skip_nodes_if_on_run_start_fails: bool = False
-    state_modified_compare_more_unrendered_values: bool = False
+    skip_nodes_if_on_run_start_fails: bool = True
+    state_modified_compare_more_unrendered_values: bool = True
     state_modified_compare_vars: bool = False
-    require_yaml_configuration_for_mf_time_spines: bool = False
-    require_nested_cumulative_type_params: bool = False
-    validate_macro_args: bool = False
-    require_all_warnings_handled_by_warn_error: bool = False
+    require_yaml_configuration_for_mf_time_spines: bool = True
+    require_nested_cumulative_type_params: bool = True
+    validate_macro_args: bool = True
+    require_all_warnings_handled_by_warn_error: bool = True
     require_generic_test_arguments_property: bool = True
     require_unique_project_resource_names: bool = False
     require_ref_searches_node_package_before_root: bool = False

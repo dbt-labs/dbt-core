@@ -1,5 +1,5 @@
 import typing
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import jinja2
 
@@ -15,6 +15,16 @@ if typing.TYPE_CHECKING:
 
 
 _TESTING_MACRO_CACHE: Dict[str, Any] = {}
+_COMPARE_OPS = {
+    "eq": "==",
+    "ne": "!=",
+    "lt": "<",
+    "lteq": "<=",
+    "gt": ">",
+    "gteq": ">=",
+    "in": "in",
+    "notin": "not in",
+}
 
 
 def statically_check_has_jinja(source: Optional[str]) -> bool:
@@ -250,7 +260,74 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
 
 
 def construct_static_kwarg_value(kwarg) -> str:
-    # Instead of trying to re-assemble complex kwarg value, simply stringify the value.
-    # This is still useful to be able to detect changes in unrendered configs, even if it is
-    # not an exact representation of the user input.
-    return str(kwarg)
+    try:
+        # jinja2 nodes define fields dynamically; kw typed Any to avoid attr errors.
+        kw: Any = kwarg
+        kw_val: Any = kw.value
+        # If the final value is a plain string constant, return it without quotes.
+        # Nested string args (e.g. inside env_var) keep their repr() quoting.
+        if isinstance(kw_val, jinja2.nodes.Const):
+            # Re-bind to Any after narrowing so .value access stays untyped.
+            const_val: Any = kw_val
+            if isinstance(const_val.value, str):
+                return const_val.value
+        return _reconstruct_node(kw_val)
+    except Exception:
+        # Sensitive codepath — fall back to the original AST repr on any error
+        return str(kwarg)
+
+
+def _reconstruct_call(n: Any) -> str:
+    func = _reconstruct_node(n.node)
+    parts: List[str] = [_reconstruct_node(a) for a in n.args]
+    parts += [f"{kw.key}={_reconstruct_node(kw.value)}" for kw in n.kwargs]
+    if n.dyn_args is not None:
+        parts.append(f"*{_reconstruct_node(n.dyn_args)}")
+    if n.dyn_kwargs is not None:
+        parts.append(f"**{_reconstruct_node(n.dyn_kwargs)}")
+    return f"{func}({', '.join(parts)})"
+
+
+def _reconstruct_tuple(n: Any) -> str:
+    items = [_reconstruct_node(i) for i in n.items]
+    return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
+
+
+def _reconstruct_dict(n: Any) -> str:
+    pairs = [f"{_reconstruct_node(p.key)}: {_reconstruct_node(p.value)}" for p in n.items]
+    return "{" + ", ".join(pairs) + "}"
+
+
+def _reconstruct_compare(n: Any) -> str:
+    expr = _reconstruct_node(n.expr)
+    ops = " ".join(
+        f"{_COMPARE_OPS.get(op.op, op.op)} {_reconstruct_node(op.expr)}" for op in n.ops
+    )
+    return f"{expr} {ops}"
+
+
+# Dispatch table keyed by exact node type. All keys are concrete leaf classes in
+# the jinja2 AST, so an exact `type(node)` lookup is sufficient.
+_NODE_HANDLERS: Dict[type, Callable[[Any], str]] = {
+    jinja2.nodes.Const: lambda n: repr(n.value),
+    jinja2.nodes.Name: lambda n: n.name,
+    jinja2.nodes.Call: _reconstruct_call,
+    jinja2.nodes.List: lambda n: f"[{', '.join(_reconstruct_node(i) for i in n.items)}]",
+    jinja2.nodes.Tuple: _reconstruct_tuple,
+    jinja2.nodes.Dict: _reconstruct_dict,
+    jinja2.nodes.Getattr: lambda n: f"{_reconstruct_node(n.node)}.{n.attr}",
+    jinja2.nodes.Getitem: lambda n: f"{_reconstruct_node(n.node)}[{_reconstruct_node(n.arg)}]",
+    jinja2.nodes.Concat: lambda n: " ~ ".join(_reconstruct_node(c) for c in n.nodes),
+    jinja2.nodes.Compare: _reconstruct_compare,
+    jinja2.nodes.Not: lambda n: f"not {_reconstruct_node(n.node)}",
+    jinja2.nodes.Neg: lambda n: f"-{_reconstruct_node(n.node)}",
+    jinja2.nodes.And: lambda n: f"{_reconstruct_node(n.left)} and {_reconstruct_node(n.right)}",
+    jinja2.nodes.Or: lambda n: f"{_reconstruct_node(n.left)} or {_reconstruct_node(n.right)}",
+}
+
+
+def _reconstruct_node(node) -> str:
+    """Reconstruct a Jinja2 AST node back to a source-like expression string."""
+    # `str` is the fallback for any unhandled node type — preserves existing behaviour.
+    handler = _NODE_HANDLERS.get(type(node), str)
+    return handler(node)

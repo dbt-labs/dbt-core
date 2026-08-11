@@ -1,6 +1,0 @@
-kind: Features
-body: Add the ability to process derived semantic entities to dbt models, as required by new YAML schema.
-time: 2026-01-28T12:57:27.576354-08:00
-custom:
-    Author: theyostalservice
-    Issue: "12401"

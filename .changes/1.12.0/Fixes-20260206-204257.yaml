@@ -1,6 +1,0 @@
-kind: Fixes
-body: Skip raising `CustomKeyInConfigDeprecation` for config key alias in sql
-time: 2026-02-06T20:42:57.134627+05:30
-custom:
-    Author: ash2shukla
-    Issue: "12396"

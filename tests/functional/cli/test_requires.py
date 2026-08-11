@@ -107,6 +107,7 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_VERSION_CHECK",
             "DBT_ENGINE_QUIET",
             "DBT_ENGINE_SINGLE_THREADED",
+            "DBT_ENGINE_SNOWFLAKE_PROJECTS_OTEL",
             "DBT_ENGINE_SQLPARSE",
             "DBT_ENGINE_ARTIFACT_STATE_PATH",
             "DBT_ENGINE_FULL_REFRESH",
@@ -138,14 +139,7 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_DEBUG",
             "DBT_ENGINE_PRINT",
             "DBT_ENGINE_SAMPLE",
-            "DBT_ENGINE_MANAGE_STATE",
-            "DBT_ENGINE_STATE_EMIT_REUSED_STATUS",
-            "DBT_ENGINE_STATE_OAUTH_CLIENT_ID",
-            "DBT_ENGINE_STATE_AUTH_URL",
-            "DBT_ENGINE_STATE_TOKEN_URL",
-            "DBT_ENGINE_STATE_API_URL",
-            "DBT_ENGINE_MANAGE_STATE",
-            "DBT_ENGINE_SKIP_BROWSER_AUTH",
+            "DBT_ENGINE_HINTS_ENABLED",
         }
         from dbt.env_vars import _ALLOWED_ENV_VARS
 

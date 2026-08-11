@@ -1,0 +1,8 @@
+kind: Fixes
+body: Fix `dbt build` node count ("X of Y") being inflated when unit tests are selected,
+  by adding the unit test count to num_nodes exactly once instead of on every dequeue
+  while run_count is still 0
+time: 2026-07-20T12:00:00.000000+00:00
+custom:
+    Author: tauhid621
+    Issue: "11185"

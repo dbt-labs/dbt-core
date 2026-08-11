@@ -177,7 +177,7 @@ jobs:
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
       DBT_TEST_USER_3: dbt_test_user_3
-      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: ${{ secrets.DATADOG_API_KEY != '' }}
       DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
       DD_SITE: datadoghq.com
       DD_ENV: ci
@@ -227,7 +227,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- ${{ secrets.DATADOG_API_KEY != '' && '--ddtrace' || '' }} --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -268,7 +268,7 @@ jobs:
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
       DBT_TEST_USER_3: dbt_test_user_3
-      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: ${{ secrets.DATADOG_API_KEY != '' }}
       DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
       DD_SITE: datadoghq.com
       DD_ENV: ci
@@ -305,7 +305,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- ${{ secrets.DATADOG_API_KEY != '' && '--ddtrace' || '' }} --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()

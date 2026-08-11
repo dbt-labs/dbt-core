@@ -1,11 +1,14 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set, Tuple
 
 from dbt import deprecations
 from dbt.clients import yaml_helper
+from dbt.events.fusion_warn_error_options import FUSION_WARN_ERROR_OPTION_NAMES
 from dbt.events.types import InvalidOptionYAML
 from dbt.exceptions import DbtExclusivePropertyUseError, OptionNotYamlDictError
 from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtValidationError
+from dbt_common.helper_types import WarnErrorOptionsV2
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
@@ -75,3 +78,41 @@ def normalize_warn_error_options(warn_error_options: Dict[str, Any]) -> None:
     for key in ("error", "warn", "silence"):
         if key in warn_error_options and warn_error_options[key] is None:
             warn_error_options[key] = []
+
+
+def partition_warn_error_options(
+    warn_error_options: Dict[str, Any], valid_error_names: Set[str]
+) -> Tuple[Set[str], Dict[str, Any]]:
+
+    fusion_only_vocab = FUSION_WARN_ERROR_OPTION_NAMES - valid_error_names
+
+    def is_fusion_only(name: Any) -> bool:
+        return isinstance(name, str) and name in fusion_only_vocab
+
+    fusion_only_names: Set[str] = set()
+    core_fusion_warn_error_options = dict(warn_error_options)
+    for key in ("error", "warn", "silence"):
+        names = warn_error_options.get(key)
+        if isinstance(names, list):
+            fusion_only_names.update(filter(is_fusion_only, names))
+            core_fusion_warn_error_options[key] = [n for n in names if not is_fusion_only(n)]
+    return fusion_only_names, core_fusion_warn_error_options
+
+
+def build_warn_error_options_v2(
+    warn_error_options: Dict[str, Any], valid_error_names: Set[str]
+) -> WarnErrorOptionsV2:
+    fusion_only_names, core_fusion_warn_error_options = partition_warn_error_options(
+        warn_error_options, valid_error_names
+    )
+    for name in sorted(fusion_only_names):
+        fire_event(
+            Note(msg=f"{name} is not being used because it's specific to the dbt Fusion engine.")
+        )
+
+    return WarnErrorOptionsV2(
+        error=core_fusion_warn_error_options.get("error", []),
+        warn=core_fusion_warn_error_options.get("warn", []),
+        silence=core_fusion_warn_error_options.get("silence", []),
+        valid_error_names=valid_error_names,
+    )

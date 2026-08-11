@@ -1,6 +1,0 @@
-kind: Fixes
-body: Allow for setting of OSI documents directory as project config
-time: 2026-06-02T12:04:57.383127-07:00
-custom:
-  Author: QMalcolm
-  Issue: "13088"

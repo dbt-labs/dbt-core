@@ -306,6 +306,13 @@ full_refresh = _create_option_and_track_env_var(
     is_flag=True,
 )
 
+hints_enabled = _create_option_and_track_env_var(
+    "--hints-enabled/--no-hints-enabled",
+    envvar="DBT_ENGINE_HINTS_ENABLED",
+    help="If set, dbt will surface occasional hints suggesting ways to speed up or improve your project.",
+    default=True,
+)
+
 host = _create_option_and_track_env_var(
     "--host",
     envvar="DBT_HOST",
@@ -425,26 +432,6 @@ macro_debugging = _create_option_and_track_env_var(
     envvar="DBT_MACRO_DEBUGGING",
     hidden=True,
 )
-
-skip_browser_auth = _create_option_and_track_env_var(
-    "--skip-browser-auth/--no-skip-browser-auth",
-    envvar="DBT_ENGINE_SKIP_BROWSER_AUTH",
-    help="Skip opening the browser and print the authentication URL instead.",
-    default=False,
-)
-
-
-manage_state = _create_option_and_track_env_var(
-    "--manage-state/--no-manage-state",
-    envvar="DBT_ENGINE_MANAGE_STATE",
-    help=(
-        "Opt in to loading the bundled dbt-state plugin (installed as a dependency "
-        "of dbt-core). Default false. Pass --manage-state to enable auto-discovery "
-        "and the plugin's runtime behavior."
-    ),
-    default=False,
-)
-
 
 sqlparse_options = _create_option_and_track_env_var(
     "--sqlparse",
@@ -691,6 +678,13 @@ single_threaded = _create_option_and_track_env_var(
     envvar="DBT_SINGLE_THREADED",
     default=False,
     hidden=True,
+)
+
+snowflake_projects_otel = _create_option_and_track_env_var(
+    "--snowflake-projects-otel/--no-snowflake-projects-otel",
+    envvar="DBT_ENGINE_SNOWFLAKE_PROJECTS_OTEL",
+    help="Enable OpenTelemetry span instrumentation for node and hook execution.",
+    default=False,
 )
 
 show_all_deprecations = _create_option_and_track_env_var(

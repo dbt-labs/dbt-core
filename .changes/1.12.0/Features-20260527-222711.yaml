@@ -1,6 +1,0 @@
-kind: Features
-body: Add dbt login command
-time: 2026-05-27T22:27:11.256616+05:30
-custom:
-    Author: ash2shukla
-    Issue: "13032"

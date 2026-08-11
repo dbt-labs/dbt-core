@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Bump lower bound for dbt-common to 1.37.2
-time: 2025-12-15T15:50:46.857793-05:00
-custom:
-    Author: michelleark
-    Issue: "12284"

@@ -1,3 +1,4 @@
+from collections import ChainMap
 from typing import List
 
 from dbt.adapters.contracts.connection import AdapterRequiredConfig
@@ -39,7 +40,7 @@ class ManifestContext(ConfiguredContext):
         # this takes all the macros in the manifest and adds them
         # to the MacroNamespaceBuilder stored in self.namespace
         builder = self._get_namespace_builder()
-        return builder.build_namespace(self.manifest.get_macros_by_package(), self._ctx)
+        return builder.build_namespace(self.manifest.get_macros_by_package(), self._ctx)  # type: ignore
 
     def _get_namespace_builder(self) -> MacroNamespaceBuilder:
         # avoid an import loop
@@ -62,10 +63,26 @@ class ManifestContext(ConfiguredContext):
         if isinstance(self.namespace, TestMacroNamespace):
             dct.update(self.namespace.local_namespace)
             dct.update(self.namespace.project_namespace)
+            return dct
         else:
-            dct.update(self.namespace)
+            # The following is a performance optimization which creates a "virtual"
+            # copy of dct, updated with the values in namespace. The result is
+            # called cm and by using a ChainMap it avoids the very large cost of
+            # iterating every value of namespace.
+            cm = ChainMap(self.namespace, dct)
 
-        return dct
+            # These next lines repair certain assumptions which were important
+            # before the performance optimization:
+            # 1. The context has a key called 'context' whose value is a reference
+            #    to the full context.
+            # 2. That self.namespace has the updated version of dct as its context,
+            #    which is used for macro context later.
+            # 3. That self._ctx is the updated version of dct rather than just dct
+            cm.maps.insert(0, {"context": cm})
+            self.namespace.ctx = cm
+            self._ctx = cm
+
+            return cm
 
     @contextproperty()
     def context_macro_stack(self):

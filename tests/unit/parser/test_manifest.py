@@ -16,9 +16,12 @@ from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
 from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
 from dbt.exceptions import ParsingError
 from dbt.flags import set_from_args
+from dbt.hints import HintType
 from dbt.parser.manifest import (
+    LONG_PARSING_THRESHOLD_SECONDS,
     ManifestLoader,
     _check_function_language_support,
+    _maybe_show_long_parsing_hint,
     _warn_for_unused_resource_config_paths,
     extended_mashumaro_encoder,
     extended_msgpack_encoder,
@@ -574,3 +577,33 @@ class TestVersionToStr:
     )
     def test_version_to_str(self, version, expected):
         assert version_to_str(version) == expected
+
+
+class TestLongParsingHint:
+    @pytest.fixture(autouse=True)
+    def mock_hint_deps(self, mocker: MockerFixture):
+        self.mock_show_hint = mocker.patch("dbt.parser.manifest.show_hint")
+        self.mock_get_flags = mocker.patch("dbt.parser.manifest.get_flags")
+
+    def _set_v2_parser(self, enabled: bool):
+        self.mock_get_flags.return_value = MagicMock(USE_V2_PARSER=enabled)
+
+    def test_fires_when_slow_and_legacy_parser(self):
+        self._set_v2_parser(False)
+        _maybe_show_long_parsing_hint(LONG_PARSING_THRESHOLD_SECONDS + 1)
+        self.mock_show_hint.assert_called_once_with(HintType.LONG_PARSING_WITHOUT_V2_PARSER)
+
+    def test_silent_when_fast(self):
+        self._set_v2_parser(False)
+        _maybe_show_long_parsing_hint(LONG_PARSING_THRESHOLD_SECONDS)
+        self.mock_show_hint.assert_not_called()
+
+    def test_silent_when_using_v2_parser(self):
+        self._set_v2_parser(True)
+        _maybe_show_long_parsing_hint(LONG_PARSING_THRESHOLD_SECONDS + 100)
+        self.mock_show_hint.assert_not_called()
+
+    def test_silent_when_elapsed_is_none(self):
+        self._set_v2_parser(False)
+        _maybe_show_long_parsing_hint(None)
+        self.mock_show_hint.assert_not_called()
