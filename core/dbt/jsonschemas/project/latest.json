@@ -452,6 +452,23 @@
       },
       "additionalProperties": false
     },
+    "ClickHouseIndex": {
+      "description": "A ClickHouse data-skipping index: `{name, definition}` items consumed by the ClickHouse macros (`ADD INDEX {{ index.get('name') }} {{ index.get('definition') }}`). Both fields are required, so no `skip_serializing_none` is needed.",
+      "type": "object",
+      "required": [
+        "definition",
+        "name"
+      ],
+      "properties": {
+        "definition": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "ClusterConfig": {
       "description": "Configuration for cluster by columns.\n\ndbt-core allows either of the variants for the `cluster_by` to allow cluster on a single column or on multiple columns",
       "anyOf": [
@@ -1072,6 +1089,31 @@
         }
       ]
     },
+    "IndexItem": {
+      "description": "One element of the shared `indexes` config. Adapter shapes are kept as distinct typed variants (like `PartitionConfig` does for BigQuery); the required fields are disjoint (`columns` vs `name`+`definition`), so untagged deserialization is unambiguous, and each variant serializes its own shape back to Jinja.",
+      "anyOf": [
+        {
+          "description": "Postgres: `{columns, unique, type}`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PostgresIndex"
+            }
+          ]
+        },
+        {
+          "description": "ClickHouse: `{name, definition}`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ClickHouseIndex"
+            }
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
     "IndexesConfig": {
       "description": "A wrapper type for the `indexes` config field that handles flexible deserialization.\n\ndbt-core accepts both list and dictionary formats for indexes. This type accepts either format on input but always serializes as a list.\n\n# Example\n\n```ignore // Input (list): [{columns: [\"id\"], unique: true}] // Serializes as: [{columns: [\"id\"], unique: true}]\n\n// Input (dict): {\"my_index\": {columns: [\"id\"], unique: true}} // Serializes as: [{columns: [\"id\"], unique: true}]  (keys are discarded) ```",
       "type": [
@@ -1079,7 +1121,7 @@
         "null"
       ],
       "items": {
-        "$ref": "#/definitions/PostgresIndex"
+        "$ref": "#/definitions/IndexItem"
       }
     },
     "LatestVersionPointer": {
@@ -3087,6 +3129,15 @@
             }
           ]
         },
+        "+connection_overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+constraints": {
           "type": [
             "array",
@@ -3291,7 +3342,22 @@
             "null"
           ]
         },
+        "+fields": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+format": {
           "type": [
             "string",
             "null"
@@ -3531,6 +3597,22 @@
           "anyOf": [
             {
               "$ref": "#/definitions/LatestVersionPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+layout": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+lifetime": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
             },
             {
               "type": "null"
@@ -3870,6 +3952,16 @@
             }
           ]
         },
+        "+range": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+refresh_interval_minutes": {
           "anyOf": [
             {
@@ -4054,6 +4146,12 @@
             "null"
           ]
         },
+        "+source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+sql_header": {
           "type": [
             "string",
@@ -4107,6 +4205,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+table": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+table_format": {
@@ -4224,6 +4328,28 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "+update_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+update_lag": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+url": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+use_anonymous_sproc": {
