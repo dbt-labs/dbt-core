@@ -185,7 +185,7 @@
   {% set views = {} %}
   {% if view_names %}
     {% for view_name in view_names %}
-      {% set view_sql = modules.re.findall('--(?:\s)?' + view_name + ':begin(.*)--(?:\s)?' + view_name + ':end', sql, flags=modules.re.DOTALL)[0] %}
+      {% set view_sql = modules.re.findall('--(?:\s)?' + view_name + ':begin(.*)--(?:\s)?' + view_name + ':end', sql, modules.re.DOTALL)[0] %}
       {%- set _ = views.update({view_name: view_sql}) -%}
     {% endfor %}
   {% else %}
