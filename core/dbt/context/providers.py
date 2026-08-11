@@ -1211,9 +1211,9 @@ class ProviderContext(ManifestContext):
     def store_raw_result(
         self,
         name: str,
-        message=Optional[str],
-        code=Optional[str],
-        rows_affected=Optional[str],
+        message: Optional[str] = None,
+        code: Optional[str] = None,
+        rows_affected: Optional[str] = None,
         agate_table: Optional["agate.Table"] = None,
     ) -> str:
         response = AdapterResponse(_message=message, code=code, rows_affected=rows_affected)
@@ -1224,9 +1224,13 @@ class ProviderContext(ManifestContext):
         def validate_any(*args) -> Callable[[T], None]:
             def inner(value: T) -> None:
                 for arg in args:
-                    if isinstance(arg, type) and isinstance(value, arg):
-                        return
-                    elif value == arg:
+                    if isinstance(arg, (type, tuple)):
+                        try:
+                            if isinstance(value, arg):
+                                return
+                        except TypeError:
+                            pass
+                    if value == arg:
                         return
                 raise DbtValidationError(
                     'Expected value "{}" to be one of {}'.format(value, ",".join(map(str, args)))
