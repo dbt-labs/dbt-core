@@ -4570,6 +4570,16 @@
             "null"
           ]
         },
+        "+alt_compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputePlatform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+as_columnstore": {
           "anyOf": [
             {
