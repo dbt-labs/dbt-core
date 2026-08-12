@@ -428,6 +428,15 @@
         "name"
       ],
       "properties": {
+        "classifiers": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "column_mask": {
           "anyOf": [
             {
@@ -1347,6 +1356,20 @@
             }
           ]
         },
+        "incremental_apply_config_changes": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
           "default": null,
           "allOf": [
@@ -1917,7 +1940,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -3272,6 +3323,20 @@
             }
           ]
         },
+        "incremental_apply_config_changes": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
           "default": null,
           "allOf": [
@@ -3818,7 +3883,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -4976,6 +5069,17 @@
             }
           ]
         },
+        "classifiers": {
+          "default": [],
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -5328,6 +5432,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -6108,6 +6226,20 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
           "anyOf": [
             {
@@ -6123,6 +6255,20 @@
           ]
         },
         "user_folder_for_python": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -7498,6 +7644,20 @@
             }
           ]
         },
+        "incremental_apply_config_changes": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
           "default": null,
           "allOf": [
@@ -8057,7 +8217,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -8627,6 +8815,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -9269,7 +9471,35 @@
             "null"
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -9795,6 +10025,20 @@
           ]
         },
         "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "incremental_apply_config_changes": {
           "anyOf": [
             {
               "type": [
@@ -10340,7 +10584,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
@@ -11132,6 +11404,20 @@
             }
           ]
         },
+        "incremental_apply_config_changes": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
           "default": null,
           "allOf": [
@@ -11619,7 +11905,35 @@
             }
           ]
         },
+        "use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "view_update_via_alter": {
           "anyOf": [
             {
               "type": [
