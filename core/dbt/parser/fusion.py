@@ -82,11 +82,8 @@ def parse_with_fusion(
             writable_manifest = _load_writable_manifest(manifest_path)
 
             if write and write_json:
-                # semantic_manifest.json is copied as-is: macro rediscovery below
-                # doesn't affect semantic models, so there's nothing to correct.
-                # manifest.json, however, is written from the corrected in-memory
-                # Manifest after the handoff dir is gone (see below) so the on-disk
-                # artifact reflects the rediscovered adapter macros.
+                # macro rediscovery below doesn't affect semantic models, so
+                # semantic_manifest.json needs no correction pass.
                 project_target_path.mkdir(parents=True, exist_ok=True)
                 semantic_manifest_path = handoff / "semantic_manifest.json"
                 if semantic_manifest_path.exists():
@@ -131,11 +128,10 @@ def parse_with_fusion(
     _delete_stale_partial_parse(project_target_path)
 
     if write and write_json:
-        # Write manifest.json from the corrected in-memory Manifest rather than
-        # copying Fusion's raw handoff file, which still reflects Fusion's bundled
-        # (pre-rediscovery) adapter macros. write_manifest() can't be reused here:
-        # it no-ops under USE_V2_PARSER and would also rewrite semantic_manifest.json,
-        # clobbering the raw copy made above.
+        # Written from the corrected manifest so the on-disk artifact reflects
+        # rediscovered adapter macros rather than Fusion's bundled ones.
+        # write_manifest() isn't reusable here: it no-ops under USE_V2_PARSER
+        # and would also rewrite the semantic_manifest.json copied above.
         from dbt.utils.artifact_upload import add_artifact_produced
 
         manifest_out_path = str(project_target_path / "manifest.json")
@@ -197,11 +193,8 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
             if source_file:
                 macro_parser.parse_file(FileBlock(source_file))
 
-        # The four built-in generic tests (test_not_null, test_unique,
-        # test_accepted_values, test_relationships) are {% test %} blocks under
-        # tests/generic/, parsed by GenericTestParser over generic_test_paths --
-        # a different parser and path list than MacroParser. Eviction above
-        # removes them (package_name "dbt"), so they must be re-parsed here too.
+        # Eviction above only restores via MacroParser, so the built-in generic
+        # tests (parsed separately by GenericTestParser) are lost without this pass.
         generic_test_parser = GenericTestParser(project, manifest)
         for path in filesystem_search(
             project=project, relative_dirs=project.generic_test_paths, extension=".sql"
