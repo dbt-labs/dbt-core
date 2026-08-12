@@ -332,7 +332,13 @@ class TestDeprecatedInvalidDeprecationDate:
 
         # type-based jsonschema validation is not enabled, so no deprecations are raised even though deprecation_date is an int
         assert len(event_catcher.caught_events) == 0
-        assert len(note_catcher.caught_events) == 0
+        # Excludes the deprecated-version Note, which also fires on every invocation
+        # when running on an EOL dbt version (e.g. 1.10.x).
+        assert not [
+            e
+            for e in note_catcher.caught_events
+            if "is deprecated and no longer" not in e.info.msg
+        ]
 
 
 class TestDuplicateYAMLKeysInSchemaFiles:
@@ -752,7 +758,13 @@ class TestCustomConfigInDbtProjectYmlNoDeprecation:
     def test_missing_plus_prefix_deprecation_sub_path(self, project):
         note_catcher = EventCatcher(Note)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[note_catcher.catch])
-        assert len(note_catcher.caught_events) == 0
+        # Excludes the deprecated-version Note, which also fires on every invocation
+        # when running on an EOL dbt version (e.g. 1.10.x).
+        assert not [
+            e
+            for e in note_catcher.caught_events
+            if "is deprecated and no longer" not in e.info.msg
+        ]
 
 
 class TestJsonSchemaValidationGating:

@@ -50,9 +50,14 @@ class TestGenericJsonSchemaValidationDeprecation:
             pass
 
         if GenericJSONSchemaValidationDeprecationCore()._is_preview:
-            assert len(note_catcher.caught_events) == 1
+            # Filter out the unrelated deprecated-version Note that also fires on
+            # every invocation when running on an EOL dbt version (e.g. 1.10.x).
+            schema_notes = [
+                e for e in note_catcher.caught_events if "is a required property" in e.info.msg
+            ]
+            assert len(schema_notes) == 1
             assert len(event_catcher.caught_events) == 0
-            event = note_catcher.caught_events[0]
+            event = schema_notes[0]
         else:
             assert len(event_catcher.caught_events) == 1
             assert len(note_catcher.caught_events) == 0
