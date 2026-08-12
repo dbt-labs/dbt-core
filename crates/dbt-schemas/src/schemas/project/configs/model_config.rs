@@ -113,6 +113,8 @@ pub struct ProjectModelConfig {
     pub catalog: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+catalog_sync")]
+    pub catalog_sync: Option<String>,
     #[serde(rename = "+alt_compute")]
     pub alt_compute: Option<ComputePlatform>,
     #[serde(rename = "+cluster_by")]
@@ -760,6 +762,7 @@ pub struct ModelConfig {
     #[serde(default)]
     pub classifiers: Classifiers,
     pub catalog_name: Option<String>,
+    pub catalog_sync: Option<String>,
     // Internal placement hint; kept out of serialized config/telemetry output.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alt_compute: Option<ComputePlatform>,
@@ -878,6 +881,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
             catalog_name: config.catalog_name.clone(),
+            catalog_sync: config.catalog_sync.clone(),
             alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
@@ -1064,6 +1068,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             begin: config.begin,
             bind: config.__warehouse_specific_config__.bind,
             catalog_name: config.catalog_name,
+            catalog_sync: config.catalog_sync,
             alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
@@ -1933,6 +1938,38 @@ mod tests {
                 "pii".to_string(),
             ]))
         );
+    }
+
+    #[test]
+    fn test_catalog_sync_parses() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+catalog_sync: MY_CATALOG
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.catalog_sync.as_deref(), Some("MY_CATALOG"));
+    }
+
+    #[test]
+    fn test_catalog_sync_none_child_inherits_parent() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+
+        let parent = ModelConfig {
+            catalog_sync: Some("PARENT_CATALOG".to_string()),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            catalog_sync: None,
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(child.catalog_sync.as_deref(), Some("PARENT_CATALOG"));
     }
 
     #[test]
