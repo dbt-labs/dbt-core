@@ -1,8 +1,0 @@
-kind: Dependencies
-body: Bump ca-certificates, libpq-dev, and openssh-client in Docker image to current
-  bullseye versions to fix Docker release build failure caused by superseded package
-  versions
-time: 2026-07-01T12:00:00.000000-04:00
-custom:
-  Author: ajnovice
-  Issue: NA
