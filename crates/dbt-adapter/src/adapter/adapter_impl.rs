@@ -2727,6 +2727,13 @@ impl AdapterImpl {
             {
                 Ok("text".to_string())
             }
+            // ClickHouse: Only add Nullable(...) when the column's data actually contains NULLs
+            Impl(ClickHouse, _) => {
+                let has_nulls = batch.column(col_idx as usize).null_count() > 0;
+                let mut out = String::new();
+                crate::sql_types::clickhouse::try_format_type(data_type, has_nulls, &mut out)?;
+                Ok(out)
+            }
             Impl(_, engine) => {
                 let mut out = String::new();
                 engine
