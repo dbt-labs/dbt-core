@@ -82,9 +82,12 @@ def parse_with_fusion(
             writable_manifest = _load_writable_manifest(manifest_path)
 
             if write and write_json:
-                # Copy v2 parser artifacts rather than re-serializing through write_manifest
+                # semantic_manifest.json is copied as-is: macro rediscovery below
+                # doesn't affect semantic models, so there's nothing to correct.
+                # manifest.json, however, is written from the corrected in-memory
+                # Manifest after the handoff dir is gone (see below) so the on-disk
+                # artifact reflects the rediscovered adapter macros.
                 project_target_path.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(manifest_path, project_target_path / "manifest.json")
                 semantic_manifest_path = handoff / "semantic_manifest.json"
                 if semantic_manifest_path.exists():
                     shutil.copyfile(
@@ -128,6 +131,16 @@ def parse_with_fusion(
     _delete_stale_partial_parse(project_target_path)
 
     if write and write_json:
+        # Write manifest.json from the corrected in-memory Manifest rather than
+        # copying Fusion's raw handoff file, which still reflects Fusion's bundled
+        # (pre-rediscovery) adapter macros. write_manifest() can't be reused here:
+        # it no-ops under USE_V2_PARSER and would also rewrite semantic_manifest.json,
+        # clobbering the raw copy made above.
+        from dbt.utils.artifact_upload import add_artifact_produced
+
+        manifest_out_path = str(project_target_path / "manifest.json")
+        manifest.write(manifest_out_path)
+        add_artifact_produced(manifest_out_path)
         enrich_manifest_with_plugin_artifacts(manifest, runtime_config.project_name)
 
     return manifest
@@ -148,10 +161,11 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
     )
     from dbt.context.macro_resolver import MacroResolver
     from dbt.mp_context import get_mp_context
+    from dbt.parser.generic_test import GenericTestParser
     from dbt.parser.macros import MacroParser
     from dbt.parser.manifest import resolve_macro_depends_on
     from dbt.parser.read_files import load_source_file
-    from dbt.parser.search import FileBlock
+    from dbt.parser.search import FileBlock, filesystem_search
 
     adapter_type = runtime_config.credentials.type
     load_plugin(adapter_type)
@@ -182,6 +196,21 @@ def rediscover_adapter_macros(manifest: Manifest, runtime_config: "RuntimeConfig
             source_file = load_source_file(path, ParseFileType.Macro, project.project_name, {})
             if source_file:
                 macro_parser.parse_file(FileBlock(source_file))
+
+        # The four built-in generic tests (test_not_null, test_unique,
+        # test_accepted_values, test_relationships) are {% test %} blocks under
+        # tests/generic/, parsed by GenericTestParser over generic_test_paths --
+        # a different parser and path list than MacroParser. Eviction above
+        # removes them (package_name "dbt"), so they must be re-parsed here too.
+        generic_test_parser = GenericTestParser(project, manifest)
+        for path in filesystem_search(
+            project=project, relative_dirs=project.generic_test_paths, extension=".sql"
+        ):
+            source_file = load_source_file(
+                path, ParseFileType.GenericTest, project.project_name, {}
+            )
+            if source_file:
+                generic_test_parser.parse_file(FileBlock(source_file))
 
     new_macro_ids = set(manifest.macros.keys()) - pre_existing_ids
     if new_macro_ids:

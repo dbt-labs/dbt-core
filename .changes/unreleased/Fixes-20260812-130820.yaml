@@ -1,0 +1,10 @@
+kind: Fixes
+body: Re-parse the built-in generic tests (test_not_null, test_unique, test_accepted_values,
+    test_relationships) after loading a Fusion-generated manifest, so they are not
+    permanently evicted and left undefined at test-compile time
+time: 2026-08-12T13:08:20.000000-06:00
+custom:
+    Author: aiguofer
+    Issue: "15914"
+</content>
+</invoke>
