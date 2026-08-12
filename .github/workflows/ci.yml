@@ -52,7 +52,7 @@ jobs:
   # ------------------------------------------------------------------
   fmt:
     name: Format
-    runs-on: ${{ vars.UBUNTU_LATEST }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
@@ -67,7 +67,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    runs-on: depot-ubuntu-24.04-32
     timeout-minutes: 45
     env:
       RUSTC_WRAPPER: sccache
@@ -96,7 +96,7 @@ jobs:
   # ------------------------------------------------------------------
   test:
     name: Test workspace
-    runs-on: ${{ vars.UBUNTU_RUNNER_32 }}
+    runs-on: depot-ubuntu-24.04-32
     timeout-minutes: 60
     env:
       RUSTC_WRAPPER: sccache
