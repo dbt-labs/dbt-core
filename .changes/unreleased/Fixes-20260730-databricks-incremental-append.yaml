@@ -1,7 +1,0 @@
-kind: Fixes
-body: 'Fix Databricks incremental models configured with the `append` strategy recreating existing tables instead of appending on rerun.'
-time: 2026-07-30T12:54:07.000000+00:00
-custom:
-    author: sd-db
-    issue: "14203"
-    project: dbt-core

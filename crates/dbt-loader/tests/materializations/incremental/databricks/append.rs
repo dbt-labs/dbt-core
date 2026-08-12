@@ -1,6 +1,9 @@
 use super::*;
 
 const APPEND_SQL: &str = "INSERT INTO target SELECT * FROM source";
+const DATABRICKS_STRATEGIES_SQL: &str = include_str!(
+    "../../../../src/dbt_macro_assets/dbt-databricks/macros/materializations/incremental/strategies.sql"
+);
 
 fn normalize_sql(sql: &str) -> String {
     sql.to_lowercase()
@@ -142,7 +145,30 @@ fn assert_existing_table_full_refresh(materialization_v2: bool) {
 
 #[test]
 fn append_strategy_renders_insert_into_target() {
-    let harness = build_harness();
+    let harness = MacroTestHarness::for_adapter(ADAPTER)
+        .with_macro_at_path(
+            "dbt_databricks",
+            "databricks__get_incremental_append_sql",
+            DATABRICKS_STRATEGIES_SQL,
+            "dbt_macro_assets/dbt-databricks/macros/materializations/incremental/strategies.sql",
+        )
+        .with_macro_at_path(
+            "dbt_databricks",
+            "get_insert_into_sql",
+            DATABRICKS_STRATEGIES_SQL,
+            "dbt_macro_assets/dbt-databricks/macros/materializations/incremental/strategies.sql",
+        )
+        .with_macro_at_path(
+            "dbt_databricks",
+            "insert_into_sql_impl",
+            DATABRICKS_STRATEGIES_SQL,
+            "dbt_macro_assets/dbt-databricks/macros/materializations/incremental/strategies.sql",
+        )
+        .build()
+        .expect("Databricks append strategy harness should build");
+    harness
+        .mock()
+        .on("has_dbr_capability", |_| Ok(Value::from(false)));
     mock_insert_columns(&harness);
     let ctx = insert_context(&harness);
 
@@ -152,12 +178,9 @@ fn append_strategy_renders_insert_into_target() {
             ctx.clone(),
         )
         .unwrap_or_else(|e| panic!("rendering Databricks append SQL failed: {e:?}"));
-    let qualified_sql = harness
-        .render(
-            "{{ databricks__get_insert_into_sql(source, target) }}",
-            ctx.clone(),
-        )
-        .unwrap_or_else(|e| panic!("rendering qualified insert SQL failed: {e:?}"));
+    let public_helper_sql = harness
+        .render("{{ get_insert_into_sql(source, target) }}", ctx.clone())
+        .unwrap_or_else(|e| panic!("rendering public insert SQL helper failed: {e:?}"));
     let normalized = normalize_sql(&append_sql);
 
     assert!(
@@ -172,7 +195,7 @@ fn append_strategy_renders_insert_into_target() {
         !normalized.contains("create or replace"),
         "got: {append_sql}"
     );
-    assert_eq!(normalize_sql(&qualified_sql), normalized);
+    assert_eq!(normalize_sql(&public_helper_sql), normalized);
 }
 
 #[test]
