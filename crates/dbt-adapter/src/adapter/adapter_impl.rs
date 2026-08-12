@@ -6466,6 +6466,32 @@ mod tests {
     }
 
     #[test]
+    fn test_convert_type_clickhouse_nullable_only_for_columns_with_nulls() {
+        use arrow_array::Int64Array;
+
+        // Both fields are declared nullable — seed schemas always are — so the
+        // decision must come from the actual data (null_count), not the field flag.
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("with_nulls", DataType::Int64, true),
+            Field::new("no_nulls", DataType::Int64, true),
+        ]));
+        let with_nulls = Arc::new(Int64Array::from(vec![Some(1), None, Some(3)])) as ArrayRef;
+        let no_nulls = Arc::new(Int64Array::from(vec![Some(1), Some(2), Some(3)])) as ArrayRef;
+        let batch = RecordBatch::try_new(schema, vec![with_nulls, no_nulls]).unwrap();
+        let table = Arc::new(AgateTable::from_record_batch(Arc::new(batch)));
+
+        let adapter = clickhouse_adapter(Mapping::new());
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        assert_eq!(
+            adapter.convert_type(&state, Arc::clone(&table), 0).unwrap(),
+            "Nullable(Int64)"
+        );
+        assert_eq!(adapter.convert_type(&state, table, 1).unwrap(), "Int64");
+    }
+
+    #[test]
     fn test_verify_database_redshift_cross_db_blocked_without_flags() {
         let config = Mapping::from_iter([("database".into(), "mydb".into())]);
         let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
