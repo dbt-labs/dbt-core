@@ -2809,6 +2809,9 @@
             }
           ]
         },
+        "+classifiers": {
+          "$ref": "#/definitions/StringOrArrayOfStrings"
+        },
         "+cluster_by": {
           "anyOf": [
             {
@@ -3170,6 +3173,21 @@
           ]
         },
         "+include_full_name_in_path": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+incremental_apply_config_changes": {
           "anyOf": [
             {
               "default": null,
@@ -3957,6 +3975,21 @@
             }
           ]
         },
+        "+use_safer_relation_operations": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+use_uniform": {
           "anyOf": [
             {
@@ -3973,6 +4006,21 @@
           ]
         },
         "+user_folder_for_python": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+view_update_via_alter": {
           "anyOf": [
             {
               "default": null,
