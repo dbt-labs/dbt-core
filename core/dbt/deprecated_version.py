@@ -7,7 +7,7 @@ from dbt_common.ui import warning_tag
 
 # dbt Core 1.10 and older no longer receive patches. See
 # https://github.com/dbt-labs/dbt-core/issues/15694
-LAST_SUPPORTED_MINOR_VERSION = 10
+LAST_SUPPORTED_MINOR_VERSION = 11
 
 WARN_MSG = (
     "This version of dbt is deprecated and no longer receives regular patches, including for "
@@ -25,7 +25,7 @@ def is_deprecated_version() -> bool:
     installed = get_installed_version()
     if installed.major is None or installed.minor is None:
         return False
-    return (int(installed.major), int(installed.minor)) <= (1, LAST_SUPPORTED_MINOR_VERSION)
+    return (int(installed.major), int(installed.minor)) < (1, LAST_SUPPORTED_MINOR_VERSION)
 
 
 def check_deprecated_version(is_warn: bool = False) -> None:
