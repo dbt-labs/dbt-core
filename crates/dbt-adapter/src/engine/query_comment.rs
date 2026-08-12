@@ -143,10 +143,12 @@ impl QueryCommentConfig {
                 if use_default {
                     if has_cloud_config(cloud_config) {
                         DEFAULT_QUERY_COMMENT_WITH_CLOUD.to_string()
-                    } else if adapter_type == AdapterType::Databricks {
-                        DATABRICKS_QUERY_COMMENT.to_string()
                     } else {
-                        DEFAULT_QUERY_COMMENT.to_string()
+                        match adapter_type {
+                            AdapterType::Databricks => DATABRICKS_QUERY_COMMENT,
+                            _ => DEFAULT_QUERY_COMMENT,
+                        }
+                        .to_string()
                     }
                 } else {
                     "".to_string()
@@ -442,7 +444,7 @@ mod tests {
         }
 
         let config = QueryCommentConfig::from_query_comment(
-            query_comment.clone(),
+            query_comment,
             AdapterType::Databricks,
             true,
             None,
