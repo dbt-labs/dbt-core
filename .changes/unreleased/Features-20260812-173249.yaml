@@ -1,5 +1,5 @@
 kind: Features
-body: '[ClickHouse] Seed data types are now Nullable only if Null values exists. Fix wrong primary key declaration when list configured'
+body: '[ClickHouse] Seed data types are now Nullable only when NULL values exist. Fix incorrect primary key declaration when configured as a list'
 time: 2026-08-12T17:32:49.757029+02:00
 custom:
     author: koletzilla
