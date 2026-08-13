@@ -1343,6 +1343,7 @@ impl ModelConfig {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
+        let catalog_sync_eq = self.catalog_sync == other.catalog_sync;
         let alt_compute_eq = self.alt_compute == other.alt_compute;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let materialized_eq_result = materialized_eq(&self.materialized, &other.materialized);
@@ -1403,6 +1404,7 @@ impl ModelConfig {
 
         let result = enabled_eq
             && catalog_name_eq
+            && catalog_sync_eq
             && alt_compute_eq
             && meta_eq_result
             && materialized_eq_result
@@ -1458,6 +1460,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.catalog_name),
                             format!("{:?}", &other.catalog_name),
+                        )),
+                    ),
+                    (
+                        "catalog_sync",
+                        catalog_sync_eq,
+                        Some((
+                            format!("{:?}", &self.catalog_sync),
+                            format!("{:?}", &other.catalog_sync),
                         )),
                     ),
                     (
@@ -1970,6 +1980,25 @@ __warehouse_specific_config__: {}
         child.default_to(&parent);
 
         assert_eq!(child.catalog_sync.as_deref(), Some("PARENT_CATALOG"));
+    }
+
+    #[test]
+    fn test_catalog_sync_detects_config_change() {
+        let a = ModelConfig {
+            catalog_sync: Some("CAT_A".to_string()),
+            ..Default::default()
+        };
+        let b = ModelConfig {
+            catalog_sync: Some("CAT_B".to_string()),
+            ..Default::default()
+        };
+        let c = ModelConfig {
+            catalog_sync: Some("CAT_A".to_string()),
+            ..Default::default()
+        };
+
+        assert!(!a.same_config(&b));
+        assert!(a.same_config(&c));
     }
 
     #[test]
