@@ -249,6 +249,52 @@ my_project:
 }
 
 #[test]
+fn test_custom_adapter_query_tags_keeps_native_rendering() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    unsafe {
+        std::env::set_var(
+            "DBT_PROFILE_TEST_CUSTOM_QUERY_TAGS",
+            r#"{"team":"analytics"}"#,
+        );
+    }
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: custom
+      query_tags: "{{ env_var('DBT_PROFILE_TEST_CUSTOM_QUERY_TAGS') }}"
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    let query_tags = result
+        .credentials
+        .get("query_tags")
+        .expect("query_tags should be present");
+    assert_eq!(
+        query_tags.get("team").and_then(dbt_yaml::Value::as_str),
+        Some("analytics")
+    );
+
+    unsafe {
+        std::env::remove_var("DBT_PROFILE_TEST_CUSTOM_QUERY_TAGS");
+    }
+}
+
+#[test]
 fn test_resolve_with_vars() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();

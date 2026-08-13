@@ -356,13 +356,34 @@ pub fn render_target(
     target_val: &dbt_yaml::Value,
     penv: &ProfileEnvironment,
 ) -> Result<dbt_yaml::Mapping> {
-    let rendered = render_value_recursive(&penv.env, &penv.ctx, target_val)?;
-    match rendered {
-        dbt_yaml::Value::Mapping(m, _) => Ok(m),
-        _ => Err(ProfileError::Other(
+    let dbt_yaml::Value::Mapping(target, _) = target_val else {
+        return Err(ProfileError::Other(
             "rendered target output is not a mapping".to_owned(),
-        )),
+        ));
+    };
+
+    let adapter_type = target
+        .get("type")
+        .map(|value| render_value_recursive(&penv.env, &penv.ctx, value))
+        .transpose()?
+        .and_then(|value| value.as_str().map(str::to_owned));
+    let preserve_query_tags = adapter_type
+        .as_deref()
+        .is_some_and(|adapter_type| adapter_type.eq_ignore_ascii_case("databricks"));
+
+    let mut rendered = dbt_yaml::Mapping::new();
+    for (key, value) in target.iter() {
+        let string_rendering = if preserve_query_tags && key.as_str() == Some("query_tags") {
+            StringRendering::Preserve
+        } else {
+            StringRendering::Native
+        };
+        rendered.insert(
+            key.clone(),
+            render_value_recursive_inner(&penv.env, &penv.ctx, value, string_rendering)?,
+        );
     }
+    Ok(rendered)
 }
 
 // ---------------------------------------------------------------------------
@@ -401,15 +422,20 @@ fn render_value_recursive<S: Serialize>(
     ctx: &S,
     value: &dbt_yaml::Value,
 ) -> Result<dbt_yaml::Value> {
-    render_value_recursive_inner(env, ctx, value, false, true)
+    render_value_recursive_inner(env, ctx, value, StringRendering::Native)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StringRendering {
+    Native,
+    Preserve,
 }
 
 fn render_value_recursive_inner<S: Serialize>(
     env: &Environment<'_>,
     ctx: &S,
     value: &dbt_yaml::Value,
-    preserve_rendered_string: bool,
-    preserve_query_tags_child: bool,
+    string_rendering: StringRendering,
 ) -> Result<dbt_yaml::Value> {
     let listeners: &[Rc<dyn RenderingEventListener>] = &[];
 
@@ -423,7 +449,7 @@ fn render_value_recursive_inner<S: Serialize>(
                 s.clone()
             };
             let resolved = render_secrets(&rendered)?;
-            if preserve_rendered_string {
+            if string_rendering == StringRendering::Preserve {
                 Ok(dbt_yaml::Value::String(resolved, span.clone()))
             } else if !has_jinja && resolved == rendered {
                 Ok(value.clone())
@@ -442,11 +468,9 @@ fn render_value_recursive_inner<S: Serialize>(
         dbt_yaml::Value::Mapping(map, span) => {
             let mut new_map = dbt_yaml::Mapping::new();
             for (k, v) in map.iter() {
-                let preserve_rendered_string =
-                    preserve_query_tags_child && k.as_str() == Some("query_tags");
                 new_map.insert(
                     k.clone(),
-                    render_value_recursive_inner(env, ctx, v, preserve_rendered_string, false)?,
+                    render_value_recursive_inner(env, ctx, v, StringRendering::Native)?,
                 );
             }
             Ok(dbt_yaml::Value::Mapping(new_map, span.clone()))
@@ -454,7 +478,7 @@ fn render_value_recursive_inner<S: Serialize>(
         dbt_yaml::Value::Sequence(seq, span) => {
             let rendered: std::result::Result<Vec<_>, _> = seq
                 .iter()
-                .map(|v| render_value_recursive_inner(env, ctx, v, false, false))
+                .map(|v| render_value_recursive_inner(env, ctx, v, StringRendering::Native))
                 .collect();
             Ok(dbt_yaml::Value::Sequence(rendered?, span.clone()))
         }
