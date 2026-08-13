@@ -610,6 +610,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.buckets.is_some()
             || self.catalog.is_some()
             || self.catalog_name.is_some()
+            || self.catalog_sync.is_some()
             || self.alt_compute.is_some()
             || self.cluster_by.is_some()
             || self.clustered_by.is_some()
@@ -1999,6 +2000,22 @@ __warehouse_specific_config__: {}
 
         assert!(!a.same_config(&b));
         assert!(a.same_config(&c));
+    }
+
+    #[test]
+    fn test_catalog_sync_counts_as_set_field() {
+        use crate::schemas::project::dbt_project::TypedRecursiveConfig;
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++catalog_sync: MY_CATALOG
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.catalog_sync.as_deref(), Some("MY_CATALOG"));
+        assert!(config.has_set_fields());
     }
 
     #[test]
