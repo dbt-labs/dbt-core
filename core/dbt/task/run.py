@@ -597,10 +597,6 @@ class MicrobatchBatchRunner(ModelRunner):
     def compile(self, manifest: Manifest):
         batch = self.batches[self.batch_idx]
 
-        # LEGACY: Set start/end in context prior to re-compiling (Will be removed for 1.10+)
-        # TODO: REMOVE before 1.10 GA
-        self.node.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
-        self.node.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
         # Create batch context on model node prior to re-compiling
         self.node.batch = BatchContext(
             id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size),

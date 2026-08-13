@@ -554,14 +554,12 @@ class TestMicrobatchUsingRefRenderSkipsFilter(BaseMicrobatchTest):
 
 microbatch_model_context_vars = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
-{{ log("start: "~ model.config.__dbt_internal_microbatch_event_time_start, info=True)}}
-{{ log("end: "~ model.config.__dbt_internal_microbatch_event_time_end, info=True)}}
 {% if model.batch %}
 {{ log("batch.event_time_start: "~ model.batch.event_time_start, info=True)}}
 {{ log("batch.event_time_end: "~ model.batch.event_time_end, info=True)}}
 {{ log("batch.id: "~ model.batch.id, info=True)}}
 {{ log("start timezone: "~ model.batch.event_time_start.tzinfo, info=True)}}
-{{ log("end timezone: "~ model.batch.event_time_end.tzinfo, info=True)}}
+{{ log("end timezone: "~ model.batch.event_time_end, info=True)}}
 {% endif %}
 select * from {{ ref('input_model') }}
 """
@@ -579,22 +577,16 @@ class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             _, logs = run_dbt_and_capture(["run"])
 
-        assert "start: 2020-01-01 00:00:00+00:00" in logs
-        assert "end: 2020-01-02 00:00:00+00:00" in logs
         assert "batch.event_time_start: 2020-01-01 00:00:00+00:00" in logs
         assert "batch.event_time_end: 2020-01-02 00:00:00+00:00" in logs
         assert "batch.id: 20200101" in logs
         assert "start timezone: UTC" in logs
         assert "end timezone: UTC" in logs
 
-        assert "start: 2020-01-02 00:00:00+00:00" in logs
-        assert "end: 2020-01-03 00:00:00+00:00" in logs
         assert "batch.event_time_start: 2020-01-02 00:00:00+00:00" in logs
         assert "batch.event_time_end: 2020-01-03 00:00:00+00:00" in logs
         assert "batch.id: 20200102" in logs
 
-        assert "start: 2020-01-03 00:00:00+00:00" in logs
-        assert "end: 2020-01-03 13:57:00+00:00" in logs
         assert "batch.event_time_start: 2020-01-03 00:00:00+00:00" in logs
         assert "batch.event_time_end: 2020-01-03 13:57:00+00:00" in logs
         assert "batch.id: 20200103" in logs
@@ -603,15 +595,13 @@ class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             _, compile_logs = run_dbt_and_capture(["compile"])
 
-        assert "start:" in compile_logs
-        assert "end:" in compile_logs
         assert "batch.event_time_start:" not in compile_logs
         assert "batch.event_time_end:" not in compile_logs
 
 
 microbatch_model_failing_incremental_partition_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
-{% if '2020-01-02' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
+{% if model.batch and '2020-01-02' in (model.batch.event_time_start | string) %}
  invalid_sql
 {% endif %}
 select * from {{ ref('input_model') }}
@@ -727,7 +717,7 @@ class TestMicrobatchMultipleRetries(BaseMicrobatchTest):
 
 microbatch_model_first_partition_failing_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
-{% if '2020-01-01' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
+{% if model.batch and '2020-01-01' in (model.batch.event_time_start | string) %}
  invalid_sql
 {% endif %}
 select * from {{ ref('input_model') }}
