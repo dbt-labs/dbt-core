@@ -2,10 +2,10 @@
   <h1>dbt-docs-server</h1>
   <p><strong>The next generation of dbt docs.</strong></p>
   <p>
-    Serves an interactive docs site and a JSON REST API for your dbt project, straight from the parquet artifacts the Fusion engine writes on every run.
+    A static, interactive docs site for your dbt project — the parquet artifacts the Fusion engine writes on every run, queried in the browser by DuckDB-WASM.
   </p>
   <p>
-    <a href="./API-CONTRACTS.md">API contracts</a> ·
+    <a href="./API-CONTRACTS.md">Contracts &amp; decisions</a> ·
     <a href="https://github.com/dbt-labs/dbt-core">dbt Core repo</a> ·
     <a href="https://docs.getdbt.com/docs/fusion/about-fusion">About Fusion</a> ·
     <a href="https://docs.getdbt.com">Official dbt docs</a>
@@ -20,9 +20,44 @@
 
 ## 👋 Introduction
 
-`dbt-docs-server` is the successor to dbt Core v1's `dbt docs generate` + `dbt docs serve`, rebuilt for the Rust/Fusion runtime. It ships inside the Fusion binary as `dbt docs serve` and can also be self-hosted in a container.
+`dbt-docs-server` is the successor to dbt Core v1's `dbt docs generate` + `dbt docs serve`, rebuilt for the Rust/Fusion runtime. It ships inside the Fusion binary as `dbt docs generate` and `dbt docs serve`, and can also be self-hosted in a container.
 
-The server is **read-only** and **stateless**: it loads parquet artifacts into an in-memory analytical engine at boot and answers queries against them. Point it at a fresh set of artifacts and restart to refresh.
+### Static sites (`dbt docs generate`)
+
+`dbt docs generate` writes into your target directory, which you can host on any plain file server — GitLab Pages, GitHub Pages, S3 — with no process and no state. It exports an index rather than building one, so run a compile or build with `--write-index` first:
+
+```bash
+dbt compile --write-index --static-analysis strict   # or: dbt build --write-index …
+dbt docs generate
+```
+
+```
+target/index.html        SPA entry, with window.__DBT_DOCS__ injected
+target/assets/           hashed JS/CSS
+target/index/            the artifacts `--write-index` wrote, read as they are
+```
+
+`index.html` lands exactly where dbt Core v1 wrote it, so an existing pipeline that
+publishes `target/` keeps working unchanged.
+
+**The site reads the index artifacts directly.** Nothing is copied, projected, or
+derived, so `target/index/` is the only artifact contract the site depends on — the same
+files, columns, and names every other index consumer sees. Tables that `--write-index`
+omits because they hold no rows (no run yet, no sources, no catalog) are declared as
+empty relations in the browser from DDL, which is why the queries need no
+missing-table variants.
+
+`--output-dir <dir>` still gives a self-contained directory: the index travels along as
+a byte-for-byte copy under `<dir>/index/`.
+
+> [!NOTE]
+> Publishing `target/` publishes everything in it: `manifest.json`, `run_results.json`,
+> compiled SQL, and any stored test failures under `target/data/`. Use
+> `--output-dir <dir>` for a self-contained directory holding only the site.
+
+The browser loads DuckDB-WASM from a CDN at runtime (never bundled; override the base with `--duckdb-cdn-base`) and queries the parquet directly. Column-level lineage rides along when the index has it, which is what `--static-analysis strict` on the compile or build produces; the site derives whether the feature is available from whether `dbt.column_lineage.parquet` is present, so nothing else has to be kept in sync.
+
+`dbt docs serve` generates this site when it is missing or older than the index, then serves it. It is a static file host for local preview — a convenience, not a requirement. There is no server-side query engine and no HTTP API: every query the site runs, it runs in the browser.
 
 ## ⚙️ How it works
 
@@ -30,27 +65,28 @@ Data comes from parquet files that the Fusion engine writes to `<target>/index/`
 
 ```
 dbt project
-    │  dbt --write-index <run | build | compile>
+    │  dbt compile --write-index --static-analysis strict
     ▼
-<target>/index/*.parquet          ← the data source (not manifest.json)
-    │  loaded at boot into an in-memory DuckDB (via ADBC), one view per table
+<target>/index/*.parquet   ← the data source (not manifest.json), read as written
+    │  dbt docs generate — writes index.html + assets/, copies nothing
     ▼
-axum HTTP handlers  (Arrow → JSON)
+<target>/index.html        ← hostable anywhere; reads index/ beside it
+    │  fetched by the browser
     ▼
-REST API  /api/v1/*
+DuckDB-WASM, in the page
     ▼
 React SPA  (embedded in the binary, hash routing)
 ```
 
-The SPA is baked into the binary at compile time (the `embed-ui` feature, on by default), so a single self-contained executable serves both the API and the UI.
+The SPA is baked into the binary at compile time (the `embed-ui` feature, on by default), so one self-contained executable both generates a site and previews it.
 
 ## ✨ Features
 
 - **Full project catalog** — models, sources, seeds, snapshots, tests, unit tests, exposures, groups, macros, metrics, semantic models, and saved queries.
 - **Interactive lineage** — node-to-node DAG lineage.
 - **Execution info** — last-run status, completion time, and errors surfaced inline on resource detail pages (when run results are present in the artifacts).
-- **Single self-contained binary** — API + embedded SPA, no separate static-asset hosting.
-- **No live warehouse dependency** — everything is served from the parquet snapshot.
+- **Statically hostable** — the generated site needs no process and no state, so any file host will do.
+- **No live warehouse dependency** — everything is read from the parquet snapshot.
 
 ## 🪜 Tiers
 
@@ -163,7 +199,7 @@ pnpm build          # writes web/dist/
 Other useful commands, all from `web/`:
 
 ```bash
-pnpm dev            # vite dev server on :3002, proxying /api to :8580
+pnpm dev            # vite dev server on :3002; set DBT_DOCS_DEV_SITE=<a generated site> for real data
 pnpm test           # vitest
 pnpm typecheck
 pnpm lint           # eslint + prettier

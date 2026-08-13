@@ -78,7 +78,6 @@ vortex-events = { workspace = true }
 [features]
 default = ["embed-ui"]
 embed-ui = ["dbt-docs-server/embed-ui"]
-openapi-ui = ["dbt-docs-server/openapi-ui"]
 
 [dev-dependencies]
 flate2 = { workspace = true }

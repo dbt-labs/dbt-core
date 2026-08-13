@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { FileTreeItemType } from '@dbt-labs/sourdough';
 
-import type { NodeSummary } from '../api';
 import type { AssetFilters } from '../App';
 import type {
   AssetCounts,
@@ -14,6 +13,7 @@ import type {
   UserState,
 } from '../shared';
 import { renderWithProviders } from '../test/renderWithProviders';
+import type { NodeSummary } from '../types';
 import { LocatePane } from './LocatePane';
 
 // The real `PaginatedFileTree` measures its parent via AutoSizer

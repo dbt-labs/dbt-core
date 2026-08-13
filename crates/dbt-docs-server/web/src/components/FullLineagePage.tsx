@@ -16,6 +16,7 @@ import { decorateOutboundHref } from '../lib/outboundReferrer';
 import { isTelemetryInitialized, trackLineageViewed } from '../lib/telemetry';
 import { paths } from '../routes';
 import { LineageEmptyState, Spinner } from '../shared';
+import { UNSUPPORTED_SURFACE_MESSAGE } from '../shared/hooks/unsupportedSurface';
 import { NodeLineagePanel } from './NodeLineagePanel';
 
 export default function FullLineagePage() {
@@ -23,7 +24,10 @@ export default function FullLineagePage() {
   const rootUniqueId = searchParams.get('uniqueId') ?? '';
   const panelId = searchParams.get('panel');
   const navigate = useNavigate();
-  const { data, error, dagNodes, selector } = useLineageData(rootUniqueId, 3);
+  const { data, error, dagNodes, selector, isSupported } = useLineageData(
+    rootUniqueId,
+    3,
+  );
 
   // Analytics: `lineage_viewed` (fullscreen) once the graph resolves for the
   // current root. Re-fires when the root changes (refetch → data null → data).
@@ -124,7 +128,12 @@ export default function FullLineagePage() {
           Failed to load lineage: <code className="inline">{error.message}</code>
         </div>
       )}
-      {!data && !error && rootUniqueId && (
+      {!isSupported && rootUniqueId && (
+        <p className="muted" style={{ fontSize: 13, padding: 16 }}>
+          {UNSUPPORTED_SURFACE_MESSAGE}
+        </p>
+      )}
+      {isSupported && !data && !error && rootUniqueId && (
         <p
           className="muted flex items-center gap-2"
           style={{ fontSize: 13, padding: 16 }}

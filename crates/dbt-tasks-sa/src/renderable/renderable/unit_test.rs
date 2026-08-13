@@ -3285,7 +3285,7 @@ mod tests {
     fn row(pairs: &[(&str, i64)]) -> BTreeMap<String, YmlValue> {
         pairs
             .iter()
-            .map(|(k, v)| (k.to_string(), YmlValue::number((*v).into())))
+            .map(|(k, v)| ((*k).to_string(), YmlValue::number((*v).into())))
             .collect()
     }
 

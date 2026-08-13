@@ -1553,7 +1553,7 @@ mod tests {
             model.__model_attr__.catalog_name = catalog_name.map(str::to_string);
             model.__model_attr__.table_format = table_format.map(str::to_string);
             model.__base_attr__.depends_on.nodes =
-                upstreams.iter().map(|s| s.to_string()).collect();
+                upstreams.iter().map(|s| (*s).to_string()).collect();
             model
         };
 

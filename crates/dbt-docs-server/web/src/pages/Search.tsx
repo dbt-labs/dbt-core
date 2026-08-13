@@ -3,8 +3,6 @@ import { useEffect, useMemo } from 'react';
 import type { ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
 import { Badge, NotificationBanner, Pill } from '@dbt-labs/sourdough';
 
-import type { NodeSummary, SearchErrorCode } from '../api';
-import { SEARCHABLE_RESOURCE_TYPES } from '../api';
 import type { AssetFilters } from '../App';
 import { FEATURE_FLAGS } from '../lib/featureFlags';
 import { RESOURCE_TYPE_LABEL } from '../lib/resourceType';
@@ -27,6 +25,8 @@ import {
   toTitleCase,
   useSearch,
 } from '../shared';
+import type { NodeSummary, SearchErrorCode } from '../types';
+import { SEARCHABLE_RESOURCE_TYPES } from '../types';
 
 /** Page size for cross-type search — skeleton/fetch granularity. Mirrors the
  *  `useSearch` server-side default. */
@@ -46,10 +46,9 @@ interface Props {
 }
 
 /**
- * Maps the four documented `/api/v1/search` 400 codes to user-facing copy.
- * Unknown codes fall through to the raw `message` from the envelope so the
- * user still gets context if the backend adds a new code before the FE
- * catches up.
+ * Maps the four documented search-rejection codes to user-facing copy. Unknown
+ * codes fall through to the raw `message` so the user still gets context if the
+ * search layer adds a code this hasn't caught up with.
  */
 function formatSearchError(code: SearchErrorCode | string, message: string): string {
   switch (code) {

@@ -39,6 +39,22 @@ fn sender_receiver(b: bool) -> (Option<Tx>, Option<Rx>) {
     }
 }
 
+/// The `alt_compute` placement configured for `unique_id`, checking whichever
+/// node collection (models or seeds) it belongs to. `None` for any other node
+/// type, or a node with no non-`default` placement.
+fn resolve_alt_compute(nodes: &Nodes, unique_id: &str) -> Option<ComputePlatform> {
+    nodes
+        .models
+        .get(unique_id)
+        .and_then(|model| model.__model_attr__.alt_compute)
+        .or_else(|| {
+            nodes
+                .seeds
+                .get(unique_id)
+                .and_then(|seed| seed.__seed_attr__.alt_compute)
+        })
+}
+
 pub fn renderable_test_group_task(
     phases: &[TP],
     generic_test_group: &Arc<GenericTestGroup>,
@@ -402,13 +418,10 @@ pub trait TasksForNodeFactory: Send + Sync {
                     (_, Execute::Service) => (),
                 }
             } else {
-                // A model configured with a non-`default` `alt_compute`
+                // A model or seed configured with a non-`default` `alt_compute`
                 // takes the compute-platform path instead of the default (remote)
                 // one; selection/execution is delegated to the run hook.
-                let alt_compute = nodes
-                    .models
-                    .get(unique_id)
-                    .and_then(|model| model.__model_attr__.alt_compute);
+                let alt_compute = resolve_alt_compute(nodes, unique_id);
                 match (the_runnable_task, execute) {
                     (Some(t), Execute::Remote) if alt_compute == Some(ComputePlatform::Alt) => {
                         runnable = Some(Arc::new(RunTask::new(
@@ -454,5 +467,55 @@ pub trait TasksForNodeFactory: Send + Sync {
             runnable,
             showable,
         }
+    }
+}
+
+#[cfg(test)]
+mod alt_compute_dispatch_tests {
+    use super::*;
+    use dbt_schemas::schemas::{DbtModel, DbtSeed};
+
+    #[test]
+    fn seed_with_alt_compute_resolves_to_alt() {
+        let mut nodes = Nodes::default();
+        let mut seed = DbtSeed::default();
+        seed.__seed_attr__.alt_compute = Some(ComputePlatform::Alt);
+        nodes.seeds.insert("seed.p.s".to_string(), Arc::new(seed));
+
+        assert_eq!(
+            resolve_alt_compute(&nodes, "seed.p.s"),
+            Some(ComputePlatform::Alt)
+        );
+    }
+
+    #[test]
+    fn seed_without_alt_compute_resolves_to_none() {
+        let mut nodes = Nodes::default();
+        nodes
+            .seeds
+            .insert("seed.p.s".to_string(), Arc::new(DbtSeed::default()));
+
+        assert_eq!(resolve_alt_compute(&nodes, "seed.p.s"), None);
+    }
+
+    #[test]
+    fn model_with_alt_compute_resolves_to_alt() {
+        let mut nodes = Nodes::default();
+        let mut model = DbtModel::default();
+        model.__model_attr__.alt_compute = Some(ComputePlatform::Alt);
+        nodes
+            .models
+            .insert("model.p.m".to_string(), Arc::new(model));
+
+        assert_eq!(
+            resolve_alt_compute(&nodes, "model.p.m"),
+            Some(ComputePlatform::Alt)
+        );
+    }
+
+    #[test]
+    fn unknown_unique_id_resolves_to_none() {
+        let nodes = Nodes::default();
+        assert_eq!(resolve_alt_compute(&nodes, "seed.p.missing"), None);
     }
 }

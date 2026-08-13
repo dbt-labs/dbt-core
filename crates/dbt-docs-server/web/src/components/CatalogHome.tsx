@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 
 import { Icon, MetricTile } from '@dbt-labs/sourdough';
 
-import type { NodeSummary } from '../api';
 import { FEATURE_FLAGS } from '../lib/featureFlags';
 import { decorateOutboundHref } from '../lib/outboundReferrer';
 import {
@@ -18,6 +17,7 @@ import {
   UpgradeStatusPanel,
   type UserState,
 } from '../shared';
+import type { NodeSummary } from '../types';
 
 interface Props {
   project: Project;

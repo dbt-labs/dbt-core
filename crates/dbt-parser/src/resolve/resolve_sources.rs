@@ -963,6 +963,28 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_freshness_table_null_opts_out() {
+        // Table-level `config: freshness: null` → None, even when the source level sets rules.
+        //
+        // Together with `test_merge_freshness_omitted_no_base` this is what makes `None` mean
+        // "the user explicitly opted out" and nothing else — `dbt-freshness`'s
+        // `collects_freshness_during_build` relies on that distinction to skip the metadata
+        // query for opted-out sources only (dbt-labs/dbt-core#14534).
+        let base = Omissible::Present(Some(FreshnessDefinition {
+            warn_after: Some(FreshnessRules {
+                count: Some(12),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        }));
+        assert_eq!(merge_freshness(&base, &Omissible::Present(None)), None);
+        assert_eq!(
+            merge_freshness(&Omissible::Omitted, &Omissible::Present(None)),
+            None
+        );
+    }
+
+    #[test]
     fn test_merge_freshness_partial_update_overrides_completely() {
         // Test that partial updates in the update completely override base
         // This validates the comment about mantle logic

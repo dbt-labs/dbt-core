@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
+use crate::schemas::common::ComputePlatform;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
@@ -196,6 +197,8 @@ pub struct ProjectSeedConfig {
     pub file_format: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+alt_compute")]
+    pub alt_compute: Option<ComputePlatform>,
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
@@ -414,6 +417,9 @@ pub struct SeedConfig {
     pub schema: Option<String>,
     pub alias: Option<String>,
     pub catalog_name: Option<String>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_compute: Option<ComputePlatform>,
     pub docs: Option<DocsConfig>,
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -451,6 +457,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             schema: config.schema,
             alias: config.alias,
             catalog_name: config.catalog_name.clone(),
+            alt_compute: config.alt_compute,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -600,6 +607,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             database: config.database,
             schema: config.schema,
             alias: config.alias,
+            alt_compute: config.alt_compute,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -852,5 +860,25 @@ __additional_properties__: {}
             .resource_tags
             .expect("resource_tags should propagate from SeedConfig back to ProjectSeedConfig");
         assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
+
+    #[test]
+    fn test_project_seed_config_alt_compute_parses_and_round_trips() {
+        use crate::schemas::common::ComputePlatform;
+
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++alt_compute: alt
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.alt_compute, Some(ComputePlatform::Alt));
+
+        let seed_config: SeedConfig = project_config.into();
+        assert_eq!(seed_config.alt_compute, Some(ComputePlatform::Alt));
+
+        let round_tripped: ProjectSeedConfig = seed_config.into();
+        assert_eq!(round_tripped.alt_compute, Some(ComputePlatform::Alt));
     }
 }

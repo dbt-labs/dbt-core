@@ -10,7 +10,6 @@ import {
   Tooltip,
 } from '@dbt-labs/sourdough';
 
-import { type NodeSummary } from './api';
 import { AnalysisFilterView } from './components/AnalysisFilterView';
 import FullLineagePage from './components/FullLineagePage';
 import { LocatePane, type LocatePaneMode } from './components/LocatePane';
@@ -64,6 +63,7 @@ import {
   type UserState,
   useSearchFacets,
 } from './shared';
+import { type NodeSummary } from './types';
 
 export type { View };
 
@@ -109,10 +109,10 @@ export default function App() {
   const assetCountsQuery = useAssetCounts();
   const allNodes = useAllNodes();
 
-  // Telemetry consent gate. Checked once on load via `/api/v1/identity`;
+  // Telemetry consent gate. Resolved once on load from the site bootstrap;
   // `initTelemetry` only runs after it resolves, so no analytics init or
-  // network call happens before consent is known. Failure resolves to
-  // consent-denied (see useIdentity), so telemetry never fails open.
+  // network call happens before consent is known. An unreadable bootstrap
+  // resolves to consent-denied (see useIdentity), so telemetry never fails open.
   const identityQuery = useIdentity();
   useEffect(() => {
     if (identityQuery.data) initTelemetry(identityQuery.data);
@@ -131,10 +131,9 @@ export default function App() {
   const nodes = allNodes.nodes;
   const nodeTotal = allNodes.total;
 
-  // Derive the upsell-component user state from `/api/v1/distribution`,
-  // which separates "build flavor" (`name`) from "auth state"
-  // (`is_logged_in`). Stays `null` until the response lands so the
-  // upsells don't flash through the Core default on first paint.
+  // Derive the upsell-component user state from the distribution, which separates
+  // "build flavor" (`name`) from "auth state" (`is_logged_in`). Stays `null` until
+  // it lands so the upsells don't flash through the Core default on first paint.
   const userState = deriveUserState(distInfo);
   const upgradeCapabilities = deriveUpgradeCapabilities(capabilities, distInfo);
 

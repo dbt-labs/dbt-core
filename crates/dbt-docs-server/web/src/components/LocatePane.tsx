@@ -19,8 +19,6 @@ import {
   SegmentedButton,
 } from '@dbt-labs/sourdough';
 
-import type { NodeSummary } from '../api';
-import { SEARCHABLE_RESOURCE_TYPES } from '../api';
 import type { AssetFilters } from '../App';
 import { FEATURE_FLAGS } from '../lib/featureFlags';
 import { buildFileTreeItems } from '../lib/fileTree';
@@ -40,6 +38,8 @@ import {
   UpgradeRailStack,
   type UserState,
 } from '../shared';
+import type { NodeSummary } from '../types';
+import { SEARCHABLE_RESOURCE_TYPES } from '../types';
 
 export type LocatePaneMode = 'assets' | 'files' | 'filter';
 
@@ -750,7 +750,7 @@ function FilterMode({
   const clear = (key: keyof AssetFilters) => onSetFilters({ ...filters, [key]: [] });
 
   // Skip 0-count options so "Select all" matches the visibly-enabled rows;
-  // selecting a disabled value would either no-op or 400 on /api/v1/search.
+  // selecting a disabled value would only ever return nothing.
   const selectAllWithCounts = (
     key: keyof AssetFilters,
     options: string[],

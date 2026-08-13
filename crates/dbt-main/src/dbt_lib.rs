@@ -423,15 +423,29 @@ async fn do_execute_fs(
                 )
                 .await
             }
-            _ => {
-                emit_warn_log_message(
-                    ErrorCode::DocsGenerateWarning,
-                    "`dbt docs generate` is not supported. Use `dbt compile --write-catalog` to write \
-                    catalog.json. To host docs locally, use the dbt Core index.html with catalog.json \
-                    and manifest.json in the same directory: \
-                    https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/task/docs/index.html",
+            Some(DocsSubcommand::Generate(generate_args)) => {
+                run_docs_generate(generate_args.clone(), eval_arg, &cli, feature_stack).await
+            }
+            // An unrecognized subcommand is a typo, not a request. Naming it beats
+            // the silent success this arm used to return.
+            Some(DocsSubcommand::Other(argv)) => {
+                emit_error_log_message(
+                    ErrorCode::Generic,
+                    format!(
+                        "unrecognized subcommand `{}`\n\nUsage: dbt docs <generate|serve>",
+                        argv.join(" "),
+                    ),
                 );
-                Ok(())
+                Err(FsError::exit_with_status(2))
+            }
+            None => {
+                emit_error_log_message(
+                    ErrorCode::Generic,
+                    "`dbt docs` needs a subcommand.\n\n  \
+                     dbt docs generate   Build a statically hostable docs site\n  \
+                     dbt docs serve      Build if needed, then serve it locally",
+                );
+                Err(FsError::exit_with_status(2))
             }
         };
     } else if let Command::Core(Init(init_args)) = &cli.command {
@@ -1710,6 +1724,139 @@ impl<'a> AllPhasesExecutor<'a> {
     }
 }
 
+/// `dbt docs generate` — write a statically hostable site from an existing index.
+///
+/// Does not compile. The index is produced by
+/// `dbt compile --write-index` / `dbt build --write-index` (add
+/// `--static-analysis strict` for column-level lineage), and this command turns it
+/// into a directory of files any host can serve. Keeping the two apart means docs
+/// needs no project directory, no warehouse connection, and no say in the task
+/// graph — the phase pipeline branches on `FsCommand::Compile | Build | Run` in
+/// roughly two dozen places, and a docs command that compiled would have to be
+/// threaded through every one of them.
+async fn run_docs_generate(
+    generate_args: dbt_clap_core::DocsGenerateArgs,
+    eval_arg: &EvalArgs,
+    cli: &Cli,
+    feature_stack: Arc<FeatureStack>,
+) -> FsResult<()> {
+    // `docs generate` is a project command, so `out_dir` is the project's target
+    // directory, resolved the standard way: `--project-dir` or discovery, then
+    // `--target-path` or `dbt_project.yml`'s. The subcommand's own `--target-path`
+    // stays as an explicit override, and `--index-dir` / `--metadata-dir` still win
+    // over both, as they do everywhere else.
+    let target_dir = generate_args
+        .target_path
+        .clone()
+        .unwrap_or_else(|| eval_arg.io.out_dir.clone());
+
+    let index_dir = eval_arg
+        .index_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.join("index"));
+    let output_dir = generate_args
+        .output_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.clone());
+
+    // Roll any newer metadata epochs into the index, the same opportunistic
+    // catch-up `docs serve` does, so a build that ran since the index was last
+    // written is picked up.
+    let metadata_dir = eval_arg
+        .metadata_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.join("metadata"));
+    if metadata_dir.exists() {
+        let mut state = IngestState::default();
+        if let Err(err) = apply_delta_direct(&metadata_dir, &index_dir, &mut state) {
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("dbt docs generate: failed to ingest metadata: {err}"),
+            );
+        }
+    }
+
+    // Check for the index before opening the backend, so a first-time user gets the
+    // export's message — which names both commands that build one — rather than the
+    // backend's generic "index directory does not exist".
+    if !dbt_docs_server::index_dir_has_artifacts(&index_dir) {
+        emit_error_log_message(
+            ErrorCode::Generic,
+            format!(
+                "dbt docs generate: {}",
+                dbt_docs_server::ExportError::NoIndex { index_dir }
+            ),
+        );
+        return Err(FsError::exit_with_status(1));
+    }
+
+    let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
+        Ok(backend) => backend,
+        Err(err) => {
+            emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
+            return Err(FsError::exit_with_status(1));
+        }
+    });
+    let providers = (feature_stack.index.providers_factory)(backend);
+
+    let project_dir = &eval_arg.io.in_dir;
+    let options = dbt_docs_server::ExportOptions {
+        index_dir,
+        output_dir,
+        duckdb_cdn_base: generate_args.duckdb_cdn_base,
+        // Consent is resolved here because the project and profile are only
+        // readable on this machine; the browser reads the answer, not the inputs.
+        analytics_enabled: std::env::var("DO_NOT_TRACK").as_deref() != Ok("1")
+            && cli
+                .common_args()
+                .get_send_anonymous_usage_stats_for_project(project_dir),
+    };
+
+    let summary = match dbt_docs_server::export_site(&providers, &options) {
+        Ok(summary) => summary,
+        Err(err) => {
+            emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
+            return Err(FsError::exit_with_status(1));
+        }
+    };
+
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        "Generated".to_string(),
+        format!(
+            "{}{}{}",
+            summary.output_dir.display(),
+            if summary.copied_artifacts > 0 {
+                format!(" ({} artifacts copied)", summary.copied_artifacts)
+            } else {
+                // The common case: the site reads the index where it already lies.
+                format!(" (reading {})", summary.data_dir)
+            },
+            if summary.has_column_lineage {
+                ""
+            } else {
+                " — no column lineage; rerun the compile or build with \
+                 `--write-index --static-analysis strict` to include it"
+            },
+        ),
+    ));
+    // The caveat only applies when the site was written into the target directory,
+    // which holds plenty besides the site. An explicit `--output-dir` gets a fresh
+    // directory containing nothing else.
+    let wrote_into_target = summary.output_dir == target_dir;
+    emit_info_log_message(format!(
+        "Host the contents of {} on any static file server.{}",
+        summary.output_dir.display(),
+        if wrote_into_target {
+            " Note that this publishes everything else in the target directory too, \
+             including compiled SQL and any stored test failures."
+        } else {
+            ""
+        },
+    ));
+
+    Ok(())
+}
+
 async fn run_docs_serve(
     serve_args: ClapDocsServeArgs,
     feature_stack: &Arc<FeatureStack>,
@@ -1726,6 +1873,8 @@ async fn run_docs_serve(
         no_open: serve_args.no_open,
         has_dbt_state,
         send_anonymous_usage_stats,
+        // Filled in below, once the site has been generated.
+        site_dir: None,
     };
     let index_dir = dbt_docs_server::resolve_index_dir(&args);
 
@@ -1770,12 +1919,59 @@ async fn run_docs_serve(
     });
     let providers = (feature_stack.index.providers_factory)(backend);
 
+    // Serve the same static site `docs generate` produces rather than the
+    // embedded bundle, so local preview exercises the artifact the user will
+    // actually host. Regenerated when missing or older than the index; a failure
+    // here is not fatal, because the embedded bundle is still a usable fallback.
+    let site_dir = target.clone();
+    if site_needs_regenerating(&site_dir, &index_dir) {
+        let options = dbt_docs_server::ExportOptions {
+            index_dir: index_dir.clone(),
+            output_dir: site_dir.clone(),
+            duckdb_cdn_base: None,
+            analytics_enabled: std::env::var("DO_NOT_TRACK").as_deref() != Ok("1")
+                && send_anonymous_usage_stats,
+        };
+        match dbt_docs_server::export_site(&providers, &options) {
+            Ok(summary) => eprintln!(
+                "dbt docs serve: generated {} (reading {})",
+                summary.output_dir.display(),
+                summary.data_dir
+            ),
+            Err(err) => emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("dbt docs serve: could not generate the site: {err}"),
+            ),
+        }
+    }
+
+    let args = dbt_docs_server::DocsServeArgs {
+        site_dir: site_dir.exists().then_some(site_dir),
+        ..args
+    };
+
     dbt_docs_server::run_with_args(Arc::new(args), providers)
         .await
         .map_err(|err| {
             emit_error_log_message(ErrorCode::Generic, err.to_string());
             FsError::exit_with_status(1)
         })
+}
+
+/// Whether `site_dir` is missing or predates the index it was built from.
+///
+/// Compares against the index directory's mtime, the same staleness signal
+/// `AppState::compute_generation` reports to the UI. Any unreadable timestamp
+/// means regenerate: cheap, and being wrong the other way serves stale docs.
+fn site_needs_regenerating(site_dir: &std::path::Path, index_dir: &std::path::Path) -> bool {
+    let Ok(site_mtime) = std::fs::metadata(site_dir.join("index.html")).and_then(|m| m.modified())
+    else {
+        return true;
+    };
+    let Ok(index_mtime) = std::fs::metadata(index_dir).and_then(|m| m.modified()) else {
+        return true;
+    };
+    site_mtime < index_mtime
 }
 
 #[allow(clippy::cognitive_complexity)]

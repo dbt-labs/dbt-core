@@ -1436,6 +1436,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             delimiter: seed.config.delimiter.clone().map(|d| d.into_inner()),
                             root_path: seed.root_path,
                             catalog_name: seed.config.catalog_name.clone(),
+                            alt_compute: seed.config.alt_compute,
                         },
                         deprecated_config: seed.config.into(),
                         __other__: seed.__other__,

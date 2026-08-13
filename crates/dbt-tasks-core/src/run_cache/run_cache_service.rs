@@ -32,6 +32,7 @@ use dbt_common::adapter::dialect_of;
 use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
+use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_frontend_common::ident::FullyQualifiedName;
 use dbt_frontend_common::named_reference::NamedReference;
@@ -63,7 +64,7 @@ use dbt_state::request_builder::{
     values_execution_record_from_submit_request,
 };
 use dbt_state::service_client::RunCacheServiceError;
-use dbt_telemetry::NodeType;
+use dbt_telemetry::{NodeEvaluated, NodeType};
 
 use crate::run_cache::run_cache_request::{
     DbtProjectInfo, SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
@@ -1362,11 +1363,17 @@ pub async fn run_cache_service_before_execution(
                 .run_cache_dev_cloned_nodes
                 .contains_key(node.unique_id().as_str());
             let decision = relabel_skip_for_dev_cloned_node(is_dev_cloned, decision);
-            write_state_explain_node(
-                ctx,
-                node,
-                state_explain_execution_decision_id(Some(&outcome.response), &decision),
-            );
+            let execution_decision_id =
+                state_explain_execution_decision_id(Some(&outcome.response), &decision);
+            // Surface the service-side execution decision id on the node's
+            // run-phase evaluation span so successful executions can be
+            // correlated with the dbt State decision that governed them.
+            if let Some(id) = execution_decision_id.as_deref() {
+                find_and_update_span_attrs(|attrs: &mut NodeEvaluated| {
+                    attrs.state_decision_id = Some(id.to_string());
+                });
+            }
+            write_state_explain_node(ctx, node, execution_decision_id);
             decision
         }
         Ok(Some(RunCacheSubmitResult::ExecuteUntracked(record))) => {

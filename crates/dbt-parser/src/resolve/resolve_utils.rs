@@ -433,7 +433,7 @@ mod tests {
     fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
         pairs
             .iter()
-            .map(|(k, v)| (k.to_string(), dbt_yaml::from_str(v).unwrap()))
+            .map(|(k, v)| ((*k).to_string(), dbt_yaml::from_str(v).unwrap()))
             .collect()
     }
 

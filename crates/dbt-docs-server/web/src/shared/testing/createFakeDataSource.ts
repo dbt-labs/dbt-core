@@ -1,8 +1,8 @@
-import type { MetadataDataSource } from '../data-sources/MetadataDataSource';
-// Imported only so the `{@link REGISTRY_RESOURCE_TYPES}` reference below resolves;
-// eslint cannot see JSDoc links as usage.
+// Imported only so the `{@link LIST_REGISTRY}` reference below resolves; eslint
+// cannot see JSDoc links as usage.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { REGISTRY_RESOURCE_TYPES } from '../data-sources/rest/index';
+import { LIST_REGISTRY } from '../data-sources/duckdb/lists';
+import type { MetadataDataSource } from '../data-sources/MetadataDataSource';
 import type { AssetArgs } from '../typings/args';
 import type {
   Asset,
@@ -136,9 +136,8 @@ function fakeBase(resourceType: ResourceType) {
 
 /**
  * Build a minimal valid {@link Asset} detail for any registry resource type.
- * Mirrors the real REST source's per-type coverage (derived from
- * {@link REGISTRY_RESOURCE_TYPES}) so a fake can stand in for any type the
- * source serves.
+ * Mirrors the real source's per-type coverage (derived from {@link LIST_REGISTRY})
+ * so a fake can stand in for any type the source serves.
  */
 export function makeFakeAsset(
   resourceType: ResourceType,

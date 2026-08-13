@@ -1436,6 +1436,37 @@ fn parse_boolish_env(value: &OsStr) -> Option<bool> {
         .ok()
 }
 
+pub const LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV: &str =
+    "DBT_LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT";
+
+pub fn resolve_latest_version_pointer_enabled_by_default(project_flags: Option<&Value>) -> bool {
+    resolve_latest_version_pointer_enabled_by_default_with_env_lookup(project_flags, |name| {
+        std::env::var_os(name)
+    })
+}
+
+fn resolve_latest_version_pointer_enabled_by_default_with_env_lookup(
+    project_flags: Option<&Value>,
+    get_env: impl Fn(&str) -> Option<OsString>,
+) -> bool {
+    if let Some(value) = get_env(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV) {
+        if let Some(resolved) = parse_boolish_env(value.as_ref()) {
+            return resolved;
+        }
+    }
+
+    if let Some(enabled) = project_flags
+        .and_then(|flags| {
+            project_flags_get_value(flags, "latest_version_pointer_enabled_by_default")
+        })
+        .and_then(Value::as_bool)
+    {
+        return enabled;
+    }
+
+    true
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum, EnumIter)]
 #[serde(rename_all = "lowercase")]
 #[clap(rename_all = "lowercase")]
@@ -1628,6 +1659,21 @@ mod tests {
     fn project_defaults(yaml: &str) -> HashSet<OptimizeTestsOptions> {
         let project_flags: Value = dbt_yaml::from_str(yaml).unwrap();
         optimize_test_defaults_from_project_flags(Some(&project_flags))
+    }
+
+    fn latest_version_pointer_with_env(
+        project_flags_yaml: Option<&str>,
+        env: &[(&str, &str)],
+    ) -> bool {
+        let project_flags =
+            project_flags_yaml.map(|yaml| dbt_yaml::from_str::<Value>(yaml).unwrap());
+        resolve_latest_version_pointer_enabled_by_default_with_env_lookup(
+            project_flags.as_ref(),
+            |name| {
+                env.iter()
+                    .find_map(|(key, value)| (*key == name).then(|| OsString::from(*value)))
+            },
+        )
     }
 
     #[test]
@@ -1862,5 +1908,52 @@ mod tests {
             dbt_yaml::from_str::<StaticAnalysisKind>("\"True\"").unwrap(),
             StaticAnalysisKind::On
         );
+    }
+
+    #[test]
+    fn latest_version_pointer_env_true_overrides_project_false() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "true")],
+        );
+
+        assert!(resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_env_false_overrides_project_true() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: true\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "false")],
+        );
+
+        assert!(!resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_absent_env_uses_project_defaults() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[],
+        );
+
+        assert!(!resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_absent_env_and_project_defaults_true() {
+        let resolved = latest_version_pointer_with_env(None, &[]);
+
+        assert!(resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_malformed_env_falls_back_to_project() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "maybe")],
+        );
+
+        assert!(!resolved);
     }
 }

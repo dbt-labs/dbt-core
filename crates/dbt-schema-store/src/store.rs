@@ -163,7 +163,14 @@ impl SchemaStoreState {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or(Duration::ZERO)
             .as_millis();
-        for (entry, _interval) in entries_with_intervals {
+        for (entry, interval) in entries_with_intervals {
+            if matches!(entry, LookupEntry::Frontier(_)) {
+                dbt_common::tracing::dbt_emit::emit_debug_log_message(format!(
+                    "Initializing schema store with entry: {:?} and interval: {:?}",
+                    entry, interval
+                ));
+            }
+
             let key = entry.to_string();
             let maybe = if let LookupEntry::Selected(uid) = entry {
                 if uid.starts_with("snapshot") {

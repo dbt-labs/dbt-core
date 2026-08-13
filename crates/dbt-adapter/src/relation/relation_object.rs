@@ -112,12 +112,14 @@ impl RelationObject {
                 )
             })?
             .map(|v| {
-                minijinja_value_to_typed_struct::<TypedConstraint>(v).map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!("enrich constraint item: {e}"),
-                    )
-                })
+                v.downcast_object_ref::<TypedConstraint>()
+                    .cloned()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "enrich constraints must contain TypedConstraint objects",
+                        )
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?;
         let enriched = dbx.enrich(&constraints);
@@ -137,12 +139,6 @@ impl RelationObject {
                 )
             })?;
         Ok(Value::from(dbx.render_constraints_for_create()))
-    }
-
-    /// Databricks: get create_constraints for get_column_and_constraints_sql
-    fn relation_create_constraints(self: &Arc<Self>) -> Option<Value> {
-        let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
-        Some(Value::from_serialize(&dbx.create_constraints))
     }
 }
 
@@ -360,7 +356,24 @@ impl Object for RelationObject {
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
-            Some("create_constraints") => self.relation_create_constraints(),
+            Some("alter_constraints") => {
+                let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
+                Some(Value::from_iter(
+                    dbx.alter_constraints
+                        .iter()
+                        .cloned()
+                        .map(Value::from_object),
+                ))
+            }
+            Some("create_constraints") => {
+                let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
+                Some(Value::from_iter(
+                    dbx.create_constraints
+                        .iter()
+                        .cloned()
+                        .map(Value::from_object),
+                ))
+            }
             Some("is_view") => Some(Value::from(self.is_view())),
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
@@ -834,6 +847,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
 mod tests {
     use super::*;
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+    use minijinja_contrib::testing::jinja_assert;
 
     fn source_with_meta_location(location: &str) -> DbtSource {
         let mut source = DbtSource::default();
@@ -884,6 +898,46 @@ mod tests {
         .unwrap();
 
         assert_eq!(relation.render_self_as_str(), "read_csv('orders.csv')");
+    }
+
+    #[test]
+    fn databricks_relation_exposes_constraints_to_jinja() {
+        let relation = Relation::new(
+            AdapterType::Databricks,
+            "main".to_string(),
+            "default".to_string(),
+            "child_model".to_string(),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING)
+        .enrich(&[
+            TypedConstraint::PrimaryKey {
+                name: Some("pk_id".to_string()),
+                columns: vec!["id".to_string()],
+                expression: None,
+            },
+            TypedConstraint::Check {
+                name: Some("check_id_positive".to_string()),
+                expression: "id > 0".to_string(),
+                columns: Some(vec!["id".to_string()]),
+            },
+        ]);
+
+        jinja_assert(
+            RelationObject::new(Arc::new(relation)),
+            r#"
+            {%- for c in obj.create_constraints %}
+            create {{ c.type }} | {{ c.render() }}
+            {%- endfor %}
+            {%- for c in obj.alter_constraints %}
+            alter {{ c.type }} | {{ c.render() }}
+            {%- endfor %}
+            "#,
+            r#"
+            create primary_key | CONSTRAINT pk_id PRIMARY KEY (id)
+            alter check | CONSTRAINT check_id_positive CHECK (id > 0)
+            "#,
+        );
     }
 
     #[test]

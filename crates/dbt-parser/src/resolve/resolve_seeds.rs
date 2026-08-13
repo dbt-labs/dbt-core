@@ -4,6 +4,7 @@ use crate::dbt_project_config::{
 };
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
+    validate_compute_platform,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -301,6 +302,16 @@ pub async fn resolve_seeds(
 
         validate_delimiter(&properties_config.delimiter)?;
 
+        validate_compute_platform(
+            properties_config.alt_compute,
+            &DbtMaterialization::Table,
+            properties_config.catalog_name.as_deref(),
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            false,
+            &path,
+        )?;
+
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds
         let original_file_path =
@@ -362,6 +373,7 @@ pub async fn resolve_seeds(
                 delimiter: properties_config.delimiter.clone().map(|d| d.into_inner()),
                 root_path: Some(seed_file.base_path.clone()),
                 catalog_name: properties_config.catalog_name.clone(),
+                alt_compute: properties_config.alt_compute,
             },
             __other__: BTreeMap::new(),
             deprecated_config: properties_config.clone().into(),

@@ -993,6 +993,9 @@ pub struct ManifestSeedConfig {
     pub schema: Option<String>,
     pub alias: Option<String>,
     pub catalog_name: Option<String>,
+    // Internal-only placement hint; never written to the manifest.
+    #[serde(skip_serializing, default)]
+    pub alt_compute: Option<ComputePlatform>,
     #[serde(
         default,
         serialize_with = "crate::schemas::serde::serialize_option_docs_with_nulls"
@@ -1048,6 +1051,7 @@ impl From<SeedConfig> for ManifestSeedConfig {
             database: config.database,
             schema: config.schema,
             catalog_name: config.catalog_name,
+            alt_compute: config.alt_compute,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,
@@ -1083,6 +1087,7 @@ impl From<ManifestSeedConfig> for SeedConfig {
             database: config.database,
             schema: config.schema,
             catalog_name: config.catalog_name,
+            alt_compute: config.alt_compute,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,
@@ -2141,5 +2146,39 @@ impl From<DbtSavedQuery> for ManifestSavedQuery {
             config: saved_query.deprecated_config,
             __other__: saved_query.__other__,
         }
+    }
+}
+
+#[cfg(test)]
+mod alt_compute_manifest_round_trip_tests {
+    use super::{ManifestSeedConfig, SeedConfig};
+    use crate::schemas::common::ComputePlatform;
+
+    #[test]
+    fn seed_config_alt_compute_round_trips_through_manifest_seed_config() {
+        let seed_config = SeedConfig {
+            alt_compute: Some(ComputePlatform::Alt),
+            ..Default::default()
+        };
+
+        let manifest_config: ManifestSeedConfig = seed_config.into();
+        assert_eq!(manifest_config.alt_compute, Some(ComputePlatform::Alt));
+
+        let round_tripped: SeedConfig = manifest_config.into();
+        assert_eq!(round_tripped.alt_compute, Some(ComputePlatform::Alt));
+    }
+
+    #[test]
+    fn manifest_seed_config_never_serializes_alt_compute() {
+        let manifest_config = ManifestSeedConfig {
+            alt_compute: Some(ComputePlatform::Alt),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_value(&manifest_config).unwrap();
+        assert!(
+            json.get("alt_compute").is_none(),
+            "alt_compute is an internal placement hint and must not appear in the manifest: {json}"
+        );
     }
 }

@@ -99,8 +99,26 @@ impl RecordBatchExt for RecordBatch {
     where
         T: std::any::Any + Clone,
     {
-        Ok(self
-            .column_typed(column_name)?
+        let column = self.column_typed(column_name)?;
+
+        // Metadata/catalog queries are parsed by downcasting straight to a
+        // concrete `StringArray`, but drivers/engines may now return
+        // `Utf8View`/`LargeUtf8` for what used to always be plain `Utf8`
+        // (e.g. the query-execution path unconditionally widens to view
+        // types). Normalize down to `Utf8` first so callers expecting
+        // `StringArray` keep working regardless of which string
+        // representation produced the result.
+        let normalized: ArrayRef = if std::any::TypeId::of::<T>()
+            == std::any::TypeId::of::<StringArray>()
+            && matches!(column.data_type(), DataType::Utf8View | DataType::LargeUtf8)
+        {
+            cast_with_options(column.as_ref(), &DataType::Utf8, &CastOptions::default())
+                .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?
+        } else {
+            column.clone()
+        };
+
+        Ok(normalized
             .as_any()
             .downcast_ref::<T>()
             .ok_or_else(|| {
@@ -320,21 +338,23 @@ fn jsonify_map_keys(
             let (new_value_field, new_value_arr) =
                 jsonify_map_keys(value_field, map.values(), options);
 
-            let (new_key_field, new_key_arr): (FieldRef, ArrayRef) =
-                if matches!(key_field.data_type(), DataType::Utf8 | DataType::LargeUtf8) {
-                    (key_field.clone(), map.keys().clone())
-                } else {
-                    let (norm_key_field, norm_key_arr) =
-                        jsonify_map_keys(key_field, map.keys(), options);
-                    let key_strs = encode_array_to_strings(&norm_key_field, &norm_key_arr, options);
-                    (
-                        Arc::new(
-                            Field::new(key_field.name(), DataType::Utf8, key_field.is_nullable())
-                                .with_metadata(key_field.metadata().clone()),
-                        ),
-                        Arc::new(key_strs),
-                    )
-                };
+            let (new_key_field, new_key_arr): (FieldRef, ArrayRef) = if matches!(
+                key_field.data_type(),
+                DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View
+            ) {
+                (key_field.clone(), map.keys().clone())
+            } else {
+                let (norm_key_field, norm_key_arr) =
+                    jsonify_map_keys(key_field, map.keys(), options);
+                let key_strs = encode_array_to_strings(&norm_key_field, &norm_key_arr, options);
+                (
+                    Arc::new(
+                        Field::new(key_field.name(), DataType::Utf8, key_field.is_nullable())
+                            .with_metadata(key_field.metadata().clone()),
+                    ),
+                    Arc::new(key_strs),
+                )
+            };
 
             let new_entry_fields = Fields::from(vec![new_key_field, new_value_field]);
             let new_entries = StructArray::new(
@@ -648,6 +668,36 @@ mod tests {
         assert_contains!(error.message(), "available are");
         assert_contains!(error.message(), "name");
         assert_contains!(error.message(), "score");
+    }
+
+    #[test]
+    fn column_values_normalizes_utf8_view_to_string_array() {
+        let batch = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "name",
+                DataType::Utf8View,
+                false,
+            )])),
+            vec![Arc::new(arrow_array::StringViewArray::from(vec!["FOO"]))],
+        )
+        .unwrap();
+        let result: AdapterResult<StringArray> = batch.column_values("name");
+        assert_eq!(result.unwrap(), StringArray::from(vec!["FOO"]));
+    }
+
+    #[test]
+    fn column_values_normalizes_large_utf8_to_string_array() {
+        let batch = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "name",
+                DataType::LargeUtf8,
+                false,
+            )])),
+            vec![Arc::new(arrow_array::LargeStringArray::from(vec!["FOO"]))],
+        )
+        .unwrap();
+        let result: AdapterResult<StringArray> = batch.column_values("name");
+        assert_eq!(result.unwrap(), StringArray::from(vec!["FOO"]));
     }
 
     #[test]

@@ -1167,6 +1167,12 @@ impl BaseRelation for Relation {
                 }
             }
             Bigquery => {
+                if remote_state_value.is_none() {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        "remote_state cannot be None",
+                    ));
+                }
                 let current_state = remote_state_value
                     .as_object()
                     .ok_or_else(|| {

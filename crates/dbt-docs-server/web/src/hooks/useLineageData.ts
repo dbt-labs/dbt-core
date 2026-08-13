@@ -30,6 +30,8 @@ export function useLineageData(
   error: Error | null;
   dagNodes: DbtDagNode[];
   selector: string;
+  /** False when the active data source has no `fetchLineage`. */
+  isSupported: boolean;
 } {
   const query = useLineage(
     rootUniqueId
@@ -67,5 +69,6 @@ export function useLineageData(
     error: query.error,
     dagNodes,
     selector: defaultSelectorFor(rootUniqueId, depth),
+    isSupported: query.isSupported,
   };
 }

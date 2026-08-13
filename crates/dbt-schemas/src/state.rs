@@ -28,7 +28,9 @@ use crate::schemas::{
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
 use dbt_common::{
-    ErrorCode, FsResult, fs_err, io_args::FsCommand, path::DbtPath,
+    ErrorCode, FsResult, fs_err,
+    io_args::{FsCommand, resolve_latest_version_pointer_enabled_by_default},
+    path::DbtPath,
     warn_error_options::WarnErrorOptions,
 };
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
@@ -1051,13 +1053,10 @@ impl DbtRuntimeConfig {
             restrict_access: package.dbt_project.restrict_access,
             invoked_at: Utc::now(),
             args: InvocationArgs::default(),
-            latest_version_pointer_enabled_by_default: package
-                .dbt_project
-                .flags
-                .as_ref()
-                .and_then(|flags| flags.get("latest_version_pointer_enabled_by_default"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true),
+            latest_version_pointer_enabled_by_default:
+                resolve_latest_version_pointer_enabled_by_default(
+                    package.dbt_project.flags.as_ref(),
+                ),
         };
 
         // TODO(anna): Look into whether this should also be Index map

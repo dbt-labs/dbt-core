@@ -50,6 +50,7 @@ use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
 use dashmap::DashMap;
 use dbt_adapter_core::AdapterType;
+use dbt_adapter_sql::is_keyword_ignore_ascii_case;
 use dbt_adbc::bigquery::*;
 use dbt_adbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_adbc::{Connection, QueryCtx};
@@ -739,8 +740,34 @@ impl AdapterImpl {
         }
     }
 
+    fn warehouse_restore_name(warehouse: &str) -> Cow<'_, str> {
+        // `current_warehouse()` drops quotes. Removing them from a canonical
+        // uppercase identifier preserves its identity; other quoted names need
+        // their delimiters to preserve identity.
+        let (unquoted, quoted) = normalize_quote(false, Snowflake, warehouse);
+        // Not `need_quotes`/`must_be_quoted`: those accept Unicode letters and `-`.
+        let is_canonical = unquoted
+            .as_bytes()
+            .first()
+            .is_some_and(|byte| byte.is_ascii_uppercase() || *byte == b'_')
+            && unquoted.as_bytes().iter().skip(1).all(|byte| {
+                byte.is_ascii_uppercase() || byte.is_ascii_digit() || [b'_', b'$'].contains(byte)
+            })
+            && is_keyword_ignore_ascii_case(&unquoted, Snowflake).is_none();
+        if quoted && is_canonical {
+            Cow::Owned(unquoted)
+        } else if warehouse.contains('"') {
+            // Quoted, or unbalanced quotes we must not reinterpret.
+            Cow::Borrowed(warehouse)
+        } else {
+            Cow::Owned(warehouse.to_ascii_uppercase())
+        }
+    }
+
     /// Execute `use warehouse [name]` statement for Snowflake.
     /// For other warehouses, this is noop.
+    ///
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/8b55a4781229a420836fdac6c933969f31188634/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L249-L273
     pub fn restore_warehouse(
         &self,
         conn: &'_ mut dyn Connection,
@@ -752,16 +779,9 @@ impl AdapterImpl {
                 let warehouse = self.get_db_config("warehouse").ok_or_else(|| {
                     unexpected_fs_err!("'warehouse' not found in Snowflake DB config")
                 })?;
-                // dbt Core restores the warehouse to the value reported by
-                // `select current_warehouse()`, which Snowflake returns in its
-                // canonical upper-cased (unquoted-identifier) form. The configured
-                // value may be authored in any case, so upper-case it here to match
-                // Core's restore SQL and avoid spurious record/replay mismatches.
-                // Warehouse names are case-insensitive in Snowflake, and the name is
-                // always an unquoted identifier (quotes are never applied), so this is
-                // safe and idempotent.
+                let warehouse = Self::warehouse_restore_name(&warehouse);
                 let ctx = QueryCtx::default().with_node_id(node_id);
-                let sql = format!("use warehouse {}", warehouse.to_ascii_uppercase());
+                let sql = format!("use warehouse {warehouse}");
                 self.exec_stmt(&ctx, conn, &sql, false, token)?;
             }
             _ => debug_assert!(
@@ -4960,19 +4980,9 @@ impl AdapterImpl {
             })
             .collect();
 
-        let columns_value: Vec<Value> = enriched_columns
-            .into_iter()
-            .map(Value::from_object)
-            .collect();
-
-        let constraints_value: Vec<Value> = typed_constraints
-            .into_iter()
-            .map(|c| Value::from_serialize(&c))
-            .collect();
-
         Ok(Value::from(vec![
-            Value::from(columns_value),
-            Value::from(constraints_value),
+            Value::from_iter(enriched_columns.into_iter().map(Value::from_object)),
+            Value::from_iter(typed_constraints.into_iter().map(Value::from_object)),
         ]))
     }
 
@@ -5120,14 +5130,18 @@ impl AdapterImpl {
         &self,
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
-        _state: Option<&State>,
+        state: Option<&State>,
     ) -> AdapterResult<Option<RelationConfig>> {
         if self.adapter_type() != Bigquery {
             unimplemented!("only available with BigQuery adapter");
         }
 
-        if let Replay(_, _) = self.inner_adapter() {
-            return Ok(None);
+        if let (Replay(_, replay), Some(state)) = (self.inner_adapter(), state) {
+            let recorded = replay.replay_describe_relation(state)?;
+            return crate::relation::bigquery::config::relation_types::materialized_view::relation_config_from_recorded(
+                recorded.as_ref(),
+            )
+            .map(Some);
         }
 
         let adbc_schema = conn
@@ -5892,7 +5906,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         schema: &str,
     ) -> AdapterResult<Value>;
 
-    fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<Value>>;
+    fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<serde_json::Value>>;
 
     fn replay_schema_exists_from_trace(&self, database: &str, schema: &str) -> Option<bool>;
 
@@ -6033,6 +6047,46 @@ mod tests {
     fn test_adapter_type() {
         let adapter = AdapterImpl::new(engine(Snowflake), None);
         assert_eq!(adapter.adapter_type(), Snowflake);
+    }
+
+    #[test]
+    fn test_restore_warehouse_matches_snowflake_current_warehouse_text() {
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("analytics_transform"),
+            "ANALYTICS_TRANSFORM"
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"DBT_TRANSFORMATION\""),
+            "DBT_TRANSFORMATION"
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"CaseSensitive\""),
+            "\"CaseSensitive\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"CASE SENSITIVE\""),
+            "\"CASE SENSITIVE\""
+        );
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"A-B\""), "\"A-B\"");
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"3RD_WH\""),
+            "\"3RD_WH\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"QUOTE\"\"HERE\""),
+            "\"QUOTE\"\"HERE\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"SELECT\""),
+            "\"SELECT\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"Unbalanced"),
+            "\"Unbalanced"
+        );
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"WH$1\""), "WH$1");
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"_WH\""), "_WH");
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"\""), "\"\"");
     }
 
     #[test]

@@ -367,10 +367,17 @@ got {:?}, expected an instance of {}",
         use CoreCommand::*;
         match &self.command {
             Command::Core(
-                Man(_) | Init(_) | Docs(_) | Login(_) | State(_) | Completions(_) | Internal(_),
+                Man(_) | Init(_) | Login(_) | State(_) | Completions(_) | Internal(_),
             ) => {
                 // These commands do not require a project directory
                 false
+            }
+            // `docs generate` reads a project's target directory, so it resolves
+            // `--project-dir` / `--target-path` the same way every project command
+            // does. `docs serve` only serves a directory and is documented as not
+            // requiring a project, so it stays out.
+            Command::Core(Docs(args)) => {
+                matches!(args.subcommand, Some(DocsSubcommand::Generate(_)))
             }
             Command::Core(_) => {
                 // Assume all the other core commands require a project directory.
@@ -1512,8 +1519,16 @@ impl DocsArgs {
 
 #[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum DocsSubcommand {
-    /// Generate docs catalog (deprecated: use `dbt compile --write-catalog` instead)
-    Generate,
+    /// Generate a self-contained, statically hostable docs site.
+    ///
+    /// Reads the parquet artifacts a previous `--write-index` run wrote and
+    /// writes the site to `--output-dir`. The result is a plain directory of
+    /// files: host it anywhere, no server process required.
+    ///
+    /// Build the index first with `dbt compile --write-index` or `dbt build
+    /// --write-index`. Adding `--static-analysis strict` to that run is what
+    /// produces column-level lineage; without it the site omits that feature.
+    Generate(DocsGenerateArgs),
     /// Start the dbt docs v2 server backed by parquet artifacts in the target directory.
     ///
     /// Reads parquet artifacts written by `--use-index` (or `--write-index`) and
@@ -1526,7 +1541,8 @@ pub enum DocsSubcommand {
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 pub struct DocsServeArgs {
     /// Path to the dbt target directory containing the `index/` subdirectory of
-    /// parquet artifacts. Defaults to `./target` in the current working directory.
+    /// parquet artifacts. Defaults to the project's target directory, resolved from
+    /// `--project-dir` and `--target-path` like any other project command.
     #[arg(long, value_name = "DIR", env = "DBT_DOCS_TARGET_PATH")]
     pub target_path: Option<PathBuf>,
 
@@ -1552,6 +1568,32 @@ impl Default for DocsServeArgs {
             no_open: false,
         }
     }
+}
+
+/// Args for `dbt docs generate`.
+///
+/// Mirrors [`DocsServeArgs`] on `--target-path`, including the env var, so both
+/// docs subcommands locate the index identically. `generate` does not compile —
+/// it exports an index a previous `--write-index` run wrote — so it needs no
+/// project directory and no warehouse connection.
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct DocsGenerateArgs {
+    /// Path to the dbt target directory containing the `index/` subdirectory of
+    /// parquet artifacts. Defaults to `./target` in the current working directory.
+    #[arg(long, value_name = "DIR", env = "DBT_DOCS_TARGET_PATH")]
+    pub target_path: Option<PathBuf>,
+
+    /// Directory to write the static site to. Defaults to the target directory
+    /// itself, so `index.html` lands where core v1 wrote it.
+    #[arg(long, value_name = "DIR", env = "DBT_DOCS_OUTPUT_DIR")]
+    pub output_dir: Option<PathBuf>,
+
+    /// Base URL the browser loads DuckDB-WASM from at runtime.
+    ///
+    /// Defaults to the pinned jsDelivr path. Point this at a mirror to serve the
+    /// wasm from your own infrastructure; the site never bundles it.
+    #[arg(long, value_name = "URL", env = "DBT_DOCS_DUCKDB_CDN_BASE")]
+    pub duckdb_cdn_base: Option<String>,
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
