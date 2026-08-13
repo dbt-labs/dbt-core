@@ -3,7 +3,6 @@ use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_schema::{ArrowError, Schema};
 use dbt_adbc::{Connection, Statement};
-use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
@@ -161,10 +160,6 @@ impl Connection for RecordConnection {
 
     fn update_node_id(&mut self, node_id: Option<String>) {
         self.ctx.node_id = node_id;
-    }
-
-    fn synchronize_query_tags(&mut self, tags: &BTreeMap<String, String>) -> AdbcResult<()> {
-        self.inner.synchronize_query_tags(tags)
     }
 
     fn fingerprint(&self) -> u64 {

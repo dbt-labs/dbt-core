@@ -118,6 +118,8 @@ pub struct ProjectSeedConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -486,7 +488,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
-                query_tags: None,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -633,6 +635,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -775,6 +778,23 @@ impl ConfigKeys for SeedConfig {
 #[cfg(test)]
 mod tests {
     use super::{ProjectSeedConfig, SeedConfig};
+
+    #[test]
+    fn test_seed_query_tags_propagate_through_resolved_config() {
+        let project: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"seed"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: SeedConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"seed"}"#)
+        );
+    }
 
     #[test]
     fn test_project_seed_config_resource_tags_parses() {

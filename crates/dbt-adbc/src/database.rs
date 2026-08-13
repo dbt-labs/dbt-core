@@ -368,13 +368,7 @@ impl InnerAdbcDatabase {
                     Err(e)
                 }
             }?;
-            Ok(AdbcConnection {
-                backend: self.backend,
-                inner: conn,
-                semaphore,
-                fingerprint: 0,
-                query_tags: Default::default(),
-            })
+            Ok(AdbcConnection(self.backend, conn, semaphore, 0))
         };
 
         let conn = if db_opts.is_empty() {

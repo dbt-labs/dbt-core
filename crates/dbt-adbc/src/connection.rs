@@ -3,13 +3,13 @@
 //!
 
 use core::fmt;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::driver_manager::ManagedConnection as ManagedAdbcConnection;
 use adbc_core::options;
 use adbc_core::{
-    Connection as _, Optionable, Statement as _,
+    Connection as _, Optionable,
     error::Result,
     options::{OptionConnection, OptionValue},
 };
@@ -41,14 +41,6 @@ pub trait Connection: Send {
     /// Called when a pooled connection is reused for a different node.
     /// Record/replay connections override this to update their recording context.
     fn update_node_id(&mut self, _node_id: Option<String>) {}
-
-    /// Synchronizes Databricks query tags on this physical connection.
-    ///
-    /// Other backends ignore query tags. Databricks connections cache the
-    /// applied state so pooled connections only execute updates when needed.
-    fn synchronize_query_tags(&mut self, _tags: &BTreeMap<String, String>) -> Result<()> {
-        Ok(())
-    }
 
     /// Returns the config fingerprint of the engine that created this connection.
     ///
@@ -391,30 +383,24 @@ impl fmt::Debug for dyn Connection {
 /// created by a [`Database`] instance and are used to execute SQL queries and
 /// manage transactions.
 #[allow(dead_code)]
-pub(crate) struct AdbcConnection {
-    pub(crate) backend: Backend,
-    pub(crate) inner: ManagedAdbcConnection,
-    pub(crate) semaphore: Option<Arc<Semaphore>>,
+pub(crate) struct AdbcConnection(
+    pub(crate) Backend,
+    pub(crate) ManagedAdbcConnection,
+    pub(crate) Option<Arc<Semaphore>>,
     /// Generation of the engine that created this connection (0 if untagged).
-    pub(crate) fingerprint: u64,
-    /// Raw Databricks query tags currently applied to this physical connection.
-    pub(crate) query_tags: BTreeMap<String, String>,
-}
+    pub(crate) u64,
+);
 
 impl fmt::Debug for AdbcConnection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "AdbcConnection({:?}, ManagedAdbcConnection)",
-            self.backend
-        )
+        write!(f, "AdbcConnection({:?}, ManagedAdbcConnection)", self.0)
     }
 }
 
 impl Drop for AdbcConnection {
     fn drop(&mut self) {
         // TODO(backpressure): re-enable once re-entrancy is handled.
-        // if let Some(semaphore) = &self.semaphore {
+        // if let Some(semaphore) = &self.2 {
         //     semaphore.unguarded_release();
         // }
     }
@@ -422,43 +408,28 @@ impl Drop for AdbcConnection {
 
 impl Connection for AdbcConnection {
     fn fingerprint(&self) -> u64 {
-        self.fingerprint
+        self.3
     }
 
     fn set_fingerprint(&mut self, fingerprint: u64) {
-        self.fingerprint = fingerprint;
+        self.3 = fingerprint;
     }
 
     fn new_statement(&mut self) -> Result<Box<dyn Statement>> {
-        let managed_adbc_stmt = self.inner.new_statement()?;
-        let adbc_stmt = AdbcStatement(self.backend, managed_adbc_stmt);
+        let managed_adbc_stmt = self.1.new_statement()?;
+        let adbc_stmt = AdbcStatement(self.0, managed_adbc_stmt);
         Ok(Box::new(adbc_stmt))
     }
 
-    fn synchronize_query_tags(&mut self, tags: &BTreeMap<String, String>) -> Result<()> {
-        if self.backend != Backend::Databricks {
-            return Ok(());
-        }
-        let Some(sql) = crate::databricks::query_tags_update_sql(&self.query_tags, tags) else {
-            return Ok(());
-        };
-
-        let mut statement = self.inner.new_statement()?;
-        statement.set_sql_query(&sql)?;
-        statement.execute_update()?;
-        self.query_tags.clone_from(tags);
-        Ok(())
-    }
-
     fn cancel(&mut self) -> Result<()> {
-        self.inner.cancel()
+        self.1.cancel()
     }
 
     fn get_info<'a>(
         &'a self,
         codes: Option<HashSet<options::InfoCode>>,
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        let reader = self.inner.get_info(codes)?;
+        let reader = self.1.get_info(codes)?;
         let reader = Box::new(reader);
         Ok(reader)
     }
@@ -472,7 +443,7 @@ impl Connection for AdbcConnection {
         table_type: Option<Vec<&'a str>>,
         column_name: Option<&'a str>,
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        let reader = self.inner.get_objects(
+        let reader = self.1.get_objects(
             depth,
             catalog,
             db_schema,
@@ -490,17 +461,17 @@ impl Connection for AdbcConnection {
         db_schema: Option<&str>,
         table_name: &str,
     ) -> Result<Schema> {
-        self.inner.get_table_schema(catalog, db_schema, table_name)
+        self.1.get_table_schema(catalog, db_schema, table_name)
     }
 
     fn get_table_types<'a>(&'a self) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        let reader = self.inner.get_table_types()?;
+        let reader = self.1.get_table_types()?;
         let reader = Box::new(reader);
         Ok(reader)
     }
 
     fn get_statistic_names<'a>(&'a self) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        let reader = self.inner.get_statistic_names()?;
+        let reader = self.1.get_statistic_names()?;
         let reader = Box::new(reader);
         Ok(reader)
     }
@@ -513,47 +484,47 @@ impl Connection for AdbcConnection {
         approximate: bool,
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
         let reader = self
-            .inner
+            .1
             .get_statistics(catalog, db_schema, table_name, approximate)?;
         let reader = Box::new(reader);
         Ok(reader)
     }
 
     fn commit(&mut self) -> Result<()> {
-        self.inner.commit()
+        self.1.commit()
     }
 
     fn rollback(&mut self) -> Result<()> {
-        self.inner.rollback()
+        self.1.rollback()
     }
 
     fn read_partition<'a>(
         &'a self,
         partition: &'a [u8],
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        let reader = self.inner.read_partition(partition)?;
+        let reader = self.1.read_partition(partition)?;
         let reader = Box::new(reader);
         Ok(reader)
     }
 
     fn set_option(&mut self, key: OptionConnection, value: OptionValue) -> Result<()> {
-        self.inner.set_option(key, value)
+        self.1.set_option(key, value)
     }
 
     fn get_option_string(&self, key: OptionConnection) -> Result<String> {
-        self.inner.get_option_string(key)
+        self.1.get_option_string(key)
     }
 
     fn get_option_bytes(&self, key: OptionConnection) -> Result<Vec<u8>> {
-        self.inner.get_option_bytes(key)
+        self.1.get_option_bytes(key)
     }
 
     fn get_option_int(&self, key: OptionConnection) -> Result<i64> {
-        self.inner.get_option_int(key)
+        self.1.get_option_int(key)
     }
 
     fn get_option_double(&self, key: OptionConnection) -> Result<f64> {
-        self.inner.get_option_double(key)
+        self.1.get_option_double(key)
     }
 
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
