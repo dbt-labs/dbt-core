@@ -1213,10 +1213,10 @@ class ProviderContext(ManifestContext):
         name: str,
         message: Optional[str] = None,
         code: Optional[str] = None,
-        rows_affected: Optional[str] = None,
+        rows_affected: Optional[int] = None,
         agate_table: Optional["agate.Table"] = None,
     ) -> str:
-        response = AdapterResponse(_message=message, code=code, rows_affected=rows_affected)
+        response = AdapterResponse(_message=message or "", code=code, rows_affected=rows_affected)
         return self.store_result(name, response, agate_table)
 
     @contextproperty()
@@ -2278,7 +2278,6 @@ class TestContext(ProviderContext):
             self.macro_resolver, self._ctx, self.model, self.thread_ctx, depends_on_macros
         )
         self.namespace = macro_namespace
-
     @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         return_value = None
