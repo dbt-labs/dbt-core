@@ -32,11 +32,6 @@ class RemoteCompileResult(RemoteCompileResultMixin):
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
 
-    @property
-    def error(self) -> None:
-        # TODO: Can we delete this? It's never set anywhere else and never accessed
-        return None
-
 
 @dataclass
 @schema_version("remote-execution-result", 1)
