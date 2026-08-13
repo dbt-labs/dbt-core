@@ -1316,6 +1316,13 @@ def model(dbt, session):
     return dbt.ref("some_model")
 """
 
+python_model_with_jinja = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+    # jinja comment: {{ ref('something') }}
+    return dbt.ref("some_model")
+"""
+
 
 class ModelParserTest(BaseParserTest):
     def setUp(self):
@@ -1475,6 +1482,13 @@ class ModelParserTest(BaseParserTest):
         self.parser.manifest.files[block.file.file_id] = block.file
         with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
+
+    def test_python_model_with_jinja(self):
+        block = self.file_block_for(python_model_with_jinja, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError) as context:
+            self.parser.parse_file(block)
+        self.assertIn("No jinja in python model code is allowed", str(context.exception))
 
     def test_python_model_empty_file(self):
         block = self.file_block_for(python_model_empty_file, "nested/py_model.py")
