@@ -710,7 +710,7 @@ class StateSelectorMethod(SelectorMethod):
             visited_macros = []
             return self.recursively_check_macros_modified(node, visited_macros)
 
-    # TODO check modifed_content and check_modified macro seems a bit redundent
+    # TODO check modified_content and check_modified macro seems a bit redundant
     def check_modified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:

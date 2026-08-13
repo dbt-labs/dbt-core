@@ -63,7 +63,8 @@ class dbtPluginError(DbtRuntimeError):
     MESSAGE = "Plugin Error"
 
 
-# TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
+# While not directly raised in dbt-core, it is caught in several schema parser locations
+# and may be raised by external plugins or adapters for backwards compatibility.
 class JSONValidationError(DbtValidationError):
     def __init__(self, typename, errors) -> None:
         self.typename = typename

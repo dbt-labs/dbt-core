@@ -254,7 +254,7 @@ class ConfiguredParser(
         }
         dct.update(kwargs)
 
-        # TODO: we're doing this becaus return type is _required_ for the FunctionNode
+        # TODO: we're doing this because return type is _required_ for the FunctionNode
         # but we don't get the return type until we patch the node with the yml definition
         # so we need to set it to a default value here.
         if self.resource_type == NodeType.Function:
