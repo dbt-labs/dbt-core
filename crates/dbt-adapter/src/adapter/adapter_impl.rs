@@ -2727,11 +2727,13 @@ impl AdapterImpl {
             {
                 Ok("text".to_string())
             }
-            // ClickHouse: Only add Nullable(...) when the column's data actually contains NULLs
+            // ClickHouse: never wrap seed columns in Nullable(...), matching the Python
+            // adapter's agate-based typing. Missing CSV values arrive as literal NULLs and
+            // are turned into column defaults ('' / 0) by the server's
+            // input_format_null_as_default setting, which is what Python produces too.
             Impl(ClickHouse, _) => {
-                let has_nulls = batch.column(col_idx as usize).null_count() > 0;
                 let mut out = String::new();
-                crate::sql_types::clickhouse::try_format_type(data_type, has_nulls, &mut out)?;
+                crate::sql_types::clickhouse::try_format_type(data_type, false, &mut out)?;
                 Ok(out)
             }
             Impl(_, engine) => {
@@ -6466,11 +6468,14 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_type_clickhouse_nullable_only_for_columns_with_nulls() {
+    fn test_convert_type_clickhouse_never_nullable() {
         use arrow_array::Int64Array;
 
-        // Both fields are declared nullable — seed schemas always are — so the
-        // decision must come from the actual data (null_count), not the field flag.
+        // Seed columns must never render as Nullable(...), regardless of the field
+        // flag (seed schemas always declare nullable) or the actual data: this
+        // matches the Python adapter's agate-based typing. Missing values are
+        // inserted as literal NULLs and become column defaults server-side via
+        // input_format_null_as_default.
         let schema = Arc::new(Schema::new(vec![
             Field::new("with_nulls", DataType::Int64, true),
             Field::new("no_nulls", DataType::Int64, true),
@@ -6486,7 +6491,7 @@ mod tests {
 
         assert_eq!(
             adapter.convert_type(&state, Arc::clone(&table), 0).unwrap(),
-            "Nullable(Int64)"
+            "Int64"
         );
         assert_eq!(adapter.convert_type(&state, table, 1).unwrap(), "Int64");
     }
