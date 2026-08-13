@@ -7,32 +7,36 @@
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
-use std::fs::File;
-use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
-use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_common::tracing::dbt_emit::emit_trace_log_message;
+use dbt_common::{ErrorCode, FsResult, fs_err, path::DbtPath};
+use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtMaterialization, OnSchemaChange};
 use dbt_schemas::schemas::project::{
     DataTestConfig, ModelConfig, SeedConfig, SnapshotConfig, WarehouseSpecificNodeConfig,
 };
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
+    macros::DbtMacro,
 };
+use dbt_state::hash::node_state_hashes;
 use dbt_state::proto::query_cache::{
-    QueryDependency, StaleUpstreamPolicy, SubmitEnrichedSqlRequest, SubmitValuesRequest,
-    TableModifiedInfo, TableProperties,
+    DbtNodeState, QueryDependency, StaleUpstreamPolicy, SubmitEnrichedSqlRequest,
+    SubmitValuesRequest, TableModifiedInfo, TableProperties,
 };
 use dbt_state::request_builder::{
     ExecutionTypeInput, NodeIdentity, RequestBuildError, SemanticExtraConfig, SemanticExtras,
     SubmitEnrichedSqlRequestInput, SubmitValuesRequestInput, execution_type_from_input,
-    seed_semantic_extras, seed_values_hash_reader, sql_semantic_extras,
+    seed_semantic_extras, sql_semantic_extras,
 };
 use dbt_telemetry::NodeType;
 use serde::Serialize;
 use serde_json::Value;
+
+use crate::context::TaskRunnerCtx;
 
 /// Semantic-extras keys mirroring the dbt-core plugin (run_cache.py). They fold a
 /// microbatch model run's resolved event-time window into the model-level cache
@@ -41,6 +45,43 @@ use serde_json::Value;
 /// extras) so both engines produce the same semantic hash for the same window.
 const MICROBATCH_EVENT_TIME_START_KEY: &str = "__microbatch_event_time_start";
 const MICROBATCH_EVENT_TIME_END_KEY: &str = "__microbatch_event_time_end";
+
+/// Semantic-extras key used to fold the hash of a node's persisted documentation (relation
+/// and/or column descriptions, when persist_docs is enabled) into the cache key. This ensures
+/// that a docs-only change triggers an execution so the new descriptions are written to the
+/// target table, even when the query result is otherwise unchanged.
+const PERSISTED_DOCS_HASH_KEY: &str = "__persisted_docs_hash";
+
+#[derive(Clone, Debug)]
+pub struct DbtProjectInfo {
+    active_profile_name: String,
+    active_target_name: String,
+    project_name: String,
+    project_id: Option<String>, // dbt cloud project id; only present if dbt cloud is in use
+    project_root: DbtPath,
+}
+
+impl From<&TaskRunnerCtx> for DbtProjectInfo {
+    fn from(value: &TaskRunnerCtx) -> Self {
+        let profile = value.dbt_profile();
+        let project_id = value
+            .resolver_state()
+            .cloud_config
+            .as_ref()
+            .and_then(|c| c.project_id.clone());
+
+        let project_name = value.root_project_name().to_owned();
+        let project_root: DbtPath = value.inner.arg.io.in_dir.as_path().into();
+
+        Self {
+            active_profile_name: profile.profile.clone(),
+            active_target_name: profile.target.clone(),
+            project_name,
+            project_id,
+            project_root,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 /// Execution-time SQL request inputs assembled by `dbt-tasks`.
@@ -57,6 +98,9 @@ pub struct SqlRunCacheRequestContext {
     pub freshness_tolerance_seconds: i64,
     pub lenient_dependencies: Vec<String>,
     pub tolerate_nondeterminism: bool,
+    /// When set, the service first matches candidates on the unrendered node hashes carried in
+    /// `dbt_node_state` and only falls back to the compiled-SQL hash if those differ.
+    pub compare_unrendered_code: bool,
     pub full_refresh: bool,
     pub clone_time_travel_limit: Option<i64>,
     pub clone_table_properties: Option<TableProperties>,
@@ -70,6 +114,7 @@ pub struct SqlRunCacheRequestContext {
     /// run. Folded into the model-level cache key so an unchanged window no-ops
     /// and a different window executes. `None` for non-microbatch nodes.
     pub microbatch_window: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    pub dbt_project_info: DbtProjectInfo,
 }
 
 #[derive(Clone, Debug)]
@@ -77,22 +122,28 @@ pub struct SqlRunCacheRequestContext {
 ///
 /// This context may include task-layer details, such as the project root, before
 /// being lowered into the stable `dbt-state` request-builder input.
-pub struct SeedRunCacheRequestContext<'a> {
+pub struct SeedRunCacheRequestContext {
     pub adapter_type: AdapterType,
     pub dialect: String, // TODO: remove because redundant when adapter_type is present in context
-    pub project_root: &'a Path,
     pub last_modified_epoch: Option<i64>,
     pub clone_time_travel_limit: Option<i64>,
     pub clone_table_properties: Option<TableProperties>,
+    pub clone_chain_depth_limit: Option<i64>,
+    pub dbt_project_info: DbtProjectInfo,
 }
 
-pub fn build_model_sql_request(
-    model: &DbtModel,
+pub fn build_model_sql_request<'a>(
+    model: &'a DbtModel,
     context: SqlRunCacheRequestContext,
+    materialization_resolver: &MaterializationResolver,
+    macro_resolver: impl Fn(&str) -> Option<&'a DbtMacro>,
 ) -> FsResult<SubmitEnrichedSqlRequest> {
-    let execution_type =
-        execution_type_from_input(&model_execution_type_input(model, context.full_refresh))
-            .map_err(request_build_error)?;
+    let execution_type = execution_type_from_input(&model_execution_type_input(
+        model,
+        context.full_refresh,
+        materialization_resolver,
+    ))
+    .map_err(request_build_error)?;
     let mut semantic_extras =
         sql_semantic_extras(&model_sql_semantic_extra_config(model).map_err(request_build_error)?)
             .map_err(request_build_error)?;
@@ -111,7 +162,72 @@ pub fn build_model_sql_request(
         );
     }
 
-    Ok(build_sql_request_input(model, context, execution_type, semantic_extras)?.into_proto())
+    let node_state = build_node_state(model, &context.dbt_project_info, macro_resolver)
+        .map_err(request_build_error)?;
+    semantic_extras.extend(node_state_semantic_extras(&node_state));
+
+    Ok(
+        build_sql_request_input(model, context, execution_type, semantic_extras, node_state)?
+            .into_proto(),
+    )
+}
+
+fn build_node_state<'a, 'b>(
+    node: &'a dyn InternalDbtNodeAttributes,
+    project_info: &'b DbtProjectInfo,
+    macro_resolver: impl Fn(&str) -> Option<&'a DbtMacro>,
+) -> Result<DbtNodeState, RequestBuildError> {
+    // this is to match what Python submits
+    // ref: https://github.com/dbt-labs/dbt-core/blob/09a8314d30f162b1893d7969e989b4717c9fcf28/core/dbt/artifacts/resources/types.py#L18
+    let resource_type = match node.resource_type() {
+        NodeType::Model => "model",
+        NodeType::Seed => "seed",
+        NodeType::Snapshot => "snapshot",
+        NodeType::Test => "test",
+        NodeType::UnitTest => "unit_test",
+        NodeType::Source => "source",
+        _ => "unspecified",
+    };
+
+    let hashes = node_state_hashes(node, &project_info.project_root, macro_resolver)?;
+
+    let node_state = DbtNodeState {
+        node_unique_id: node.common().unique_id.clone(),
+        profile_name: project_info.active_profile_name.to_owned(),
+        target_name: project_info.active_target_name.to_owned(),
+        project_name: project_info.project_name.to_owned(),
+        project_id: project_info.project_id.clone(),
+        resource_type: resource_type.to_owned(),
+        node_hash: hashes.node_hash,
+        node_body_hash: hashes.node_body_hash,
+        node_configs_hash: hashes.node_configs_hash,
+        node_persisted_descriptions_hash: hashes.node_persisted_descriptions_hash,
+        node_macros_hash: hashes.node_macros_hash,
+        node_contract_hash: hashes.node_contract_hash,
+    };
+
+    // Every component is logged individually because the server compares them
+    // individually: a reuse decision turns on body/configs/macros agreeing, and any one of
+    // them differing is enough to fall back to the compiled-SQL hash. Logging only
+    // `node_hash` would say "something changed" without saying which.
+    emit_trace_log_message(|| {
+        format!(
+            "dbt State node hashes for {} (fqn {}): node_hash={} body={} configs={} persisted_docs={} macros={} contract={}",
+            node_state.node_unique_id,
+            node.selector_string(),
+            node_state.node_hash,
+            node_state.node_body_hash.as_deref().unwrap_or("<none>"),
+            node_state.node_configs_hash.as_deref().unwrap_or("<none>"),
+            node_state
+                .node_persisted_descriptions_hash
+                .as_deref()
+                .unwrap_or("<none>"),
+            node_state.node_macros_hash.as_deref().unwrap_or("<none>"),
+            node_state.node_contract_hash.as_deref().unwrap_or("<none>"),
+        )
+    });
+
+    Ok(node_state)
 }
 
 /// Whether a model executes as microbatch. Kept identical to the SA-side
@@ -133,9 +249,10 @@ fn microbatch_window_isoformat(dt: DateTime<Utc>) -> String {
     dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
 }
 
-pub fn build_snapshot_sql_request(
-    snapshot: &DbtSnapshot,
+pub fn build_snapshot_sql_request<'a>(
+    snapshot: &'a DbtSnapshot,
     context: SqlRunCacheRequestContext,
+    macro_resolver: impl Fn(&str) -> Option<&'a DbtMacro>,
 ) -> FsResult<SubmitEnrichedSqlRequest> {
     let execution_type = execution_type_from_input(&snapshot_execution_type_input(
         snapshot,
@@ -143,27 +260,43 @@ pub fn build_snapshot_sql_request(
     ))
     .map_err(request_build_error)?;
 
-    let semantic_extras = sql_semantic_extras(
+    let mut semantic_extras = sql_semantic_extras(
         &snapshot_config_sql_semantic_extra_config(&snapshot.deprecated_config)
             .map_err(request_build_error)?,
     )
     .map_err(request_build_error)?;
 
-    Ok(build_sql_request_input(snapshot, context, execution_type, semantic_extras)?.into_proto())
+    let node_state = build_node_state(snapshot, &context.dbt_project_info, macro_resolver)
+        .map_err(request_build_error)?;
+    semantic_extras.extend(node_state_semantic_extras(&node_state));
+
+    Ok(build_sql_request_input(
+        snapshot,
+        context,
+        execution_type,
+        semantic_extras,
+        node_state,
+    )?
+    .into_proto())
 }
 
-pub fn build_test_sql_request(
-    test: &DbtTest,
+pub fn build_test_sql_request<'a>(
+    test: &'a DbtTest,
     context: SqlRunCacheRequestContext,
+    macro_resolver: impl Fn(&str) -> Option<&'a DbtMacro>,
 ) -> FsResult<SubmitEnrichedSqlRequest> {
     let execution_type =
         execution_type_from_input(&test_execution_type_input()).map_err(request_build_error)?;
 
-    let semantic_extras = sql_semantic_extras(
+    let mut semantic_extras = sql_semantic_extras(
         &test_config_sql_semantic_extra_config(&test.deprecated_config)
             .map_err(request_build_error)?,
     )
     .map_err(request_build_error)?;
+
+    let node_state = build_node_state(test, &context.dbt_project_info, macro_resolver)
+        .map_err(request_build_error)?;
+    semantic_extras.extend(node_state_semantic_extras(&node_state));
 
     // Mirrors dbt-core's `_build_submit_enriched_sql_request` (run_cache.py
     // L992-996): data tests submit with `target_table=None` so the service's
@@ -173,31 +306,25 @@ pub fn build_test_sql_request(
     // the request's `tables` list with a `last_modified_epoch` to mark the
     // target as "existing" — which is not possible when
     // `store_failures_as=None` skips the audit relation materialization.
-    let mut input = build_sql_request_input(test, context, execution_type, semantic_extras)?;
+    let mut input =
+        build_sql_request_input(test, context, execution_type, semantic_extras, node_state)?;
     input.target_table = None;
     Ok(input.into_proto())
 }
 
-pub fn build_seed_values_request(
-    seed: &DbtSeed,
-    context: SeedRunCacheRequestContext<'_>,
+pub fn build_seed_values_request<'a>(
+    seed: &'a DbtSeed,
+    context: SeedRunCacheRequestContext,
+    macro_resolver: impl Fn(&str) -> Option<&'a DbtMacro>,
 ) -> FsResult<SubmitValuesRequest> {
-    let seed_file = context
-        .project_root
-        .join(seed.common().original_file_path.as_path());
-    let values_hash = seed_values_hash_reader(File::open(&seed_file).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to open seed file for dbt State request {}: {}",
-            seed_file.display(),
-            e
-        )
-    })?)
-    .map_err(request_build_error)?;
-
-    let semantic_extras =
+    let mut semantic_extras =
         seed_semantic_extras(&seed_semantic_extra_config(seed).map_err(request_build_error)?)
             .map_err(request_build_error)?;
+
+    let node_state = build_node_state(seed, &context.dbt_project_info, macro_resolver)
+        .map_err(request_build_error)?;
+    semantic_extras.extend(node_state_semantic_extras(&node_state));
+    let values_hash = node_state.node_hash.clone();
 
     Ok(SubmitValuesRequestInput {
         target_table: target_table_for_node(context.adapter_type, seed)?,
@@ -209,6 +336,8 @@ pub fn build_seed_values_request(
         labels: node_identity(seed).labels(),
         clone_time_travel_limit: context.clone_time_travel_limit,
         clone_table_properties: context.clone_table_properties,
+        clone_chain_depth_limit: context.clone_chain_depth_limit,
+        dbt_node_state: Some(node_state),
     }
     .into_proto())
 }
@@ -228,12 +357,22 @@ pub fn target_table_for_node(
     Ok(create_relation_from_node(adapter_type, node, None)?.semantic_fqn())
 }
 
-pub fn model_execution_type_input(model: &DbtModel, full_refresh: bool) -> ExecutionTypeInput {
+pub fn model_execution_type_input(
+    model: &DbtModel,
+    full_refresh: bool,
+    materialization_resolver: &MaterializationResolver,
+) -> ExecutionTypeInput {
     let materialized = &model.base().materialized;
     ExecutionTypeInput {
         resource_type: NodeType::Model,
         is_view: materialized == &DbtMaterialization::View,
-        is_custom_materialization: matches!(materialized, DbtMaterialization::Unknown(_)),
+        // A model uses a custom materialization when the macro dbt would
+        // dispatch for its materialization is user-defined — a novel name or a
+        // user macro that shadows a built-in name (e.g. `table`/`incremental`).
+        // Matches the parse-time classification in `resolve_models` so the run
+        // cache treats such models as `DBT_CUSTOM` (dbt-core#14486).
+        is_custom_materialization: materialization_resolver
+            .is_custom_materialization(&materialized.to_string()),
         is_incremental: materialized == &DbtMaterialization::Incremental,
         full_refresh,
         incremental_strategy: model_incremental_strategy(model),
@@ -294,12 +433,16 @@ pub fn model_sql_semantic_extra_config(
         extras.remove("on_schema_change");
     }
 
-    // `constraints` lives on the resolved model attributes (merging schema.yml
-    // declarations and any `{{ config(constraints=...) }}` override), not on
-    // `ModelConfig` directly, so it can't be picked up in
-    // `model_config_sql_semantic_extra_config`. Only include it when set,
-    // mirroring the Python plugin's `if key in node_config` gating.
-    if !model.__model_attr__.constraints.is_empty() {
+    // `{{ config(constraints=...) }}` is picked up directly from `ModelConfig` in
+    // `model_config_sql_semantic_extra_config` above. dbt-core has no functional
+    // path from `config()` to a model's real constraints (only the schema.yml
+    // `constraints:` property feeds `model.constraints`/contract enforcement), so
+    // this only affects cache-key hashing here, not enforcement (matching dbt-core
+    // parity — see `resolve_versioned_fields` in dbt-parser, which is the sole
+    // functional source of `__model_attr__.constraints`). Only fall back to the
+    // schema.yml-resolved value when `config()` didn't set one, so cache
+    // invalidation still reacts to schema.yml-declared constraint changes too.
+    if !extras.contains_key("constraints") && !model.__model_attr__.constraints.is_empty() {
         extras.insert(
             "constraints".to_string(),
             Some(serde_json::to_value(&model.__model_attr__.constraints)?),
@@ -313,6 +456,19 @@ pub fn seed_semantic_extra_config(
     seed: &DbtSeed,
 ) -> Result<SemanticExtraConfig, RequestBuildError> {
     seed_config_semantic_extra_config(&seed.deprecated_config)
+}
+
+fn node_state_semantic_extras(node_state: &DbtNodeState) -> SemanticExtras {
+    let mut extras = SemanticExtras::new();
+
+    if let Some(persisted_docs_hash) = &node_state.node_persisted_descriptions_hash {
+        extras.insert(
+            PERSISTED_DOCS_HASH_KEY.to_owned(),
+            persisted_docs_hash.to_owned(),
+        );
+    }
+
+    extras
 }
 
 pub fn model_clone_table_properties(model: &DbtModel) -> Option<TableProperties> {
@@ -332,6 +488,7 @@ fn build_sql_request_input(
     context: SqlRunCacheRequestContext,
     execution_type: dbt_state::proto::query_cache::ModelExecutionType,
     semantic_extras: SemanticExtras,
+    node_state: DbtNodeState,
 ) -> FsResult<SubmitEnrichedSqlRequestInput> {
     Ok(SubmitEnrichedSqlRequestInput {
         target_table: Some(target_table_for_node(context.adapter_type, node)?),
@@ -351,6 +508,8 @@ fn build_sql_request_input(
         clone_table_properties: context.clone_table_properties,
         stale_upstream_policy: context.stale_upstream_policy,
         clone_chain_depth_limit: context.clone_chain_depth_limit,
+        dbt_node_state: Some(node_state),
+        compare_unrendered_code: context.compare_unrendered_code,
     })
 }
 
@@ -388,6 +547,7 @@ fn model_config_sql_semantic_extra_config(
         "merge_exclude_columns",
         config.merge_exclude_columns.as_ref(),
     )?;
+    insert_json(&mut extras, "constraints", config.constraints.as_ref())?;
     insert_json(&mut extras, "contract", config.contract.as_ref())?;
     insert_json(&mut extras, "unique_key", config.unique_key.as_ref())?;
     insert_json(&mut extras, "grants", config.grants.as_ref())?;
@@ -560,6 +720,7 @@ fn model_config_clone_table_properties(config: &ModelConfig) -> Option<TableProp
             .__warehouse_specific_config__
             .hours_to_expiration
             .as_ref()
+            .and_then(|inner| inner.as_ref())
             .and_then(|v| v.to_string().parse::<u64>().ok()),
         config
             .__warehouse_specific_config__
@@ -575,6 +736,7 @@ fn snapshot_config_clone_table_properties(config: &SnapshotConfig) -> Option<Tab
             .__warehouse_specific_config__
             .hours_to_expiration
             .as_ref()
+            .and_then(|inner| inner.as_ref())
             .and_then(|v| v.to_string().parse::<u64>().ok()),
         config
             .__warehouse_specific_config__
@@ -590,6 +752,7 @@ fn seed_config_clone_table_properties(config: &SeedConfig) -> Option<TableProper
             .__warehouse_specific_config__
             .hours_to_expiration
             .as_ref()
+            .and_then(|inner| inner.as_ref())
             .and_then(|v| v.to_string().parse::<u64>().ok()),
         config
             .__warehouse_specific_config__
@@ -646,8 +809,9 @@ mod tests {
     use dbt_common::path::DbtPath;
     use dbt_schemas::schemas::common::{
         Access, DbtIncrementalStrategy, DbtMaterialization, DbtUniqueKey, OnSchemaChange,
-        ResolvedQuoting, Severity, StoreFailuresAs,
+        PersistDocsConfig, ResolvedQuoting, Severity, StoreFailuresAs,
     };
+    use dbt_schemas::schemas::macros::DbtMacro;
     use dbt_schemas::schemas::nodes::AdapterAttr;
     use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
     use dbt_schemas::schemas::{
@@ -655,10 +819,42 @@ mod tests {
         IntrospectionKind, NodeBaseAttributes,
     };
     use dbt_state::proto::query_cache::ModelExecutionType;
-    use dbt_state::request_builder::{execution_type_from_input, seed_values_hash};
+    use dbt_state::request_builder::execution_type_from_input;
     use dbt_yaml::Spanned;
     use indexmap::IndexMap;
     use std::collections::BTreeMap;
+
+    /// A resolver with no macros: built-in materialization names resolve to no
+    /// user-defined macro, so `is_custom_materialization` is false — matching
+    /// the built-in materializations these tests use.
+    fn test_materialization_resolver() -> MaterializationResolver {
+        MaterializationResolver::new(&BTreeMap::new(), AdapterType::Snowflake, "jaffle_shop")
+    }
+
+    /// A resolver where `name` is a user-defined (root-project) materialization,
+    /// so `is_custom_materialization(name)` returns true.
+    fn custom_materialization_resolver(name: &str) -> MaterializationResolver {
+        let macro_name = format!("materialization_{name}_default");
+        let macro_def = DbtMacro {
+            name: macro_name.clone(),
+            package_name: "jaffle_shop".to_string(),
+            unique_id: format!("macro.jaffle_shop.{macro_name}"),
+            ..Default::default()
+        };
+        let mut macros = BTreeMap::new();
+        macros.insert(macro_def.unique_id.clone(), macro_def);
+        MaterializationResolver::new(&macros, AdapterType::Snowflake, "jaffle_shop")
+    }
+
+    fn make_project_info() -> DbtProjectInfo {
+        DbtProjectInfo {
+            active_profile_name: "test_profile".to_owned(),
+            active_target_name: "test_target".to_owned(),
+            project_name: "test_project".to_owned(),
+            project_id: None,
+            project_root: "dummy-project-root".into(),
+        }
+    }
 
     fn make_common(unique_id: &str, name: &str) -> CommonAttributes {
         CommonAttributes {
@@ -785,6 +981,7 @@ mod tests {
             freshness_tolerance_seconds: 2700,
             lenient_dependencies: vec![],
             tolerate_nondeterminism: true,
+            compare_unrendered_code: false,
             full_refresh,
             clone_time_travel_limit: None,
             clone_table_properties: None,
@@ -792,13 +989,20 @@ mod tests {
             default_schema: "marts".to_string(),
             stale_upstream_policy: StaleUpstreamPolicy::Any,
             microbatch_window: None,
+            dbt_project_info: make_project_info(),
         }
     }
 
     #[test]
     fn model_request_uses_fusion_node_identity_target_and_semantic_extras() {
         let model = make_model(DbtMaterialization::Incremental);
-        let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
 
         assert_eq!(
             request.target_table.as_deref(),
@@ -833,6 +1037,35 @@ mod tests {
     }
 
     #[test]
+    fn model_request_includes_persisted_docs_hash_when_persist_docs_is_enabled() {
+        for (columns, relation, has_persisted_docs_hash) in [
+            (None, None, false),
+            (Some(true), None, true),
+            (None, Some(true), true),
+            (Some(true), Some(true), true),
+        ] {
+            let mut model = make_model(DbtMaterialization::Table);
+            model.__base_attr__.persist_docs = Some(PersistDocsConfig { columns, relation });
+
+            let request = build_model_sql_request(
+                &model,
+                sql_context(false),
+                &test_materialization_resolver(),
+                |_| None,
+            )
+            .unwrap();
+
+            assert_eq!(
+                request
+                    .semantic_extras
+                    .contains_key(PERSISTED_DOCS_HASH_KEY),
+                has_persisted_docs_hash,
+                "persist_docs.columns={columns:?}, persist_docs.relation={relation:?}"
+            );
+        }
+    }
+
+    #[test]
     fn microbatch_window_folds_raw_iso_bounds_into_semantic_extras() {
         use chrono::TimeZone;
 
@@ -847,7 +1080,9 @@ mod tests {
         let mut context = sql_context(false);
         context.microbatch_window = Some((start, end));
 
-        let request = build_model_sql_request(&model, context).unwrap();
+        let request =
+            build_model_sql_request(&model, context, &test_materialization_resolver(), |_| None)
+                .unwrap();
 
         // Raw ISO-8601 strings (not JSON-encoded, so no surrounding quotes),
         // matching the dbt-core plugin so both engines hash the window the same.
@@ -870,7 +1105,13 @@ mod tests {
     #[test]
     fn non_microbatch_request_omits_microbatch_window_extras() {
         let model = make_model(DbtMaterialization::Incremental);
-        let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
 
         assert!(
             !request
@@ -892,7 +1133,13 @@ mod tests {
             model.deprecated_config.incremental_predicates = None;
             model.deprecated_config.merge_update_columns = None;
 
-            let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+            let request = build_model_sql_request(
+                &model,
+                sql_context(false),
+                &test_materialization_resolver(),
+                |_| None,
+            )
+            .unwrap();
 
             assert_eq!(
                 request.semantic_extras.get("on_schema_change").unwrap(),
@@ -917,7 +1164,13 @@ mod tests {
         let mut model = make_model(DbtMaterialization::View);
         model.deprecated_config.on_schema_change = Some(OnSchemaChange::SyncAllColumns);
 
-        let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
 
         assert!(!request.semantic_extras.contains_key("on_schema_change"));
     }
@@ -927,8 +1180,12 @@ mod tests {
         let mut model = make_model(DbtMaterialization::Incremental);
         model.deprecated_config.unique_key = None;
 
-        let execution_type =
-            execution_type_from_input(&model_execution_type_input(&model, false)).unwrap();
+        let execution_type = execution_type_from_input(&model_execution_type_input(
+            &model,
+            false,
+            &test_materialization_resolver(),
+        ))
+        .unwrap();
 
         assert_eq!(execution_type, ModelExecutionType::Append);
     }
@@ -936,7 +1193,13 @@ mod tests {
     #[test]
     fn model_full_refresh_suppresses_incremental_skip_type() {
         let model = make_model(DbtMaterialization::Incremental);
-        let request = build_model_sql_request(&model, sql_context(true)).unwrap();
+        let request = build_model_sql_request(
+            &model,
+            sql_context(true),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
 
         assert_eq!(request.execution_type, ModelExecutionType::Full as i32);
     }
@@ -944,7 +1207,13 @@ mod tests {
     #[test]
     fn model_full_refresh_keeps_view_execution_type() {
         let model = make_model(DbtMaterialization::View);
-        let request = build_model_sql_request(&model, sql_context(true)).unwrap();
+        let request = build_model_sql_request(
+            &model,
+            sql_context(true),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
 
         assert_eq!(request.execution_type, ModelExecutionType::View as i32);
     }
@@ -955,8 +1224,32 @@ mod tests {
             "my_materialization".to_string(),
         ));
 
-        let execution_type =
-            execution_type_from_input(&model_execution_type_input(&model, false)).unwrap();
+        let execution_type = execution_type_from_input(&model_execution_type_input(
+            &model,
+            false,
+            &custom_materialization_resolver("my_materialization"),
+        ))
+        .unwrap();
+
+        assert_eq!(execution_type, ModelExecutionType::DbtCustom);
+    }
+
+    #[test]
+    fn shadowing_builtin_maps_to_custom_execution_type() {
+        // The headline case for the dispatch-based check: a model materialized
+        // as a *built-in* name (`table`) whose materialization macro is
+        // shadowed by a user-defined macro. The old `Unknown(_)`-only heuristic
+        // classified this as `Full`; the resolver-based check must classify it
+        // as `DbtCustom`. This test would fail under the old heuristic and pins
+        // the fix in this PR.
+        let model = make_model(DbtMaterialization::Table);
+
+        let execution_type = execution_type_from_input(&model_execution_type_input(
+            &model,
+            false,
+            &custom_materialization_resolver("table"),
+        ))
+        .unwrap();
 
         assert_eq!(execution_type, ModelExecutionType::DbtCustom);
     }
@@ -971,7 +1264,13 @@ mod tests {
         model.__model_attr__.incremental_strategy = Some(strategy.clone());
         model.deprecated_config.incremental_strategy = Some(strategy);
 
-        let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
 
         assert_eq!(request.execution_type, ModelExecutionType::DbtCustom as i32);
     }
@@ -980,15 +1279,39 @@ mod tests {
     fn snapshot_request_uses_snapshot_execution_type_during_full_refresh() {
         let snapshot = make_snapshot();
 
-        let request = build_snapshot_sql_request(&snapshot, sql_context(false)).unwrap();
+        let request = build_snapshot_sql_request(&snapshot, sql_context(false), |_| None).unwrap();
         assert_eq!(request.execution_type, ModelExecutionType::Snapshot as i32);
         assert_eq!(
             request.target_table.as_deref(),
             Some(r#""analytics"."marts"."orders_snapshot""#)
         );
 
-        let request = build_snapshot_sql_request(&snapshot, sql_context(true)).unwrap();
+        let request = build_snapshot_sql_request(&snapshot, sql_context(true), |_| None).unwrap();
         assert_eq!(request.execution_type, ModelExecutionType::Snapshot as i32);
+    }
+
+    #[test]
+    fn snapshot_request_includes_persisted_docs_hash_when_persist_docs_is_enabled() {
+        for (columns, relation, has_persisted_docs_hash) in [
+            (None, None, false),
+            (Some(true), None, true),
+            (None, Some(true), true),
+            (Some(true), Some(true), true),
+        ] {
+            let mut snapshot = make_snapshot();
+            snapshot.__base_attr__.persist_docs = Some(PersistDocsConfig { columns, relation });
+
+            let request =
+                build_snapshot_sql_request(&snapshot, sql_context(false), |_| None).unwrap();
+
+            assert_eq!(
+                request
+                    .semantic_extras
+                    .contains_key(PERSISTED_DOCS_HASH_KEY),
+                has_persisted_docs_hash,
+                "persist_docs.columns={columns:?}, persist_docs.relation={relation:?}"
+            );
+        }
     }
 
     #[test]
@@ -998,7 +1321,7 @@ mod tests {
         let mut context = sql_context(false);
         context.default_schema = test.schema();
 
-        let request = build_test_sql_request(&test, context).unwrap();
+        let request = build_test_sql_request(&test, context, |_| None).unwrap();
 
         assert_eq!(request.target_table, None);
         assert_eq!(request.default_catalog, "analytics");
@@ -1012,28 +1335,46 @@ mod tests {
     #[test]
     fn seed_request_uses_md5_file_hash_and_seed_semantic_extras() {
         let tempdir = tempfile::tempdir().unwrap();
-        let seeds_dir = tempdir.path().join("seeds");
+        let project_root: DbtPath = tempdir.path().into();
+        let seeds_dir = project_root.join("seeds");
+
         std::fs::create_dir(&seeds_dir).unwrap();
         let seed_bytes = b"id|city\n1|Chicago\n";
         std::fs::write(seeds_dir.join("cities.csv"), seed_bytes).unwrap();
 
         let seed = make_seed();
+
+        let mut project_info = make_project_info();
+        project_info.project_root = project_root;
+
         let request = build_seed_values_request(
             &seed,
             SeedRunCacheRequestContext {
                 adapter_type: AdapterType::Snowflake,
                 dialect: "snowflake".to_string(),
-                project_root: tempdir.path(),
                 last_modified_epoch: Some(456),
                 clone_time_travel_limit: Some(3600),
                 clone_table_properties: None,
+                clone_chain_depth_limit: Some(1),
+                dbt_project_info: project_info,
             },
+            |_| None,
         )
         .unwrap();
 
+        let project_root: DbtPath = tempdir.path().into();
+        assert!(project_root.is_absolute());
+        assert!(
+            project_root
+                .join(&seed.common().original_file_path)
+                .exists()
+        );
+
+        let node_state_hashes = node_state_hashes(&seed, &project_root, |_| None).unwrap();
+
         assert_eq!(request.target_table, r#""analytics"."marts"."cities""#);
         assert_eq!(request.default_catalog, "analytics");
-        assert_eq!(request.values_hash, seed_values_hash(seed_bytes));
+        assert_eq!(request.values_hash, node_state_hashes.node_hash);
         assert_eq!(request.last_modified_epoch, Some(456));
         assert_eq!(request.clone_time_travel_limit, Some(3600));
         assert_eq!(
@@ -1046,6 +1387,52 @@ mod tests {
         );
         assert_eq!(request.semantic_extras.get("delimiter").unwrap(), "\"|\"");
         assert_eq!(request.labels.get("dbt_node_name").unwrap(), "cities");
+        assert_eq!(request.clone_chain_depth_limit, Some(1))
+    }
+
+    #[test]
+    fn seed_request_includes_persisted_docs_hash_when_persist_docs_is_enabled() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let project_root: DbtPath = tempdir.path().into();
+        let seeds_dir = project_root.join("seeds");
+
+        std::fs::create_dir(&seeds_dir).unwrap();
+        std::fs::write(seeds_dir.join("cities.csv"), b"id|city\n1|Chicago\n").unwrap();
+
+        for (columns, relation, has_persisted_docs_hash) in [
+            (None, None, false),
+            (Some(true), None, true),
+            (None, Some(true), true),
+            (Some(true), Some(true), true),
+        ] {
+            let mut seed = make_seed();
+            seed.__base_attr__.persist_docs = Some(PersistDocsConfig { columns, relation });
+
+            let mut project_info = make_project_info();
+            project_info.project_root = project_root.clone();
+            let request = build_seed_values_request(
+                &seed,
+                SeedRunCacheRequestContext {
+                    adapter_type: AdapterType::Snowflake,
+                    dialect: "snowflake".to_string(),
+                    last_modified_epoch: None,
+                    clone_time_travel_limit: None,
+                    clone_table_properties: None,
+                    clone_chain_depth_limit: None,
+                    dbt_project_info: project_info,
+                },
+                |_| None,
+            )
+            .unwrap();
+
+            assert_eq!(
+                request
+                    .semantic_extras
+                    .contains_key(PERSISTED_DOCS_HASH_KEY),
+                has_persisted_docs_hash,
+                "persist_docs.columns={columns:?}, persist_docs.relation={relation:?}"
+            );
+        }
     }
 
     #[test]
@@ -1083,7 +1470,13 @@ mod tests {
             .__warehouse_specific_config__
             .auto_liquid_cluster = Some(true);
 
-        let request = build_model_sql_request(&model, sql_context(false)).unwrap();
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
 
         assert_eq!(
             request.semantic_extras.get("contract").unwrap(),
@@ -1120,6 +1513,63 @@ mod tests {
     }
 
     #[test]
+    fn model_semantic_extras_constraints_prefer_config_over_properties() {
+        use dbt_schemas::schemas::common::ConstraintType;
+        use dbt_schemas::schemas::properties::ModelConstraint;
+
+        // `__model_attr__.constraints` (schema.yml-property-derived, the only source
+        // dbt-core actually enforces) should be used for the cache-key extras only
+        // as a fallback when `{{ config(constraints=...) }}` didn't set anything.
+        let mut model = make_model(DbtMaterialization::Table);
+        model.__model_attr__.constraints = vec![ModelConstraint {
+            type_: ConstraintType::PrimaryKey,
+            columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        }];
+        model.deprecated_config.constraints = Some(vec![ModelConstraint {
+            type_: ConstraintType::NotNull,
+            expression: Some("id".to_string()),
+            ..Default::default()
+        }]);
+
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
+
+        let constraints = request.semantic_extras.get("constraints").unwrap();
+        assert!(constraints.contains("\"type\":\"not_null\""));
+        assert!(!constraints.contains("primary_key"));
+    }
+
+    #[test]
+    fn model_semantic_extras_constraints_fall_back_to_properties_when_config_unset() {
+        use dbt_schemas::schemas::common::ConstraintType;
+        use dbt_schemas::schemas::properties::ModelConstraint;
+
+        let mut model = make_model(DbtMaterialization::Table);
+        model.__model_attr__.constraints = vec![ModelConstraint {
+            type_: ConstraintType::PrimaryKey,
+            columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        }];
+
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
+
+        let constraints = request.semantic_extras.get("constraints").unwrap();
+        assert!(constraints.contains("primary_key"));
+    }
+
+    #[test]
     fn snapshot_semantic_extras_include_config_and_warehouse_keys() {
         let mut snapshot = make_snapshot();
         snapshot.deprecated_config.unique_key =
@@ -1130,7 +1580,7 @@ mod tests {
             .__warehouse_specific_config__
             .transient = Some(true);
 
-        let request = build_snapshot_sql_request(&snapshot, sql_context(false)).unwrap();
+        let request = build_snapshot_sql_request(&snapshot, sql_context(false), |_| None).unwrap();
 
         assert_eq!(request.semantic_extras.get("unique_key").unwrap(), "\"id\"");
         assert_eq!(
@@ -1144,7 +1594,7 @@ mod tests {
     fn test_semantic_extras_include_data_test_config_keys() {
         let test = make_test();
 
-        let request = build_test_sql_request(&test, sql_context(false)).unwrap();
+        let request = build_test_sql_request(&test, sql_context(false), |_| None).unwrap();
 
         assert_eq!(
             request.semantic_extras.get("severity").unwrap(),

@@ -1,4 +1,4 @@
-use dbt_schemas::schemas::project::ProjectModelConfig;
+use dbt_schemas::schemas::project::{ProjectModelConfig, TypedRecursiveConfig};
 
 #[test]
 fn notebook_scoped_libraries_config_is_preserved() {
@@ -9,6 +9,8 @@ __additional_properties__: {}
 "#,
     )
     .unwrap();
+
+    assert!(config.has_set_fields());
 
     let serialized = serde_json::to_value(config).unwrap();
     assert_eq!(

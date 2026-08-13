@@ -255,6 +255,11 @@ pub struct NodeEvaluated {
     /// This includes time spent waiting on internal backpressure.
     #[prost(uint64, optional, tag = "42")]
     pub idle_time_ms: ::core::option::Option<u64>,
+    /// Identifier of the dbt State execution decision that governed this node's
+    /// run-phase execution. Only set when the dbt State service was consulted and
+    /// returned an execution decision.
+    #[prost(string, optional, tag = "43")]
+    pub state_decision_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[prost(oneof = "node_evaluated::NodeOutcomeDetail", tags = "30, 31, 32, 33, 34")]
     pub node_outcome_detail: ::core::option::Option<node_evaluated::NodeOutcomeDetail>,

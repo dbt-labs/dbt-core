@@ -39,7 +39,7 @@ pub fn warn_constraint_support(
         ),
         _ => unreachable!("constraint_support_warning only returns constraint-support codes"),
     };
-    emit_warn_log_message(code, message, None);
+    emit_warn_log_message(code, message);
 }
 
 /// Decides which constraint-support warning (if any) applies, per dbt-core's

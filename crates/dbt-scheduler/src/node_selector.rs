@@ -468,9 +468,11 @@ fn match_path(pattern: &str, common_attr: &CommonAttributes) -> FsResult<bool> {
     let pattern = normalised.to_string_lossy();
     let pattern = pattern.as_ref();
 
-    // ── 1. Wildcard selector → fnmatch against full path string
+    // ── 1. Wildcard selector → fnmatch against the original file and its parent directories
     if has_special_chars(pattern) {
-        return Ok(fnmatch(pattern, &node_path.to_string_lossy())
+        return Ok(node_path
+            .ancestors()
+            .any(|path| fnmatch(pattern, &path.to_string_lossy()))
             || patch_path.is_some_and(|p| fnmatch(pattern, &p.to_string_lossy())));
     }
 
@@ -770,7 +772,6 @@ fn match_source_status(
         emit_warn_log_message(
             ErrorCode::SelectorError,
             "source_status selector requires a sources.json with freshness results in the state directory.",
-            None,
         );
         return Ok(false);
     };
@@ -820,7 +821,6 @@ fn match_source_status(
                 emit_warn_log_message(
                     ErrorCode::SelectorError,
                     "The current sources.json file contains no freshness results.",
-                    None,
                 );
                 return Ok(false);
             }
@@ -1297,6 +1297,7 @@ mod tests {
                 alt_compute: None,
                 table_format: None,
                 sync: None,
+                compiled_code: None,
             },
             __adapter_attr__: AdapterAttr::default(),
             __other__: BTreeMap::new(),
@@ -1788,6 +1789,35 @@ mod tests {
             .unwrap()
         );
         assert!(match_path("models/staging/orders", &common_attr_with_patch).unwrap());
+    }
+
+    #[test]
+    fn test_match_path_wildcard_directory() {
+        for path in [
+            "models/group_a/one/subdir/leaf/model_a.sql",
+            "models/group_a/two/subdir/leaf/model_b.sql",
+        ] {
+            let common_attr = CommonAttributes {
+                original_file_path: path.into(),
+                ..Default::default()
+            };
+
+            assert!(match_path("models/group_a/*/subdir/leaf", &common_attr).unwrap());
+        }
+
+        let sibling_attr = CommonAttributes {
+            original_file_path: "models/group_a/one/other/model_c.sql".into(),
+            ..Default::default()
+        };
+        assert!(!match_path("models/group_a/*/subdir/leaf", &sibling_attr).unwrap());
+
+        let patched_attr = CommonAttributes {
+            original_file_path: "models/other/model.sql".into(),
+            patch_path: Some("models/group_a/one/subdir/leaf/schema.yml".into()),
+            ..Default::default()
+        };
+        assert!(!match_path("models/group_a/*/subdir/leaf", &patched_attr).unwrap());
+        assert!(match_path("models/group_a/*/subdir/leaf/*.yml", &patched_attr).unwrap());
     }
 
     #[test]

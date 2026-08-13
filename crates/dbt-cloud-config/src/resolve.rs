@@ -19,6 +19,21 @@ pub fn resolve_cloud_config(
     resolve_cloud_config_with_env_reader(dbt_cloud_yml, project_dbt_cloud, non_empty_env)
 }
 
+/// Detects the misconfiguration where `dbt_project.yml` links a project via
+/// `dbt-cloud: project-id` but `dbt_cloud.yml` holds no token for that id.
+/// Returns the unlinked project id.
+pub fn detect_unlinked_project(
+    dbt_cloud_yml: Option<&DbtCloudConfig>,
+    project_dbt_cloud: Option<&ProjectDbtCloudConfig>,
+) -> Option<String> {
+    let dbt_cloud_yml = dbt_cloud_yml?;
+    let project_id = project_dbt_cloud?.project_id_str()?;
+    if dbt_cloud_yml.get_project_by_id(&project_id).is_some() {
+        return None;
+    }
+    Some(project_id)
+}
+
 /// Internal: same as [`resolve_cloud_config`] but with an injectable env reader
 /// for testing.
 fn resolve_cloud_config_with_env_reader(
@@ -32,20 +47,15 @@ fn resolve_cloud_config_with_env_reader(
     // fallback to the global context.active_project, so a bare login session
     // does not leak its credentials into unlinked projects.
     let active_project = dbt_cloud_yml.and_then(|config| {
-        let lookup_id = project_dbt_cloud
-            .and_then(|p| p.project_id.as_ref())
-            .map(|v| v.to_string())?;
+        let lookup_id = project_dbt_cloud.and_then(|p| p.project_id_str())?;
         config.get_project_by_id(&lookup_id)
     });
 
     // Resolve project_id first — needed for credential mixing guard.
     // Sources: DBT_CLOUD_PROJECT_ID env var, then the local dbt_project.yml
     // link only (no global active_project fallback).
-    let project_id = env_reader("DBT_CLOUD_PROJECT_ID").or_else(|| {
-        project_dbt_cloud
-            .and_then(|p| p.project_id.as_ref())
-            .map(|v| v.to_string())
-    });
+    let project_id =
+        env_reader("DBT_CLOUD_PROJECT_ID").or_else(|| project_dbt_cloud?.project_id_str());
 
     // Credential mixing guard: if env var overrides project_id to a different
     // project than dbt_cloud.yml, don't use dbt_cloud.yml credentials.
@@ -155,6 +165,7 @@ mod tests {
     use super::*;
     use dbt_schemas::schemas::serde::StringOrInteger;
     use dbt_schemas::schemas::{DbtCloudContext, DbtCloudProject};
+    use dbt_yaml::Spanned;
     use std::collections::HashMap;
 
     /// Test env reader that filters empty strings (like non_empty_env).
@@ -194,7 +205,7 @@ mod tests {
         state_org_id: Option<&str>,
     ) -> ProjectDbtCloudConfig {
         ProjectDbtCloudConfig {
-            project_id: pid.map(|s| StringOrInteger::String(s.to_string())),
+            project_id: Spanned::new(pid.map(|s| StringOrInteger::String(s.to_string()))),
             account_host: host.map(|s| s.to_string()),
             defer_env_id: defer.map(|s| StringOrInteger::String(s.to_string())),
             state_org_id: state_org_id.map(|s| StringOrInteger::String(s.to_string())),
@@ -460,6 +471,29 @@ mod tests {
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
         let creds = r.credentials.unwrap();
         assert_eq!(creds.host, "tenant.dbt.com"); // tenant_hostname preferred
+    }
+
+    #[test]
+    fn unlinked_project_detected_when_id_absent_from_cloud_yml() {
+        let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+        let pc = project_cloud(Some("999"), None, None, None);
+        let unlinked = detect_unlinked_project(Some(&yml), Some(&pc)).unwrap();
+        assert_eq!(unlinked, "999");
+    }
+
+    #[test]
+    fn unlinked_project_not_detected_for_matching_or_absent_link() {
+        let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
+
+        let pc = project_cloud(Some("456"), None, None, None);
+        assert!(detect_unlinked_project(Some(&yml), Some(&pc)).is_none());
+
+        assert!(detect_unlinked_project(Some(&yml), None).is_none());
+        let no_id = project_cloud(None, None, None, None);
+        assert!(detect_unlinked_project(Some(&yml), Some(&no_id)).is_none());
+
+        let pc = project_cloud(Some("999"), None, None, None);
+        assert!(detect_unlinked_project(None, Some(&pc)).is_none());
     }
 
     #[test]

@@ -99,6 +99,9 @@ fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
         execute: false,
         node: MinijinjaValue::NONE,
         connection_name: String::new(),
+        store_result: MinijinjaValue::from("store-result-stub"),
+        load_result: MinijinjaValue::from("load-result-stub"),
+        store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
         dbt_namespaces,
     }
 }

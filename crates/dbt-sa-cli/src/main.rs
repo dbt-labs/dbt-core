@@ -1,5 +1,5 @@
 use dbt_clap_core::{CliParserFactory as _, from_main};
-use dbt_common::tracing::{FsTraceConfig, dbt_init::init_tracing};
+use dbt_common::tracing::FsTraceConfig;
 use dbt_features::cli::DefaultCliParserFactory;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::tracing::TracingFeature;
@@ -15,17 +15,17 @@ fn main() -> ExitCode {
 
     let mut arg = from_main(&cli);
 
-    let (telemetry_handle, tracing_config_provider) = match init_tracing(
-        FsTraceConfig::new_from_io_args(
-            arg.command,
-            cli.project_dir().as_ref(),
-            cli.target_path().as_ref(),
-            &arg.io,
-            Some(&cli.common_args().get_cli_warn_error_options()),
-            "dbt",
-        )
-        .with_command_name(cli_parser.command_name()),
-    ) {
+    let (telemetry_handle, tracing_config_provider) = match FsTraceConfig::new_from_io_args(
+        arg.command,
+        cli.project_dir().as_ref(),
+        cli.target_path().as_ref(),
+        &arg.io,
+        Some(&cli.common_args().get_cli_warn_error_options()),
+        "dbt",
+    )
+    .with_command_name(cli_parser.command_name())
+    .init()
+    {
         Ok(handle) => handle,
         Err(e) => {
             let msg = e.to_string();

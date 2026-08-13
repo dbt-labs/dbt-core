@@ -351,7 +351,7 @@ impl ColumnBuilder {
                         .or(sql_types::max_varchar_size(Snowflake));
                 }
             }
-            DataType::Binary => {
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
                 if let Some(char_size) = field
                     .metadata()
                     .get(metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY)

@@ -5,16 +5,20 @@
 //! converts those inputs into generated protobuf request messages.
 
 use std::collections::{BTreeMap, HashMap};
-use std::io::{self, Read};
+use std::io;
+use std::time::Duration;
 
 use dbt_telemetry::NodeType;
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::hash;
 use crate::proto::query_cache::{
-    CloneRequest, ExecutionOutcome, ExecutionRecord, ModelExecutionType, QueryDependency,
-    StaleUpstreamPolicy, SubmitEnrichedSqlRequest, SubmitValuesRequest, TableModifiedInfo,
-    TableProperties, ValuesExecution, execution_record,
+    ClientPrepareEnrichedSqlRequest, ClientTelemetryEvent, CloneRequest, DbtNodeState,
+    ExecutionOutcome, ExecutionRecord, ModelExecutionType, QueryDependency, SessionEndRequest,
+    SessionStartRequest, StaleUpstreamPolicy, Struct, SubmitEnrichedSqlRequest,
+    SubmitTelemetryBatchRequest, SubmitValuesRequest, TableModifiedInfo, TableProperties,
+    ValuesExecution, client_telemetry_event, execution_record,
 };
 
 pub const SQL_SEMANTIC_EXTRA_KEYS: &[&str] = &[
@@ -73,12 +77,12 @@ pub const SQL_SEMANTIC_EXTRA_KEYS: &[&str] = &[
 
 pub const SEED_SEMANTIC_EXTRA_KEYS: &[&str] = &["column_types", "quote_columns", "delimiter"];
 
-const HASH_READ_CHUNK_SIZE: usize = 64 * 1024;
-
 #[derive(Debug, Error)]
 pub enum RequestBuildError {
     #[error("failed to serialize dbt State semantic extra: {0}")]
     SemanticExtra(#[from] serde_json::Error),
+    #[error("failed to build dbt State node hash: {0}")]
+    NodeHashError(#[from] hash::NodeHashError),
     #[error("failed to read seed data for dbt State hash: {0}")]
     SeedHash(#[from] io::Error),
 }
@@ -199,6 +203,8 @@ pub struct SubmitEnrichedSqlRequestInput {
     pub clone_table_properties: Option<TableProperties>,
     pub stale_upstream_policy: StaleUpstreamPolicy,
     pub clone_chain_depth_limit: Option<i64>,
+    pub dbt_node_state: Option<DbtNodeState>,
+    pub compare_unrendered_code: bool,
 }
 
 impl SubmitEnrichedSqlRequestInput {
@@ -221,8 +227,8 @@ impl SubmitEnrichedSqlRequestInput {
             clone_table_properties: self.clone_table_properties,
             stale_upstream_policy: self.stale_upstream_policy as i32,
             clone_chain_depth_limit: self.clone_chain_depth_limit,
-            dbt_node_state: None,           //todo: implement
-            compare_unrendered_code: false, //todo: implement
+            dbt_node_state: self.dbt_node_state,
+            compare_unrendered_code: self.compare_unrendered_code,
         }
     }
 }
@@ -238,6 +244,8 @@ pub struct SubmitValuesRequestInput {
     pub labels: HashMap<String, String>,
     pub clone_time_travel_limit: Option<i64>,
     pub clone_table_properties: Option<TableProperties>,
+    pub clone_chain_depth_limit: Option<i64>,
+    pub dbt_node_state: Option<DbtNodeState>,
 }
 
 impl SubmitValuesRequestInput {
@@ -252,7 +260,8 @@ impl SubmitValuesRequestInput {
             labels: self.labels,
             clone_time_travel_limit: self.clone_time_travel_limit,
             clone_table_properties: self.clone_table_properties,
-            clone_chain_depth_limit: None, //todo: implement
+            clone_chain_depth_limit: self.clone_chain_depth_limit,
+            dbt_node_state: self.dbt_node_state,
         }
     }
 }
@@ -294,7 +303,7 @@ pub fn sql_execution_record_from_submit_request(
                 semantic_extras: request.semantic_extras,
                 labels: request.labels,
                 default_schema: request.default_schema,
-                dbt_node_state: None, //todo: implement
+                dbt_node_state: request.dbt_node_state,
                 from_speculative_submit,
             },
         ))),
@@ -314,8 +323,90 @@ pub fn values_execution_record_from_submit_request(
             values_hash: request.values_hash,
             semantic_extras: request.semantic_extras,
             labels: request.labels,
+            dbt_node_state: request.dbt_node_state,
         }))),
     }
+}
+
+/// `dbt_run_cache_version` and `sqlglot_version` are left empty: unlike the
+/// Python dbt State client (a package layered on top of dbt-core, using a
+/// separately-versioned sqlglot dependency), Fusion has no separate "state
+/// client plugin" or SQL-parsing library with its own version to report —
+/// the running binary's version (`dbt_version`) is the only one that applies.
+pub fn session_start_event(config: Struct, event_order: i64) -> ClientTelemetryEvent {
+    ClientTelemetryEvent {
+        request: Some(client_telemetry_event::Request::SessionStart(
+            SessionStartRequest {
+                dbt_run_cache_version: String::new(),
+                dbt_version: env!("CARGO_PKG_VERSION").to_string(),
+                sqlglot_version: String::new(),
+                config: Some(config),
+            },
+        )),
+        event_order: Some(event_order),
+    }
+}
+
+pub fn session_end_event(
+    duration: Duration,
+    result: SessionEndResult,
+    description: impl Into<String>,
+    event_order: i64,
+) -> ClientTelemetryEvent {
+    ClientTelemetryEvent {
+        request: Some(client_telemetry_event::Request::SessionEnd(
+            SessionEndRequest {
+                session_duration: Some(prost_types::Duration {
+                    seconds: i64::try_from(duration.as_secs()).unwrap_or(i64::MAX),
+                    nanos: i32::try_from(duration.subsec_nanos()).unwrap_or_default(),
+                }),
+                result: result as i32,
+                result_description: description.into(),
+                metrics: Some(Struct::default()),
+            },
+        )),
+        event_order: Some(event_order),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SessionEndResult {
+    Success = 0,
+    Failure = 1,
+    Cancelled = 2,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn enriched_sql_prepared_event(
+    request_id: String,
+    duration: Duration,
+    target_table_fqn: Option<String>,
+    num_dependencies: Option<i64>,
+    num_view_dependencies: Option<i64>,
+    error_type: Option<String>,
+    labels: HashMap<String, String>,
+    event_order: i64,
+) -> ClientTelemetryEvent {
+    ClientTelemetryEvent {
+        request: Some(client_telemetry_event::Request::EnrichedSqlPrepared(
+            ClientPrepareEnrichedSqlRequest {
+                request_id,
+                duration: duration.as_secs_f64(),
+                target_table_fqn,
+                num_dependencies,
+                num_view_dependencies,
+                error_type,
+                view_traversal_duration_ms: None,
+                last_modified_duration_ms: None,
+                labels,
+            },
+        )),
+        event_order: Some(event_order),
+    }
+}
+
+pub fn telemetry_batch(events: Vec<ClientTelemetryEvent>) -> SubmitTelemetryBatchRequest {
+    SubmitTelemetryBatchRequest { events }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -349,25 +440,6 @@ impl CloneRequestInput {
     }
 }
 
-pub fn seed_values_hash(bytes: impl AsRef<[u8]>) -> String {
-    format!("{:x}", md5::compute(bytes))
-}
-
-pub fn seed_values_hash_reader(mut reader: impl Read) -> Result<String, RequestBuildError> {
-    let mut context = md5::Context::new();
-    let mut buffer = [0; HASH_READ_CHUNK_SIZE];
-
-    loop {
-        let read = reader.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        context.consume(&buffer[..read]);
-    }
-
-    Ok(format!("{:x}", context.compute()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,6 +468,77 @@ mod tests {
             "model.jaffle_shop.orders"
         );
         assert_eq!(labels.len(), 3);
+    }
+
+    #[test]
+    fn telemetry_events_use_expected_payloads_and_order() {
+        let start = session_start_event(Struct::default(), 7);
+        assert_eq!(start.event_order, Some(7));
+        let Some(client_telemetry_event::Request::SessionStart(payload)) = start.request else {
+            panic!("expected session start event");
+        };
+        assert_eq!(payload.dbt_run_cache_version, "");
+        assert_eq!(payload.dbt_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(payload.sqlglot_version, "");
+
+        let mut labels = HashMap::new();
+        labels.insert(
+            "dbt_node_unique_id".to_string(),
+            "model.pkg.node".to_string(),
+        );
+        let prepared = enriched_sql_prepared_event(
+            "request-1".to_string(),
+            Duration::from_millis(1250),
+            Some("db.schema.node".to_string()),
+            Some(2),
+            Some(1),
+            None,
+            labels,
+            8,
+        );
+        assert_eq!(prepared.event_order, Some(8));
+        let Some(client_telemetry_event::Request::EnrichedSqlPrepared(payload)) = prepared.request
+        else {
+            panic!("expected prepared SQL event");
+        };
+        assert_eq!(payload.request_id, "request-1");
+        assert_eq!(payload.duration, 1.25);
+        assert_eq!(payload.target_table_fqn.as_deref(), Some("db.schema.node"));
+        assert_eq!(payload.num_dependencies, Some(2));
+        assert_eq!(payload.num_view_dependencies, Some(1));
+        assert_eq!(payload.error_type, None);
+
+        let failed = enriched_sql_prepared_event(
+            "request-2".to_string(),
+            Duration::from_millis(40),
+            None,
+            None,
+            None,
+            Some("Rpc".to_string()),
+            HashMap::new(),
+            9,
+        );
+        let Some(client_telemetry_event::Request::EnrichedSqlPrepared(failed_payload)) =
+            failed.request
+        else {
+            panic!("expected prepared SQL event");
+        };
+        assert_eq!(failed_payload.error_type, Some("Rpc".to_string()));
+        assert_eq!(failed_payload.num_dependencies, None);
+
+        let end = session_end_event(
+            Duration::from_secs(3),
+            SessionEndResult::Success,
+            "completed",
+            9,
+        );
+        assert_eq!(end.event_order, Some(9));
+        let Some(client_telemetry_event::Request::SessionEnd(payload)) = end.request else {
+            panic!("expected session end event");
+        };
+        assert_eq!(payload.result, SessionEndResult::Success as i32);
+        assert_eq!(payload.result_description, "completed");
+        assert_eq!(payload.session_duration.unwrap().seconds, 3);
     }
 
     #[test]
@@ -700,9 +843,27 @@ mod tests {
             }),
             stale_upstream_policy: StaleUpstreamPolicy::Any,
             clone_chain_depth_limit: None,
+            dbt_node_state: Some(DbtNodeState {
+                node_unique_id: "unique_id".to_string(),
+                profile_name: "profile_name".to_string(),
+                target_name: "target_name".to_string(),
+                project_name: "project_name".to_string(),
+                project_id: Some("project_id".to_string()),
+                resource_type: "model".to_string(),
+                node_hash: "node_hash".to_string(),
+                node_body_hash: Some("node_body_hash".to_string()),
+                node_configs_hash: Some("node_configs_hash".to_string()),
+                node_persisted_descriptions_hash: Some(
+                    "node_persisted_descriptions_hash".to_string(),
+                ),
+                node_macros_hash: Some("node_macros_hash".to_string()),
+                node_contract_hash: Some("node_contract_hash".to_string()),
+            }),
+            compare_unrendered_code: true,
         }
         .into_proto();
 
+        assert!(request.compare_unrendered_code);
         assert_eq!(request.target_table.as_deref(), Some("analytics.orders"));
         assert_eq!(request.default_schema.as_deref(), Some("marts"));
         assert_eq!(request.execution_type, ModelExecutionType::Merge as i32);
@@ -716,6 +877,25 @@ mod tests {
             request.stale_upstream_policy,
             StaleUpstreamPolicy::Any as i32
         );
+        assert_eq!(
+            request.dbt_node_state,
+            Some(DbtNodeState {
+                node_unique_id: "unique_id".to_string(),
+                profile_name: "profile_name".to_string(),
+                target_name: "target_name".to_string(),
+                project_name: "project_name".to_string(),
+                project_id: Some("project_id".to_string()),
+                resource_type: "model".to_string(),
+                node_hash: "node_hash".to_string(),
+                node_body_hash: Some("node_body_hash".to_string()),
+                node_configs_hash: Some("node_configs_hash".to_string()),
+                node_persisted_descriptions_hash: Some(
+                    "node_persisted_descriptions_hash".to_string(),
+                ),
+                node_macros_hash: Some("node_macros_hash".to_string()),
+                node_contract_hash: Some("node_contract_hash".to_string()),
+            })
+        )
     }
 
     #[test]
@@ -724,12 +904,29 @@ mod tests {
             target_table: "analytics.seed_orders".to_string(),
             dialect: "bigquery".to_string(),
             default_catalog: "analytics".to_string(),
-            values_hash: seed_values_hash(b"id,name\n1,Ada\n"),
+            values_hash: "6c1abef29d8c78fb8e696f94546a3918".to_string(),
             semantic_extras: HashMap::from([("delimiter".to_string(), "\",\"".to_string())]),
             last_modified_epoch: Some(456),
             labels: HashMap::new(),
             clone_time_travel_limit: Some(3600),
             clone_table_properties: None,
+            clone_chain_depth_limit: None,
+            dbt_node_state: Some(DbtNodeState {
+                node_unique_id: "unique_id".to_string(),
+                profile_name: "profile_name".to_string(),
+                target_name: "target_name".to_string(),
+                project_name: "project_name".to_string(),
+                project_id: Some("project_id".to_string()),
+                resource_type: "model".to_string(),
+                node_hash: "node_hash".to_string(),
+                node_body_hash: Some("node_body_hash".to_string()),
+                node_configs_hash: Some("node_configs_hash".to_string()),
+                node_persisted_descriptions_hash: Some(
+                    "node_persisted_descriptions_hash".to_string(),
+                ),
+                node_macros_hash: Some("node_macros_hash".to_string()),
+                node_contract_hash: Some("node_contract_hash".to_string()),
+            }),
         }
         .into_proto();
 
@@ -737,6 +934,26 @@ mod tests {
         assert_eq!(request.values_hash, "6c1abef29d8c78fb8e696f94546a3918");
         assert_eq!(request.last_modified_epoch, Some(456));
         assert_eq!(request.clone_time_travel_limit, Some(3600));
+        assert!(request.clone_chain_depth_limit.is_none());
+        assert_eq!(
+            request.dbt_node_state,
+            Some(DbtNodeState {
+                node_unique_id: "unique_id".to_string(),
+                profile_name: "profile_name".to_string(),
+                target_name: "target_name".to_string(),
+                project_name: "project_name".to_string(),
+                project_id: Some("project_id".to_string()),
+                resource_type: "model".to_string(),
+                node_hash: "node_hash".to_string(),
+                node_body_hash: Some("node_body_hash".to_string()),
+                node_configs_hash: Some("node_configs_hash".to_string()),
+                node_persisted_descriptions_hash: Some(
+                    "node_persisted_descriptions_hash".to_string(),
+                ),
+                node_macros_hash: Some("node_macros_hash".to_string()),
+                node_contract_hash: Some("node_contract_hash".to_string()),
+            })
+        )
     }
 
     #[test]
@@ -762,6 +979,8 @@ mod tests {
             clone_table_properties: None,
             stale_upstream_policy: StaleUpstreamPolicy::Any,
             clone_chain_depth_limit: None,
+            dbt_node_state: None,
+            compare_unrendered_code: false,
         }
         .into_proto();
 
@@ -784,6 +1003,7 @@ mod tests {
         assert_eq!(sql.execution_type, ModelExecutionType::Merge as i32);
         assert_eq!(sql.labels.get("dbt_node_name").unwrap(), "orders");
         assert!(!sql.from_speculative_submit);
+        assert!(sql.dbt_node_state.is_none());
     }
 
     #[test]
@@ -798,6 +1018,8 @@ mod tests {
             labels: HashMap::new(),
             clone_time_travel_limit: Some(3600),
             clone_table_properties: None,
+            clone_chain_depth_limit: None,
+            dbt_node_state: None,
         }
         .into_proto();
 
@@ -850,14 +1072,5 @@ mod tests {
         assert_eq!(request.clone_source_table_type.as_deref(), Some("table"));
         assert_eq!(request.table_properties, Some(properties));
         assert_eq!(request.clone_chain_depth_limit, Some(3));
-    }
-
-    #[test]
-    fn seed_values_hash_matches_md5_hex_and_streaming_reader() {
-        let seed_bytes = b"id,name\n1,Ada\n2,Grace\n";
-        let expected = "e146991e1c07585745c5a65f06a517e9";
-
-        assert_eq!(seed_values_hash(seed_bytes), expected);
-        assert_eq!(seed_values_hash_reader(&seed_bytes[..]).unwrap(), expected);
     }
 }

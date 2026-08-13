@@ -4,11 +4,13 @@ use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::schemas::properties::StatePreClone;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot, InternalDbtNode, InternalDbtNodeAttributes};
+use dbt_state::explain::StateExplainDevClone;
 use dbt_state::proto::query_cache::{CloneResponse, ReadyToCloneResponse, clone_response};
 use dbt_state::request_builder::{CloneRequestInput, execution_type_from_input};
 use dbt_state::service_config::CloneIncrementalInDev;
@@ -49,7 +51,6 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
                 format!(
                     "dbt State dev clone request preparation failed for node {node_id}: {err}; executing normally"
                 ),
-                None,
             );
             return;
         }
@@ -64,7 +65,6 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
                 format!(
                     "dbt State dev clone registration failed for node {node_id}: {err}; executing normally"
                 ),
-                None,
             );
             return;
         }
@@ -95,6 +95,10 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     .await
     {
         Ok(_) => {
+            let explain_dev_clone = StateExplainDevClone {
+                source_table_fqn: prepared.clone_source_table.clone(),
+                target_table_fqn: prepared.target_table.clone(),
+            };
             ctx.inner
                 .run_cache_ctx
                 .run_cache_metadata
@@ -114,7 +118,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
             ctx.inner
                 .run_cache_ctx
                 .run_cache_dev_cloned_nodes
-                .insert(node_id.to_string(), ());
+                .insert(node_id.to_string(), explain_dev_clone);
             confirm_run_cache_service_execution(
                 ctx,
                 node.as_ref(),
@@ -133,7 +137,6 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
                 format!(
                     "dbt State dev clone SQL failed for node {node_id}: {err}; executing normally"
                 ),
-                None,
             );
         }
     }
@@ -251,22 +254,26 @@ impl DevCloneCandidate {
         }
     }
 
-    fn execution_type(&self) -> FsResult<dbt_state::proto::query_cache::ModelExecutionType> {
-        let execution_type = match self {
-            Self::Model { local, .. } => {
-                execution_type_from_input(&model_execution_type_input(local, false))
+    fn execution_type(
+        &self,
+        materialization_resolver: &MaterializationResolver,
+    ) -> FsResult<dbt_state::proto::query_cache::ModelExecutionType> {
+        let execution_type =
+            match self {
+                Self::Model { local, .. } => execution_type_from_input(
+                    &model_execution_type_input(local, false, materialization_resolver),
+                ),
+                Self::Snapshot { local, .. } => {
+                    execution_type_from_input(&snapshot_execution_type_input(local, false))
+                }
             }
-            Self::Snapshot { local, .. } => {
-                execution_type_from_input(&snapshot_execution_type_input(local, false))
-            }
-        }
-        .map_err(|err| {
-            fs_err!(
-                ErrorCode::Generic,
-                "Failed to build dbt State dev clone execution type: {}",
-                err
-            )
-        })?;
+            .map_err(|err| {
+                fs_err!(
+                    ErrorCode::Generic,
+                    "Failed to build dbt State dev clone execution type: {}",
+                    err
+                )
+            })?;
         Ok(execution_type)
     }
 
@@ -404,13 +411,17 @@ async fn prepare_dev_clone_request(
         target_table: target_table.clone(),
         dialect: ctx.adapter_type().to_string(),
         default_catalog: candidate.local().database(),
-        execution_type: candidate.execution_type()?,
+        execution_type: candidate.execution_type(&ctx.inner.materialization_resolver)?,
         clone_source_table: clone_source_table.clone(),
         clone_source_last_modified_epoch: source_last_modified_epoch,
         labels: node_identity(candidate.local()).labels(),
         clone_source_table_type: candidate.clone_source_table_type(ctx.adapter_type()),
         table_properties: candidate.table_properties(),
-        clone_chain_depth_limit: clone_chain_depth_limit_for_adapter(ctx.adapter_type(), false),
+        clone_chain_depth_limit: clone_chain_depth_limit_for_adapter(
+            ctx.adapter_type(),
+            false,
+            ctx.dbt_profile().allow_clones,
+        ),
     }
     .into_proto();
 
@@ -576,6 +587,14 @@ mod tests {
     use dbt_state::proto::query_cache::{ModelExecutionType, TableProperties};
     use dbt_yaml::Spanned;
     use indexmap::IndexMap;
+    use std::collections::BTreeMap;
+
+    /// A resolver with no macros: built-in materialization names resolve to no
+    /// user-defined macro, so `is_custom_materialization` is false — matching
+    /// the built-in materializations these tests use.
+    fn test_resolver() -> MaterializationResolver {
+        MaterializationResolver::new(&BTreeMap::new(), AdapterType::Snowflake, "jaffle_shop")
+    }
 
     #[test]
     fn dev_clone_metadata_probes_use_options_aware_adapter_methods() {
@@ -596,6 +615,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: Some(StatePreClone::Always),
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         let candidate = DevCloneCandidate::Model {
             local: Arc::new(local),
@@ -622,6 +642,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: Some(StatePreClone::IfMissing),
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         let candidate = DevCloneCandidate::Snapshot {
             local: Arc::new(local),
@@ -701,7 +722,7 @@ mod tests {
             target_table: target_relation.semantic_fqn(),
             dialect: "snowflake".to_string(),
             default_catalog: candidate.local().database(),
-            execution_type: candidate.execution_type().unwrap(),
+            execution_type: candidate.execution_type(&test_resolver()).unwrap(),
             clone_source_table: source_relation.semantic_fqn(),
             clone_source_last_modified_epoch: Some(123),
             labels: node_identity(candidate.local()).labels(),
@@ -740,7 +761,7 @@ mod tests {
         };
 
         assert_eq!(
-            candidate.execution_type().unwrap(),
+            candidate.execution_type(&test_resolver()).unwrap(),
             ModelExecutionType::Snapshot
         );
         assert_eq!(
@@ -801,9 +822,9 @@ mod tests {
                 )),
                 merge_update_columns: Some(StringOrArrayOfStrings::String("status".to_string())),
                 __warehouse_specific_config__: WarehouseSpecificNodeConfig {
-                    hours_to_expiration: Some(
+                    hours_to_expiration: dbt_common::serde_utils::Omissible::Present(Some(
                         dbt_schemas::schemas::serde::StringOrInteger::Integer(12),
-                    ),
+                    )),
                     ..Default::default()
                 },
                 ..Default::default()

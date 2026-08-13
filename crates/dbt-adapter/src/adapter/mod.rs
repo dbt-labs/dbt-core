@@ -1,7 +1,7 @@
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
-use crate::engine::AdbcEngine;
+use crate::engine::{AdbcEngine, Options};
 use crate::errors::into_fs_error;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
@@ -19,13 +19,13 @@ use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
 
 use crate::auth::DefaultAuthWarningPrinter;
+use adbc_core::options::OptionValue;
 use dbt_adapter_core::AdapterType;
 use dbt_adbc::QueryCtx;
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
-use dbt_common::io_utils::StatusReporter;
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
@@ -41,6 +41,7 @@ use minijinja::arg_utils::ArgsIter;
 use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::mutable_vec::MutableVec;
 use minijinja::value::{Object, ValueKind};
 use minijinja::{State, Value};
 use serde::Deserialize;
@@ -153,7 +154,6 @@ impl Adapter {
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
-        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Adapter {
         let state = Self::make_parse_adapter_state(
@@ -162,7 +162,6 @@ impl Adapter {
             package_quoting,
             type_ops,
             Arc::new(RelationCache::default()),
-            status_reporter,
             catalogs,
         );
         Adapter {
@@ -178,13 +177,12 @@ impl Adapter {
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,
-        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
 
-        let warning_printer = Box::new(DefaultAuthWarningPrinter::new(status_reporter))
-            as Box<dyn AuthWarningPrinter>;
+        let warning_printer =
+            Box::new(DefaultAuthWarningPrinter::new()) as Box<dyn AuthWarningPrinter>;
         let auth: Arc<dyn Auth> = auth_for_backend(warning_printer, backend).into();
         let adapter_config = AdapterConfig::new(config);
         let quoting = package_quoting
@@ -310,11 +308,15 @@ impl Adapter {
         ctx: Option<&QueryCtx>,
         sql: &str,
         fetch: bool,
+        options: Option<Options>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let t_borrow = std::time::Instant::now();
                 let mut conn = adapter.borrow_tlocal_connection(None, None)?;
-                adapter.execute(
+                tracing::debug!("borrow_tlocal_connection() took {:?}", t_borrow.elapsed());
+                let t_execute = std::time::Instant::now();
+                let result = adapter.execute(
                     None,
                     conn.as_mut(),
                     ctx,
@@ -322,9 +324,14 @@ impl Adapter {
                     false,
                     fetch,
                     None,
-                    None,
+                    options,
                     self.cancellation_token.clone(),
-                )
+                );
+                tracing::debug!(
+                    "adapter.execute() (full call, incl. adbc_execute_with_options) took {:?}",
+                    t_execute.elapsed()
+                );
+                result
             }
             Parse(_) => Ok((AdapterResponse::default(), AgateTable::default())),
         }
@@ -852,7 +859,7 @@ impl Adapter {
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
-        options: Option<HashMap<String, String>>,
+        options: Option<Options>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -1596,9 +1603,9 @@ impl Adapter {
                 iter.finish()?;
 
                 let result = adapter.get_missing_columns(state, &from_relation, &to_relation)?;
-                Ok(Value::from_object(result))
+                Ok(Value::from(MutableVec::from(result)))
             }
-            Parse(_) => Ok(empty_vec_value()),
+            Parse(_) => Ok(empty_mutable_vec_value()),
         }
     }
 
@@ -1627,14 +1634,14 @@ impl Adapter {
                         cached,
                     )
                 } else {
-                    Ok(Value::from(
+                    Ok(Value::from(MutableVec::from(
                         adapter.get_columns_in_relation(state, relation)?,
-                    ))
+                    )))
                 }
             }
             Parse(parse_adapter_state) => {
                 parse_adapter_state.record_get_columns_in_relation_call(state, relation)?;
-                Ok(empty_vec_value())
+                Ok(empty_mutable_vec_value())
             }
         }
     }
@@ -3041,12 +3048,15 @@ impl Adapter {
     pub fn is_cluster(&self, state: &State) -> Result<Value, minijinja::Error> {
         let is_cluster = match &self.inner {
             Typed { adapter, .. } => {
-                if let Some(replay_adapter) = adapter.as_replay() {
-                    replay_adapter
+                let recorded = match adapter.as_replay() {
+                    Some(replay_adapter) => replay_adapter
                         .replay_is_cluster(state)
-                        .map_err(minijinja::Error::from)?
-                } else {
-                    adapter.is_cluster().map_err(minijinja::Error::from)?
+                        .map_err(minijinja::Error::from)?,
+                    None => None,
+                };
+                match recorded {
+                    Some(is_cluster) => is_cluster,
+                    None => adapter.is_cluster().map_err(minijinja::Error::from)?,
                 }
             }
             Parse(_) => false,
@@ -3225,7 +3235,7 @@ impl Adapter {
                 let model_val = iter.next_arg::<&Value>()?;
                 iter.finish()?;
 
-                let node =
+                let mut node =
                     minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model_val.clone())
                         .map_err(|e| {
                             minijinja::Error::new(
@@ -3233,6 +3243,16 @@ impl Adapter {
                                 e.to_string(),
                             )
                         })?;
+
+                // The Jinja `model` object loads compiled SQL from disk on access and keeps it out
+                // of its enumeration, so it never survives the conversion above. Copy it over for
+                // the components that diff a relation's query against its applied definition.
+                if let InternalDbtNodeWrapper::Model(model) = &mut node
+                    && let Ok(compiled_code) = model_val.get_attr("compiled_code")
+                    && let Some(compiled_code) = compiled_code.as_str()
+                {
+                    model.__model_attr__.compiled_code = Some(compiled_code.to_string());
+                }
 
                 Ok(adapter.get_config_from_model(&node)?)
             }
@@ -3313,13 +3333,13 @@ impl Adapter {
                 };
 
                 let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
-                adapter.use_warehouse(
+                let warehouse_changed = adapter.use_warehouse(
                     conn.as_mut(),
                     warehouse,
                     node_id,
                     self.cancellation_token.clone(),
                 )?;
-                Ok(Some(NodeOverride::Warehouse))
+                Ok(warehouse_changed.then_some(NodeOverride::Warehouse))
             }
             Parse(_) => Ok(None),
         }
@@ -3578,12 +3598,18 @@ impl Adapter {
                 let mut fetch = iter.next_kwarg::<Option<bool>>("fetch")?.unwrap_or(false);
                 let limit = iter.next_kwarg::<Option<i64>>("limit")?;
                 let options = if let Some(value) = iter.next_kwarg::<Option<Value>>("options")? {
-                    Some(HashMap::<String, String>::deserialize(value).map_err(|e| {
+                    let options = HashMap::<String, String>::deserialize(value).map_err(|e| {
                         minijinja::Error::new(
                             minijinja::ErrorKind::SerdeDeserializeError,
                             e.to_string(),
                         )
-                    })?)
+                    })?;
+                    Some(
+                        options
+                            .into_iter()
+                            .map(|(k, v)| (k, OptionValue::String(v)))
+                            .collect::<Options>(),
+                    )
                 } else {
                     None
                 };
@@ -4054,6 +4080,7 @@ impl Adapter {
                     })?;
                 self.get_csv_data(table)
             }
+            "get_credentials" => self.get_credentials(args),
             "render_equals" => {
                 let iter = ArgsIter::new(name, &["expr1", "expr2"], args);
                 let expr1 = iter.next_arg::<&str>()?;
@@ -4065,6 +4092,20 @@ impl Adapter {
                 minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on adapter object: '{name}'"),
             )),
+        }
+    }
+
+    /// ClickHouse: `adapter.get_credentials(connection_overrides)` — connection
+    /// parameters for dictionary SOURCE clauses. See [AdapterImpl::get_credentials].
+    pub fn get_credentials(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_credentials", &["connection_overrides"], args);
+        let overrides = iter.next_arg::<Option<&Value>>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => {
+                Ok(adapter.get_credentials(overrides.unwrap_or(&Value::UNDEFINED)))
+            }
+            Parse(_) => Ok(empty_map_value()),
         }
     }
 
@@ -4085,6 +4126,17 @@ impl Adapter {
     }
 }
 
+/// Adapter methods whose `Parse`-mode implementation independently
+/// fabricates relation/table/column/schema-shaped data (rather than
+/// returning a trivial `bool`/`none` placeholder) instead of ever calling
+/// `execute`. Each of these needs to be tainted individually at the
+/// dispatch point below -- there is no single shared call they all funnel
+/// through to taint once. This is the canonical list; minijinja's
+/// `INTROSPECTIVE_METHOD_NAMES` (used for the static "does this macro reach
+/// an introspective call" analysis) must be kept in sync with it, since
+/// minijinja cannot depend on this crate to reuse it directly.
+const INTROSPECTIVE_METHODS: &[&str] = minijinja::INTROSPECTIVE_METHOD_NAMES;
+
 impl Object for Adapter {
     fn call_method(
         self: &Arc<Self>,
@@ -4094,7 +4146,23 @@ impl Object for Adapter {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
         if let Parse(_) = &self.inner {
-            return self.call_method_impl(state, name, args, listeners);
+            let result = self.call_method_impl(state, name, args, listeners);
+            return result.map(|value| {
+                // Gated on a listener actually wanting introspective holes
+                // (only `JinjaRenderMode::Symbolic`'s listener does): wrapping
+                // unconditionally would change this value's `ValueRepr` from
+                // whatever primitive it really is (e.g. `None`) to `Object`
+                // for *every* render mode, silently breaking plain
+                // `{% if not adapter.get_relation(...) %}`/`is none`-style
+                // checks that never touch taint at all.
+                if INTROSPECTIVE_METHODS.contains(&name)
+                    && listeners.iter().any(|l| l.wants_introspective_holes())
+                {
+                    crate::introspective_taint::IntrospectiveValue::wrap(value)
+                } else {
+                    value
+                }
+            });
         }
         // NOTE(jason): This function uses the time machine - cross version Fusion snapshot tests
         // not to be confused with conformance ReplayAdapter or Adapter Record/Replay modes

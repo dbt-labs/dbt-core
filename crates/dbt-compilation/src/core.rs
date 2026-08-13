@@ -580,6 +580,7 @@ impl DbtLoadedProject {
         token: &CancellationToken,
         sidecar_client: Option<Arc<dyn SidecarClient>>,
         execute: Execute,
+        infer_schemas: bool,
     ) -> FsResult<Arc<Adapter>> {
         let adapter_factory = self.adapter_factory.clone();
         let type_ops_factory = self.type_ops_factory.clone();
@@ -618,8 +619,9 @@ impl DbtLoadedProject {
         // recording. Route those runs through the factory so it builds a replay
         // adapter instead; sidecar execution still goes through the db_runner.
         let is_mantle_replay = matches!(&replay_mode, Some(ReplayMode::MantleReplay(_)));
-        let executes_locally =
-            !introspect_enabled || matches!(execute, Execute::Sidecar | Execute::Service);
+        let executes_locally = !introspect_enabled
+            || infer_schemas
+            || matches!(execute, Execute::Sidecar | Execute::Service);
         let use_local_mock_adapter = executes_locally && !is_mantle_replay;
         let adapter = if adapter_type == AdapterType::DuckDB {
             adapter_factory
@@ -669,12 +671,39 @@ impl DbtLoadedProject {
                 Arc::new(Adapter::new(Arc::new(adapter_impl), None, token.clone()))
             } else {
                 // Fallback: use mock adapter
-                let mock = AdapterImpl::new_mock(
+                let metadata_fallback_engine = if infer_schemas {
+                    match adapter_factory.create_adapter(
+                        adapter_type,
+                        db_config,
+                        Arc::clone(&type_ops_factory),
+                        replay_mode,
+                        flags.project_flags(),
+                        schema_store,
+                        root_project_quoting,
+                        query_comment,
+                        token.clone(),
+                        cloud_config,
+                        threads,
+                    ) {
+                        Ok(adapter) => Some(Arc::clone(adapter.engine())),
+                        Err(e) => {
+                            tracing::warn!(
+                                "infer-schemas: failed to build metadata fallback adapter, \
+                                 continuing with mock-only metadata: {e:?}"
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+                let mock = AdapterImpl::new_mock_with_metadata_fallback(
                     adapter_type,
                     flags.project_flags(),
                     root_project_quoting,
                     type_ops,
                     adapter_factory.stmt_splitter(),
+                    metadata_fallback_engine,
                 );
                 Arc::new(Adapter::new(Arc::new(mock), None, token.clone()))
             }

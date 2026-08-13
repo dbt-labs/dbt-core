@@ -1,9 +1,10 @@
 use std::path::Path;
 
-use dbt_telemetry::LogMessage;
 use dbt_tracing::{LogRecordInfo, SeverityNumber};
 
-use super::super::{data_provider::DataProvider, layer::TelemetryMiddleware};
+use super::super::{
+    data_provider::DataProvider, fs_error_log::get_log_message, layer::TelemetryMiddleware,
+};
 
 pub struct TelemetryMarkdownLogFilter;
 
@@ -27,7 +28,7 @@ impl TelemetryMiddleware for TelemetryMarkdownLogFilter {
             return Some(record);
         }
 
-        let Some(log_message) = record.attributes.downcast_ref::<LogMessage>() else {
+        let Some(log_message) = get_log_message(&record.attributes) else {
             return Some(record);
         };
         let path = log_message

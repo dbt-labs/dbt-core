@@ -8,13 +8,12 @@ use std::collections::{BTreeMap, btree_map::Iter};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 
-use crate::{
-    default_to,
-    schemas::{
-        project::{ResolvableConfig, TypedRecursiveConfig, configs::common::default_meta_and_tags},
-        serde::StringOrArrayOfStrings,
-    },
+use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::{
+    project::{ResolvableConfig, TypedRecursiveConfig},
+    serde::StringOrArrayOfStrings,
 };
+use dbt_proc_macros::DefaultTo;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -39,21 +38,24 @@ impl TypedRecursiveConfig for ProjectSemanticModelConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.enabled.is_some() || self.group.is_some() || self.meta.is_some() || self.tags.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, DbtSchema,
+)]
 pub struct SemanticModelConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     pub enabled: Option<bool>,
     pub group: Option<String>,
-    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
+    #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
 }
 
 impl From<ProjectSemanticModelConfig> for SemanticModelConfig {
@@ -62,7 +64,7 @@ impl From<ProjectSemanticModelConfig> for SemanticModelConfig {
             enabled: config.enabled,
             group: config.group,
             meta: config.meta,
-            tags: config.tags,
+            tags: Tags(config.tags),
         }
     }
 }
@@ -73,7 +75,7 @@ impl From<SemanticModelConfig> for ProjectSemanticModelConfig {
             enabled: config.enabled,
             group: config.group,
             meta: config.meta,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -99,18 +101,6 @@ impl ResolvableConfig<SemanticModelConfig> for SemanticModelConfig {
     }
 
     fn default_to(&mut self, parent: &SemanticModelConfig) {
-        let SemanticModelConfig {
-            enabled,
-            group,
-            meta,
-            tags,
-        } = self;
-
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused)]
-        let tags = ();
-
-        default_to!(parent, [enabled, group]);
+        self.default_to_fields(parent);
     }
 }

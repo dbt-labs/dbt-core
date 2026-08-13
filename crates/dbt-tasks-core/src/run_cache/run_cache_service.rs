@@ -13,13 +13,16 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::Instant;
+
+use tokio::sync::mpsc;
 
 use crate::context::TaskRunnerCtx;
 use crate::task::{TaskOp, TaskResult};
-use dbt_adapter::Adapter;
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{Cancellable, into_fs_error};
-use dbt_adapter::metadata::{FreshnessOverride, MetadataAdapter, MetadataQueryOptions};
+use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
 use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
@@ -29,40 +32,46 @@ use dbt_common::adapter::dialect_of;
 use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
+use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_frontend_common::ident::FullyQualifiedName;
 use dbt_frontend_common::named_reference::NamedReference;
 use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::{DbtMaterialization, ModelFreshnessRules, ResolvedQuoting};
+use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::profiles::DbConfig;
 use dbt_schemas::schemas::properties::ModelState;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
 };
+use dbt_state::explain::{
+    StateExplainLogRecord, StateExplainNode, StateExplainNodeInfo, append_state_explain_log_record,
+};
 use dbt_state::metadata_cache::RunCacheMetadataCache;
 use dbt_state::node_session::ExecutionGuard;
 use dbt_state::proto::query_cache::{
-    ConfirmExecutionRequest, ExplainedDecision, NodeFuncMapping, QueryDependency,
-    RecordExecutionsRequest, SkipExecutionResponse, Struct, SubmitEnrichedSqlRequest,
-    SubmitSqlResponse, SubmitValuesRequest, TableModifiedInfo, Value, submit_sql_response,
-    submit_sql_speculative_response, value::Kind,
+    ClientTelemetryEvent, ConfirmExecutionRequest, ExplainedDecision, NodeFuncMapping,
+    QueryDependency, RecordExecutionsRequest, SkipExecutionResponse, Struct,
+    SubmitEnrichedSqlRequest, SubmitSqlResponse, SubmitValuesRequest, TableModifiedInfo, Value,
+    submit_sql_response, submit_sql_speculative_response, value::Kind,
 };
 use dbt_state::request_builder::{
-    ExecutionOutcomeInput, sql_execution_record_from_submit_request,
+    ExecutionOutcomeInput, SessionEndResult, enriched_sql_prepared_event, session_end_event,
+    session_start_event, sql_execution_record_from_submit_request, telemetry_batch,
     values_execution_record_from_submit_request,
 };
 use dbt_state::service_client::RunCacheServiceError;
-use dbt_telemetry::NodeType;
+use dbt_telemetry::{NodeEvaluated, NodeType};
 
 use crate::run_cache::run_cache_request::{
-    SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
+    DbtProjectInfo, SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
     build_seed_values_request, build_snapshot_sql_request, build_test_sql_request,
     is_microbatch_model, node_identity,
 };
 use chrono::{DateTime, Utc};
-use futures::stream::{StreamExt, TryStreamExt};
 
 pub fn collect_upstream_hashes(ctx: &TaskRunnerCtx, unique_id: &str) -> HashMap<String, String> {
     ctx.inner
@@ -456,7 +465,6 @@ pub fn insert_compiled_view_definition(
                 "Skipping compiled view definition insert for node {}: canonical FQN unavailable; cannot determine deferral status",
                 node.unique_id()
             ),
-            None,
         );
         return;
     };
@@ -516,7 +524,7 @@ pub fn insert_compiled_view_definition(
 /// stored and submitted epochs identical and the comparison exact.
 #[derive(Debug)]
 pub struct HeuristicClock {
-    start_instant: std::time::Instant,
+    start_instant: Instant,
     start_ts_ms: i64,
 }
 
@@ -527,7 +535,7 @@ impl HeuristicClock {
         if !heuristic_clock_enabled_for_adapter(ctx.adapter_type()) {
             return None;
         }
-        let start_instant = std::time::Instant::now();
+        let start_instant = Instant::now();
         let start_ts_ms = warehouse_now_ms(ctx).await?;
         Some(Self {
             start_instant,
@@ -555,7 +563,7 @@ async fn warehouse_now_ms(ctx: &TaskRunnerCtx) -> Option<i64> {
         let adapter = ctx_inner.env.get_adapter_ref()?;
         let query_ctx = QueryCtx::default().with_desc("dbt State run clock");
         let (_, table) = adapter
-            .execute_without_state(Some(&query_ctx), sql, true)
+            .execute_without_state(Some(&query_ctx), sql, true, None)
             .ok()?;
         table.original_record_batch().first_value_as_i64()
     }))
@@ -578,13 +586,20 @@ fn heuristic_clock_enabled_for_adapter(adapter_type: AdapterType) -> bool {
     )
 }
 
+fn has_non_empty_schema(relation: &dyn BaseRelation) -> bool {
+    relation
+        .schema()
+        .is_some_and(|schema| !schema.trim().is_empty())
+}
+
 /// Collect every relation and source freshness override needed for the run's
 /// metadata prefetch.
 ///
 /// Returns a map of `semantic_fqn → relation` covering every selected node's
 /// own target relation plus the relations of all their runtime dependencies
 /// (models, snapshots, seeds, sources). Ephemeral and inline models are skipped
-/// because they never submit to the service. A second map carries
+/// because they never submit to the service, as are graph-only nodes with no
+/// warehouse relation (see `has_non_empty_schema`). A second map carries
 /// `FreshnessOverride` entries for sources that declare `loaded_at_query` or
 /// `loaded_at_field`; these are passed through to `freshness_with_overrides`
 /// so the prefetch uses the same freshness strategy as per-node submits.
@@ -613,7 +628,9 @@ fn collect_global_prefetch_relations(
             }
         }
 
-        if let Ok(relation) = create_relation_from_node(adapter_type, node, None) {
+        if let Ok(relation) = create_relation_from_node(adapter_type, node, None)
+            && has_non_empty_schema(relation.as_ref())
+        {
             let fqn = relation.semantic_fqn();
             relations.entry(fqn).or_insert_with(|| relation.into());
         }
@@ -725,42 +742,10 @@ async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) -> FsResult<(
         };
         rendered_overrides.insert(fqn, ovr);
     }
-    let started_at = std::time::Instant::now();
+    let started_at = Instant::now();
     let result = bulk_prefetch_last_modified_by_schema(ctx, &relations, &rendered_overrides).await;
     maybe_warn_slow_metadata_prefetch(ctx, started_at.elapsed());
     result
-}
-
-/// Concurrency to use for the per-schema freshness fan-out when a dedicated
-/// metadata warehouse is configured but the profile does not expose a thread
-/// count (e.g. mock / sidecar engines). Keeps the fan-out bounded so a project
-/// with many schemas does not open an unbounded number of connections.
-const DEFAULT_SCHEMA_PREFETCH_FANOUT: usize = 4;
-
-/// Per-`(database, schema)` inputs for the last-modified prefetch, materialized
-/// up front so the borrowed futures can share them whether the groups run
-/// sequentially or concurrently.
-struct SchemaPrefetchGroup {
-    database: String,
-    schema: String,
-    /// Map of `semantic_fqn → rendered relation name` for this group.
-    semantic_to_name: BTreeMap<String, String>,
-    relation_values: Vec<Arc<dyn BaseRelation>>,
-}
-
-/// Fan the per-schema freshness dumps out concurrently only when a dedicated
-/// metadata warehouse is configured.
-///
-/// With a metadata warehouse the queries run on that isolated warehouse instead
-/// of competing with model execution, so issuing them in parallel is a clear
-/// win. Without one they would contend on the main warehouse, so we keep the
-/// sequential behavior to avoid congesting it with many concurrent metadata
-/// queries.
-fn should_fan_out_schema_prefetch(options: &MetadataQueryOptions) -> bool {
-    options
-        .warehouse
-        .as_deref()
-        .is_some_and(|warehouse| !warehouse.is_empty())
 }
 
 /// Total freshness-prefetch time above which we hint that a dedicated metadata
@@ -778,8 +763,12 @@ fn should_warn_slow_metadata_prefetch(
     options: &MetadataQueryOptions,
     elapsed: std::time::Duration,
 ) -> bool {
+    let has_metadata_warehouse = options
+        .warehouse
+        .as_deref()
+        .is_some_and(|warehouse| !warehouse.is_empty());
     adapter_type == AdapterType::Snowflake
-        && !should_fan_out_schema_prefetch(options)
+        && !has_metadata_warehouse
         && elapsed >= SLOW_METADATA_PREFETCH_WARN_THRESHOLD
 }
 
@@ -801,25 +790,19 @@ fn maybe_warn_slow_metadata_prefetch(ctx: &TaskRunnerCtx, elapsed: std::time::Du
              contention, resulting in these queries being executed significantly faster.",
             elapsed.as_secs_f64()
         ),
-        None,
     );
 }
 
-/// Prefetch last-modified epochs using per-schema dump queries rather than
-/// per-table predicates.
+/// Prefetch last-modified epochs for the selected relations and warm
+/// `run_cache_metadata`.
 ///
-/// For each (database, schema) group, calls `freshness_all_in_schema` which
-/// returns ALL rows for the schema with a single `WHERE table_schema = '...'`
-/// filter — matching the plugin's approach. Relations with source overrides
-/// (`loaded_at_query` / `loaded_at_field`) are handled separately via the
-/// existing per-table path so their custom freshness logic is preserved.
-///
-/// When a dedicated metadata warehouse is configured the per-schema dumps are
-/// fanned out concurrently (bounded by the profile's thread count), since they
-/// run on the isolated warehouse and each single-schema query is far more
-/// selective than one broad multi-schema scan. Without a metadata warehouse the
-/// groups run sequentially so the metadata queries don't contend with model
-/// execution on the main warehouse. See `should_fan_out_schema_prefetch`.
+/// Relations with source overrides (`loaded_at_query` / `loaded_at_field`) are
+/// handled separately via the per-table path so their custom freshness logic is
+/// preserved. Everything else is handed to the metadata adapter's
+/// `freshness_all_in_schemas`, which owns the engine-specific strategy (per-schema
+/// dumps, metadata-warehouse fan-out, adaptive broad-vs-sequential). Failures are
+/// fail-open: a relation whose freshness could not be determined is cached as
+/// unknown (`None`), never aborting the run.
 async fn bulk_prefetch_last_modified_by_schema(
     ctx: &TaskRunnerCtx,
     relations: &BTreeMap<String, Arc<dyn BaseRelation>>,
@@ -859,166 +842,48 @@ async fn bulk_prefetch_last_modified_by_schema(
         return Ok(());
     }
 
-    let groups: Vec<SchemaPrefetchGroup> = group_relations_by_database_and_schema(&bulk_relations)
-        .into_iter()
-        .map(|((database, schema), grouped)| {
-            let semantic_to_name = grouped
-                .iter()
-                .map(|(name, rel)| (rel.semantic_fqn(), name.clone()))
-                .collect();
-            let relation_values = grouped.values().cloned().collect();
-            SchemaPrefetchGroup {
-                database: database.unwrap_or_default(),
-                schema: schema.unwrap_or_default(),
-                semantic_to_name,
-                relation_values,
-            }
-        })
+    // `freshness_all_in_schemas` keys its result by `semantic_fqn`; keep the
+    // mapping back to each relation's cache name (rendered relation name).
+    let semantic_to_name: BTreeMap<String, String> = bulk_relations
+        .iter()
+        .map(|(name, rel)| (rel.semantic_fqn(), name.clone()))
         .collect();
+    let relation_values: Vec<Arc<dyn BaseRelation>> = bulk_relations.values().cloned().collect();
 
-    // Sequential when no metadata warehouse is set (fan-out width 1); otherwise
-    // keep up to `fan_out` schema dumps in flight at once so many schemas don't
-    // open an unbounded number of connections. A sliding window (rather than
-    // fixed batches) means a slow schema never leaves the other slots idle.
-    let fan_out = if should_fan_out_schema_prefetch(&metadata_options) {
-        adapter
-            .engine()
-            .threads()
-            .unwrap_or(DEFAULT_SCHEMA_PREFETCH_FANOUT)
-            .max(1)
-    } else {
-        1
-    };
-
-    let mut group_futures = Vec::with_capacity(groups.len());
-    for group in &groups {
-        group_futures.push(prefetch_last_modified_for_schema_group(
-            ctx,
-            adapter,
-            metadata_adapter.as_ref(),
+    // The adapter owns the strategy and is fail-open per group internally; treat
+    // a top-level error the same way (unknown freshness for the whole batch) so a
+    // metadata failure never aborts the run.
+    let freshness = match metadata_adapter
+        .freshness_all_in_schemas(
+            &relation_values,
             &metadata_options,
-            group,
-        ));
-    }
-
-    futures::stream::iter(group_futures)
-        .buffer_unordered(fan_out)
-        .try_collect::<Vec<()>>()
-        .await?;
-
-    Ok(())
-}
-
-/// Prefetch last-modified epochs for a single `(database, schema)` group and
-/// write them into `run_cache_metadata`.
-///
-/// A schema-dump failure is treated as unknown freshness for the group (cached
-/// as `None`) and does not propagate, matching the plugin: broad metadata
-/// prefetch failures should not disable dbt State. An empty dump falls back to
-/// the batched per-table path; only that fallback can propagate an error.
-async fn prefetch_last_modified_for_schema_group(
-    ctx: &TaskRunnerCtx,
-    adapter: &Adapter,
-    metadata_adapter: &dyn MetadataAdapter,
-    metadata_options: &MetadataQueryOptions,
-    group: &SchemaPrefetchGroup,
-) -> FsResult<()> {
-    let SchemaPrefetchGroup {
-        database,
-        schema,
-        semantic_to_name,
-        relation_values,
-    } = group;
-
-    let dump = match metadata_adapter
-        .freshness_all_in_schema(
-            database,
-            schema,
-            relation_values,
-            metadata_options,
             adapter.cancellation_token(),
         )
         .await
     {
-        Ok(dump) => dump,
+        Ok(freshness) => freshness,
         Err(err) => {
             let err = into_fs_error(err);
-            // Matches the Python plugin: broad metadata prefetch failures
-            // should not disable dbt State; unknown freshness keeps
-            // downstream decisions conservative.
             emit_warn_log_message(
                 ErrorCode::StateServiceWarn,
                 format!(
-                    "dbt State schema-level freshness dump failed for {database}.{schema}: {err}; \
-                     caching unknown freshness for {} relations",
+                    "dbt State freshness prefetch failed for {} relations: {err}; caching unknown \
+                     freshness",
                     semantic_to_name.len()
                 ),
-                None,
             );
-            for name in semantic_to_name.values() {
-                ctx.inner
-                    .run_cache_ctx
-                    .run_cache_metadata
-                    .insert_last_modified_epoch(name, None);
-            }
-            return Ok(());
+            BTreeMap::new()
         }
     };
 
-    if dump.is_empty() {
-        // Empty result from the schema dump. This is typically caused by
-        // INFORMATION_SCHEMA eventual consistency: Fusion's global prefetch
-        // fires eagerly at run start (before any node executes), whereas the
-        // dbt-core plugin prefetches lazily on the first node-start event.
-        // The extra seconds of compilation time in the plugin's path are
-        // usually enough for Snowflake's INFORMATION_SCHEMA to propagate a
-        // table created by the immediately preceding run. Fusion doesn't get
-        // that grace period, so the dump can return empty even when the table
-        // actually exists.
-        //
-        // Fall back to freshness_with_overrides_and_options for this schema
-        // group. That call is still batched — one query per database group
-        // with all tables in a single WHERE clause (the old per-table predicate
-        // form rather than the schema-only dump form) — so it does not
-        // degenerate into one query per table. The fallback only fires when
-        // the schema dump returns empty, which is unusual, so the cost of the
-        // larger WHERE clause is acceptable.
-        emit_warn_log_message(
-            ErrorCode::StateServiceWarn,
-            format!(
-                "dbt State schema-level freshness dump returned empty for {database}.{schema}; \
-                 falling back to per-node warehouse queries for {} relations",
-                semantic_to_name.len()
-            ),
-            None,
-        );
-        let empty_overrides = BTreeMap::new();
-        let freshness = metadata_adapter
-            .freshness_with_overrides_and_options(
-                relation_values,
-                &empty_overrides,
-                metadata_options,
-                adapter.cancellation_token(),
-            )
-            .await
-            .map_err(into_fs_error)?;
-        for (sem_fqn, name) in semantic_to_name {
-            let epoch = freshness
-                .get(sem_fqn)
-                .map(|m| m.last_altered.timestamp_millis());
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .insert_last_modified_epoch(name, epoch);
-        }
-    } else {
-        for (sem_fqn, name) in semantic_to_name {
-            let epoch = dump.get(sem_fqn).map(|m| m.last_altered.timestamp_millis());
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .insert_last_modified_epoch(name, epoch);
-        }
+    for (semantic_fqn, name) in &semantic_to_name {
+        let epoch = freshness
+            .get(semantic_fqn)
+            .map(|m| m.last_altered.timestamp_millis());
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(name, epoch);
     }
 
     Ok(())
@@ -1050,6 +915,8 @@ async fn prefetch_last_modified_for_schema_group(
 /// fetched at most once per run. Total IO is identical — only the timing
 /// changes from eager/pre-run to lazy/per-node.
 pub async fn run_cache_service_before_run(ctx: &TaskRunnerCtx) -> AdapterResult<()> {
+    run_cache_service_start_telemetry(ctx).await;
+
     let prefetch = ctx.inner.run_cache_ctx.prefetch.clone();
     prefetch.mark_started();
 
@@ -1062,7 +929,6 @@ pub async fn run_cache_service_before_run(ctx: &TaskRunnerCtx) -> AdapterResult<
                     "dbt State dependency last-modified prefetch failed: {err}; \
                      falling back to per-node freshness lookups"
                 ),
-                None,
             );
         }
         prefetch_ctx.inner.run_cache_ctx.prefetch.mark_done();
@@ -1103,10 +969,283 @@ async fn await_prefetch(ctx: &TaskRunnerCtx) {
                 "dbt State dependency last-modified prefetch task did not complete cleanly: {err}; \
                  continuing"
             ),
-            None,
         );
     }
     prefetch.mark_done();
+}
+
+pub async fn run_cache_service_start_telemetry(ctx: &TaskRunnerCtx) {
+    submit_run_cache_session_start(ctx).await;
+}
+
+pub async fn run_cache_service_after_run(ctx: &TaskRunnerCtx, cancelled: bool) {
+    let result = if cancelled {
+        SessionEndResult::Cancelled
+    } else if ctx
+        .inner
+        .run_stats
+        .iter()
+        .any(|stat| stat.status == NodeStatus::Errored)
+        || ctx
+            .inner
+            .analyze_stats
+            .iter()
+            .any(|stat| stat.status == NodeStatus::Errored)
+    {
+        SessionEndResult::Failure
+    } else {
+        SessionEndResult::Success
+    };
+    submit_run_cache_session_end(ctx, result).await;
+}
+
+/// `cancelled` distinguishes a run aborted via the run's `CancellationToken`
+/// (e.g. a user hitting Ctrl-C) from any other early-return failure, so the
+/// dbt State service can tell the two apart in telemetry.
+pub async fn run_cache_service_after_run_failed(ctx: &TaskRunnerCtx, cancelled: bool) {
+    let result = if cancelled {
+        SessionEndResult::Cancelled
+    } else {
+        SessionEndResult::Failure
+    };
+    submit_run_cache_session_end(ctx, result).await;
+}
+
+/// Number of telemetry events buffered before new events are dropped.
+/// Matches the Python dbt State client's `TelemetryDispatcher` queue bound.
+const TELEMETRY_QUEUE_CAPACITY: usize = 150;
+
+/// Maximum number of events sent in a single `SubmitTelemetryBatch` RPC.
+/// Matches the Python dbt State client's `TelemetryDispatcher` batch bound.
+const TELEMETRY_MAX_BATCH_SIZE: usize = 50;
+
+/// Longest a queued event waits before being flushed, absent a full batch.
+/// Matches the Python dbt State client's `TelemetryDispatcher` emit interval.
+const TELEMETRY_MAX_EMIT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Retries for a batch that failed with a retriable error before its events
+/// are dropped. Matches the Python dbt State client's `TelemetryDispatcher`.
+const TELEMETRY_MAX_RETRY_COUNT: u32 = 3;
+
+type QueuedTelemetryEvent = (ClientTelemetryEvent, u32);
+
+/// Background dispatcher that batches and submits dbt State telemetry events
+/// without blocking node execution, mirroring the async batching design of
+/// the Python dbt State client's telemetry dispatcher: events are pushed
+/// onto a bounded channel (non-blocking, drop-on-full) and a single
+/// background task flushes whatever is queued into one `SubmitTelemetryBatch`
+/// RPC per batch, either once `TELEMETRY_MAX_BATCH_SIZE` events have
+/// accumulated or `TELEMETRY_MAX_EMIT_INTERVAL` has elapsed, whichever comes
+/// first. A batch that fails with a retriable error is re-queued (up to
+/// `TELEMETRY_MAX_RETRY_COUNT` times per event); anything else is dropped.
+///
+/// `flush` closes the channel and awaits the worker so the run's final
+/// events (in particular session-end) get a chance to be delivered before
+/// the process exits.
+pub struct TelemetryDispatcher {
+    sender: tokio::sync::Mutex<Option<mpsc::Sender<QueuedTelemetryEvent>>>,
+    worker: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
+}
+
+impl TelemetryDispatcher {
+    fn spawn(client: dbt_state::service_client::SharedRunCacheServiceClient) -> Self {
+        let (sender, receiver) = mpsc::channel(TELEMETRY_QUEUE_CAPACITY);
+        let worker = dbt_common::tracing::spawn_traced(Self::run(client, receiver));
+        Self {
+            sender: tokio::sync::Mutex::new(Some(sender)),
+            worker: tokio::sync::Mutex::new(Some(worker)),
+        }
+    }
+
+    async fn run(
+        client: dbt_state::service_client::SharedRunCacheServiceClient,
+        mut receiver: mpsc::Receiver<QueuedTelemetryEvent>,
+    ) {
+        // Retries go straight back into `buffer`, not through the channel: a
+        // `Sender` clone held by this task would stop `recv` from ever
+        // returning `None`, hanging `flush()` forever.
+        let mut buffer: Vec<QueuedTelemetryEvent> = Vec::new();
+        let mut interval = tokio::time::interval(TELEMETRY_MAX_EMIT_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                event = receiver.recv() => {
+                    let Some(event) = event else {
+                        Self::flush_buffer(&client, &mut buffer).await;
+                        break;
+                    };
+                    buffer.push(event);
+                    // `==`, not `>=`: a requeued failure can leave `buffer`
+                    // at the cap already, and `>=` would re-flush on every
+                    // event after that with no gap between retries.
+                    if buffer.len() == TELEMETRY_MAX_BATCH_SIZE {
+                        Self::flush_buffer(&client, &mut buffer).await;
+                    }
+                }
+                _ = interval.tick() => {
+                    Self::flush_buffer(&client, &mut buffer).await;
+                }
+            }
+        }
+    }
+
+    /// Drain `buffer` in chunks of at most `TELEMETRY_MAX_BATCH_SIZE`, one
+    /// `SubmitTelemetryBatch` RPC per chunk, stopping at the first chunk that
+    /// fails. Fail-open: a retriable failure re-queues that chunk (bounded by
+    /// `TELEMETRY_MAX_RETRY_COUNT`); anything else drops it.
+    async fn flush_buffer(
+        client: &dbt_state::service_client::SharedRunCacheServiceClient,
+        buffer: &mut Vec<QueuedTelemetryEvent>,
+    ) {
+        while !buffer.is_empty() {
+            let chunk_size = buffer.len().min(TELEMETRY_MAX_BATCH_SIZE);
+            let chunk: Vec<QueuedTelemetryEvent> = buffer.drain(..chunk_size).collect();
+            let events = chunk.iter().map(|(event, _)| event.clone()).collect();
+            let Err(err) = client.submit_telemetry_batch(telemetry_batch(events)).await else {
+                continue;
+            };
+            if !err.is_retriable_telemetry_submission() {
+                emit_trace_log_message(|| {
+                    format!(
+                        "dbt State service telemetry batch failed: {err}; dropping {} event(s)",
+                        chunk.len()
+                    )
+                });
+                return;
+            }
+            for (event, retry_count) in chunk {
+                if retry_count >= TELEMETRY_MAX_RETRY_COUNT {
+                    emit_trace_log_message(|| {
+                        "dbt State telemetry event exceeded max retries; dropping".to_string()
+                    });
+                    continue;
+                }
+                buffer.push((event, retry_count + 1));
+            }
+            return;
+        }
+    }
+
+    /// Enqueue an event without blocking on network I/O. Drops the event
+    /// (fail-open) if the queue is full or the dispatcher has been flushed.
+    async fn send(&self, event: ClientTelemetryEvent) {
+        let guard = self.sender.lock().await;
+        if let Some(sender) = guard.as_ref() {
+            if sender.try_send((event, 0)).is_err() {
+                emit_trace_log_message(|| {
+                    "dbt State telemetry queue full; dropping event".to_string()
+                });
+            }
+        }
+    }
+
+    /// Enqueue a critical event, waiting for capacity instead of dropping it.
+    async fn send_critical(&self, event: ClientTelemetryEvent) {
+        let sender = self.sender.lock().await.as_ref().cloned();
+        if let Some(sender) = sender
+            && sender.send((event, 0)).await.is_err()
+        {
+            emit_trace_log_message(|| {
+                "dbt State telemetry dispatcher is closed; dropping critical event".to_string()
+            });
+        }
+    }
+
+    /// Close the queue and await the worker so already-queued events flush
+    /// before the caller proceeds. Fail-open: a join error is swallowed.
+    async fn flush(&self) {
+        self.sender.lock().await.take();
+        if let Some(handle) = self.worker.lock().await.take() {
+            let _ = handle.await;
+        }
+    }
+}
+
+async fn submit_run_cache_session_end(ctx: &TaskRunnerCtx, result: SessionEndResult) {
+    let run_cache_ctx = &ctx.inner.run_cache_ctx;
+    if run_cache_ctx
+        .telemetry_session_ended
+        .swap(true, Ordering::Relaxed)
+    {
+        return;
+    }
+
+    let Some(start) = run_cache_ctx.telemetry_session_start.get() else {
+        return;
+    };
+    let description = match result {
+        SessionEndResult::Success => "completed",
+        SessionEndResult::Failure => "completed with errors",
+        SessionEndResult::Cancelled => "cancelled",
+    };
+    let event = session_end_event(
+        start.elapsed(),
+        result,
+        description,
+        next_telemetry_event_order(ctx),
+    );
+    submit_run_cache_critical_telemetry_event(ctx, event).await;
+    flush_run_cache_telemetry(ctx).await;
+}
+
+async fn submit_run_cache_session_start(ctx: &TaskRunnerCtx) {
+    let run_cache_ctx = &ctx.inner.run_cache_ctx;
+    if run_cache_ctx
+        .telemetry_session_start
+        .set(Instant::now())
+        .is_err()
+    {
+        return;
+    }
+
+    let Some(config) = run_cache_ctx.run_cache_service_config.as_ref() else {
+        return;
+    };
+    let event = session_start_event(config.telemetry_config(), next_telemetry_event_order(ctx));
+    submit_run_cache_telemetry_event(ctx, event).await;
+}
+
+async fn submit_run_cache_telemetry_event(ctx: &TaskRunnerCtx, event: ClientTelemetryEvent) {
+    let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
+        return;
+    };
+    let dispatcher = ctx
+        .inner
+        .run_cache_ctx
+        .telemetry_dispatcher
+        .get_or_init(|| TelemetryDispatcher::spawn(client.clone()));
+    dispatcher.send(event).await;
+}
+
+async fn submit_run_cache_critical_telemetry_event(
+    ctx: &TaskRunnerCtx,
+    event: ClientTelemetryEvent,
+) {
+    let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
+        return;
+    };
+    let dispatcher = ctx
+        .inner
+        .run_cache_ctx
+        .telemetry_dispatcher
+        .get_or_init(|| TelemetryDispatcher::spawn(client.clone()));
+    dispatcher.send_critical(event).await;
+}
+
+/// Closes the run's telemetry dispatcher (if one was started) and awaits its
+/// worker, giving already-queued events — in particular session-end — a
+/// chance to reach the service before the command exits.
+async fn flush_run_cache_telemetry(ctx: &TaskRunnerCtx) {
+    if let Some(dispatcher) = ctx.inner.run_cache_ctx.telemetry_dispatcher.get() {
+        dispatcher.flush().await;
+    }
+}
+
+fn next_telemetry_event_order(ctx: &TaskRunnerCtx) -> i64 {
+    ctx.inner
+        .run_cache_ctx
+        .telemetry_event_order
+        .fetch_add(1, Ordering::Relaxed)
 }
 
 /// Submits a runnable node to the dbt State service before local execution.
@@ -1128,8 +1267,8 @@ pub async fn run_cache_service_before_execution(
                 "dbt State service hook reached while service mode is disabled for node {}; executing normally",
                 node.unique_id()
             ),
-            None,
         );
+        write_state_explain_node(ctx, node, None);
         return RunCacheServiceDecision::execute_without_confirmation();
     }
 
@@ -1140,17 +1279,19 @@ pub async fn run_cache_service_before_execution(
                 "dbt State service was requested but no validated client is available for node {}; executing normally",
                 node.unique_id()
             ),
-            None,
         );
+        write_state_explain_node(ctx, node, None);
         return RunCacheServiceDecision::execute_without_confirmation();
     };
     if client.is_disabled() {
+        write_state_explain_node(ctx, node, None);
         return RunCacheServiceDecision::execute_without_confirmation();
     }
 
     if !should_honor_service_skip(ctx) {
         let result =
             prepare_write_only_execution_record(ctx, node, task_result, microbatch_window).await;
+        write_state_explain_node(ctx, node, None);
         return match result {
             Ok(Some(record)) => RunCacheServiceDecision::execute_with_record(record),
             Ok(None) => {
@@ -1169,7 +1310,6 @@ pub async fn run_cache_service_before_execution(
                         "dbt State service record preparation failed for node {}: {err}; executing normally",
                         node.unique_id()
                     ),
-                    None,
                 );
                 RunCacheServiceDecision::execute_without_confirmation()
             }
@@ -1185,10 +1325,12 @@ pub async fn run_cache_service_before_execution(
                     "dbt State service submit skipped for no-op model materialization (node {unique_id}, materialization {materialization})"
                 )
             });
+            write_state_explain_node(ctx, node, None);
             return RunCacheServiceDecision::execute_without_confirmation();
         }
         if model.common().language.as_deref() != Some("sql") {
             record_unsupported_node(node, "non-SQL model");
+            write_state_explain_node(ctx, node, None);
             return RunCacheServiceDecision::execute_without_confirmation();
         }
         submit_model(ctx, model, task_result, client, microbatch_window).await
@@ -1200,6 +1342,7 @@ pub async fn run_cache_service_before_execution(
         submit_test(ctx, test, task_result, client).await
     } else {
         record_unsupported_node(node, "unsupported node type");
+        write_state_explain_node(ctx, node, None);
         return RunCacheServiceDecision::execute_without_confirmation();
     };
 
@@ -1219,12 +1362,26 @@ pub async fn run_cache_service_before_execution(
                 .run_cache_ctx
                 .run_cache_dev_cloned_nodes
                 .contains_key(node.unique_id().as_str());
-            relabel_skip_for_dev_cloned_node(is_dev_cloned, decision)
+            let decision = relabel_skip_for_dev_cloned_node(is_dev_cloned, decision);
+            let execution_decision_id =
+                state_explain_execution_decision_id(Some(&outcome.response), &decision);
+            // Surface the service-side execution decision id on the node's
+            // run-phase evaluation span so successful executions can be
+            // correlated with the dbt State decision that governed them.
+            if let Some(id) = execution_decision_id.as_deref() {
+                find_and_update_span_attrs(|attrs: &mut NodeEvaluated| {
+                    attrs.state_decision_id = Some(id.to_string());
+                });
+            }
+            write_state_explain_node(ctx, node, execution_decision_id);
+            decision
         }
         Ok(Some(RunCacheSubmitResult::ExecuteUntracked(record))) => {
             // A speculative `ReadyToExecuteUntracked` verdict: execute now and
             // record the outcome after the fact. Never a Skip, so no dev-cloned
-            // relabel applies.
+            // relabel applies. The verdict carries no execution decision id, so
+            // the node only gets a local fallback explain record.
+            write_state_explain_node(ctx, node, None);
             RunCacheServiceDecision::execute_with_record(record)
         }
         Ok(None) => {
@@ -1232,9 +1389,13 @@ pub async fn run_cache_service_before_execution(
             emit_trace_log_message(|| {
                 format!("dbt State service submit skipped for node {unique_id}; executing normally")
             });
+            write_state_explain_node(ctx, node, None);
             RunCacheServiceDecision::execute_without_confirmation()
         }
-        Err(_) if client.is_disabled() => RunCacheServiceDecision::execute_without_confirmation(),
+        Err(_) if client.is_disabled() => {
+            write_state_explain_node(ctx, node, None);
+            RunCacheServiceDecision::execute_without_confirmation()
+        }
         Err(err) => {
             emit_warn_log_message(
                 ErrorCode::StateServiceWarn,
@@ -1242,10 +1403,152 @@ pub async fn run_cache_service_before_execution(
                     "dbt State service submit failed for node {}: {err}; executing normally",
                     node.unique_id()
                 ),
-                None,
             );
+            write_state_explain_node(ctx, node, None);
+            // The request failed, so the node rebuilds without tracking; its
+            // cached epoch/existence (e.g. from the prefetch, already awaited by
+            // the time a submit errors) is now stale. Evict it here so
+            // downstream nodes in this run re-query fresh state instead of
+            // reusing it — unlike the benign-skip path, which preserves a valid
+            // prefetched epoch.
+            evict_node_metadata_for_failed_state_request(ctx, node);
             RunCacheServiceDecision::execute_without_confirmation()
         }
+    }
+}
+
+fn write_state_explain_node(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    execution_decision_id: Option<String>,
+) {
+    let Some(path) = ctx.inner.run_cache_ctx.state_explain_log_path.as_ref() else {
+        return;
+    };
+    let record = StateExplainLogRecord::Node(StateExplainNode {
+        node_unique_id: node.unique_id(),
+        node_name: node.name(),
+        node_info: state_explain_node_info(ctx, node),
+        execution_decision_id,
+    });
+    if let Err(err) = append_state_explain_log_record(path, &record) {
+        emit_warn_log_message(
+            ErrorCode::StateServiceWarn,
+            format!("Failed to write dbt State explain node record: {err}"),
+        );
+    }
+}
+
+fn state_explain_execution_decision_id(
+    response: Option<&SubmitSqlResponse>,
+    decision: &RunCacheServiceDecision,
+) -> Option<String> {
+    let response = response?;
+    match decision {
+        RunCacheServiceDecision::Execute {
+            after_success: RunCacheAfterSuccess::Confirm(_),
+            ..
+        }
+        | RunCacheServiceDecision::Clone { .. }
+        | RunCacheServiceDecision::Skip { .. } => execution_decision_id_from_response(response),
+        RunCacheServiceDecision::Execute { .. } | RunCacheServiceDecision::Disabled => None,
+    }
+}
+
+fn state_explain_node_info(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+) -> StateExplainNodeInfo {
+    let mut node_info =
+        state_explain_node_info_for_parts(ctx.adapter_type(), ctx.inner.arg.full_refresh, node);
+    node_info.dev_clone = ctx
+        .inner
+        .run_cache_ctx
+        .run_cache_dev_cloned_nodes
+        .get(node.unique_id().as_str())
+        .map(|entry| entry.value().clone());
+    node_info.deferrals = state_explain_deferrals(ctx, node);
+    node_info
+}
+
+fn state_explain_deferrals(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+) -> HashMap<String, String> {
+    let Some(defer_nodes) = ctx.defer_nodes() else {
+        return HashMap::new();
+    };
+
+    node.base()
+        .depends_on
+        .nodes
+        .iter()
+        .filter_map(|dependency_id| {
+            let deferred_node = defer_nodes.get_node(dependency_id)?;
+            let deferred_fqn = create_relation_from_node(ctx.adapter_type(), deferred_node, None)
+                .ok()?
+                .semantic_fqn();
+            if !ctx
+                .inner
+                .run_cache_ctx
+                .run_cache_deferred_fqns
+                .contains(&deferred_fqn)
+            {
+                return None;
+            }
+
+            let local_node = ctx.nodes().get_node(dependency_id)?;
+            let local_fqn = create_relation_from_node(ctx.adapter_type(), local_node, None)
+                .ok()?
+                .semantic_fqn();
+            Some((local_fqn, deferred_fqn))
+        })
+        .collect()
+}
+
+fn state_explain_node_info_for_parts(
+    adapter_type: AdapterType,
+    full_refresh: bool,
+    node: &dyn InternalDbtNodeAttributes,
+) -> StateExplainNodeInfo {
+    let materialized = node.base().materialized.clone();
+    // No-op materializations are inlined into their consumers, so they never get
+    // a warehouse relation. Reporting one would name a table that cannot exist.
+    let is_ephemeral = is_no_op_model_materialization(materialized.clone());
+    let fqn = if is_ephemeral {
+        String::new()
+    } else {
+        create_relation_from_node(adapter_type, node, None)
+            .map(|relation| relation.semantic_fqn())
+            .unwrap_or_default()
+    };
+    let is_full_refresh = if let Some(model) = node.as_any().downcast_ref::<DbtModel>() {
+        effective_full_refresh(full_refresh, model.deprecated_config.full_refresh)
+    } else if let Some(snapshot) = node.as_any().downcast_ref::<DbtSnapshot>() {
+        effective_full_refresh(full_refresh, snapshot.deprecated_config.full_refresh)
+    } else {
+        false
+    };
+
+    StateExplainNodeInfo {
+        fqn,
+        node_resource_type: node.resource_type().as_static_ref().to_string(),
+        is_view: materialized == DbtMaterialization::View,
+        is_table: matches!(
+            materialized,
+            DbtMaterialization::Table
+                | DbtMaterialization::Incremental
+                | DbtMaterialization::Snapshot
+                | DbtMaterialization::Seed
+        ),
+        is_ephemeral,
+        is_incremental_or_snapshot: matches!(
+            materialized,
+            DbtMaterialization::Incremental | DbtMaterialization::Snapshot
+        ),
+        is_full_refresh,
+        dev_clone: None,
+        deferrals: HashMap::new(),
     }
 }
 
@@ -1288,7 +1591,6 @@ pub async fn confirm_run_cache_service_execution(
                         "dbt State service final metadata lookup failed for node {}: {err}; command remains successful",
                         node.unique_id()
                     ),
-                    None,
                 );
                 return;
             }
@@ -1303,7 +1605,6 @@ pub async fn confirm_run_cache_service_execution(
                 node.unique_id(),
                 confirmation.request_id
             ),
-            None,
         );
         return;
     };
@@ -1320,7 +1621,6 @@ pub async fn confirm_run_cache_service_execution(
                     "dbt State service confirmation metadata lookup failed for node {}: {err}; command remains successful",
                     node.unique_id()
                 ),
-                None,
             );
             return;
         }
@@ -1344,7 +1644,6 @@ pub async fn confirm_run_cache_service_execution(
                     format!(
                         "dbt State service confirmation failed for node {unique_id} (request_id {request_id}): {err}; command remains successful"
                     ),
-                    None,
                 );
             }
         }
@@ -1380,7 +1679,6 @@ pub async fn record_run_cache_service_execution(
                 "dbt State service record skipped for node {} because no validated client is available",
                 node.unique_id()
             ),
-            None,
         );
         return;
     };
@@ -1397,7 +1695,6 @@ pub async fn record_run_cache_service_execution(
                     "dbt State service record metadata lookup failed for node {}: {err}; command remains successful",
                     node.unique_id()
                 ),
-                None,
             );
             return;
         }
@@ -1420,7 +1717,6 @@ pub async fn record_run_cache_service_execution(
                     format!(
                         "dbt State service record failed for node {unique_id}: {err}; command remains successful"
                     ),
-                    None,
                 );
             }
         }
@@ -1878,7 +2174,7 @@ fn execute_clone_sqls_blocking(
         .with_desc("dbt State clone");
     for sql in clone_sqls {
         adapter
-            .execute_without_state(Some(&query_ctx), sql, false)
+            .execute_without_state(Some(&query_ctx), sql, false, None)
             .map_err(|err| into_fs_error(Cancellable::Error(err)))?;
     }
     Ok(())
@@ -1929,7 +2225,14 @@ async fn submit_model(
         full_refresh,
         microbatch_window,
         client,
-        |context| build_model_sql_request(model, context),
+        |context| {
+            build_model_sql_request(
+                model,
+                context,
+                &ctx.inner.materialization_resolver,
+                create_macro_resolver(ctx),
+            )
+        },
     )
     .await
 }
@@ -1960,6 +2263,11 @@ async fn submit_sql_with_speculation(
     client: &dbt_state::service_client::SharedRunCacheServiceClient,
     build_request: impl Fn(SqlRunCacheRequestContext) -> FsResult<SubmitEnrichedSqlRequest>,
 ) -> FsResult<Option<RunCacheSubmitResult>> {
+    // Client-generated so `EnrichedSqlPrepared` telemetry doesn't depend on
+    // the server response carrying a request id (`SkipExecution` and
+    // `ReadyToExecuteUntracked` don't).
+    let request_id = dbt_state::service_client::new_request_id();
+
     if is_prefetch_ready(ctx) {
         return build_and_submit_non_speculative(
             ctx,
@@ -1970,10 +2278,13 @@ async fn submit_sql_with_speculation(
             microbatch_window,
             client,
             &build_request,
+            request_id,
+            true,
         )
         .await;
     }
 
+    let request_start = Instant::now();
     let Some((request, freshness_tolerance_seconds)) = build_sql_request(
         ctx,
         node,
@@ -1988,6 +2299,45 @@ async fn submit_sql_with_speculation(
     else {
         return Ok(None);
     };
+    let telemetry = enriched_sql_prepared_telemetry_input(&request);
+    let prepare_duration = request_start.elapsed();
+
+    // Re-check readiness at the last responsible moment. `build_sql_request`
+    // blocks on the view-definition traversal (fetching view DDL from the
+    // warehouse) while the background prefetch runs concurrently, so the
+    // prefetch often completes during that window. The decision above was made
+    // against a now-stale snapshot: if the prefetch is ready, submit
+    // non-speculatively with fully-resolved epochs instead of wasting a
+    // speculative round-trip that would only come back `Undecided` and force a
+    // resubmit. `is_prefetch_ready` is a cheap atomic read, and the rebuild
+    // reuses the traverser's warm cache, so no view definition is re-fetched.
+    if is_prefetch_ready(ctx) {
+        return build_and_submit_non_speculative(
+            ctx,
+            node,
+            sql,
+            is_view,
+            full_refresh,
+            microbatch_window,
+            client,
+            &build_request,
+            request_id,
+            true,
+        )
+        .await;
+    }
+
+    // Report the speculative attempt once the final path is known. If the
+    // prefetch completed while building the request, the regular path above
+    // is the only submission and reports its own event.
+    emit_enriched_sql_prepared_telemetry(
+        ctx,
+        request_id.clone(),
+        prepare_duration,
+        telemetry,
+        None,
+    )
+    .await;
 
     let unique_id = node.unique_id();
     let verdict = client
@@ -2043,11 +2393,16 @@ async fn submit_sql_with_speculation(
                     microbatch_window,
                     client,
                     &build_request,
+                    request_id,
+                    false,
                 )
                 .await
             }
         },
         Err(err) => {
+            // Swallowed here rather than reported as a prepare-error: the
+            // speculative RPC is a best-effort fast path, and the resubmit
+            // below still reports its own failures.
             emit_trace_log_message(|| {
                 format!(
                     "dbt State speculative submit failed for node {unique_id}: {err}; awaiting prefetch and resubmitting"
@@ -2063,6 +2418,8 @@ async fn submit_sql_with_speculation(
                 microbatch_window,
                 client,
                 &build_request,
+                request_id,
+                false,
             )
             .await
         }
@@ -2073,6 +2430,11 @@ async fn submit_sql_with_speculation(
 /// prefetch first so freshness resolves from the warm cache. Idempotent with
 /// respect to the prefetch await, so it is safe to call after the speculative
 /// path already awaited it.
+///
+/// `request_id` is the attempt's client-generated id (see
+/// `submit_sql_with_speculation`). `report_prepared_success` is `false` when
+/// this is a resubmit after a speculative attempt already reported success
+/// telemetry for the same id — a failure here is still reported either way.
 #[allow(clippy::too_many_arguments)]
 async fn build_and_submit_non_speculative(
     ctx: &TaskRunnerCtx,
@@ -2083,8 +2445,11 @@ async fn build_and_submit_non_speculative(
     microbatch_window: Option<(DateTime<Utc>, DateTime<Utc>)>,
     client: &dbt_state::service_client::SharedRunCacheServiceClient,
     build_request: &impl Fn(SqlRunCacheRequestContext) -> FsResult<SubmitEnrichedSqlRequest>,
+    request_id: String,
+    report_prepared_success: bool,
 ) -> FsResult<Option<RunCacheSubmitResult>> {
     await_prefetch(ctx).await;
+    let request_start = Instant::now();
     let Some((request, freshness_tolerance_seconds)) = build_sql_request(
         ctx,
         node,
@@ -2099,14 +2464,41 @@ async fn build_and_submit_non_speculative(
     else {
         return Ok(None);
     };
+    let telemetry = enriched_sql_prepared_telemetry_input(&request);
+    let prepare_duration = request_start.elapsed();
 
-    let response = client.submit_enriched_sql(request).await.map_err(|e| {
-        fs_err!(
-            ErrorCode::Generic,
-            "dbt State service SubmitEnrichedSQL failed: {}",
-            e
-        )
-    })?;
+    // Success only if `report_prepared_success` (the sole/first build for
+    // this attempt); failure always, even on a resubmit.
+    let response = match client.submit_enriched_sql(request).await {
+        Ok(response) => {
+            if report_prepared_success {
+                emit_enriched_sql_prepared_telemetry(
+                    ctx,
+                    request_id,
+                    prepare_duration,
+                    telemetry,
+                    None,
+                )
+                .await;
+            }
+            response
+        }
+        Err(err) => {
+            emit_enriched_sql_prepared_telemetry(
+                ctx,
+                request_id,
+                request_start.elapsed(),
+                telemetry,
+                Some(err.error_type_label().to_string()),
+            )
+            .await;
+            return Err(fs_err!(
+                ErrorCode::Generic,
+                "dbt State service SubmitEnrichedSQL failed: {}",
+                err
+            ));
+        }
+    };
     Ok(Some(RunCacheSubmitResult::outcome(
         response,
         freshness_tolerance_seconds,
@@ -2199,7 +2591,12 @@ async fn prepare_write_only_execution_record(
         context.request.microbatch_window = microbatch_window;
         remove_cache_decision_fields(&mut context.request);
         Ok(Some(RunCachePendingExecutionRecord::sql(
-            build_model_sql_request(model, context.request)?,
+            build_model_sql_request(
+                model,
+                context.request,
+                &ctx.inner.materialization_resolver,
+                create_macro_resolver(ctx),
+            )?,
         )))
     } else if let Some(snapshot) = node.as_any().downcast_ref::<DbtSnapshot>() {
         let mut context = build_sql_context(
@@ -2220,7 +2617,7 @@ async fn prepare_write_only_execution_record(
         }
         remove_cache_decision_fields(&mut context.request);
         Ok(Some(RunCachePendingExecutionRecord::sql(
-            build_snapshot_sql_request(snapshot, context.request)?,
+            build_snapshot_sql_request(snapshot, context.request, create_macro_resolver(ctx))?,
         )))
     } else if let Some(seed) = node.as_any().downcast_ref::<DbtSeed>() {
         let request = build_seed_values_request(
@@ -2228,11 +2625,13 @@ async fn prepare_write_only_execution_record(
             SeedRunCacheRequestContext {
                 adapter_type: ctx.adapter_type(),
                 dialect: run_cache_dialect(ctx),
-                project_root: ctx.inner.arg.io.in_dir.as_path(),
                 last_modified_epoch: None,
                 clone_time_travel_limit: None,
                 clone_table_properties: None,
+                clone_chain_depth_limit: None,
+                dbt_project_info: DbtProjectInfo::from(ctx),
             },
+            create_macro_resolver(ctx),
         )?;
         Ok(Some(RunCachePendingExecutionRecord::values(request)))
     } else {
@@ -2259,7 +2658,7 @@ async fn submit_snapshot(
         full_refresh,
         None,
         client,
-        |context| build_snapshot_sql_request(snapshot, context),
+        |context| build_snapshot_sql_request(snapshot, context, create_macro_resolver(ctx)),
     )
     .await
 }
@@ -2299,11 +2698,13 @@ async fn submit_seed(
         SeedRunCacheRequestContext {
             adapter_type: ctx.adapter_type(),
             dialect: run_cache_dialect(ctx),
-            project_root: ctx.inner.arg.io.in_dir.as_path(),
             last_modified_epoch,
             clone_time_travel_limit,
             clone_table_properties: None,
+            clone_chain_depth_limit: None,
+            dbt_project_info: DbtProjectInfo::from(ctx),
         },
+        create_macro_resolver(ctx),
     )?;
 
     let response = client.submit_values(request).await.map_err(|e| {
@@ -2336,9 +2737,58 @@ async fn submit_test(
         false, // full_refresh is meaningless for tests
         None,
         client,
-        |context| build_test_sql_request(test, context),
+        |context| build_test_sql_request(test, context, create_macro_resolver(ctx)),
     )
     .await
+}
+
+struct EnrichedSqlPreparedTelemetryInput {
+    target_table_fqn: Option<String>,
+    num_dependencies: Option<i64>,
+    num_view_dependencies: Option<i64>,
+    labels: HashMap<String, String>,
+}
+
+fn enriched_sql_prepared_telemetry_input(
+    request: &SubmitEnrichedSqlRequest,
+) -> EnrichedSqlPreparedTelemetryInput {
+    EnrichedSqlPreparedTelemetryInput {
+        target_table_fqn: request.target_table.clone(),
+        num_dependencies: i64::try_from(
+            request
+                .tables
+                .iter()
+                .filter(|table| Some(table.name.as_str()) != request.target_table.as_deref())
+                .count(),
+        )
+        .ok(),
+        num_view_dependencies: i64::try_from(request.query_dependencies.len()).ok(),
+        labels: request.labels.clone(),
+    }
+}
+
+/// Emit an `EnrichedSqlPrepared` telemetry event for one submission attempt.
+/// `request_id` is a client-generated id correlating this event with the
+/// attempt, independent of whatever the server ends up deciding (or whether
+/// it responds at all) — see `submit_sql_with_speculation`.
+async fn emit_enriched_sql_prepared_telemetry(
+    ctx: &TaskRunnerCtx,
+    request_id: String,
+    duration: std::time::Duration,
+    input: EnrichedSqlPreparedTelemetryInput,
+    error_type: Option<String>,
+) {
+    let event = enriched_sql_prepared_event(
+        request_id,
+        duration,
+        input.target_table_fqn,
+        input.num_dependencies,
+        input.num_view_dependencies,
+        error_type,
+        input.labels,
+        next_telemetry_event_order(ctx),
+    );
+    submit_run_cache_telemetry_event(ctx, event).await;
 }
 
 struct BuiltSqlRunCacheContext {
@@ -2382,9 +2832,13 @@ async fn build_sql_context(
 
     let stale_upstream_policy = stale_upstream_policy_for_node(node);
 
-    let is_targeting_prod = config.is_defer_to_target(ctx.dbt_profile());
-    let clone_chain_depth_limit =
-        clone_chain_depth_limit_for_adapter(ctx.adapter_type(), is_targeting_prod);
+    let active_profile = ctx.dbt_profile();
+    let is_targeting_prod = config.is_defer_to_target(active_profile);
+    let clone_chain_depth_limit = clone_chain_depth_limit_for_adapter(
+        ctx.adapter_type(),
+        is_targeting_prod,
+        active_profile.allow_clones,
+    );
 
     Ok(BuiltSqlRunCacheContext {
         request: SqlRunCacheRequestContext {
@@ -2403,6 +2857,10 @@ async fn build_sql_context(
                 node,
                 config.tolerate_nondeterminism,
             ),
+            compare_unrendered_code: resolve_compare_unrendered_code(
+                node,
+                config.compare_unrendered_code,
+            ),
             full_refresh,
             clone_time_travel_limit: config.clone_time_travel_limit_seconds,
             clone_table_properties: None,
@@ -2412,6 +2870,7 @@ async fn build_sql_context(
             // Populated by the model submit paths for microbatch models; other
             // node types never carry a window.
             microbatch_window: None,
+            dbt_project_info: DbtProjectInfo::from(ctx),
         },
         metadata_complete,
     })
@@ -2455,6 +2914,44 @@ fn evaluate_volatile_sql_for_node(node: &dyn InternalDbtNodeAttributes) -> Optio
         .downcast_ref::<DbtTest>()
         .and_then(|test| test.__test_attr__.state.as_ref())
         .and_then(|state| state.evaluate_volatile_sql)
+}
+
+/// `compare_unrendered_code`, honored by models and snapshots (via `ModelState`) and data tests
+/// (via `DataTestState`).
+fn compare_unrendered_code_for_node(node: &dyn InternalDbtNodeAttributes) -> Option<bool> {
+    if let Some(state) = model_state_for_node(node) {
+        return state.compare_unrendered_code;
+    }
+    node.as_any()
+        .downcast_ref::<DbtTest>()
+        .and_then(|test| test.__test_attr__.state.as_ref())
+        .and_then(|state| state.compare_unrendered_code)
+}
+
+/// Per-node override for the service's `compare_unrendered_code` wire flag. Unlike
+/// `tolerate_nondeterminism` there is no inversion and no legacy `meta` form: the node config
+/// wins over the service default, otherwise the default stands.
+fn resolve_compare_unrendered_code(
+    node: &dyn InternalDbtNodeAttributes,
+    service_default: bool,
+) -> bool {
+    let node_override = compare_unrendered_code_for_node(node);
+    let resolved = node_override.unwrap_or(service_default);
+
+    // Logs the override separately from the result so a surprising `false` distinguishes
+    // "the node never set it" from "the service default lost to an explicit node value".
+    emit_trace_log_message(|| {
+        format!(
+            "dbt State compare_unrendered_code={resolved} for node {} (node config {}, service default {service_default})",
+            node.unique_id(),
+            match node_override {
+                Some(v) => v.to_string(),
+                None => "unset".to_owned(),
+            },
+        )
+    });
+
+    resolved
 }
 
 pub fn should_execute_hooks_for_skip_reuse(
@@ -2542,7 +3039,6 @@ fn resolve_tolerate_nondeterminism(
             "Ignoring meta.{KEY} on node {}: value is not a bool, int, or recognized string",
             node.unique_id()
         ),
-        None,
     );
     service_default
 }
@@ -2575,7 +3071,14 @@ fn stale_upstream_policy_for_node(
 pub(crate) fn clone_chain_depth_limit_for_adapter(
     adapter_type: AdapterType,
     is_targeting_prod: bool,
+    allow_clones: bool,
 ) -> Option<i64> {
+    // if cloning is disabled by the active target's config, send a limit of 0 to
+    // exclude clone candidates regardless of adapter
+    if !allow_clones {
+        return Some(0);
+    }
+
     // the Python implementation hardcodes the default on each adapter
     // ref: https://github.com/fivetran/query-cache/blob/14dddc260082af4bc6a9800743ddbe5ccb03ba67/clients/dbt_state/src/dbt_state/run_cache.py#L1911
     match adapter_type {
@@ -2601,6 +3104,7 @@ fn metadata_query_options_for_warehouses(
 ) -> MetadataQueryOptions {
     MetadataQueryOptions {
         warehouse: profile_warehouse.or(legacy_service_warehouse),
+        ..MetadataQueryOptions::default()
     }
 }
 
@@ -2616,7 +3120,18 @@ pub(crate) fn run_cache_metadata_query_options(ctx: &TaskRunnerCtx) -> MetadataQ
         .as_ref()
         .and_then(|config| config.snowflake_metadata_warehouse.clone());
 
-    metadata_query_options_for_warehouses(profile_warehouse, legacy_service_warehouse)
+    // Adaptive broad-vs-sequential freshness fetch: read from the Snowflake
+    // target config, defaulting to `true` (adaptive on). Only the Snowflake
+    // no-metadata-warehouse strategy consults it; other adapters ignore it.
+    let adaptive_metadata_fetch = match &ctx.dbt_profile().db_config {
+        DbConfig::Snowflake(config) => config.adaptive_metadata_fetch.unwrap_or(true),
+        _ => true,
+    };
+
+    MetadataQueryOptions {
+        adaptive_metadata_fetch,
+        ..metadata_query_options_for_warehouses(profile_warehouse, legacy_service_warehouse)
+    }
 }
 
 /// Returns deferred dependencies that should be treated leniently by the dbt
@@ -2652,6 +3167,10 @@ fn build_lenient_dependencies(
         .filter(|fqn| request_dependencies.contains(fqn.as_str()))
         .cloned()
         .collect()
+}
+
+fn create_macro_resolver<'a>(ctx: &'a TaskRunnerCtx) -> impl Fn(&str) -> Option<&'a DbtMacro> {
+    |macro_id| ctx.resolver_state().macros.macros.get(macro_id)
 }
 
 struct CollectedTableModifiedInfos {
@@ -2875,7 +3394,6 @@ fn apply_unresolvable_last_modified_overrides(
             "Could not determine freshness for {}; treating as modified. Configure loaded_at_field or loaded_at_query to set freshness timestamp.",
             unresolvable_without_override.join(", ")
         ),
-        None,
     );
 
     let now_ms = clock.now_ms();
@@ -2917,6 +3435,31 @@ pub fn clear_stale_missing_last_modified_epoch_for_node(
         if matches!(run_cache_metadata.last_modified_epoch(&name), Some(None)) {
             run_cache_metadata.remove_last_modified_epoch(&name);
         }
+    }
+}
+
+/// Evicts a node's cached warehouse metadata (last-modified epoch and existence)
+/// when its dbt State request failed and it will rebuild without tracking.
+///
+/// The prefetch is already awaited by the time a submit returns an error, so
+/// nothing re-populates the entry after this. The imminent untracked rebuild
+/// makes the cached value stale; without eviction, downstream nodes in the same
+/// invocation would report the relation's pre-build state to the service and
+/// could be incorrectly skipped. Mirrors the plugin's
+/// `clear_cache([target_table])`.
+///
+/// Unlike [`clear_stale_missing_last_modified_epoch_for_node`] (the benign-skip
+/// path), this clears a real cached epoch too, because a failed request means
+/// the rebuild happens without the service observing it.
+fn evict_node_metadata_for_failed_state_request(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+) {
+    if let Ok((name, _)) = relation_for_node(ctx, node) {
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .invalidate_relation_metadata(&name);
     }
 }
 
@@ -3006,7 +3549,6 @@ async fn prefetch_last_modified_epochs(
             misses.len(),
             misses.keys().cloned().collect::<Vec<_>>().join(", ")
         ),
-        None,
     );
     let refresh_result =
         refresh_planned_last_modified_misses(ctx, &misses, overrides, ctx.adapter_type()).await;
@@ -3292,6 +3834,18 @@ async fn collect_query_dependencies(
         Err(err) => return query_dependencies_for_parse_error(ctx, node, sql, err).await,
     };
     if relations.is_empty() {
+        // A custom materialization's compiled SQL isn't necessarily a query,
+        // so an empty SQL-derived result isn't proof of no upstreams. Fall
+        // back to the manifest's depends_on graph. Built-ins are exempt:
+        // their compiled SQL is always a real query, so an empty result is
+        // trustworthy.
+        if node_uses_custom_materialization(node, &ctx.inner.materialization_resolver) {
+            let manifest_relations = cacheable_manifest_dependency_relations(ctx, node);
+            if !manifest_relations.is_empty() {
+                return collect_query_dependencies_from_relations(ctx, node, manifest_relations)
+                    .await;
+            }
+        }
         return Ok(CollectedViewQueryDependencies::complete(
             Vec::new(),
             BTreeSet::new(),
@@ -3362,7 +3916,7 @@ async fn query_dependencies_for_parse_error(
     sql: &str,
     err: Box<FsError>,
 ) -> FsResult<CollectedViewQueryDependencies> {
-    if !node_uses_custom_materialization(node) {
+    if !node_uses_custom_materialization(node, &ctx.inner.materialization_resolver) {
         return Err(err);
     }
 
@@ -3399,6 +3953,13 @@ async fn query_dependencies_for_parse_error(
     };
 
     if relations.is_empty() {
+        // Same fallback as in `collect_query_dependencies`: an empty
+        // expression-parse result isn't proof of no upstreams.
+        let manifest_relations = cacheable_manifest_dependency_relations(ctx, node);
+        if !manifest_relations.is_empty() {
+            return collect_query_dependencies_from_relations(ctx, node, manifest_relations).await;
+        }
+
         emit_trace_log_message(|| {
             format!(
                 "dbt State dependency extraction accepted standalone SQL expression for custom materialization {unique_id}"
@@ -3414,10 +3975,47 @@ async fn query_dependencies_for_parse_error(
     collect_query_dependencies_from_relations(ctx, node, relations).await
 }
 
-fn node_uses_custom_materialization(node: &dyn InternalDbtNodeAttributes) -> bool {
+/// Resolves a node's manifest depends_on graph into relations, restricted
+/// to cacheable node kinds. Fallback dependency source when SQL-derived
+/// extraction finds none.
+fn cacheable_manifest_dependency_relations(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+) -> BTreeMap<String, Arc<dyn BaseRelation>> {
+    let mut relations = BTreeMap::new();
+    for dep_id in &node.base().depends_on.nodes {
+        let Some(dep_node) = ctx.nodes().get_node(dep_id) else {
+            continue;
+        };
+        if !is_cacheable_resource_type(dep_node.resource_type()) {
+            continue;
+        }
+        let Ok((name, relation)) = relation_for_node(ctx, dep_node) else {
+            continue;
+        };
+        relations.insert(name, relation);
+    }
+    relations
+}
+
+/// Mirrors the `is_cacheable` filter used elsewhere in the run-cache path:
+/// only these node kinds participate in dependency freshness checks.
+fn is_cacheable_resource_type(resource_type: NodeType) -> bool {
+    matches!(
+        resource_type,
+        NodeType::Source | NodeType::Model | NodeType::Snapshot | NodeType::Seed
+    )
+}
+
+fn node_uses_custom_materialization(
+    node: &dyn InternalDbtNodeAttributes,
+    materialization_resolver: &MaterializationResolver,
+) -> bool {
     node.as_any()
         .downcast_ref::<DbtModel>()
-        .is_some_and(|model| matches!(model.materialized(), DbtMaterialization::Unknown(_)))
+        .is_some_and(|model| {
+            materialization_resolver.is_custom_materialization(&model.materialized().to_string())
+        })
 }
 
 fn parse_sql_relations_for_run_cache(
@@ -3688,6 +4286,21 @@ fn record_service_decision(
     }
 }
 
+/// Extract the service-side explain decision id from a submit response.
+pub(crate) fn execution_decision_id_from_response(response: &SubmitSqlResponse) -> Option<String> {
+    match response.response.as_ref()? {
+        submit_sql_response::Response::ReadyToExecute(response) => {
+            response.execution_decision_id.clone()
+        }
+        submit_sql_response::Response::SkipExecution(response) => {
+            response.execution_decision_id.clone()
+        }
+        submit_sql_response::Response::ReadyToClone(response) => {
+            response.execution_decision_id.clone()
+        }
+    }
+}
+
 /// Map a `SkipExecutionResponse` to the [`NodeStatus`] used for downstream
 /// reporting. When the service admitted a candidate despite at least one
 /// upstream having changed (`explained_decision.is_stale == true`), emit
@@ -3800,6 +4413,7 @@ mod tests {
     use dbt_schema_store::mock_store::{MockDataStore, MockSchemaStore};
     use dbt_schemas::schemas::Nodes;
     use dbt_schemas::schemas::common::{FreshnessPeriod, ResolvedQuoting, UpdatesOn};
+    use dbt_schemas::schemas::macros::DbtMacro;
     use dbt_schemas::schemas::profiles::{Execute, SnowflakeDbConfig};
     use dbt_schemas::schemas::properties::{DataTestState, ModelFreshness, ModelState};
     use dbt_schemas::state::{
@@ -3822,6 +4436,51 @@ mod tests {
         model.__common_attr__.unique_id = "model.test.orders".to_string();
         model.__model_attr__.state = Some(state);
         model
+    }
+
+    #[test]
+    fn state_explain_node_info_identifies_incremental_model() {
+        let model = state_explain_model(DbtMaterialization::Incremental);
+
+        let info = state_explain_node_info_for_parts(AdapterType::Postgres, true, &model);
+
+        assert_eq!(info.node_resource_type, "model");
+        assert_eq!(info.fqn, "\"analytics\".\"marts\".\"orders\"");
+        assert!(!info.is_view);
+        assert!(info.is_table);
+        assert!(info.is_incremental_or_snapshot);
+        assert!(info.is_full_refresh);
+    }
+
+    #[test]
+    fn state_explain_node_info_reports_ephemeral_without_a_relation() {
+        let model = state_explain_model(DbtMaterialization::Ephemeral);
+
+        let info = state_explain_node_info_for_parts(AdapterType::Postgres, false, &model);
+
+        assert!(info.is_ephemeral);
+        assert!(!info.is_table);
+        assert!(!info.is_view);
+        // Ephemeral models are inlined into their consumers, so naming a
+        // warehouse relation for them would name a table that cannot exist.
+        assert!(info.fqn.is_empty());
+    }
+
+    #[test]
+    fn state_explain_node_info_identifies_seed_and_snapshot() {
+        let seed = state_explain_seed();
+        let snapshot = state_explain_snapshot();
+
+        let seed_info = state_explain_node_info_for_parts(AdapterType::Postgres, true, &seed);
+        let snapshot_info =
+            state_explain_node_info_for_parts(AdapterType::Postgres, false, &snapshot);
+
+        assert_eq!(seed_info.node_resource_type, "seed");
+        assert!(seed_info.is_table);
+        assert!(!seed_info.is_incremental_or_snapshot);
+        assert!(!seed_info.is_full_refresh);
+        assert_eq!(snapshot_info.node_resource_type, "snapshot");
+        assert!(snapshot_info.is_incremental_or_snapshot);
     }
 
     #[test]
@@ -4322,6 +4981,135 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn custom_materialization_bare_relation_reference_falls_back_to_manifest_deps() {
+        let mut model = make_model(
+            "model.test.copy_target",
+            "db",
+            "analytics",
+            "copy_target",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+        Arc::make_mut(&mut model)
+            .__base_attr__
+            .depends_on
+            .nodes
+            .push("model.test.copy_source".to_string());
+        let upstream = make_model(
+            "model.test.copy_source",
+            "db",
+            "analytics",
+            "copy_source",
+            DbtMaterialization::Table,
+        );
+        let ctx = test_task_runner_ctx_with_nodes(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(EmptySourcesExtractor),
+            nodes_from(vec![model.clone(), upstream], vec![]),
+            ["model.test.copy_target".to_string()].into_iter().collect(),
+        );
+
+        let deps =
+            collect_query_dependencies(&ctx, model.as_ref(), "db.analytics.copy_source", false)
+                .await
+                .expect("bare relation reference for a custom materialization should be cacheable");
+
+        assert!(
+            !deps.metadata_complete || !deps.seen_tables.is_empty(),
+            "must not silently report zero dependencies when depends_on.nodes has a real upstream"
+        );
+        assert!(deps.dependencies.is_empty());
+    }
+
+    #[test]
+    fn cacheable_manifest_dependency_relations_resolves_only_cacheable_deps() {
+        let mut model = make_model(
+            "model.test.copy_target",
+            "db",
+            "analytics",
+            "copy_target",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+        Arc::make_mut(&mut model)
+            .__base_attr__
+            .depends_on
+            .nodes
+            .push("model.test.copy_source".to_string());
+        Arc::make_mut(&mut model)
+            .__base_attr__
+            .depends_on
+            .nodes
+            .push("exposure.test.some_dashboard".to_string());
+        let upstream = make_model(
+            "model.test.copy_source",
+            "db",
+            "analytics",
+            "copy_source",
+            DbtMaterialization::Table,
+        );
+        let ctx = test_task_runner_ctx_with_nodes(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(EmptySourcesExtractor),
+            nodes_from(vec![model.clone(), upstream], vec![]),
+            ["model.test.copy_target".to_string()].into_iter().collect(),
+        );
+
+        let relations = cacheable_manifest_dependency_relations(&ctx, model.as_ref());
+
+        assert_eq!(relations.len(), 1);
+        assert!(relations.contains_key(&fqn_of("db", "analytics", "copy_source")));
+    }
+
+    #[tokio::test]
+    async fn custom_materialization_parse_error_expression_empty_falls_back_to_manifest_deps() {
+        let mut model = make_model(
+            "model.test.copy_target",
+            "db",
+            "analytics",
+            "copy_target",
+            DbtMaterialization::Unknown("custom_table".to_string()),
+        );
+        Arc::make_mut(&mut model)
+            .__base_attr__
+            .depends_on
+            .nodes
+            .push("model.test.copy_source".to_string());
+        let upstream = make_model(
+            "model.test.copy_source",
+            "db",
+            "analytics",
+            "copy_source",
+            DbtMaterialization::Table,
+        );
+        let ctx = test_task_runner_ctx_with_nodes(
+            None,
+            RunCacheMode::ReadWrite,
+            false,
+            Arc::new(EmptySourcesExtractor),
+            nodes_from(vec![model.clone(), upstream], vec![]),
+            ["model.test.copy_target".to_string()].into_iter().collect(),
+        );
+
+        let deps = query_dependencies_for_parse_error(
+            &ctx,
+            model.as_ref(),
+            "db.analytics.copy_source",
+            synthetic_extraction_error(),
+        )
+        .await
+        .expect("bare relation reference for a custom materialization should be cacheable");
+
+        assert!(
+            !deps.metadata_complete || !deps.seen_tables.is_empty(),
+            "must not silently report zero dependencies when depends_on.nodes has a real upstream"
+        );
+        assert!(deps.dependencies.is_empty());
+    }
+
+    #[tokio::test]
     async fn custom_materialization_parse_failure_with_manifest_deps_is_incomplete() {
         let mut model = make_model(
             "model.test.user_name_model",
@@ -4476,7 +5264,7 @@ mod tests {
             .heuristic_clock
             .set(HeuristicClock {
                 start_ts_ms: 1_700_000_000_000,
-                start_instant: std::time::Instant::now(),
+                start_instant: Instant::now(),
             })
             .unwrap();
 
@@ -4511,7 +5299,7 @@ mod tests {
             .heuristic_clock
             .set(HeuristicClock {
                 start_ts_ms: 1_700_000_000_000,
-                start_instant: std::time::Instant::now(),
+                start_instant: Instant::now(),
             })
             .unwrap();
 
@@ -4578,6 +5366,47 @@ mod tests {
                 .run_cache_metadata
                 .last_modified_epoch(&target_fqn),
             Some(Some(1_700_000_000_000))
+        );
+    }
+
+    #[test]
+    fn evict_node_metadata_for_failed_state_request_clears_valid_epoch_and_existence() {
+        let ctx = test_task_runner_ctx(None);
+        let model = make_model(
+            "model.test.user_name_model",
+            "db",
+            "dbt_test",
+            "user_name_model",
+            DbtMaterialization::Table,
+        );
+        let target_fqn = fqn_of("db", "dbt_test", "user_name_model");
+        // A real (valid-looking) cached epoch and existence, which the benign
+        // skip path would preserve — but a failed request means the rebuild was
+        // unobserved, so both must be evicted here.
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(&target_fqn, Some(1_700_000_000_000));
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_relation_exists(&target_fqn, true);
+
+        evict_node_metadata_for_failed_state_request(&ctx, model.as_ref());
+
+        assert_eq!(
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .last_modified_epoch(&target_fqn),
+            None
+        );
+        assert_eq!(
+            ctx.inner
+                .run_cache_ctx
+                .run_cache_metadata
+                .relation_exists(&target_fqn),
+            None
         );
     }
 
@@ -4995,6 +5824,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn prefetch_completing_during_request_build_skips_speculation() {
+        // Regression test for the last-responsible-moment re-check. The
+        // speculative-vs-regular decision is taken at entry, before
+        // `build_sql_request` runs. In production `build_sql_request` blocks on
+        // the view-definition traversal (inside `build_sql_context`), during
+        // which the background prefetch frequently completes. This test drives
+        // the same observable condition deterministically: the prefetch is in
+        // flight at entry but becomes ready before `build_sql_request` returns.
+        // The node must then re-check and submit non-speculatively, leaving the
+        // canned skip verdict below unconsulted.
+        let client = Arc::new(RecordingRunCacheClient::with_speculative_response(
+            speculative_skip_response(),
+        ));
+        let shared: dbt_state::service_client::SharedRunCacheServiceClient = client.clone();
+        let ctx = test_task_runner_ctx(Some(shared.clone()));
+        // Started but not yet done: the entry-point readiness check sees the
+        // prefetch in flight and enters the speculative branch.
+        ctx.inner.run_cache_ctx.prefetch.mark_started();
+        let model = speculative_test_model();
+
+        // The `build_request` closure is invoked at the end of
+        // `build_sql_request`, after `build_sql_context` returns (that is where
+        // the view traversal runs in production). Marking the prefetch done here
+        // models it completing by the time the request build finishes — exactly
+        // the state the re-check inspects. `build_and_submit_non_speculative`
+        // invokes the closure a second time; `mark_done` is idempotent.
+        let build = |context| {
+            ctx.inner.run_cache_ctx.prefetch.mark_done();
+            build_model_sql_request(
+                model.as_ref(),
+                context,
+                &ctx.inner.materialization_resolver,
+                |_| None,
+            )
+        };
+
+        let result = submit_sql_with_speculation(
+            &ctx,
+            model.as_ref(),
+            "select 'alice' as first_name".to_string(),
+            false,
+            false,
+            None,
+            &shared,
+            build,
+        )
+        .await
+        .unwrap();
+
+        assert!(result.is_some());
+        assert_eq!(
+            client.speculative_submitted_count(),
+            0,
+            "a prefetch that completes during the build must skip the speculative RPC"
+        );
+        assert_eq!(
+            client.submitted_count(),
+            1,
+            "the node must fall through to a single non-speculative submit"
+        );
+    }
+
+    #[tokio::test]
     async fn write_only_mode_skips_speculation_and_produces_record() {
         let client = Arc::new(RecordingRunCacheClient::with_speculative_response(
             speculative_skip_response(),
@@ -5154,26 +6046,11 @@ mod tests {
     }
 
     #[test]
-    fn fans_out_schema_prefetch_only_when_metadata_warehouse_is_set() {
-        let with_warehouse = MetadataQueryOptions {
-            warehouse: Some("META_WH".to_string()),
-        };
-        assert!(should_fan_out_schema_prefetch(&with_warehouse));
-
-        let empty_warehouse = MetadataQueryOptions {
-            warehouse: Some(String::new()),
-        };
-        assert!(!should_fan_out_schema_prefetch(&empty_warehouse));
-
-        let no_warehouse = MetadataQueryOptions { warehouse: None };
-        assert!(!should_fan_out_schema_prefetch(&no_warehouse));
-    }
-
-    #[test]
     fn warns_on_slow_snowflake_prefetch_without_metadata_warehouse() {
-        let no_warehouse = MetadataQueryOptions { warehouse: None };
+        let no_warehouse = MetadataQueryOptions::default();
         let with_warehouse = MetadataQueryOptions {
             warehouse: Some("META_WH".to_string()),
+            ..MetadataQueryOptions::default()
         };
         let slow = SLOW_METADATA_PREFETCH_WARN_THRESHOLD;
         let fast = SLOW_METADATA_PREFETCH_WARN_THRESHOLD - std::time::Duration::from_secs(1);
@@ -5215,6 +6092,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: Some(true),
+            compare_unrendered_code: None,
         });
 
         assert!(should_execute_hooks_for_skip_reuse(&model, false));
@@ -5228,6 +6106,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
 
         assert!(should_execute_hooks_for_skip_reuse(&model, true));
@@ -5245,6 +6124,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
 
         assert_eq!(freshness_tolerance_seconds_for_node(&model, 2700), 7200);
@@ -5258,6 +6138,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         model.__model_attr__.freshness = Some(ModelFreshness {
             build_after: Some(ModelFreshnessRules {
@@ -5282,6 +6163,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         model.__model_attr__.freshness = Some(ModelFreshness {
             build_after: Some(ModelFreshnessRules {
@@ -5312,6 +6194,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         model.__model_attr__.freshness = Some(ModelFreshness {
             build_after: Some(ModelFreshnessRules {
@@ -5335,6 +6218,7 @@ mod tests {
             evaluate_volatile_sql: Some(true),
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         model.__common_attr__.meta.insert(
             "run_cache_tolerate_nondeterminism".to_string(),
@@ -5364,6 +6248,7 @@ mod tests {
             evaluate_volatile_sql: Some(true),
             pre_clone: None,
             execute_hooks_on_any_reuse: Some(true),
+            compare_unrendered_code: None,
         });
 
         assert!(should_execute_hooks_for_skip_reuse(&snapshot, false));
@@ -5390,6 +6275,7 @@ mod tests {
         let test = data_test_with_state(DataTestState {
             require_fresh_data_from: Some(UpdatesOn::All),
             evaluate_volatile_sql: Some(true),
+            compare_unrendered_code: None,
         });
 
         assert!(!resolve_tolerate_nondeterminism(&test, true));
@@ -5399,6 +6285,67 @@ mod tests {
         );
         assert!(should_execute_hooks_for_skip_reuse(&test, true));
         assert!(!should_execute_hooks_for_skip_reuse(&test, false));
+    }
+
+    #[test]
+    fn compare_unrendered_code_falls_back_to_service_default() {
+        let model = model_with_state(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
+        });
+
+        assert!(resolve_compare_unrendered_code(&model, true));
+        assert!(!resolve_compare_unrendered_code(&model, false));
+        // A node with no `state:` block at all resolves the same way.
+        assert!(resolve_compare_unrendered_code(&DbtModel::default(), true));
+    }
+
+    #[test]
+    fn compare_unrendered_code_node_config_wins_over_service_default() {
+        // Both directions: the node config overrides the default whichever way it points.
+        let enabled = model_with_state(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: Some(true),
+        });
+        let disabled = model_with_state(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: Some(false),
+        });
+
+        assert!(resolve_compare_unrendered_code(&enabled, false));
+        assert!(!resolve_compare_unrendered_code(&disabled, true));
+    }
+
+    #[test]
+    fn compare_unrendered_code_resolves_for_snapshots_and_data_tests() {
+        let snapshot = snapshot_with_state(ModelState {
+            lag_tolerance: None,
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: Some(true),
+        });
+        let test = data_test_with_state(DataTestState {
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            compare_unrendered_code: Some(true),
+        });
+
+        assert!(resolve_compare_unrendered_code(&snapshot, false));
+        assert!(resolve_compare_unrendered_code(&test, false));
     }
 
     #[test]
@@ -5771,6 +6718,215 @@ mod tests {
         }
     }
 
+    /// `RunCacheServiceError` isn't `Clone` (and can't be made so from this
+    /// crate — the type is foreign), so `TelemetryTestClient` stores which
+    /// error to manufacture rather than a reusable instance.
+    #[derive(Clone, Copy)]
+    enum TestFailure {
+        Retriable,
+        NonRetriable,
+    }
+
+    impl TestFailure {
+        fn build(self) -> RunCacheServiceError {
+            match self {
+                Self::Retriable => RunCacheServiceError::Rpc(tonic::Status::unavailable("down")),
+                Self::NonRetriable => {
+                    RunCacheServiceError::Rpc(tonic::Status::invalid_argument("bad request"))
+                }
+            }
+        }
+    }
+
+    /// Test double for `TelemetryDispatcher` tests: records every batch it's
+    /// asked to submit, and fails the first `fail_count` calls with a
+    /// configurable error before succeeding.
+    #[derive(Default)]
+    struct TelemetryTestClient {
+        batches: Mutex<Vec<Vec<ClientTelemetryEvent>>>,
+        fail_count: std::sync::atomic::AtomicUsize,
+        failure: Option<TestFailure>,
+    }
+
+    impl TelemetryTestClient {
+        fn failing(fail_count: usize, failure: TestFailure) -> Self {
+            Self {
+                batches: Mutex::new(Vec::new()),
+                fail_count: std::sync::atomic::AtomicUsize::new(fail_count),
+                failure: Some(failure),
+            }
+        }
+
+        fn batches(&self) -> Vec<Vec<ClientTelemetryEvent>> {
+            self.batches.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl RunCacheServiceClient for TelemetryTestClient {
+        async fn validate_client_version(
+            &self,
+        ) -> Result<ClientVersionStatus, RunCacheServiceError> {
+            Ok(ClientVersionStatus::Supported)
+        }
+
+        async fn submit_enriched_sql(
+            &self,
+            _request: SubmitEnrichedSqlRequest,
+        ) -> Result<SubmitSqlResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn submit_values(
+            &self,
+            _request: SubmitValuesRequest,
+        ) -> Result<SubmitSqlResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn confirm_execution(
+            &self,
+            _request: ConfirmExecutionRequest,
+        ) -> Result<ConfirmExecutionResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn submit_telemetry_batch(
+            &self,
+            request: dbt_state::proto::query_cache::SubmitTelemetryBatchRequest,
+        ) -> Result<dbt_state::proto::query_cache::SubmitTelemetryBatchResponse, RunCacheServiceError>
+        {
+            if self
+                .fail_count
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+                    (count > 0).then(|| count - 1)
+                })
+                .is_ok()
+            {
+                let failure = self.failure.unwrap_or(TestFailure::Retriable);
+                return Err(failure.build());
+            }
+            self.batches.lock().unwrap().push(request.events);
+            Ok(dbt_state::proto::query_cache::SubmitTelemetryBatchResponse { success: true })
+        }
+    }
+
+    fn test_telemetry_event(event_order: i64) -> ClientTelemetryEvent {
+        session_start_event(Struct::default(), event_order)
+    }
+
+    #[test]
+    fn enriched_sql_telemetry_counts_dependencies_without_existing_target() {
+        let request = SubmitEnrichedSqlRequest {
+            target_table: Some("db.schema.target".to_string()),
+            tables: vec![TableModifiedInfo {
+                name: "db.schema.dependency".to_string(),
+                last_modified_epoch: Some(1),
+            }],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            enriched_sql_prepared_telemetry_input(&request).num_dependencies,
+            Some(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn flush_buffer_delivers_and_clears_buffer_on_success() {
+        let client: dbt_state::service_client::SharedRunCacheServiceClient =
+            Arc::new(TelemetryTestClient::default());
+        let mut buffer: Vec<QueuedTelemetryEvent> =
+            (0..3).map(|i| (test_telemetry_event(i), 0)).collect();
+
+        TelemetryDispatcher::flush_buffer(&client, &mut buffer).await;
+
+        assert!(buffer.is_empty(), "successful flush must drain the buffer");
+    }
+
+    #[tokio::test]
+    async fn flush_buffer_caps_each_rpc_at_max_batch_size() {
+        let client_arc = Arc::new(TelemetryTestClient::default());
+        let client: dbt_state::service_client::SharedRunCacheServiceClient = client_arc.clone();
+        let total = TELEMETRY_MAX_BATCH_SIZE * 2 + 20;
+        let mut buffer: Vec<QueuedTelemetryEvent> = (0..total as i64)
+            .map(|i| (test_telemetry_event(i), 0))
+            .collect();
+
+        TelemetryDispatcher::flush_buffer(&client, &mut buffer).await;
+
+        assert!(buffer.is_empty());
+        let batches = client_arc.batches();
+        assert!(
+            batches
+                .iter()
+                .all(|batch| batch.len() <= TELEMETRY_MAX_BATCH_SIZE),
+            "no single SubmitTelemetryBatch RPC may exceed the batch cap: {batches:?}",
+        );
+        assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), total);
+    }
+
+    #[tokio::test]
+    async fn flush_buffer_requeues_retriable_failures_with_incremented_retry_count() {
+        let client: dbt_state::service_client::SharedRunCacheServiceClient = Arc::new(
+            TelemetryTestClient::failing(usize::MAX, TestFailure::Retriable),
+        );
+        let mut buffer: Vec<QueuedTelemetryEvent> = vec![(test_telemetry_event(0), 0)];
+
+        TelemetryDispatcher::flush_buffer(&client, &mut buffer).await;
+        assert_eq!(buffer.len(), 1);
+        assert_eq!(buffer[0].1, 1, "retriable failure increments retry_count");
+
+        TelemetryDispatcher::flush_buffer(&client, &mut buffer).await;
+        assert_eq!(buffer[0].1, 2);
+
+        TelemetryDispatcher::flush_buffer(&client, &mut buffer).await;
+        assert_eq!(buffer[0].1, 3);
+
+        // One more attempt exceeds `TELEMETRY_MAX_RETRY_COUNT`: dropped, not requeued.
+        TelemetryDispatcher::flush_buffer(&client, &mut buffer).await;
+        assert!(
+            buffer.is_empty(),
+            "event exceeding max retries must be dropped"
+        );
+    }
+
+    #[tokio::test]
+    async fn flush_buffer_drops_batch_on_non_retriable_error() {
+        let client: dbt_state::service_client::SharedRunCacheServiceClient = Arc::new(
+            TelemetryTestClient::failing(usize::MAX, TestFailure::NonRetriable),
+        );
+        let mut buffer: Vec<QueuedTelemetryEvent> = vec![(test_telemetry_event(0), 0)];
+
+        TelemetryDispatcher::flush_buffer(&client, &mut buffer).await;
+
+        assert!(
+            buffer.is_empty(),
+            "a non-retriable error must drop the batch outright, not requeue it"
+        );
+    }
+
+    #[tokio::test]
+    async fn dispatcher_flush_terminates_instead_of_hanging() {
+        // Regression test: `flush()` closes the dispatcher's `Sender` and
+        // awaits the worker task, which only exits once
+        // `mpsc::Receiver::recv` returns `None` — which requires every
+        // `Sender` clone, including any the worker task itself might hold,
+        // to be dropped. If the worker ever holds on to a `Sender` clone
+        // (e.g. to requeue retries through the channel instead of the local
+        // buffer), this hangs forever.
+        let client = Arc::new(TelemetryTestClient::default());
+        let dispatcher = TelemetryDispatcher::spawn(client.clone());
+        dispatcher.send(test_telemetry_event(0)).await;
+        dispatcher.send(test_telemetry_event(1)).await;
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), dispatcher.flush())
+            .await
+            .expect("flush() must terminate, not hang");
+
+        assert_eq!(client.batches().iter().flatten().count(), 2);
+    }
+
     #[derive(Debug)]
     struct TestExtendedCtx;
 
@@ -6047,9 +7203,14 @@ mod tests {
                 run_cache_service_requested: true,
                 run_cache_service_config: Some(RunCacheServiceConfig::disabled()),
                 run_cache_service_client,
+                state_explain_log_path: None,
                 view_traverser: None,
                 heuristic_clock: std::sync::OnceLock::new(),
                 prefetch: Default::default(),
+                telemetry_event_order: std::sync::atomic::AtomicI64::new(0),
+                telemetry_session_start: std::sync::OnceLock::new(),
+                telemetry_session_ended: std::sync::atomic::AtomicBool::new(false),
+                telemetry_dispatcher: std::sync::OnceLock::new(),
             },
         );
 
@@ -6065,17 +7226,33 @@ mod tests {
     }
 
     fn test_resolver_state_with_nodes(nodes: Nodes) -> ResolverState {
+        // Register a root-project `custom_table` materialization so the
+        // materialization resolver classifies models materialized as
+        // `custom_table` as custom (root/imported macro shadowing), matching
+        // what the custom-materialization tests below exercise.
+        let mut macros = Macros::default();
+        let custom_table_mat = DbtMacro {
+            name: "materialization_custom_table_default".to_string(),
+            package_name: "test".to_string(),
+            unique_id: "macro.test.materialization_custom_table_default".to_string(),
+            ..Default::default()
+        };
+        macros
+            .macros
+            .insert(custom_table_mat.unique_id.clone(), custom_table_mat);
+
         ResolverState {
             root_project_name: "test".to_string(),
             adapter_type: AdapterType::Snowflake,
             nodes,
             disabled_nodes: Nodes::default(),
-            macros: Macros::default(),
+            macros,
             operations: Operations::default(),
             dbt_profile: DbtProfile {
                 profile: "default".to_string(),
                 target: "dev".to_string(),
                 defer_to_target: None,
+                allow_clones: true,
                 db_config: DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default()),
                 alt_target_db_config: None,
                 schema: "dbt_test".to_string(),
@@ -6279,6 +7456,75 @@ mod tests {
             "source dep should be included"
         );
         assert!(overrides.is_empty());
+    }
+
+    fn make_exposure(unique_id: &str) -> Arc<dbt_schemas::schemas::nodes::DbtExposure> {
+        let mut exposure = dbt_schemas::schemas::nodes::DbtExposure::default();
+        exposure.__common_attr__.unique_id = unique_id.to_string();
+        Arc::new(exposure)
+    }
+
+    #[test]
+    fn prefetch_keeps_real_relations_alongside_an_exposure() {
+        let model = make_model(
+            "model.pkg.orders",
+            "db",
+            "analytics",
+            "orders",
+            DbtMaterialization::Table,
+        );
+        let exposure = make_exposure("exposure.pkg.dashboard");
+        let mut nodes = nodes_from(vec![model], vec![]);
+        nodes
+            .exposures
+            .insert(exposure.__common_attr__.unique_id.clone(), exposure);
+
+        let runnable_set: BTreeSet<String> = [
+            "model.pkg.orders".to_string(),
+            "exposure.pkg.dashboard".to_string(),
+        ]
+        .into_iter()
+        .collect();
+
+        let (relations, _) = collect_global_prefetch_relations(
+            AdapterType::Snowflake,
+            &runnable_set,
+            &BTreeMap::new(),
+            &nodes,
+        );
+
+        assert_eq!(
+            relations.keys().collect::<Vec<_>>(),
+            vec![&fqn_of("db", "analytics", "orders")],
+            "the exposure must be dropped without disturbing real relations"
+        );
+    }
+
+    #[test]
+    fn non_empty_schema_check_ignores_database() {
+        // BigQuery renders relations without a database; only a missing schema
+        // makes the metadata query unbuildable.
+        let no_database = create_relation(
+            AdapterType::Bigquery,
+            String::new(),
+            "analytics".to_string(),
+            Some("orders".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap();
+        assert!(has_non_empty_schema(no_database.as_ref()));
+
+        let no_schema = create_relation(
+            AdapterType::Snowflake,
+            "db".to_string(),
+            String::new(),
+            Some("orders".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap();
+        assert!(!has_non_empty_schema(no_schema.as_ref()));
     }
 
     #[test]
@@ -6489,7 +7735,7 @@ mod tests {
         let start_ts_ms: i64 = 1_700_000_000_000;
         let clock = HeuristicClock {
             start_ts_ms,
-            start_instant: std::time::Instant::now(),
+            start_instant: Instant::now(),
         };
         assert_eq!(clock.now_ms(), start_ts_ms);
     }
@@ -6499,12 +7745,12 @@ mod tests {
         let start_ts_ms: i64 = 1_700_000_000_000;
         let clock = HeuristicClock {
             start_ts_ms,
-            start_instant: std::time::Instant::now(),
+            start_instant: Instant::now(),
         };
         let first = clock.now_ms();
         // Spin briefly so at least one millisecond passes.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(5);
-        while std::time::Instant::now() < deadline {}
+        let deadline = Instant::now() + std::time::Duration::from_millis(5);
+        while Instant::now() < deadline {}
         let second = clock.now_ms();
         assert!(
             second >= first,
@@ -6520,11 +7766,11 @@ mod tests {
         let base: i64 = 1_700_000_000_000;
         let clock_a = HeuristicClock {
             start_ts_ms: base,
-            start_instant: std::time::Instant::now(),
+            start_instant: Instant::now(),
         };
         let clock_b = HeuristicClock {
             start_ts_ms: base + 1_000,
-            start_instant: std::time::Instant::now(),
+            start_instant: Instant::now(),
         };
         // Both clocks were created at approximately the same real time, so
         // their elapsed values are nearly equal. The difference in now_ms
@@ -6542,7 +7788,7 @@ mod tests {
         assert!(lock.get().is_none(), "lock should be empty before set");
         lock.set(HeuristicClock {
             start_ts_ms: 42_000,
-            start_instant: std::time::Instant::now(),
+            start_instant: Instant::now(),
         })
         .unwrap();
         let clock = lock.get().expect("clock should be set");
@@ -6556,7 +7802,7 @@ mod tests {
         cache.insert_last_modified_epoch(&fqn, Some(123));
         let clock = HeuristicClock {
             start_ts_ms: 1_700_000_000_000,
-            start_instant: std::time::Instant::now(),
+            start_instant: Instant::now(),
         };
 
         apply_unresolvable_last_modified_overrides(
@@ -6579,7 +7825,7 @@ mod tests {
         cache.insert_last_modified_epoch(&fqn, Some(123));
         let clock = HeuristicClock {
             start_ts_ms: 1_700_000_000_000,
-            start_instant: std::time::Instant::now(),
+            start_instant: Instant::now(),
         };
         let overrides = BTreeMap::from([(
             fqn.clone(),
@@ -6613,13 +7859,120 @@ mod tests {
     }
 
     #[test]
+    fn execution_decision_id_from_response_extracts_service_ids() {
+        let mut ready = ready_to_execute_response();
+        let Some(submit_sql_response::Response::ReadyToExecute(response)) = ready.response.as_mut()
+        else {
+            panic!("expected ready response");
+        };
+        response.execution_decision_id = Some("ready-id".to_string());
+
+        let mut skip = skip_execution_response();
+        let Some(submit_sql_response::Response::SkipExecution(response)) = skip.response.as_mut()
+        else {
+            panic!("expected skip response");
+        };
+        response.execution_decision_id = Some("skip-id".to_string());
+
+        let mut clone = ready_to_clone_response();
+        let Some(submit_sql_response::Response::ReadyToClone(response)) = clone.response.as_mut()
+        else {
+            panic!("expected clone response");
+        };
+        response.execution_decision_id = Some("clone-id".to_string());
+
+        assert_eq!(
+            execution_decision_id_from_response(&ready).as_deref(),
+            Some("ready-id")
+        );
+        assert_eq!(
+            execution_decision_id_from_response(&skip).as_deref(),
+            Some("skip-id")
+        );
+        assert_eq!(
+            execution_decision_id_from_response(&clone).as_deref(),
+            Some("clone-id")
+        );
+        assert!(execution_decision_id_from_response(&empty_response()).is_none());
+    }
+
+    #[test]
+    fn state_explain_execution_decision_id_allows_missing_service_response() {
+        let mut ready = ready_to_execute_response();
+        let Some(submit_sql_response::Response::ReadyToExecute(response)) = ready.response.as_mut()
+        else {
+            panic!("expected ready response");
+        };
+        response.execution_decision_id = Some("ready-id".to_string());
+        let ready_decision = record_service_decision("model.test.orders", &ready, 0, true);
+
+        assert_eq!(
+            state_explain_execution_decision_id(Some(&ready), &ready_decision).as_deref(),
+            Some("ready-id")
+        );
+        assert!(state_explain_execution_decision_id(None, &ready_decision).is_none());
+    }
+
+    #[test]
+    fn state_explain_execution_decision_id_ignores_data_test_skip_fallback() {
+        let mut response = skip_execution_response();
+        let Some(submit_sql_response::Response::SkipExecution(skip)) = response.response.as_mut()
+        else {
+            panic!("expected skip response");
+        };
+        skip.execution_decision_id = Some("skip-id".to_string());
+
+        let decision = record_service_decision(
+            "test.test.not_null_orders_order_date.abc123",
+            &response,
+            0,
+            true,
+        );
+
+        assert_eq!(
+            decision,
+            RunCacheServiceDecision::Execute {
+                after_success: RunCacheAfterSuccess::None,
+                sao_guard: None,
+            }
+        );
+        assert!(state_explain_execution_decision_id(Some(&response), &decision).is_none());
+    }
+
+    #[test]
+    fn state_explain_execution_decision_id_keeps_honored_skip() {
+        let mut response = skip_execution_response_with_test_result(CachedTestExecutionResult {
+            failures: 0,
+            should_warn: false,
+            should_error: false,
+        });
+        let Some(submit_sql_response::Response::SkipExecution(skip)) = response.response.as_mut()
+        else {
+            panic!("expected skip response");
+        };
+        skip.execution_decision_id = Some("skip-id".to_string());
+
+        let decision = record_service_decision(
+            "test.test.not_null_orders_order_date.abc123",
+            &response,
+            0,
+            true,
+        );
+
+        assert_eq!(
+            state_explain_execution_decision_id(Some(&response), &decision).as_deref(),
+            Some("skip-id")
+        );
+    }
+
+    #[test]
     fn clone_chain_depth_limit_for_adapter_returns_n_minus_1_for_prod() {
         assert_eq!(
-            clone_chain_depth_limit_for_adapter(AdapterType::Databricks, true),
+            clone_chain_depth_limit_for_adapter(AdapterType::Databricks, true, true),
             Some(0)
         );
         assert_eq!(
-            clone_chain_depth_limit_for_adapter(AdapterType::Bigquery, true),
+            clone_chain_depth_limit_for_adapter(AdapterType::Bigquery, true, true),
             Some(2)
         );
     }
@@ -6627,11 +7980,11 @@ mod tests {
     #[test]
     fn clone_chain_depth_limit_for_adapter_returns_default_for_non_prod() {
         assert_eq!(
-            clone_chain_depth_limit_for_adapter(AdapterType::Databricks, false),
+            clone_chain_depth_limit_for_adapter(AdapterType::Databricks, false, true),
             Some(1)
         );
         assert_eq!(
-            clone_chain_depth_limit_for_adapter(AdapterType::Bigquery, false),
+            clone_chain_depth_limit_for_adapter(AdapterType::Bigquery, false, true),
             Some(3)
         );
     }
@@ -6639,12 +7992,74 @@ mod tests {
     #[test]
     fn clone_chain_depth_limit_for_adapter_none_for_adapters_with_no_limits() {
         assert_eq!(
-            clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, true),
+            clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, true, true),
             None
         );
         assert_eq!(
-            clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, false),
+            clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, false, true),
             None
         );
+    }
+
+    #[test]
+    fn clone_chain_depth_limit_for_adapter_zero_when_clones_disallowed() {
+        // allow_clones=false overrides to 0 regardless of adapter or prod/dev direction,
+        // including adapters that otherwise have no default limit at all.
+        assert_eq!(
+            clone_chain_depth_limit_for_adapter(AdapterType::Databricks, true, false),
+            Some(0)
+        );
+        assert_eq!(
+            clone_chain_depth_limit_for_adapter(AdapterType::Bigquery, false, false),
+            Some(0)
+        );
+        assert_eq!(
+            clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, true, false),
+            Some(0)
+        );
+        assert_eq!(
+            clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, false, false),
+            Some(0)
+        );
+    }
+
+    fn state_explain_model(materialized: DbtMaterialization) -> DbtModel {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.test.orders".to_string();
+        model.__common_attr__.name = "orders".to_string();
+        set_state_explain_base(&mut model.__base_attr__, materialized, "orders");
+        model
+    }
+
+    fn state_explain_seed() -> DbtSeed {
+        let mut seed = DbtSeed::default();
+        seed.__common_attr__.unique_id = "seed.test.cities".to_string();
+        seed.__common_attr__.name = "cities".to_string();
+        set_state_explain_base(&mut seed.__base_attr__, DbtMaterialization::Seed, "cities");
+        seed
+    }
+
+    fn state_explain_snapshot() -> DbtSnapshot {
+        let mut snapshot = DbtSnapshot::default();
+        snapshot.__common_attr__.unique_id = "snapshot.test.orders_snapshot".to_string();
+        snapshot.__common_attr__.name = "orders_snapshot".to_string();
+        set_state_explain_base(
+            &mut snapshot.__base_attr__,
+            DbtMaterialization::Snapshot,
+            "orders_snapshot",
+        );
+        snapshot
+    }
+
+    fn set_state_explain_base(
+        base: &mut dbt_schemas::schemas::nodes::NodeBaseAttributes,
+        materialized: DbtMaterialization,
+        alias: &str,
+    ) {
+        base.database = "analytics".to_string();
+        base.schema = "marts".to_string();
+        base.alias = alias.to_string();
+        base.materialized = materialized;
+        base.quoting = ResolvedQuoting::trues();
     }
 }

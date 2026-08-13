@@ -1221,8 +1221,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             tags: test
                                 .config
                                 .tags
+                                .inner()
                                 .clone()
-                                .map(|tags| tags.into())
+                                .map(Into::into)
                                 .unwrap_or_default(),
                             classifiers: Default::default(),
                             meta: test.config.meta.clone().unwrap_or_default(),
@@ -1315,7 +1316,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .config
                                 .tags
                                 .clone()
-                                .map(|tags| tags.into())
+                                .map(Into::into)
                                 .unwrap_or_default(),
                             classifiers: Default::default(),
                             meta: snapshot.config.meta.clone().unwrap_or_default(),
@@ -1394,12 +1395,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             raw_code: seed.__base_attr__.raw_code,
                             checksum: seed.__base_attr__.checksum,
                             language: seed.__base_attr__.language,
-                            tags: seed
-                                .config
-                                .tags
-                                .clone()
-                                .map(|tags| tags.into())
-                                .unwrap_or_default(),
+                            tags: seed.config.tags.clone().map(Into::into).unwrap_or_default(),
                             classifiers: Default::default(),
                             meta: seed.config.meta.clone().unwrap_or_default(),
                         },
@@ -1440,6 +1436,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             delimiter: seed.config.delimiter.clone().map(|d| d.into_inner()),
                             root_path: seed.root_path,
                             catalog_name: seed.config.catalog_name.clone(),
+                            alt_compute: seed.config.alt_compute,
                         },
                         deprecated_config: seed.config.into(),
                         __other__: seed.__other__,
@@ -1457,8 +1454,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 let config = analysis.config;
                 let tags = config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default();
                 let meta = config.meta.clone().unwrap_or_default();
 
@@ -1551,8 +1549,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     tags: source
                         .config
                         .tags
+                        .inner()
                         .clone()
-                        .map(|tags| tags.into())
+                        .map(Into::into)
                         .unwrap_or_default(),
                     classifiers: Default::default(),
                     meta: source.config.meta.clone().unwrap_or_default(),
@@ -1683,8 +1682,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     tags: unit_test
                         .config
                         .tags
+                        .inner()
                         .clone()
-                        .map(|tags| tags.into())
+                        .map(Into::into)
                         .unwrap_or_default(),
                     classifiers: Default::default(),
                     meta: unit_test.config.meta.clone().unwrap_or_default(),
@@ -1735,8 +1735,11 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
             .semantic_models
             .insert(unique_id, Arc::new(semantic_model.into()));
     }
-    for (_unique_id, _metric) in manifest.metrics {
-        // TODO: insert DbtMetric into node.metrics
+    for (unique_id, metric) in manifest.metrics {
+        // Load previous-state metrics so `state:modified` can compare them. Without this,
+        // `previous_node_for` never finds a metric and every metric is unconditionally
+        // reported as modified (dbt-core#15513).
+        nodes.metrics.insert(unique_id, Arc::new(metric.into()));
     }
     for (unique_id, saved_query) in manifest.saved_queries {
         nodes.saved_queries.insert(
@@ -1758,8 +1761,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     tags: saved_query
                         .config
                         .tags
+                        .inner()
                         .clone()
-                        .map(|tags| tags.into())
+                        .map(Into::into)
                         .unwrap_or_default(),
                     classifiers: Default::default(),
                     meta: saved_query.config.meta.clone().unwrap_or_default(),
@@ -1933,7 +1937,7 @@ pub fn manifest_model_to_dbt_model(
                 .config
                 .classifiers
                 .clone()
-                .map(|c| c.into())
+                .map(Into::into)
                 .unwrap_or_default(),
             meta: model.config.meta.clone().unwrap_or_default(),
         },
@@ -1986,6 +1990,7 @@ pub fn manifest_model_to_dbt_model(
             alt_compute: model.config.alt_compute,
             table_format: model.config.table_format.clone(),
             sync: model.config.sync.clone(),
+            compiled_code: None,
         },
         __adapter_attr__: AdapterAttr::from_config_and_dialect(
             &model.config.__warehouse_specific_config__,
@@ -2032,8 +2037,9 @@ pub fn manifest_function_to_dbt_function(
             tags: function
                 .config
                 .tags
+                .inner()
                 .clone()
-                .map(|tags| tags.into())
+                .map(Into::into)
                 .unwrap_or_default(),
             classifiers: Default::default(),
             meta: function.config.meta.clone().unwrap_or_default(),

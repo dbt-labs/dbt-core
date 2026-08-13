@@ -27,7 +27,9 @@ use dbt_schemas::{
 use minijinja::MacroSpans;
 
 use super::resolve_properties::MinimalPropertiesEntry;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::utils::{RelationComponents, update_node_relation_components};
 use crate::{
@@ -69,10 +71,10 @@ pub async fn resolve_analyses(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.analyses,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?;
@@ -83,6 +85,7 @@ pub async fn resolve_analyses(
             root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
+            uses_snapshot_fqn: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -179,7 +182,7 @@ pub async fn resolve_analyses(
         let columns = process_columns(
             properties.columns.as_ref(),
             analysis_config.meta.clone(),
-            analysis_config.tags.clone().map(|tags| tags.into()),
+            analysis_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
 
         let is_enabled = matches!(status, ModelStatus::Enabled);
@@ -206,6 +209,7 @@ pub async fn resolve_analyses(
                 raw_code: Some(raw_code),
                 tags: analysis_config
                     .tags
+                    .inner()
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
@@ -307,7 +311,7 @@ pub async fn resolve_analyses(
                 "Unused schema.yml entry for analysis '{}'",
                 analysis_name,
             );
-            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            emit_warn_log_from_fs_error(*err);
         }
     }
 

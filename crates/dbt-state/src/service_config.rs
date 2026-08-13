@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::env;
 use std::fmt;
 use std::time::Duration;
 
 use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_schemas::state::DbtProfile;
+
+use crate::proto::query_cache::{Struct, Value, value};
 
 pub const DEFAULT_API_URL: &str = "api.state.dbt.com:443";
 pub const DEFAULT_OAUTH_TOKEN_URL: &str = "https://auth.state.dbt.com/token";
@@ -62,6 +65,7 @@ pub struct RunCacheServiceConfig {
     pub clone_time_travel_limit_seconds: Option<i64>,
     pub metadata_cache_ttl_seconds: i64,
     pub run_hooks_on_no_op: bool,
+    pub compare_unrendered_code: bool,
     pub snowflake_get_view_ddl_override: Option<String>,
     pub snowflake_metadata_warehouse: Option<String>,
 }
@@ -187,6 +191,10 @@ impl RunCacheServiceConfig {
             Some(value) => parse_bool("RUN_HOOKS_ON_NO_OP", &value)?,
             None => false,
         };
+        let compare_unrendered_code = match config_value(&mut get_env, "COMPARE_UNRENDERED_CODE") {
+            Some(value) => parse_bool("COMPARE_UNRENDERED_CODE", &value)?,
+            None => false,
+        };
 
         Ok(Self {
             enabled,
@@ -223,6 +231,7 @@ impl RunCacheServiceConfig {
             clone_time_travel_limit_seconds,
             metadata_cache_ttl_seconds,
             run_hooks_on_no_op,
+            compare_unrendered_code,
             snowflake_get_view_ddl_override: config_value(
                 &mut get_env,
                 "SNOWFLAKE_GET_VIEW_DDL_OVERRIDE",
@@ -269,6 +278,7 @@ impl RunCacheServiceConfig {
             clone_time_travel_limit_seconds: None,
             metadata_cache_ttl_seconds: DEFAULT_METADATA_CACHE_TTL_SECONDS,
             run_hooks_on_no_op: false,
+            compare_unrendered_code: false,
             snowflake_get_view_ddl_override: None,
             snowflake_metadata_warehouse: None,
         }
@@ -304,6 +314,119 @@ impl RunCacheServiceConfig {
         // is the current target the same as the "defer to" target
         // this is essentially an "is prod?" check
         self.defer_to_target(active_profile) == active_profile.target
+    }
+
+    pub fn telemetry_config(&self) -> Struct {
+        let mut fields = HashMap::new();
+        insert_string(&mut fields, "api_url", &self.api_url);
+        insert_bool(&mut fields, "secure", self.secure);
+        insert_string_option(&mut fields, "org_id", self.org_id.as_deref());
+        // `oauth_client_id`, like `oauth_client_secret`, is intentionally left
+        // out: the Python dbt State client marks both sensitive and excludes
+        // them from the config it reports as telemetry.
+        insert_string(&mut fields, "oauth_token_url", &self.oauth_token_url);
+        insert_string(&mut fields, "oauth_auth_url", &self.oauth_auth_url);
+        insert_i64(
+            &mut fields,
+            "api_client_timeout",
+            i64::try_from(self.timeout.as_secs()).unwrap_or(i64::MAX),
+        );
+        insert_string(&mut fields, "defer_to", &self.defer_to);
+        insert_string(&mut fields, "defer_log_level", &self.defer_log_level);
+        insert_bool(
+            &mut fields,
+            "enable_response_logging",
+            self.enable_response_logging,
+        );
+        insert_bool(&mut fields, "enable_data_tests", self.enable_data_tests);
+        insert_i64(&mut fields, "log_file_limit", self.log_file_limit);
+        insert_string_option(
+            &mut fields,
+            "log_dir_override",
+            self.log_dir_override.as_deref(),
+        );
+        insert_string(&mut fields, "log_prefix", &self.log_prefix);
+        insert_i64(
+            &mut fields,
+            "freshness_tolerance_seconds",
+            self.freshness_tolerance_seconds,
+        );
+        insert_bool(
+            &mut fields,
+            "tolerate_nondeterminism",
+            self.tolerate_nondeterminism,
+        );
+        insert_bool(
+            &mut fields,
+            "enable_lenient_dependencies",
+            self.enable_lenient_dependencies,
+        );
+        insert_string(
+            &mut fields,
+            "clone_incremental_in_dev",
+            self.clone_incremental_in_dev.as_str(),
+        );
+        insert_i64_option(
+            &mut fields,
+            "clone_time_travel_limit",
+            self.clone_time_travel_limit_seconds,
+        );
+        insert_i64(
+            &mut fields,
+            "metadata_cache_ttl",
+            self.metadata_cache_ttl_seconds,
+        );
+        insert_bool(&mut fields, "run_hooks_on_no_op", self.run_hooks_on_no_op);
+        insert_string_option(
+            &mut fields,
+            "snowflake_get_view_ddl_override",
+            self.snowflake_get_view_ddl_override.as_deref(),
+        );
+        insert_string_option(
+            &mut fields,
+            "snowflake_metadata_warehouse",
+            self.snowflake_metadata_warehouse.as_deref(),
+        );
+        Struct { fields }
+    }
+}
+
+fn insert_string(fields: &mut HashMap<String, Value>, key: &str, value: &str) {
+    fields.insert(
+        key.to_string(),
+        Value {
+            kind: Some(value::Kind::StringValue(value.to_string())),
+        },
+    );
+}
+
+fn insert_string_option(fields: &mut HashMap<String, Value>, key: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        insert_string(fields, key, value);
+    }
+}
+
+fn insert_bool(fields: &mut HashMap<String, Value>, key: &str, value: bool) {
+    fields.insert(
+        key.to_string(),
+        Value {
+            kind: Some(value::Kind::BoolValue(value)),
+        },
+    );
+}
+
+fn insert_i64(fields: &mut HashMap<String, Value>, key: &str, value: i64) {
+    fields.insert(
+        key.to_string(),
+        Value {
+            kind: Some(value::Kind::IntValue(value)),
+        },
+    );
+}
+
+fn insert_i64_option(fields: &mut HashMap<String, Value>, key: &str, value: Option<i64>) {
+    if let Some(value) = value {
+        insert_i64(fields, key, value);
     }
 }
 
@@ -474,6 +597,7 @@ mod tests {
             profile: "default".to_string(),
             target: target.to_string(),
             defer_to_target: defer_to_target.map(|target| target.to_string()),
+            allow_clones: true,
             db_config: DbConfig::DuckDB(Box::<DuckDbConfig>::default()),
             alt_target_db_config: None,
             schema: "dbt_test".to_string(),
@@ -533,6 +657,7 @@ mod tests {
         assert_eq!(config.clone_time_travel_limit_seconds, None);
         assert_eq!(config.metadata_cache_ttl_seconds, 0);
         assert!(!config.run_hooks_on_no_op);
+        assert!(!config.compare_unrendered_code);
         assert_eq!(config.snowflake_get_view_ddl_override, None);
         assert_eq!(config.snowflake_metadata_warehouse, None);
     }
@@ -733,6 +858,7 @@ mod tests {
             ("RUN_CACHE_ENABLE_RESPONSE_LOGGING", "false"),
             ("RUN_CACHE_ENABLE_DATA_TESTS", "0"),
             ("RUN_CACHE_RUN_HOOKS_ON_NO_OP", "true"),
+            ("RUN_CACHE_COMPARE_UNRENDERED_CODE", "true"),
         ])
         .unwrap();
 
@@ -744,6 +870,12 @@ mod tests {
         assert!(!config.enable_response_logging);
         assert!(!config.enable_data_tests);
         assert!(config.run_hooks_on_no_op);
+        assert!(config.compare_unrendered_code);
+    }
+
+    #[test]
+    fn compare_unrendered_code_rejects_unparseable_values() {
+        assert!(config_from_pairs(&[("RUN_CACHE_COMPARE_UNRENDERED_CODE", "maybe")]).is_err());
     }
 
     #[test]
@@ -806,6 +938,20 @@ mod tests {
             config.snowflake_metadata_warehouse.as_deref(),
             Some("metadata_wh")
         );
+    }
+
+    #[test]
+    fn telemetry_config_excludes_oauth_credentials() {
+        let mut config = RunCacheServiceConfig::disabled();
+        config.oauth_client_secret = Some("secret".to_string());
+        config.org_id = Some("org-1".to_string());
+
+        let telemetry = config.telemetry_config();
+
+        assert!(telemetry.fields.contains_key("api_url"));
+        assert!(telemetry.fields.contains_key("org_id"));
+        assert!(!telemetry.fields.contains_key("oauth_client_id"));
+        assert!(!telemetry.fields.contains_key("oauth_client_secret"));
     }
 
     #[test]

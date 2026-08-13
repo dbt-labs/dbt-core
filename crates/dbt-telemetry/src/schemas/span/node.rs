@@ -83,6 +83,8 @@ struct NodeEvaluatedJsonPayload {
     pub node_outcome_detail: Option<NodeOutcomeDetail>,
     /// Time the node evaluation spent idle.
     pub idle_time_ms: Option<u64>,
+    /// dbt State decision id for the node's run-phase execution.
+    pub state_decision_id: Option<String>,
 }
 
 /// Internal struct used for serializing/deserializing subset of
@@ -107,6 +109,7 @@ fn deserialize_node_evaluated_json_payload(
         return Ok(NodeEvaluatedJsonPayload {
             node_outcome_detail: None,
             idle_time_ms: None,
+            state_decision_id: None,
         });
     };
 
@@ -119,7 +122,9 @@ fn deserialize_node_evaluated_json_payload(
     })?;
 
     let is_wrapped_payload = value.as_object().is_some_and(|obj| {
-        obj.contains_key("node_outcome_detail") || obj.contains_key("idle_time_ms")
+        obj.contains_key("node_outcome_detail")
+            || obj.contains_key("idle_time_ms")
+            || obj.contains_key("state_decision_id")
     });
 
     if is_wrapped_payload {
@@ -142,6 +147,7 @@ fn deserialize_node_evaluated_json_payload(
                 },
             )?),
             idle_time_ms: None,
+            state_decision_id: None,
         })
     }
 }
@@ -172,20 +178,22 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
             content_hash: Some(Cow::Borrowed(self.node_checksum.as_str())),
             // Serialize less frequently queried node fields into JSON as they may grow
             // with arbitrary data.
-            json_payload: (self.node_outcome_detail.is_some() || self.idle_time_ms.is_some()).then(
-                || {
-                    serde_json::to_string(&NodeEvaluatedJsonPayload {
-                        node_outcome_detail: self.node_outcome_detail.clone(),
-                        idle_time_ms: self.idle_time_ms,
-                    })
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Failed to serialize json payload for event type \"{}\" to JSON",
-                            Self::full_name()
-                        )
-                    })
-                },
-            ),
+            json_payload: (self.node_outcome_detail.is_some()
+                || self.idle_time_ms.is_some()
+                || self.state_decision_id.is_some())
+            .then(|| {
+                serde_json::to_string(&NodeEvaluatedJsonPayload {
+                    node_outcome_detail: self.node_outcome_detail.clone(),
+                    idle_time_ms: self.idle_time_ms,
+                    state_decision_id: self.state_decision_id.clone(),
+                })
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to serialize json payload for event type \"{}\" to JSON",
+                        Self::full_name()
+                    )
+                })
+            }),
             rows_affected: self.rows_affected,
             ..Default::default()
         }
@@ -232,6 +240,7 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
             node_cancel_reason: record.node_cancel_reason.map(|v| v as i32),
             node_skip_reason: record.node_skip_reason.map(|v| v as i32),
             sao_enabled: record.sao_enabled,
+            state_decision_id: json_payload.state_decision_id,
             dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
             node_outcome_detail: json_payload.node_outcome_detail,
             relative_path: record

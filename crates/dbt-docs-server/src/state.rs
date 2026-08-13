@@ -2,9 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde::Serialize;
 
-use crate::handlers::analytics::{AnalyticsSink, VortexSink};
 use crate::providers::Providers;
 pub use dbt_docs_core::{DistInfo, TelemetryHydration};
 
@@ -21,21 +19,9 @@ pub struct AppState {
     /// RFC3339 timestamp of the loaded snapshot (`index_dir` mtime), or
     /// `None` on empty-start. Computed once at boot; a staleness signal.
     pub generation: Option<String>,
-    /// Sink for docs analytics events (`POST /api/v1/analytics/events`).
-    /// Production forwards to Vortex; tests inject a recording double.
-    pub analytics: Arc<dyn AnalyticsSink>,
 }
 
 pub type SharedState = Arc<AppState>;
-
-/// Gated feature surfaces — `true` only when the running distribution
-/// supports the feature. The UI reads this via `GET /api/v1/capabilities`
-/// to decide which features are enabled.
-#[derive(Debug, Clone, Serialize)]
-pub struct Capabilities {
-    pub has_column_lineage: bool,
-    pub has_dbt_state: bool,
-}
 
 impl AppState {
     pub fn new(
@@ -59,7 +45,6 @@ impl AppState {
             send_anonymous_usage_stats,
             project_loaded,
             generation,
-            analytics: Arc::new(VortexSink),
         }
     }
 
@@ -98,13 +83,6 @@ impl AppState {
         self
     }
 
-    /// Inject a recording analytics sink for testing.
-    #[cfg(test)]
-    pub fn with_analytics(mut self, sink: Arc<dyn AnalyticsSink>) -> Self {
-        self.analytics = sink;
-        self
-    }
-
     pub fn dist_info(&self) -> DistInfo {
         self.providers.dist_info.dist_info()
     }
@@ -113,8 +91,10 @@ impl AppState {
         self.providers.dist_info.server_version()
     }
 
-    /// Server-authoritative telemetry fields hydrated onto docs analytics
-    /// events. Mirrors [`Self::dist_info`] / [`Self::server_version`].
+    /// Telemetry fields the build knows authoritatively. The server no longer
+    /// hydrates events with them — the export bakes them into the site's
+    /// bootstrap instead (ADR-10). Mirrors [`Self::dist_info`] /
+    /// [`Self::server_version`].
     pub fn telemetry_hydration(&self) -> TelemetryHydration {
         self.providers.dist_info.telemetry_hydration()
     }
@@ -125,12 +105,5 @@ impl AppState {
 
     pub fn has_dbt_state(&self) -> bool {
         self.has_dbt_state
-    }
-
-    pub fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            has_column_lineage: self.has_column_lineage(),
-            has_dbt_state: self.has_dbt_state(),
-        }
     }
 }

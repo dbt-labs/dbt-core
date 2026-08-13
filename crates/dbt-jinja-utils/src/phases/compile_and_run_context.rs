@@ -637,17 +637,36 @@ impl Object for SourceFunction {
         args: &[MinijinjaValue],
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        let num_args = parser.positional_len();
+        let mut parser = ArgParser::new(args, None);
+        let num_args = parser.positional_len() + parser.kwargs_len();
         let (source_name, table_name) = match num_args {
             0 | 1 => Err(MinijinjaError::new(
                 MinijinjaErrorKind::MissingArgument,
                 "source macro requires 2 arguments: source name and table name",
             )),
-            2 => Ok((
-                args[0].as_str().unwrap().to_string(), // source name (namespace)
-                args[1].as_str().unwrap().to_string(), // name (relation name)
-            )),
+            2 => {
+                let source_name_value = parser.get::<MinijinjaValue>("source_name")?;
+                let table_name_value = parser.get::<MinijinjaValue>("table_name")?;
+                let source_name = source_name_value.as_str().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        format!(
+                            "The source name (first) argument to source() must be a string, got {}",
+                            source_name_value.kind()
+                        ),
+                    )
+                })?;
+                let table_name = table_name_value.as_str().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        format!(
+                            "The table name (second) argument to source() must be a string, got {}",
+                            table_name_value.kind()
+                        ),
+                    )
+                })?;
+                Ok((source_name.to_string(), table_name.to_string()))
+            }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::TooManyArguments,
                 "source",

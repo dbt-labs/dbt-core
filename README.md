@@ -50,8 +50,8 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 Start by choosing a distribution. dbt Core is the baseline distribution of dbt. Fusion extends dbt Core with additional SQL comprehension abilities. Both distributions are free to install and can run locally.
 
-- **If you need an Apache 2.0 licensed tool** and the ability to review every line of code inside of it, [install dbt Core](https://docs.getdbt.com/docs/local/install-dbt#dbt-core).
-- **If you need a free CLI you can use locally**, [install Fusion](https://docs.getdbt.com/docs/local/install-dbt#dbt-fusion-engine-recommended). It can do more than dbt Core out of the box and you can seamlessly enable other advanced features over time if you choose to. 
+- **If you need an Apache 2.0 licensed tool** and the ability to review every line of code inside of it, [install dbt Core](https://docs.getdbt.com/docs/local/install-dbt-core-v2?version=2.0).
+- **If you need a free CLI you can use locally**, [install Fusion](https://docs.getdbt.com/docs/local/install-dbt?version=2.0). It can do more than dbt Core out of the box and you can seamlessly enable other advanced features over time if you choose to.
 
 Regardless of the distribution you choose, each is part of a single framework with a single language specification, meaning your business logic is portable in both directions.
 

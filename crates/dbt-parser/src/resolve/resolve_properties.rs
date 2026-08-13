@@ -1,7 +1,8 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::io_args::IoArgs;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
@@ -10,8 +11,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
-    AnalysesProperties, DbtPropertiesFileValues, MacrosProperties, MinimalSchemaValue,
-    MinimalTableValue, MinimalUnitTestValue,
+    AnalysesProperties, DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
+    MinimalUnitTestValue,
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
@@ -62,7 +63,6 @@ pub struct MinimalProperties {
 impl MinimalProperties {
     pub fn extend_from_minimal_properties_file(
         &mut self,
-        io_args: &IoArgs,
         other: DbtPropertiesFileValues,
         jinja_env: &JinjaEnv,
         properties_path: &Path,
@@ -73,7 +73,6 @@ impl MinimalProperties {
             // Extend but error on duplicate keys
             for model_value in models {
                 let model = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     model_value.clone(),
                     false,
                     jinja_env,
@@ -107,7 +106,6 @@ impl MinimalProperties {
         if let Some(analyses) = other.analyses {
             for analysis_value in analyses {
                 let analysis = into_typed_with_jinja::<AnalysesProperties, _>(
-                    io_args,
                     analysis_value.clone(),
                     false,
                     jinja_env,
@@ -147,7 +145,6 @@ impl MinimalProperties {
                 pre_render_tables_field(&mut source_value, jinja_env, base_ctx);
 
                 let source = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     source_value.clone(),
                     false,
                     jinja_env,
@@ -173,7 +170,6 @@ impl MinimalProperties {
                     validate_resource_name(&source.name)?;
                     for table in tables.iter() {
                         let minimum_table_value = into_typed_with_jinja::<MinimalTableValue, _>(
-                            io_args,
                             table.clone(),
                             false,
                             jinja_env,
@@ -201,7 +197,6 @@ impl MinimalProperties {
                                     properties_path.display(),
                                     existing_entry.relative_path.display()
                                 ),
-                                io_args.status_reporter.as_ref(),
                             );
                         } else {
                             self.source_tables.insert(
@@ -226,7 +221,6 @@ impl MinimalProperties {
                             source.name,
                             properties_path.display()
                         ),
-                        io_args.status_reporter.as_ref(),
                     );
                 }
             }
@@ -234,7 +228,6 @@ impl MinimalProperties {
         if let Some(seeds) = other.seeds {
             for seed_value in seeds {
                 let seed = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     seed_value.clone(),
                     false,
                     jinja_env,
@@ -266,7 +259,6 @@ impl MinimalProperties {
         if let Some(snapshots) = other.snapshots {
             for snapshot_value in snapshots {
                 let snapshot = into_typed_with_jinja::<MinimalSnapshotValue, _>(
-                    io_args,
                     snapshot_value.clone(),
                     false,
                     jinja_env,
@@ -298,7 +290,6 @@ impl MinimalProperties {
         if let Some(functions) = other.functions {
             for function_value in functions {
                 let function = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     function_value.clone(),
                     false,
                     jinja_env,
@@ -330,7 +321,6 @@ impl MinimalProperties {
         if let Some(exposures) = other.exposures {
             for exposure_value in exposures {
                 let exposure = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     exposure_value.clone(),
                     false,
                     jinja_env,
@@ -356,7 +346,6 @@ impl MinimalProperties {
         if let Some(metrics) = other.metrics {
             for metric_value in metrics {
                 let metric = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     metric_value.clone(),
                     false,
                     jinja_env,
@@ -388,7 +377,6 @@ impl MinimalProperties {
         if let Some(saved_queries) = other.saved_queries {
             for saved_query_value in saved_queries {
                 let saved_query = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     saved_query_value.clone(),
                     false,
                     jinja_env,
@@ -420,7 +408,6 @@ impl MinimalProperties {
         if let Some(unit_tests) = other.unit_tests {
             for unit_test_value in unit_tests {
                 let unit_test = into_typed_with_jinja::<MinimalUnitTestValue, _>(
-                    io_args,
                     unit_test_value.clone(),
                     false,
                     jinja_env,
@@ -452,7 +439,6 @@ impl MinimalProperties {
         if let Some(tests) = other.tests {
             for test_value in tests {
                 let test = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     test_value.clone(),
                     false,
                     jinja_env,
@@ -484,7 +470,6 @@ impl MinimalProperties {
         if let Some(data_tests) = other.data_tests {
             for test_value in data_tests {
                 let test = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     test_value.clone(),
                     false,
                     jinja_env,
@@ -516,7 +501,6 @@ impl MinimalProperties {
         if let Some(groups) = other.groups {
             for group_value in groups {
                 let group = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    io_args,
                     group_value.clone(),
                     false,
                     jinja_env,
@@ -547,8 +531,9 @@ impl MinimalProperties {
         }
         if let Some(macros) = other.macros {
             for macro_value in macros {
-                let macro_props = into_typed_with_jinja::<MacrosProperties, _>(
-                    io_args,
+                // Only `name` is needed here. The full `MacrosProperties` renders every string
+                // field and discards it, double-rendering what `apply_macro_patches` renders.
+                let macro_props = into_typed_with_jinja::<MinimalSchemaValue, _>(
                     macro_value.clone(),
                     false,
                     jinja_env,
@@ -601,6 +586,7 @@ fn validate_resource_name(name: &str) -> FsResult<String> {
 pub fn resolve_minimal_properties(
     arg: &ResolveArgs,
     package: &DbtPackage,
+    root_package: &DbtPackage,
     root_package_name: &str,
     root_project_configs: &RootProjectConfigs,
     jinja_env: &JinjaEnv,
@@ -618,10 +604,10 @@ pub fn resolve_minimal_properties(
         is_dependency,
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.semantic_models,
                 (),
                 Some(package.dbt_project.name.as_str()),
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?;
@@ -649,12 +635,11 @@ pub fn resolve_minimal_properties(
             None
         };
 
-        let result = {
+        {
             let _guard = span.enter();
             let input = try_read_yml_to_str(&absolute_path)?;
 
-            match from_yaml_raw::<DbtPropertiesFileValues>(
-                &arg.io,
+            let result = match from_yaml_raw::<DbtPropertiesFileValues>(
                 &input,
                 Some(&absolute_path),
                 true,
@@ -663,7 +648,6 @@ pub fn resolve_minimal_properties(
                 Ok(properties_file_values) => {
                     let properties_path = &dbt_asset.path;
                     minimal_resolved_properties.extend_from_minimal_properties_file(
-                        &arg.io,
                         properties_file_values.clone(),
                         jinja_env,
                         properties_path,
@@ -689,7 +673,6 @@ pub fn resolve_minimal_properties(
                                     "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
                                     &package.dbt_project.name,
                                 ),
-                                arg.io.status_reporter.as_ref(),
                             );
 
                             minimal_resolved_properties.semantic_layer_spec_is_legacy = true;
@@ -698,17 +681,16 @@ pub fn resolve_minimal_properties(
 
                     Ok(())
                 }
-                Err(e) => {
-                    // Emit error and save it to apply to span, but continue processing other files
-                    emit_strict_parse_error(&e, dependency_package_name, &arg.io);
-                    Err(e)
-                }
-            }
-        };
+                Err(e) => Err(e),
+            };
 
-        // Record both success and failure statuses to the span, but continue processing
-        // regardless of outcome
-        let _ = result.record_status(&span);
+            // Record both success and failure statuses to the span, but continue processing
+            // regardless of outcome.
+            let _ = result.as_ref().record_status(&span);
+            if let Err(e) = result {
+                emit_strict_parse_error(*e, dependency_package_name);
+            }
+        }
     }
     Ok(minimal_resolved_properties)
 }

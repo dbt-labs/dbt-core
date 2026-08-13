@@ -11,13 +11,13 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 
 use super::config_keys::ConfigKeys;
-use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
@@ -31,19 +31,17 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::default_docs;
-use crate::schemas::project::configs::common::default_hooks;
-use crate::schemas::project::configs::common::default_meta_and_tags;
-use crate::schemas::project::configs::common::default_quoting;
-use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::project::configs::config_merge::Tags;
 use crate::schemas::properties::ModelState;
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, StringOrInteger, f64_or_string_f64,
-    hours_to_expiration_or_string, u64_or_string_u64,
+    hours_to_expiration_or_string_omissible, u64_or_string_u64,
 };
+use dbt_common::serde_utils::Omissible;
+use dbt_proc_macros::DefaultTo;
 use dbt_proc_macros::Resolvable;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -202,9 +200,9 @@ pub struct ProjectSnapshotConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "hours_to_expiration_or_string"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<StringOrInteger>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -370,10 +368,115 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.database.is_some()
+            || self.schema.is_some()
+            || self.alias.is_some()
+            || self.materialized.is_some()
+            || self.strategy.is_some()
+            || self.unique_key.is_some()
+            || self.check_cols.is_some()
+            || self.updated_at.is_some()
+            || self.dbt_valid_to_current.is_some()
+            || self.snapshot_meta_column_names.is_some()
+            || self.hard_deletes.is_some()
+            || self.target_database.is_some()
+            || self.target_schema.is_some()
+            || self.enabled.is_some()
+            || self.full_refresh.is_some()
+            || self.tags.is_some()
+            || self.pre_hook.is_some()
+            || self.post_hook.is_some()
+            || self.persist_docs.is_some()
+            || self.grants.0.is_present()
+            || self.event_time.is_some()
+            || self.quoting.is_some()
+            || self.static_analysis.is_some()
+            || self.meta.is_some()
+            || self.group.is_some()
+            || self.quote_columns.is_some()
+            || self.invalidate_hard_deletes.is_some()
+            || self.docs.is_some()
+            || self.adapter_properties.is_some()
+            || self.automatic_clustering.is_some()
+            || self.auto_refresh.is_some()
+            || self.backup.is_some()
+            || self.base_location_root.is_some()
+            || self.base_location_subpath.is_some()
+            || self.copy_grants.is_some()
+            || self.copy_tags.is_some()
+            || self.external_volume.is_some()
+            || self.initialize.is_some()
+            || self.scheduler.is_some()
+            || self.query_tag.is_some()
+            || self.table_tag.is_some()
+            || self.row_access_policy.is_some()
+            || self.refresh_mode.is_some()
+            || self.secure.is_some()
+            || self.snowflake_initialization_warehouse.is_some()
+            || self.immutable_where.is_some()
+            || self.snowflake_warehouse.is_some()
+            || self.refresh_warehouse.is_some()
+            || self.target_lag.is_some()
+            || self.tmp_relation_type.is_some()
+            || self.transient.is_some()
+            || self.cluster_by.is_some()
+            || self.enable_refresh.is_some()
+            || self.grant_access_to.is_some()
+            || self.hours_to_expiration.is_present()
+            || self.job_execution_timeout_seconds.is_some()
+            || self.reservation.is_some()
+            || self.kms_key_name.is_some()
+            || self.labels.is_some()
+            || self.labels_from_meta.is_some()
+            || self.max_staleness.is_some()
+            || self.partition_by.is_some()
+            || self.partition_expiration_days.is_some()
+            || self.partitions.is_some()
+            || self.refresh_interval_minutes.is_some()
+            || self.resource_tags.is_some()
+            || self.require_partition_filter.is_some()
+            || self.auto_liquid_cluster.is_some()
+            || self.buckets.is_some()
+            || self.catalog.is_some()
+            || self.clustered_by.is_some()
+            || self.compute.is_some()
+            || self.compression.is_some()
+            || self.databricks_compute.is_some()
+            || self.databricks_tags.is_some()
+            || self.file_format.is_some()
+            || self.catalog_name.is_some()
+            || self.include_full_name_in_path.is_some()
+            || self.liquid_clustered_by.is_some()
+            || self.location_root.is_some()
+            || self.matched_condition.is_some()
+            || self.merge_with_schema_evolution.is_some()
+            || self.not_matched_by_source_action.is_some()
+            || self.not_matched_by_source_condition.is_some()
+            || self.not_matched_condition.is_some()
+            || self.skip_matched_step.is_some()
+            || self.skip_not_matched_step.is_some()
+            || self.source_alias.is_some()
+            || self.target_alias.is_some()
+            || self.tblproperties.is_some()
+            || self.bind.is_some()
+            || self.dist.is_some()
+            || self.sort.is_some()
+            || self.sort_type.is_some()
+            || self.as_columnstore.is_some()
+            || self.table_type.is_some()
+            || self.indexes.is_some()
+            || self.unlogged.is_some()
+            || self.schedule.is_some()
+            || self.sync.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq,
+)]
 pub struct SnapshotConfig {
     // Snapshot-specific Configuration
     #[serde(alias = "project", alias = "data_space")]
@@ -401,11 +504,8 @@ pub struct SnapshotConfig {
     pub enabled: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(alias = "post-hook")]
@@ -568,7 +668,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             compute: config.compute,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
-            tags: config.tags,
+            tags: Tags(config.tags),
             pre_hook: config.pre_hook,
             post_hook: config.post_hook,
             persist_docs: config.persist_docs,
@@ -683,6 +783,27 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 // snapshot is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -707,7 +828,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             compute: config.compute,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             pre_hook: config.pre_hook,
             post_hook: config.post_hook,
             persist_docs: config.persist_docs,
@@ -858,101 +979,36 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
         self.finalize_resolved()
     }
 
-    #[allow(clippy::cognitive_complexity)]
     fn default_to(&mut self, parent: &SnapshotConfig) {
-        let SnapshotConfig {
-            database,
-            schema,
-            alias,
-            materialized,
-            strategy,
-            unique_key,
-            check_cols,
-            updated_at,
-            dbt_valid_to_current,
-            snapshot_meta_column_names,
-            hard_deletes,
-            target_database,
-            target_schema,
-            compute,
-            enabled,
-            full_refresh,
-            tags,
-            pre_hook,
-            post_hook,
-            persist_docs,
-            grants,
-            event_time,
-            quoting,
-            meta,
-            group,
-            quote_columns,
-            invalidate_hard_deletes,
-            docs,
-            static_analysis,
-            sync,
-            state,
-            // Flattened configs
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
-
-        // Handle flattened configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-
-        #[allow(unused, clippy::let_unit_value)]
-        let pre_hook = default_hooks(pre_hook, &parent.pre_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let post_hook = default_hooks(post_hook, &parent.post_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
-        #[allow(unused, clippy::let_unit_value)]
-        let grants = default_to_grants(grants, &parent.grants);
-        #[allow(unused, clippy::let_unit_value)]
-        let docs = default_docs(docs, &parent.docs);
-
-        // Use the improved default_to macro for simple fields
-        default_to!(
-            parent,
-            [
-                enabled,
-                compute,
-                full_refresh,
-                alias,
-                schema,
-                database,
-                target_database,
-                target_schema,
-                materialized,
-                group,
-                persist_docs,
-                unique_key,
-                event_time,
-                quote_columns,
-                invalidate_hard_deletes,
-                strategy,
-                updated_at,
-                dbt_valid_to_current,
-                snapshot_meta_column_names,
-                hard_deletes,
-                check_cols,
-                static_analysis,
-                materialized,
-                sync,
-                state,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 
 impl ConfigKeys for SnapshotConfig {
-    // The default implementation from the trait will handle
-    // extracting field names via serialization automatically
+    fn valid_field_names() -> HashSet<String> {
+        let default_instance = Self::default();
+        let serialized = dbt_yaml::to_value(&default_instance)
+            .expect("Failed to serialize SnapshotConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, _) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    field_names.insert(key_str);
+                }
+            }
+        }
+
+        // Add known aliases that might not show up in serialization
+        field_names.insert("project".to_string()); // alias for database
+        field_names.insert("data_space".to_string()); // alias for database
+        field_names.insert("dataset".to_string()); // alias for schema
+        field_names.insert("post-hook".to_string()); // might be serialized as post_hook
+        field_names.insert("pre-hook".to_string()); // might be serialized as pre_hook
+
+        field_names
+    }
 }
 
 #[cfg(test)]
@@ -1087,6 +1143,7 @@ __warehouse_specific_config__: {}
                 evaluate_volatile_sql: Some(true),
                 pre_clone: Some(StatePreClone::IfMissing),
                 execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
             }),
             ..Default::default()
         };

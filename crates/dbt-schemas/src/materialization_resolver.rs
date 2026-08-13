@@ -283,6 +283,40 @@ impl MaterializationResolver {
             &self.adapter_type
         ))
     }
+
+    /// Returns `true` when the materialization that will be dispatched for
+    /// `materialization_name` is user-defined (it comes from the root project
+    /// or an installed package) rather than a built-in dbt/adapter
+    /// materialization.
+    ///
+    /// This is used to skip static analysis for models that use a custom
+    /// materialization. Unlike a check on the parsed `materialized` config
+    /// value, this also detects a custom materialization that *shadows* a
+    /// built-in name such as `table` or `incremental`: dbt's dispatch rules
+    /// let a root/imported `materialization_<name>_<adapter>` macro win over
+    /// the built-in, so the model runs user code that Fusion cannot statically
+    /// reason about (e.g. an `{% if execute %}` branch that builds SQL from
+    /// `graph.nodes`, which renders empty during the parse-time `execute=false`
+    /// pass and can produce malformed SQL).
+    ///
+    /// A name that resolves to no macro (an invalid materialization) returns
+    /// `false`; that error is surfaced later where the macro is actually
+    /// dispatched.
+    pub fn is_custom_materialization(&self, materialization_name: &str) -> bool {
+        match self.find_materialization_macro_by_name(materialization_name) {
+            Ok(qualified) => {
+                // `qualified` is `"<package>.<macro_name>"`; package names do
+                // not contain `.`, so the prefix before the first `.` is the
+                // defining package.
+                let package_name = qualified.split('.').next().unwrap_or_default();
+                !matches!(
+                    self.classify_macro_locality(package_name),
+                    MacroLocality::Core
+                )
+            }
+            Err(_) => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -299,6 +333,7 @@ mod tests {
         m.original_file_path = DbtPath::from(format!("macros/{package}/{name}.sql"));
         m.path = m.original_file_path.clone();
         m.description = String::new();
+        m.supported_languages = None;
         m
     }
 
@@ -517,6 +552,87 @@ mod tests {
             .find_materialization_macro_by_name("view")
             .expect("should resolve");
         assert_eq!(got, format!("{}.{}", root, "materialization_view_postgres"));
+    }
+
+    #[test]
+    fn is_custom_materialization_true_for_novel_name() {
+        let root = "root";
+        let adapter = AdapterType::Postgres;
+        let macros = vec![build_macro(
+            "materialization_test_table_postgres",
+            "external_package",
+        )];
+        let resolver = resolver_with(macros, adapter, root);
+        assert!(resolver.is_custom_materialization("test_table"));
+    }
+
+    #[test]
+    fn is_custom_materialization_true_when_root_shadows_builtin() {
+        // Root project reimplements a built-in name (`table`) with an
+        // adapter-specific macro, which wins dispatch over the core
+        // adapter-specific macro at the same specificity (Root > Core). Even
+        // though the parsed materialized value is the built-in `Table`, the
+        // model runs the root macro, so it must be treated as custom.
+        let root = "root";
+        let adapter = AdapterType::Postgres;
+        let macros = vec![
+            build_macro("materialization_table_postgres", "dbt_postgres"),
+            build_macro("materialization_table_default", "dbt"),
+            build_macro("materialization_table_postgres", root),
+        ];
+        let resolver = resolver_with(macros, adapter, root);
+        assert!(resolver.is_custom_materialization("table"));
+    }
+
+    #[test]
+    fn is_custom_materialization_false_when_root_default_loses_to_core_adapter_specific() {
+        // Dispatch prefers adapter specificity over locality: a root `default`
+        // macro does NOT override a core adapter-specific macro, so the model
+        // runs the built-in and is not custom.
+        let root = "root";
+        let adapter = AdapterType::Postgres;
+        let macros = vec![
+            build_macro("materialization_table_postgres", "dbt_postgres"),
+            build_macro("materialization_table_default", "dbt"),
+            build_macro("materialization_table_default", root),
+        ];
+        let resolver = resolver_with(macros, adapter, root);
+        assert!(!resolver.is_custom_materialization("table"));
+    }
+
+    #[test]
+    fn is_custom_materialization_false_for_builtin_from_core() {
+        let root = "root";
+        let adapter = AdapterType::Postgres;
+        let macros = vec![
+            build_macro("materialization_table_postgres", "dbt_postgres"),
+            build_macro("materialization_table_default", "dbt"),
+        ];
+        let resolver = resolver_with(macros, adapter, root);
+        assert!(!resolver.is_custom_materialization("table"));
+    }
+
+    #[test]
+    fn is_custom_materialization_false_when_imported_cannot_override_builtin() {
+        // An imported (non-root) package cannot override a built-in name, so
+        // the built-in core macro is dispatched and the model is not custom.
+        let root = "root";
+        let adapter = AdapterType::Postgres;
+        let macros = vec![
+            build_macro("materialization_table_default", "dbt"),
+            build_macro("materialization_table_postgres", "pkg_override"),
+        ];
+        let resolver = resolver_with(macros, adapter, root);
+        assert!(!resolver.is_custom_materialization("table"));
+    }
+
+    #[test]
+    fn is_custom_materialization_false_for_unknown_name() {
+        let root = "root";
+        let adapter = AdapterType::Postgres;
+        let macros = vec![build_macro("materialization_view_default", "dbt")];
+        let resolver = resolver_with(macros, adapter, root);
+        assert!(!resolver.is_custom_materialization("does_not_exist"));
     }
 
     #[test]

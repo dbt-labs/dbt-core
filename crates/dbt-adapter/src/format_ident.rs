@@ -3,6 +3,16 @@ use std::collections::HashSet;
 use dbt_adapter_core::{AdapterType, quote_char};
 use once_cell::sync::Lazy;
 
+pub fn default_identifier_case(component: &str, adapter: AdapterType) -> String {
+    match adapter {
+        AdapterType::Salesforce | AdapterType::Bigquery | AdapterType::ClickHouse => {
+            component.to_string()
+        }
+        AdapterType::Snowflake => component.to_uppercase(),
+        _ => component.to_lowercase(),
+    }
+}
+
 pub fn format_ident(id: &str, adapter: AdapterType) -> String {
     if !need_quotes(id, adapter) {
         return id.to_string();

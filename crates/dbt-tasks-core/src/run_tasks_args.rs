@@ -10,6 +10,7 @@ use dbt_common::io_args::OptimizeTestsOptions;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::{DisplayFormat, EvalArgs, ReplayMode};
 use dbt_common::io_args::{Phases, RunCacheMode};
+use dbt_common::node_selector::SelectExpression;
 use dbt_common::static_analysis::{
     is_static_analysis_off_or_baseline, normalize_static_analysis_kind,
 };
@@ -83,6 +84,10 @@ pub struct RunTasksArgs {
     pub phase: Phases,
     /// Optional (resolved) sampling plan to locate local sampled data for sources
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
+    /// Parsed select expression from the invocation.
+    pub select: Option<SelectExpression>,
+    /// Parsed exclude expression from the invocation.
+    pub exclude: Option<SelectExpression>,
     /// Backend used for local execution of runnable nodes
     pub local_execution_backend: LocalExecutionBackendKind,
     /// Sidecar/service should not time out. (Used by REPL to keep the runner alive across multiple commands.)
@@ -91,10 +96,16 @@ pub struct RunTasksArgs {
     pub full_refresh: bool,
     /// Whether to run with `--empty` (creates relations with schema only, no data).
     pub empty: bool,
+    pub infer_schemas: bool,
+    pub skip_type_checking: bool,
+    pub show_sources: bool,
+    pub resolve_ambiguous_cols: bool,
     /// If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).
     pub event_time_end: Option<String>,
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
     pub event_time_start: Option<String>,
+    /// The raw `--sample` spec (e.g. `"30 days"` or a `{start, end}` JSON range), if passed.
+    pub sample: Option<String>,
     /// Per-invocation fail-fast signal.
     pub fail_fast: FailFast,
     /// Whether the user passed `--fail-fast`. The signal above is triggered on
@@ -148,12 +159,15 @@ impl RunTasksArgs {
             favor_state: arg.favor_state,
             run_cache_mode: arg.run_cache_mode.clone(),
             sample_renaming: arg.sample_renaming.clone(),
+            select: arg.select.clone(),
+            exclude: arg.exclude.clone(),
             phase: arg.phase.clone(),
             local_execution_backend: arg.local_execution_backend,
             long_living: arg.long_living,
             full_refresh: arg.full_refresh,
             event_time_start: arg.event_time_start.clone(),
             event_time_end: arg.event_time_end.clone(),
+            sample: arg.sample.clone(),
             fail_fast,
             fail_fast_flag: arg.fail_fast,
             skip_post_hooks: arg.skip_post_hooks,
@@ -161,6 +175,10 @@ impl RunTasksArgs {
             run_cache_service: arg.run_cache_service,
             warn_error_options: arg.warn_error_options.clone(),
             empty: arg.empty,
+            infer_schemas: arg.infer_schemas,
+            skip_type_checking: arg.skip_type_checking,
+            show_sources: arg.show_sources,
+            resolve_ambiguous_cols: arg.resolve_ambiguous_cols,
             previous_batch_results: Default::default(),
         };
         Box::new(run_tasks_args)

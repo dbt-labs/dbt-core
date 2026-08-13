@@ -87,33 +87,9 @@ impl Task for FileWriteTask {
     }
 }
 
-/// Task to touch a file.
-pub struct TouchTask {
-    path: String,
-}
-
-impl TouchTask {
-    pub fn new(path: impl Into<String>) -> TouchTask {
-        TouchTask { path: path.into() }
-    }
-}
-
-#[async_trait]
-impl Task for TouchTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        touch(PathBuf::from(&self.path))?;
-        Ok(())
-    }
-}
-
 // Touch is here simulate by read followed by write -- the basic touch
 // is only available via its nightly
-fn touch(file: PathBuf) -> FsResult<()> {
+pub(crate) fn touch(file: PathBuf) -> FsResult<()> {
     let res = stdfs::read(&file).expect("read to succeed");
     stdfs::remove_file(&file)?;
     let mut file = File::create(&file)?;
@@ -175,30 +151,6 @@ impl Task for CpFromTargetTask {
         }
 
         stdfs::copy(&src_path, &dest_path)?;
-        Ok(())
-    }
-}
-
-/// Task to remove a file.
-pub struct RmTask {
-    path: String,
-}
-
-impl RmTask {
-    pub fn new(path: impl Into<String>) -> RmTask {
-        RmTask { path: path.into() }
-    }
-}
-
-#[async_trait]
-impl Task for RmTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        stdfs::remove_file(&self.path).expect("could not remove a file");
         Ok(())
     }
 }

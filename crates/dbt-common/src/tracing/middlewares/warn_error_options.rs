@@ -1,11 +1,12 @@
 use std::sync::{Arc, RwLock};
 
 use dbt_error::ErrorCode;
-use dbt_telemetry::LogMessage;
 use dbt_tracing::{LogRecordInfo, SeverityNumber};
 
 use crate::{
-    tracing::{data_provider::DataProvider, layer::TelemetryMiddleware},
+    tracing::{
+        data_provider::DataProvider, fs_error_log::get_log_message, layer::TelemetryMiddleware,
+    },
     warn_error_options::{ErrorCtx, WarnErrorDecision, WarnErrorOptions},
 };
 
@@ -32,7 +33,7 @@ impl TelemetryMiddleware for TelemetryWarnErrorOptionsMiddleware {
         mut record: LogRecordInfo,
         _data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
-        let Some(log_message) = record.attributes.downcast_ref::<LogMessage>() else {
+        let Some(log_message) = get_log_message(&record.attributes) else {
             return Some(record);
         };
         if record.severity_number != SeverityNumber::Warn {

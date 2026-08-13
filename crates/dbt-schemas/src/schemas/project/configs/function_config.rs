@@ -13,11 +13,9 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use super::omissible_utils::handle_omissible_override;
 
-use dbt_proc_macros::Resolvable;
+use dbt_proc_macros::{DefaultTo, Resolvable};
 
-use crate::default_to;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::{Access, DbtQuoting};
 use crate::schemas::project::configs::common::log_state_mod_diff;
@@ -27,14 +25,11 @@ use super::common::{
     same_warehouse_config,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::{
-    default_docs, default_meta_and_tags, default_packages, default_quoting, default_to_grants,
-};
+use crate::schemas::project::configs::config_merge::{Packages, Tags};
 use crate::schemas::project::dbt_project::{
     ResolvableConfig, ResolvedConfig, TypedRecursiveConfig,
 };
 use crate::schemas::properties::{FunctionKind, Volatility};
-use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, default_type};
 
 fn default_function_kind() -> Option<FunctionKind> {
@@ -52,7 +47,7 @@ pub struct FunctionSnowflakeConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+#[derive(DefaultTo, Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectFunctionConfig {
     #[serde(rename = "+access")]
     pub access: Option<Access>,
@@ -81,7 +76,7 @@ pub struct ProjectFunctionConfig {
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+tags")]
-    pub tags: Option<StringOrArrayOfStrings>,
+    pub tags: Tags,
     #[serde(rename = "+type")]
     pub function_kind: Option<FunctionKind>,
     #[serde(rename = "+volatility")]
@@ -91,11 +86,12 @@ pub struct ProjectFunctionConfig {
     #[serde(rename = "+entry_point")]
     pub entry_point: Option<String>,
     #[serde(rename = "+packages")]
-    pub packages: Option<StringOrArrayOfStrings>,
+    pub packages: Packages,
     #[serde(rename = "+snowflake")]
     pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Additional properties for directory structure
+    #[default_to(skip)]
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectFunctionConfig>>,
 }
 
@@ -115,12 +111,12 @@ impl Default for ProjectFunctionConfig {
             quoting: None,
             schema: Omissible::Omitted,
             static_analysis: None,
-            tags: None,
+            tags: Tags::default(),
             function_kind: None,
             volatility: None,
             runtime_version: None,
             entry_point: None,
-            packages: None,
+            packages: Packages::default(),
             snowflake: None,
             __additional_properties__: BTreeMap::new(),
         }
@@ -151,57 +147,7 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
     }
 
     fn default_to(&mut self, parent: &ProjectFunctionConfig) {
-        let ProjectFunctionConfig {
-            access,
-            alias,
-            database,
-            description,
-            docs,
-            enabled,
-            grants,
-            group,
-            meta,
-            on_configuration_change,
-            quoting,
-            schema,
-            static_analysis,
-            tags,
-            function_kind,
-            volatility,
-            runtime_version,
-            entry_point,
-            packages,
-            snowflake,
-            __additional_properties__: _,
-        } = self;
-
-        // Handle special cases
-        default_quoting(quoting, &parent.quoting);
-        default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        default_to_grants(grants, &parent.grants);
-        handle_omissible_override(database, &parent.database);
-        handle_omissible_override(schema, &parent.schema);
-        #[allow(unused, clippy::let_unit_value)]
-        let packages = default_packages(packages, &parent.packages);
-        default_docs(docs, &parent.docs);
-
-        default_to!(
-            parent,
-            [
-                access,
-                alias,
-                description,
-                enabled,
-                group,
-                on_configuration_change,
-                static_analysis,
-                function_kind,
-                volatility,
-                runtime_version,
-                entry_point,
-                snowflake,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 
@@ -213,10 +159,35 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.access.is_some()
+            || self.alias.is_some()
+            || self.database.is_present()
+            || self.description.is_some()
+            || self.docs.is_some()
+            || self.enabled.is_some()
+            || self.grants.0.is_present()
+            || self.group.is_some()
+            || self.meta.is_some()
+            || self.on_configuration_change.is_some()
+            || self.quoting.is_some()
+            || self.schema.is_present()
+            || self.static_analysis.is_some()
+            || self.tags.is_some()
+            || self.function_kind.is_some()
+            || self.volatility.is_some()
+            || self.runtime_version.is_some()
+            || self.entry_point.is_some()
+            || self.packages.is_some()
+            || self.snowflake.is_some()
+    }
 }
 
 #[skip_serializing_none]
-#[derive(Resolvable, Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub struct FunctionConfig {
     pub access: Option<Access>,
@@ -226,11 +197,8 @@ pub struct FunctionConfig {
     pub alias: Option<String>,
     pub database: Omissible<Option<String>>,
     pub schema: Omissible<Option<String>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]
     pub meta: Option<IndexMap<String, YmlValue>>,
@@ -247,7 +215,7 @@ pub struct FunctionConfig {
     pub volatility: Option<Volatility>,
     pub runtime_version: Option<String>,
     pub entry_point: Option<String>,
-    pub packages: Option<StringOrArrayOfStrings>,
+    pub packages: Packages,
     pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Warehouse-specific configurations
@@ -284,61 +252,7 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
     }
 
     fn default_to(&mut self, parent: &FunctionConfig) {
-        let FunctionConfig {
-            access,
-            enabled,
-            alias,
-            database,
-            schema,
-            tags,
-            meta,
-            group,
-            docs,
-            grants,
-            quoting,
-            on_configuration_change,
-            static_analysis,
-            function_kind,
-            volatility,
-            runtime_version,
-            entry_point,
-            packages,
-            snowflake,
-            __warehouse_specific_config__: warehouse_config,
-        } = self;
-
-        // Handle warehouse config
-        warehouse_config.default_to(&parent.__warehouse_specific_config__);
-
-        // Handle omissible database and schema fields separately
-        handle_omissible_override(database, &parent.database);
-        handle_omissible_override(schema, &parent.schema);
-
-        // Handle grants with custom merge logic
-        default_to_grants(grants, &parent.grants);
-        #[allow(unused, clippy::let_unit_value)]
-        let packages = default_packages(packages, &parent.packages);
-        default_docs(docs, &parent.docs);
-
-        default_to!(
-            parent,
-            [
-                access,
-                enabled,
-                alias,
-                tags,
-                meta,
-                group,
-                quoting,
-                on_configuration_change,
-                static_analysis,
-                function_kind,
-                volatility,
-                runtime_version,
-                entry_point,
-                snowflake,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 
@@ -383,11 +297,14 @@ impl FunctionConfig {
         let quoting_eq = self.quoting == other.quoting;
         let on_configuration_change_eq =
             self.on_configuration_change == other.on_configuration_change;
-        let static_analysis_eq = self.static_analysis == other.static_analysis;
+        // `static_analysis` is a Fusion-only, invocation-driven value (e.g. set by
+        // `--static-analysis`) with no dbt-core equivalent, so it can never be a
+        // legitimate dbt-core `state:modified` trigger and is deliberately excluded
+        // from this comparison (see `base_config_excluded_keys`, parity-exclude).
         let function_kind_eq = self.function_kind == other.function_kind;
         let volatility_eq = self.volatility == other.volatility;
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
-        let packages_eq = array_of_strings_eq(&self.packages, &other.packages);
+        let packages_eq = array_of_strings_eq(self.packages.inner(), other.packages.inner());
         let snowflake_eq = self.snowflake == other.snowflake;
         let warehouse_config_eq = same_warehouse_config(
             &self.__warehouse_specific_config__,
@@ -405,7 +322,6 @@ impl FunctionConfig {
             && grants_eq
             && quoting_eq
             && on_configuration_change_eq
-            && static_analysis_eq
             && function_kind_eq
             && volatility_eq
             && access_eq_result
@@ -470,14 +386,6 @@ impl FunctionConfig {
                         )),
                     ),
                     (
-                        "static_analysis",
-                        static_analysis_eq,
-                        Some((
-                            format!("{:?}", &self.static_analysis),
-                            format!("{:?}", &other.static_analysis),
-                        )),
-                    ),
-                    (
                         "function_kind",
                         function_kind_eq,
                         Some((
@@ -534,23 +442,24 @@ impl ConfigKeys for FunctionConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schemas::project::configs::config_merge::Packages;
     use crate::schemas::project::dbt_project::ResolvableConfig;
     use crate::schemas::serde::StringOrArrayOfStrings;
 
     #[test]
     fn test_function_config_packages_append() {
         let parent = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "matplotlib".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
@@ -558,25 +467,25 @@ mod tests {
 
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
                 "matplotlib".to_string(),
-            ]))
+            ])))
         );
     }
 
     #[test]
     fn test_function_config_packages_none_child_inherits_parent() {
         let parent = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = FunctionConfig {
-            packages: None,
+            packages: Packages::default(),
             ..Default::default()
         };
 
@@ -584,34 +493,34 @@ mod tests {
 
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ]))
+            ])))
         );
     }
 
     #[test]
     fn test_function_config_packages_same_config() {
         let a = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let b = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         assert!(a.same_config(&b));
 
         let c = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "pandas".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 

@@ -1116,6 +1116,7 @@ mod tests {
             profile: "test".into(),
             target: "dev".into(),
             defer_to_target: None,
+            allow_clones: true,
             db_config: DbConfig::Datafusion(Box::new(DatafusionDbConfig {
                 database: Some("testdb".into()),
                 schema: Some("public".into()),

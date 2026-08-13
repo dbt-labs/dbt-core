@@ -58,8 +58,8 @@ pub struct FeatureStack {
     pub loader: LoaderFeature,
     pub jinja: JinjaFeature,
     pub login_hooks: Arc<dyn LoginHooks>,
-    pub version_check_enabled: bool,
     // TODO: add more features here
+    pub version_check_enabled: bool,
 }
 
 impl fmt::Debug for FeatureStack {

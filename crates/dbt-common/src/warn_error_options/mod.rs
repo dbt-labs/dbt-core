@@ -530,7 +530,9 @@ impl WarnErrorOptions {
             WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::Deprecations)
                 if matches!(
                     error_code,
-                    ErrorCode::PackageRedirectDeprecation | ErrorCode::WEOIncludeExcludeDeprecation
+                    ErrorCode::PackageRedirectDeprecation
+                        | ErrorCode::WEOIncludeExcludeDeprecation
+                        | ErrorCode::MalformedBlockName
                 ) =>
             {
                 MatchType::Group
@@ -779,6 +781,22 @@ mod tests {
             deprecations_options.decision_for_error_code(ErrorCode::WEOIncludeExcludeDeprecation),
             WarnErrorDecision::Silence,
             "Named event silence should beat Deprecations warn and All error"
+        );
+    }
+
+    #[test]
+    fn malformed_block_name_is_a_deprecation() {
+        let options = WarnErrorOptions {
+            error: vec![WarnErrorOptionValue::LegacyGroup(
+                LegacyWarnErrorGroupValue::Deprecations,
+            )],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            options.decision_for_error_code(ErrorCode::MalformedBlockName),
+            WarnErrorDecision::UpgradeToError,
+            "MalformedBlockName should be escalated by the Deprecations group"
         );
     }
 

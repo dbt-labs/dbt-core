@@ -282,15 +282,14 @@ fn submit_workflow_job(
     poll_job_completion(&api_client, &run_id.to_string(), timeout)?;
 
     // Only convert to string at the boundary (AdapterResponse)
-    Ok(AdapterResponse {
-        message: format!(
+    Ok(AdapterResponse::new()
+        .with_message(format!(
             "Python model executed successfully via workflow_job. Job ID: {}, Run ID: {}",
             job_id, run_id
-        ),
-        code: "OK".to_string(),
-        rows_affected: 0,
-        query_id: Some(run_id.to_string()),
-    })
+        ))
+        .with_code("OK")
+        .with_rows_affected(0)
+        .with_query_id(run_id.to_string()))
 }
 
 /// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L392
@@ -384,15 +383,14 @@ fn submit_via_command_api(
 
     let cleanup_result = api_client.destroy_context(cluster_id, &context_id);
     match (result, cleanup_result) {
-        (Ok(command_id), Ok(())) => Ok(AdapterResponse {
-            message: format!(
+        (Ok(command_id), Ok(())) => Ok(AdapterResponse::new()
+            .with_message(format!(
                 "Python model executed successfully using Command API on cluster {}",
                 cluster_id
-            ),
-            code: "OK".to_string(),
-            rows_affected: 0,
-            query_id: Some(command_id),
-        }),
+            ))
+            .with_code("OK")
+            .with_rows_affected(0)
+            .with_query_id(command_id)),
         (Err(e), _) => Err(e),
         (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
     }
@@ -452,16 +450,15 @@ fn submit_via_notebook(
 
     poll_job_completion(&api_client, &run_id, timeout)?;
 
-    Ok(AdapterResponse {
-        message: format!(
+    Ok(AdapterResponse::new()
+        .with_message(format!(
             "Python model executed successfully via notebook using {}. \
              Run ID: {}, Notebook: {}",
             submission_type, run_id, notebook_path
-        ),
-        code: "OK".to_string(),
-        rows_affected: 0,
-        query_id: Some(run_id),
-    })
+        ))
+        .with_code("OK")
+        .with_rows_affected(0)
+        .with_query_id(run_id))
 }
 
 fn resolve_cluster_id(adapter: &AdapterImpl, config: &Value) -> AdapterResult<String> {
@@ -592,7 +589,6 @@ fn extract_timeout(config: &Value) -> u64 {
             emit_warn_log_message(
                 ErrorCode::InvalidConfig,
                 "Invalid timeout value, using default of 0",
-                None,
             );
             0
         }

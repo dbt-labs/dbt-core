@@ -80,6 +80,10 @@ impl fmt::Display for StateArtifacts {
     }
 }
 
+pub fn config_excluded_keys(node_type: NodeType) -> &'static [&'static str] {
+    UnrenderedKeyRelevance::base_config_excluded_keys(node_type)
+}
+
 fn normalize_line_endings(s: &str) -> String {
     s.replace("\r\n", "\n")
 }
@@ -118,15 +122,42 @@ fn hook_entries(v: &dbt_yaml::Value) -> Option<Vec<String>> {
 ///
 /// A hook may be stored either as a real YAML sequence or as a single stringified list literal
 /// whose interior whitespace/indentation is not semantically meaningful. When both sides parse
-/// into hook entry lists, compare those (each entry canonicalized); otherwise fall back to the
-/// generic unrendered comparison.
+/// into hook entry lists, compare those as multisets (each entry canonicalized) rather than
+/// ordered lists: a resource can configure hooks at more than one level (schema.yml plus an
+/// inline SQL `{{ config(...) }}` call), and `canonicalize_hook_keys` merges those contributions
+/// together — but raw `unrendered_config` (particularly dbt-core's, which keeps the two spellings
+/// as separate top-level keys with no explicit relative order) carries no reliable ordering
+/// between them, only the fully-rendered/executed config does. Otherwise fall back to the generic
+/// unrendered comparison.
 fn unrendered_hook_value_eq(a: Option<&dbt_yaml::Value>, b: Option<&dbt_yaml::Value>) -> bool {
     if let (Some(va), Some(vb)) = (a, b) {
-        if let (Some(a_hooks), Some(b_hooks)) = (hook_entries(va), hook_entries(vb)) {
+        if let (Some(mut a_hooks), Some(mut b_hooks)) = (hook_entries(va), hook_entries(vb)) {
+            a_hooks.sort();
+            b_hooks.sort();
             return a_hooks == b_hooks;
         }
     }
     unrendered_value_eq(a, b)
+}
+
+/// Builds a source's unique_id the way dbt-core does: resource type, package name, source
+/// name and table name joined with `.`, all verbatim
+/// (`core/dbt/parser/schemas.py`, `add_source_definitions`).
+///
+/// Fusion instead runs the table name through `[^a-zA-Z0-9_]` → `__` first
+/// (`dbt-parser`, `resolve_sources.rs`), so a BigQuery wildcard source table `events_*` is
+/// `source.pkg.src.events___` here and `source.pkg.src.events_*` in a dbt-core-produced
+/// state manifest.  Since unique_id is the key that pairs a node with its previous-manifest
+/// counterpart, that divergence makes every such source look brand new, which under a
+/// descendant selector (`state:modified+`) drags in everything downstream of it.
+///
+/// The sanitization is not invertible — `__` could have come from `*`, `-`, `.`, `/`, a
+/// space, or a literal `__` — so the two spellings can only be reconciled with both nodes in
+/// hand.  This rebuilds the dbt-core spelling from the three components both engines store
+/// verbatim on the node (`package_name`, `source_name`, `name`), giving a join key that is
+/// stable across engines.
+fn core_style_source_uid(package_name: &str, source_name: &str, table_name: &str) -> String {
+    format!("source.{package_name}.{source_name}.{table_name}")
 }
 
 impl StateArtifacts {
@@ -265,6 +296,26 @@ impl StateArtifacts {
         nodes.get_node(base).map(|n| n as &dyn InternalDbtNode)
     }
 
+    /// Pairs a source with its state-manifest counterpart when the two engines spell its
+    /// unique_id differently — see [`core_style_source_uid`].  Keys on the three components
+    /// both engines store verbatim, so a source genuinely *renamed* to the sanitized spelling
+    /// looks itself up under that new name and correctly finds nothing.
+    fn find_previous_source_by_core_style_id<'a>(
+        current: &dyn InternalDbtNode,
+        nodes: &'a Nodes,
+    ) -> Option<&'a dyn InternalDbtNode> {
+        let current_source = current.as_any().downcast_ref::<DbtSource>()?;
+        let core_style_uid = core_style_source_uid(
+            &current_source.__common_attr__.package_name,
+            &current_source.__source_attr__.source_name,
+            &current_source.__common_attr__.name,
+        );
+        nodes
+            .sources
+            .get(&core_style_uid)
+            .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+    }
+
     fn previous_node_for<'a>(
         &'a self,
         current: &dyn InternalDbtNode,
@@ -273,6 +324,15 @@ impl StateArtifacts {
 
         if let Some(prev) = nodes.get_node(current.common().unique_id.as_str()) {
             return Some(prev as &dyn InternalDbtNode);
+        }
+
+        if current.resource_type() == NodeType::Source {
+            // Fallback: Fusion sanitizes a source's table name into its unique_id while
+            // dbt-core does not, so the exact lookup misses against a Mantle-produced state
+            // manifest.  Pair on the source's identity instead.
+            if let Some(found) = Self::find_previous_source_by_core_style_id(current, nodes) {
+                return Some(found);
+            }
         }
 
         if current.resource_type() == NodeType::Test {
@@ -349,7 +409,6 @@ impl StateArtifacts {
                         "The state and target directories are the same: '{}'. This could lead to missing changes due to overwritten state.",
                         state_path.display()
                     ),
-                    None,
                 );
             }
         }
@@ -402,7 +461,6 @@ impl StateArtifacts {
                                 state_path.display(),
                                 e
                             ),
-                            None,
                         );
                     }
                     OnManifestLoadFailure::Ignore => {}
@@ -924,8 +982,14 @@ fn unrendered_configs_eq(
 ) -> bool {
     let relevance = UnrenderedKeyRelevance::for_node_type(node_type);
 
-    let previous = canonicalize_hook_keys(previous_uc);
-    let current = canonicalize_hook_keys(current_uc);
+    let mut previous = canonicalize_hook_keys(previous_uc);
+    let mut current = canonicalize_hook_keys(current_uc);
+
+    // Gate on `meta` being a relevant key at all: for Allowlist types (data tests) `meta` is not a
+    // compared key, so running this could only ever suppress a genuine modifier diff.
+    if relevance.key_is_relevant("meta") {
+        reconcile_meta_relocated_keys(&mut previous, &mut current, unique_id);
+    }
 
     let all_keys: std::collections::BTreeSet<&str> = previous
         .keys()
@@ -940,13 +1004,7 @@ fn unrendered_configs_eq(
         }
         let a = previous.get(key);
         let b = current.get(key);
-        // Hooks may be authored as a YAML sequence or as a stringified list literal; compare them
-        // by their entries so representation/whitespace differences do not count as a modification.
-        let values_eq = if key == "pre-hook" || key == "post-hook" {
-            unrendered_hook_value_eq(a, b)
-        } else {
-            unrendered_value_eq(a, b)
-        };
+        let values_eq = unrendered_key_value_eq(key, a, b);
         if !values_eq {
             all_eq = false;
             log_state_mod_diff(
@@ -1013,10 +1071,17 @@ impl UnrenderedKeyRelevance {
             // whose set of non-modification keys is exactly the `CompareBehavior.Exclude` fields of
             // `NodeAndTestConfig` — the five below (core/dbt/artifacts/resources/v1/config.py @
             // v1.10.0).
-            NodeType::Model | NodeType::Seed | NodeType::Snapshot | NodeType::Function => {
+            NodeType::Model
+            | NodeType::Seed
+            | NodeType::Snapshot
+            | NodeType::Function
+            | NodeType::Test => {
                 &[
-                    "tags", "group", // parity-excludes
-                    "schema", "database",
+                    "tags",
+                    "group",           // parity-excludes
+                    "static_analysis", // parity-exclude: Fusion-only, invocation-driven, no dbt-core equivalent
+                    "schema",
+                    "database",
                     "alias", // ownership-excludes, counted in `check_relation_modified`
                 ]
             }
@@ -1027,8 +1092,10 @@ impl UnrenderedKeyRelevance {
             // via `same_database_representation`.
             NodeType::Source => {
                 &[
-                    "tags", // parity-exclude
-                    "schema", "database",
+                    "tags",            // parity-exclude
+                    "static_analysis", // parity-exclude: Fusion-only, invocation-driven, no dbt-core equivalent
+                    "schema",
+                    "database",
                     "alias", // ownership-excludes, counted in `check_relation_modified`
                 ]
             }
@@ -1039,21 +1106,147 @@ impl UnrenderedKeyRelevance {
     }
 }
 
-/// Normalise hook key aliases so `pre_hook` and `pre-hook` compare as equal;
-/// they have been long-term aliases in dbt.
+/// Coerces a hook config value into its flat list of entries: a sequence's items as-is, or a
+/// single non-sequence value (e.g. a lone hook string) as a one-element list.
+fn hook_value_entries(value: dbt_yaml::Value) -> Vec<dbt_yaml::Value> {
+    match value {
+        dbt_yaml::Value::Sequence(seq, _) => seq,
+        other => vec![other],
+    }
+}
+
+/// Normalise hook key aliases so `pre_hook` and `pre-hook` compare as equal; they have been
+/// long-term aliases in dbt. Some previous-state manifests (notably dbt-core's: it only
+/// translates the alias for hooks contributed by an inline SQL `{{ config(...) }}` call, not
+/// ones contributed by a schema.yml `config:` block) carry BOTH spellings as separate keys when a
+/// resource configures hooks at more than one level — in that case the two entries are merged
+/// (concatenated, canonical-key first) rather than one silently overwriting the other.
 fn canonicalize_hook_keys(
     map: &std::collections::BTreeMap<String, dbt_yaml::Value>,
 ) -> std::collections::BTreeMap<String, dbt_yaml::Value> {
-    map.iter()
-        .map(|(k, v)| {
-            let k = match k.as_str() {
-                "pre_hook" => "pre-hook".to_string(),
-                "post_hook" => "post-hook".to_string(),
-                _ => k.clone(),
-            };
-            (k, v.clone())
+    let mut out = std::collections::BTreeMap::new();
+    for (k, v) in map {
+        let k = match k.as_str() {
+            "pre_hook" => "pre-hook".to_string(),
+            "post_hook" => "post-hook".to_string(),
+            _ => k.clone(),
+        };
+        match out.remove(&k) {
+            Some(existing) => {
+                let mut entries = hook_value_entries(existing);
+                entries.extend(hook_value_entries(v.clone()));
+                out.insert(k, dbt_yaml::Value::Sequence(entries, Default::default()));
+            }
+            None => {
+                out.insert(k, v.clone());
+            }
+        }
+    }
+    out
+}
+
+/// The comparator `unrendered_configs_eq`'s loop applies to one `unrendered_config` key. Extracted
+/// so `meta_relocated_keys` decides "same value" by exactly the same rule the comparison loop uses.
+fn unrendered_key_value_eq(
+    key: &str,
+    a: Option<&dbt_yaml::Value>,
+    b: Option<&dbt_yaml::Value>,
+) -> bool {
+    if key == "pre-hook" || key == "post-hook" {
+        unrendered_hook_value_eq(a, b)
+    } else {
+        unrendered_value_eq(a, b)
+    }
+}
+
+/// Reconcile a config key that was relocated into `meta` on one side of the comparison (e.g.
+/// dbt-autofix: "Moved unrecognized config '+access' to '+meta'" when a config key has no field on
+/// Fusion's typed config struct). `meta` IS a compared key, so a value that moved from top-level
+/// `K` into `meta.K` manufactures a phantom `meta` diff plus a phantom top-level `K` diff for a
+/// config that never changed. Deliberately fuzzy and engine-agnostic: keyed on value identity only,
+/// not on whether `K` is a recognized field anywhere on either side; applies bidirectionally
+/// (either side may be the relocated one), so it helps dbt-core-vs-Fusion and Fusion-vs-Fusion
+/// comparisons alike.
+///
+/// Suppress-only: only ever touches a key pair that is ALREADY unequal (decided against the
+/// unmutated maps before any removal is applied), so this can only make `unrendered_configs_eq`
+/// report *more* equality — never introduce a new inequality.
+fn reconcile_meta_relocated_keys(
+    previous: &mut std::collections::BTreeMap<String, dbt_yaml::Value>,
+    current: &mut std::collections::BTreeMap<String, dbt_yaml::Value>,
+    unique_id: &str,
+) {
+    // Nothing to explain unless `meta` itself already disagrees: if `meta` is equal on both sides,
+    // nothing "arrived" there, and a top-level-only diff on `K` is a genuine config removal, not a
+    // relocation. Also makes this a cheap no-op for the overwhelming majority of nodes.
+    if unrendered_value_eq(previous.get("meta"), current.get("meta")) {
+        return;
+    }
+
+    // Compute both directions against the unmutated maps, then apply.
+    let previous_side = meta_relocated_keys(previous, current);
+    let current_side = meta_relocated_keys(current, previous);
+
+    for key in &previous_side {
+        strip_relocated_key(previous, current, key, unique_id);
+    }
+    for key in &current_side {
+        strip_relocated_key(current, previous, key, unique_id);
+    }
+}
+
+/// Top-level keys of `top` whose value also sits, unchanged, at `nested["meta"][key]`.
+///
+/// `top`/`nested` are the two sides of one direction of the comparison; call twice with the
+/// arguments swapped for bidirectional coverage.
+fn meta_relocated_keys(
+    top: &std::collections::BTreeMap<String, dbt_yaml::Value>,
+    nested: &std::collections::BTreeMap<String, dbt_yaml::Value>,
+) -> Vec<String> {
+    let Some(meta) = nested.get("meta").and_then(|v| v.as_mapping()) else {
+        return Vec::new();
+    };
+    top.keys()
+        .filter(|key| key.as_str() != "meta")
+        .filter(|key| {
+            let top_value = top.get(key.as_str());
+            // Suppress-only guard: only ever touch a pair that is already unequal.
+            if unrendered_key_value_eq(key, top_value, nested.get(key.as_str())) {
+                return false;
+            }
+            // The same value must actually be present at `meta[key]` on the other side.
+            meta.get(key.as_str())
+                .is_some_and(|meta_value| unrendered_key_value_eq(key, top_value, Some(meta_value)))
         })
+        .cloned()
         .collect()
+}
+
+/// Remove the relocated pair: `key` from `top`'s top level and `key` from `nested`'s `meta` map.
+/// Everything else in `nested`'s `meta` is left intact so unrelated genuine `meta` differences still
+/// surface. An emptied `meta` mapping is left in place — `unrendered_value_eq` already treats an
+/// empty mapping and an absent key as equivalent.
+fn strip_relocated_key(
+    top: &mut std::collections::BTreeMap<String, dbt_yaml::Value>,
+    nested: &mut std::collections::BTreeMap<String, dbt_yaml::Value>,
+    key: &str,
+    unique_id: &str,
+) {
+    top.remove(key);
+    if let Some(meta) = nested.get_mut("meta").and_then(|v| v.as_mapping_mut()) {
+        meta.shift_remove(key);
+    }
+    // `log_state_mod_diff` only emits when the check flag is `false` — pass `false` here to make
+    // this suppression visible in traces, not because the values disagree.
+    log_state_mod_diff(
+        unique_id,
+        "unrendered_config_meta_relocated",
+        [(
+            "meta_relocated_key",
+            false,
+            Some((key.to_string(), format!("meta.{key}"))),
+        )],
+    );
 }
 
 #[cfg(test)]
@@ -1110,6 +1303,88 @@ mod tests {
             test_full_name_index: Default::default(),
             truncated_name_to_state_uid: std::sync::OnceLock::new(),
         }
+    }
+
+    /// `unique_id` is spelled independently of the three identity fields so a test can
+    /// reproduce the Fusion (sanitized) and Mantle (verbatim) spellings side by side.
+    fn make_source(uid: &str, package: &str, source_name: &str, table_name: &str) -> DbtSource {
+        let mut source = DbtSource::default();
+        source.__common_attr__.unique_id = uid.to_string();
+        source.__common_attr__.package_name = package.to_string();
+        source.__common_attr__.name = table_name.to_string();
+        source.__source_attr__.source_name = source_name.to_string();
+        source.__common_attr__.fqn = vec![source_name.to_string(), table_name.to_string()];
+        source
+    }
+
+    fn state_with_previous_sources(previous_sources: Vec<DbtSource>) -> StateArtifacts {
+        let mut prev_nodes = Nodes::default();
+        for source in previous_sources {
+            prev_nodes
+                .sources
+                .insert(source.__common_attr__.unique_id.clone(), Arc::new(source));
+        }
+
+        StateArtifacts {
+            nodes: Some(prev_nodes),
+            run_results: None,
+            source_freshness_results: None,
+            state_path: PathBuf::from("/tmp/fake_state"),
+            target_path: None,
+            test_sig_index: Default::default(),
+            test_full_name_index: Default::default(),
+            truncated_name_to_state_uid: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// A BigQuery wildcard source table is `source.pkg.ga4.events_*` in a dbt-core-produced
+    /// state manifest but `source.pkg.ga4.events___` in Fusion, because Fusion sanitizes the
+    /// table name into the unique_id.  Before the identity fallback the exact lookup missed,
+    /// `is_new` fired, and `state:modified+` dragged in everything downstream of the source.
+    #[test]
+    fn source_with_sanitized_uid_pairs_with_mantle_verbatim_uid() {
+        let state = state_with_previous_sources(vec![make_source(
+            "source.pkg.ga4.events_*",
+            "pkg",
+            "ga4",
+            "events_*",
+        )]);
+        // Fusion's spelling of the same source: sanitized unique_id, verbatim `name`.
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events_*");
+
+        assert!(!state.is_new(&current));
+        assert!(!state.is_modified(&current, None, None, AdapterType::Bigquery));
+    }
+
+    /// The fallback keys on the table name both engines store verbatim, not on the sanitized
+    /// unique_id, so a source genuinely renamed to the sanitized spelling is still new.
+    #[test]
+    fn source_renamed_to_a_different_table_is_still_new() {
+        let state = state_with_previous_sources(vec![make_source(
+            "source.pkg.ga4.events_*",
+            "pkg",
+            "ga4",
+            "events_*",
+        )]);
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___");
+
+        assert!(state.is_new(&current));
+    }
+
+    /// When the state manifest contains both spellings as genuinely distinct sources, the
+    /// exact unique_id match owns the pairing — the fallback runs only after it misses.
+    #[test]
+    fn source_exact_uid_match_wins_over_identity_fallback() {
+        let state = state_with_previous_sources(vec![
+            make_source("source.pkg.ga4.events_*", "pkg", "ga4", "events_*"),
+            make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___"),
+        ]);
+
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___");
+        let previous = state
+            .previous_node_for(&current)
+            .expect("exact unique_id match");
+        assert_eq!(previous.common().name, "events___");
     }
 
     #[test]
@@ -1191,6 +1466,279 @@ mod tests {
             None,
             AdapterType::Snowflake
         ));
+    }
+
+    fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), yml_value(v)))
+            .collect()
+    }
+
+    #[test]
+    fn meta_relocated_key_is_not_a_config_modification() {
+        // Mirrors the real repro: dbt-autofix moved an unrecognized `+access` snapshot config into
+        // `+meta` because Fusion's typed config has no `access` field. The previous (dbt-core)
+        // manifest carries `access` at top level with no `meta` key at all; the current (Fusion)
+        // manifest carries it nested under `meta`. No real project change occurred.
+        let previous = config_map(&[("access", "public"), ("strategy", "check")]);
+        let current = config_map(&[("meta", "{access: public}"), ("strategy", "check")]);
+        assert!(unrendered_configs_eq(
+            NodeType::Snapshot,
+            &previous,
+            &current,
+            "snapshot.pkg.s"
+        ));
+    }
+
+    #[test]
+    fn meta_relocated_key_reconciles_in_both_directions() {
+        // Mirror of the case above: this time the CURRENT side holds the top-level key and the
+        // PREVIOUS side holds it nested under `meta`.
+        let previous = config_map(&[("meta", "{access: public}"), ("strategy", "check")]);
+        let current = config_map(&[("access", "public"), ("strategy", "check")]);
+        assert!(unrendered_configs_eq(
+            NodeType::Snapshot,
+            &previous,
+            &current,
+            "snapshot.pkg.s"
+        ));
+    }
+
+    #[test]
+    fn meta_relocated_key_with_differing_value_still_modified() {
+        // The value actually changed (public -> private), not merely relocated. Must still be
+        // reported as modified.
+        let previous = config_map(&[("access", "public")]);
+        let current = config_map(&[("meta", "{access: private}")]);
+        assert!(!unrendered_configs_eq(
+            NodeType::Snapshot,
+            &previous,
+            &current,
+            "snapshot.pkg.s"
+        ));
+    }
+
+    #[test]
+    fn meta_relocated_key_leaves_unrelated_meta_diffs() {
+        // `access` was relocated (accounted for), but `owner` inside `meta` genuinely changed and
+        // must still surface as a modification.
+        let previous = config_map(&[("access", "public"), ("meta", "{owner: old_team}")]);
+        let current = config_map(&[("meta", "{access: public, owner: new_team}")]);
+        assert!(!unrendered_configs_eq(
+            NodeType::Snapshot,
+            &previous,
+            &current,
+            "snapshot.pkg.s"
+        ));
+
+        // Confirm precisely what the reconciliation removed: only `access`/`meta.access`, leaving
+        // the genuine `owner` disagreement intact on both sides.
+        let mut previous = previous;
+        let mut current = current;
+        reconcile_meta_relocated_keys(&mut previous, &mut current, "snapshot.pkg.s");
+        assert_eq!(previous.get("access"), None);
+        assert_eq!(previous.get("meta"), Some(&yml_value("{owner: old_team}")));
+        assert_eq!(current.get("access"), None);
+        assert_eq!(current.get("meta"), Some(&yml_value("{owner: new_team}")));
+    }
+
+    #[test]
+    fn meta_relocated_reconciliation_skips_keys_equal_on_both_sides() {
+        // `access` is already equal at the top level on both sides; `meta.access` is merely an
+        // additional (genuinely new) entry on the current side, not a relocation of the top-level
+        // value. Reconciling this pair would DELETE the top-level `access` from `previous` only
+        // (current has no top-level `access` to begin with), turning an equal pair into an unequal
+        // one -- exactly the "introduce a new inequality" hazard the suppress-only guard exists to
+        // prevent.
+        let previous = config_map(&[("access", "public")]);
+        let current = config_map(&[("access", "public"), ("meta", "{access: public}")]);
+        assert!(!unrendered_configs_eq(
+            NodeType::Snapshot,
+            &previous,
+            &current,
+            "snapshot.pkg.s"
+        ));
+
+        let mut previous_mut = previous.clone();
+        let mut current_mut = current;
+        reconcile_meta_relocated_keys(&mut previous_mut, &mut current_mut, "snapshot.pkg.s");
+        assert_eq!(previous_mut.get("access"), previous.get("access"));
+        assert_eq!(
+            current_mut.get("meta"),
+            Some(&yml_value("{access: public}"))
+        );
+    }
+
+    #[test]
+    fn meta_relocated_reconciliation_is_noop_when_meta_agrees() {
+        // `meta` is already equal on both sides, so nothing "arrived" there -- the top-level-only
+        // `access` diff is a genuine removal, not evidence of a relocation. Must not be touched.
+        let mut previous = config_map(&[("access", "public"), ("meta", "{access: public}")]);
+        let mut current = config_map(&[("meta", "{access: public}")]);
+        let previous_before = previous.clone();
+        let current_before = current.clone();
+
+        reconcile_meta_relocated_keys(&mut previous, &mut current, "snapshot.pkg.s");
+
+        assert_eq!(previous, previous_before);
+        assert_eq!(current, current_before);
+    }
+
+    #[test]
+    fn meta_relocated_reconciliation_applies_to_excluded_keys() {
+        // `tags` is a Stage-1 parity-exclude for snapshots, but the reconciliation is gated only on
+        // `meta`'s own relevance, not on `K`'s -- the phantom diff lands on `meta`, which IS
+        // relevant regardless of what `K` is.
+        let previous = config_map(&[("tags", "[a]")]);
+        let current = config_map(&[("meta", "{tags: [a]}")]);
+        assert!(unrendered_configs_eq(
+            NodeType::Snapshot,
+            &previous,
+            &current,
+            "snapshot.pkg.s"
+        ));
+    }
+
+    #[test]
+    fn meta_relocated_reconciliation_is_noop_for_data_tests() {
+        // Data tests use the Allowlist rule (`DBTTEST_CONFIG_MODIFIERS`), where `meta` is not a
+        // compared key at all. The reconciliation must not run for this node type, since it could
+        // only ever mask an unrelated, genuinely relevant Allowlist modifier that also happens to
+        // be duplicated under `meta`.
+        let previous = config_map(&[("severity", "warn")]);
+        let current = config_map(&[("meta", "{severity: warn}")]);
+        assert!(!unrendered_configs_eq(
+            NodeType::Test,
+            &previous,
+            &current,
+            "test.pkg.t"
+        ));
+    }
+
+    #[test]
+    fn meta_relocated_reconciliation_applies_to_sources() {
+        // The reconciliation is not snapshot-specific.
+        let previous = config_map(&[("event_time", "updated_at")]);
+        let current = config_map(&[("meta", "{event_time: updated_at}")]);
+        assert!(unrendered_configs_eq(
+            NodeType::Source,
+            &previous,
+            &current,
+            "source.pkg.s"
+        ));
+    }
+
+    #[test]
+    fn meta_relocated_reconciliation_ignores_non_mapping_meta() {
+        let previous = config_map(&[("access", "public")]);
+        let current = config_map(&[("meta", "\"not_a_map\""), ("access", "private")]);
+        assert!(!unrendered_configs_eq(
+            NodeType::Snapshot,
+            &previous,
+            &current,
+            "snapshot.pkg.s"
+        ));
+    }
+
+    #[test]
+    fn meta_relocated_reconciliation_never_introduces_inequality() {
+        // Table of already-Stage-1-equal map pairs. `reconcile_meta_relocated_keys` must leave all
+        // of them byte-identical to their pre-call state, and `unrendered_configs_eq` must still
+        // report equal.
+        let cases: Vec<(
+            BTreeMap<String, dbt_yaml::Value>,
+            BTreeMap<String, dbt_yaml::Value>,
+        )> = vec![
+            // Identical maps.
+            (
+                config_map(&[("access", "public"), ("meta", "{owner: team}")]),
+                config_map(&[("access", "public"), ("meta", "{owner: team}")]),
+            ),
+            // `meta: {}` vs absent `meta` (already equivalent via `is_effectively_empty`).
+            (config_map(&[("meta", "{}")]), config_map(&[])),
+            // Hook-alias pair (already handled by `canonicalize_hook_keys`, not by this fix, but
+            // must not be disturbed by it).
+            (
+                config_map(&[("pre-hook", "[\"a\"]")]),
+                config_map(&[("pre-hook", "[\"a\"]")]),
+            ),
+            // `meta: null` vs absent `meta` (also already-equivalent via `is_effectively_empty`;
+            // note `meta: {}` vs `meta: null`, both Some but neither None, is NOT already-equal
+            // under `unrendered_value_eq`'s current semantics -- a separate, deliberately
+            // out-of-scope gap -- so is not used as a case here).
+            (config_map(&[("meta", "null")]), config_map(&[])),
+        ];
+
+        for (previous, current) in cases {
+            let mut previous_mut = previous.clone();
+            let mut current_mut = current.clone();
+            reconcile_meta_relocated_keys(&mut previous_mut, &mut current_mut, "snapshot.pkg.s");
+            assert_eq!(previous_mut, previous);
+            assert_eq!(current_mut, current);
+            assert!(unrendered_configs_eq(
+                NodeType::Snapshot,
+                &previous,
+                &current,
+                "snapshot.pkg.s"
+            ));
+        }
+    }
+
+    #[test]
+    fn canonicalize_hook_keys_merges_dash_and_underscore_spellings_instead_of_overwriting() {
+        // dbt-core's own unrendered_config keeps `pre_hook`/`post_hook` (underscore, contributed
+        // by a schema.yml `config:` block) as a SEPARATE key from `pre-hook`/`post-hook` (dash,
+        // contributed by an inline SQL `{{ config(...) }}` call) when a resource configures hooks
+        // at more than one level -- dbt-core only translates the alias for the inline-SQL source.
+        // Before the fix, renaming both to the same key via a naive `.collect()` silently
+        // overwrote one value with the other (BTreeMap iteration order sorts "post-hook" before
+        // "post_hook", so the underscore entry always won) instead of merging them.
+        let mut map = BTreeMap::new();
+        map.insert("post-hook".to_string(), yml_value(r#""DELETE FROM t""#));
+        map.insert("post_hook".to_string(), yml_value(r#""apply masking""#));
+
+        let canonicalized = canonicalize_hook_keys(&map);
+
+        assert_eq!(canonicalized.len(), 1);
+        let merged = canonicalized.get("post-hook").expect("expected post-hook");
+        let dbt_yaml::Value::Sequence(entries, _) = merged else {
+            panic!("expected a merged sequence, got {merged:?}");
+        };
+        let strings: Vec<&str> = entries.iter().map(|v| v.as_str().unwrap()).collect();
+        assert_eq!(strings, vec!["DELETE FROM t", "apply masking"]);
+    }
+
+    #[test]
+    fn canonicalize_hook_keys_is_a_noop_when_only_one_spelling_is_present() {
+        let mut map = BTreeMap::new();
+        map.insert("pre_hook".to_string(), yml_value(r#""create masking""#));
+
+        let canonicalized = canonicalize_hook_keys(&map);
+
+        assert_eq!(canonicalized.len(), 1);
+        assert_eq!(
+            canonicalized.get("pre-hook").and_then(|v| v.as_str()),
+            Some("create masking")
+        );
+        assert!(!canonicalized.contains_key("pre_hook"));
+    }
+
+    #[test]
+    fn unrendered_hook_value_eq_ignores_order() {
+        // A merged (multi-source) hook value has no reliable relative order at the unrendered
+        // level (only the fully-rendered/executed config does) -- comparison must treat the
+        // entries as a multiset, not an ordered list.
+        let a = yml_value(r#"["DELETE FROM t", "apply masking"]"#);
+        let b = yml_value(r#"["apply masking", "DELETE FROM t"]"#);
+        assert!(unrendered_hook_value_eq(Some(&a), Some(&b)));
+    }
+
+    #[test]
+    fn unrendered_hook_value_eq_still_detects_a_genuine_difference() {
+        let a = yml_value(r#"["DELETE FROM t", "apply masking"]"#);
+        let b = yml_value(r#"["DELETE FROM t", "apply different masking"]"#);
+        assert!(!unrendered_hook_value_eq(Some(&a), Some(&b)));
     }
 
     #[test]
@@ -1414,21 +1962,22 @@ mod tests {
                 ExcludeKind::Relevant,
                 Box::new(|n| n.__source_attr__.loaded_at_query = Some("select 1".to_string())),
             ),
-            (
-                "static_analysis",
-                ExcludeKind::Relevant,
-                Box::new(|n| {
-                    n.deprecated_config.static_analysis =
-                        Some(Spanned::new(StaticAnalysisKind::Off))
-                }),
-            ),
-            // --- parity-exclude: dbt-core's `SourceDefinition.same_contents` ignores tags ---
+            // --- parity-excludes: dbt-core has no equivalent, checks these nowhere ---
             (
                 "tags",
                 ExcludeKind::Parity,
                 Box::new(|n| {
-                    n.deprecated_config.tags =
-                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                    n.deprecated_config.tags = crate::schemas::project::configs::config_merge::Tags(
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string())),
+                    )
+                }),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(StaticAnalysisKind::Off))
                 }),
             ),
             // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
@@ -1466,6 +2015,7 @@ mod tests {
         use crate::schemas::common::{DbtMaterialization, DocsConfig, Hooks};
         use crate::schemas::nodes::DbtSeed;
         use crate::schemas::serde::{GrantConfig, OmissibleGrantConfig, StringOrArrayOfStrings};
+        use dbt_common::io_args::StaticAnalysisKind;
         use dbt_common::serde_utils::Omissible;
         use dbt_yaml::{Spanned, Verbatim};
 
@@ -1569,14 +2119,23 @@ mod tests {
                 "tags",
                 ExcludeKind::Parity,
                 Box::new(|n| {
-                    n.deprecated_config.tags =
-                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                    n.deprecated_config.tags = crate::schemas::project::configs::config_merge::Tags(
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string())),
+                    )
                 }),
             ),
             (
                 "group",
                 ExcludeKind::Parity,
                 Box::new(|n| n.deprecated_config.group = Some("a_group".to_string())),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(StaticAnalysisKind::Off))
+                }),
             ),
             // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
             (
@@ -1673,14 +2232,6 @@ mod tests {
                 }),
             ),
             (
-                "static_analysis",
-                ExcludeKind::Relevant,
-                Box::new(|n| {
-                    n.deprecated_config.static_analysis =
-                        Some(Spanned::new(StaticAnalysisKind::Off))
-                }),
-            ),
-            (
                 "function_kind",
                 ExcludeKind::Relevant,
                 Box::new(|n| n.deprecated_config.function_kind = Some(FunctionKind::Aggregate)),
@@ -1695,7 +2246,9 @@ mod tests {
                 ExcludeKind::Relevant,
                 Box::new(|n| {
                     n.deprecated_config.packages =
-                        Some(StringOrArrayOfStrings::String("pkg1".to_string()))
+                        crate::schemas::project::configs::config_merge::Packages(Some(
+                            StringOrArrayOfStrings::String("pkg1".to_string()),
+                        ))
                 }),
             ),
             (
@@ -1712,14 +2265,23 @@ mod tests {
                 "tags",
                 ExcludeKind::Parity,
                 Box::new(|n| {
-                    n.deprecated_config.tags =
-                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                    n.deprecated_config.tags = crate::schemas::project::configs::config_merge::Tags(
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string())),
+                    )
                 }),
             ),
             (
                 "group",
                 ExcludeKind::Parity,
                 Box::new(|n| n.deprecated_config.group = Some("a_group".to_string())),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(StaticAnalysisKind::Off))
+                }),
             ),
             // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
             (
@@ -1901,14 +2463,6 @@ mod tests {
                 }),
             ),
             (
-                "static_analysis",
-                ExcludeKind::Relevant,
-                Box::new(|n| {
-                    n.deprecated_config.static_analysis =
-                        Some(Spanned::new(StaticAnalysisKind::Off))
-                }),
-            ),
-            (
                 "quote_columns",
                 ExcludeKind::Relevant,
                 Box::new(|n| n.deprecated_config.quote_columns = Some(true)),
@@ -1928,6 +2482,7 @@ mod tests {
                         evaluate_volatile_sql: Some(true),
                         pre_clone: None,
                         execute_hooks_on_any_reuse: None,
+                        compare_unrendered_code: None,
                     })
                 }),
             ),
@@ -1936,8 +2491,17 @@ mod tests {
                 "tags",
                 ExcludeKind::Parity,
                 Box::new(|n| {
-                    n.deprecated_config.tags =
-                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                    n.deprecated_config.tags = crate::schemas::project::configs::config_merge::Tags(
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string())),
+                    )
+                }),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(StaticAnalysisKind::Off))
                 }),
             ),
             (
@@ -2119,7 +2683,9 @@ mod tests {
                 ExcludeKind::Relevant,
                 Box::new(|n| {
                     n.deprecated_config.packages =
-                        Some(StringOrArrayOfStrings::String("pkg1".to_string()))
+                        crate::schemas::project::configs::config_merge::Packages(Some(
+                            StringOrArrayOfStrings::String("pkg1".to_string()),
+                        ))
                 }),
             ),
             (
@@ -2193,6 +2759,7 @@ mod tests {
                         evaluate_volatile_sql: Some(true),
                         pre_clone: None,
                         execute_hooks_on_any_reuse: None,
+                        compare_unrendered_code: None,
                     })
                 }),
             ),
@@ -2226,14 +2793,23 @@ mod tests {
                 "tags",
                 ExcludeKind::Parity,
                 Box::new(|n| {
-                    n.deprecated_config.tags =
-                        Some(StringOrArrayOfStrings::String("a_tag".to_string()))
+                    n.deprecated_config.tags = crate::schemas::project::configs::config_merge::Tags(
+                        Some(StringOrArrayOfStrings::String("a_tag".to_string())),
+                    )
                 }),
             ),
             (
                 "group",
                 ExcludeKind::Parity,
                 Box::new(|n| n.deprecated_config.group = Some("a_group".to_string())),
+            ),
+            (
+                "static_analysis",
+                ExcludeKind::Parity,
+                Box::new(|n| {
+                    n.deprecated_config.static_analysis =
+                        Some(Spanned::new(dbt_common::io_args::StaticAnalysisKind::Off))
+                }),
             ),
             // --- ownership-excludes: owned by `check_relation_modified`, not this comparator ---
             (

@@ -73,7 +73,6 @@ impl RunCacheProfileResolver {
         };
 
         let defer_jinja_env = jinja_env_for_run_cache_target(
-            arg,
             jinja_env,
             &resolved_state.dbt_profile.profile,
             &auto_defer.defer_to_target,
@@ -104,10 +103,7 @@ fn run_cache_auto_defer_config(
     arg: &EvalArgs,
     active_profile: &DbtProfile,
 ) -> Option<RunCacheAutoDeferConfig> {
-    if !run_cache_auto_defer_requested(
-        arg,
-        RunCacheServiceConfig::is_explicitly_requested_from_env(),
-    ) {
+    if !run_cache_auto_defer_requested(arg) {
         return None;
     }
 
@@ -119,7 +115,6 @@ fn run_cache_auto_defer_config(
                 format!(
                     "dbt State auto-deferral config failed: {err}; continuing without synthesized defer state"
                 ),
-                None,
             );
             return None;
         }
@@ -134,7 +129,7 @@ fn run_cache_auto_defer_config(
     })
 }
 
-fn run_cache_auto_defer_requested(arg: &EvalArgs, env_requested: bool) -> bool {
+fn run_cache_auto_defer_requested(arg: &EvalArgs) -> bool {
     if !run_cache_auto_defer_command(arg.command) {
         return false;
     }
@@ -149,7 +144,10 @@ fn run_cache_auto_defer_requested(arg: &EvalArgs, env_requested: bool) -> bool {
     if !arg.defer {
         return false;
     }
-    arg.run_cache_service || env_requested
+    // `run_cache_service` already folds in DBT_ENGINE_MANAGE_STATE; consulting the
+    // environment again here would let the env var dbt platform injects on
+    // production deployments override an explicit `--no-manage-state`.
+    arg.run_cache_service
 }
 
 fn run_cache_auto_defer_command(command: FsCommand) -> bool {
@@ -172,7 +170,7 @@ fn resolve_run_cache_defer_target_profile(
 ) -> Result<DbConfig, ProfileError> {
     let profile_path = find_profiles_path(arg.profiles_dir.as_deref())?;
     let mut penv = ProfileEnvironment::new(arg.vars.clone());
-    register_base_functions(&mut penv.env, arg.io.clone(), WarnErrorOptions::default());
+    register_base_functions(&mut penv.env, WarnErrorOptions::default());
     let resolved: ResolvedProfile =
         resolve_with_env(&penv, &profile_path, profile_name, Some(defer_to_target))?;
 
@@ -185,7 +183,6 @@ fn resolve_run_cache_defer_target_profile(
 }
 
 fn jinja_env_for_run_cache_target(
-    arg: &EvalArgs,
     jinja_env: &JinjaEnv,
     profile_name: &str,
     target_name: &str,
@@ -197,7 +194,6 @@ fn jinja_env_for_run_cache_target(
             "The `execute:` field in profiles.yml is no longer supported and will be ignored. \
              Use the `--compute inline|sidecar|service|remote` CLI flag instead. \
              Please remove `execute:` from your profile.",
-            arg.io.status_reporter.as_ref(),
         );
     }
 

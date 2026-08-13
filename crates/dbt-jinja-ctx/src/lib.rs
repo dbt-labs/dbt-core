@@ -34,6 +34,7 @@
 
 pub mod compile;
 pub mod core;
+pub mod docs;
 pub mod jinja_object;
 pub mod load;
 pub mod objects;
@@ -41,9 +42,10 @@ pub mod register;
 pub mod resolve;
 pub mod run;
 
-pub use compile::{CompileBaseCtx, CompileNodeCtx, OperationCtx};
+pub use compile::{CompileBaseCtx, CompileNodeCtx, CustomSqlRenderCtx, OperationCtx};
 pub use core::{GlobalCore, ResolveCore};
 pub use dbt_handles::AdapterHandle;
+pub use docs::DocsContext;
 pub use jinja_object::JinjaObject;
 pub use load::LoadCtx;
 pub use objects::{

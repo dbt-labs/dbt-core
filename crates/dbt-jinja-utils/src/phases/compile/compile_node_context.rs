@@ -5,7 +5,7 @@ use chrono_tz::{Europe::London, Tz};
 use dbt_adapter::{AdapterType, load_store::ResultStore};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
-use dbt_common::{dashmap::DashMap, serde_utils::convert_yml_to_value_map};
+use dbt_common::{FsResult, dashmap::DashMap, serde_utils::convert_yml_to_value_map};
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, common::DbtMaterialization, telemetry::NodeType},
@@ -131,10 +131,10 @@ pub fn build_compile_node_context<T>(
     resolver_state: &ResolverState,
     base_context: &BTreeMap<String, MinijinjaValue>,
     ref_validation_config: DependencyValidationConfig,
-) -> (
+) -> FsResult<(
     BTreeMap<String, MinijinjaValue>,
     Arc<DashMap<String, MinijinjaValue>>,
-)
+)>
 where
     T: InternalDbtNodeAttributes + ?Sized,
 {
@@ -160,10 +160,10 @@ pub fn build_compile_node_context_inner<T>(
     node_resolver: Arc<dyn NodeResolverTracker>,
     runtime_config: Arc<DbtRuntimeConfig>,
     ref_validation_config: DependencyValidationConfig,
-) -> (
+) -> FsResult<(
     BTreeMap<String, MinijinjaValue>,
     Arc<DashMap<String, MinijinjaValue>>,
-)
+)>
 where
     T: InternalDbtNodeAttributes + ?Sized,
 {
@@ -188,14 +188,12 @@ where
                 .cloned()
                 .map(|r| r.name)
                 .expect("Unit test must have a dependency");
-            let (_, this_relation, _, _) = node_resolver
-                .lookup_ref(
-                    &Some(model.common().package_name.clone()),
-                    &ref_name,
-                    &None,
-                    &None,
-                )
-                .expect("Ref must exist");
+            let (_, this_relation, _, _) = node_resolver.lookup_ref(
+                &Some(model.common().package_name.clone()),
+                &ref_name,
+                &None,
+                &None,
+            )?;
             this_relation
         }
         NodeType::Model => {
@@ -236,14 +234,16 @@ where
                 ))
                 .into_value()
             } else {
-                let (_, this_relation, _, deferred_relation) = node_resolver
-                    .lookup_ref(
-                        &Some(model.common().package_name.clone()),
-                        &ref_name,
-                        &model.version().map(|v| v.to_string()),
-                        &Some(model.common().package_name.clone()),
-                    )
-                    .expect("Ref must exist");
+                let version = model.version().map(|v| v.to_string());
+                // Bind `this` by identity. Sharing a name with another node
+                // (e.g. a legacy snapshot) makes `ref()` ambiguous, but must
+                // not stop a model from resolving its own relation.
+                let (this_relation, deferred_relation) = node_resolver.lookup_self_relation(
+                    &model.common().unique_id,
+                    &model.common().package_name,
+                    &ref_name,
+                    &version,
+                )?;
 
                 if let Some(deferred_relation_value) = deferred_relation
                     && (matches!(*model.base().static_analysis, StaticAnalysisKind::Unsafe)
@@ -415,7 +415,7 @@ where
     // produced. PR 9 (cleanup) flows the typed struct directly through
     // `render_named_str<S: Serialize>` and drops the conversion.
     ctx.extend(to_jinja_btreemap(&overlay));
-    (ctx, config_map)
+    Ok((ctx, config_map))
 }
 
 fn init_batch_context() -> BTreeMap<String, MinijinjaValue> {
@@ -439,4 +439,195 @@ fn init_batch_context() -> BTreeMap<String, MinijinjaValue> {
         )),
     );
     batch_map
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node_resolver::NodeResolver;
+    use dbt_common::ErrorCode;
+    use dbt_schemas::schemas::nodes::{
+        CommonAttributes, DbtModel, DbtSnapshot, NodeBaseAttributes,
+    };
+    use dbt_schemas::state::ModelStatus;
+
+    const ADAPTER_TYPE: AdapterType = AdapterType::Snowflake;
+
+    fn common(unique_id: &str) -> CommonAttributes {
+        CommonAttributes {
+            unique_id: unique_id.to_string(),
+            name: "barbers".to_string(),
+            package_name: "my_new_project".to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn colliding_model() -> DbtModel {
+        DbtModel {
+            __common_attr__: common("model.my_new_project.barbers"),
+            __base_attr__: NodeBaseAttributes {
+                alias: "barbers".to_string(),
+                materialized: DbtMaterialization::View,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    /// A model and a legacy snapshot sharing a name, as dbt-core accepts.
+    fn insert_colliding_snapshot(node_resolver: &mut NodeResolver) {
+        let snapshot = DbtSnapshot {
+            __common_attr__: common("snapshot.my_new_project.barbers"),
+            __base_attr__: NodeBaseAttributes {
+                alias: "barbers_snapshot".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        node_resolver
+            .insert_ref(&snapshot, ADAPTER_TYPE, ModelStatus::Enabled, false)
+            .expect("insert snapshot ref");
+    }
+
+    fn resolver_with_collision(model: &DbtModel) -> NodeResolver {
+        let mut node_resolver = NodeResolver::default();
+        node_resolver
+            .insert_ref(model, ADAPTER_TYPE, ModelStatus::Enabled, false)
+            .expect("insert model ref");
+        insert_colliding_snapshot(&mut node_resolver);
+        node_resolver
+    }
+
+    fn build_ctx(
+        model: &DbtModel,
+        node_resolver: NodeResolver,
+    ) -> FsResult<BTreeMap<String, MinijinjaValue>> {
+        build_compile_node_context_inner(
+            model,
+            ADAPTER_TYPE,
+            &BTreeMap::new(),
+            "my_new_project",
+            Arc::new(node_resolver),
+            Arc::new(DbtRuntimeConfig::default()),
+            DependencyValidationConfig::new_unvalidated(),
+        )
+        .map(|(ctx, _)| ctx)
+    }
+
+    // A name shared with a snapshot must not stop a model from binding its own
+    // `this` — dbt-core builds such projects (dbt-labs/fs#12879).
+    #[test]
+    fn colliding_node_name_still_resolves_own_this() {
+        let model = colliding_model();
+        let ctx = build_ctx(&model, resolver_with_collision(&model))
+            .expect("model must resolve its own `this` despite the name collision");
+
+        let this = ctx.get("this").expect("`this` must be bound").to_string();
+        assert!(
+            this.contains("barbers") && !this.contains("barbers_snapshot"),
+            "`this` bound to the wrong node's relation: {this}"
+        );
+    }
+
+    // `merge` extends the ref vectors in place, so identity resolution reads
+    // merged records without any second structure to keep in sync.
+    #[test]
+    fn merged_resolver_still_resolves_own_this() {
+        let model = colliding_model();
+        let mut node_resolver = NodeResolver::default();
+        node_resolver.merge(resolver_with_collision(&model));
+
+        let ctx = build_ctx(&model, node_resolver)
+            .expect("a merged resolver must still resolve the model's own `this`");
+
+        let this = ctx.get("this").expect("`this` must be bound").to_string();
+        assert!(
+            this.contains("barbers") && !this.contains("barbers_snapshot"),
+            "`this` bound to the wrong node's relation: {this}"
+        );
+    }
+
+    // Identity resolution must not smuggle a disabled node past the
+    // enabled/disabled distinction `lookup_ref` enforces.
+    #[test]
+    fn disabled_self_node_is_reported_not_resolved() {
+        let model = colliding_model();
+        let mut node_resolver = NodeResolver::default();
+        node_resolver
+            .insert_ref(&model, ADAPTER_TYPE, ModelStatus::Disabled, false)
+            .expect("insert disabled model ref");
+
+        let err = build_ctx(&model, node_resolver).expect_err("a disabled node must not resolve");
+
+        assert_eq!(err.code, ErrorCode::DisabledDependency);
+    }
+
+    #[test]
+    fn disabled_self_node_with_colliding_snapshot_is_reported() {
+        let model = colliding_model();
+        let mut node_resolver = NodeResolver::default();
+        node_resolver
+            .insert_ref(&model, ADAPTER_TYPE, ModelStatus::Disabled, false)
+            .expect("insert disabled model ref");
+        insert_colliding_snapshot(&mut node_resolver);
+
+        let err = build_ctx(&model, node_resolver)
+            .expect_err("a colliding snapshot must not replace a disabled model's `this`");
+
+        assert_eq!(err.code, ErrorCode::DisabledDependency);
+        assert!(
+            err.to_string()
+                .contains("Attempted to use disabled ref 'barbers'"),
+            "unexpected error: {err}"
+        );
+    }
+
+    // The collision is still a genuine ambiguity for user-written `ref()`,
+    // which has no unique_id to disambiguate with.
+    #[test]
+    fn colliding_node_name_still_makes_user_ref_ambiguous() {
+        let model = colliding_model();
+        let err = resolver_with_collision(&model)
+            .lookup_ref(
+                &Some("my_new_project".to_string()),
+                "barbers",
+                &None,
+                &Some("my_new_project".to_string()),
+            )
+            .expect_err("ref('barbers') must stay ambiguous");
+
+        assert_eq!(err.code, ErrorCode::InvalidConfig);
+        assert!(
+            err.to_string().contains("Found ambiguous ref('barbers')"),
+            "unexpected error: {err}"
+        );
+    }
+
+    // An unresolvable `this` must be reported, not `.expect()`ed into a panic.
+    #[test]
+    fn unresolvable_this_is_reported_not_panicked() {
+        let model = colliding_model();
+        let err = build_ctx(&model, NodeResolver::default())
+            .expect_err("an unregistered model must not resolve");
+
+        assert_eq!(err.code, ErrorCode::DependencyNotFound);
+    }
+
+    #[test]
+    fn missing_self_node_with_colliding_snapshot_is_reported() {
+        let model = colliding_model();
+        let mut node_resolver = NodeResolver::default();
+        insert_colliding_snapshot(&mut node_resolver);
+
+        let err = build_ctx(&model, node_resolver)
+            .expect_err("a colliding snapshot must not replace a missing model's `this`");
+
+        assert_eq!(err.code, ErrorCode::DependencyNotFound);
+        assert!(
+            err.to_string()
+                .contains("Ref 'barbers' not found in project"),
+            "unexpected error: {err}"
+        );
+    }
 }

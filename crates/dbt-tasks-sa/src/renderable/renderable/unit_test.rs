@@ -53,8 +53,10 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{CodeLocation, State, Value, Value as MinijinjaValue};
 use regex::Regex;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 use super::common::handle_render_result;
+use crate::sql::dialect::sqlparser_dialect_for;
 
 type YmlValue = dbt_yaml::Value;
 
@@ -410,7 +412,7 @@ fn populate_schema_from_empty_relation(
         )
     })?;
 
-    let mut run_context = build_run_node_context(
+    let (mut run_context, _result_store) = build_run_node_context(
         unit_test,
         &unit_test.deprecated_config,
         ctx.adapter_type(),
@@ -894,7 +896,7 @@ fn discover_given_relations(
         ut,
         &base_context,
         DependencyValidationConfig::new_unvalidated(),
-    );
+    )?;
 
     let mut given_relations = Vec::new();
     let mut relations_to_fetch = Vec::new();
@@ -1095,7 +1097,7 @@ fn render_unit_test(
             .validate()
             .allow_dependencies(given_relation_ids.iter())
             .allow_dependencies(tested_model_function_deps),
-    );
+    )?;
 
     // Apply overrides to the compile context
     if let Some(overrides) = &node.__unit_test_attr__.overrides {
@@ -1382,7 +1384,7 @@ fn render_unit_test(
     // ... iterate over all subqueries
     let mut subqueries_vec = vec![];
     for (fqn, values) in &subqueries {
-        let query = format!("\t{fqn} as ({values})");
+        let query = format_unit_test_subquery(adapter_type, fqn, values);
         subqueries_vec.push(query);
     }
 
@@ -1500,6 +1502,21 @@ WITH
     ))
 }
 
+fn format_unit_test_subquery(adapter_type: AdapterType, fqn: &str, values: &str) -> String {
+    let needs_newline = Tokenizer::new(sqlparser_dialect_for(adapter_type), values)
+        .tokenize()
+        .is_ok_and(|tokens| {
+            matches!(
+                tokens.last(),
+                Some(Token::Whitespace(Whitespace::SingleLineComment { comment, .. }))
+                    if !comment.ends_with('\n') && !comment.ends_with('\r')
+            )
+        });
+    let newline = if needs_newline { "\n" } else { "" };
+
+    format!("\t{fqn} as ({values}{newline})")
+}
+
 fn format_fqn(type_ops: &dyn TypeOps, catalog: &str, schema: &str, table: &str) -> String {
     format!(
         "{}.{}.{}",
@@ -1538,6 +1555,7 @@ fn is_supported_type(adapter_type: AdapterType, ref_type: &DataType) -> bool {
         || match adapter_type {
             AdapterType::Snowflake => {
                 SnowflakeTyping::is_any_timestamp(ref_type).is_yes()
+                    || SnowflakeTyping::is_time(ref_type).is_yes()
                     || SnowflakeTyping::is_semi_structured_array(ref_type)
                     || SnowflakeTyping::is_variant(ref_type)
                     || SnowflakeTyping::is_object(ref_type)
@@ -1668,6 +1686,16 @@ fn yml_mapping_to_sql_literal(
     }
 }
 
+/// BigQuery has no `STRING -> JSON` cast, so `PARSE_JSON` is the only constructor, and its
+/// result is already typed - callers must not wrap it (dbt-labs/dbt-core#15708).
+fn is_bigquery_json_literal(
+    adapter_type: AdapterType,
+    data_type: &DataType,
+    value: &YmlValue,
+) -> bool {
+    adapter_type == AdapterType::Bigquery && BigqueryTyping::is_json(data_type) && !value.is_null()
+}
+
 /// Converts a yaml value to a String literal for the given adapter type
 fn yml_value_to_sql_literal(
     adapter_type: AdapterType,
@@ -1676,6 +1704,25 @@ fn yml_value_to_sql_literal(
     data_type: &DataType,
 ) -> FsResult<String> {
     let literal_formatter = SqlLiteralFormatter::new(adapter_type);
+
+    if is_bigquery_json_literal(adapter_type, data_type, &value) {
+        // A string fixture is the JSON document itself; anything else is serialized to JSON.
+        let json_str = match &value {
+            YmlValue::String(s, _) => s.clone(),
+            _ => serde_json::to_string(&value).map_err(|_| {
+                fs_err!(
+                    ErrorCode::InvalidArgument,
+                    "Unable to serialize JSON fixture value"
+                )
+            })?,
+        };
+        // `format_str` does not escape backslashes for BigQuery; JSON text is full of them.
+        let json_str = json_str.replace('\\', "\\\\");
+        return Ok(format!(
+            "PARSE_JSON({})",
+            literal_formatter.format_str(&json_str)
+        ));
+    }
 
     match value {
         // Scalars are handled the same across dialects
@@ -2075,6 +2122,10 @@ fn create_bigquery_relation_to_select_from(
                         )
                     })?;
 
+                    let data_type = schema.field(i).data_type();
+                    let skip_cast =
+                        is_bigquery_json_literal(AdapterType::Bigquery, data_type, &value);
+
                     // Complex-type handling (verbatim SQL-expression injection
                     // for STRUCT/GEOGRAPHY, STRUCT(...) for mappings, arrays for
                     // sequences) lives in `yml_value_to_sql_literal`.
@@ -2082,12 +2133,16 @@ fn create_bigquery_relation_to_select_from(
                         AdapterType::Bigquery,
                         type_ops,
                         value,
-                        schema.field(i).data_type(),
+                        data_type,
                     )?;
 
-                    Ok(format!(
-                        "CAST({formatted_value} AS {bigquery_type}) AS {formatted_name}"
-                    ))
+                    if skip_cast {
+                        Ok(format!("{formatted_value} AS {formatted_name}"))
+                    } else {
+                        Ok(format!(
+                            "CAST({formatted_value} AS {bigquery_type}) AS {formatted_name}"
+                        ))
+                    }
                 })
                 .collect::<FsResult<Vec<_>>>()?;
             Ok(format!("STRUCT({})", struct_fields.join(", ")))
@@ -2292,6 +2347,56 @@ mod tests {
         let result =
             create_cte_name_from_fqn(adapter_type, &DefaultTypeOps::new(adapter_type), fqn);
         assert_eq!(result, "\"database_schema_table\"");
+    }
+
+    #[test]
+    fn test_unit_test_subquery_closes_after_trailing_line_comment() {
+        let result = format_unit_test_subquery(
+            AdapterType::Snowflake,
+            "\"database_schema_model_actual\"",
+            "SELECT 1\n-- trailing comment",
+        );
+
+        assert_eq!(
+            result,
+            "\t\"database_schema_model_actual\" as (SELECT 1\n-- trailing comment\n)"
+        );
+
+        let sql = format!("WITH {result} SELECT * FROM \"database_schema_model_actual\"");
+        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::SnowflakeDialect {}, &sql)
+            .expect("unit test CTE should remain valid after a trailing line comment");
+    }
+
+    #[test]
+    fn test_unit_test_subquery_preserves_existing_formatting() {
+        for values in [
+            "SELECT 1",
+            "SELECT '-- not a comment'",
+            "SELECT 1\n-- terminated comment\n",
+        ] {
+            assert_eq!(
+                format_unit_test_subquery(
+                    AdapterType::Snowflake,
+                    "\"database_schema_model_actual\"",
+                    values,
+                ),
+                format!("\t\"database_schema_model_actual\" as ({values})")
+            );
+        }
+    }
+
+    #[test]
+    fn test_snowflake_time_is_supported_type() {
+        let time_type = DataType::FixedSizeList(
+            Arc::new(Field::new(
+                "time:9",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            )),
+            1,
+        );
+
+        assert!(is_supported_type(AdapterType::Snowflake, &time_type));
     }
 
     #[test]
@@ -3093,10 +3198,94 @@ mod tests {
         );
     }
 
+    /// Regression for dbt-labs/dbt-core#15708: a BigQuery `JSON` column is
+    /// mockable from either an object or a JSON string, both rendered with
+    /// `PARSE_JSON` and no enclosing cast.
+    #[test]
+    fn test_create_values_bigquery_json_column() {
+        let json_type =
+            DataType::FixedSizeList(Arc::new(Field::new("json", DataType::Utf8, true)), 1);
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("from_object", json_type.clone(), true),
+            Field::new("from_string", json_type.clone(), true),
+            Field::new("with_escapes", json_type.clone(), true),
+            Field::new("missing", json_type, true),
+        ]));
+        let type_ops = DefaultTypeOps::new(AdapterType::Bigquery);
+
+        let mut object_map = dbt_yaml::mapping::Mapping::new();
+        object_map.insert(
+            YmlValue::string("segmentCode".to_string()),
+            YmlValue::string("HORECA".to_string()),
+        );
+        let mut escaped_map = dbt_yaml::mapping::Mapping::new();
+        escaped_map.insert(
+            YmlValue::string("note".to_string()),
+            YmlValue::string("a\nb".to_string()),
+        );
+
+        let rows = vec![BTreeMap::from([
+            (
+                "from_object".to_string(),
+                YmlValue::Mapping(object_map, Default::default()),
+            ),
+            (
+                "from_string".to_string(),
+                YmlValue::string(r#"{"segmentCode":"HORECA"}"#.to_string()),
+            ),
+            (
+                "with_escapes".to_string(),
+                YmlValue::Mapping(escaped_map, Default::default()),
+            ),
+            ("missing".to_string(), YmlValue::null()),
+        ])];
+
+        // `allow_pseudocolumns` is the only thing separating given from expect
+        for allow_pseudocolumns in [true, false] {
+            let result = create_values(
+                &schema,
+                &rows,
+                AdapterType::Bigquery,
+                &type_ops,
+                None,
+                "json_source",
+                allow_pseudocolumns,
+            )
+            .expect("JSON fixture should render");
+
+            assert_contains!(
+                result,
+                r#"PARSE_JSON('{"segmentCode":"HORECA"}') AS from_object"#,
+                "object fixture should render as PARSE_JSON"
+            );
+            assert_contains!(
+                result,
+                r#"PARSE_JSON('{"segmentCode":"HORECA"}') AS from_string"#,
+                "JSON string fixture should render as PARSE_JSON"
+            );
+            // BigQuery unescapes `\\` back to a single backslash, so PARSE_JSON
+            // receives the `\n` escape rather than a literal newline.
+            assert_contains!(
+                result,
+                r#"PARSE_JSON('{"note":"a\\nb"}') AS with_escapes"#,
+                "backslashes in JSON text must survive the string literal"
+            );
+            assert_contains!(
+                result,
+                "CAST(NULL AS JSON) AS missing",
+                "a null JSON value keeps the cast that carries the column type"
+            );
+            assert!(
+                !result.contains("CAST(PARSE_JSON"),
+                "PARSE_JSON is already typed JSON and must not be cast: {result}"
+            );
+        }
+    }
+
     fn row(pairs: &[(&str, i64)]) -> BTreeMap<String, YmlValue> {
         pairs
             .iter()
-            .map(|(k, v)| (k.to_string(), YmlValue::number((*v).into())))
+            .map(|(k, v)| ((*k).to_string(), YmlValue::number((*v).into())))
             .collect()
     }
 

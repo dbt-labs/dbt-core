@@ -38,7 +38,7 @@ use super::ProjectUnitTestConfig;
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectDbtCloudConfig {
     #[serde(rename = "project-id")]
-    pub project_id: Option<StringOrInteger>,
+    pub project_id: Spanned<Option<StringOrInteger>>,
     #[serde(rename = "defer-env-id")]
     pub defer_env_id: Option<StringOrInteger>,
     #[serde(rename = "state-org-id")]
@@ -56,6 +56,12 @@ pub struct ProjectDbtCloudConfig {
     pub application: Option<StringOrInteger>,
     pub environment: Option<StringOrInteger>,
     pub tenant_hostname: Option<String>,
+}
+
+impl ProjectDbtCloudConfig {
+    pub fn project_id_str(&self) -> Option<String> {
+        self.project_id.as_ref().as_ref().map(|v| v.to_string())
+    }
 }
 
 #[skip_serializing_none]
@@ -365,18 +371,6 @@ pub trait ResolvableConfig<T>:
         Self: Sized;
 }
 
-// Improved macro for simple field defaulting with mutable references
-#[macro_export]
-macro_rules! default_to {
-    ($parent:ident, [$($field:ident),* $(,)?]) => {
-        $(
-            if $field.is_none() {
-                *$field = $parent.$field.clone();
-            }
-        )*
-    };
-}
-
 /// Yaml configs that can contain nested child configs of the same type.
 pub trait TypedRecursiveConfig: Clone {
     /// Returns the type name of the config, e.g., "model", "source", etc.
@@ -384,6 +378,11 @@ pub trait TypedRecursiveConfig: Clone {
 
     /// Returns an iterator over the child configs.
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>>;
+
+    /// Returns whether this level of the recursive config sets any config fields.
+    /// This is just an approximation, since we can't reliably tell at this level if someone
+    /// explicitly set a config field to its default.
+    fn has_set_fields(&self) -> bool;
 }
 
 #[cfg(test)]
@@ -453,6 +452,38 @@ dbt-cloud:
 
         let dbt_cloud = project.dbt_cloud.expect("dbt-cloud config");
         assert_eq!(dbt_cloud.state_org_id, Some(StringOrInteger::Integer(789)));
+    }
+
+    #[test]
+    fn project_id_span_points_at_the_project_id_line() {
+        let project: DbtProject = dbt_yaml::from_str(
+            r#"
+name: test
+dbt-cloud:
+  project-id: 123
+  defer-env-id: 456
+"#,
+        )
+        .unwrap();
+
+        let dbt_cloud = project.dbt_cloud.expect("dbt-cloud config");
+        assert_eq!(dbt_cloud.project_id_str().as_deref(), Some("123"));
+        assert_eq!(dbt_cloud.project_id.span().start.line, 4);
+    }
+
+    #[test]
+    fn project_dbt_cloud_config_without_project_id() {
+        let project: DbtProject = dbt_yaml::from_str(
+            r#"
+name: test
+dbt-cloud:
+  defer-env-id: 456
+"#,
+        )
+        .unwrap();
+
+        let dbt_cloud = project.dbt_cloud.expect("dbt-cloud config");
+        assert!(dbt_cloud.project_id_str().is_none());
     }
 
     #[test]

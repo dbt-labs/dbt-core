@@ -917,6 +917,12 @@ impl<'source> Environment<'source> {
         self.globals.remove(name);
     }
 
+    /// Discards every added global and restores the ones Minijinja ships with.
+    /// Used to derive a restricted environment from a clone of a populated one.
+    pub fn reset_globals_to_defaults(&mut self) {
+        self.globals = defaults::get_globals();
+    }
+
     /// Returns an empty [`State`] for testing purposes and similar.
     pub fn empty_state(&self) -> State<'_, '_> {
         State::new_for_env(self)

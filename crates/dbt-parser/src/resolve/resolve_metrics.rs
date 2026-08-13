@@ -1,5 +1,7 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{
@@ -10,7 +12,7 @@ use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_error_log_message};
 use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::serde::into_typed_with_error;
+use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::common::{DbtChecksum, NodeDependsOn};
 use dbt_schemas::schemas::project::MetricConfig;
@@ -30,39 +32,11 @@ use dbt_schemas::schemas::manifest::metric::{
     MetricTypeParams, NonAdditiveDimension,
 };
 use minijinja::constants::CURRENT_PATH;
-use std::path::Path;
 
 type ResolveMetricsResult = FsResult<(
     HashMap<String, Arc<DbtMetric>>,
     HashMap<String, Arc<DbtMetric>>,
 )>;
-
-/// Render Jinja expressions (e.g. `{{ doc("...") }}`) in a metric description.
-///
-/// Metrics are intentionally excluded from full Jinja rendering because fields
-/// like `filter` and `expr` contain MetricFlow DSL (e.g. `{{ Dimension('...') }}`)
-/// that must not be evaluated during parsing.  Description fields, however,
-/// legitimately use `{{ doc() }}` and need selective rendering.
-fn render_jinja_description(
-    description: &Option<String>,
-    env: &JinjaEnv,
-    base_ctx: &BTreeMap<String, MinijinjaValue>,
-    relative_path: &Path,
-) -> Option<String> {
-    description.as_ref().map(|desc| {
-        if desc.contains("{{") {
-            let mut ctx = base_ctx.clone();
-            ctx.insert(
-                CURRENT_PATH.to_string(),
-                MinijinjaValue::from(relative_path.to_string_lossy().to_string()),
-            );
-            env.render_str(desc, &ctx, &[])
-                .unwrap_or_else(|_| desc.clone())
-        } else {
-            desc.clone()
-        }
-    })
-}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_metrics(
@@ -92,6 +66,8 @@ pub async fn resolve_metrics(
     } else {
         None
     };
+    let disallow_plus_prefix =
+        disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref());
 
     let (nested_metrics, nested_disabled_metrics) = resolve_nested_model_metrics(
         arg,
@@ -105,6 +81,7 @@ pub async fn resolve_metrics(
         &mut seen_metric_names,
         &raw_local_project_config,
         raw_root_project_cfg.as_ref(),
+        disallow_plus_prefix,
     )?;
     metrics.extend(nested_metrics);
     disabled_metrics.extend(nested_disabled_metrics);
@@ -120,6 +97,7 @@ pub async fn resolve_metrics(
         &mut seen_metric_names,
         &raw_local_project_config,
         raw_root_project_cfg.as_ref(),
+        disallow_plus_prefix,
     )?;
     metrics.extend(top_level_metrics);
     disabled_metrics.extend(top_level_disabled_metrics);
@@ -140,6 +118,7 @@ pub fn resolve_nested_model_metrics(
     seen_metric_names: &mut HashSet<String>,
     raw_local_project_config: &crate::utils::RawProjectConfig,
     raw_root_project_cfg: Option<&crate::utils::RawProjectConfig>,
+    disallow_plus_prefix: bool,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -155,10 +134,10 @@ pub fn resolve_nested_model_metrics(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.metrics,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix,
             )
         },
     )?;
@@ -195,7 +174,7 @@ pub fn resolve_nested_model_metrics(
 
                 // Validate metric (name and window)
                 if let Err(e) = validate_metric(metric_props) {
-                    emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+                    emit_error_log_from_fs_error(*e);
 
                     continue;
                 }
@@ -208,7 +187,6 @@ pub fn resolve_nested_model_metrics(
                             "Duplicate metric name '{}' found in package '{}'",
                             metric_name, package_name
                         ),
-                        arg.io.status_reporter.as_ref(),
                     );
                     continue;
                 }
@@ -274,19 +252,15 @@ pub fn resolve_nested_model_metrics(
                         patch_path: Some(DbtPath::from(&mpe.relative_path)),
                         unique_id: metric_unique_id.clone(),
                         fqn: metric_fqn.clone(),
-                        description: render_jinja_description(
-                            &metric_props.description,
-                            env,
-                            base_ctx,
-                            &mpe.relative_path,
-                        ),
+                        description: metric_props.description.clone(),
                         checksum: DbtChecksum::default(),
                         raw_code: None,
                         language: None,
                         tags: metric_config
                             .tags
+                            .inner()
                             .clone()
-                            .map(|tags| tags.into())
+                            .map(Into::into)
                             .unwrap_or_default(),
                         classifiers: Default::default(),
                         meta: metric_config.meta.clone().unwrap_or_default(),
@@ -333,7 +307,7 @@ pub fn resolve_nested_model_metrics(
                         ),
                         metric_type: metric_props.type_.clone().unwrap_or_default(),
                         type_params,
-                        filter: metric_props.filter.clone().map(|f| vec![f].into()),
+                        filter: metric_props.filter.0.clone().map(|f| vec![f].into()),
                         time_granularity: metric_props.time_granularity.clone(),
                         metrics: vec![], // always empty, hydrated in type_params.metrics
                     },
@@ -371,6 +345,7 @@ pub fn resolve_top_level_metrics(
     seen_metric_names: &mut HashSet<String>,
     raw_local_project_config: &crate::utils::RawProjectConfig,
     raw_root_project_cfg: Option<&crate::utils::RawProjectConfig>,
+    disallow_plus_prefix: bool,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -385,10 +360,10 @@ pub fn resolve_top_level_metrics(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.metrics,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix,
             )
         },
     )?;
@@ -400,14 +375,22 @@ pub fn resolve_top_level_metrics(
 
         let raw_properties_yml_config = extract_config_map(&mpe.schema_value);
 
+        let mut metric_ctx = base_ctx.clone();
+        metric_ctx.insert(
+            CURRENT_PATH.to_string(),
+            MinijinjaValue::from(mpe.relative_path.to_string_lossy().to_string()),
+        );
+
         // Parse the metric properties from YAML
-        let metric_props: MetricsProperties = into_typed_with_error(
-            &arg.io,
+        let metric_props: MetricsProperties = into_typed_with_jinja(
             mpe.schema_value.clone(),
+            false,
+            env,
+            &metric_ctx,
+            &[],
+            dependency_package_name,
             // Set show_errors_or_warnings to false for legacy top-level metrics to avoid strict validation errors, since these metrics use a different specification format than the current semantic layer spec.
             false,
-            None,
-            None,
         )?;
 
         let metric_fqn = get_node_fqn(
@@ -425,7 +408,7 @@ pub fn resolve_top_level_metrics(
 
         // Validate metric (name and window)
         if let Err(e) = validate_metric(&metric_props) {
-            emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+            emit_error_log_from_fs_error(*e);
 
             continue;
         }
@@ -438,7 +421,6 @@ pub fn resolve_top_level_metrics(
                     "Duplicate metric name '{}' found in package '{}'",
                     metric_name, package_name
                 ),
-                arg.io.status_reporter.as_ref(),
             );
             continue;
         }
@@ -554,19 +536,15 @@ pub fn resolve_top_level_metrics(
                 patch_path: Some(DbtPath::from(&mpe.relative_path)),
                 unique_id: metric_unique_id.clone(),
                 fqn: metric_fqn.clone(),
-                description: render_jinja_description(
-                    &metric_props.description,
-                    env,
-                    base_ctx,
-                    &mpe.relative_path,
-                ),
+                description: metric_props.description.clone(),
                 checksum: DbtChecksum::default(),
                 raw_code: None,
                 language: None,
                 tags: metric_metric_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: Default::default(),
                 meta: metric_metric_config.meta.clone().unwrap_or_default(),
@@ -607,7 +585,7 @@ pub fn resolve_top_level_metrics(
                 ),
                 metric_type,
                 type_params,
-                filter: metric_props.filter.clone().map(|f| vec![f].into()),
+                filter: metric_props.filter.0.clone().map(|f| vec![f].into()),
                 time_granularity: metric_props.time_granularity.clone(),
                 metrics: vec![],
             },

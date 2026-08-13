@@ -568,7 +568,6 @@ impl DatabricksApiClient {
                     emit_warn_log_message(
                         ErrorCode::UnexpectedApiResponse,
                         format!("Unknown command status: {}", response.status),
-                        None,
                     );
                 }
             }

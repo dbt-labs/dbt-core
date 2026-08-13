@@ -1,80 +1,13 @@
 use crate::collections::{HashMap, HashSet};
 use dbt_error::ErrorCode;
-use dbt_telemetry::LogMessage;
-use dbt_tracing::{
-    AnyTelemetryEvent, LogRecordInfo, SeverityNumber, SpanStartInfo, TelemetryEventRecType,
-    TelemetryOutputFlags,
-};
+use dbt_tracing::{LogRecordInfo, SeverityNumber, SpanStartInfo};
 
 use super::super::{
     data_provider::DataProvider,
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
+    fs_error_log::{FsErrorLog, get_log_message_mut},
     layer::TelemetryMiddleware,
 };
-
-/// An unfortunate temporary wrapper used to mark log messages that are parsing errors.
-/// At the time of writing there were no documented list of error codes that should be treated
-/// as deprecation/parsing errors and thus handled by this middleware. Instead, existing call
-/// sites just emitted all `FsErrors` as deprecation errors subject to the logic
-/// in this module. Reverse-engineering all possible codes as part of migration seemed
-/// a tall order, so instead we wrap the log message in this type that allows distinguishing
-/// them from other log messages.
-/// TODO: remove this wrapper and replace with a static list of fusion error codes that
-/// should be treated as parsing/deprecation errors.
-#[derive(Debug)]
-pub(in crate::tracing) struct ParsingErrorMessage(LogMessage);
-
-impl ParsingErrorMessage {
-    pub fn new(log_message: LogMessage) -> Self {
-        Self(log_message)
-    }
-}
-
-impl AnyTelemetryEvent for ParsingErrorMessage {
-    fn event_type(&self) -> &'static str {
-        self.0.event_type()
-    }
-
-    fn event_display_name(&self) -> String {
-        self.0.event_display_name()
-    }
-
-    fn record_category(&self) -> TelemetryEventRecType {
-        self.0.record_category()
-    }
-
-    fn output_flags(&self) -> TelemetryOutputFlags {
-        self.0.output_flags()
-    }
-
-    fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<Self>() {
-            self.0 == other.0
-        } else {
-            false
-        }
-    }
-
-    fn has_sensitive_data(&self) -> bool {
-        self.0.has_sensitive_data()
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-
-    fn clone_box(&self) -> Box<dyn AnyTelemetryEvent> {
-        Box::new(Self(self.0.clone()))
-    }
-
-    fn to_json(&self) -> Result<serde_json::Value, String> {
-        self.0.to_json()
-    }
-}
 
 /// Private type to store set of package names that have already emitted deprecation warnings
 /// in data provider.
@@ -134,8 +67,10 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
         mut record: LogRecordInfo,
         data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
-        if let Some(wrapped_log_message) = record.attributes.downcast_mut::<ParsingErrorMessage>() {
-            let log_message = &mut wrapped_log_message.0;
+        if let Some(error_log) = record.attributes.downcast_mut::<FsErrorLog>()
+            && error_log.is_parsing_error()
+        {
+            let log_message = error_log.get_log_message_mut();
 
             let (downgrade_to_warn, downgrade_message_suffix) = if let Some(package_name) =
                 log_message.package_name.as_ref()
@@ -199,13 +134,11 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
                 1,
             );
 
-            // Finally, always replace wrapper with inner log message
-            record.attributes = log_message.clone().into();
             return Some(record);
         }
 
         if !self.show_all_deprecations
-            && let Some(log_message) = record.attributes.downcast_mut::<LogMessage>()
+            && let Some(log_message) = get_log_message_mut(&mut record.attributes)
             && let Some(code) = log_message.code
             && code == ErrorCode::DeprecatedStaticAnalysisValue as u32
         {

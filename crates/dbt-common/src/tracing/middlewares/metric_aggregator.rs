@@ -1,7 +1,7 @@
 use dbt_telemetry::{
-    ConnectionLimitWait, HookProcessed, Invocation, InvocationMetrics, LogMessage, NodeEvaluated,
-    NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, SourceFreshnessOutcome,
-    has_node_warning, node_processed::NodeOutcomeDetail,
+    ConnectionLimitWait, HookProcessed, Invocation, InvocationMetrics, NodeEvaluated, NodeEvent,
+    NodeOutcome, NodeProcessed, NodeSkipReason, SourceFreshnessOutcome, has_node_warning,
+    node_processed::NodeOutcomeDetail,
 };
 use dbt_tracing::{LogRecordInfo, SeverityNumber, SpanEndInfo};
 
@@ -11,6 +11,7 @@ use super::super::{
         FusionMetricKey, InvocationMetricKey, NodeSubOutcome, OutcomeCountsKey, OutcomeKind,
     },
     event_classifiers::is_exit_with_status_log,
+    fs_error_log::get_log_message,
     layer::TelemetryMiddleware,
 };
 
@@ -250,7 +251,7 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             return Some(log_record);
         }
 
-        if log_record.attributes.is::<LogMessage>() {
+        if get_log_message(&log_record.attributes).is_some() {
             match log_record.severity_number {
                 SeverityNumber::Error => {
                     data_provider.increment_metric(

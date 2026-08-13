@@ -21,7 +21,7 @@ use crate::ingest::ingest_state::{
     CATALOG_COLUMNS_SUBDIR, COMPILE_CLL_SUBDIR, COMPILE_COLUMNS_SUBDIR, COMPILE_NODES_SUBDIR,
     IngestState, PARSE_ALIVE, PARSE_COLUMNS_SUBDIR, PARSE_GENERATION, PARSE_NODES_SUBDIR,
     PARSE_PROJECT, PARSE_RESOLVER_STATE, RUN_CATALOG_STATS_SUBDIR, RUN_FRESHNESS_SUBDIR,
-    RUN_INVOCATIONS_SUBDIR, RUN_RESULTS_SUBDIR,
+    RUN_INVOCATIONS_SUBDIR, RUN_RESULTS_SUBDIR, mtime_us,
 };
 use crate::ingest::payload::{
     ParsedDoc, ParsedExposure, ParsedGroup, ParsedMacro, ParsedMetric, ParsedSavedQuery,
@@ -68,27 +68,30 @@ pub struct PersistedState {
     pub alive_mtime_us: Option<u64>,
     /// last epoch number per subdir
     pub last_epoch: HashMap<String, u32>,
-    // base_mtime_us removed: compaction detection now uses curr_max < last_epoch comparison.
-    // Old persisted state files may still have this field — ignored via #[serde(default)].
+    /// micros-since-epoch for `{subdir}/v1_0.parquet` mtime. Detects an in-place
+    /// rewrite of the base epoch, which epoch numbers alone cannot see. Absent in
+    /// state files written between #10624 and this fix — `default` makes those
+    /// reload in full once, then track normally.
     #[serde(default)]
     pub base_mtime_us: HashMap<String, u64>,
 }
 
 pub fn save_state(index_dir: &Path, state: &IngestState) {
-    let alive_mtime_us = state.alive_mtime.and_then(|t| {
-        t.duration_since(UNIX_EPOCH)
-            .ok()
-            .map(|d| d.as_micros() as u64)
-    });
+    let alive_mtime_us = state.alive_mtime.and_then(mtime_us);
     let last_epoch = state
         .last_epoch
         .iter()
         .map(|(k, v)| ((*k).to_string(), *v))
         .collect();
+    let base_mtime_us = state
+        .base_mtime
+        .iter()
+        .filter_map(|(k, t)| mtime_us(*t).map(|us| ((*k).to_string(), us)))
+        .collect();
     let ps = PersistedState {
         alive_mtime_us,
         last_epoch,
-        base_mtime_us: Default::default(),
+        base_mtime_us,
     };
     if let Ok(json) = serde_json::to_string(&ps) {
         let _ = std::fs::write(index_dir.join(STATE_FILE), json);
@@ -103,20 +106,28 @@ pub fn load_state(index_dir: &Path) -> Option<IngestState> {
         .alive_mtime_us
         .map(|us| UNIX_EPOCH + Duration::from_micros(us));
 
+    // Every subdir that any write_* fn calls set_epoch for. A subdir missing here
+    // never has its epoch restored, so it silently full-reloads on every delta.
     const ALL_SUBDIRS: &[&str] = &[
         PARSE_NODES_SUBDIR,
         PARSE_COLUMNS_SUBDIR,
         COMPILE_NODES_SUBDIR,
         COMPILE_COLUMNS_SUBDIR,
         COMPILE_CLL_SUBDIR,
+        CATALOG_COLUMNS_SUBDIR,
         RUN_INVOCATIONS_SUBDIR,
         RUN_RESULTS_SUBDIR,
         RUN_FRESHNESS_SUBDIR,
+        RUN_CATALOG_STATS_SUBDIR,
     ];
     let mut last_epoch = HashMap::new();
+    let mut base_mtime = HashMap::new();
     for &subdir in ALL_SUBDIRS {
         if let Some(&epoch) = ps.last_epoch.get(subdir) {
             last_epoch.insert(subdir, epoch);
+        }
+        if let Some(&us) = ps.base_mtime_us.get(subdir) {
+            base_mtime.insert(subdir, UNIX_EPOCH + Duration::from_micros(us));
         }
     }
 
@@ -125,6 +136,7 @@ pub fn load_state(index_dir: &Path) -> Option<IngestState> {
         last_epoch,
         index_dir: None,
         alive_ids: HashSet::new(),
+        base_mtime,
     })
 }
 
@@ -222,8 +234,7 @@ fn cold_ingest(
     let alive_us: Option<u64> = std::fs::metadata(metadata_dir.join(PARSE_ALIVE))
         .ok()
         .and_then(|m| m.modified().ok())
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_micros() as u64);
+        .and_then(mtime_us);
     state.alive_mtime = alive_us.map(|us| UNIX_EPOCH + Duration::from_micros(us));
 
     Ok(total)
@@ -240,18 +251,14 @@ pub fn apply_delta_direct(
     let current_us: Option<u64> = std::fs::metadata(metadata_dir.join(PARSE_ALIVE))
         .ok()
         .and_then(|m| m.modified().ok())
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_micros() as u64);
-    let stored_us: Option<u64> = state
-        .alive_mtime
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_micros() as u64);
+        .and_then(mtime_us);
+    let stored_us: Option<u64> = state.alive_mtime.and_then(mtime_us);
     let alive_changed = current_us != stored_us;
 
     // Compile-phase artifacts (CLL, compile/nodes, compile/columns) can be written
     // without a reparse — e.g. `--static-analysis strict` on a non-clean target.
     // Check for new compile epochs even when alive_mtime is unchanged.
-    let has_new_compile_epochs = !alive_changed && has_unseen_epochs(metadata_dir, state);
+    let has_new_compile_epochs = !alive_changed && has_unseen_compile_epochs(metadata_dir, state);
 
     if !alive_changed && !has_new_compile_epochs {
         return Ok(0);
@@ -325,8 +332,9 @@ pub fn apply_delta_direct(
     Ok(total)
 }
 
-/// Returns true if any compile-phase subdirectory has epochs beyond what was last ingested.
-fn has_unseen_epochs(metadata_dir: &Path, state: &IngestState) -> bool {
+/// Returns true if any compile-phase subdirectory has epochs beyond what was last
+/// ingested, or had its base epoch rewritten in place.
+pub fn has_unseen_compile_epochs(metadata_dir: &Path, state: &IngestState) -> bool {
     const COMPILE_SUBDIRS: &[&str] = &[
         COMPILE_NODES_SUBDIR,
         COMPILE_COLUMNS_SUBDIR,
@@ -338,11 +346,18 @@ fn has_unseen_epochs(metadata_dir: &Path, state: &IngestState) -> bool {
         if !dir.exists() {
             continue;
         }
-        let epochs = epoch_layers::existing_epochs(&dir);
-        let curr_max = epochs.iter().map(|(n, _)| *n).max();
+        if state.base_differs(subdir, &dir) {
+            return true;
+        }
         let last = state.last_epoch_for(subdir);
-        match curr_max {
-            Some(max) if last == u32::MAX || max > last || max < last => return true,
+        // Any epoch number other than `last` means something changed: higher = new
+        // epochs, lower = compaction reset the numbering.
+        match epoch_layers::existing_epochs(&dir)
+            .iter()
+            .map(|(n, _)| *n)
+            .max()
+        {
+            Some(max) if last == u32::MAX || max != last => return true,
             _ => {}
         }
     }
@@ -630,7 +645,7 @@ pub fn load_compile_nodes_map(
 
     let last = state.last_epoch_for(COMPILE_NODES_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
-    let need_full = full || last == u32::MAX || curr_max_ep < last;
+    let need_full = state.needs_full_reload(COMPILE_NODES_SUBDIR, &dir, curr_max_ep, full);
     let new_epochs: Vec<_> = if need_full {
         epochs
     } else {
@@ -767,9 +782,8 @@ fn write_parse_nodes(
     }
 
     let epochs = epoch_layers::existing_epochs(&dir);
-    let last_saved = state.last_epoch_for(PARSE_NODES_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
-    let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
+    let need_full = state.needs_full_reload(PARSE_NODES_SUBDIR, &dir, curr_max_ep, full);
     if epochs.is_empty() {
         return Ok(0);
     }
@@ -1724,9 +1738,8 @@ fn write_parse_columns(
     }
 
     let epochs = epoch_layers::existing_epochs(&dir);
-    let last_saved = state.last_epoch_for(PARSE_COLUMNS_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
-    let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
+    let need_full = state.needs_full_reload(PARSE_COLUMNS_SUBDIR, &dir, curr_max_ep, full);
     let new_epochs: Vec<_> = if need_full {
         epochs
     } else {
@@ -2034,9 +2047,8 @@ fn write_compile_columns(
     }
 
     let epochs = epoch_layers::existing_epochs(&dir);
-    let last_saved = state.last_epoch_for(COMPILE_COLUMNS_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
-    let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
+    let need_full = state.needs_full_reload(COMPILE_COLUMNS_SUBDIR, &dir, curr_max_ep, full);
     let new_epochs: Vec<_> = if need_full {
         epochs
     } else {
@@ -2135,7 +2147,7 @@ fn write_catalog_columns(
     let epochs = epoch_layers::existing_epochs(&dir);
     let last_saved = state.last_epoch_for(CATALOG_COLUMNS_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
-    let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
+    let need_full = state.needs_full_reload(CATALOG_COLUMNS_SUBDIR, &dir, curr_max_ep, full);
     let new_epochs: Vec<_> = if need_full {
         epochs
     } else {
@@ -2532,9 +2544,8 @@ fn write_compile_cll(
     }
 
     let epochs = epoch_layers::existing_epochs(&dir);
-    let last_saved = state.last_epoch_for(COMPILE_CLL_SUBDIR);
     let curr_max_ep = epochs.iter().map(|(n, _)| *n).max().unwrap_or(0);
-    let need_full = full || last_saved == u32::MAX || curr_max_ep < last_saved;
+    let need_full = state.needs_full_reload(COMPILE_CLL_SUBDIR, &dir, curr_max_ep, full);
     let new_epochs: Vec<_> = if need_full {
         epochs
     } else {

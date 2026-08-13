@@ -22,10 +22,23 @@ fn component_from_recorded(
 ) -> Option<Box<dyn ComponentConfig>> {
     match name {
         components::tbl_properties::TYPE_NAME => {
-            let props: IndexMap<String, String> = val
+            let mut props: IndexMap<String, String> = val
                 .get("tblproperties")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
+            // `to_jinja` splits `pipelines.pipelineId` out into a separate
+            // top-level `pipeline_id` key; re-insert it so the round-trip is
+            // lossless (Time Machine replay reserializes this component).
+            if let Some(pipeline_id) = val
+                .get("pipeline_id")
+                .and_then(|v| serde_json::from_value::<Option<String>>(v.clone()).ok())
+                .flatten()
+            {
+                props.insert(
+                    components::tbl_properties::PIPELINE_ID_KEY.to_string(),
+                    pipeline_id,
+                );
+            }
             Some(components::TblPropertiesLoader::new_component_type_erased(
                 props,
             ))

@@ -70,7 +70,7 @@ impl<'a> DepsOperationContext<'a> {
 
     pub(crate) fn flush_notices(&self, lock: &DbtPackagesLock) {
         for n in prepare_for_emit(self.notices.drain(), lock) {
-            n.emit(self);
+            n.emit();
         }
     }
 

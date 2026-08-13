@@ -159,6 +159,8 @@ pub async fn execute_login(
         redirect_port: LOOPBACK_PORT,
         opener: state_opener,
         abort_signal: Mutex::new(Some(state_abort_rx)),
+        // `dbt login` is an explicitly interactive command; always attempt it.
+        available: true,
     };
 
     let env_scopes = std::env::var("DBT_OAUTH_SCOPES").ok();

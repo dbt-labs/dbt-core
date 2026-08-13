@@ -126,6 +126,7 @@ mod tests {
                 builder.with_named_option("path", database_path)?;
                 Ok(builder)
             }
+            Backend::Alt => unimplemented!("Alt backend database builder in tests"),
             Backend::ClickHouse => {
                 let mut builder = database::Builder::new(backend);
                 let uri = env::var("ADBC_CLICKHOUSE_URI")
@@ -163,7 +164,6 @@ mod tests {
                     .with_password(password);
                 Ok(builder)
             }
-            Backend::Alt => unimplemented!("Alt backend database builder in tests"),
             Backend::Generic { .. } => unimplemented!("generic backend database builder in tests"),
         }?;
         if backend == Backend::Snowflake {

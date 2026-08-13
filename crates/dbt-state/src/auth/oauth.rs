@@ -82,6 +82,7 @@ impl OAuthTokenSource {
             redirect_port: LOOPBACK_PORT,
             opener: BrowserFlow::default_opener(),
             abort_signal: std::sync::Mutex::new(None),
+            available: BrowserFlow::has_attached_terminal(),
         });
 
         Ok(Self {
@@ -199,8 +200,16 @@ impl OAuthTokenSource {
             match self.auth_chain.resolve().await {
                 Ok(credential) => self.fetch_platform_token_exchange(&credential).await?,
                 // No platform credentials available — fall back to dbt State
-                // standalone authentication via the interactive browser flow.
-                Err(AuthError::NotAuthenticated) => self.interactive_flow.run().await?,
+                // standalone authentication via the interactive browser flow,
+                // unless there's nobody around to complete a browser login
+                // (CI, batch replay). Checking this up front avoids waiting
+                // out the full interactive timeout just to fail anyway.
+                Err(AuthError::NotAuthenticated) => {
+                    if !self.interactive_flow.is_available() {
+                        return Err(RunCacheServiceError::NoInteractiveTerminal);
+                    }
+                    self.interactive_flow.run().await?
+                }
                 Err(err) => {
                     return Err(RunCacheServiceError::Auth(format!(
                         "failed to resolve dbt Platform credential for dbt State token exchange: {err}"
@@ -474,18 +483,33 @@ projects:
 
     struct FakeFlow {
         responses: StdMutex<Vec<TokenResponse>>,
+        available: bool,
     }
 
     impl FakeFlow {
         fn new(responses: Vec<TokenResponse>) -> Arc<Self> {
             Arc::new(Self {
                 responses: StdMutex::new(responses),
+                available: true,
+            })
+        }
+
+        /// A flow that reports itself as unable to run (e.g. no interactive
+        /// terminal), mirroring `BrowserFlow` in a non-interactive environment.
+        fn unavailable() -> Arc<Self> {
+            Arc::new(Self {
+                responses: StdMutex::new(vec![]),
+                available: false,
             })
         }
     }
 
     #[async_trait]
     impl InteractiveFlow for FakeFlow {
+        fn is_available(&self) -> bool {
+            self.available
+        }
+
         async fn run(&self) -> Result<TokenResponse, RunCacheServiceError> {
             let mut q = self.responses.lock().unwrap();
             if q.is_empty() {
@@ -615,6 +639,30 @@ projects:
         let token = source.token().await.unwrap();
         assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
         assert_eq!(token.refresh_token.as_deref(), Some("refresh-xyz"));
+    }
+
+    #[tokio::test]
+    async fn unavailable_interactive_flow_fails_fast_instead_of_running() {
+        let server = MockServer::start().await;
+        let dir = TempDir::new().unwrap();
+        let config = config_with(&server.uri(), None, Some("dev"));
+
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::unavailable(),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let err = source.token().await.unwrap_err();
+        assert!(matches!(err, RunCacheServiceError::NoInteractiveTerminal));
+        // `is_user_actionable_auth` gates whether a caller like
+        // `validate_client_version_fail_open` treats the failure as
+        // something to surface vs. silently skip. Not having a terminal to
+        // complete a login is an environment limitation, not something the
+        // user can act on in the moment, so this must not be actionable.
+        assert!(!err.is_user_actionable_auth());
     }
 
     #[tokio::test]

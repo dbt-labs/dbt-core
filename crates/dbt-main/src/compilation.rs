@@ -1,3 +1,4 @@
+use crate::source_freshness::run_source_freshness;
 use crate::{dbt_lib::write_catalog_json, version_check};
 use arrow::datatypes::SchemaRef;
 use dbt_adapter::{
@@ -41,8 +42,9 @@ use dbt_tasks_core::{
     CompiledSqlCache, RunTaskResults,
     local_schema_builder::{init_data_store, init_schema_store},
     metricflow::MetricflowClient,
+    run_cache::run_cache_service::run_cache_service_after_run_failed,
     static_analysis_buckets::{StaticAnalysisBuckets, build_refresh_intervals},
-    utils::{write_run_results_json, write_run_results_json_or_warn},
+    utils::{build_run_results_artifact, write_run_results_json, write_run_results_json_or_warn},
 };
 
 use dbt_common::{
@@ -67,8 +69,8 @@ use dbt_metadata::file_registry::CompleteStateWithKind;
 use dbt_schemas::{
     filter::RunFilter,
     schemas::{
-        Nodes, ResolvedCloudConfig, common::ResolvedQuoting, manifest::DbtManifestV12,
-        profiles::Execute, project::DbtProject,
+        DbtCommandExecutionArtifacts, Nodes, ResolvedCloudConfig, common::ResolvedQuoting,
+        manifest::DbtManifestV12, profiles::Execute, project::DbtProject,
         semantic_layer::semantic_manifest::SemanticManifest,
     },
     state::{CacheState, DbtPackage, DbtState, Macros, ModelStatus, ResolverState},
@@ -95,7 +97,7 @@ use dbt_telemetry::{ExecutionPhase, PhaseExecuted, ShowResult};
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::PathBuf,
     sync::OnceLock,
 };
@@ -113,7 +115,6 @@ use dbt_tasks_sa::debug::DebugArgs;
 
 use dbt_telemetry::{ArtifactType, ListItemOutput};
 
-use std::collections::BTreeSet;
 use std::{sync::Arc, time::SystemTime};
 
 use serde_json::to_string_pretty;
@@ -270,7 +271,6 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 static_analysis,
                 StaticAnalysisDeprecationOrigin::CliArg,
                 None,
-                self.arg.io.status_reporter.as_ref(),
             );
         }
         self.token.check_cancellation()?;
@@ -292,12 +292,10 @@ impl<'a> CompilationPhasesExecutor<'a> {
 
         // Handle 'debug' or 'init' commands to run debug.
         if let FsCommand::Debug | FsCommand::Init = self.arg.command {
-            compilation_pipeline::loaded_project::debug(
-                &loaded_project,
-                DebugArgs::from_eval_args(self.arg.as_ref()),
-                &self.token,
-            )
-            .await?;
+            let mut debug_args = DebugArgs::from_eval_args(self.arg.as_ref());
+            debug_args.alt_propagation_checker = feature_stack.cli.hooks.alt_propagation_checker();
+            compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
+                .await?;
             self.token.check_cancellation()?;
         }
 
@@ -367,7 +365,6 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 emit_warn_log_message(
                     ErrorCode::Generic,
                     "verify-partial-parse: round-trip FAILED — deserialization did not reconstruct valid state",
-                    self.arg.io.status_reporter.as_ref(),
                 );
             }
         }
@@ -501,19 +498,16 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             emit_warn_log_message(
                                 ErrorCode::Generic,
                                 format!("dbt-index: save_artifact_meta: {e}"),
-                                self.arg.io.status_reporter.as_ref(),
                             );
                         }
                         emit_warn_log_message(
                             ErrorCode::Generic,
                             "--write-index: the index produced by `parse` is incomplete; column schemas and column-level lineage are only written by `compile`, `run`, or `build`.",
-                            self.arg.io.status_reporter.as_ref(),
                         );
                     }
                     Err(e) => emit_warn_log_message(
                         ErrorCode::Generic,
                         format!("dbt-index: write-index: {e}"),
-                        self.arg.io.status_reporter.as_ref(),
                     ),
                 }
             }
@@ -556,13 +550,24 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
                         batch_results: Default::default(),
+                        compiled_code: Default::default(),
                     };
                     if self.arg.write_json {
-                        write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
+                        write_run_results_json_or_warn(
+                            // TODO: should also be captured by the caller?
+                            &build_run_results_artifact(
+                                &error_stats,
+                                // Adapter responses are not available during parse phase.
+                                &HashMap::new(),
+                                self.arg.as_ref(),
+                            ),
+                            self.arg.as_ref(),
+                        );
                     }
                     if self.arg.write_metadata {
                         crate::utils::write_runtime_results_parquet(
                             &error_stats,
+                            &HashMap::new(),
                             self.arg.as_ref(),
                         );
                     }
@@ -885,6 +890,7 @@ impl DbtProjectCompilation {
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        artifacts_sink: &mut DbtCommandExecutionArtifacts,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -901,6 +907,7 @@ impl DbtProjectCompilation {
                 jinja_type_checking_event_listener_factory,
                 token,
                 version_check_handle,
+                artifacts_sink,
             )
             .await;
         }
@@ -932,6 +939,7 @@ impl DbtProjectCompilation {
             None,
             token,
             version_check_handle,
+            artifacts_sink,
         )
         .await
     }
@@ -948,6 +956,7 @@ impl DbtProjectCompilation {
         jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        artifacts_sink: &mut DbtCommandExecutionArtifacts,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -993,6 +1002,7 @@ impl DbtProjectCompilation {
                         None,
                         token,
                         version_check_handle,
+                        artifacts_sink,
                     )
                     .await;
                 }
@@ -1067,6 +1077,7 @@ impl DbtProjectCompilation {
             maybe_prev.clone(),
             token,
             version_check_handle,
+            artifacts_sink,
         )
         .await;
 
@@ -1103,6 +1114,7 @@ impl DbtProjectCompilation {
                             None,
                             token,
                             version_check_handle,
+                            artifacts_sink,
                         )
                         .await;
                     }
@@ -1122,6 +1134,7 @@ impl DbtProjectCompilation {
                                 None,
                                 token,
                                 version_check_handle,
+                                artifacts_sink,
                             )
                             .await;
                         }
@@ -1139,6 +1152,7 @@ impl DbtProjectCompilation {
                         None,
                         token,
                         version_check_handle,
+                        artifacts_sink,
                     )
                     .await
                 }
@@ -1161,6 +1175,7 @@ impl DbtProjectCompilation {
                     None,
                     token,
                     version_check_handle,
+                    artifacts_sink,
                 )
                 .await
             }
@@ -1210,6 +1225,7 @@ impl DbtProjectCompilation {
             prev_compilation,
             token,
             &mut None,
+            &mut Default::default(),
         )
         .await
     }
@@ -1228,6 +1244,7 @@ impl DbtProjectCompilation {
         maybe_prev_compilation: Option<Arc<DbtProjectCompilation>>,
         token: &CancellationToken,
         version_check_handle: &mut Option<tokio::task::JoinHandle<Option<String>>>,
+        artifacts_sink: &mut DbtCommandExecutionArtifacts,
     ) -> FsResult<(
         DbtProjectCompilation,
         JinjaEnv,
@@ -1329,7 +1346,7 @@ impl DbtProjectCompilation {
             };
         token.check_cancellation()?;
 
-        executor
+        match executor
             .maybe_write_json_and_exit(
                 feature_stack,
                 &loaded_project,
@@ -1340,7 +1357,19 @@ impl DbtProjectCompilation {
                 &invocation_id,
                 &jinja_env,
             )
-            .await?;
+            .await
+        {
+            // `compile --write-catalog` returns Ok here, so the catalog has to be
+            // taken on this path too or it is never surfaced.
+            Ok(()) => artifacts_sink.catalog = executor.catalog_artifact.take(),
+            Err(e) => {
+                // Capture artifacts if possible before early exit
+                artifacts_sink.manifest = executor.lazy_dbt_manifest.take();
+                artifacts_sink.catalog = executor.catalog_artifact.take();
+
+                return Err(e);
+            }
+        };
         token.check_cancellation()?;
 
         let mut cloud_defer_path: Option<PathBuf> = None;
@@ -1468,6 +1497,7 @@ impl DbtProjectCompilation {
                         &custom_schedule_desc.unique_ids,
                         custom_schedule_desc.include_parents,
                         custom_schedule_desc.include_children,
+                        custom_schedule_desc.indirect_selection,
                         arg.local_execution_backend,
                         token,
                     )
@@ -1566,14 +1596,12 @@ impl DbtProjectCompilation {
                             "The selection criterion '{}' does not match any enabled nodes",
                             select_expr
                         ),
-                        None,
                     );
                 }
 
                 emit_warn_log_message(
                     ErrorCode::NoNodesSelected,
                     "Nothing to do. Try checking your model configs and model specification args",
-                    None,
                 );
             }
         }
@@ -1631,7 +1659,6 @@ impl DbtProjectCompilation {
                                 arg.format,
                                 ListOutputFormat::supported_formats_display()
                             ),
-                            None,
                         );
                     }
                     ListOutputFormat::Selector
@@ -1752,8 +1779,6 @@ impl DbtProjectCompilation {
                 &arg.io.out_dir,
                 self.resolved_state.adapter_type,
                 extra_frontier_unique_ids,
-                arg.io.use_parquet_schema_store,
-                arg.io.verify_parquet_schema_store,
             )?)
         };
 
@@ -1797,6 +1822,7 @@ impl DbtProjectCompilation {
             token,
             sidecar_client.clone(),
             execute_mode,
+            arg.infer_schemas,
         )?;
         token.check_cancellation()?;
 
@@ -1965,6 +1991,21 @@ impl DbtProjectCompilation {
             .await?;
         token.check_cancellation()?;
 
+        // FEATURES: cmd_source_freshness on_run_hooks artifact_output
+        let freshness_results = if arg.command == FsCommand::Source {
+            run_source_freshness(
+                arg,
+                &jinja_env,
+                &resolved_state,
+                &schedule,
+                Arc::clone(&adapter),
+                &base_context,
+            )
+            .await?
+        } else {
+            freshness_results
+        };
+
         feature_stack
             .cli
             .hooks
@@ -2025,9 +2066,21 @@ impl DbtProjectCompilation {
                 stats: vec![stat],
                 nodes: Some(resolved_state.nodes),
                 batch_results: Default::default(),
+                compiled_code: Default::default(),
             };
             if arg.write_json {
-                write_run_results_json(&run_stats, arg)?;
+                // TODO: should also be captured by the caller?
+                write_run_results_json(
+                    &build_run_results_artifact(
+                        &run_stats,
+                        // NOTE: dbt Core v1 does not populate AdapterResponse on `dbt run-operation`.
+                        // However we technically could pull the adapter responses from the macro
+                        // execution and add them here. We just have to wire it up.
+                        &HashMap::new(),
+                        arg,
+                    ),
+                    arg,
+                )?;
             }
 
             return Err(return_exit_code_from_error_counter());
@@ -2128,7 +2181,12 @@ impl DbtProjectCompilation {
                     )
                     .await?;
 
-                task_runner
+                // Cheap clone (all fields are `Arc`s): keeps a handle to the
+                // run's telemetry state even if `run` drops `ctx` on an early
+                // error, so any failure still reports `SessionEnd` instead of
+                // leaving the session open. No-ops if a session never started.
+                let run_cache_ctx_on_error = ctx.clone();
+                let run_result = task_runner
                     .run(
                         Arc::clone(&run_task_args),
                         schedule,
@@ -2138,7 +2196,15 @@ impl DbtProjectCompilation {
                         has_dynamic_closure,
                         token.clone(),
                     )
-                    .await?
+                    .await;
+                if run_result.is_err() {
+                    run_cache_service_after_run_failed(
+                        &run_cache_ctx_on_error,
+                        token.is_cancelled(),
+                    )
+                    .await;
+                }
+                run_result?
             }
         };
 
@@ -2416,6 +2482,7 @@ async fn write_catalog(
         token,
         None,
         execute,
+        arg.infer_schemas,
     )?;
     let mut jinja_env = Arc::unwrap_or_clone(jinja_env.clone());
     configure_compile_and_run_jinja_environment(&mut jinja_env, adapter.clone());

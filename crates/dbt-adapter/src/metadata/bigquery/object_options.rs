@@ -56,7 +56,11 @@ pub(crate) fn get_common_table_options_value(
     // `description`). A sorted map would reorder them and break parity.
     let mut result = IndexMap::new();
 
-    if let Some(hours) = config.__warehouse_specific_config__.hours_to_expiration
+    if let Some(hours) = config
+        .__warehouse_specific_config__
+        .hours_to_expiration
+        .as_ref()
+        .and_then(|o| o.clone())
         && !temporary
     {
         let expiration = format!("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL {hours} hour)");
@@ -232,7 +236,8 @@ mod tests {
         let env = minijinja::Environment::new();
         let state = env.empty_state();
         let mut config = ModelConfig::default();
-        config.__warehouse_specific_config__.hours_to_expiration = hours;
+        config.__warehouse_specific_config__.hours_to_expiration =
+            dbt_common::serde_utils::Omissible::Present(hours);
         let common = CommonAttributes::default();
         let opts = get_common_table_options_value(&state, config, &common, temporary);
         opts.get("expiration_timestamp").map(|v| v.to_string())

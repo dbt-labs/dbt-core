@@ -240,6 +240,36 @@ impl FsError {
         }
     }
 
+    /// Clones the complete error payload without retaining its backtrace.
+    ///
+    /// Third-party causes are not generally cloneable, so their rendered form
+    /// is retained as a generic cause. Error codes, locations, context, Jinja
+    /// frames, and chained errors are cloned directly.
+    pub fn clone_without_backtrace(&self) -> Self {
+        let cause = self.cause.as_ref().map(|cause| match cause {
+            WrappedError::Antlr(error) => WrappedError::Antlr(error.clone()),
+            WrappedError::Generic(error) => WrappedError::Generic(error.clone()),
+            WrappedError::ExitCode(status) => WrappedError::ExitCode(*status),
+            WrappedError::Cli(error) => {
+                WrappedError::Cli(Box::new(error.clone_without_backtrace()))
+            }
+            error => WrappedError::Generic(error.to_string()),
+        });
+
+        Self {
+            code: self.code,
+            location: self.location.clone(),
+            context: self.context.clone(),
+            cause,
+            backtrace: Backtrace::disabled(),
+            jinja_frames: self.jinja_frames.clone(),
+            next: self
+                .next
+                .as_deref()
+                .map(|error| Box::new(error.clone_without_backtrace())),
+        }
+    }
+
     pub fn new_with_forced_backtrace(code: ErrorCode, context: impl Into<String>) -> Self {
         FsError {
             code,

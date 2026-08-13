@@ -65,6 +65,7 @@ pub struct DbtMacro {
     pub config: MacroConfig,
     pub patch_path: Option<PathBuf>,
     pub funcsign: Option<String>,
+    pub supported_languages: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<ArgSpec>,
     /// Macro arguments from YAML spec (used for manifest serialization via ManifestMacro)
@@ -147,6 +148,20 @@ mod tests {
             docs.get("node_color").expect("node_color key"),
             &serde_json::Value::Null,
             "docs.node_color should serialize as explicit null even when None"
+        );
+    }
+
+    #[test]
+    fn test_macro_supported_languages_serializes_as_strings() {
+        let macro_ = DbtMacro {
+            supported_languages: Some(vec!["sql".to_string(), "python".to_string()]),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_value(&macro_).expect("serializes");
+        assert_eq!(
+            json.get("supported_languages"),
+            Some(&serde_json::json!(["sql", "python"]))
         );
     }
 }

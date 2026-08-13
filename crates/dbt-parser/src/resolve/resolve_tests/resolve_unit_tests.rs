@@ -1,6 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
+use crate::dbt_project_config::disallow_plus_prefix_from_flags;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_utils::validate_unit_test_compute;
@@ -60,6 +61,7 @@ pub fn resolve_unit_tests(
     arg: &ResolveArgs,
     unit_test_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
+    root_package: &DbtPackage,
     package_quoting: DbtQuoting,
     root_project_configs: &RootProjectConfigs,
     package_name: &str,
@@ -79,10 +81,10 @@ pub fn resolve_unit_tests(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.unit_tests,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?
@@ -102,7 +104,6 @@ pub fn resolve_unit_tests(
         });
 
         let unit_test = into_typed_with_jinja::<UnitTestProperties, _>(
-            &arg.io,
             mpe.schema_value,
             false,
             jinja_env,
@@ -151,7 +152,6 @@ pub fn resolve_unit_tests(
             arg.static_analysis,
             &base_unique_id,
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
         validate_unit_test_compute(properties_config.compute, &mpe.relative_path)?;
         // Sidecar needs a bound LP. Upgrade baseline to strict like the CLI
@@ -260,8 +260,9 @@ pub fn resolve_unit_tests(
                 language: Some("sql".to_string()),
                 tags: properties_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: Default::default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),

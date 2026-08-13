@@ -730,6 +730,34 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         Ok(self.to_owned())
     }
 
+    /// Derive a new relation from this one by appending `suffix` to the identifier
+    /// (or, when `interpret_suffix_as_full_identifier` is set, using `suffix` as the
+    /// whole identifier), keeping the same schema and optionally overriding the type.
+    ///
+    /// Called from the ClickHouse materialized-view and snapshot macros, e.g.
+    /// `target_relation.derivative('_mv', 'materialized_view')`.
+    /// Ref: dbt-clickhouse `relation.py::ClickHouseRelation.derivative`.
+    fn derivative(
+        &self,
+        suffix: &str,
+        relation_type: Option<RelationType>,
+        interpret_suffix_as_full_identifier: bool,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+        let new_identifier = if interpret_suffix_as_full_identifier {
+            suffix.to_string()
+        } else {
+            format!("{}{}", self.identifier_as_str()?, suffix)
+        };
+        let relation_type = relation_type.or_else(|| self.relation_type());
+        self.create_relation(
+            self.database().map(|s| s.to_string()),
+            Some(self.schema_as_str()?),
+            Some(new_identifier),
+            relation_type,
+            self.quote_policy(),
+        )
+    }
+
     /// Create a new relation with the specified components and policies.
     ///
     /// This method is used to create a new relation instance with the given database, schema,

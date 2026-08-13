@@ -63,7 +63,6 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from("test"),
             &PathBuf::from("test"),
-            &IoArgs::default(),
             Some(StaticAnalysisKind::Strict),
         );
         context.insert(TARGET_PACKAGE_NAME.to_string(), Value::from("common"));
@@ -133,14 +132,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let cfg: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -176,14 +168,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -217,14 +202,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -401,7 +379,6 @@ mod tests {
                 dbt_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,
                 Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-                None,
                 None,
             ));
             env.add_global("adapter", adapter.as_value());
@@ -973,6 +950,7 @@ mod tests {
             vec![SqlResource::Materialization(
                 "materialization_name_default".to_string(),
                 "default".to_string(),
+                None,
                 Span {
                     start_line: 2,
                     start_col: 13,
@@ -1005,6 +983,7 @@ mod tests {
             vec![SqlResource::Materialization(
                 "materialization_name_redshift".to_string(),
                 "redshift".to_string(),
+                Some(vec!["sql".to_string(), "python".to_string()]),
                 Span {
                     start_line: 2,
                     start_col: 9,
@@ -1206,5 +1185,328 @@ mod tests {
             .collect();
 
         assert_eq!(doc_names, vec!["3_months_prior_date".to_string()]);
+    }
+
+    /// dbt-core#15473: an explicit `null` at a deeper level clears the inherited
+    /// value; an omitted key still inherits.
+    #[test]
+    fn test_null_config_clears_inherited_value_in_project_hierarchy() {
+        use crate::dbt_project_config::recur_build_dbt_project_config;
+        use dbt_schemas::schemas::project::ProjectModelConfig;
+
+        let yaml = r#"
+        +hours_to_expiration: 120
+        cleared:
+          +hours_to_expiration: null
+        inherited:
+          +materialized: table
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let pmc: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
+            val, false, &env, &ctx, &listeners, None, true,
+        )
+        .unwrap();
+
+        let base = ModelConfig::default();
+        let tree = recur_build_dbt_project_config(
+            &base,
+            &pmc,
+            "",
+            &|_variant: &dbt_yaml::ShouldBe<ProjectModelConfig>, _key: &str, _key_path: &str| {},
+            false,
+        );
+
+        let hours = |cfg: &ModelConfig| {
+            cfg.__warehouse_specific_config__
+                .hours_to_expiration
+                .clone()
+                .into_inner()
+                .flatten()
+        };
+
+        assert_eq!(hours(&tree.config), Some(StringOrInteger::Integer(120)));
+
+        let cleared = tree.get_config_for_fqn(&["cleared".to_string()]);
+        assert_eq!(
+            hours(cleared),
+            None,
+            "explicit null must clear the inherited hours_to_expiration"
+        );
+
+        let inherited = tree.get_config_for_fqn(&["inherited".to_string()]);
+        assert_eq!(
+            hours(inherited),
+            Some(StringOrInteger::Integer(120)),
+            "omitted key must still inherit hours_to_expiration"
+        );
+    }
+
+    /// Resolve a `models:` hierarchy snippet the same way the parser does.
+    fn build_model_config_tree(
+        yaml: &str,
+    ) -> crate::dbt_project_config::DbtProjectConfig<ModelConfig> {
+        use crate::dbt_project_config::recur_build_dbt_project_config;
+        use dbt_schemas::schemas::project::ProjectModelConfig;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let pmc: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
+            val, false, &env, &ctx, &listeners, None, true,
+        )
+        .unwrap();
+
+        let base = ModelConfig::default();
+        recur_build_dbt_project_config(
+            &base,
+            &pmc,
+            "",
+            &|_variant: &dbt_yaml::ShouldBe<ProjectModelConfig>, _key: &str, _key_path: &str| {},
+            false,
+        )
+    }
+
+    fn hours_of(cfg: &ModelConfig) -> Option<StringOrInteger> {
+        cfg.__warehouse_specific_config__
+            .hours_to_expiration
+            .clone()
+            .into_inner()
+            .flatten()
+    }
+
+    /// dbt-core#15473: a concrete value at a more specific level overrides the
+    /// inherited value.
+    #[test]
+    fn test_config_child_value_overrides_inherited_in_project_hierarchy() {
+        let tree = build_model_config_tree(
+            r#"
+        +hours_to_expiration: 120
+        overridden:
+          +hours_to_expiration: 240
+        "#,
+        );
+
+        assert_eq!(hours_of(&tree.config), Some(StringOrInteger::Integer(120)));
+        let overridden = tree.get_config_for_fqn(&["overridden".to_string()]);
+        assert_eq!(
+            hours_of(overridden),
+            Some(StringOrInteger::Integer(240)),
+            "a concrete child value must override the inherited value"
+        );
+    }
+
+    /// dbt-core#15473: a `null` at one level does not stop a deeper level from
+    /// setting a new concrete value.
+    #[test]
+    fn test_config_null_clear_then_deeper_override_in_project_hierarchy() {
+        let tree = build_model_config_tree(
+            r#"
+        +hours_to_expiration: 120
+        a:
+          +hours_to_expiration: null
+          b:
+            +hours_to_expiration: 200
+        "#,
+        );
+
+        assert_eq!(hours_of(&tree.config), Some(StringOrInteger::Integer(120)));
+        let a = tree.get_config_for_fqn(&["a".to_string()]);
+        assert_eq!(hours_of(a), None, "explicit null at `a` clears the value");
+        let ab = tree.get_config_for_fqn(&["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            hours_of(ab),
+            Some(StringOrInteger::Integer(200)),
+            "a deeper concrete value applies even after a parent cleared it"
+        );
+    }
+
+    /// dbt-core#15473: an omitted key inherits the nearest ancestor's value
+    /// across multiple intermediate levels that never mention it.
+    #[test]
+    fn test_config_inherits_through_omitted_intermediate_levels() {
+        let tree = build_model_config_tree(
+            r#"
+        +hours_to_expiration: 120
+        a:
+          +materialized: table
+          b:
+            +materialized: view
+        "#,
+        );
+
+        let a = tree.get_config_for_fqn(&["a".to_string()]);
+        assert_eq!(
+            hours_of(a),
+            Some(StringOrInteger::Integer(120)),
+            "intermediate level that omits the key inherits it"
+        );
+        let ab = tree.get_config_for_fqn(&["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            hours_of(ab),
+            Some(StringOrInteger::Integer(120)),
+            "value inherits through multiple omitted intermediate levels"
+        );
+    }
+
+    /// dbt-core#15473: `null` at the top level leaves the value unset, and a
+    /// child can still set a concrete value below it.
+    #[test]
+    fn test_config_null_at_root_stays_cleared_child_can_reset() {
+        let tree = build_model_config_tree(
+            r#"
+        +hours_to_expiration: null
+        child:
+          +hours_to_expiration: 72
+        "#,
+        );
+
+        assert_eq!(
+            hours_of(&tree.config),
+            None,
+            "explicit null at root leaves the value unset"
+        );
+        let child = tree.get_config_for_fqn(&["child".to_string()]);
+        assert_eq!(
+            hours_of(child),
+            Some(StringOrInteger::Integer(72)),
+            "a child may set a concrete value under a cleared root"
+        );
+    }
+
+    /// dbt-core#15473: explicit-null-clears must hold for non-model resource
+    /// types too. Guards the sibling `Project*Config` fix (fs#12155 review),
+    /// where a plain `Option` had collapsed null and omitted to the same `None`.
+    #[test]
+    fn test_null_config_clears_inherited_value_for_snapshots() {
+        use crate::dbt_project_config::recur_build_dbt_project_config;
+        use dbt_schemas::schemas::project::{ProjectSnapshotConfig, SnapshotConfig};
+
+        let yaml = r#"
+        +hours_to_expiration: 120
+        cleared:
+          +hours_to_expiration: null
+        inherited:
+          +enabled: true
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let psc: ProjectSnapshotConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
+            val, false, &env, &ctx, &listeners, None, true,
+        )
+        .unwrap();
+
+        let base = SnapshotConfig::default();
+        let tree = recur_build_dbt_project_config(
+            &base,
+            &psc,
+            "",
+            &|_variant: &dbt_yaml::ShouldBe<ProjectSnapshotConfig>, _key: &str, _key_path: &str| {},
+            false,
+        );
+
+        let hours = |cfg: &SnapshotConfig| {
+            cfg.__warehouse_specific_config__
+                .hours_to_expiration
+                .clone()
+                .into_inner()
+                .flatten()
+        };
+
+        assert_eq!(hours(&tree.config), Some(StringOrInteger::Integer(120)));
+
+        let cleared = tree.get_config_for_fqn(&["cleared".to_string()]);
+        assert_eq!(
+            hours(cleared),
+            None,
+            "explicit null must clear inherited hours_to_expiration for snapshots"
+        );
+
+        let inherited = tree.get_config_for_fqn(&["inherited".to_string()]);
+        assert_eq!(
+            hours(inherited),
+            Some(StringOrInteger::Integer(120)),
+            "omitted key must still inherit hours_to_expiration for snapshots"
+        );
+    }
+
+    /// A doc block whose name is not an identifier is skipped, but the other
+    /// blocks in the same file must still be registered. Dropping them made
+    /// every `doc()` reference in the project render as a missing-doc
+    /// placeholder, which then reached the warehouse as a column COMMENT.
+    #[test]
+    fn test_process_markdown_invalid_doc_name_skips_only_that_block() {
+        let sql = r#"
+        {% docs cloud_plan %}
+        The plan name representing the pricing and features for a given Cloud account.
+        {% enddocs %}
+
+        {% docs *** end of list, for new entries insert rows above this line *** %}
+        *** END OF LIST ***
+        {% enddocs %}
+
+        {% docs database_source %}
+        The source Postgres database the Cloud account information comes from.
+        {% enddocs %}
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.md"), &["docs"]).unwrap();
+        let doc_names: Vec<String> = docs
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Doc(name, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(
+            doc_names,
+            vec!["cloud_plan".to_string(), "database_source".to_string()]
+        );
+    }
+
+    /// dbt-core matches end tags on the block type alone, so `{% enddocs name %}`
+    /// closes the block. Rejecting the extra name discarded every doc in the file.
+    #[test]
+    fn test_process_markdown_named_enddocs() {
+        let sql = r#"
+        {% docs cloud_plan %}
+        The plan name representing the pricing and features for a given Cloud account.
+        {% enddocs cloud_plan %}
+
+        {% docs database_source %}
+        The source Postgres database the Cloud account information comes from.
+        {% enddocs %}
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.md"), &["docs"]).unwrap();
+        let doc_names: Vec<String> = docs
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Doc(name, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(
+            doc_names,
+            vec!["cloud_plan".to_string(), "database_source".to_string()]
+        );
     }
 }

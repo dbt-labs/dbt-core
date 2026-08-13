@@ -142,7 +142,7 @@ fn load_and_parse_selectors_file(
         return Ok(None);
     }
 
-    let raw_selectors = value_from_file(&arg.io, &path, true, None)?;
+    let raw_selectors = value_from_file(&path, true, None)?;
 
     // Treat an empty or null selectors.yml the same as an absent file — dbt Core does not
     // error on a zero-byte selectors.yml; it simply has no selectors defined.
@@ -164,7 +164,6 @@ fn load_and_parse_selectors_file(
     );
 
     let yaml: SelectorFile = match dbt_jinja_utils::serde::into_typed_with_jinja(
-        &arg.io,
         raw_selectors,
         false,
         jinja_env,

@@ -370,7 +370,7 @@ impl AggregatedTestRunRemoteTask {
         let test = self.group.aggregated_test.clone();
         let ctx_inner = ctx.clone();
 
-        let (test_results, failing_rows_opt) = TaskOp::BlockingWithConnection {
+        let (test_results, failing_rows_opt, main_response) = TaskOp::BlockingWithConnection {
             f: Box::new(move || {
                 materialize_test(
                     &sql_instruction.sql,
@@ -422,6 +422,12 @@ impl AggregatedTestRunRemoteTask {
         };
 
         for (unique_id, result) in &member_results {
+            // Members share the aggregated query, so they share its main response.
+            if let Some(main_response) = &main_response {
+                ctx.inner
+                    .main_adapter_responses
+                    .insert(unique_id.clone(), main_response.clone());
+            }
             let (_, span) = span_by_id
                 .remove(unique_id)
                 .expect("span should exist for unique_id");
@@ -588,7 +594,7 @@ fn execute_test_remote_inner(
     // path. The runner framework turns the returned Err into NodeStatus::Errored
     // and records it. Severity is only consulted for successfully-returned
     // results below.
-    let (test_results, failing_rows_opt) = materialize_test(
+    let (test_results, failing_rows_opt, main_response) = materialize_test(
         &sql_instruction.sql,
         test,
         ctx.generic_test_relationships(),
@@ -599,6 +605,11 @@ fn execute_test_remote_inner(
         base_context,
         &ctx.inner.arg.io,
     )?;
+    if let Some(main_response) = main_response {
+        ctx.inner
+            .main_adapter_responses
+            .insert(test.__common_attr__.unique_id.clone(), main_response);
+    }
     let test_result = test_results
         .into_iter()
         .next()

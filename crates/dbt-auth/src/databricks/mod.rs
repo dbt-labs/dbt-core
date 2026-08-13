@@ -2,6 +2,7 @@ use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 use database::Builder as DatabaseBuilder;
 use dbt_yaml::Value;
 use std::borrow::Cow;
+use std::time::Duration;
 
 use dbt_adbc::{Backend, database, databricks};
 
@@ -51,6 +52,11 @@ enum DatabricksAuthIR<'a> {
     ExternalBrowserOAuth {
         client_id: Option<&'a str>,
     },
+    // Token is minted against Azure AD, not the Databricks OIDC endpoint (cf. OAuthM2M).
+    AzureClientSecret {
+        azure_client_id: &'a str,
+        azure_client_secret: &'a str,
+    },
     Token {
         token: &'a str,
     },
@@ -77,6 +83,17 @@ impl<'a> DatabricksAuthIR<'a> {
                     databricks::auth_type::EXTERNAL_BROWSER,
                 )?;
             }
+            Self::AzureClientSecret {
+                azure_client_id,
+                azure_client_secret,
+            } => {
+                builder.with_named_option(databricks::AZURE_CLIENT_ID, azure_client_id)?;
+                builder.with_named_option(databricks::AZURE_CLIENT_SECRET, azure_client_secret)?;
+                builder.with_named_option(
+                    databricks::AUTH_TYPE,
+                    databricks::auth_type::AZURE_CLIENT_SECRET,
+                )?;
+            }
             Self::Token { token } => {
                 builder.with_named_option(databricks::TOKEN, token)?;
                 builder.with_named_option(databricks::AUTH_TYPE, databricks::auth_type::PAT)?;
@@ -94,21 +111,33 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<DatabricksAuthIR<'a>, Aut
         Ok(DatabricksAuthType::OAuth) => {
             // Token-first: if a preminted bearer token is in the payload, use it as
             // PAT regardless of which OAuth-app fields accompany it. This matches
-            // dbt-databricks' `_ensure_config` (token short-circuits past M2M and
-            // external-browser)
+            // dbt-databricks' `_ensure_config`, which does `if self.token:` — a
+            // truthy check that treats empty/null tokens as absent and falls
+            // through to M2M / external-browser.
             // https://github.com/databricks/dbt-databricks/blob/c1c74df4bc01e155dabcc07f23a5a414e04aad62/dbt/adapters/databricks/credentials.py#L360-L361
             //
-            // dbt Studio's U2M flow relies on
-            // completes the OAuth handshake on the cloud side and forwards
-            // `auth_type=oauth` together with the OAuth-app `client_id`/`client_secret`
-            // (which are *not* a Databricks service-principal credential) and the
-            // resulting access token. Without this short-circuit we would attempt an
-            // M2M client-credentials grant against Databricks with the cloud-app
+            // dbt Studio's U2M flow completes the OAuth handshake on the cloud
+            // side and forwards `auth_type=oauth` together with the OAuth-app
+            // `client_id`/`client_secret` (which are *not* a Databricks
+            // service-principal credential) and the resulting access token.
+            // Without this short-circuit we would attempt an M2M
+            // client-credentials grant against Databricks with the cloud-app
             // secret, which fails with `invalid_client`.
             // https://github.com/dbt-labs/dbt-cloud/blob/228283facb9103a2053d83e5b085f6a7b771e686/sinter/services/profile/util/adapters/adapter_profile_helper.py#L189-L190
-            if config.contains_key("token") {
-                Ok(DatabricksAuthIR::Token {
-                    token: config.require_str("token")?,
+            //
+            // The value must be non-empty: dbt Cloud's Databricks credentials
+            // schema defaults `token` to `""` when a customer selects OAuth or
+            // relies on extended attributes to inject the real token. Treating
+            // that empty placeholder as a real PAT would send an empty
+            // `databricks.access_token` to the ADBC driver, which rejects it
+            // with "access token is required when using auth type 'pat'".
+            // https://app.notion.com/p/dbtlabs/Databricks-OAuth-for-Deployment-Environments-22bbb38ebda780dc9608ef05cfd757ff?source=copy_link
+            if let Some(token) = config.get_str("token").filter(|s| !s.is_empty()) {
+                Ok(DatabricksAuthIR::Token { token })
+            } else if config.contains_key("azure_client_secret") {
+                Ok(DatabricksAuthIR::AzureClientSecret {
+                    azure_client_id: config.require_str("azure_client_id")?,
+                    azure_client_secret: config.require_str("azure_client_secret")?,
                 })
             } else if config.contains_key("client_secret") {
                 Ok(DatabricksAuthIR::OAuthM2M {
@@ -146,7 +175,67 @@ fn apply_connection_args(
     builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
     builder.with_named_option(databricks::HTTP_PATH, http_path)?;
 
+    // Azure SP: the tenant is a connection detail, not an auth credential, so it lives here
+    // rather than in the auth IR. Resolve it (explicit `azure_tenant_id`, else discover from
+    // the workspace) and pass it to the driver, which requires it.
+    if config.contains_key("azure_client_secret") {
+        let tenant_id = match config.get_str("azure_tenant_id") {
+            Some(tenant_id) => tenant_id.to_string(),
+            None => discover_azure_tenant_id(config.require_string("host")?.as_ref())?,
+        };
+        builder.with_named_option(databricks::AZURE_TENANT_ID, tenant_id)?;
+    }
+
     Ok(builder)
+}
+
+/// Resolve the Microsoft Entra ID tenant for an Azure Databricks workspace from the
+/// unauthenticated `<host>/aad/auth` redirect. Mirrors databricks-sdk-py's public
+/// `load_azure_tenant_id`; the Go SDK's equivalent is unexported and its Azure
+/// client-secret credentials won't activate without a tenant, so we resolve it here
+/// (in dbt-auth) rather than depend on the driver. Used only when `azure_tenant_id`
+/// is not supplied explicitly.
+fn discover_azure_tenant_id(host: &str) -> Result<String, AuthError> {
+    let login_url = format!("https://{host}/aad/auth");
+    // The tenant is in the 3xx Location header; do not follow the redirect, and
+    // treat a 3xx as a normal response rather than an error.
+    let config = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .max_redirects(0)
+        .max_redirects_will_error(false)
+        .timeout_global(Some(Duration::from_secs(30)))
+        .build();
+    let agent = ureq::Agent::new_with_config(config);
+    let response = agent.get(&login_url).call().map_err(|e| {
+        AuthError::config(format!(
+            "azure tenant discovery request to {login_url} failed \
+             (set 'azure_tenant_id' explicitly): {e}"
+        ))
+    })?;
+    let location = response
+        .headers()
+        .get(ureq::http::header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| {
+            AuthError::config(format!(
+                "could not resolve azure tenant id from {login_url}; \
+                 set 'azure_tenant_id' explicitly"
+            ))
+        })?;
+    parse_azure_tenant_from_location(location)
+}
+
+/// Extract the tenant id from an Entra ID authorize URL of the form
+/// `https://login.microsoftonline.com/<tenant-id>/oauth2/authorize?...` (the login
+/// domain varies by Azure cloud, e.g. `login.microsoftonline.us`).
+fn parse_azure_tenant_from_location(location: &str) -> Result<String, AuthError> {
+    let url = url::Url::parse(location)
+        .map_err(|e| AuthError::config(format!("could not parse Location '{location}': {e}")))?;
+    url.path_segments()
+        .and_then(|mut segments| segments.next())
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| segment.to_string())
+        .ok_or_else(|| AuthError::config(format!("could not extract tenant id from '{location}'")))
 }
 
 pub struct DatabricksAuth;
@@ -406,6 +495,67 @@ mod tests {
         run_config_test(config, &expected).unwrap();
     }
 
+    /// Azure service principal (Microsoft Entra ID) via `azure_client_id`/
+    /// `azure_client_secret` routes to `azure-client-secret` (distinct from M2M), and the
+    /// tenant — a connection param, not an auth-IR field — is forwarded to the driver.
+    /// Regression test for dbt-core#13986. (The no-tenant path resolves via `/aad/auth`
+    /// discovery, which is a network call and is covered by `parse_azure_tenant_from_location`
+    /// + live testing rather than here.)
+    #[test]
+    fn test_azure_client_secret_with_tenant() {
+        let mut config = base_config();
+        config.insert("auth_type".into(), "oauth".into());
+        config.insert("azure_client_id".into(), "AID".into());
+        config.insert("azure_client_secret".into(), "ASECRET".into());
+        config.insert("azure_tenant_id".into(), "TENANT".into());
+
+        let expected = vec![
+            (databricks::AZURE_CLIENT_ID, "AID"),
+            (databricks::AZURE_CLIENT_SECRET, "ASECRET"),
+            (databricks::AZURE_TENANT_ID, "TENANT"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (databricks::HTTP_PATH, "/sql/1.0/warehouses/warehouse-id"),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (
+                databricks::AUTH_TYPE,
+                databricks::auth_type::AZURE_CLIENT_SECRET,
+            ),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    /// Azure SP fields take priority over the Databricks M2M `client_id`/
+    /// `client_secret` when both are present, matching dbt-databricks'
+    /// `_ensure_config` (azure branch precedes the oauth-m2m branch).
+    #[test]
+    fn test_azure_client_secret_takes_priority_over_m2m() {
+        let mut config = base_config();
+        config.insert("auth_type".into(), "oauth".into());
+        config.insert("azure_client_id".into(), "AID".into());
+        config.insert("azure_client_secret".into(), "ASECRET".into());
+        config.insert("azure_tenant_id".into(), "TENANT".into());
+        config.insert("client_id".into(), "OID".into());
+        config.insert("client_secret".into(), "OSECRET".into());
+
+        let expected = vec![
+            (databricks::AZURE_CLIENT_ID, "AID"),
+            (databricks::AZURE_CLIENT_SECRET, "ASECRET"),
+            (databricks::AZURE_TENANT_ID, "TENANT"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (databricks::HTTP_PATH, "/sql/1.0/warehouses/warehouse-id"),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (
+                databricks::AUTH_TYPE,
+                databricks::auth_type::AZURE_CLIENT_SECRET,
+            ),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
     #[test]
     fn test_external_browser_oauth_without_client_id() {
         let mut config = base_config();
@@ -422,6 +572,74 @@ mod tests {
                 "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
             ),
             (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (
+                databricks::AUTH_TYPE,
+                databricks::auth_type::EXTERNAL_BROWSER,
+            ),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    /// Regression: `auth_type=oauth` + valid M2M `client_id`/`client_secret` +
+    /// an *empty* `token` placeholder (e.g. dbt Cloud's default value or an
+    /// unfilled extended-attribute override) must still dispatch to OAuth M2M.
+    /// Treating the empty string as a real PAT would forward an empty
+    /// `databricks.access_token` to the ADBC driver, which rejects it with
+    /// "access token is required when using auth type 'pat'". Matches Python
+    /// `_ensure_config`'s `if self.token:` truthy check.
+    #[test]
+    fn test_oauth_m2m_with_empty_token_placeholder_routes_to_m2m() {
+        let mut config = base_config();
+        config.insert(
+            "http_path".into(),
+            "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+        );
+        config.insert("client_id".into(), "M2M_CLIENT_ID".into());
+        config.insert("client_secret".into(), "M2M_CLIENT_SECRET".into());
+        config.insert("auth_type".into(), "oauth".into());
+        config.insert("token".into(), "".into());
+
+        let expected = vec![
+            (databricks::CLIENT_ID, "M2M_CLIENT_ID"),
+            (databricks::CLIENT_SECRET, "M2M_CLIENT_SECRET"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (
+                databricks::HTTP_PATH,
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
+            ),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (databricks::AUTH_TYPE, databricks::auth_type::OAUTH_M2M),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    /// Companion to the M2M empty-token regression: with `auth_type=oauth`,
+    /// only `client_id`, and an empty `token` placeholder, we should fall
+    /// through to the external-browser branch instead of trying PAT with an
+    /// empty token.
+    #[test]
+    fn test_oauth_external_browser_with_empty_token_placeholder_routes_to_browser() {
+        let mut config = base_config();
+        config.insert(
+            "http_path".into(),
+            "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+        );
+        config.insert("client_id".into(), "CLIENT_ID".into());
+        config.insert("auth_type".into(), "oauth".into());
+        config.insert("token".into(), "".into());
+
+        let expected = vec![
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (
+                databricks::HTTP_PATH,
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
+            ),
+            (databricks::CATALOG, "C"),
+            (databricks::CLIENT_ID, "CLIENT_ID"),
             (databricks::USER_AGENT, USER_AGENT_NAME),
             (
                 databricks::AUTH_TYPE,
@@ -755,5 +973,33 @@ mod tests {
             result.is_err(),
             "expected an error when http_path is missing"
         );
+    }
+
+    /// Tenant extraction from the `/aad/auth` redirect Location across Azure clouds
+    /// and malformed inputs (the login domain varies by cloud).
+    #[test]
+    fn test_parse_azure_tenant_from_location() {
+        let tenant = "11111111-2222-3333-4444-555555555555";
+
+        // public cloud
+        assert_eq!(
+            parse_azure_tenant_from_location(&format!(
+                "https://login.microsoftonline.com/{tenant}/oauth2/authorize?response_type=code"
+            ))
+            .unwrap(),
+            tenant
+        );
+        // us gov cloud (different login domain)
+        assert_eq!(
+            parse_azure_tenant_from_location(&format!(
+                "https://login.microsoftonline.us/{tenant}/oauth2/v2.0/authorize"
+            ))
+            .unwrap(),
+            tenant
+        );
+        // no tenant path segment
+        assert!(parse_azure_tenant_from_location("https://login.microsoftonline.com/").is_err());
+        // unparseable
+        assert!(parse_azure_tenant_from_location("not a url").is_err());
     }
 }

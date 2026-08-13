@@ -1902,7 +1902,10 @@ fn canonicalize_elementary_metadata_pkg_version(sql: &str) -> String {
         .to_string()
 }
 
-fn is_elementary_query(sql: &str) -> bool {
+/// Public because `compare_sql` treats *any* two Elementary-originated statements as equal, so a
+/// caller that searches a recording for a specific statement needs to know when a match is that
+/// wildcard rather than evidence it found the right statement.
+pub fn is_elementary_query(sql: &str) -> bool {
     // Elementary appends an explicit marker comment to its generated SQL.
     // We treat any SQL containing this marker as Elementary-originated.
     sql.contains("--ELEMENTARY-METADATA--")

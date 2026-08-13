@@ -702,9 +702,9 @@ fn is_unsupported_filter_input(input_type: &Type) -> Option<&'static str> {
     }
 }
 
-/// Filter type for `as_bool` - converts a value to boolean.
+/// Filter type for `as_bool` - passes through the value as-is.
 ///
-/// This filter does not support collection types (sequences, dicts, iterables, tuples, plain).
+/// This filter accepts any value and returns `Any { hard: true }`.
 #[derive(Default, Clone, Eq, PartialEq)]
 pub struct AsBoolFilterType;
 
@@ -717,15 +717,12 @@ impl fmt::Debug for AsBoolFilterType {
 impl FunctionType for AsBoolFilterType {
     fn _resolve_arguments(
         &self,
-        args: &[Type],
-        listener: Rc<dyn TypecheckingEventListener>,
+        _args: &[Type],
+        _listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if let Some(input_type) = args.first() {
-            if let Some(type_name) = is_unsupported_filter_input(input_type) {
-                listener.warn_filter(&format!("as_bool on {type_name} not supported"));
-            }
-        }
-        Ok(Type::Bool)
+        // as_bool only converts while rendering native values, so for
+        // typechecking purposes it passes the value through as-is
+        Ok(Type::Any { hard: true })
     }
 
     fn arg_specs(&self) -> Vec<ArgSpec> {

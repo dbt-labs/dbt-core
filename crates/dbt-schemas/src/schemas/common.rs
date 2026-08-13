@@ -924,7 +924,7 @@ pub struct Constraint {
     #[serde(
         default,
         deserialize_with = "crate::schemas::serde::string_or_array",
-        serialize_with = "crate::schemas::serde::serialize_option_as_empty_vec"
+        serialize_with = "crate::schemas::serde::serialize_none_as_empty_vec"
     )]
     pub to_columns: Option<Vec<String>>,
     pub warn_unsupported: Option<bool>,

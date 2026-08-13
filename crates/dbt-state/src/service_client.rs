@@ -73,9 +73,32 @@ pub enum RunCacheServiceError {
     Aborted,
     #[error("dbt State authentication timed out after {0}s")]
     Timeout(u64),
+    #[error(
+        "dbt State authentication requires an interactive terminal, but none is available in this environment"
+    )]
+    NoInteractiveTerminal,
 }
 
 impl RunCacheServiceError {
+    /// Short, stable label for the error's variant, used as `error_type` on
+    /// `ClientEnrichedSqlPrepared` telemetry. Mirrors the Python dbt State
+    /// client's use of the caught exception's class name.
+    pub fn error_type_label(&self) -> &'static str {
+        match self {
+            Self::Disabled => "Disabled",
+            Self::Config(_) => "Config",
+            Self::Transport(_) => "Transport",
+            Self::AuthRequest(_) => "AuthRequest",
+            Self::Auth(_) => "Auth",
+            Self::OrgDisabled { .. } => "OrgDisabled",
+            Self::Metadata(_) => "Metadata",
+            Self::Rpc(_) => "Rpc",
+            Self::Aborted => "Aborted",
+            Self::Timeout(_) => "Timeout",
+            Self::NoInteractiveTerminal => "NoInteractiveTerminal",
+        }
+    }
+
     pub fn is_transient_transport_rpc(&self) -> bool {
         match self {
             Self::Rpc(status) => {
@@ -89,15 +112,11 @@ impl RunCacheServiceError {
     /// for the rest of the process.
     pub fn disables_service(&self) -> bool {
         match self {
-            Self::OrgDisabled { .. } | Self::Transport(_) => true,
-            Self::Rpc(status) => {
-                matches!(
-                    status.code(),
-                    tonic::Code::PermissionDenied
-                        | tonic::Code::Unauthenticated
-                        | tonic::Code::Unavailable
-                ) || self.is_transient_transport_rpc()
-            }
+            Self::OrgDisabled { .. } => true,
+            Self::Rpc(status) => matches!(
+                status.code(),
+                tonic::Code::PermissionDenied | tonic::Code::Unauthenticated
+            ),
             Self::AuthRequest(_) => is_retryable_token_error(self),
             _ => false,
         }
@@ -108,6 +127,28 @@ impl RunCacheServiceError {
             self,
             Self::Auth(_) | Self::AuthRequest(_) | Self::Aborted | Self::Timeout(_)
         ) && !self.disables_service()
+    }
+
+    /// Whether a failed telemetry submission is worth retrying. Mirrors the
+    /// Python dbt State client's telemetry dispatcher: `Unimplemented`,
+    /// `PermissionDenied`, and `InvalidArgument` RPC errors indicate the
+    /// batch itself will never succeed, so those are dropped immediately.
+    /// `Disabled` means the client has been permanently disabled for the rest
+    /// of the process (see `GrpcRunCacheServiceClient::before_request`), so
+    /// every subsequent attempt would fail identically — also not worth
+    /// retrying. Everything else (including other non-RPC errors) is
+    /// treated as transient.
+    pub fn is_retriable_telemetry_submission(&self) -> bool {
+        match self {
+            Self::Disabled => false,
+            Self::Rpc(status) => !matches!(
+                status.code(),
+                tonic::Code::Unimplemented
+                    | tonic::Code::PermissionDenied
+                    | tonic::Code::InvalidArgument
+            ),
+            _ => true,
+        }
     }
 }
 
@@ -366,7 +407,6 @@ impl GrpcRunCacheServiceClient {
                             "dbt State service disabled: {}; executing normally",
                             format_error_chain(&err)
                         ),
-                        None,
                     );
                 }
                 Err(RunCacheServiceError::Disabled)
@@ -497,7 +537,11 @@ impl RunCacheServiceClient for GrpcRunCacheServiceClient {
     }
 }
 
-fn new_request_id() -> String {
+/// Generate a fresh client-side request id (used both as the gRPC
+/// `x-request-id` header and, for SQL submissions, as the id correlating a
+/// submission attempt's `ClientEnrichedSqlPrepared` telemetry event with the
+/// attempt itself, independent of whatever the server ends up deciding).
+pub fn new_request_id() -> String {
     uuid::Uuid::new_v4().simple().to_string()
 }
 
@@ -535,7 +579,6 @@ where
                     "dbt State client validation failed: {}; executing normally",
                     format_error_chain(&err)
                 ),
-                None,
             );
             Ok(ClientVersionStatus::Skipped)
         }
@@ -733,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_locked_and_unavailable_errors_disable_service() {
+    fn account_access_errors_disable_service() {
         assert!(
             RunCacheServiceError::OrgDisabled {
                 org_id: "test-org".to_string()
@@ -747,8 +790,55 @@ mod tests {
         assert!(
             RunCacheServiceError::Rpc(tonic::Status::unauthenticated("locked")).disables_service()
         );
-        assert!(RunCacheServiceError::Rpc(tonic::Status::unavailable("down")).disables_service());
+        assert!(!RunCacheServiceError::Rpc(tonic::Status::unavailable("down")).disables_service());
+        assert!(
+            !RunCacheServiceError::Rpc(tonic::Status::unknown("transport error"))
+                .disables_service()
+        );
         assert!(!RunCacheServiceError::Auth("bad credentials".to_string()).disables_service());
+    }
+
+    #[tokio::test]
+    async fn initial_transport_error_does_not_disable_service() {
+        let err = GrpcRunCacheServiceClient::connect(RunCacheServiceConfig {
+            enabled: true,
+            api_url: "http://127.0.0.1:1".to_string(),
+            secure: false,
+            timeout: Duration::from_millis(1),
+            ..RunCacheServiceConfig::disabled()
+        })
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, RunCacheServiceError::Transport(_)));
+        assert!(!err.disables_service());
+    }
+
+    #[tokio::test]
+    async fn unavailable_rpc_does_not_disable_service() {
+        let channel = Endpoint::from_static("http://127.0.0.1:1").connect_lazy();
+        let client = GrpcRunCacheServiceClient {
+            sql: SqlClient::new(channel.clone()),
+            clone: clone_client::CloneClient::new(channel.clone()),
+            execution: ExecutionClient::new(channel.clone()),
+            client_telemetry: ClientTelemetryClient::new(channel.clone()),
+            client_validation: ClientValidationClient::new(channel.clone()),
+            explain: ExplainClient::new(channel),
+            auth: RunCacheAuth::None,
+            metadata: RunCacheClientMetadata::default(),
+            disabled: Arc::new(AtomicBool::new(false)),
+        };
+
+        assert!(matches!(
+            client.after_request::<()>(Err(RunCacheServiceError::Rpc(tonic::Status::unavailable(
+                "no healthy upstream"
+            ),))),
+            Err(RunCacheServiceError::Rpc(status))
+                if status.code() == tonic::Code::Unavailable
+                    && status.message() == "no healthy upstream"
+        ));
+        assert!(!client.is_disabled());
+        assert!(client.before_request().is_ok());
     }
 
     #[test]

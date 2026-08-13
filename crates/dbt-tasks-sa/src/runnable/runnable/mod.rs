@@ -189,7 +189,6 @@ impl Task for RunTask {
                                             "Failed to resolve microbatch window for node {}: {e}; executing without dbt State",
                                             self.node.unique_id()
                                         ),
-                                        None,
                                     );
                                     None
                                 }
@@ -310,7 +309,6 @@ impl Task for RunTask {
                                                 "dbt State service clone failed for node {}: {err}; executing normally",
                                                 self.node.unique_id()
                                             ),
-                                            None,
                                         );
                                         clone
                                             .fallback_confirmation()
@@ -554,6 +552,7 @@ impl Task for RunTask {
                 Err(e) => {
                     // TODO: At some point, these should log as part of the same event
                     let node_status = NodeStatus::Errored;
+                    let error_message = e.to_string();
                     report_completed(
                         &NodeStatus::Errored,
                         self.node.defined_at().cloned(),
@@ -568,10 +567,7 @@ impl Task for RunTask {
                             | RunExecutionPath::SideCar
                             | RunExecutionPath::AltCompute
                     ) {
-                        emit_error_log_from_fs_error(
-                            e.as_ref(),
-                            ctx.inner.arg.io.status_reporter.as_ref(),
-                        );
+                        emit_error_log_from_fs_error(*e);
                     }
 
                     // Insert stats for the error case so it appears in run_results.json
@@ -582,7 +578,7 @@ impl Task for RunTask {
                             start_time.into(),
                             None,
                             node_status.clone(),
-                            Some(e.to_string()),
+                            Some(error_message),
                             ctx.thread_id,
                         ),
                     );
@@ -1185,6 +1181,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse,
+            compare_unrendered_code: None,
         });
         model.deprecated_config.pre_hook =
             Verbatim::from(Some(Hooks::String("select 1".to_string())));

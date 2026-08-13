@@ -226,6 +226,16 @@ pub struct TokenResponse {
 #[async_trait]
 pub trait InteractiveFlow: Send + Sync {
     async fn run(&self) -> Result<TokenResponse, RunCacheServiceError>;
+
+    /// Whether this flow can actually complete in the current environment.
+    ///
+    /// Browser-based flows need a human to complete a login in a browser; in a
+    /// non-interactive environment (CI, batch replay) there is nobody to do
+    /// that, so callers should treat the flow as unavailable up front instead
+    /// of waiting out the full timeout before failing.
+    fn is_available(&self) -> bool {
+        true
+    }
 }
 
 pub type Opener = Box<dyn Fn(&str) + Send + Sync>;
@@ -257,6 +267,13 @@ pub struct BrowserFlow {
     pub opener: Opener,
     // Wrapped in Mutex so run() can take the receiver with &self.
     pub abort_signal: std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    /// Whether a human is actually available to complete a browser login right
+    /// now. Production callers should compute this from the environment (see
+    /// [`BrowserFlow::has_attached_terminal`]); tests that simulate the browser
+    /// completing the redirect (via a custom `opener`) can set this to `true`
+    /// unconditionally to exercise the flow regardless of the test runner's
+    /// own TTY state.
+    pub available: bool,
 }
 
 impl BrowserFlow {
@@ -269,6 +286,12 @@ impl BrowserFlow {
                 );
             }
         })
+    }
+
+    /// Whether an interactive terminal is attached, i.e. there is plausibly a
+    /// human present who could complete a browser login.
+    pub fn has_attached_terminal() -> bool {
+        std::io::IsTerminal::is_terminal(&std::io::stdout())
     }
 }
 
@@ -337,6 +360,10 @@ pub(crate) fn is_retryable_token_error(err: &RunCacheServiceError) -> bool {
 
 #[async_trait]
 impl InteractiveFlow for BrowserFlow {
+    fn is_available(&self) -> bool {
+        self.available
+    }
+
     async fn run(&self) -> Result<TokenResponse, RunCacheServiceError> {
         let redirect_uri = format!("http://127.0.0.1:{}/handler", self.redirect_port);
         let listener = TcpListener::bind(("127.0.0.1", self.redirect_port))

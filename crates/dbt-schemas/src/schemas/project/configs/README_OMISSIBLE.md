@@ -1,134 +1,193 @@
-# Omissible Field Handling Guide
+# Config Field Inheritance Guide
 
-This guide explains how to use the omissible utility functions to implement hierarchical configuration overrides with proper null handling in dbt configurations.
+This guide explains how hierarchical config inheritance works in dbt configurations,
+including the `Omissible<T>` type, the `DefaultTo` trait, and the proc-macro derive.
 
 ## Overview
 
-The `Omissible<T>` type distinguishes between:
-- **`Omitted`**: Field not specified in the configuration
-- **`Present(None)`**: Field explicitly set to null (e.g., `+schema: null`)
-- **`Present(Some(value))`**: Field explicitly set to a value
+Config inheritance flows project-level → package-level → model-level. Two types of
+fields participate:
 
-This distinction is crucial for hierarchical configurations where explicit null values should override parent configurations.
+- **`Option<T>`**: Field was not specified (`None`) vs specified (`Some`). Child inherits
+  parent value when `None`.
+- **`Omissible<T>`**: Extends `Option<T>` with a third state. Distinguishes between
+  "field not present in YAML" (`Omitted`) and "field explicitly set to null"
+  (`Present(None)`). Explicit null overrides the parent; absence does not.
 
-## Quick Start
+## The `DefaultTo` Trait
 
-### 1. Add Omissible Fields to Your Config
+Defined in `config_merge.rs`:
 
 ```rust
-use dbt_common::serde_utils::Omissible;
-use serde::{Deserialize, Serialize};
+pub trait DefaultTo {
+    fn inherit_from(&mut self, parent: &Self);
+}
+```
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct MyConfig {
-    // Omissible fields for hierarchical override support
+Each field type implements `inherit_from` with its own merge semantics:
+
+| Type | Semantics |
+|------|-----------|
+| `Option<T>` where `T: ReplaceIfNone` | Replace child with parent when child is `None` |
+| `Omissible<T>` | Replace child with parent when child is `Omitted` |
+| `Tags` | Union-merge (dedup + sort) of parent and child tag lists |
+| `Packages` | Append parent values before child values, no dedup |
+| `Option<DbtQuoting>` | Deep-merge: each sub-field inherits from parent when unset |
+| `Option<DocsConfig>` | Deep-merge: `node_color` falls back to parent |
+| `Option<IndexMap<String, YmlValue>>` | Union-merge: child keys win, missing keys fall back to parent |
+| `Option<BTreeMap<Spanned<String>, String>>` | Union-merge: parent keys fill missing child keys |
+| `OmissibleGrantConfig` | DictKeyAppend: `+key` extends, plain key clobbers |
+| `Verbatim<Option<Hooks>>` | Append: parent hooks prepended to child hooks |
+| `Verbatim<T: DefaultTo>` | Delegates to inner type's `inherit_from` |
+| `IndexesConfig` / `PrimaryKeyConfig` | Replace-if-none (opaque newtypes with `.is_none()`) |
+
+### `ReplaceIfNone` Marker
+
+```rust
+pub trait ReplaceIfNone: Clone {}
+
+impl<T: ReplaceIfNone> DefaultTo for Option<T> {
+    fn inherit_from(&mut self, parent: &Self) {
+        if self.is_none() {
+            *self = parent.clone();
+        }
+    }
+}
+```
+
+Implement `ReplaceIfNone` for any type whose `Option<T>` field should simply copy the
+parent value when the child is `None`. Types with custom merge logic (quoting, docs,
+meta, grants) have their own `impl DefaultTo for Option<T>` and must NOT implement
+this marker.
+
+## Tags and Packages Newtypes
+
+`StringOrArrayOfStrings` has two different merge semantics depending on the field:
+
+- **`Tags`** (wraps `Option<StringOrArrayOfStrings>`): parent-first append merge, order
+  preserved, no dedup/sort. Used for the `tags` field.
+- **`Classifiers`** (wraps `Option<StringOrArrayOfStrings>`): union-merge with dedup+sort.
+  Used for the `classifiers` field.
+- **`Packages`** (wraps `Option<StringOrArrayOfStrings>`): append parent before child,
+  no dedup. Used for `packages` field.
+- **Bare `Option<StringOrArrayOfStrings>`**: replace-if-none (via `ReplaceIfNone`
+  blanket). Used for fields like `check_cols`, `unique_key`.
+
+Both newtypes expose `inner()` and `into_inner()` accessors to get the wrapped
+`Option<StringOrArrayOfStrings>`.
+
+## Adding a New Config Field
+
+### Regular field (replace-if-none)
+
+If `T` already implements `ReplaceIfNone`, just add the field:
+
+```rust
+pub my_field: Option<T>,
+```
+
+No other changes needed — `#[derive(DefaultTo)]` picks it up automatically.
+
+If `T` is a new type, add `impl ReplaceIfNone for T {}` to `config_merge.rs`.
+
+### Field with custom merge semantics
+
+Implement `DefaultTo` directly for the field type in `config_merge.rs`:
+
+```rust
+impl DefaultTo for Option<MyType> {
+    fn inherit_from(&mut self, parent: &Self) {
+        // custom merge logic
+    }
+}
+```
+
+Then add the field to the struct — `#[derive(DefaultTo)]` picks it up.
+
+### Omissible field (explicit-null-wins)
+
+Wrap the field in `Omissible<T>`. The blanket impl handles it:
+
+```rust
+pub schema: Omissible<Option<String>>,
+```
+
+`Omissible<T>` inherits from parent only when the child is `Omitted`. `Present(None)`
+(explicit YAML null) blocks inheritance and propagates downstream.
+
+## `#[derive(DefaultTo)]`
+
+The proc-macro in `dbt-proc-macros` generates a `default_to_fields` method that calls
+`DefaultTo::inherit_from` for every named field:
+
+```rust
+#[derive(DefaultTo)]
+pub struct ModelConfig {
     pub schema: Omissible<Option<String>>,
-    pub database: Omissible<Option<String>>,
-    pub catalog: Omissible<Option<String>>,
-    
-    // Regular fields
+    pub tags: Tags,
     pub enabled: Option<bool>,
-    pub description: Option<String>,
+    // ...
 }
 ```
 
-### 2. Add Accessor Methods
+Generated code (simplified):
 
 ```rust
-impl MyConfig {
-    fn schema(&self) -> Option<String> {
-        self.schema.into_inner().unwrap_or(None)
-    }
-    
-    fn database(&self) -> Option<String> {
-        self.database.into_inner().unwrap_or(None)
-    }
+fn default_to_fields(&mut self, parent: &Self) {
+    DefaultTo::inherit_from(&mut self.schema, &parent.schema);
+    DefaultTo::inherit_from(&mut self.tags, &parent.tags);
+    DefaultTo::inherit_from(&mut self.enabled, &parent.enabled);
+    // ...
 }
 ```
 
-### 3. Update Your DefaultTo Implementation
+Skip a field with `#[default_to(skip)]` — use this for fields that should never
+inherit from parent (e.g., internal metadata).
+
+## `ResolvableConfig` / `DefaultConfig` Trait
+
+Config structs implement `ResolvableConfig<ProjectConfig>`, which requires:
 
 ```rust
-impl DefaultTo<MyConfig> for MyConfig {
-    fn default_to(&mut self, parent: &MyConfig) {
-        // Handle Omissible fields with hierarchical override logic
-        handle_omissible_override(
-            &mut self.schema,
-            &parent.schema
-        );
-        handle_omissible_override(
-            &mut self.database,
-            &parent.database
-        );
-        
-        // Handle regular fields normally
-        if self.enabled.is_none() {
-            self.enabled = parent.enabled;
-        }
-        if self.description.is_none() {
-            self.description = parent.description.clone();
-        }
-    }
-    
-    // ... other required methods
+fn default_to(&mut self, parent: &ProjectConfig);
+```
+
+For most structs this is now just:
+
+```rust
+fn default_to(&mut self, parent: &ProjectConfig) {
+    self.default_to_fields(parent);
 }
 ```
 
-## Behavior Rules
+The `default_to_fields` method is generated by `#[derive(DefaultTo)]`.
 
-The `handle_omissible_override` function implements these rules:
+## Behavior Reference
 
-1. **Child Omitted**: Inherits parent's value (whether Omitted, None, or Some)
-2. **Child Present(None)**: Keeps its null value, overriding parent
-3. **Child Present(Some)**: Keeps its value, overriding parent
-4. **Parent Present(None)**: Overrides child's Some value with null
-5. **Parent Omitted**: Never overrides child's Present values
+### `Omissible<T>` states
 
-## Advanced Usage
+| Child state | Parent state | Result |
+|-------------|--------------|--------|
+| `Omitted` | any | child takes parent's value |
+| `Present(None)` | any | child keeps `Present(None)` (explicit null wins) |
+| `Present(Some(v))` | any | child keeps `Present(Some(v))` |
 
-### Non-Option Omissible Fields
+### `Option<T: ReplaceIfNone>` states
 
-For fields like `tags: Omissible<Vec<String>>`:
-
-```rust
-Self::handle_omissible_override_non_option(
-    &mut self.tags,
-    &parent.tags,
-);
-```
-
-## Real-World Example
-
-```yaml
-# Root project dbt_project.yml
-models:
-  my_package:
-    +schema: null      # Explicitly override to null
-    +database: null    # Explicitly override to null
-```
-
-```sql
--- Package model with config
-{{ config(schema = 'something_else', database = 'my_db') }}
-select 1 as id
-```
-
-Result: Model uses null for both schema and database, as the root project's explicit null values override the package's settings.
+| Child | Parent | Result |
+|-------|--------|--------|
+| `None` | any | child takes parent's value |
+| `Some(v)` | any | child keeps `Some(v)` |
 
 ## Testing
 
-See `omissible_utils_tests.rs` for comprehensive test examples covering:
-- Basic inheritance patterns
-- Explicit null overrides
-- Chain of overrides (grandparent → parent → child)
-- Cross-package context behavior
-- Non-Option Omissible fields
-- Serialization/deserialization
+See `config_merge_tests.rs` for tests covering `Omissible` inheritance patterns,
+including explicit null overrides, chain inheritance, and serialization.
 
-## Benefits
+## Files
 
-1. **Clear Semantics**: Distinguishes between "not specified" and "explicitly null"
-2. **Hierarchical Control**: Parent configs can force null values on children
-3. **Type Safety**: Compile-time guarantees for override behavior
-4. **Easy Extension**: Simple function calls for any config type
-5. **Consistent Behavior**: Same logic works across all configuration types
+| File | Purpose |
+|------|---------|
+| `config_merge.rs` | `DefaultTo`, `ReplaceIfNone`, all per-type impls, `Tags`, `Packages` |
+| `config_merge_tests.rs` | Tests for `Omissible` inheritance logic |
+| `dbt-proc-macros/src/lib.rs` | `#[derive(DefaultTo)]` proc-macro |

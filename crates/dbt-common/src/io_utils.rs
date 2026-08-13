@@ -2,7 +2,7 @@ use crate::io_args::{EvalArgs, Phases, StaticAnalysisKind, StaticAnalysisOffReas
 use crate::path::DbtPath;
 use crate::stdfs::File;
 use crate::tracing::dbt_metrics::{error_count_checkpoint, return_exit_code_from_error_counter};
-use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
+use crate::{ErrorCode, FsResult, err, fs_err, stdfs::canonicalize};
 use dbt_telemetry::{ExecutionPhase, NodeOutcome};
 use dbt_yaml::Span;
 use pathdiff::diff_paths;
@@ -14,12 +14,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// A trait for reporting status messages and errors that occur during execution.
-/// This is primarily used in LSP mode to report errors and progress to the client.
+/// A trait for reporting execution status to an external client.
 pub trait StatusReporter: Any + Send + Sync {
-    /// Called when an error occurs to collect it for later processing
-    fn collect_error(&self, error: &FsError);
-    fn collect_warning(&self, warning: &FsError);
     fn collect_node_evaluation(
         &self,
         unique_id: &str,

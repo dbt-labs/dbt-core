@@ -42,6 +42,28 @@ impl DbtNamespace {
     }
 }
 
+/// Does package `macro_names` define a macro called `name`?
+///
+/// The macro namespace registry stores each package's macro names as a map keyed by
+/// name, so the common path is a single hash lookup. It used to store a sequence, which
+/// made this a linear scan over every macro in the package — for a package the size of
+/// elementary (~1000 macros) that dominated the cost of every `pkg.macro_name` access.
+///
+/// The sequence branch is kept because the registry is a plain global that callers
+/// outside `environment_builder` can populate themselves; an unexpected shape should
+/// degrade in speed, not correctness.
+fn namespace_defines_macro(macro_names: &Value, name: &str) -> bool {
+    if macro_names.kind() == ValueKind::Map {
+        return macro_names
+            .get_item(&Value::from(name))
+            .is_ok_and(|found| !found.is_undefined());
+    }
+    macro_names
+        .try_iter()
+        .map(|mut iter| iter.any(|v| v.as_str() == Some(name)))
+        .unwrap_or(false)
+}
+
 impl Object for DbtNamespace {
     fn get_property(
         self: &Arc<Self>,
@@ -56,11 +78,10 @@ impl Object for DbtNamespace {
             .unwrap_or_default();
         let template_registry = state.env().get_macro_template_registry();
         // Could be a package name; check whether there's a macro in the namespace.
-        if namespace_registry.get(&ns_name).is_some_and(|val| {
-            val.try_iter()
-                .map(|mut iter| iter.any(|v| v.as_str() == Some(name)))
-                .unwrap_or(false)
-        }) {
+        if namespace_registry
+            .get(&ns_name)
+            .is_some_and(|val| namespace_defines_macro(val, name))
+        {
             let template_registry_entry = template_registry.get(&ns_name);
             let path = template_registry_entry
                 .and_then(|entry| entry.get_attr("path").ok())
@@ -372,5 +393,64 @@ impl Object for MacroLookupContext {
                 ))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use minijinja::value::mutable_vec::MutableVec;
+
+    fn map_of(names: &[&str]) -> Value {
+        let entries: ValueMap = names
+            .iter()
+            .map(|n| (Value::from(*n), Value::from(true)))
+            .collect();
+        Value::from_object(entries)
+    }
+
+    fn seq_of(names: &[&str]) -> Value {
+        Value::from_object(MutableVec::from(
+            names.iter().map(|n| Value::from(*n)).collect::<Vec<_>>(),
+        ))
+    }
+
+    #[test]
+    fn map_shaped_namespace_resolves_membership() {
+        let names = map_of(&["flatten_column", "union_lists", "safe_get_with_default"]);
+        assert!(namespace_defines_macro(&names, "flatten_column"));
+        assert!(namespace_defines_macro(&names, "safe_get_with_default"));
+        assert!(!namespace_defines_macro(&names, "not_a_macro"));
+    }
+
+    #[test]
+    fn sequence_shaped_namespace_still_resolves_membership() {
+        // The registry is a plain global; callers outside environment_builder may still
+        // populate it with a sequence. That must keep working, just without the O(1) path.
+        let names = seq_of(&["flatten_column", "union_lists"]);
+        assert!(namespace_defines_macro(&names, "flatten_column"));
+        assert!(namespace_defines_macro(&names, "union_lists"));
+        assert!(!namespace_defines_macro(&names, "not_a_macro"));
+    }
+
+    #[test]
+    fn both_shapes_agree() {
+        let present = ["a", "b", "c"];
+        for probe in ["a", "b", "c", "d", ""] {
+            assert_eq!(
+                namespace_defines_macro(&map_of(&present), probe),
+                namespace_defines_macro(&seq_of(&present), probe),
+                "shapes disagreed for {probe:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_and_unexpected_shapes_report_no_macro() {
+        assert!(!namespace_defines_macro(&map_of(&[]), "anything"));
+        assert!(!namespace_defines_macro(&seq_of(&[]), "anything"));
+        // A scalar is neither a map nor iterable; must not panic.
+        assert!(!namespace_defines_macro(&Value::from(42), "anything"));
+        assert!(!namespace_defines_macro(&Value::UNDEFINED, "anything"));
     }
 }

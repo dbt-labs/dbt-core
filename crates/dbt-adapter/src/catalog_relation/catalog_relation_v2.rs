@@ -118,7 +118,8 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 Some(catalog_name) => catalog_name,
             }
         }
-        AdapterType::DuckDB => match model_catalog_name(model, AdapterType::DuckDB) {
+        // Alt behaves as DuckDB-backed for relation-building purposes.
+        AdapterType::DuckDB | AdapterType::Alt => match model_catalog_name(model, adapter_type) {
             None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
             Some(catalog_name) => catalog_name,
         },
@@ -197,6 +198,24 @@ pub(super) fn from_model_config_and_catalogs_v2(
             AdapterErrorKind::Configuration,
             format!(
                 "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'iceberg_rest', 'ducklake', and 'local_filesystem'",
+                other.as_str()
+            ),
+        )),
+        // Alt never issues its own ATTACH: the dbt-compute
+        // service auto-attaches the org's MDLS catalog server-side via the
+        // caller's bearer token. All Alt needs from catalogs.yml is the
+        // Snowflake-cased `catalog_database` these catalog types carry --
+        // see `catalog_attach_database()` in dbt-tasks'
+        // local_engine::runnable::compute_platform, which reads the exact
+        // same field and nothing else.
+        (
+            AdapterType::Alt,
+            V2CatalogType::Horizon | V2CatalogType::IcebergRest | V2CatalogType::Unity,
+        ) => CatalogRelation::build_alt_with_catalogs_v2(catalog, &catalog_name),
+        (AdapterType::Alt, other) => Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Catalog '{catalog_name}' has type '{}'; Alt (dbt Compute) v2 mapping supports only 'horizon', 'iceberg_rest', and 'unity'",
                 other.as_str()
             ),
         )),
@@ -590,6 +609,8 @@ impl CatalogRelation {
         let external_volume =
             Self::get_model_config_value(model, FIELD_EXTERNAL_VOLUME, AdapterType::Snowflake)
                 .or_else(|| get_yaml_str(snowflake, FIELD_EXTERNAL_VOLUME).map(|s| s.to_string()));
+        let external_volume =
+            Some(external_volume.unwrap_or_else(|| SNOWFLAKE_MANAGED_EXTERNAL_VOLUME.to_string()));
 
         let base_location_root =
             Self::get_model_config_value(model, FIELD_BASE_LOCATION_ROOT, AdapterType::Snowflake)
@@ -605,12 +626,20 @@ impl CatalogRelation {
         let schema = Self::get_model_config_value(model, "schema", AdapterType::Snowflake);
         let identifier = Self::get_model_config_value(model, "alias", AdapterType::Snowflake)
             .or_else(|| Self::get_model_config_value(model, "identifier", AdapterType::Snowflake));
-        let base_location = Self::build_base_location(
-            &base_location_root,
-            &base_location_subpath,
-            &schema,
-            &identifier,
-        );
+        let base_location = external_volume
+            .as_ref()
+            .filter(|v| {
+                !v.trim()
+                    .eq_ignore_ascii_case(SNOWFLAKE_MANAGED_EXTERNAL_VOLUME)
+            })
+            .map(|_| {
+                Self::build_base_location(
+                    &base_location_root,
+                    &base_location_subpath,
+                    &schema,
+                    &identifier,
+                )
+            });
 
         let mut adapter_properties = BTreeMap::new();
 
@@ -683,7 +712,7 @@ impl CatalogRelation {
             table_format: catalog.table_format,
             external_volume,
             catalog_database,
-            base_location: Some(base_location),
+            base_location,
             adapter_properties,
             is_transient: Some(false),
             file_format: None,
@@ -806,6 +835,44 @@ impl CatalogRelation {
             catalog_database,
             base_location: None,
             file_format: Some(file_format),
+        })
+    }
+
+    /// Alt equivalent of `build_horizon_with_catalogs_v2` /
+    /// `build_snowflake_linked_with_catalogs_v2`, pared down to the single
+    /// field the Alt runtime actually consults: `catalog_database` from
+    /// `config.snowflake`. Alt attaches server-side (see module doc on
+    /// `build_duckdb_with_catalogs_v2` and `catalog_attach_database()` in
+    /// dbt-tasks), so none of the ATTACH/endpoint fields apply here.
+    fn build_alt_with_catalogs_v2(
+        catalog: &CatalogSpecV2View<'_>,
+        catalog_name: &str,
+    ) -> AdapterResult<CatalogRelation> {
+        let snowflake = require_platform_block(catalog, catalog_name, "snowflake")?;
+
+        let catalog_database = get_yaml_str(snowflake, FIELD_CATALOG_DATABASE)
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!(
+                        "Catalog '{catalog_name}' requires config.snowflake.catalog_database for the Alt (dbt Compute) adapter"
+                    ),
+                )
+            })?;
+
+        Ok(CatalogRelation {
+            adapter_type: AdapterType::Alt,
+            catalog_name: Some(catalog_name.to_string()),
+            integration_name: None,
+            catalog_type: catalog.catalog_type.as_str().to_string(),
+            table_format: catalog.table_format,
+            file_format: None,
+            external_volume: None,
+            catalog_database: Some(catalog_database),
+            base_location: None,
+            adapter_properties: BTreeMap::new(),
+            is_transient: None,
         })
     }
 
@@ -1168,6 +1235,126 @@ catalogs:
             .unwrap();
 
             assert_eq!(r.catalog_database.as_deref(), Some("PROD_DB"));
+        }
+    }
+
+    #[test]
+    fn snowflake_v2_horizon_iceberg_with_external_volume_synthesizes_base_location() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: SF_HORIZON
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: my_volume
+        base_location_root: _root
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "SF_HORIZON",
+            "schema": "SCH",
+            "identifier": "ID",
+            "base_location_subpath": "sub",
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Snowflake,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_name, Some("SF_HORIZON".to_string()));
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.catalog_type, ICEBERG_BUILT_IN_CATALOG);
+            assert_eq!(r.external_volume.as_deref(), Some("my_volume"));
+            assert_eq!(r.base_location.as_deref(), Some("_root/SCH/ID/sub"));
+        }
+    }
+
+    #[test]
+    fn snowflake_v2_horizon_iceberg_explicit_snowflake_managed_external_volume_omits_base_location()
+    {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: SF_HORIZON
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: SNOWFLAKE_MANAGED
+        base_location_root: _root
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "SF_HORIZON",
+            "schema": "SCH",
+            "identifier": "ID",
+            "base_location_subpath": "sub",
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Snowflake,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.external_volume.as_deref(), Some("SNOWFLAKE_MANAGED"));
+            assert!(r.base_location.is_none());
+        }
+    }
+
+    #[test]
+    fn snowflake_v2_horizon_iceberg_without_catalog_templates_snowflake_managed_and_omits_base_location()
+     {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: my_volume
+"#,
+        );
+        let conf = json!({ "table_format": "ICEBERG", "schema": "SCH", "identifier": "ID" });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Snowflake,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.catalog_type, ICEBERG_BUILT_IN_CATALOG);
+            assert_eq!(
+                r.external_volume.as_deref(),
+                Some(SNOWFLAKE_MANAGED_EXTERNAL_VOLUME)
+            );
+            assert!(r.base_location.is_none());
         }
     }
 

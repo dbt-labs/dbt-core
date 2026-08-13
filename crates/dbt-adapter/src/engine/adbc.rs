@@ -208,7 +208,7 @@ impl AdbcEngine {
         let (database_builder, load_strategy) = if use_cloud_credentials {
             // Cloud credentials are used to connect to a service that manages
             // drivers and warehouse credentials for us. The "flock" driver takes
-            // these credentials and behaves as a proxy to the actual.
+            // these credentials and behaves as a proxy to the actual warehouse.
             let builder = Self::configure_cloud_database(backend)?;
             (builder, LoadStrategy::Remote)
         } else {
@@ -223,7 +223,6 @@ impl AdbcEngine {
                 dbt_common::tracing::dbt_emit::emit_warn_log_message(
                     dbt_common::ErrorCode::InvalidConfig,
                     warning,
-                    None,
                 );
             }
 
@@ -259,9 +258,7 @@ impl AdbcEngine {
                 let mut database = driver
                     .new_database_with_opts(opts)
                     .map_err(adbc_error_to_adapter_error)?;
-                // DuckDB-backed adapters: apply extensions, settings, secrets, and
-                // catalog attachments.
-                if matches!(self.adapter_type, AdapterType::DuckDB | AdapterType::Alt) {
+                if self.adapter_type == AdapterType::DuckDB {
                     self.apply_duckdb_init_sql(&mut database, config)?;
                 }
                 write_guard.inner.insert(fingerprint, database.clone());

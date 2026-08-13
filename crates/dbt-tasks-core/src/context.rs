@@ -1,12 +1,18 @@
 use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::time::Instant;
 
-use crate::run_cache::run_cache_service::{CachedTestExecutionResult, HeuristicClock};
+use crate::run_cache::run_cache_service::{
+    CachedTestExecutionResult, HeuristicClock, TelemetryDispatcher,
+};
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
 use dbt_adapter::relation::create_relation_from_node;
+use dbt_adapter::response::AdapterResponse;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::collections::{DashMap, SccHashMap};
@@ -26,6 +32,7 @@ use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{BatchResults, InternalDbtNode, InternalDbtNodeAttributes, Nodes};
 use dbt_schemas::state::{DbtProfile, DbtRuntimeConfig, NodeResolverTracker, ResolverState};
+use dbt_state::explain::StateExplainDevClone;
 use dbt_state::metadata_cache::RunCacheMetadataCache;
 use dbt_state::service_client::SharedRunCacheServiceClient;
 use dbt_state::service_config::RunCacheServiceConfig;
@@ -44,11 +51,13 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 /// construction time from the extended-context factory.
 pub struct RunCacheCtx {
     pub run_cache_metadata: Arc<RunCacheMetadataCache>,
-    pub run_cache_dev_cloned_nodes: DashMap<String, ()>,
+    pub run_cache_dev_cloned_nodes: DashMap<String, StateExplainDevClone>,
     pub run_cache_deferred_fqns: BTreeSet<String>,
     pub run_cache_service_requested: bool,
     pub run_cache_service_config: Option<RunCacheServiceConfig>,
     pub run_cache_service_client: Option<SharedRunCacheServiceClient>,
+    /// Run-scoped dbt State explain log file, when state config is available.
+    pub state_explain_log_path: Option<PathBuf>,
     pub view_traverser: Option<Arc<ViewDefinitionTraverser>>,
     /// Run-start warehouse clock, set once in `run_cache_service_before_run`.
     /// When present, `confirm_run_cache_service_execution` uses it to stamp
@@ -57,6 +66,12 @@ pub struct RunCacheCtx {
     /// Tracks the background dependency last-modified prefetch so per-node
     /// submits can observe its progress and await it on demand.
     pub prefetch: RunCachePrefetchState,
+    pub telemetry_event_order: AtomicI64,
+    pub telemetry_session_start: std::sync::OnceLock<Instant>,
+    pub telemetry_session_ended: AtomicBool,
+    /// Background telemetry batching worker, started lazily on the first
+    /// event so runs with the dbt State service disabled never spawn it.
+    pub telemetry_dispatcher: std::sync::OnceLock<TelemetryDispatcher>,
 }
 
 /// Lifecycle handle for the background dependency last-modified prefetch.
@@ -73,9 +88,9 @@ pub struct RunCachePrefetchState {
 #[derive(Default)]
 struct RunCachePrefetchStateInner {
     /// Set once the prefetch has been kicked off (or determined to be a no-op).
-    started: std::sync::atomic::AtomicBool,
+    started: AtomicBool,
     /// Set once the prefetch has finished (or there was nothing to fetch).
-    done: std::sync::atomic::AtomicBool,
+    done: AtomicBool,
     /// Handle to the background prefetch task, taken and joined the first time
     /// the prefetch is awaited. `None` when there was nothing to spawn or it
     /// has already been joined.
@@ -147,6 +162,7 @@ pub struct TaskRunnerCtxInner {
     pub run_stats: DashMap<String, Stat>,
     pub data_test_execution_results: DashMap<String, CachedTestExecutionResult>,
     pub batch_results_map: DashMap<String, BatchResults>,
+    pub main_adapter_responses: DashMap<String, AdapterResponse>,
     pub node_hashes: DashMap<String, String>,
     pub rendered_sql: DashMap<String, RenderedNodeInfo>,
     pub freshness_seconds: SccHashMap<String, i64>,
@@ -228,6 +244,7 @@ impl TaskRunnerCtxInner {
             run_stats: DashMap::default(),
             data_test_execution_results: DashMap::default(),
             batch_results_map,
+            main_adapter_responses: DashMap::default(),
             node_hashes,
             rendered_sql: DashMap::default(),
             freshness_seconds: SccHashMap::default(),
@@ -439,7 +456,7 @@ impl TaskRunnerCtx {
         model: &T,
         base_context: &BTreeMap<String, Value>,
         ref_validation_config: DependencyValidationConfig,
-    ) -> (BTreeMap<String, Value>, Arc<DashMap<String, Value>>)
+    ) -> FsResult<(BTreeMap<String, Value>, Arc<DashMap<String, Value>>)>
     where
         T: InternalDbtNodeAttributes + ?Sized,
     {

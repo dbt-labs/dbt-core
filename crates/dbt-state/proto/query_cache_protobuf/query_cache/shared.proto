@@ -71,7 +71,7 @@ message NodeFuncMapping {
 }
 
 message DbtNodeState {
-  reserved 8;
+  reserved 8, 14;
 
   string node_unique_id = 1;
   string target_name = 2;

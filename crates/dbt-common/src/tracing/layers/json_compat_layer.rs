@@ -39,6 +39,7 @@ use super::super::{
         progress::format_progress_message,
         query_log::format_query_log,
     },
+    fs_error_log::get_log_message,
 };
 
 use crate::io_args::FsCommand;
@@ -1352,7 +1353,7 @@ impl TelemetryConsumer for JsonCompatLayer {
 
     fn on_log_record(&self, log_record: &LogRecordInfo, _data_provider: &mut DataProvider<'_>) {
         // Dispatch to LogMessage handler
-        if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
+        if let Some(log_msg) = get_log_message(&log_record.attributes) {
             self.emit_log_message(log_msg, log_record);
             return;
         }

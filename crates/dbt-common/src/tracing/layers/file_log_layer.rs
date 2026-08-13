@@ -52,6 +52,7 @@ use super::super::{
         state_mod_diff::format_state_modified_diff_lines,
         test_result::format_test_failure,
     },
+    fs_error_log::get_log_message,
 };
 
 const HEADER_SEPARATOR: &str = "====================";
@@ -261,7 +262,7 @@ impl TelemetryConsumer for FileLogLayer {
 
     fn on_log_record(&self, log_record: &LogRecordInfo, _data_provider: &mut DataProvider<'_>) {
         // Check if this is a LogMessage (error/warning)
-        if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
+        if let Some(log_msg) = get_log_message(&log_record.attributes) {
             self.handle_log_message(log_msg, log_record);
             return;
         }

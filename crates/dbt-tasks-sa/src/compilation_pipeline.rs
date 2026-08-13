@@ -125,6 +125,7 @@ impl CompilationPipeline {
         unique_ids: &[String],
         include_parents: bool,
         include_children: bool,
+        indirect_selection: IndirectSelection,
     ) -> Vec<SelectExpression> {
         let mut atoms = Vec::new();
 
@@ -160,7 +161,7 @@ impl CompilationPipeline {
                         None
                     }
                 },
-                indirect: Some(IndirectSelection::Eager),
+                indirect: Some(indirect_selection),
                 exclude: None,
             };
             atoms.push(SelectExpression::Atom(criteria));
@@ -235,6 +236,7 @@ pub async fn schedule_with_unique_ids(
     unique_ids: &[String],
     include_parents: bool,
     include_children: bool,
+    indirect_selection: IndirectSelection,
     local_execution_backend: LocalExecutionBackendKind,
     token: &CancellationToken,
 ) -> FsResult<Schedule<String>> {
@@ -242,6 +244,7 @@ pub async fn schedule_with_unique_ids(
         unique_ids,
         include_parents,
         include_children,
+        indirect_selection,
     );
     CompilationPipeline::schedule_phase(
         schedule_args,

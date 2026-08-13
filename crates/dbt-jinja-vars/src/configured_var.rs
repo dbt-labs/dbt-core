@@ -11,12 +11,15 @@ use minijinja::{
 };
 
 use crate::VarFunction;
+use crate::cli_value::cli_var_value_to_minijinja;
 
 /// A struct that represent a var object to be used in configuration contexts
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ConfiguredVar {
     vars: BTreeMap<String, IndexMap<String, DbtVars>>,
     cli_vars: BTreeMap<String, dbt_yaml::Value>,
+    /// Package namespace, when the context has no `TARGET_PACKAGE_NAME` key to read it from.
+    package_name: Option<String>,
 }
 
 // Similar to Var, but handling package specific vars
@@ -26,23 +29,43 @@ impl ConfiguredVar {
         vars: BTreeMap<String, IndexMap<String, DbtVars>>,
         cli_vars: BTreeMap<String, dbt_yaml::Value>,
     ) -> Self {
-        Self { vars, cli_vars }
+        Self {
+            vars,
+            cli_vars,
+            package_name: None,
+        }
+    }
+
+    /// Returns a copy whose package namespace does not depend on a Jinja context key.
+    pub fn bind_package(&self, package_name: impl Into<String>) -> Self {
+        Self {
+            package_name: Some(package_name.into()),
+            ..self.clone()
+        }
+    }
+
+    fn package_name(&self, state: &State<'_, '_>, var_name: &str) -> Result<String, Error> {
+        self.package_name
+            .clone()
+            .or_else(|| {
+                state
+                    .lookup(TARGET_PACKAGE_NAME, &[])
+                    .and_then(|value| value.as_str().map(str::to_string))
+            })
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!(
+                        "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
+                    ),
+                )
+            })
     }
 }
 
 impl VarFunction for ConfiguredVar {
     fn contains_var(&self, state: &State<'_, '_>, var_name: &str) -> Result<bool, Error> {
-        let Some(package_name) = state
-            .lookup(TARGET_PACKAGE_NAME, &[])
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-        else {
-            return Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!(
-                    "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
-                ),
-            ));
-        };
+        let package_name = self.package_name(state, var_name)?;
         let vars_lookup = self.vars.get(&package_name).ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidOperation,
@@ -60,14 +83,11 @@ impl VarFunction for ConfiguredVar {
     ) -> Result<Value, Error> {
         // 1. CLI vars
         if let Some(value) = self.cli_vars.get(&var_name) {
-            return Ok(Value::from_serialize(value));
+            return Ok(cli_var_value_to_minijinja(value));
         }
         // 2. Check if this is dbt_project.yml parsing
-        if Some("dbt_project.yml".to_string())
-            == state
-                .lookup(TARGET_PACKAGE_NAME, &[])
-                .and_then(|v| v.as_str().map(|s| s.to_string()))
-        {
+        let package_name = self.package_name(state, &var_name)?;
+        if package_name == "dbt_project.yml" {
             if let Some(default_value) = default_value {
                 return Ok(default_value);
             } else {
@@ -79,17 +99,6 @@ impl VarFunction for ConfiguredVar {
         }
 
         // 3. Package vars
-        let Some(package_name) = state
-            .lookup(TARGET_PACKAGE_NAME, &[])
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-        else {
-            return Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!(
-                    "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
-                ),
-            ));
-        };
         let vars_lookup = self.vars.get(&package_name).ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidOperation,
@@ -222,6 +231,28 @@ mod tests {
 
         let rendered = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(rendered, "table");
+    }
+
+    #[test]
+    fn cli_var_unquoted_date_scalar_supports_strftime() {
+        let env = make_env_with_var();
+        let cli_vars: BTreeMap<String, dbt_yaml::Value> =
+            dbt_yaml::from_str("start_date: 2026-08-03\n").unwrap();
+
+        let mut vars: BTreeMap<String, IndexMap<String, DbtVars>> = BTreeMap::new();
+        vars.insert("my_new_project".to_string(), IndexMap::new());
+
+        let mut env_with_vars = env;
+        env_with_vars.add_global(
+            "var",
+            MinijinjaValue::from_object(ConfiguredVar::new(vars, cli_vars)),
+        );
+
+        let template = env_with_vars
+            .template_from_str("{{ var('start_date').strftime('%Y%m') }}")
+            .unwrap();
+        let rendered = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(rendered, "202608");
     }
 
     #[test]

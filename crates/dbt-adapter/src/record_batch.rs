@@ -43,6 +43,11 @@ pub trait RecordBatchExt {
         on_disambiguate: Option<impl FnOnce(&[RenamedColumn<'_>])>,
     ) -> RecordBatch;
     fn jsonify_nested_columns(self) -> RecordBatch;
+    /// Lowercase all column names in the RecordBatch schema.
+    ///
+    /// This is used for database commands whose result column names are defined
+    /// as lowercase even when a driver reports them in uppercase.
+    fn lowercase_column_names(self) -> RecordBatch;
 }
 
 impl RecordBatchExt for RecordBatch {
@@ -94,8 +99,26 @@ impl RecordBatchExt for RecordBatch {
     where
         T: std::any::Any + Clone,
     {
-        Ok(self
-            .column_typed(column_name)?
+        let column = self.column_typed(column_name)?;
+
+        // Metadata/catalog queries are parsed by downcasting straight to a
+        // concrete `StringArray`, but drivers/engines may now return
+        // `Utf8View`/`LargeUtf8` for what used to always be plain `Utf8`
+        // (e.g. the query-execution path unconditionally widens to view
+        // types). Normalize down to `Utf8` first so callers expecting
+        // `StringArray` keep working regardless of which string
+        // representation produced the result.
+        let normalized: ArrayRef = if std::any::TypeId::of::<T>()
+            == std::any::TypeId::of::<StringArray>()
+            && matches!(column.data_type(), DataType::Utf8View | DataType::LargeUtf8)
+        {
+            cast_with_options(column.as_ref(), &DataType::Utf8, &CastOptions::default())
+                .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?
+        } else {
+            column.clone()
+        };
+
+        Ok(normalized
             .as_any()
             .downcast_ref::<T>()
             .ok_or_else(|| {
@@ -206,6 +229,51 @@ impl RecordBatchExt for RecordBatch {
         RecordBatch::try_new(new_schema, new_columns)
             .expect("jsonify_nested_columns: rewritten schema and columns are consistent")
     }
+
+    fn lowercase_column_names(self) -> RecordBatch {
+        let schema = self.schema();
+        let fields = schema.fields();
+
+        if fields.iter().all(|f| {
+            f.name()
+                .chars()
+                .all(|c| c.is_lowercase() || !c.is_alphabetic())
+        }) {
+            return self;
+        }
+
+        let new_fields: Vec<_> = fields
+            .iter()
+            .map(|f| Arc::new(f.as_ref().clone().with_name(f.name().to_lowercase())))
+            .collect();
+
+        let new_schema = Arc::new(Schema::new_with_metadata(
+            new_fields,
+            schema.metadata().clone(),
+        ));
+
+        RecordBatch::try_new(new_schema, self.columns().to_vec())
+            .expect("lowercase_column_names: schema and columns should be compatible")
+    }
+}
+
+pub trait StructArrayExt {
+    /// Looks up a named field in the struct and returns it as a typed array `T`.
+    /// Errors if the field is absent or is not of type `T`.
+    fn column_as<T: 'static>(&self, name: &str) -> AdapterResult<&T>;
+}
+
+impl StructArrayExt for StructArray {
+    fn column_as<T: 'static>(&self, name: &str) -> AdapterResult<&T> {
+        self.column_by_name(name)
+            .and_then(|c| c.as_any().downcast_ref::<T>())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    format!("Missing or invalid '{name}' column"),
+                )
+            })
+    }
 }
 
 pub trait SchemaExt {
@@ -270,21 +338,23 @@ fn jsonify_map_keys(
             let (new_value_field, new_value_arr) =
                 jsonify_map_keys(value_field, map.values(), options);
 
-            let (new_key_field, new_key_arr): (FieldRef, ArrayRef) =
-                if matches!(key_field.data_type(), DataType::Utf8 | DataType::LargeUtf8) {
-                    (key_field.clone(), map.keys().clone())
-                } else {
-                    let (norm_key_field, norm_key_arr) =
-                        jsonify_map_keys(key_field, map.keys(), options);
-                    let key_strs = encode_array_to_strings(&norm_key_field, &norm_key_arr, options);
-                    (
-                        Arc::new(
-                            Field::new(key_field.name(), DataType::Utf8, key_field.is_nullable())
-                                .with_metadata(key_field.metadata().clone()),
-                        ),
-                        Arc::new(key_strs),
-                    )
-                };
+            let (new_key_field, new_key_arr): (FieldRef, ArrayRef) = if matches!(
+                key_field.data_type(),
+                DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View
+            ) {
+                (key_field.clone(), map.keys().clone())
+            } else {
+                let (norm_key_field, norm_key_arr) =
+                    jsonify_map_keys(key_field, map.keys(), options);
+                let key_strs = encode_array_to_strings(&norm_key_field, &norm_key_arr, options);
+                (
+                    Arc::new(
+                        Field::new(key_field.name(), DataType::Utf8, key_field.is_nullable())
+                            .with_metadata(key_field.metadata().clone()),
+                    ),
+                    Arc::new(key_strs),
+                )
+            };
 
             let new_entry_fields = Fields::from(vec![new_key_field, new_value_field]);
             let new_entries = StructArray::new(
@@ -601,6 +671,36 @@ mod tests {
     }
 
     #[test]
+    fn column_values_normalizes_utf8_view_to_string_array() {
+        let batch = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "name",
+                DataType::Utf8View,
+                false,
+            )])),
+            vec![Arc::new(arrow_array::StringViewArray::from(vec!["FOO"]))],
+        )
+        .unwrap();
+        let result: AdapterResult<StringArray> = batch.column_values("name");
+        assert_eq!(result.unwrap(), StringArray::from(vec!["FOO"]));
+    }
+
+    #[test]
+    fn column_values_normalizes_large_utf8_to_string_array() {
+        let batch = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "name",
+                DataType::LargeUtf8,
+                false,
+            )])),
+            vec![Arc::new(arrow_array::LargeStringArray::from(vec!["FOO"]))],
+        )
+        .unwrap();
+        let result: AdapterResult<StringArray> = batch.column_values("name");
+        assert_eq!(result.unwrap(), StringArray::from(vec!["FOO"]));
+    }
+
+    #[test]
     fn column_values_wrong_type() {
         let result: AdapterResult<Int32Array> = TEST_DATA.column_values("name");
         assert!(result.is_err());
@@ -610,6 +710,61 @@ mod tests {
         assert!(error.message().contains(
             "arrow_array::array::primitive_array::PrimitiveArray<arrow_array::types::Int32Type>"
         ));
+    }
+
+    fn string_struct() -> StructArray {
+        StructArray::from(vec![(
+            Arc::new(Field::new("col", DataType::Utf8, false)),
+            Arc::new(StringArray::from(vec!["a", "b"])) as ArrayRef,
+        )])
+    }
+
+    #[test]
+    fn column_as_success() {
+        let s = string_struct();
+        let col = s.column_as::<StringArray>("col").unwrap();
+        assert_eq!(col.value(0), "a");
+        assert_eq!(col.value(1), "b");
+    }
+
+    #[test]
+    fn column_as_missing_column() {
+        let s = string_struct();
+        let error = s.column_as::<StringArray>("missing").unwrap_err();
+        assert_eq!(error.kind(), AdapterErrorKind::UnexpectedResult);
+        assert_eq!(error.message(), "Missing or invalid 'missing' column");
+    }
+
+    #[test]
+    fn column_as_wrong_type() {
+        let s = string_struct();
+        let error = s.column_as::<Int32Array>("col").unwrap_err();
+        assert_eq!(error.kind(), AdapterErrorKind::UnexpectedResult);
+        assert_eq!(error.message(), "Missing or invalid 'col' column");
+    }
+
+    #[test]
+    fn column_as_nested_struct() {
+        let inner = string_struct();
+        let outer = StructArray::from(vec![(
+            Arc::new(Field::new("inner", inner.data_type().clone(), false)),
+            Arc::new(inner) as ArrayRef,
+        )]);
+        let got_inner = outer.column_as::<StructArray>("inner").unwrap();
+        let col = got_inner.column_as::<StringArray>("col").unwrap();
+        assert_eq!(col.value(0), "a");
+        assert_eq!(col.value(1), "b");
+    }
+
+    #[test]
+    fn column_as_i32() {
+        let s = StructArray::from(vec![(
+            Arc::new(Field::new("col", DataType::Int32, false)),
+            Arc::new(Int32Array::from(vec![1, 2])) as ArrayRef,
+        )]);
+        let col = s.column_as::<Int32Array>("col").unwrap();
+        assert_eq!(col.value(0), 1);
+        assert_eq!(col.value(1), 2);
     }
 
     #[test]
@@ -1011,5 +1166,84 @@ mod tests {
         let col = column_as_string(&result, "m");
         let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
         assert_eq!(row0, serde_json::json!({"[1,2]": 10, "[3]": 20}));
+    }
+
+    #[test]
+    fn lowercase_column_names_already_lowercase_is_noop() {
+        let schema = Schema::new(vec![
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("data_type", DataType::Utf8, false),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["id"])) as ArrayRef,
+                Arc::new(StringArray::from(vec!["integer"])) as ArrayRef,
+            ],
+        )
+        .unwrap();
+
+        let original_ptr = Arc::as_ptr(batch.schema_ref());
+        let result = batch.lowercase_column_names();
+        // Schema should be the same object (no rebuild needed)
+        assert_eq!(Arc::as_ptr(result.schema_ref()), original_ptr);
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["column_name", "data_type"]);
+    }
+
+    #[test]
+    fn lowercase_column_names_snowflake_uppercase() {
+        // Simulates what the Snowflake ADBC driver returns for SHOW / system queries.
+        // dbt_constraints accesses columns["column_name"].values() (lowercase).
+        // Without lowercasing, columns["column_name"] returns undefined.
+        let schema = Schema::new(vec![
+            Field::new("COLUMN_NAME", DataType::Utf8, false),
+            Field::new("DATA_TYPE", DataType::Utf8, false),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["id", "name"])) as ArrayRef,
+                Arc::new(StringArray::from(vec!["integer", "varchar"])) as ArrayRef,
+            ],
+        )
+        .unwrap();
+
+        let result = batch.lowercase_column_names();
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["column_name", "data_type"]);
+
+        // Data should be preserved unchanged.
+        let col = result
+            .column_by_name("column_name")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(col.value(0), "id");
+        assert_eq!(col.value(1), "name");
+    }
+
+    #[test]
+    fn lowercase_column_names_mixed_case() {
+        let schema = Schema::new(vec![
+            Field::new("Column_Name", DataType::Utf8, false),
+            Field::new("id_42", DataType::Int32, false),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["x"])) as ArrayRef,
+                Arc::new(Int32Array::from(vec![1])) as ArrayRef,
+            ],
+        )
+        .unwrap();
+
+        let result = batch.lowercase_column_names();
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["column_name", "id_42"]);
     }
 }

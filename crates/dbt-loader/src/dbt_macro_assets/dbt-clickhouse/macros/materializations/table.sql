@@ -89,7 +89,14 @@
 {%- endmacro -%}
 
 {% macro primary_key_clause(label) %}
-  {%- set primary_key = config.get('primary_key', validator=validation.any[basestring]) -%}
+  {%- set primary_key = config.get('primary_key', validator=validation.any[list, basestring]) -%}
+  {#- Fusion compatibility: Fusion's typed primary_key config arrives as a list
+      (scalar inputs are listified), so join it back into the raw string this
+      clause renders. Guarded like the incremental macros' unique_key handling.
+      No-op in Python, where a plain string passes through untouched. -#}
+  {%- if primary_key is not none and primary_key is iterable and (primary_key is not string and primary_key is not mapping) -%}
+    {%- set primary_key = primary_key | join(', ') -%}
+  {%- endif %}
 
   {%- if primary_key is not none %}
     {{ label }} {{ primary_key }}

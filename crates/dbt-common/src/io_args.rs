@@ -35,17 +35,7 @@ pub enum LocalExecutionBackendKind {
 }
 
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    ValueEnum,
-    Display,
-    Default,
-    JsonSchema,
+    Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ValueEnum, Display, Default,
 )]
 #[serde(rename_all = "lowercase")]
 #[clap(rename_all = "lowercase")]
@@ -57,9 +47,67 @@ pub enum ComputeArg {
     /// Run computations in-process
     Inline,
     /// Run computations in a separate, ephemeral worker process
+    // `local` is the other accepted spelling, as in `Execute::from_str`. It is
+    // an alias, not a variant, so that one value reaches the code that matches
+    // on `Sidecar`, and so that we always serialize `sidecar`.
+    #[serde(alias = "local")]
+    #[value(alias = "local")]
     Sidecar,
     /// Run via the remote compute service (persistent workers/cluster).
     Service,
+}
+
+// Hand-written because schemars 0.8 drops `#[serde(alias)]`. Editors validate
+// YAML against this schema, so it must list `local`. If it does not, an editor
+// rejects a value that dbt accepts. Keep the descriptions in sync with the
+// variant docs above.
+impl schemars::JsonSchema for ComputeArg {
+    fn schema_name() -> String {
+        "ComputeArg".to_string()
+    }
+
+    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+        let variants: [(&[&str], &str); 4] = [
+            (
+                &["remote"],
+                "Execute on the remote warehouse (Snowflake, BigQuery, etc.)",
+            ),
+            (&["inline"], "Run computations in-process"),
+            (
+                &["sidecar", "local"],
+                "Run computations in a separate, ephemeral worker process",
+            ),
+            (
+                &["service"],
+                "Run via the remote compute service (persistent workers/cluster).",
+            ),
+        ];
+
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(
+                    variants
+                        .iter()
+                        .map(|(values, description)| {
+                            schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+                                metadata: Some(Box::new(schemars::schema::Metadata {
+                                    description: Some((*description).to_string()),
+                                    ..Default::default()
+                                })),
+                                instance_type: Some(schemars::schema::InstanceType::String.into()),
+                                enum_values: Some(
+                                    values.iter().map(|v| (*v).into()).collect::<Vec<_>>(),
+                                ),
+                                ..Default::default()
+                            })
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+    }
 }
 
 impl From<ComputeArg> for LocalExecutionBackendKind {
@@ -179,7 +227,10 @@ pub enum FsCommand {
     Debug,
     Retry,
     Docs,
+    State,
     Completions,
+    /// Undocumented plumbing commands (e.g. `dbt internal get-distribution-info`)
+    Internal,
     /// All other commands provided by private cli's
     Extension(&'static str),
 }
@@ -209,7 +260,9 @@ impl FsCommand {
             FsCommand::Debug => "debug",
             FsCommand::Retry => "retry",
             FsCommand::Docs => "docs",
+            FsCommand::State => "state",
             FsCommand::Completions => "completions",
+            FsCommand::Internal => "internal",
             FsCommand::Extension(s) => s,
         }
     }
@@ -251,8 +304,6 @@ pub struct IoArgs {
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
-    pub use_parquet_schema_store: bool,
-    pub verify_parquet_schema_store: bool,
     pub host: String,
     pub port: u16,
 }
@@ -523,6 +574,10 @@ pub struct EvalArgs {
     pub empty: bool,
     pub sample: Option<String>,
     pub full_refresh: bool,
+    pub infer_schemas: bool,
+    pub skip_type_checking: bool,
+    pub show_sources: bool,
+    pub resolve_ambiguous_cols: bool,
     pub store_failures: bool,
     pub favor_state: bool,
     pub refresh_sources: bool,
@@ -1381,6 +1436,37 @@ fn parse_boolish_env(value: &OsStr) -> Option<bool> {
         .ok()
 }
 
+pub const LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV: &str =
+    "DBT_LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT";
+
+pub fn resolve_latest_version_pointer_enabled_by_default(project_flags: Option<&Value>) -> bool {
+    resolve_latest_version_pointer_enabled_by_default_with_env_lookup(project_flags, |name| {
+        std::env::var_os(name)
+    })
+}
+
+fn resolve_latest_version_pointer_enabled_by_default_with_env_lookup(
+    project_flags: Option<&Value>,
+    get_env: impl Fn(&str) -> Option<OsString>,
+) -> bool {
+    if let Some(value) = get_env(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV) {
+        if let Some(resolved) = parse_boolish_env(value.as_ref()) {
+            return resolved;
+        }
+    }
+
+    if let Some(enabled) = project_flags
+        .and_then(|flags| {
+            project_flags_get_value(flags, "latest_version_pointer_enabled_by_default")
+        })
+        .and_then(Value::as_bool)
+    {
+        return enabled;
+    }
+
+    true
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum, EnumIter)]
 #[serde(rename_all = "lowercase")]
 #[clap(rename_all = "lowercase")]
@@ -1573,6 +1659,21 @@ mod tests {
     fn project_defaults(yaml: &str) -> HashSet<OptimizeTestsOptions> {
         let project_flags: Value = dbt_yaml::from_str(yaml).unwrap();
         optimize_test_defaults_from_project_flags(Some(&project_flags))
+    }
+
+    fn latest_version_pointer_with_env(
+        project_flags_yaml: Option<&str>,
+        env: &[(&str, &str)],
+    ) -> bool {
+        let project_flags =
+            project_flags_yaml.map(|yaml| dbt_yaml::from_str::<Value>(yaml).unwrap());
+        resolve_latest_version_pointer_enabled_by_default_with_env_lookup(
+            project_flags.as_ref(),
+            |name| {
+                env.iter()
+                    .find_map(|(key, value)| (*key == name).then(|| OsString::from(*value)))
+            },
+        )
     }
 
     #[test]
@@ -1807,5 +1908,52 @@ mod tests {
             dbt_yaml::from_str::<StaticAnalysisKind>("\"True\"").unwrap(),
             StaticAnalysisKind::On
         );
+    }
+
+    #[test]
+    fn latest_version_pointer_env_true_overrides_project_false() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "true")],
+        );
+
+        assert!(resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_env_false_overrides_project_true() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: true\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "false")],
+        );
+
+        assert!(!resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_absent_env_uses_project_defaults() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[],
+        );
+
+        assert!(!resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_absent_env_and_project_defaults_true() {
+        let resolved = latest_version_pointer_with_env(None, &[]);
+
+        assert!(resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_malformed_env_falls_back_to_project() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "maybe")],
+        );
+
+        assert!(!resolved);
     }
 }

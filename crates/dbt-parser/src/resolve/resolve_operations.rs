@@ -6,10 +6,7 @@ use std::{
 
 use crate::utils::NoOpConfig;
 use dbt_adapter_core::AdapterType;
-use dbt_common::{
-    CodeLocationWithFile, ErrorCode, FsResult, fs_err,
-    io_args::{IoArgs, StaticAnalysisKind},
-};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsResult, fs_err, io_args::StaticAnalysisKind};
 use dbt_common::{path::DbtPath, tracing::dbt_emit::emit_warn_log_from_fs_error};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
@@ -36,7 +33,6 @@ pub fn resolve_operations(
     package_base_path: &Path,
     project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
-    io: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
@@ -56,7 +52,6 @@ pub fn resolve_operations(
             package_base_path,
             project_root,
             jinja_env,
-            io,
             global_static_analysis,
             adapter_type,
             database,
@@ -75,7 +70,6 @@ pub fn resolve_operations(
             package_base_path,
             project_root,
             jinja_env,
-            io,
             global_static_analysis,
             adapter_type,
             database,
@@ -96,7 +90,6 @@ fn new_operation(
     _package_base_path: &Path,
     _project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
-    io: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
@@ -138,6 +131,14 @@ fn new_operation(
                 checksum: DbtChecksum::hash(operation_sql.trim().as_bytes()),
                 raw_code: Some(operation_sql.to_string()),
                 language: Some("sql".to_string()),
+                // Stored as a plain field (unlike `Spanned<T>`'s own span) so it
+                // survives the `--partial-parse` cache's JSON round-trip; see
+                // `run_operation_on_run` in dbt-tasks-sa, which relies on this to
+                // attribute hook-execution errors back to their real location.
+                name_span: dbt_common::Span::from_serde_span(
+                    operation_sql_spanned.span().clone(),
+                    original_file_path.clone(),
+                ),
                 ..Default::default()
             },
             __base_attr__: NodeBaseAttributes {
@@ -177,7 +178,6 @@ fn new_operation(
                 execute_exists,
                 &operation.__common_attr__.original_file_path,
                 &PathBuf::new(),
-                io,
                 global_static_analysis,
             ));
 
@@ -259,7 +259,7 @@ fn new_operation(
                         err.to_string()
                     )
                     .with_location(operation.__common_attr__.original_file_path.to_path_buf());
-                    emit_warn_log_from_fs_error(&err, io.status_reporter.as_ref());
+                    emit_warn_log_from_fs_error(err);
                 }
             }
         }

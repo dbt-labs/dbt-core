@@ -505,3 +505,113 @@ fn test_snapshot_paren_suffix_matches_dbt_core_behavior() {
         result.err()
     );
 }
+
+// ---------------------------------------------------------------------------
+// Zero-argument `ref()` / `source()` — dbt-labs/dbt-core#15759.
+//
+// `compile_call` extracted a diagnostic span for ref/source by indexing the argument
+// list without an arity check, so `{{ ref() }}` panicked with "index out of bounds" and
+// `{{ source() }}` with an unwrap on `None`.
+//
+// The user-visible messages and their source locations are asserted by the SLT
+// `crates/sdf-integration-tests/tests/data/jinja/ref_source_arity.slt`, which renders
+// through the real dbt `ref`/`source` implementations. These tests deliberately do *not*
+// duplicate those strings; they cover what the SLT structurally cannot:
+//
+//   - that *compilation* completes, in the crate that owns the fix, with no dbt project
+//     or integration harness needed;
+//   - that a malformed call does not poison other templates (the panic was at compile
+//     time, so one bad call took down the whole project);
+//   - well-formed argument shapes, including the kwarg form, which reaches a different
+//     arm of the span-extraction match than a positional literal does. The SLT cannot
+//     cover these because Mantle can't resolve a ref/source target in that fixture.
+// ---------------------------------------------------------------------------
+
+/// A `ref()` / `source()` stand-in that rejects a bad argument count the way dbt's real
+/// implementations do (`ResolveRefFunction::call` returns an `InvalidOperation` for an
+/// empty `args`). Only the error *kind* is asserted here — the exact wording is the
+/// SLT's job.
+fn arity_checked_ref_like(args: &[Value]) -> Result<Value, minijinja::Error> {
+    if args.is_empty() || args.len() > 3 {
+        return Err(minijinja::Error::new(
+            ErrorKind::InvalidOperation,
+            "invalid number of arguments",
+        ));
+    }
+    let mut parser = ArgParser::new(args, None);
+    Ok(Value::from(format!(
+        "resolved({})",
+        parser.get::<String>("name").unwrap_or_default()
+    )))
+}
+
+fn env_with_arity_checked_ref() -> Environment<'static> {
+    let mut env = Environment::new();
+    env.add_function("ref", arity_checked_ref_like);
+    env.add_function("source", arity_checked_ref_like);
+    env
+}
+
+#[test]
+fn test_zero_argument_ref_compiles_without_panicking() {
+    // Compilation alone is the regression: this panicked at `&c.args[0]`.
+    let env = Environment::new();
+    env.template_from_str(r#"{{ ref() }}"#)
+        .expect("zero-argument ref() must compile, then fail at call time");
+}
+
+#[test]
+fn test_zero_argument_source_compiles_without_panicking() {
+    // Same, for the `c.args.last().unwrap()` branch.
+    let env = Environment::new();
+    env.template_from_str(r#"{{ source() }}"#)
+        .expect("zero-argument source() must compile, then fail at call time");
+}
+
+#[test]
+fn test_zero_argument_ref_and_source_error_at_call_time() {
+    let env = env_with_arity_checked_ref();
+
+    for template in [r#"{{ ref() }}"#, r#"{{ source() }}"#] {
+        let err = env
+            .render_str(template, context! {}, &[])
+            .expect_err("must be an error, not a panic");
+        assert_eq!(
+            err.kind(),
+            ErrorKind::InvalidOperation,
+            "unexpected error kind for {template}: {err}"
+        );
+    }
+}
+
+#[test]
+fn test_zero_argument_ref_does_not_break_other_templates() {
+    // The panic was at compile time, so one malformed call took down every other node in
+    // the project. Compiling the bad template must not affect a valid one.
+    let env = env_with_arity_checked_ref();
+
+    assert!(env.render_str(r#"{{ ref() }}"#, context! {}, &[]).is_err());
+    assert_eq!(
+        env.render_str(r#"{{ ref('my_model') }}"#, context! {}, &[])
+            .unwrap(),
+        "resolved(my_model)"
+    );
+}
+
+#[test]
+fn test_ref_and_source_with_arguments_still_resolve() {
+    // Guards the fix itself: span extraction must still reach the referenced literal for
+    // well-formed calls. `ref` reads the first positional argument, `source` the last.
+    // `ref(name=...)` is a kwarg, not `CallArg::Pos`, so it exercises the fallback arm.
+    let env = env_with_arity_checked_ref();
+
+    for template in [
+        r#"{{ ref('my_model') }}"#,
+        r#"{{ ref('my_package', 'my_model') }}"#,
+        r#"{{ ref(name='my_model') }}"#,
+        r#"{{ source('my_source', 'my_table') }}"#,
+    ] {
+        env.render_str(template, context! {}, &[])
+            .unwrap_or_else(|e| panic!("{template} should render, got {e}"));
+    }
+}

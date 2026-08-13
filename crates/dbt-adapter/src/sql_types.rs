@@ -773,8 +773,12 @@ pub mod postgres {
             DataType::Time64(TimeUnit::Microsecond) => out.push_str("time without time zone"),
             DataType::Time64(TimeUnit::Nanosecond) => out.push_str("time without time zone"),
             DataType::Interval(_) => out.push_str("interval"),
-            DataType::Binary => out.push_str("binary"),
-            DataType::Utf8 | DataType::Utf8View => out.push_str("character varying"),
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
+                out.push_str("binary")
+            }
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+                out.push_str("character varying")
+            }
             DataType::List(_) => out.push_str("array"),
             DataType::Dictionary(key, value)
                 if key.as_ref() == &DataType::UInt16 && value.as_ref() == &DataType::Utf8 =>
@@ -836,7 +840,9 @@ pub mod clickhouse {
             DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
                 rendered.push_str("String")
             }
-            DataType::Binary | DataType::LargeBinary => rendered.push_str("String"),
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
+                rendered.push_str("String")
+            }
             DataType::Date32 | DataType::Date64 => rendered.push_str("Date32"),
             DataType::Timestamp(TimeUnit::Second, _) => rendered.push_str("DateTime"),
             DataType::Timestamp(TimeUnit::Millisecond, _) => rendered.push_str("DateTime64(3)"),
@@ -920,8 +926,12 @@ pub mod fabric {
                     "INTERVAL is not supported in Microsoft Fabric",
                 ));
             }
-            DataType::Binary => out.push_str("VARBINARY(MAX)"),
-            DataType::Utf8 | DataType::Utf8View => out.push_str(FABRIC_MAX_VARCHAR_TYPE),
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
+                out.push_str("VARBINARY(MAX)")
+            }
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+                out.push_str(FABRIC_MAX_VARCHAR_TYPE)
+            }
 
             DataType::List(_) => {
                 return Err(AdapterError::new(
@@ -1103,19 +1113,27 @@ pub fn var_size(adapter_type: AdapterType, data_type: &DataType) -> Option<usize
     match (adapter_type, data_type) {
         // Strings: Redshift wants a length; persist it in char_size
         // TODO(jason): We need to report the correct size and not just a default
-        (Redshift, DataType::Utf8 | DataType::Utf8View) => max_varchar_size(Redshift),
-        // For VARCHAR types, no explicit size in Snowflake unless specified
-        (Snowflake, DataType::Utf8 | DataType::Utf8View) => None,
-        // XXX: need to think about the defaults for these adapters
-        (Postgres | Bigquery | Databricks | Salesforce, DataType::Utf8 | DataType::Utf8View) => {
-            None
+        (Redshift, DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View) => {
+            max_varchar_size(Redshift)
         }
+        // For VARCHAR types, no explicit size in Snowflake unless specified
+        (Snowflake, DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View) => None,
+        // XXX: need to think about the defaults for these adapters
+        (
+            Postgres | Bigquery | Databricks | Salesforce,
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View,
+        ) => None,
 
         // Bytes
         // TODO(jason): We need to report the correct size and not just a default
-        (Redshift, DataType::Binary) => max_varbinary_size(Redshift),
+        (Redshift, DataType::Binary | DataType::LargeBinary | DataType::BinaryView) => {
+            max_varbinary_size(Redshift)
+        }
         // XXX: need to think about the defaults for these adapters
-        (Snowflake | Postgres | Bigquery | Databricks | Salesforce, DataType::Binary) => None,
+        (
+            Snowflake | Postgres | Bigquery | Databricks | Salesforce,
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView,
+        ) => None,
 
         // Snowflake: For timestamp/date/time types, extract precision if available
         (Snowflake, dt) if snowflake::is_time(dt).is_yes() => {

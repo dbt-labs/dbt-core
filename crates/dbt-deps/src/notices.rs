@@ -5,7 +5,6 @@ use dbt_common::ErrorCode;
 use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_schemas::schemas::packages::{DbtPackageEntry, DbtPackages, DbtPackagesLock};
 
-use crate::context::DepsOperationContext;
 use crate::types::HubPinnedPackage;
 use crate::utils::scrub_package_name_secret_env_vars;
 
@@ -85,8 +84,7 @@ impl PackageNotice {
         self.kind.category()
     }
 
-    pub(crate) fn emit(&self, ctx: &DepsOperationContext<'_>) {
-        let reporter = ctx.io.status_reporter.as_ref();
+    pub(crate) fn emit(&self) {
         let package = self.key.as_str();
         match &self.kind {
             PackageNoticeKind::HubRedirect {
@@ -105,7 +103,7 @@ impl PackageNotice {
                     ),
                     (None, None) => return,
                 };
-                emit_warn_log_message(ErrorCode::PackageRedirectDeprecation, msg, reporter);
+                emit_warn_log_message(ErrorCode::PackageRedirectDeprecation, msg);
             }
             PackageNoticeKind::HubDeprecated => {
                 emit_warn_log_message(
@@ -113,7 +111,6 @@ impl PackageNotice {
                     format!(
                         "Package '{package}' has been deprecated. Consider finding an alternative package."
                     ),
-                    reporter,
                 );
             }
             PackageNoticeKind::HubVersionCompat(kind) => {
@@ -128,7 +125,7 @@ impl PackageNotice {
                          This package may not be compatible with your dbt version."
                     ),
                 };
-                emit_warn_log_message(ErrorCode::PackageVersionMismatch, msg, reporter);
+                emit_warn_log_message(ErrorCode::PackageVersionMismatch, msg);
             }
             PackageNoticeKind::HubUpdateAvailable { version, latest } => {
                 emit_info_log_message(format!(
@@ -141,7 +138,6 @@ impl PackageNotice {
                     format!(
                         "Detected secret env var in {package}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
                     ),
-                    reporter,
                 );
             }
             PackageNoticeKind::DuplicatePackageName => {
@@ -149,9 +145,8 @@ impl PackageNotice {
                     ErrorCode::DepsDuplicatePackage,
                     format!(
                         "Duplicate package name '{package}' found in dependencies. Keeping the first occurrence. \
-                         This will be an error in a future version of Fusion."
+                     This will be an error in a future version of Fusion."
                     ),
-                    reporter,
                 );
             }
         }

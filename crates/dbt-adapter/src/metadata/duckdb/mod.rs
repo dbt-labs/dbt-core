@@ -169,10 +169,10 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let table_names = relations
+        let keys: Vec<(String, String)> = relations
             .iter()
-            .map(|relation| relation.semantic_fqn())
-            .collect::<Vec<_>>();
+            .map(|relation| (relation.semantic_fqn(), relation.render_self_as_str()))
+            .collect();
 
         let factory = Box::new(AdapterConnectionFactory::new(
             self.adapter.engine().clone(),
@@ -182,11 +182,12 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
-                          table_name: &String|
+                          key: &(String, String)|
               -> AdapterResult<Arc<Schema>> {
+            let (_, rendered) = key;
             // Use DESCRIBE to get table schema
             // DuckDB's DESCRIBE returns: column_name, column_type, null, key, default, extra
-            let sql = format!("DESCRIBE {};", &table_name);
+            let sql = format!("DESCRIBE {};", rendered);
             let mut ctx = QueryCtx::default().with_desc("Get table schema");
             if let Some(node_id) = unique_id.clone() {
                 ctx = ctx.with_node_id(&node_id);
@@ -202,15 +203,16 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         };
 
         let reduce_f = |acc: &mut Acc,
-                        table_name: String,
+                        key: (String, String),
                         schema: AdapterResult<Arc<Schema>>|
          -> Result<(), Cancellable<AdapterError>> {
-            acc.insert(table_name, schema);
+            let (semantic_fqn, _) = key;
+            acc.insert(semantic_fqn, schema);
             Ok(())
         };
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        map_reduce.run(Arc::new(table_names), token)
+        map_reduce.run(Arc::new(keys), token)
     }
 
     fn list_relations_schemas_by_patterns_inner(

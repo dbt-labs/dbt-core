@@ -19,11 +19,14 @@ pub mod data_type; // TODO: rename to data_types
 mod decimal;
 pub mod grouper;
 pub mod hashers;
+pub mod join;
 mod print_table;
 mod row;
 mod rows;
 mod table;
 mod table_set;
+/// Fixtures for testing within this crate and by users of it.
+pub mod test_fixtures;
 
 pub(crate) mod flat_record_batch;
 mod vec_of_rows;

@@ -134,6 +134,28 @@ impl DbtCatalogs {
             .any(|d| d == db))
     }
 
+    /// Returns `(catalog_name, catalog_database)` for every v2 `iceberg_rest`
+    /// catalog that declares a Snowflake `catalog_database` (the linked
+    /// database write support is gated on).
+    pub fn iceberg_rest_catalog_databases(&self) -> FsResult<Vec<(String, String)>> {
+        use super::dbt_catalogs_v2::V2CatalogType;
+
+        let view = self.view_v2()?;
+        Ok(view
+            .catalogs
+            .iter()
+            .filter(|c| c.catalog_type == V2CatalogType::IcebergRest)
+            .filter_map(|c| {
+                let db = c
+                    .config_block("snowflake")?
+                    .get(yml::Value::from("catalog_database"))?
+                    .as_str()?
+                    .trim();
+                (!db.is_empty()).then(|| (c.name.to_owned(), db.to_owned()))
+            })
+            .collect())
+    }
+
     // Both is_v2_catalog and is_v2_catalog_database share a single
     // view_v2() parse so that whichever fires first pays the cost once for
     // both caches. This couples their initialization but avoids a redundant
@@ -2952,5 +2974,64 @@ catalogs:
         );
         assert!(c.is_v2_catalog("uc").unwrap());
         assert!(c.is_v2_catalog_database("CD").unwrap());
+    }
+
+    #[test]
+    fn iceberg_rest_catalog_databases_collects_only_iceberg_rest() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: mdls_horizon
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "DBT_COMPUTE_STAGING"
+  - name: glue_cat
+    type: glue
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "GLUE_DB"
+"#,
+        );
+        let dbs = c.iceberg_rest_catalog_databases().unwrap();
+        assert_eq!(
+            dbs,
+            vec![(
+                "mdls_horizon".to_string(),
+                "DBT_COMPUTE_STAGING".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn iceberg_rest_catalog_databases_empty_when_no_snowflake_block() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: mdls_horizon
+    type: iceberg_rest
+    table_format: iceberg
+    config: {}
+"#,
+        );
+        assert!(c.iceberg_rest_catalog_databases().unwrap().is_empty());
+    }
+
+    #[test]
+    fn iceberg_rest_catalog_databases_empty_when_no_rest_catalogs() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: sf_native
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: ev
+"#,
+        );
+        assert!(c.iceberg_rest_catalog_databases().unwrap().is_empty());
     }
 }

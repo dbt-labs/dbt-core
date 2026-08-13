@@ -1,11 +1,13 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
 use dbt_adapter_core::AdapterType;
 use dbt_common::error::AbstractLocation;
-use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
@@ -60,10 +62,10 @@ pub async fn resolve_exposures(
         is_dependency,
         || {
             init_project_config(
-                &args.io,
                 &package.dbt_project.exposures,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?;
@@ -91,7 +93,7 @@ pub async fn resolve_exposures(
                     "Exposure name '{}' can only contain letters, numbers, and underscores.",
                     exposure_name
                 );
-                emit_error_log_from_fs_error(&e, args.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
             }
 
             let unique_id = format!("exposure.{}.{}", &package_name, exposure_name);
@@ -107,7 +109,6 @@ pub async fn resolve_exposures(
             let raw_properties_yml_config = extract_config_map(&schema_value);
             // ExposureProperties is for the yaml schema
             let exposure: ExposureProperties = into_typed_with_jinja(
-                &args.io,
                 schema_value,
                 false,
                 env,
@@ -142,7 +143,6 @@ pub async fn resolve_exposures(
                     &root_package.dbt_project.name,
                     fqn.clone(),
                     &mpe.relative_path.to_string_lossy(),
-                    &args.io,
                     args.static_analysis,
                 )?
             } else {
@@ -177,8 +177,9 @@ pub async fn resolve_exposures(
                     raw_code: None,
                     tags: exposure_properties_config
                         .tags
+                        .inner()
                         .clone()
-                        .map(|tags| tags.into())
+                        .map(Into::into)
                         .unwrap_or_default(),
                     classifiers: Default::default(),
                     meta: exposure_properties_config.meta.clone().unwrap_or_default(),
@@ -243,7 +244,6 @@ pub fn resolve_yaml_depends_on(
     root_project_name: &str,
     fqn: Vec<String>,
     relative_path: &str,
-    io_args: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
 ) -> FsResult<(Vec<DbtRef>, Vec<DbtSourceWrapper>, Vec<Vec<String>>)> {
     let exposure_config: ExposureConfig = exposure_config.clone().into();
@@ -268,13 +268,12 @@ pub fn resolve_yaml_depends_on(
             fqn.clone(),
             package_name,
             root_project_name,
-            DEFAULT_DBT_QUOTING,                   // package_quoting
-            Arc::new(DbtRuntimeConfig::default()), // runtime_config
+            DEFAULT_DBT_QUOTING,
+            Arc::new(DbtRuntimeConfig::default()),
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from(relative_path),
             &PathBuf::new(),
-            io_args,
             global_static_analysis,
         ));
 

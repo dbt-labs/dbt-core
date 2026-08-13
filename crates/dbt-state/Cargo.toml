@@ -38,6 +38,7 @@ crossbeam-queue = { workspace = true }
 dashmap = { workspace = true }
 dirs = { workspace = true }
 gcloud-auth = { workspace = true }
+glob = { workspace = true }
 jsonwebtoken = { workspace = true }
 md5 = { workspace = true }
 minijinja = { workspace = true }

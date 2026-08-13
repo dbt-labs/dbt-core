@@ -19,7 +19,7 @@ use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, 
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_loader::internal_macro_package_names;
-use dbt_schema_store::{CanonicalFqn, SchemaStoreTrait};
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::relations::base::ComponentName;
@@ -105,7 +105,6 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             let columns = update_node_columns(
                 resolved_state.adapter_type,
                 type_ops_factory,
-                io,
                 &model.__common_attr__,
                 &model.__base_attr__.columns,
                 entry.inner(),
@@ -171,7 +170,6 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             let columns = update_node_columns(
                 resolved_state.adapter_type,
                 type_ops_factory,
-                io,
                 &seed.__common_attr__,
                 &seed.__base_attr__.columns,
                 entry.inner(),
@@ -190,7 +188,6 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             let columns = update_node_columns(
                 resolved_state.adapter_type,
                 type_ops_factory,
-                io,
                 &source.__common_attr__,
                 &source.__base_attr__.columns,
                 entry.inner(),
@@ -366,7 +363,6 @@ pub fn update_resolved_state_node_columns(
 pub fn update_node_columns(
     adapter_type: AdapterType,
     type_ops_factory: &dyn TypeOpsFactory,
-    io: &IoArgs,
     common_attr: &CommonAttributes,
     columns: &[DbtColumnRef],
     schema: &SchemaRef,
@@ -412,7 +408,6 @@ pub fn update_node_columns(
                             "Column '{}' in node '{}' has a type mismatch. Overriding '{}' with '{}'.",
                             column_name, common_attr.unique_id, existing_type, column_type
                         ),
-                        io.status_reporter.as_ref(),
                     );
                 }
             }
@@ -503,7 +498,6 @@ pub fn get_catalog_schemas(
 
 /// Registers the schemas in the database.
 pub async fn register_catalog_schemas_remote(
-    io: &IoArgs,
     adapter: &Arc<Adapter>,
     state: &State<'_, '_>,
     catalog_schemas: Vec<(String, String, String)>,
@@ -517,7 +511,6 @@ pub async fn register_catalog_schemas_remote(
                 "Cannot register databases or schemas in the remote. Adapter '{}' does not support metadata operations.",
                 adapter.adapter_type()
             ),
-            io.status_reporter.as_ref(),
         );
         return Ok(());
     };
@@ -529,11 +522,7 @@ pub async fn register_catalog_schemas_remote(
                 "Failed to create schema '{schema}' in database '{catalog}' in remote for {unique_id}: {e}"
             );
 
-            emit_warn_log_message(
-                ErrorCode::FailedToCreateDatabase,
-                err_string,
-                io.status_reporter.as_ref(),
-            );
+            emit_warn_log_message(ErrorCode::FailedToCreateDatabase, err_string);
         }
     }
 
@@ -639,66 +628,6 @@ pub fn filter_missing_schemas(
     }
 
     Ok(missing_catalog_schemas)
-}
-
-pub fn mirror_schema_to_frontier_cache(
-    io_args_out_dir: &Path,
-    canonical_fqn: &CanonicalFqn,
-    unique_id: &str,
-    schema_store: &dyn SchemaStoreTrait,
-) -> FsResult<()> {
-    // For the ParquetCache store format, promote the Selected entry directly
-    // in the in-memory cache; no per-file copy is needed.
-    schema_store
-        .promote_to_frontier(canonical_fqn)
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to promote schema to frontier cache: {}",
-                e
-            )
-        })?;
-
-    // For legacy per-file formats (StoreFormat::Parquet), copy the analyzed
-    // parquet file to the sourced_remote path. This is a no-op for ParquetCache
-    // because the analyzed file no longer exists on disk.
-    let schema_root = io_args_out_dir.join("schemas");
-    let analyzed_path = schema_root
-        .join("analyzed")
-        .join(unique_id)
-        .join("output.parquet");
-    if !analyzed_path.exists() {
-        return Ok(());
-    }
-
-    let frontier_path = schema_root
-        .join("sourced_remote")
-        .join("internal")
-        .join(canonical_fqn.catalog().as_str())
-        .join(canonical_fqn.schema().as_str())
-        .join(canonical_fqn.table().as_str())
-        .join("output.parquet");
-    if let Some(parent) = frontier_path.parent() {
-        stdfs::create_dir_all(parent).map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to create schema cache directory {}: {}",
-                parent.display(),
-                e
-            )
-        })?;
-    }
-
-    stdfs::copy(&analyzed_path, &frontier_path).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to mirror seed schema from {} to {}: {}",
-            analyzed_path.display(),
-            frontier_path.display(),
-            e
-        )
-    })?;
-    Ok(())
 }
 
 pub fn typecheck_macros(

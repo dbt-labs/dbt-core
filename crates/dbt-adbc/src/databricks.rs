@@ -10,6 +10,8 @@ pub mod auth_type {
     pub const PAT: &str = "pat";
     /// External Browser authentication
     pub const EXTERNAL_BROWSER: &str = "external-browser";
+    /// Azure service principal (Microsoft Entra ID) authentication
+    pub const AZURE_CLIENT_SECRET: &str = "azure-client-secret";
 }
 
 /// HTTP Path to connect
@@ -32,6 +34,13 @@ pub const CLIENT_ID: &str = "databricks.oauth.client_id";
 pub const CLIENT_SECRET: &str = "databricks.oauth.client_secret";
 /// Timeout for U2M OAuth
 pub const OAUTH_TIMEOUT: &str = "databricks.oauth.external_browser.timeout";
+
+/// The Azure service principal's (Microsoft Entra ID) client ID
+pub const AZURE_CLIENT_ID: &str = "databricks.azure.client_id";
+/// The Azure service principal's (Microsoft Entra ID) client secret
+pub const AZURE_CLIENT_SECRET: &str = "databricks.azure.client_secret";
+/// The Azure tenant ID (optional; discovered from the workspace when absent)
+pub const AZURE_TENANT_ID: &str = "databricks.azure.tenant_id";
 
 /// TLS/SSL options
 pub const SSL_MODE: &str = "databricks.ssl_mode";

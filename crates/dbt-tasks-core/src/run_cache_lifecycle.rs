@@ -66,12 +66,7 @@ async fn initialize_run_cache_service(
     adapter_type: AdapterType,
     cloud_config: Option<&ResolvedCloudConfig>,
 ) -> FsResult<RunCacheServiceLifecycle> {
-    if !should_initialize_run_cache_service(
-        arg,
-        execute,
-        RunCacheServiceConfig::is_explicitly_requested_from_env(),
-        adapter_type,
-    ) {
+    if !should_initialize_run_cache_service(arg, execute, adapter_type) {
         increment_metric(
             FusionMetricKey::RunCacheService(RunCacheServiceMetricKey::Disabled),
             1,
@@ -105,7 +100,6 @@ async fn initialize_run_cache_service(
                     "dbt State service config failed: {}; executing normally",
                     format_error_chain(&err)
                 ),
-                None,
             );
             return Ok(RunCacheServiceLifecycle {
                 requested: true,
@@ -163,13 +157,8 @@ async fn initialize_run_cache_service(
                         "dbt State service client initialization failed: {}; executing normally",
                         format_error_chain(&err)
                     ),
-                    None,
                 );
-                return Ok(RunCacheServiceLifecycle {
-                    requested: false,
-                    config: Some(config),
-                    client: None,
-                });
+                return Ok(disconnected_run_cache_service(config));
             }
         };
 
@@ -200,7 +189,6 @@ async fn initialize_run_cache_service(
             emit_warn_log_message(
                 ErrorCode::StateServiceWarn,
                 "dbt State service does not support this client version; executing normally",
-                None,
             );
             Ok(RunCacheServiceLifecycle {
                 requested: true,
@@ -218,7 +206,6 @@ async fn initialize_run_cache_service(
                 emit_warn_log_message(
                     ErrorCode::StateServiceWarn,
                     "dbt State service validation was skipped; executing normally",
-                    None,
                 );
             }
             Ok(RunCacheServiceLifecycle {
@@ -227,6 +214,16 @@ async fn initialize_run_cache_service(
                 client: None,
             })
         }
+    }
+}
+
+/// dbt State and the local cache path are mutually exclusive, so a client that failed
+/// to connect must leave the service unrequested for the local path to stay active.
+fn disconnected_run_cache_service(config: RunCacheServiceConfig) -> RunCacheServiceLifecycle {
+    RunCacheServiceLifecycle {
+        requested: false,
+        config: Some(config),
+        client: None,
     }
 }
 
@@ -255,12 +252,9 @@ where
 fn should_initialize_run_cache_service(
     arg: &RunTasksArgs,
     execute: Execute,
-    env_requested: bool,
     adapter_type: AdapterType,
 ) -> bool {
-    execute == Execute::Remote
-        && adapter_supports_dbt_state(adapter_type)
-        && (arg.run_cache_service || env_requested)
+    execute == Execute::Remote && adapter_supports_dbt_state(adapter_type) && arg.run_cache_service
 }
 
 /// Returns true when the adapter is supported by the dbt State service.
@@ -299,14 +293,30 @@ mod tests {
     use dbt_state::service_client::{
         ClientVersionStatus, RunCacheServiceClient, RunCacheServiceError,
     };
+    use dbt_state::service_config::RunCacheServiceConfig;
 
     use super::{
-        RunTasksArgs, adapter_supports_dbt_state, should_initialize_run_cache_service,
-        validate_client_version_for_initialization,
+        RunTasksArgs, adapter_supports_dbt_state, disconnected_run_cache_service,
+        should_initialize_run_cache_service, validate_client_version_for_initialization,
     };
 
     fn args() -> RunTasksArgs {
         RunTasksArgs::default()
+    }
+
+    fn requested_args() -> RunTasksArgs {
+        let mut args = args();
+        args.run_cache_service = true;
+        args
+    }
+
+    #[test]
+    fn client_init_failure_leaves_service_unrequested() {
+        let lifecycle = disconnected_run_cache_service(RunCacheServiceConfig::disabled());
+
+        assert!(!lifecycle.requested);
+        assert!(lifecycle.config.is_some());
+        assert!(lifecycle.client.is_none());
     }
 
     #[test]
@@ -314,30 +324,15 @@ mod tests {
         assert!(!should_initialize_run_cache_service(
             &args(),
             Execute::Remote,
-            false,
-            AdapterType::Snowflake,
-        ));
-    }
-
-    #[test]
-    fn lifecycle_requests_service_from_explicit_env_opt_in() {
-        assert!(should_initialize_run_cache_service(
-            &args(),
-            Execute::Remote,
-            true,
             AdapterType::Snowflake,
         ));
     }
 
     #[test]
     fn lifecycle_requests_service_from_cli_flag() {
-        let mut args = args();
-        args.run_cache_service = true;
-
         assert!(should_initialize_run_cache_service(
-            &args,
+            &requested_args(),
             Execute::Remote,
-            false,
             AdapterType::Snowflake,
         ));
     }
@@ -345,38 +340,17 @@ mod tests {
     #[test]
     fn lifecycle_requires_remote_compute() {
         assert!(!should_initialize_run_cache_service(
-            &args(),
+            &requested_args(),
             Execute::Sidecar,
-            true,
-            AdapterType::Snowflake,
-        ));
-
-        let mut args = args();
-        args.run_cache_service = true;
-
-        assert!(!should_initialize_run_cache_service(
-            &args,
-            Execute::Sidecar,
-            false,
             AdapterType::Snowflake,
         ));
     }
 
     #[test]
     fn lifecycle_requires_supported_adapter() {
-        let mut requested_args = args();
-        requested_args.run_cache_service = true;
-
         assert!(!should_initialize_run_cache_service(
-            &requested_args,
+            &requested_args(),
             Execute::Remote,
-            false,
-            AdapterType::DuckDB,
-        ));
-        assert!(!should_initialize_run_cache_service(
-            &args(),
-            Execute::Remote,
-            true,
             AdapterType::DuckDB,
         ));
     }

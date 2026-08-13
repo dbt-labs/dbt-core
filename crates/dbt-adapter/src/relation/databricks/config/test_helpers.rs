@@ -36,8 +36,8 @@ pub(crate) struct TestModelConfig {
     pub partition_by: Vec<String>,
     pub persist_column_comments: bool,
     pub persist_relation_comments: bool,
-    // This will be used once we actually implement query
-    #[expect(dead_code)]
+    /// The model's compiled SQL, which the `query` component diffs against the applied view
+    /// definition.
     pub query: Option<String>,
     pub relation_comment: Option<String>,
     pub tags: IndexMap<String, String>,
@@ -130,6 +130,10 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
         },
         __adapter_attr__: adapter_attr,
         __base_attr__: base_attrs,
+        __model_attr__: DbtModelAttr {
+            compiled_code: cfg.query,
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

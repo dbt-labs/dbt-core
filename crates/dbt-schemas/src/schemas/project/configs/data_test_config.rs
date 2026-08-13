@@ -7,27 +7,26 @@ use serde::{Deserialize, Serialize};
 type YmlValue = dbt_yaml::Value;
 use indexmap::IndexMap;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use super::omissible_utils::handle_omissible_override;
-use crate::default_to;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{
     ClusterConfig, DbtMaterialization, DbtQuoting, Schedule, Severity, StoreFailuresAs,
 };
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::project::configs::common::{
-    WarehouseSpecificNodeConfig, default_meta_and_tags, default_quoting,
-};
+use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
+use crate::schemas::project::configs::config_merge::Tags;
 use crate::schemas::properties::DataTestState;
+use dbt_proc_macros::DefaultTo;
 use dbt_proc_macros::Resolvable;
 
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PartitionsConfig, PrimaryKeyConfig, QueryTag, StringOrArrayOfStrings,
-    StringOrInteger, bool_or_string_bool, f64_or_string_f64, hours_to_expiration_or_string,
-    u64_or_string_u64,
+    StringOrInteger, bool_or_string_bool, f64_or_string_f64,
+    hours_to_expiration_or_string_omissible, u64_or_string_u64,
 };
 
 pub const DEFAULT_DATA_TEST_ERROR_IF: &str = "!= 0";
@@ -155,9 +154,9 @@ pub struct ProjectDataTestConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "hours_to_expiration_or_string"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<StringOrInteger>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -332,10 +331,104 @@ impl TypedRecursiveConfig for ProjectDataTestConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.alias.is_some()
+            || self.compute.is_some()
+            || self.database.is_some()
+            || self.enabled.is_some()
+            || self.error_if.is_some()
+            || self.fail_calc.is_some()
+            || self.full_refresh.is_some()
+            || self.group.is_some()
+            || self.limit.is_some()
+            || self.meta.is_some()
+            || self.schema.is_present()
+            || self.severity.is_some()
+            || self.store_failures.is_some()
+            || self.store_failures_as.is_some()
+            || self.sql_header.is_some()
+            || self.tags.is_some()
+            || self.warn_if.is_some()
+            || self.where_.is_some()
+            || self.quoting.is_some()
+            || self.static_analysis.is_some()
+            || self.adapter_properties.is_some()
+            || self.external_volume.is_some()
+            || self.base_location_root.is_some()
+            || self.base_location_subpath.is_some()
+            || self.target_lag.is_some()
+            || self.snowflake_initialization_warehouse.is_some()
+            || self.snowflake_warehouse.is_some()
+            || self.refresh_warehouse.is_some()
+            || self.immutable_where.is_some()
+            || self.refresh_mode.is_some()
+            || self.initialize.is_some()
+            || self.scheduler.is_some()
+            || self.tmp_relation_type.is_some()
+            || self.query_tag.is_some()
+            || self.table_tag.is_some()
+            || self.row_access_policy.is_some()
+            || self.automatic_clustering.is_some()
+            || self.copy_grants.is_some()
+            || self.copy_tags.is_some()
+            || self.secure.is_some()
+            || self.transient.is_some()
+            || self.partition_by.is_some()
+            || self.cluster_by.is_some()
+            || self.hours_to_expiration.is_present()
+            || self.job_execution_timeout_seconds.is_some()
+            || self.reservation.is_some()
+            || self.labels.is_some()
+            || self.labels_from_meta.is_some()
+            || self.kms_key_name.is_some()
+            || self.require_partition_filter.is_some()
+            || self.partition_expiration_days.is_some()
+            || self.grant_access_to.is_some()
+            || self.partitions.is_some()
+            || self.enable_refresh.is_some()
+            || self.refresh_interval_minutes.is_some()
+            || self.max_staleness.is_some()
+            || self.file_format.is_some()
+            || self.catalog_name.is_some()
+            || self.location_root.is_some()
+            || self.tblproperties.is_some()
+            || self.include_full_name_in_path.is_some()
+            || self.liquid_clustered_by.is_some()
+            || self.auto_liquid_cluster.is_some()
+            || self.clustered_by.is_some()
+            || self.buckets.is_some()
+            || self.catalog.is_some()
+            || self.databricks_tags.is_some()
+            || self.compression.is_some()
+            || self.databricks_compute.is_some()
+            || self.target_alias.is_some()
+            || self.source_alias.is_some()
+            || self.matched_condition.is_some()
+            || self.not_matched_condition.is_some()
+            || self.not_matched_by_source_condition.is_some()
+            || self.not_matched_by_source_action.is_some()
+            || self.merge_with_schema_evolution.is_some()
+            || self.skip_matched_step.is_some()
+            || self.skip_not_matched_step.is_some()
+            || self.auto_refresh.is_some()
+            || self.backup.is_some()
+            || self.bind.is_some()
+            || self.dist.is_some()
+            || self.sort.is_some()
+            || self.sort_type.is_some()
+            || self.as_columnstore.is_some()
+            || self.table_type.is_some()
+            || self.indexes.is_some()
+            || self.unlogged.is_some()
+            || self.schedule.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, Default, DbtSchema, PartialEq,
+)]
 pub struct DataTestConfig {
     pub alias: Option<String>,
     pub compute: Option<ComputeArg>,
@@ -355,7 +448,7 @@ pub struct DataTestConfig {
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
     pub limit: Option<i32>,
-    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
+    #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[resolved(promote, default = DEFAULT_DATA_TEST_SEVERITY.clone())]
     pub severity: Option<Severity>,
@@ -363,11 +456,8 @@ pub struct DataTestConfig {
     pub store_failures: Option<bool>,
     pub store_failures_as: Option<StoreFailuresAs>,
     pub sql_header: Option<String>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     #[resolved(promote, default = DEFAULT_DATA_TEST_WARN_IF.to_string())]
     pub warn_if: Option<String>,
     #[resolved(promote, expect = "quoting set by apply_package_defaults")]
@@ -405,7 +495,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             store_failures: config.store_failures,
             store_failures_as: config.store_failures_as,
             sql_header: config.sql_header,
-            tags: config.tags,
+            tags: Tags(config.tags),
             warn_if: config.warn_if,
             quoting: config.quoting,
             where_: config.where_,
@@ -513,6 +603,27 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 // data test is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -536,7 +647,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             store_failures: config.store_failures,
             store_failures_as: config.store_failures_as,
             sql_header: config.sql_header,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             warn_if: config.warn_if,
             quoting: config.quoting,
             where_: config.where_,
@@ -693,81 +804,33 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
     }
 
     fn default_to(&mut self, parent: &DataTestConfig) {
-        let DataTestConfig {
-            alias,
-            compute,
-            database,
-            enabled,
-            error_if,
-            fail_calc,
-            full_refresh,
-            group,
-            limit,
-            meta,
-            schema,
-            severity,
-            store_failures,
-            store_failures_as,
-            sql_header,
-            tags,
-            warn_if,
-            quoting,
-            where_,
-            static_analysis,
-            materialized,
-            state,
-            // Adapter specific configs
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
-
-        // Handle adapter-specific configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-        // Protect the mutable refs from being used in the default_to macro
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
-        // Unlike other node configs where schema: null means "use target schema directly",
-        // DataTestConfig has a non-null default ("dbt_test__audit") applied during finalization.
-        // Omissible lets us distinguish an explicit null (opt out of the suffix) from an absent
-        // key (inherit the default). handle_omissible_override preserves that signal across
-        // config inheritance, so Present(None) from a child wins over a parent's Present(Some(_)).
-        #[allow(unused, clippy::let_unit_value)]
-        let schema = handle_omissible_override(schema, &parent.schema);
-
-        default_to!(
-            parent,
-            [
-                enabled,
-                compute,
-                store_failures,
-                store_failures_as,
-                sql_header,
-                limit,
-                severity,
-                error_if,
-                warn_if,
-                fail_calc,
-                full_refresh,
-                alias,
-                database,
-                group,
-                where_,
-                static_analysis,
-                materialized,
-                state,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 
 impl ConfigKeys for DataTestConfig {
-    // The default implementation from the trait will handle
-    // extracting field names via serialization automatically
+    fn valid_field_names() -> HashSet<String> {
+        let default_instance = Self::default();
+        let serialized = dbt_yaml::to_value(&default_instance)
+            .expect("Failed to serialize DataTestConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, _) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    field_names.insert(key_str);
+                }
+            }
+        }
+
+        // Add known aliases that might not show up in serialization
+        field_names.insert("project".to_string()); // alias for database
+        field_names.insert("data_space".to_string()); // alias for database
+        field_names.insert("dataset".to_string()); // alias for schema
+
+        field_names
+    }
 }
 
 #[cfg(test)]
@@ -821,6 +884,7 @@ __warehouse_specific_config__: {}
             state: Some(DataTestState {
                 require_fresh_data_from: Some(UpdatesOn::All),
                 evaluate_volatile_sql: Some(true),
+                compare_unrendered_code: None,
             }),
             ..Default::default()
         };

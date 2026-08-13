@@ -47,6 +47,7 @@ message SubmitValuesRequest {
   optional int64 clone_time_travel_limit = 8;
   optional TableProperties clone_table_properties = 9;
   optional int64 clone_chain_depth_limit = 10;
+  optional DbtNodeState dbt_node_state = 11;
 }
 
 message SubmitSQLResponse {

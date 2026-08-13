@@ -29,9 +29,11 @@ dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }
 dbt-dag = { workspace = true }
 dbt-defer = { workspace = true }
+dbt-dist = { workspace = true }
 dbt-docs-server = { workspace = true }
 dbt-error = { workspace = true }
 dbt-features = { workspace = true }
+dbt-freshness = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-index-core = { workspace = true }
 dbt-init = { workspace = true }
@@ -44,9 +46,11 @@ dbt-parser = { workspace = true }
 dbt-scheduler = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
+dbt-state = { workspace = true }
 dbt-tasks-core = { workspace = true }
 dbt-tasks-sa = { workspace = true }
 dbt-telemetry = { workspace = true }
+dbt-vortex = { workspace = true }
 
 arrow = { workspace = true }
 astral-tokio-tar = { workspace = true }

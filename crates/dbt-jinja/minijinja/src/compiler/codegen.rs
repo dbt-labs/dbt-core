@@ -714,39 +714,52 @@ impl<'source> CodeGenerator<'source> {
                         typecheck_resolved_context,
                     ) => {
                         let mut attempts = Vec::new();
-                        if let Some(macro_qualified_name) = macro_namespace_template_resolver(
+                        let resolved_signature = macro_namespace_template_resolver(
                             typecheck_resolved_context,
                             function_registry.clone(),
                             macro_decl.name,
                             &mut attempts,
-                        ) {
-                            if let Some(signature) = function_registry.get(&macro_qualified_name) {
-                                if let Some(udf) =
-                                    signature.downcast_ref::<UserDefinedFunctionType>()
-                                {
-                                    if let Some(arg) = udf.args.get(i) {
-                                        let type_ = arg.type_.get_non_optional_type();
-                                        // the parameter has default value, so we need to exclude the none from arg type and check with the default
-                                        self.add(Instruction::LoadType(Value::from_object(type_)));
-                                        self.compile_expr(default)?;
-                                        self.add(Instruction::UnionType);
-                                    } else {
-                                        self.add(Instruction::LoadType(Value::from_object(
-                                            Type::Any { hard: false },
-                                        )));
-                                        self.compile_expr(default)?;
-                                        self.add(Instruction::UnionType);
-                                    }
-                                } else {
-                                    self.add(Instruction::LoadType(Value::from_object(
-                                        Type::Any { hard: false },
-                                    )));
-                                }
-                            } else {
-                                panic!(
-                                    "Function signature not found for macro {}",
-                                    macro_decl.name
-                                );
+                        )
+                        .and_then(|macro_qualified_name| {
+                            function_registry.get(&macro_qualified_name).cloned()
+                        });
+                        match resolved_signature.as_ref().and_then(|signature| {
+                            signature.downcast_ref::<UserDefinedFunctionType>()
+                        }) {
+                            Some(udf) => {
+                                let type_ = udf
+                                    .args
+                                    .get(i)
+                                    .map(|arg| arg.type_.get_non_optional_type())
+                                    .unwrap_or(Type::Any { hard: false });
+                                // the parameter has default value, so we need to exclude the none from arg type and check with the default
+                                self.add(Instruction::LoadType(Value::from_object(type_)));
+                                self.compile_expr(default)?;
+                                self.add(Instruction::UnionType);
+                            }
+                            None => {
+                                // No statically-known signature for this macro
+                                // (e.g. it has no docstring `funcsign` -- the
+                                // common case for most macros -- or, until
+                                // recently, `macro_namespace_template_resolver`
+                                // couldn't resolve a package macro's own
+                                // qualified name at all when typechecking it in
+                                // isolation without a `target_package_name`).
+                                // Fall back to `Any` for the declared type, but
+                                // still compile the default expression and
+                                // union it in -- omitting either one leaves
+                                // this argument's assignment with nothing to
+                                // pop off the stack (a stack underflow once
+                                // typechecking reaches it), and skipping
+                                // `compile_expr(default)` would also silently
+                                // stop the type checker from ever visiting
+                                // calls made inside the default expression
+                                // itself.
+                                self.add(Instruction::LoadType(Value::from_object(Type::Any {
+                                    hard: false,
+                                })));
+                                self.compile_expr(default)?;
+                                self.add(Instruction::UnionType);
                             }
                         }
                     }
@@ -1322,15 +1335,23 @@ impl<'source> CodeGenerator<'source> {
             ast::CallType::Function(name) => {
                 let arg_count = self.compile_call_args(&c.args, 0, caller, span)?;
                 let ref_or_source_span = if name == "ref" || name == "source" {
+                    // Purely diagnostic: the span of the referenced literal, so errors can
+                    // point at the name rather than the whole call.
+                    //
+                    // A zero-argument `ref()` / `source()` is invalid, but raising that is the
+                    // function's job at call time (it already does — see `ResolveRefFunction`
+                    // in dbt-jinja-utils), not codegen's. There is simply no argument here to
+                    // take a span from, so don't index blindly: `&c.args[0]` and
+                    // `c.args.last().unwrap()` both panicked, taking down compilation of every
+                    // other node in the project along with the malformed one.
                     let arg = if name == "ref" {
-                        &c.args[0]
+                        c.args.first()
                     } else {
-                        c.args.last().unwrap()
+                        c.args.last()
                     };
-                    if let ast::CallArg::Pos(ast::Expr::Const(c)) = arg {
-                        Some(c.span().into())
-                    } else {
-                        None
+                    match arg {
+                        Some(ast::CallArg::Pos(ast::Expr::Const(c))) => Some(c.span().into()),
+                        _ => None,
                     }
                 } else {
                     None
@@ -1360,11 +1381,22 @@ impl<'source> CodeGenerator<'source> {
                     Some(identifier_span) => identifier_span,
                     _ => span, // fallback to span
                 };
+                // Remember the receiver's name for plain variable receivers, so that
+                // calling a method on an undefined receiver can report which variable
+                // was undefined rather than just the method name. Only `Var` is
+                // captured: it is the common case and the only receiver whose written
+                // form is a single identifier, so there is no risk of naming a
+                // sub-expression the author did not write.
+                let receiver_name = match expr {
+                    ast::Expr::Var(var) => Some(var.id),
+                    _ => None,
+                };
                 self.add(Instruction::CallMethod(
                     name,
                     arg_count,
                     identifier_span.into(),
                     span.into(),
+                    receiver_name,
                 ));
             }
             ast::CallType::Object(expr) => {

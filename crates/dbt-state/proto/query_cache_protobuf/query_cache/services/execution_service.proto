@@ -72,6 +72,7 @@ message ValuesExecution {
   string values_hash = 4;
   map<string, string> semantic_extras = 5;
   map<string, string> labels = 6;
+  optional DbtNodeState dbt_node_state = 7;
 }
 
 message ExecutionOutcome {

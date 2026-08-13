@@ -247,7 +247,6 @@ fn persist_inner(
         test,
         test_config,
         column_name,
-        io_args,
         dependecy_package_name,
         suppress_deprecated_test_validation,
     )?;
@@ -402,7 +401,6 @@ fn get_test_details(
     test: &DataTests,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
-    io_args: &IoArgs,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
 ) -> FsResult<TestDetails> {
@@ -458,7 +456,6 @@ fn get_test_details(
                     &mk.arguments,
                     &mk.__deprecated_args_and_configs__,
                     &mk.config,
-                    io_args,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
                 )?;
@@ -481,7 +478,6 @@ fn get_test_details(
                     &inner.arguments,
                     &inner.__deprecated_args_and_configs__,
                     &inner.config,
-                    io_args,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
                 )?;
@@ -544,7 +540,6 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     arguments: &Verbatim<Option<dbt_yaml::Value>>,
     deprecated_args_and_configs: &Verbatim<BTreeMap<String, dbt_yaml::Value>>,
     existing_config: &Option<DataTestConfig>,
-    io_args: &IoArgs,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
 ) -> FsResult<KwargsExtractionResult> {
@@ -603,7 +598,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
         );
 
         if !suppress_deprecated_test_validation {
-            emit_strict_parse_error(&schema_error, dependency_package_name, io_args);
+            emit_strict_parse_error(*schema_error, dependency_package_name);
         }
     }
     for (key, value) in deprecated.clone() {
@@ -1778,13 +1773,10 @@ mod tests {
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
-        let io_args = IoArgs::default();
-
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &verbatim_wrapper,
             &empty_deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -2786,14 +2778,11 @@ mod tests {
         let arguments = Verbatim::from(Some(args_yaml));
         let deprecated = Verbatim::from(BTreeMap::new());
         let existing_config: Option<DataTestConfig> = None;
-        let io_args = IoArgs::default();
-
         // Act
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &arguments,
             &deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -2892,13 +2881,10 @@ mod tests {
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
-        let io_args = IoArgs::default();
-
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &verbatim_wrapper,
             &empty_deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -3042,13 +3028,10 @@ mod tests {
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
-        let io_args = IoArgs::default();
-
         let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             &verbatim_wrapper,
             &empty_deprecated,
             &existing_config,
-            &io_args,
             None,
             false,
         )
@@ -3435,12 +3418,10 @@ mod tests {
             source_name: None,
         };
 
-        let io_args = IoArgs::default();
         let details = get_test_details(
             &DataTests::String("not_null".to_string().into()),
             &test_config,
             None,
-            &io_args,
             None,
             false,
         )

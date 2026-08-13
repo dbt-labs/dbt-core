@@ -18,10 +18,10 @@ use serde::{Deserialize, Serialize};
 /// without re-rendering. `reclassify_spans` is `#[serde(default)]` purely as
 /// cheap insurance against a partial write.
 #[derive(Serialize, Deserialize)]
-struct CachedSpans {
-    macro_spans: Vec<MacroSpan>,
+pub struct CachedSpans {
+    pub macro_spans: Vec<MacroSpan>,
     #[serde(default)]
-    reclassify_spans: Vec<ReclassifySpan>,
+    pub reclassify_spans: Vec<ReclassifySpan>,
 }
 
 #[derive(Default)]

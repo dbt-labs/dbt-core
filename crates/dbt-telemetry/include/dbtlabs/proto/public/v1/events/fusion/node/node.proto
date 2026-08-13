@@ -288,6 +288,11 @@ message NodeEvaluated {
   // Total time in milliseconds this node evaluation spent idle.
   // This includes time spent waiting on internal backpressure.
   optional uint64 idle_time_ms = 42;
+
+  // Identifier of the dbt State execution decision that governed this node's
+  // run-phase execution. Only set when the dbt State service was consulted and
+  // returned an execution decision.
+  optional string state_decision_id = 43;
 }
 
 // Span event tracking full processing of a node across all phases.

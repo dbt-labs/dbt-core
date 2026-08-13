@@ -16,6 +16,8 @@ mod adapter_engine;
 pub use adapter_engine::AdapterEngine;
 pub use adapter_engine::Options;
 
+mod concat_batches;
+
 pub mod query_comment;
 pub mod retry;
 

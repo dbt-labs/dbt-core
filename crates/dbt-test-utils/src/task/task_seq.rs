@@ -1,16 +1,16 @@
 use crate::task::TestError;
 use crate::task::env::TracingReloadHandle;
 
-use super::io::{RmTask, TouchTask};
-use super::tasks::{FnTask, NopTask, ShExecute};
+use super::tasks::{FnTask, ShExecute};
 use super::utils::{check_set_user_env_var, redirect_buffer_to_stdin, strip_full_test_name};
 use super::{ProjectEnv, Task, TestEnv, TestResult};
 
 use dbt_common::error::FsResult;
+use dbt_common::stdfs;
 use dbt_common::string_utils::split_into_whitespace_and_brackets;
 use dbt_common::tracing::reload::create_data_layer_for_tests;
 use dbt_common::tracing::{
-    TracingConfigProvider, dbt_data_layer_config, init_tracing_with_consumer_layer,
+    TracingConfigProvider, dbt_data_layer_config, init_tracing_with_data_layer,
 };
 use dbt_features::feature_stack::FeatureStack;
 use once_cell::sync::OnceCell;
@@ -108,17 +108,13 @@ impl TaskSeq {
         )))
     }
 
-    /// Creates a task that does not do anything. This task can be
-    /// used to increase the task count without any work in case we
-    /// need to skip/mock some steps, e.g., during execution that are
-    /// done during update.
-    pub fn nop(&mut self) -> &mut Self {
-        self.task(Box::new(NopTask))
-    }
-
     /// Creates a touch task on the given path.
     pub fn touch(&mut self, path: impl Into<String>) -> &mut Self {
-        self.task(Box::new(TouchTask::new(path)))
+        let path = path.into();
+        self.task_fn(move |_, _, _| {
+            super::io::touch(PathBuf::from(&path))?;
+            Ok(())
+        })
     }
 
     /// Creates a task to write the given content to the file at the specified
@@ -133,7 +129,11 @@ impl TaskSeq {
 
     /// Creates a remove task to delete the file at the given path.
     pub fn rm_file(&mut self, path: impl Into<String>) -> &mut Self {
-        self.task(Box::new(RmTask::new(path)))
+        let path = path.into();
+        self.task_fn(move |_, _, _| {
+            stdfs::remove_file(&path).expect("could not remove a file");
+            Ok(())
+        })
     }
 
     /// Executes this sequence in the given environment, with the given buffer
@@ -170,7 +170,7 @@ impl TaskSeq {
 
         // Keep the guard alive for the duration of the test run so the process span
         // remains available to worker threads emitting telemetry.
-        let process_span_guard = init_tracing_with_consumer_layer(
+        let process_span_guard = init_tracing_with_data_layer(
             tracing::level_filters::LevelFilter::TRACE,
             dbt_common::tracing::dbt_process_span_attributes("dbt-tests"),
             data_layer,

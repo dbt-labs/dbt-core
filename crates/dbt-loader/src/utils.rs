@@ -109,7 +109,6 @@ pub fn indent(data: &str, spaces: usize) -> String {
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 pub fn load_raw_yml<T: DeserializeOwned>(
-    io_args: &IoArgs,
     path: &Path,
     dependency_package_name: Option<&str>,
 ) -> FsResult<T> {
@@ -131,7 +130,7 @@ pub fn load_raw_yml<T: DeserializeOwned>(
         )
     })?;
 
-    from_yaml_raw(io_args, &data, Some(path), true, dependency_package_name)
+    from_yaml_raw(&data, Some(path), true, dependency_package_name)
 }
 
 fn process_package_file(
@@ -147,8 +146,7 @@ fn process_package_file(
     }
 
     let mut dependencies = BTreeSet::new();
-    let dbt_packages: DbtPackages =
-        load_raw_yml(io_args, package_file_path, dependency_package_name)?;
+    let dbt_packages: DbtPackages = load_raw_yml(package_file_path, dependency_package_name)?;
     for package in dbt_packages.packages {
         let entry_name = match package {
             DbtPackageEntry::Hub(hub_package) => hub_package.package,
@@ -195,7 +193,6 @@ fn process_package_file(
                      Run 'fs deps --upgrade' with a packages.yml to resolve all dependencies.",
                     entry_name
                 ),
-                io_args.status_reporter.as_ref(),
             );
         }
     }

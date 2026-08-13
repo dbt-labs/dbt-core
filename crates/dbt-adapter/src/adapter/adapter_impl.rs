@@ -30,7 +30,7 @@ use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
-use crate::record_batch::{RecordBatchExt, RenamedColumn};
+use crate::record_batch::{RecordBatchExt, RenamedColumn, StructArrayExt};
 use crate::relation::Relation;
 use crate::relation::RelationObject;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
@@ -45,11 +45,12 @@ use crate::{AdapterResult, load_catalogs, python};
 
 use adbc_core::options::OptionValue;
 use arrow::array::{BooleanArray, RecordBatch, StringArray};
-use arrow_array::{Array as _, ArrayRef, Decimal128Array};
+use arrow_array::{Array as _, ArrayRef, Decimal128Array, Int64Array};
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
 use dashmap::DashMap;
 use dbt_adapter_core::AdapterType;
+use dbt_adapter_sql::is_keyword_ignore_ascii_case;
 use dbt_adbc::bigquery::*;
 use dbt_adbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_adbc::{Connection, QueryCtx};
@@ -138,7 +139,7 @@ fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColum
             write!(msg, "'{}' -> '{}'", r.original, r.renamed).unwrap();
         }
 
-        emit_warn_log_message(ErrorCode::DuplicateColumns, msg, None);
+        emit_warn_log_message(ErrorCode::DuplicateColumns, msg);
     }
 }
 
@@ -266,6 +267,403 @@ pub enum InnerAdapter<'a> {
     Replay(AdapterType, &'a dyn Replayer),
 }
 
+#[derive(Default)]
+struct QuoteScanner {
+    in_single: bool,
+    in_double: bool,
+}
+
+impl QuoteScanner {
+    fn in_quotes(&self) -> bool {
+        self.in_single || self.in_double
+    }
+
+    fn advance(&mut self, c: char) {
+        if self.in_single {
+            if c == '\'' {
+                self.in_single = false;
+            }
+        } else if self.in_double {
+            if c == '"' {
+                self.in_double = false;
+            }
+        } else if c == '\'' {
+            self.in_single = true;
+        } else if c == '"' {
+            self.in_double = true;
+        }
+    }
+}
+
+fn strip_sql_comments(sql: &str) -> String {
+    let mut out = String::with_capacity(sql.len());
+    let mut chars = sql.chars().peekable();
+    let mut quotes = QuoteScanner::default();
+    while let Some(c) = chars.next() {
+        if quotes.in_quotes() {
+            out.push(c);
+            quotes.advance(c);
+            continue;
+        }
+        match c {
+            '\'' | '"' => {
+                quotes.advance(c);
+                out.push(c);
+            }
+            '-' if chars.peek() == Some(&'-') => {
+                chars.next();
+                for c2 in chars.by_ref() {
+                    if c2 == '\n' {
+                        out.push('\n');
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                let mut prev = ' ';
+                for c2 in chars.by_ref() {
+                    if prev == '*' && c2 == '/' {
+                        break;
+                    }
+                    prev = c2;
+                }
+                out.push(' ');
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn find_top_level_select(sql: &str) -> Option<usize> {
+    find_top_level_keyword_after(sql, 0, "select")
+}
+
+fn find_top_level_keyword_after(sql: &str, start: usize, keyword: &str) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let mut depth: i32 = 0;
+    let mut quotes = QuoteScanner::default();
+    let n = bytes.len();
+    let mut i = start;
+    let klen = keyword.len();
+    while i < n {
+        let c = bytes[i] as char;
+        if quotes.in_quotes() {
+            quotes.advance(c);
+            i += 1;
+            continue;
+        }
+        match c {
+            '\'' | '"' => quotes.advance(c),
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {
+                if depth == 0
+                    && (i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_'))
+                {
+                    let rest = &sql[i..];
+                    if rest.len() >= klen {
+                        let word = &rest[..klen];
+                        if word.eq_ignore_ascii_case(keyword) {
+                            let after = rest.as_bytes().get(klen).copied().unwrap_or(b' ');
+                            if !(after.is_ascii_alphanumeric() || after == b'_') {
+                                return Some(i);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+fn top_level_split_commas(s: &str) -> Vec<String> {
+    let mut items = Vec::new();
+    let mut depth = 0i32;
+    let mut quotes = QuoteScanner::default();
+    let mut current = String::new();
+    for c in s.chars() {
+        if quotes.in_quotes() {
+            current.push(c);
+            quotes.advance(c);
+            continue;
+        }
+        match c {
+            '\'' | '"' => {
+                quotes.advance(c);
+                current.push(c);
+            }
+            '(' => {
+                depth += 1;
+                current.push(c);
+            }
+            ')' => {
+                depth -= 1;
+                current.push(c);
+            }
+            ',' if depth == 0 => {
+                items.push(current.trim().to_string());
+                current = String::new();
+            }
+            _ => current.push(c),
+        }
+    }
+    if !current.trim().is_empty() {
+        items.push(current.trim().to_string());
+    }
+    items
+}
+
+fn last_identifier(item: &str) -> Option<String> {
+    let trimmed = item.trim();
+    if trimmed.ends_with(')') || trimmed.ends_with('*') {
+        return None;
+    }
+    if let Some(pos) = find_top_level_keyword_after(trimmed, 0, "as") {
+        let after = trimmed[pos + 2..].trim();
+        if !after.is_empty() {
+            return Some(strip_ident_quotes(after));
+        }
+    }
+    let bytes = trimmed.as_bytes();
+    let mut end = bytes.len();
+    while end > 0 && (bytes[end - 1] as char).is_whitespace() {
+        end = end.saturating_sub(1);
+    }
+    let mut start = end;
+    if start > 0 && bytes[start - 1] == b'"' {
+        start -= 1;
+        while start > 0 && bytes[start - 1] != b'"' {
+            start -= 1;
+        }
+        start = start.saturating_sub(1);
+        return Some(strip_ident_quotes(&trimmed[start..end]));
+    }
+    while start > 0 {
+        let c = bytes[start - 1] as char;
+        if c.is_ascii_alphanumeric() || c == '_' {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    if start == end {
+        return None;
+    }
+    Some(trimmed[start..end].to_string())
+}
+
+fn strip_ident_quotes(s: &str) -> String {
+    let s = s.trim();
+    if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
+        s[1..s.len() - 1].to_string()
+    } else {
+        s.trim_end_matches(',').to_string()
+    }
+}
+
+fn mock_select_column_names(sql: &str) -> Vec<String> {
+    let cleaned = strip_sql_comments(sql);
+    let Some(select_pos) = find_top_level_select(&cleaned) else {
+        return Vec::new();
+    };
+    let after_select = select_pos + "select".len();
+    let from_pos = find_top_level_keyword_after(&cleaned, after_select, "from");
+    let col_list_end = from_pos.unwrap_or(cleaned.len());
+    let col_list = &cleaned[after_select..col_list_end];
+    let items = top_level_split_commas(col_list);
+    if items.is_empty() {
+        return Vec::new();
+    }
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let trimmed = item.trim();
+            let trimmed = trimmed
+                .strip_prefix("DISTINCT")
+                .or_else(|| trimmed.strip_prefix("distinct"))
+                .unwrap_or(trimmed)
+                .trim();
+            if trimmed == "*" || trimmed.ends_with(".*") {
+                format!("col_{i}")
+            } else {
+                last_identifier(trimmed).unwrap_or_else(|| format!("col_{i}"))
+            }
+        })
+        .collect()
+}
+
+fn is_metadata_only_query(sql: &str) -> bool {
+    const METADATA_NAMESPACES: &[&str] = &["information_schema", "svv_", "pg_catalog"];
+    let stripped = strip_sql_comments(sql);
+    let lower = stripped.to_ascii_lowercase();
+    METADATA_NAMESPACES
+        .iter()
+        .any(|namespace| contains_as_identifier_prefix(&lower, namespace))
+}
+
+/// Like `str::contains`, but rejects a match whose preceding character is
+/// itself an identifier character — so `svv_` matches `select * from
+/// svv_tables` but not a user identifier like `my_svv_data`.
+fn contains_as_identifier_prefix(haystack: &str, needle: &str) -> bool {
+    let mut start = 0;
+    while let Some(pos) = haystack[start..].find(needle) {
+        let match_start = start + pos;
+        let preceded_by_ident_char = haystack[..match_start]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !preceded_by_ident_char {
+            return true;
+        }
+        start = match_start + needle.len();
+    }
+    false
+}
+
+fn select_source_column(item: &str) -> Option<String> {
+    let trimmed = item.trim();
+    let before_as = match find_top_level_keyword_after(trimmed, 0, "as") {
+        Some(pos) => trimmed[..pos].trim(),
+        None => trimmed,
+    };
+    if before_as.is_empty()
+        || !before_as
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+    {
+        return None;
+    }
+    let source = before_as.rsplit('.').next().unwrap_or(before_as);
+    if source.is_empty() {
+        return None;
+    }
+    Some(source.to_string())
+}
+
+fn parse_from_relation(sql_after_from: &str) -> Option<String> {
+    let bytes = sql_after_from.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+        i += 1;
+    }
+    let mut parts = Vec::new();
+    loop {
+        if i >= bytes.len() {
+            break;
+        }
+        if bytes[i] == b'"' {
+            let start = i + 1;
+            let mut end = start;
+            while end < bytes.len() && bytes[end] != b'"' {
+                end += 1;
+            }
+            if end >= bytes.len() {
+                return None;
+            }
+            parts.push(sql_after_from[start..end].to_string());
+            i = end + 1;
+        } else {
+            let start = i;
+            let mut end = i;
+            while end < bytes.len()
+                && ((bytes[end] as char).is_ascii_alphanumeric() || bytes[end] == b'_')
+            {
+                end += 1;
+            }
+            if end == start {
+                break;
+            }
+            parts.push(sql_after_from[start..end].to_string());
+            i = end;
+        }
+        if i < bytes.len() && bytes[i] == b'.' {
+            i += 1;
+            continue;
+        }
+        break;
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("."))
+    }
+}
+
+fn seed_column_values(sql: &str) -> Option<Vec<(String, Vec<String>)>> {
+    let cleaned = strip_sql_comments(sql);
+    let select_pos = find_top_level_select(&cleaned)?;
+    let after_select = select_pos + "select".len();
+    let from_pos = find_top_level_keyword_after(&cleaned, after_select, "from")?;
+    let col_list = &cleaned[after_select..from_pos];
+    let items = top_level_split_commas(col_list);
+    if items.is_empty() {
+        return None;
+    }
+
+    let after_from = from_pos + "from".len();
+    let relation_name = parse_from_relation(&cleaned[after_from..])?;
+    let seed_path = dbt_common::seed_path_registry::lookup(&relation_name)?;
+    let result =
+        dbt_csv::read_to_arrow_records(&seed_path, &dbt_csv::CustomCsvOptions::default()).ok()?;
+
+    let mut out = Vec::new();
+    for item in &items {
+        let source = select_source_column(item)?;
+        let alias = last_identifier(item).unwrap_or_else(|| source.clone());
+        let col_idx = result
+            .schema
+            .fields()
+            .iter()
+            .position(|f| f.name().eq_ignore_ascii_case(&source))?;
+
+        let mut seen = std::collections::HashSet::new();
+        let mut values = Vec::new();
+        for batch in &result.batches {
+            let array = batch
+                .column(col_idx)
+                .as_any()
+                .downcast_ref::<StringArray>()?;
+            for i in 0..array.len() {
+                if array.is_valid(i) {
+                    let v = array.value(i).to_string();
+                    if seen.insert(v.clone()) {
+                        values.push(v);
+                    }
+                }
+            }
+        }
+        out.push((alias, values));
+    }
+
+    let row_count = out.first().map(|(_, v)| v.len())?;
+    if out.iter().any(|(_, v)| v.len() != row_count) {
+        return None;
+    }
+    Some(out)
+}
+
+fn build_mock_agate_table(cols: Vec<(String, ArrayRef)>) -> Option<AgateTable> {
+    let fields: Vec<Field> = cols
+        .iter()
+        .map(|(name, array)| Field::new(name, array.data_type().clone(), true))
+        .collect();
+    let arrays: Vec<ArrayRef> = cols.into_iter().map(|(_, array)| array).collect();
+    let schema = Arc::new(Schema::new(fields));
+    let batch = RecordBatch::try_new(schema, arrays).ok()?;
+    Some(AgateTable::from_record_batch(Arc::new(batch)))
+}
+
+fn trivial_mock_agate_table() -> AgateTable {
+    let array: ArrayRef = Arc::new(StringArray::from(vec!["placeholder"]));
+    build_mock_agate_table(vec![("names".to_string(), array)])
+        .expect("single string column, single row is always a valid record batch")
+}
+
 impl AdapterImpl {
     pub fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         match self.inner_adapter() {
@@ -320,30 +718,57 @@ impl AdapterImpl {
 
     /// Execute `use warehouse [name]` statement for Snowflake.
     /// For other warehouses, this is noop.
+    /// Returns whether the connection changed and must be restored.
     pub fn use_warehouse(
         &self,
         conn: &'_ mut dyn Connection,
         warehouse: String,
         node_id: &str,
         token: CancellationToken,
-    ) -> FsResult<()> {
+    ) -> FsResult<bool> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_use_warehouse(conn, warehouse, node_id),
             Impl(Snowflake, _) => {
                 let ctx = QueryCtx::default().with_node_id(node_id);
                 let sql = format!("use warehouse {warehouse}");
                 self.exec_stmt(&ctx, conn, &sql, false, token)?;
-                Ok(())
+                Ok(true)
             }
             Impl(..) => {
                 debug_assert!(false, "use_warehouse is Snowflake-specific");
-                Ok(())
+                Ok(false)
             }
+        }
+    }
+
+    fn warehouse_restore_name(warehouse: &str) -> Cow<'_, str> {
+        // `current_warehouse()` drops quotes. Removing them from a canonical
+        // uppercase identifier preserves its identity; other quoted names need
+        // their delimiters to preserve identity.
+        let (unquoted, quoted) = normalize_quote(false, Snowflake, warehouse);
+        // Not `need_quotes`/`must_be_quoted`: those accept Unicode letters and `-`.
+        let is_canonical = unquoted
+            .as_bytes()
+            .first()
+            .is_some_and(|byte| byte.is_ascii_uppercase() || *byte == b'_')
+            && unquoted.as_bytes().iter().skip(1).all(|byte| {
+                byte.is_ascii_uppercase() || byte.is_ascii_digit() || [b'_', b'$'].contains(byte)
+            })
+            && is_keyword_ignore_ascii_case(&unquoted, Snowflake).is_none();
+        if quoted && is_canonical {
+            Cow::Owned(unquoted)
+        } else if warehouse.contains('"') {
+            // Quoted, or unbalanced quotes we must not reinterpret.
+            Cow::Borrowed(warehouse)
+        } else {
+            Cow::Owned(warehouse.to_ascii_uppercase())
         }
     }
 
     /// Execute `use warehouse [name]` statement for Snowflake.
     /// For other warehouses, this is noop.
+    ///
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/8b55a4781229a420836fdac6c933969f31188634/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L249-L273
     pub fn restore_warehouse(
         &self,
         conn: &'_ mut dyn Connection,
@@ -355,16 +780,9 @@ impl AdapterImpl {
                 let warehouse = self.get_db_config("warehouse").ok_or_else(|| {
                     unexpected_fs_err!("'warehouse' not found in Snowflake DB config")
                 })?;
-                // dbt Core restores the warehouse to the value reported by
-                // `select current_warehouse()`, which Snowflake returns in its
-                // canonical upper-cased (unquoted-identifier) form. The configured
-                // value may be authored in any case, so upper-case it here to match
-                // Core's restore SQL and avoid spurious record/replay mismatches.
-                // Warehouse names are case-insensitive in Snowflake, and the name is
-                // always an unquoted identifier (quotes are never applied), so this is
-                // safe and idempotent.
+                let warehouse = Self::warehouse_restore_name(&warehouse);
                 let ctx = QueryCtx::default().with_node_id(node_id);
-                let sql = format!("use warehouse {}", warehouse.to_ascii_uppercase());
+                let sql = format!("use warehouse {warehouse}");
                 self.exec_stmt(&ctx, conn, &sql, false, token)?;
             }
             _ => debug_assert!(
@@ -471,6 +889,75 @@ impl AdapterImpl {
             return engine.get_config().get(key);
         }
         None
+    }
+
+    /// ClickHouse `adapter.get_credentials(connection_overrides)` (impl.py):
+    /// connection parameters for dictionary SOURCE(CLICKHOUSE(...)) clauses.
+    /// Profile values merged with the model's `connection_overrides`; override
+    /// keys whose final value is falsy are removed.
+    pub fn get_credentials(&self, connection_overrides: &Value) -> Value {
+        let mut credentials: Vec<(String, Value)> = vec![
+            (
+                "user".to_string(),
+                Value::from(
+                    self.get_db_config("user")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_else(|| "default".to_string()),
+                ),
+            ),
+            (
+                "password".to_string(),
+                Value::from(
+                    self.get_db_config("password")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_default(),
+                ),
+            ),
+            (
+                "database".to_string(),
+                Value::from(
+                    self.get_db_config("database")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_default(),
+                ),
+            ),
+            (
+                "host".to_string(),
+                Value::from(
+                    self.get_db_config("host")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_else(|| "localhost".to_string()),
+                ),
+            ),
+            (
+                "port".to_string(),
+                Value::from(
+                    self.get_db_config("port")
+                        .map(|v| v.into_owned())
+                        .unwrap_or_default(),
+                ),
+            ),
+        ];
+
+        let mut override_keys: Vec<String> = Vec::new();
+        if let Ok(keys) = connection_overrides.try_iter() {
+            for key in keys {
+                let Some(name) = key.as_str() else { continue };
+                let Ok(value) = connection_overrides.get_item(&key) else {
+                    continue;
+                };
+                override_keys.push(name.to_string());
+                if let Some(entry) = credentials.iter_mut().find(|(k, _)| k == name) {
+                    entry.1 = value;
+                } else {
+                    credentials.push((name.to_string(), value));
+                }
+            }
+        }
+        // Python: overridden keys with falsy final values are dropped.
+        credentials.retain(|(k, v)| !override_keys.contains(k) || v.is_true());
+
+        Value::from(credentials.into_iter().collect::<BTreeMap<String, Value>>())
     }
 
     /// Returns the table format string for `database` (e.g. `"ducklake"`, `"iceberg"`, `"default"`).
@@ -612,19 +1099,21 @@ impl AdapterImpl {
         _auto_begin: bool,
         fetch: bool,
         _limit: Option<i64>,
-        options: Option<HashMap<String, String>>,
+        options: Option<ExecuteOptions>,
         token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let splitter = engine.splitter();
         let adapter_type = self.adapter_type();
         let all_stmts = match adapter_type {
-            // BigQuery and DuckDB support multi-statement execution.
+            // BigQuery, DuckDB, and Alt support multi-statement execution.
             //
             // BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
             //
             // DuckDB: temp tables are connection-scoped; batching CREATE TEMP + DML in one
             // execute() call avoids the need for cross-call connection caching.
-            Bigquery | DuckDB => vec![sql.to_string()],
+            //
+            // Alt: also supports batching
+            Bigquery | DuckDB | Alt => vec![sql.to_string()],
             _ => splitter.split(sql, adapter_type),
         };
         // Filter out empty and comment-only statements.
@@ -636,11 +1125,7 @@ impl AdapterImpl {
             return Ok((AdapterResponse::default(), AgateTable::default()));
         }
 
-        let mut options = options
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| (key, OptionValue::String(value)))
-            .collect::<Vec<_>>();
+        let mut options = options.unwrap_or_default();
         if let Some(state) = state {
             options.extend(self.get_adbc_execute_options(state));
         }
@@ -682,10 +1167,14 @@ impl AdapterImpl {
 
         let last_batch = last_batch.expect("last_batch should never be None");
 
-        let response = AdapterResponse::new(
-            last_batch.rows_affected(self.adapter_type()),
-            last_batch.query_id(self.adapter_type()),
-        );
+        let rows_affected = last_batch.rows_affected(self.adapter_type());
+        let mut response = AdapterResponse::new()
+            .with_message(format!("SUCCESS {}", rows_affected))
+            .with_code("SUCCESS")
+            .with_rows_affected(rows_affected);
+        if let Some(query_id) = last_batch.query_id(self.adapter_type()) {
+            response = response.with_query_id(query_id);
+        }
 
         // Deduplicate column names to match dbt-core's behavior, which renames
         // duplicate columns to `col_2`, `col_3`, etc.
@@ -720,36 +1209,10 @@ impl AdapterImpl {
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
-        options: Option<HashMap<String, String>>,
+        options: Option<ExecuteOptions>,
         token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        if self.mock_state().is_some() {
-            if !self.introspect_enabled() {
-                return Err(AdapterError::new(
-                    AdapterErrorKind::NotSupported,
-                    "Introspective queries are disabled (--no-introspect).",
-                ));
-            }
-            let response = AdapterResponse {
-                message: "execute".to_string(),
-                code: sql.to_string(),
-                rows_affected: 1,
-                query_id: None,
-            };
-
-            let schema = Arc::new(Schema::new(vec![Field::new(
-                "names",
-                DataType::Decimal128(38, 10),
-                true,
-            )]));
-            let decimal_array: ArrayRef = Arc::new(Decimal128Array::from(vec![Some(42)]));
-            let batch = RecordBatch::try_new(schema, vec![decimal_array]).unwrap();
-
-            let table = AgateTable::from_record_batch(Arc::new(batch));
-
-            return Ok((response, table));
-        }
-        let ctx = match ctx.map(Cow::Borrowed) {
+        let resolved_ctx = match ctx.map(Cow::Borrowed) {
             Some(ctx) => ctx,
             None => {
                 let ctx = match state {
@@ -760,11 +1223,94 @@ impl AdapterImpl {
                 Cow::Owned(ctx)
             }
         };
+        if let Some(mock) = self.mock_state() {
+            if !self.introspect_enabled() {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::NotSupported,
+                    "Introspective queries are disabled (--no-introspect).",
+                ));
+            }
+            if is_metadata_only_query(sql) {
+                if let Some(fallback) = mock.metadata_fallback_engine.clone() {
+                    match fallback.new_connection(state, None) {
+                        Ok(mut real_conn) => {
+                            return self.execute_inner(
+                                fallback,
+                                state,
+                                real_conn.as_mut(),
+                                resolved_ctx.as_ref(),
+                                sql,
+                                auto_begin,
+                                fetch,
+                                limit,
+                                options,
+                                token,
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "infer-schemas: metadata fallback connection failed, \
+                                 returning fabricated mock data for query: {e:?}"
+                            );
+                        }
+                    }
+                }
+            }
+            let response = AdapterResponse::new()
+                .with_message("execute".to_string())
+                .with_code(sql.to_string())
+                .with_rows_affected(1);
+
+            if let Some(columns) = seed_column_values(sql) {
+                let cols = columns
+                    .into_iter()
+                    .map(|(alias, values)| {
+                        let name = crate::format_ident::default_identifier_case(
+                            &alias,
+                            self.adapter_type(),
+                        );
+                        let array: ArrayRef = Arc::new(StringArray::from(values));
+                        (name, array)
+                    })
+                    .collect();
+                if let Some(table) = build_mock_agate_table(cols) {
+                    return Ok((response, table));
+                }
+            }
+
+            let column_names = mock_select_column_names(sql);
+            let table = if column_names.is_empty() {
+                let decimal_array: ArrayRef = Arc::new(Decimal128Array::from(vec![Some(42)]));
+                build_mock_agate_table(vec![("names".to_string(), decimal_array)])
+                    .unwrap_or_else(trivial_mock_agate_table)
+            } else {
+                let is_computed_expr = |name: &str| {
+                    name.strip_prefix("col_")
+                        .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()))
+                };
+                let cols = column_names
+                    .iter()
+                    .map(|name| {
+                        let field_name =
+                            crate::format_ident::default_identifier_case(name, self.adapter_type());
+                        let array: ArrayRef = if is_computed_expr(name) {
+                            Arc::new(Int64Array::from(vec![Some(1)]))
+                        } else {
+                            Arc::new(StringArray::from(vec!["placeholder"]))
+                        };
+                        (field_name, array)
+                    })
+                    .collect();
+                build_mock_agate_table(cols).unwrap_or_else(trivial_mock_agate_table)
+            };
+
+            return Ok((response, table));
+        }
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_execute(
                 state,
                 conn,
-                ctx.as_ref(),
+                resolved_ctx.as_ref(),
                 sql,
                 auto_begin,
                 fetch,
@@ -775,7 +1321,7 @@ impl AdapterImpl {
                 Arc::clone(engine),
                 state,
                 conn,
-                ctx.as_ref(),
+                resolved_ctx.as_ref(),
                 sql,
                 auto_begin,
                 fetch,
@@ -1024,7 +1570,7 @@ impl AdapterImpl {
                 None,
                 None,
             )
-            .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+            .map_err(adbc_error_to_adapter_error)?;
 
         let schema = reader.schema();
         let batches = reader
@@ -1052,24 +1598,30 @@ impl AdapterImpl {
                 )
             })?;
 
-        let db_schema_names = catalog_db_schemas
+        let schemas_struct = catalog_db_schemas
             .values()
             .as_any()
             .downcast_ref::<arrow::array::StructArray>()
-            .and_then(|s| s.column_by_name("db_schema_name"))
-            .and_then(|c| c.as_any().downcast_ref::<StringArray>())
             .ok_or_else(|| {
                 AdapterError::new(
                     AdapterErrorKind::UnexpectedResult,
-                    "Missing or invalid 'db_schema_name' column",
+                    "Missing or invalid 'catalog_db_schemas' values",
                 )
             })?;
-
-        Ok(db_schema_names
+        let db_schema_names = schemas_struct
+            .column_as::<StringArray>("db_schema_name")?
             .iter()
-            .flatten()
+            .flatten();
+
+        // In Core, `list_datasets` is called without the `include_all` parameter,
+        // which filters out hidden datasets.
+        // Reference: https://github.com/dbt-labs/dbt-adapters/blob/860da89225e2ecf1bf47038f5ac40d4eaa4019a2/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L619
+        let db_schema_names = db_schema_names
+            .filter(|s| !s.starts_with('_'))
             .map(|s| s.to_string())
-            .collect())
+            .collect();
+
+        Ok(db_schema_names)
     }
 
     pub fn list_schemas_inner(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {
@@ -1229,13 +1781,18 @@ impl AdapterImpl {
                     "Introspective queries are disabled (--no-introspect).",
                 ));
             }
+            let quoting = ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: true,
+            };
             let relation = Relation::new(
                 Snowflake,
                 database.to_string(),
                 schema.to_string(),
                 identifier.to_string(),
             )
-            .with_quoting(self.quoting())
+            .with_quoting(quoting)
             .validate()?;
             return Ok(Some(Arc::new(relation)));
         }
@@ -1635,7 +2192,6 @@ impl AdapterImpl {
                         name,
                         self.adapter_type()
                     ),
-                    None,
                 );
                 // None is falsy, so features should be named in such a way that
                 // `false` is the most reasonable assumption.
@@ -1741,7 +2297,7 @@ impl AdapterImpl {
                     )
                 })?,
             )
-            .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+            .map_err(adbc_error_to_adapter_error)?;
         // NOTE: it's okay to skip conversion to an SDF-frontend since
         // `schema_to_columns()` will first try to parse the type from the
         // `PLATFORM:type` metadata key returned by the driver.
@@ -1952,8 +2508,32 @@ impl AdapterImpl {
         state: &State,
         relation: &dyn BaseRelation,
     ) -> AdapterResult<Vec<Column>> {
-        // Mock adapter: return fake column without executing jinja macro
         if self.engine().is_mock() {
+            if let (Ok(database), Ok(schema), Ok(identifier)) = (
+                relation.database_as_str(),
+                relation.schema_as_str(),
+                relation.identifier_as_str(),
+            ) {
+                let relation_name = format!("{database}.{schema}.{identifier}");
+                if let Some(schema) = dbt_common::infer_schema_registry::lookup(&relation_name) {
+                    if !schema.columns.is_empty() {
+                        return Ok(schema
+                            .columns
+                            .into_iter()
+                            .map(|name| {
+                                Column::new(
+                                    self.adapter_type(),
+                                    name,
+                                    "text".to_string(),
+                                    Some(256),
+                                    None,
+                                    None,
+                                )
+                            })
+                            .collect());
+                    }
+                }
+            }
             return Ok(vec![Column::new(
                 self.adapter_type(),
                 "one".to_string(),
@@ -2160,6 +2740,14 @@ impl AdapterImpl {
 
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_convert_type(state, data_type),
+            Impl(Snowflake, _)
+                if matches!(
+                    data_type,
+                    DataType::Utf8 | DataType::Utf8View | DataType::LargeUtf8
+                ) =>
+            {
+                Ok("text".to_string())
+            }
             Impl(_, engine) => {
                 let mut out = String::new();
                 engine
@@ -2282,6 +2870,14 @@ impl AdapterImpl {
                     })
                     .collect::<BTreeMap<String, Vec<String>>>();
 
+                // Skip the ADBC round-trip (and its ETag-race exposure) when
+                // there is nothing to update. Matches dbt-core Python's
+                // `if len(columns) == 0: return` guard in dbt-bigquery's
+                // `update_columns`.
+                if column_to_description.is_empty() && column_to_policy_tags.is_empty() {
+                    return Ok(none_value());
+                }
+
                 // The heavy lift is delegated to the driver via googleapi Table.update
                 // since ALTER TABLE ... ALTER COLUMNS doesn't support updating a view.
                 // Descriptions and policy tags are applied in a single REST API call,
@@ -2309,11 +2905,14 @@ impl AdapterImpl {
                 ]);
 
                 let ctx = query_ctx_from_state(state)?;
+                let sql = format!(
+                    "-- adapter.update_columns via BigQuery REST API on `{database}.{schema}.{table}`"
+                );
                 self.engine().execute_with_options(
                     Some(state),
                     &ctx,
                     conn,
-                    "none",
+                    &sql,
                     options,
                     false,
                     token,
@@ -3809,8 +4408,10 @@ impl AdapterImpl {
     ) -> AdapterResult<bool> {
         debug_assert!(self.adapter_type() == Databricks);
 
-        if let Replay(_, replay) = self.inner_adapter() {
-            return replay.replay_has_dbr_capability(state, capability_name);
+        if let Replay(_, replay) = self.inner_adapter()
+            && let Some(recorded) = replay.replay_has_dbr_capability(state, capability_name)?
+        {
+            return Ok(recorded);
         }
 
         let capability = dbr_capabilities::DbrCapability::from_str(capability_name)
@@ -4110,8 +4711,10 @@ impl AdapterImpl {
     ) -> AdapterResult<bool> {
         match self.adapter_type() {
             adapter_type @ Databricks => {
-                if let Replay(_, replay) = self.inner_adapter() {
-                    return replay.replay_is_uniform(state);
+                if let Replay(_, replay) = self.inner_adapter()
+                    && let Some(recorded) = replay.replay_is_uniform(state)?
+                {
+                    return Ok(recorded);
                 }
 
                 // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
@@ -4221,8 +4824,9 @@ impl AdapterImpl {
     ) -> AdapterResult<RelationConfig> {
         use crate::relation::databricks::config::relation_types;
 
-        if let Replay(_, replay) = self.inner_adapter() {
-            let recorded = replay.replay_get_relation_config(state)?;
+        if let Replay(_, replay) = self.inner_adapter()
+            && let Some(recorded) = replay.replay_get_relation_config(state)?
+        {
             let relation_type = relation.relation_type().ok_or_else(|| {
                 AdapterError::new(
                     AdapterErrorKind::Configuration,
@@ -4377,19 +4981,9 @@ impl AdapterImpl {
             })
             .collect();
 
-        let columns_value: Vec<Value> = enriched_columns
-            .into_iter()
-            .map(Value::from_object)
-            .collect();
-
-        let constraints_value: Vec<Value> = typed_constraints
-            .into_iter()
-            .map(|c| Value::from_serialize(&c))
-            .collect();
-
         Ok(Value::from(vec![
-            Value::from(columns_value),
-            Value::from(constraints_value),
+            Value::from_iter(enriched_columns.into_iter().map(Value::from_object)),
+            Value::from_iter(typed_constraints.into_iter().map(Value::from_object)),
         ]))
     }
 
@@ -4537,14 +5131,18 @@ impl AdapterImpl {
         &self,
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
-        _state: Option<&State>,
+        state: Option<&State>,
     ) -> AdapterResult<Option<RelationConfig>> {
         if self.adapter_type() != Bigquery {
             unimplemented!("only available with BigQuery adapter");
         }
 
-        if let Replay(_, _) = self.inner_adapter() {
-            return Ok(None);
+        if let (Replay(_, replay), Some(state)) = (self.inner_adapter(), state) {
+            let recorded = replay.replay_describe_relation(state)?;
+            return crate::relation::bigquery::config::relation_types::materialized_view::relation_config_from_recorded(
+                recorded.as_ref(),
+            )
+            .map(Some);
         }
 
         let adbc_schema = conn
@@ -4769,7 +5367,7 @@ fn builtin_incremental_strategies() -> Vec<DbtIncrementalStrategy> {
 }
 
 // https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L117
-pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 3]> = LazyLock::new(|| {
+pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 4]> = LazyLock::new(|| {
     [
         BehaviorFlag::new(
             "require_batched_execution_for_custom_microbatch_strategy",
@@ -4787,6 +5385,15 @@ pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 3]> = Laz
                 "Enable experimental catalogs.yml v2 schema validation. This syntax is under development and may change.",
             ),
             Some("https://github.com/dbt-labs/dbt-core/discussions/12723"),
+        ),
+        BehaviorFlag::new(
+            "require_resource_names_without_plus_prefix",
+            false,
+            None,
+            Some(
+                "When enabled, the + prefix in dbt_project.yml always indicates a configuration key. Folder and file names may not start with the + prefix.",
+            ),
+            None,
         ),
     ]
 });
@@ -4922,6 +5529,7 @@ struct MockState {
     engine: Arc<dyn AdapterEngine>,
     flags: BTreeMap<String, Value>,
     behavior: Arc<Behavior>,
+    metadata_fallback_engine: Option<Arc<dyn AdapterEngine>>,
 }
 
 #[derive(Clone)]
@@ -4958,6 +5566,24 @@ impl AdapterImpl {
         quoting: ResolvedQuoting,
         type_ops: Arc<dyn TypeOps>,
         stmt_splitter: Arc<dyn StmtSplitter>,
+    ) -> Self {
+        Self::new_mock_with_metadata_fallback(
+            adapter_type,
+            flags,
+            quoting,
+            type_ops,
+            stmt_splitter,
+            None,
+        )
+    }
+
+    pub fn new_mock_with_metadata_fallback(
+        adapter_type: AdapterType,
+        flags: BTreeMap<String, Value>,
+        quoting: ResolvedQuoting,
+        type_ops: Arc<dyn TypeOps>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
+        metadata_fallback_engine: Option<Arc<dyn AdapterEngine>>,
     ) -> Self {
         let backend = crate::adapter::adapter_factory::backend_of(adapter_type);
         let auth: Arc<dyn dbt_auth::Auth> =
@@ -4998,6 +5624,7 @@ impl AdapterImpl {
                 engine,
                 flags,
                 behavior,
+                metadata_fallback_engine,
             }),
             schema_store: None,
         }
@@ -5101,7 +5728,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         conn: &'_ mut dyn Connection,
         warehouse: String,
         node_id: &str,
-    ) -> FsResult<()>;
+    ) -> FsResult<bool>;
 
     fn replay_verify_database(&self, database: &str) -> AdapterResult<Value>;
 
@@ -5127,7 +5754,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
-        options: Option<HashMap<String, String>>,
+        options: Option<ExecuteOptions>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)>;
 
     fn replay_add_query(
@@ -5280,7 +5907,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         schema: &str,
     ) -> AdapterResult<Value>;
 
-    fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<Value>>;
+    fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<serde_json::Value>>;
 
     fn replay_schema_exists_from_trace(&self, database: &str, schema: &str) -> Option<bool>;
 
@@ -5312,19 +5939,24 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         _strategy: Arc<SnapshotStrategy>,
     ) -> AdapterResult<()>;
 
-    fn replay_is_uniform(&self, state: &State) -> AdapterResult<bool>;
+    /// The following four calls are only instrumented by recorders that know about them, so each
+    /// returns `None` when the recording holds no dedicated record for it. Callers must then
+    /// compute the value themselves: consuming an unrelated record instead would shift every
+    /// following record for the node.
+    fn replay_is_uniform(&self, state: &State) -> AdapterResult<Option<bool>>;
 
     fn replay_has_dbr_capability(
         &self,
         state: &State,
         capability_name: &str,
-    ) -> AdapterResult<bool>;
+    ) -> AdapterResult<Option<bool>>;
 
-    fn replay_is_cluster(&self, state: &State) -> AdapterResult<bool>;
+    fn replay_is_cluster(&self, state: &State) -> AdapterResult<Option<bool>>;
 
     /// Returns the recorded `get_relation_config` payload (`{"config": {...}}`).
     /// The engine method reconstructs a `RelationConfig` from it.
-    fn replay_get_relation_config(&self, state: &State) -> AdapterResult<serde_json::Value>;
+    fn replay_get_relation_config(&self, state: &State)
+    -> AdapterResult<Option<serde_json::Value>>;
 }
 
 #[cfg(test)]
@@ -5419,6 +6051,46 @@ mod tests {
     }
 
     #[test]
+    fn test_restore_warehouse_matches_snowflake_current_warehouse_text() {
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("analytics_transform"),
+            "ANALYTICS_TRANSFORM"
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"DBT_TRANSFORMATION\""),
+            "DBT_TRANSFORMATION"
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"CaseSensitive\""),
+            "\"CaseSensitive\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"CASE SENSITIVE\""),
+            "\"CASE SENSITIVE\""
+        );
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"A-B\""), "\"A-B\"");
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"3RD_WH\""),
+            "\"3RD_WH\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"QUOTE\"\"HERE\""),
+            "\"QUOTE\"\"HERE\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"SELECT\""),
+            "\"SELECT\""
+        );
+        assert_eq!(
+            AdapterImpl::warehouse_restore_name("\"Unbalanced"),
+            "\"Unbalanced"
+        );
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"WH$1\""), "WH$1");
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"_WH\""), "_WH");
+        assert_eq!(AdapterImpl::warehouse_restore_name("\"\""), "\"\"");
+    }
+
+    #[test]
     fn test_quote_for_snowflake() {
         let adapter = AdapterImpl::new(engine(Snowflake), None);
         assert_eq!(adapter.quote("abc"), "\"abc\"");
@@ -5428,6 +6100,85 @@ mod tests {
     fn test_quote_for_bigquery() {
         let adapter = AdapterImpl::new(engine(Bigquery), None);
         assert_eq!(adapter.quote("abc"), "`abc`");
+    }
+
+    fn clickhouse_adapter(config: Mapping) -> AdapterImpl {
+        AdapterImpl::new(build_engine(ClickHouse, config), None)
+    }
+
+    #[test]
+    fn test_get_credentials_profile_values_and_defaults() {
+        // user/host fall back to impl.py defaults when absent from the profile;
+        // password/database/port default to empty strings.
+        let adapter = clickhouse_adapter(Mapping::from_iter([
+            ("password".into(), "secret".into()),
+            ("database".into(), "analytics".into()),
+        ]));
+        let creds = adapter.get_credentials(&Value::UNDEFINED);
+
+        assert_eq!(creds.get_attr("user").unwrap().as_str(), Some("default"));
+        assert_eq!(creds.get_attr("host").unwrap().as_str(), Some("localhost"));
+        assert_eq!(creds.get_attr("password").unwrap().as_str(), Some("secret"));
+        assert_eq!(
+            creds.get_attr("database").unwrap().as_str(),
+            Some("analytics")
+        );
+        assert_eq!(creds.get_attr("port").unwrap().as_str(), Some(""));
+    }
+
+    #[test]
+    fn test_get_credentials_overrides_replace_and_add_keys() {
+        let adapter = clickhouse_adapter(Mapping::from_iter([
+            ("user".into(), "profile_user".into()),
+            ("password".into(), "profile_pass".into()),
+            ("host".into(), "ch.example.com".into()),
+            ("port".into(), 8123.into()),
+        ]));
+        let overrides = Value::from(BTreeMap::from([
+            ("user".to_string(), Value::from("override_user")),
+            ("cluster".to_string(), Value::from("test_shard")),
+        ]));
+        let creds = adapter.get_credentials(&overrides);
+
+        // Overridden key replaced; unknown override key added.
+        assert_eq!(
+            creds.get_attr("user").unwrap().as_str(),
+            Some("override_user")
+        );
+        assert_eq!(
+            creds.get_attr("cluster").unwrap().as_str(),
+            Some("test_shard")
+        );
+        // Non-overridden profile values untouched (port stringified from the profile int).
+        assert_eq!(
+            creds.get_attr("password").unwrap().as_str(),
+            Some("profile_pass")
+        );
+        assert_eq!(
+            creds.get_attr("host").unwrap().as_str(),
+            Some("ch.example.com")
+        );
+        assert_eq!(creds.get_attr("port").unwrap().as_str(), Some("8123"));
+    }
+
+    #[test]
+    fn test_get_credentials_drops_falsy_overridden_keys() {
+        // impl.py parity: keys explicitly overridden to a falsy value are removed,
+        // while non-overridden keys keep their (possibly empty) profile values.
+        let adapter = clickhouse_adapter(Mapping::from_iter([
+            ("user".into(), "profile_user".into()),
+            ("password".into(), "profile_pass".into()),
+        ]));
+        let overrides = Value::from(BTreeMap::from([("password".to_string(), Value::from(""))]));
+        let creds = adapter.get_credentials(&overrides);
+
+        assert!(creds.get_attr("password").unwrap().is_undefined());
+        assert_eq!(
+            creds.get_attr("user").unwrap().as_str(),
+            Some("profile_user")
+        );
+        // database was never configured nor overridden: present as empty string.
+        assert_eq!(creds.get_attr("database").unwrap().as_str(), Some(""));
     }
 
     #[test]
@@ -6402,5 +7153,199 @@ mod tests {
             ("dbt".to_string(), "check_schema_exists".to_string())
         );
         Ok(())
+    }
+
+    #[test]
+    fn build_mock_agate_table_rejects_mismatched_column_lengths() {
+        let short: ArrayRef = Arc::new(StringArray::from(vec!["a"]));
+        let long: ArrayRef = Arc::new(StringArray::from(vec!["a", "b"]));
+        assert!(
+            build_mock_agate_table(vec![("a".to_string(), short), ("b".to_string(), long)])
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn trivial_mock_agate_table_never_panics() {
+        let _ = trivial_mock_agate_table();
+    }
+
+    #[test]
+    fn mock_get_relation_forces_quoting_to_preserve_case_regardless_of_dialect() -> AdapterResult<()>
+    {
+        let quoting = ResolvedQuoting {
+            database: true,
+            schema: true,
+            identifier: true,
+        };
+        let relation = Relation::new(
+            Snowflake,
+            "my_database".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+        )
+        .with_quoting(quoting)
+        .validate()?;
+        assert_eq!(
+            relation.render_self_as_str(),
+            "\"my_database\".\"my_schema\".\"my_table\""
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn strip_sql_comments_handles_line_and_block_comments() {
+        assert_eq!(
+            strip_sql_comments("select 1 -- trailing comment\nfrom t"),
+            "select 1 \nfrom t"
+        );
+        assert_eq!(
+            strip_sql_comments("select /* block */ 1 from t"),
+            "select   1 from t"
+        );
+        assert_eq!(
+            strip_sql_comments("select 1 /* multi\nline */ from t"),
+            "select 1   from t"
+        );
+    }
+
+    #[test]
+    fn strip_sql_comments_ignores_markers_inside_string_literals() {
+        assert_eq!(
+            strip_sql_comments("select '-- not a comment' from t"),
+            "select '-- not a comment' from t"
+        );
+        assert_eq!(
+            strip_sql_comments("select '/* not a comment */' from t"),
+            "select '/* not a comment */' from t"
+        );
+    }
+
+    #[test]
+    fn is_metadata_only_query_ignores_namespace_words_inside_comments() {
+        assert!(!is_metadata_only_query(
+            "-- references svv_tables in a comment\nselect * from orders"
+        ));
+        assert!(!is_metadata_only_query(
+            "/* information_schema mentioned here */ select * from orders"
+        ));
+    }
+
+    #[test]
+    fn is_metadata_only_query_ignores_namespace_word_inside_a_larger_identifier() {
+        assert!(!is_metadata_only_query("select * from my_svv_data"));
+    }
+
+    #[test]
+    fn is_metadata_only_query_matches_real_namespace_references() {
+        assert!(is_metadata_only_query("select * from svv_tables"));
+        assert!(is_metadata_only_query(
+            "select * from information_schema.tables"
+        ));
+        assert!(is_metadata_only_query("select * from pg_catalog.pg_class"));
+    }
+
+    #[test]
+    fn find_top_level_select_skips_subquery_select() {
+        assert_eq!(find_top_level_select("select 1 from (select 2) t"), Some(0));
+        assert!(find_top_level_keyword_after("(select 1) as t", 0, "select").is_none());
+    }
+
+    #[test]
+    fn find_top_level_keyword_after_does_not_match_substring_of_identifier() {
+        assert!(find_top_level_keyword_after("select selection from t", 0, "select") == Some(0));
+        assert!(
+            find_top_level_keyword_after("select selection from t", "select".len(), "select")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn top_level_split_commas_ignores_commas_in_parens_and_strings() {
+        assert_eq!(
+            top_level_split_commas("a, coalesce(b, c), 'x,y'"),
+            vec!["a", "coalesce(b, c)", "'x,y'"]
+        );
+    }
+
+    #[test]
+    fn last_identifier_extracts_alias_after_as() {
+        assert_eq!(
+            last_identifier("some_expr AS my_alias"),
+            Some("my_alias".to_string())
+        );
+        assert_eq!(
+            last_identifier(r#"some_expr AS "My Alias""#),
+            Some("My Alias".to_string())
+        );
+    }
+
+    #[test]
+    fn last_identifier_extracts_bare_qualified_column() {
+        assert_eq!(last_identifier("t.my_col"), Some("my_col".to_string()));
+    }
+
+    #[test]
+    fn last_identifier_returns_none_for_star_and_call_expressions() {
+        assert_eq!(last_identifier("t.*"), None);
+        assert_eq!(last_identifier("count(*)"), None);
+    }
+
+    #[test]
+    fn mock_select_column_names_basic() {
+        assert_eq!(
+            mock_select_column_names("select a, b as bee, t.c from t"),
+            vec!["a", "bee", "c"]
+        );
+    }
+
+    #[test]
+    fn mock_select_column_names_star_gets_placeholder() {
+        assert_eq!(mock_select_column_names("select * from t"), vec!["col_0"]);
+    }
+
+    #[test]
+    fn mock_select_column_names_ignores_comments_and_distinct() {
+        assert_eq!(
+            mock_select_column_names("select distinct a, /* skip */ b -- trailing\nfrom t"),
+            vec!["a", "b"]
+        );
+    }
+
+    #[test]
+    fn mock_select_column_names_handles_nested_subquery_in_column_list() {
+        assert_eq!(
+            mock_select_column_names("select a, (select max(x) from u) as m from t"),
+            vec!["a", "m"]
+        );
+    }
+
+    #[test]
+    fn mock_select_column_names_handles_window_function() {
+        assert_eq!(
+            mock_select_column_names("select a, row_number() over (order by a) as rn from t"),
+            vec!["a", "rn"]
+        );
+    }
+
+    #[test]
+    fn select_source_column_extracts_base_column_before_alias() {
+        assert_eq!(
+            select_source_column("t.my_col as alias"),
+            Some("my_col".to_string())
+        );
+        assert_eq!(select_source_column("count(*) as n"), None);
+    }
+
+    #[test]
+    fn parse_from_relation_handles_quoted_and_dotted_names() {
+        assert_eq!(
+            parse_from_relation("db.schema.\"My Table\" as t"),
+            Some("db.schema.My Table".to_string())
+        );
+        assert_eq!(
+            parse_from_relation("my_table"),
+            Some("my_table".to_string())
+        );
     }
 }

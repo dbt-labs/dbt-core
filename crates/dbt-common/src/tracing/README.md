@@ -1,7 +1,7 @@
 # dbt-common::tracing
 
 This module integrates the generic `dbt-tracing` library with dbt/Fusion
-runtime behavior. It owns `FsTraceConfig`, `init_tracing`, dbt fallback
+runtime behavior. It owns `FsTraceConfig`, dbt tracing initialization, dbt fallback
 attributes, process/root span attributes, CLI layer assembly, user-facing
 formatters, dbt-specific middlewares, and convenience emit helpers.
 
@@ -27,7 +27,7 @@ dbt code
         |
         v
 dbt-common::tracing
-  - FsTraceConfig and init_tracing
+  - FsTraceConfig and shared dbt tracing assembly
   - dbt_data_layer_config callbacks
   - dbt-specific middlewares and user-facing layers
   - formatter families for console, file, JSON compat, and query logs
@@ -56,9 +56,11 @@ dbt-telemetry / dbt-telemetry-private
 - Process span attributes come from `create_process_event_data` through
   `dbt_process_span_attributes`.
 
-`init_tracing` in `dbt_init.rs` builds `TelemetryDataLayer` with those callbacks,
-the configured middleware stack, and the configured consumer layers. It also
-opens the process span and returns a `TelemetryHandle` for graceful shutdown.
+`FsTraceConfig::init` assembles the CLI layers and passes their explicit inputs
+to the config-independent initializer in `dbt_init.rs`. The initializer builds
+`TelemetryDataLayer`, opens the process span, and returns a `TelemetryHandle`
+for graceful shutdown. Other applications can reuse the middleware and
+file-output assembly functions without constructing `FsTraceConfig`.
 
 ## Layer Assembly
 
@@ -133,14 +135,16 @@ use dbt_common::tracing::dbt_emit::{
 };
 
 emit_info_log_message("Parsing project");
-emit_warn_log_message(code, "Deprecated config", status_reporter);
-emit_error_log_from_fs_error(&error, status_reporter);
+emit_warn_log_message(code, "Deprecated config");
+emit_error_log_from_fs_error(error);
 ```
 
 `dbt_emit.rs` also contains helpers for package-scoped messages, strict parse
 errors, progress messages, and stdout/stderr-oriented messages. Prefer these
-helpers when emitting user-facing dbt logs so status reporting, locations, error
-codes, and middleware expectations stay consistent.
+helpers when emitting user-facing dbt logs so locations, error codes, and
+middleware expectations stay consistent. Error and warning helpers that receive
+an `FsError` retain a borrowed-only error view for in-process consumers while
+delegating serialized and user-facing output to the corresponding `LogMessage`.
 
 For direct structured events, use the generic helpers re-exported through
 `dbt_common::tracing::emit` only when there is no dbt-specific convenience

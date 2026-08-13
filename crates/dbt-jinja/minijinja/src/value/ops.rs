@@ -162,7 +162,7 @@ pub fn slice(value: Value, start: Value, stop: Value, step: Value) -> Result<Val
             };
             Ok(Value::from_bytes(bytes))
         }
-        ValueRepr::Undefined | ValueRepr::None => Ok(Value::from(Vec::<Value>::new())),
+        ValueRepr::Undefined(_) | ValueRepr::None => Ok(Value::from(Vec::<Value>::new())),
         ValueRepr::Object(obj) if matches!(obj.repr(), ObjectRepr::Seq | ObjectRepr::Iterable) => {
             let len = obj.enumerator_len().unwrap_or_default();
             let (start, len) = get_offset_and_len(start, stop, || len);

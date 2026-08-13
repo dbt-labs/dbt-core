@@ -10,20 +10,20 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use super::omissible_utils::handle_omissible_override;
-use crate::default_to;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{
     ClusterConfig, FreshnessDefinition, Schedule, SchemaOrigin, SyncConfig,
 };
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::default_meta_and_tags;
+use crate::schemas::project::configs::config_merge::Tags;
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, StringOrInteger,
-    bool_or_string_bool, f64_or_string_f64, hours_to_expiration_or_string, u64_or_string_u64,
+    bool_or_string_bool, f64_or_string_f64, hours_to_expiration_or_string_omissible,
+    u64_or_string_u64,
 };
+use dbt_proc_macros::DefaultTo;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -53,9 +53,9 @@ pub struct ProjectSourceConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "hours_to_expiration_or_string"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<StringOrInteger>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -237,24 +237,86 @@ impl TypedRecursiveConfig for ProjectSourceConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.enabled.is_some()
+            || self.event_time.is_some()
+            || self.meta.is_some()
+            || self.freshness.is_present()
+            || self.tags.is_some()
+            || self.loaded_at_query.is_some()
+            || self.loaded_at_field.is_some()
+            || self.static_analysis.is_some()
+            || self.partition_by.is_some()
+            || self.cluster_by.is_some()
+            || self.hours_to_expiration.is_present()
+            || self.job_execution_timeout_seconds.is_some()
+            || self.reservation.is_some()
+            || self.labels.is_some()
+            || self.labels_from_meta.is_some()
+            || self.kms_key_name.is_some()
+            || self.require_partition_filter.is_some()
+            || self.partition_expiration_days.is_some()
+            || self.grant_access_to.is_some()
+            || self.partitions.is_some()
+            || self.enable_refresh.is_some()
+            || self.refresh_interval_minutes.is_some()
+            || self.max_staleness.is_some()
+            || self.file_format.is_some()
+            || self.catalog_name.is_some()
+            || self.external_location.is_some()
+            || self.formatter.is_some()
+            || self.location_root.is_some()
+            || self.tblproperties.is_some()
+            || self.include_full_name_in_path.is_some()
+            || self.liquid_clustered_by.is_some()
+            || self.auto_liquid_cluster.is_some()
+            || self.clustered_by.is_some()
+            || self.buckets.is_some()
+            || self.catalog.is_some()
+            || self.databricks_tags.is_some()
+            || self.compression.is_some()
+            || self.databricks_compute.is_some()
+            || self.target_alias.is_some()
+            || self.source_alias.is_some()
+            || self.matched_condition.is_some()
+            || self.not_matched_condition.is_some()
+            || self.not_matched_by_source_condition.is_some()
+            || self.not_matched_by_source_action.is_some()
+            || self.merge_with_schema_evolution.is_some()
+            || self.skip_matched_step.is_some()
+            || self.skip_not_matched_step.is_some()
+            || self.auto_refresh.is_some()
+            || self.backup.is_some()
+            || self.bind.is_some()
+            || self.dist.is_some()
+            || self.sort.is_some()
+            || self.sort_type.is_some()
+            || self.as_columnstore.is_some()
+            || self.table_type.is_some()
+            || self.indexes.is_some()
+            || self.unlogged.is_some()
+            || self.schedule.is_some()
+            || self.schema_origin.is_some()
+            || self.sync.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema,
+)]
 pub struct SourceConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub event_time: Option<String>,
-    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
+    #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(default)]
     pub freshness: Omissible<Option<FreshnessDefinition>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Verbatim<Option<String>>,
     #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
@@ -281,7 +343,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
             event_time: config.event_time,
             meta: config.meta,
             freshness: config.freshness,
-            tags: config.tags,
+            tags: Tags(config.tags),
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
@@ -389,6 +451,27 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 // sources doesn't need this field
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -401,7 +484,7 @@ impl From<SourceConfig> for ProjectSourceConfig {
             event_time: config.event_time,
             meta: config.meta,
             freshness: config.freshness,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
@@ -517,49 +600,7 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
     }
 
     fn default_to(&mut self, parent: &SourceConfig) {
-        let SourceConfig {
-            enabled,
-            event_time,
-            meta,
-            freshness,
-            tags,
-            loaded_at_field,
-            loaded_at_query,
-            static_analysis,
-            schema_origin,
-            sync,
-            external_location,
-            formatter,
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
-
-        // Handle flattened configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
-
-        // Handle Omissible fields for hierarchical overrides
-        handle_omissible_override(freshness, &parent.freshness);
-
-        default_to!(
-            parent,
-            [
-                enabled,
-                event_time,
-                loaded_at_field,
-                loaded_at_query,
-                static_analysis,
-                schema_origin,
-                sync,
-                external_location,
-                formatter,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 

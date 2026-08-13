@@ -1,6 +1,6 @@
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_schemas::schemas::ResolvedCloudConfig;
-use dbt_schemas::schemas::packages::PrivatePackage;
+use dbt_schemas::schemas::packages::{PrivatePackage, PrivatePackageProvider};
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -13,66 +13,92 @@ pub struct ProviderDetail {
     url: String,
     token: String,
     org: String,
+    #[serde(default)]
     provider: Option<String>,
 }
 
 impl ProviderDetail {
+    /// Parses the raw provider string, emitting a deprecation warning if needed.
+    fn parsed_provider(&self) -> Option<PrivatePackageProvider> {
+        let raw = self.provider.as_deref()?;
+        if raw == "azure_devops" {
+            tracing::warn!(
+                "Provider 'azure_devops' is deprecated; use 'ado' instead. \
+                 The 'ado' provider supports both 2-part (org/repo) and 3-part (org/project/repo) paths."
+            );
+        }
+        PrivatePackageProvider::deserialize(serde_json::Value::String(raw.to_string())).ok()
+    }
+}
+
+/// `azure_active_directory` has no SSH clone form, so it's excluded here.
+const VALID_FOR_SSH: &str = "github, gitlab, ado, azure_devops";
+
+fn providers_equivalent(
+    entry: Option<PrivatePackageProvider>,
+    requested: Option<PrivatePackageProvider>,
+) -> bool {
+    match (entry, requested) {
+        (_, None) => true,
+        (None, Some(_)) => false,
+        (Some(entry), Some(requested)) => entry.equivalent(requested),
+    }
+}
+
+impl ProviderDetail {
+    fn is_ado(&self) -> bool {
+        self.parsed_provider()
+            .is_some_and(PrivatePackageProvider::is_ado)
+    }
+
     fn resolved_url(&self, private_def: &PrivateDefinition) -> String {
-        if self.is_azure_devops() {
-            let git_url = ADOGitURL::new(self.url.clone());
-            if self.is_ado() && !private_def.groups.is_empty() {
-                let project = private_def.groups.join("/");
-                git_url.resolve_with_project(&self.token, &project, &private_def.repo_name)
-            } else {
-                git_url.resolve(&self.token, &private_def.repo_name)
-            }
+        if self.is_ado() {
+            ADOGitURL::new(self.url.clone()).resolve(
+                &self.token,
+                &private_def.groups.join("/"),
+                &private_def.repo_name,
+            )
         } else {
             let git_url = GitURL::new(self.url.clone());
             git_url.resolve(&self.token, &private_def.repo_name)
         }
     }
 
-    fn is_ado(&self) -> bool {
-        self.provider.as_deref() == Some("ado")
-    }
-
-    fn is_azure_active_directory(&self) -> bool {
-        self.provider.as_deref() == Some("azure_active_directory")
-    }
-
-    fn is_azure_devops(&self) -> bool {
-        self.is_ado() || self.is_azure_active_directory()
-    }
-
     fn matches_private_definition(
         &self,
         private_def: &PrivateDefinition,
-        provider: Option<&str>,
+        provider: Option<PrivatePackageProvider>,
     ) -> bool {
-        // Check if provider matches (if specified)
-        // "ado" and "azure_active_directory" are distinct providers with different path requirements
-        if let Some(requested_provider) = provider
-            && self.provider.as_deref() != Some(requested_provider)
-        {
+        let parsed_provider = self.parsed_provider();
+        if !providers_equivalent(parsed_provider, provider) {
             return false;
         }
 
-        // Validate path structure based on provider type
-        // "ado" expects 3-part names (org/project/repo)
-        // "azure_active_directory" expects 2-part names (org/repo) for backward compatibility
-        if self.is_ado() {
-            // For "ado", the private definition should have groups (project)
-            // URL template contains the project, so we match org and repo
-            let git_url = ADOGitURL::new(self.url.clone());
-            git_url.can_resolve_ado(private_def)
-        } else if self.is_azure_active_directory() {
-            // For "azure_active_directory", backward compatibility with 2-part names
-            let git_url = ADOGitURL::new(self.url.clone());
-            git_url.can_resolve_azure_active_directory(private_def)
-        } else {
+        if !self.is_ado() {
             let git_url = GitURL::new(self.url.clone());
-            git_url.can_resolve(private_def)
+            return git_url.can_resolve(private_def);
         }
+
+        // For Azure DevOps entries, compare the project segment unless one side omits it.
+        // A 2-part package (no project) can match a concrete-project entry but not a {project} placeholder.
+        let git_url = ADOGitURL::new(self.url.clone());
+        let url_has_project = !git_url.get_definition().groups.is_empty();
+        let pkg_has_project = !private_def.groups.is_empty();
+
+        // If the URL has a {project} or {group} placeholder and the package has no project,
+        // that's an unfilled placeholder — don't match.
+        if url_has_project && !pkg_has_project {
+            let url_def = git_url.get_definition();
+            let url_group = url_def.groups.join("/");
+            if url_group == "{project}" || url_group == "{group}" {
+                return false;
+            }
+        }
+
+        // Compare the project if both sides have one, or neither has one.
+        let compare_project =
+            (url_has_project && pkg_has_project) || (!url_has_project && !pkg_has_project);
+        git_url.can_resolve(private_def, compare_project)
     }
 }
 
@@ -132,6 +158,17 @@ fn groups_eq(left: &[String], right: &[String]) -> bool {
             .iter()
             .zip(right.iter())
             .all(|(left_group, right_group)| path_component_eq(left_group, right_group))
+}
+
+/// Matches a URL template's project segment against the requested one. A lone
+/// `{project}`/`{group}` placeholder accepts any project; concrete segments must match.
+fn ado_project_matches(url_groups: &[String], def_groups: &[String]) -> bool {
+    match url_groups {
+        [placeholder] if placeholder == "{project}" || placeholder == "{group}" => {
+            !def_groups.is_empty()
+        }
+        _ => groups_eq(url_groups, def_groups),
+    }
 }
 
 fn extract_path_from_url(url: String) -> String {
@@ -219,17 +256,17 @@ impl ADOGitURL {
         PrivateDefinition::build(&path)
     }
 
-    pub fn can_resolve(&self, private_def: &PrivateDefinition) -> bool {
-        // Default behavior for backward compatibility
-        self.can_resolve_azure_active_directory(private_def)
-    }
-
-    pub fn can_resolve_azure_active_directory(&self, private_def: &PrivateDefinition) -> bool {
+    /// Matches a package definition against this URL template. `compare_project` is false for
+    /// 2-part packages, where the project comes from the template rather than the package.
+    pub fn can_resolve(&self, private_def: &PrivateDefinition, compare_project: bool) -> bool {
         let url_def = self.get_definition();
 
-        // For azure_active_directory, we only compare org and repo, not groups (project is in URL template)
-        // Private definition should be 2-part: org/repo
         if !path_component_eq(&url_def.org_name, &private_def.org_name) {
+            return false;
+        }
+
+        // Entries sharing an org differ only by project, so the project selects the entry.
+        if compare_project && !ado_project_matches(&url_def.groups, &private_def.groups) {
             return false;
         }
 
@@ -243,38 +280,11 @@ impl ADOGitURL {
         false
     }
 
-    pub fn can_resolve_ado(&self, private_def: &PrivateDefinition) -> bool {
-        // "ado" requires 3-part names: org/project/repo
-        if private_def.groups.is_empty() {
-            return false;
-        }
-
-        let url_def = self.get_definition();
-
-        // The project in private_def is informational — the URL template contains the actual project.
-        // We only match on org and repo.
-        if !path_component_eq(&url_def.org_name, &private_def.org_name) {
-            return false;
-        }
-
-        // Compare repo names (allowing for {repo} wildcard)
-        if url_def.is_repo_wildcard()
-            || path_component_eq(&url_def.repo_name, &private_def.repo_name)
-        {
-            return true;
-        }
-
-        false
-    }
-
-    pub fn resolve(&self, token: &str, repo: &str) -> String {
-        self.url.replace("{token}", token).replace("{repo}", repo)
-    }
-
-    pub fn resolve_with_project(&self, token: &str, project: &str, repo: &str) -> String {
+    pub fn resolve(&self, token: &str, project: &str, repo: &str) -> String {
         self.url
             .replace("{token}", token)
             .replace("{project}", project)
+            .replace("{group}", project)
             .replace("{repo}", repo)
     }
 }
@@ -305,13 +315,15 @@ pub fn get_resolved_url(
 
     // Iterate over all providers and try to match each one
     for provider in provider_info {
-        if provider.matches_private_definition(&private_def, private_package.provider.as_deref()) {
+        if provider.matches_private_definition(&private_def, private_package.provider) {
             private_package_usage_event(
                 cloud_config,
                 private_package.private.deref(),
-                private_package.provider.as_deref(),
+                private_package.provider.map(PrivatePackageProvider::as_str),
                 true,
-                provider.provider.as_deref(),
+                provider
+                    .parsed_provider()
+                    .map(PrivatePackageProvider::as_str),
             );
             return Ok(provider.resolved_url(&private_def));
         }
@@ -321,7 +333,7 @@ pub fn get_resolved_url(
     private_package_usage_event(
         cloud_config,
         private_package.private.deref(),
-        private_package.provider.as_deref(),
+        private_package.provider.map(PrivatePackageProvider::as_str),
         false,
         None,
     );
@@ -335,23 +347,26 @@ pub fn get_resolved_url(
 
 fn get_local_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
     // Default to "github" when provider is unspecified, matching dbt-core's behavior
-    match private_package.provider.as_deref().unwrap_or("github") {
-        "github" => Ok(format!(
+    let provider = private_package
+        .provider
+        .unwrap_or(PrivatePackageProvider::Github);
+    match provider {
+        PrivatePackageProvider::Github => Ok(format!(
             "git@github.com:{}.git",
             private_package.private.deref()
         )),
-        "gitlab" => Ok(format!(
+        PrivatePackageProvider::Gitlab => Ok(format!(
             "git@gitlab.com:{}.git",
             private_package.private.deref()
         )),
-        "ado" | "azure_devops" => {
-            // "ado"/"azure_devops" requires 3-part names: org/project/repo
+        // An SSH clone URL requires the project for ado (whether spelled as "ado" or "azure_devops").
+        PrivatePackageProvider::Ado => {
             let def = PrivateDefinition::build(private_package.private.deref());
             if def.groups.is_empty() {
                 return err!(
                     ErrorCode::InvalidConfig,
                     "The '{}' provider requires org/project/repo format (3 parts), got: '{}'",
-                    private_package.provider.as_deref().unwrap_or_default(),
+                    provider.as_str(),
                     private_package.private.deref()
                 );
             }
@@ -360,13 +375,13 @@ fn get_local_resolved_url(private_package: &PrivatePackage) -> FsResult<String> 
                 private_package.private.deref()
             ))
         }
-        _ => {
-            err!(
-                ErrorCode::InvalidConfig,
-                r#"Invalid private package configuration: '{}' provider: '{}'. Valid providers are: github, gitlab, ado, azure_active_directory"#,
-                private_package.private.deref(),
-                private_package.provider.as_deref().unwrap_or_default()
-            )
-        }
+        // `azure_active_directory` is only meaningful for platform-hosted runs.
+        PrivatePackageProvider::AzureActiveDirectory => err!(
+            ErrorCode::InvalidConfig,
+            r#"Invalid private package configuration: '{}' provider: '{}'. Valid providers are: {}"#,
+            private_package.private.deref(),
+            provider.as_str(),
+            VALID_FOR_SSH
+        ),
     }
 }

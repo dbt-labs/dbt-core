@@ -987,12 +987,7 @@ impl BaseRelation for Relation {
     }
 
     fn normalize_component(&self, component: &str) -> String {
-        use AdapterType::*;
-        match self.adapter_type {
-            Salesforce | Bigquery | ClickHouse => component.to_string(),
-            Snowflake => component.to_uppercase(),
-            _ => component.to_lowercase(),
-        }
+        crate::format_ident::default_identifier_case(component, self.adapter_type)
     }
 
     fn render_self_as_str(&self) -> String {
@@ -1172,6 +1167,12 @@ impl BaseRelation for Relation {
                 }
             }
             Bigquery => {
+                if remote_state_value.is_none() {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        "remote_state cannot be None",
+                    ));
+                }
                 let current_state = remote_state_value
                     .as_object()
                     .ok_or_else(|| {

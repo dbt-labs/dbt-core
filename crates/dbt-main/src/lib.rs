@@ -7,6 +7,7 @@ pub mod dbt_lib;
 pub mod driver;
 pub use driver::{DbtCompilationDriver, DbtTaskExecutionDriver};
 pub mod retry;
+pub mod source_freshness;
 pub mod vars;
 
 pub mod install_method;
@@ -20,4 +21,4 @@ pub mod update;
 mod utils;
 
 mod main_impl;
-pub use main_impl::{prepare_cli_or_exit, print_trimmed_error, run_cli};
+pub use main_impl::{prepare_cli_or_exit, print_trimmed_error, run_cli, run_cli_with_code};

@@ -131,6 +131,33 @@ pub struct OperationCtx {
     pub config: JinjaObject<DummyConfig>,
 }
 
+/// Render context for an ad-hoc SQL string in operation scope with a bound
+/// `{{ this }}` relation — e.g. a source's `loaded_at_query`. Layers
+/// [`OperationCtx`] (base + no-op `config`) with `this` plus its
+/// `database`/`schema`/`identifier` parts so the query can reference
+/// `{{ this }}`. Passed directly to `render_named_str`; no `BTreeMap`.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct CustomSqlRenderCtx {
+    #[serde(flatten)]
+    pub operation: OperationCtx,
+
+    /// `{{ this }}` — `RelationObject` Object bound for the rendered query.
+    /// Typed [`MinijinjaValue`] for the same reason as [`CompileNodeCtx::this`]:
+    /// the concrete `RelationObject` impl lives in `dbt-adapter` and is built
+    /// via `Value::from_object(...)`.
+    #[schemars(with = "serde_json::Value")]
+    pub this: MinijinjaValue,
+
+    /// `{{ database }}` — the relation's database.
+    pub database: String,
+
+    /// `{{ schema }}` — the relation's schema.
+    pub schema: String,
+
+    /// `{{ identifier }}` — the relation's identifier (alias).
+    pub identifier: String,
+}
+
 /// Per-node compile-time overlay layered onto [`CompileBaseCtx`] for each
 /// node SQL render. Today's `build_compile_node_context_inner<T>` populates
 /// this 1:1 — same field-key strings (including the underscore-decorated
