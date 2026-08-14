@@ -78,10 +78,6 @@ jobs:
           max_attempts: 3
           command: tox -e integration -- -nauto
 
-      - name: Find dbt.log files
-        if: always()
-        run: find "${{ env.LOG_DIR }}" -iname 'dbt.log*' 2>&1 | head -50
-
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
         with:
@@ -95,14 +91,7 @@ jobs:
 
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
-      #
-      # Retried because this occasionally races against a trailing log write
-      # from a pytest-xdist worker that hasn't been flushed to disk yet by
-      # the time this reads dbt.log, producing a spurious "invalid type"
-      # parse failure on a truncated line.
-      - name: Run log schema check
-        uses: nick-fields/retry@v3
+      - uses: actions-rs/cargo@v1
         with:
-          timeout_minutes: 5
-          max_attempts: 3
-          command: cargo run --manifest-path test/interop/log_parsing/Cargo.toml
+          command: run
+          args: --manifest-path test/interop/log_parsing/Cargo.toml
