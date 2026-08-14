@@ -1,8 +1,10 @@
-# These point to main to catch any regressions before they are released to OSS
-git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters
-git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
-git+https://github.com/dbt-labs/dbt-common.git@main
+# This points to main to catch any regressions before they are released to OSS
 git+https://github.com/dbt-labs/dbt-postgres.git@main
+# Last dbt-common/dbt-adapters releases compatible with both Python 3.9 and this
+# branch's protobuf<6.0 pin (core/setup.py) -- newer releases require protobuf>=6.0
+dbt-common==1.27.1
+dbt-adapters==1.16.3
+dbt-tests-adapter==1.19.1
 #
 black>=24.3.0,<25.0
 bumpversion
