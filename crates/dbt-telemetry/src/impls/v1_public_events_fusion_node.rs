@@ -89,6 +89,7 @@ impl NodeMaterialization {
             Self::DynamicTable => "dynamic_table",
             Self::InteractiveTable => "interactive_table",
             Self::Function => "function",
+            Self::MetricView => "metric_view",
             Self::Custom => "custom",
         }
     }
@@ -497,6 +498,23 @@ mod tests {
         assert_eq!(
             NodeMaterialization::InteractiveTable.as_static_ref(),
             "interactive_table"
+        );
+    }
+
+    #[test]
+    fn metric_view_has_stable_event_names() {
+        assert_eq!(
+            NodeMaterialization::MetricView.as_static_ref(),
+            "metric_view"
+        );
+        assert_eq!(
+            serde_json::to_string(&NodeMaterialization::MetricView).unwrap(),
+            "\"NODE_MATERIALIZATION_METRIC_VIEW\""
+        );
+        assert_eq!(
+            serde_json::from_str::<NodeMaterialization>("\"NODE_MATERIALIZATION_METRIC_VIEW\"")
+                .unwrap(),
+            NodeMaterialization::MetricView
         );
     }
 

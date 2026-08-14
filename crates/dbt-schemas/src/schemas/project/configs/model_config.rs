@@ -2307,6 +2307,32 @@ __additional_properties__: {}
     }
 
     #[test]
+    fn test_databricks_tags_rejects_non_dictionary_config() {
+        let error = dbt_yaml::from_str::<ProjectModelConfig>(
+            "+databricks_tags:\n  - not-a-dictionary\n__additional_properties__: {}\n",
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.display_no_mark().to_string(),
+            "+databricks_tags: invalid type: sequence, expected a map"
+        );
+    }
+
+    #[test]
+    fn test_tblproperties_rejects_non_dictionary_config() {
+        let error = dbt_yaml::from_str::<ProjectModelConfig>(
+            "+tblproperties: true\n__additional_properties__: {}\n",
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.display_no_mark().to_string(),
+            "+tblproperties: invalid type: boolean `true`, expected a map"
+        );
+    }
+
+    #[test]
     fn test_classifiers_merge_in_default_to() {
         use crate::schemas::project::configs::config_merge::Classifiers;
         use crate::schemas::project::dbt_project::ResolvableConfig;

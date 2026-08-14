@@ -1,5 +1,7 @@
 mod bigquery;
+mod databricks_config;
 mod databricks_metadata;
+mod databricks_render_type;
 mod delete_insert;
 mod duckdb;
 mod equals;

@@ -2,6 +2,16 @@ use dbt_adapter_core::AdapterType;
 
 use crate::tokenizer::{Token, Tokenizer};
 
+pub fn clean_sql(sql: &str, adapter_type: AdapterType) -> String {
+    match adapter_type {
+        AdapterType::Databricks => {
+            let sql = sql.trim();
+            sql.strip_suffix(';').unwrap_or(sql).to_string()
+        }
+        _ => sql.to_string(),
+    }
+}
+
 pub fn is_update_statement(sql: &str, adapter_type: AdapterType) -> bool {
     match adapter_type {
         AdapterType::ClickHouse => {
@@ -78,7 +88,20 @@ fn is_clickhouse_read_statement_token(token: &str) -> bool {
 mod tests {
     use dbt_adapter_core::AdapterType;
 
-    use super::is_update_statement;
+    use super::{clean_sql, is_update_statement};
+
+    #[test]
+    fn clean_sql_applies_adapter_specific_normalization() {
+        assert_eq!(
+            clean_sql(" select 1; ", AdapterType::Databricks),
+            "select 1"
+        );
+        assert_eq!(
+            clean_sql("select 1;;", AdapterType::Databricks),
+            "select 1;"
+        );
+        assert_eq!(clean_sql(" select 1; ", AdapterType::DuckDB), " select 1; ");
+    }
 
     #[test]
     fn clickhouse_update_statement_classification_uses_sql_tokenizer() {

@@ -3594,6 +3594,23 @@ impl Adapter {
         }
     }
 
+    #[tracing::instrument(skip_all, level = "trace")]
+    pub fn yaml_quote_backtick_values(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("yaml_quote_backtick_values", &["yaml_body"], args);
+                let yaml_body = iter.next_arg::<&str>()?;
+                iter.finish()?;
+                Ok(Value::from(adapter.yaml_quote_backtick_values(yaml_body)?))
+            }
+            Parse(_) => unimplemented!("yaml_quote_backtick_values"),
+        }
+    }
+
     /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement.
     #[tracing::instrument(skip(self), level = "trace")]
     pub fn use_warehouse(
@@ -4217,6 +4234,8 @@ impl Adapter {
             "parse_columns_and_constraints" => self.parse_columns_and_constraints(state, args),
             // sql: str
             "clean_sql" => self.clean_sql(state, args),
+            // yaml_body: str
+            "yaml_quote_backtick_values" => self.yaml_quote_backtick_values(state, args),
             "get_seed_file_path" => {
                 // model: dict (seed node)
                 let iter = ArgsIter::new(name, &["model"], args);
