@@ -129,7 +129,8 @@ jobs:
         # Python 3.7 is EOL and no longer available on GitHub-hosted runners.
         # ubuntu-20.04/macos-12 runner images have been retired by GitHub
         # Actions (jobs pinned to them queue forever); moved to ubuntu-22.04/
-        # macos-13. windows-latest/macos bumped to Python 3.9 since
+        # macos-15 (macos-13 has been fully retired and macos-14 is already
+        # flagged deprecated). windows-latest/macos bumped to Python 3.9 since
         # psycopg2-binary no longer ships a Python 3.8 wheel for those OSes.
         python-version: ["3.8", "3.9", "3.10"]
         os: [ubuntu-22.04]
@@ -137,7 +138,7 @@ jobs:
           - python-version: 3.9
             os: windows-latest
           - python-version: 3.9
-            os: macos-13
+            os: macos-15
 
     env:
       TOXENV: integration
