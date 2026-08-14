@@ -9,6 +9,7 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
+from dbt.deprecated_version import check_deprecated_version
 from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
 from dbt.events.types import (
     CommandCompleted,
@@ -55,6 +56,10 @@ def preflight(func):
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
         flags_dict_str = cast_dict_to_dict_of_strings(get_flag_dict())
         fire_event(MainReportArgs(args=flags_dict_str))
+
+        # `init` already fires its own WARNING-level version of this notice
+        if flags.WHICH != "init":
+            check_deprecated_version()
 
         # Deprecation warnings
         flags.fire_deprecations()

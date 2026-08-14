@@ -4,6 +4,7 @@ import click
 from dbt.cli.options import MultiOption
 from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
+from dbt.deprecated_version import check_deprecated_version
 from dbt.version import get_version_information
 
 args = click.option(
@@ -570,6 +571,7 @@ def _version_callback(ctx, _param, value):
     if not value or ctx.resilient_parsing:
         return
     click.echo(get_version_information())
+    check_deprecated_version(is_warn=True)
     ctx.exit()
 
 
