@@ -73,7 +73,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        # Python 3.7 is EOL and no longer available on GitHub-hosted ubuntu-latest
+        # (24.04) runners, so it's dropped from the matrix here.
+        python-version: ["3.8", "3.9", "3.10"]
 
     env:
       TOXENV: "unit"
@@ -124,13 +126,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
-        os: [ubuntu-20.04]
+        # Python 3.7 is EOL and no longer available on GitHub-hosted runners.
+        # ubuntu-20.04/macos-12 runner images have been retired by GitHub
+        # Actions (jobs pinned to them queue forever); moved to ubuntu-22.04/
+        # macos-15 (macos-13 has been fully retired and macos-14 is already
+        # flagged deprecated). windows-latest/macos bumped to Python 3.9 since
+        # psycopg2-binary no longer ships a Python 3.8 wheel for those OSes.
+        python-version: ["3.8", "3.9", "3.10"]
+        os: [ubuntu-22.04]
         include:
-          - python-version: 3.8
+          - python-version: 3.9
             os: windows-latest
-          - python-version: 3.8
-            os: macos-12
+          - python-version: 3.9
+            os: macos-15
 
     env:
       TOXENV: integration

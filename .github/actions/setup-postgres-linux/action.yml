@@ -7,4 +7,8 @@ runs:
       run: |
         sudo systemctl start postgresql.service
         pg_isready
-        sudo -u postgres bash ${{ github.action_path }}/setup_db.sh
+        # Newer Ubuntu runner images restrict other-user traversal of
+        # /home/runner, so the postgres system user can no longer read a
+        # script path under $HOME directly. Read it as the runner user and
+        # pass the contents in instead.
+        sudo -u postgres bash -c "$(cat ${{ github.action_path }}/setup_db.sh)"

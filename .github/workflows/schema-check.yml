@@ -9,17 +9,14 @@
 # occur so we want to proactively alert to it.
 #
 # **when?**
-# On pushes to `develop` and release branches. Manual runs are also enabled.
+# Only run manually. The push/pull_request triggers were disabled because
+# this job depends on a deploy key (SCHEMA_SSH_PRIVATE_KEY) that no longer
+# authenticates against schemas.getdbt.com, so it could never pass
+# automatically; main branch made the same change for the same reason.
 name: Artifact Schema Check
 
 on:
   workflow_dispatch:
-  pull_request: #TODO: remove before merging
-  push:
-    branches:
-      - "develop"
-      - "*.latest"
-      - "releases/*"
 
 # no special access is needed
 permissions: read-all
