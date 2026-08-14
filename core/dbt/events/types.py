@@ -2478,6 +2478,24 @@ class EventBufferFull(WarnLevel):
 
 
 @dataclass
+class DeprecatedVersionWarn(WarnLevel):
+    msg: str
+    code: str = "Z050"
+
+    def message(self) -> str:
+        return ui.warning_tag(self.msg)
+
+
+@dataclass
+class DeprecatedVersionInfo(InfoLevel):
+    msg: str
+    code: str = "Z051"
+
+    def message(self) -> str:
+        return self.msg
+
+
+@dataclass
 class RecordRetryException(DebugLevel):
     exc: str
     code: str = "M021"
