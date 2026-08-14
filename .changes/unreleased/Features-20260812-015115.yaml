@@ -1,6 +1,0 @@
-kind: Features
-body: Warn users if they are using a deprecated dbt version
-time: 2026-08-12T01:51:15.345868+05:30
-custom:
-    Author: ash2shukla
-    Issue: "15964"
