@@ -854,12 +854,12 @@ class BaseAdapter(metaclass=AdapterMeta):
     def convert_agate_type(cls, agate_table: agate.Table, col_idx: int) -> Optional[str]:
         agate_type: Type = agate_table.column_types[col_idx]
         conversions: List[Tuple[Type, Callable[..., str]]] = [
-            (agate.Text, cls.convert_text_type),
-            (agate.Number, cls.convert_number_type),
-            (agate.Boolean, cls.convert_boolean_type),
-            (agate.DateTime, cls.convert_datetime_type),
-            (agate.Date, cls.convert_date_type),
-            (agate.TimeDelta, cls.convert_time_type),
+            (agate.Text, cls.convert_text_type),  # type: ignore[arg-type]
+            (agate.Number, cls.convert_number_type),  # type: ignore[arg-type]
+            (agate.Boolean, cls.convert_boolean_type),  # type: ignore[arg-type]
+            (agate.DateTime, cls.convert_datetime_type),  # type: ignore[arg-type]
+            (agate.Date, cls.convert_date_type),  # type: ignore[arg-type]
+            (agate.TimeDelta, cls.convert_time_type),  # type: ignore[arg-type]
         ]
         for agate_cls, func in conversions:
             if isinstance(agate_type, agate_cls):

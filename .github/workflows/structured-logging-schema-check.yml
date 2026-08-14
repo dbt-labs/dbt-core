@@ -22,7 +22,9 @@ jobs:
   # run the performance measurements on the current or default branch
   test-schema:
     name: Test Log Schema
-    runs-on: ubuntu-20.04
+    # ubuntu-20.04 has been retired by GitHub Actions; jobs pinned to it queue
+    # forever since no runner ever picks them up.
+    runs-on: ubuntu-22.04
     env:
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"

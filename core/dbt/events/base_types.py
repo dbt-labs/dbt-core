@@ -36,7 +36,7 @@ class Event(metaclass=ABCMeta):
 
     # four digit string code that uniquely identifies this type of event
     # uniqueness and valid characters are enforced by tests
-    @abstractproperty
+    @abstractproperty  # type: ignore[misc]
     @staticmethod
     def code() -> str:
         raise Exception("code() not implemented for event")

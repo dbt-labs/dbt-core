@@ -37,7 +37,9 @@ jobs:
   code-quality:
     name: code-quality
 
-    runs-on: ubuntu-20.04
+    # ubuntu-20.04 has been retired by GitHub Actions; jobs pinned to it queue
+    # forever since no runner ever picks them up.
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check out the repository
@@ -66,12 +68,15 @@ jobs:
   unit:
     name: unit test / python ${{ matrix.python-version }}
 
-    runs-on: ubuntu-20.04
+    # ubuntu-20.04 has been retired by GitHub Actions; jobs pinned to it queue
+    # forever since no runner ever picks them up.
+    runs-on: ubuntu-22.04
 
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10']
+        # Python 3.7 is EOL and no longer available on GitHub-hosted runners.
+        python-version: ['3.8', '3.9', '3.10']
 
     env:
       TOXENV: "unit"
@@ -107,7 +112,7 @@ jobs:
           CURRENT_DATE=$(date +'%Y-%m-%dT%H_%M_%S') # no colons allowed for artifacts
           echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
@@ -121,13 +126,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10']
-        os: [ubuntu-20.04]
+        # Python 3.7 is EOL and no longer available on GitHub-hosted runners.
+        # ubuntu-20.04/macos-12 runner images have been retired by GitHub
+        # Actions (jobs pinned to them queue forever); moved to ubuntu-22.04/
+        # macos-15 (macos-13 has been fully retired and macos-14 is already
+        # flagged deprecated). windows-latest/macos bumped to Python 3.9 since
+        # psycopg2-binary no longer ships a Python 3.8 wheel for those OSes.
+        python-version: ['3.8', '3.9', '3.10']
+        os: [ubuntu-22.04]
         include:
-          - python-version: 3.8
+          - python-version: 3.9
             os: windows-latest
-          - python-version: 3.8
-            os: macos-12
+          - python-version: 3.9
+            os: macos-15
 
     env:
       TOXENV: integration
@@ -176,13 +187,13 @@ jobs:
           CURRENT_DATE=$(date +'%Y-%m-%dT%H_%M_%S') # no colons allowed for artifacts
           echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
           path: ./logs
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}.csv
@@ -191,7 +202,9 @@ jobs:
   build:
     name: build packages
 
-    runs-on: ubuntu-20.04
+    # ubuntu-20.04 has been retired by GitHub Actions; jobs pinned to it queue
+    # forever since no runner ever picks them up.
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check out the repository
