@@ -17,6 +17,7 @@ from dbt.adapters.factory import load_plugin, get_include_paths
 
 from dbt.contracts.util import Identifier as ProjectName
 
+from dbt.deprecated_version import check_deprecated_version
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     StarterProjectPath,
@@ -246,6 +247,8 @@ class InitTask(BaseTask):
 
     def run(self):
         """Entry point for the init task."""
+        check_deprecated_version(is_warn=True)
+
         profiles_dir = flags.PROFILES_DIR
         self.create_profiles_dir(profiles_dir)
 

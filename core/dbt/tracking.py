@@ -41,6 +41,7 @@ INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
 PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
 RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
+DEPRECATED_VERSION_INVOCATION_SPEC = "iglu:com.dbt/deprecated_version_invocation/jsonschema/1-0-0"
 LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
 RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-0"
 EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
@@ -477,3 +478,18 @@ def initialize_from_flags():
         initialize_tracking(flags.PROFILES_DIR)
     else:
         do_not_track()
+
+
+def track_deprecated_version_invocation() -> None:
+    if active_user is None:
+        return
+
+    context = [SelfDescribingJson(DEPRECATED_VERSION_INVOCATION_SPEC, {})]
+
+    track(
+        active_user,
+        category="dbt",
+        action="deprecated_version_invocation",
+        label=get_invocation_id(),
+        context=context,
+    )

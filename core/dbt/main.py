@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import dbt.version
+from dbt.deprecated_version import check_deprecated_version
 from dbt.events.functions import fire_event, setup_event_logger, setup_fallback_logger, LOG_VERSION
 from dbt.events.types import (
     EventLevel,
@@ -73,6 +74,7 @@ class DBTVersion(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         formatter = argparse.RawTextHelpFormatter(prog=parser.prog)
         formatter.add_text(dbt.version.get_version_information())
+        check_deprecated_version(is_warn=True)
         parser.exit(message=formatter.format_help())
 
 
@@ -243,6 +245,10 @@ def run_from_args(parsed):
 
     fire_event(MainReportVersion(version=str(dbt.version.installed), log_version=LOG_VERSION))
     fire_event(MainReportArgs(args=args_to_dict(parsed)))
+
+    # `init` already fires its own WARNING-level version of this notice
+    if parsed.which != "init":
+        check_deprecated_version()
 
     if dbt.tracking.active_user is not None:  # mypy appeasement, always true
         fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
