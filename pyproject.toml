@@ -3,6 +3,12 @@
 files = 'core/dbt'
 mypy_path = "third-party-stubs/"
 namespace_packages = true
+# mypy flipped this default to true in 0.990; the codebase predates that and
+# relies on the old implicit-Optional behavior (`def f(x: str = None)`).
+# Bumping mypy (needed for compatibility with newer type stubs) would
+# otherwise surface dozens of unrelated pre-existing "Incompatible default"
+# errors across the codebase.
+no_implicit_optional = false
 
 [tool.black]
 # TODO: remove global exclusion of tests when testing overhaul is complete

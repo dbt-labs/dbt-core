@@ -271,7 +271,7 @@ class BaseSourceResolver(BaseResolver):
 
 
 class BaseMetricResolver(BaseResolver):
-    def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:
+    def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:  # type: ignore[empty-body]
         ...
 
     def _repack_args(self, name: str, package: Optional[str]) -> List[str]:
