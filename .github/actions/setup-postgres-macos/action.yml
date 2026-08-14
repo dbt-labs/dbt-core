@@ -5,7 +5,14 @@ runs:
   steps:
     - shell: bash
       run: |
-        brew services start postgresql
+        # The unversioned `postgresql` brew alias tracks whatever the latest
+        # major version is (currently postgresql@18), which isn't guaranteed
+        # to be preinstalled on the runner image. Install and start a pinned
+        # version explicitly instead.
+        brew install postgresql@14
+        brew services start postgresql@14
+        echo "$(brew --prefix postgresql@14)/bin" >> "$GITHUB_PATH"
+        export PATH="$(brew --prefix postgresql@14)/bin:$PATH"
         echo "Check PostgreSQL service is running"
         i=10
         COMMAND='pg_isready'
