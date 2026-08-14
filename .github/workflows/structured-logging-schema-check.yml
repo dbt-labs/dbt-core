@@ -78,15 +78,20 @@ jobs:
           max_attempts: 3
           command: tox -e integration -- -nauto
 
+      - name: Find dbt.log files
+        if: always()
+        run: find "${{ env.LOG_DIR }}" -iname 'dbt.log*' 2>&1 | head -50
+
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
         with:
           name: dbt-log
           # $GITHUB_WORKSPACE is already .../dbt-core/dbt-core, so the old
-          # "dbt-core/logs/dbt.log" path pointed one level too deep and
-          # never matched a real file (silently skipped, per
-          # if-no-files-found: warn).
-          path: logs/dbt.log
+          # "dbt-core/logs/dbt.log" path pointed one level too deep. The Rust
+          # schema test also walks LOG_DIR recursively, so the real files
+          # live in nested per-test subdirectories, not directly at
+          # logs/dbt.log -- use a glob to actually match them.
+          path: logs/**/dbt.log
 
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
