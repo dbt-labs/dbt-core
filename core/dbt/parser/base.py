@@ -113,7 +113,7 @@ class ConfiguredParser(
         )
 
     @abc.abstractclassmethod
-    def get_compiled_path(cls, block: ConfiguredBlockType) -> str:
+    def get_compiled_path(cls, block: ConfiguredBlockType) -> str:  # type: ignore[empty-body]
         pass
 
     @abc.abstractmethod
