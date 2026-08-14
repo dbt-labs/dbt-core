@@ -22,7 +22,9 @@ jobs:
   # run the performance measurements on the current or default branch
   test-schema:
     name: Test Log Schema
-    runs-on: ubuntu-20.04
+    # ubuntu-20.04 has been retired by GitHub Actions; jobs pinned to it queue
+    # forever since no runner ever picks them up.
+    runs-on: ubuntu-22.04
     env:
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"
@@ -80,7 +82,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dbt-log
-          path: dbt-core/logs/dbt.log
+          # $GITHUB_WORKSPACE is already .../dbt-core/dbt-core, so the old
+          # "dbt-core/logs/dbt.log" path pointed one level too deep. The Rust
+          # schema test also walks LOG_DIR recursively, so the real files
+          # live in nested per-test subdirectories, not directly at
+          # logs/dbt.log -- use a glob to actually match them.
+          path: logs/**/dbt.log
 
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
