@@ -1447,12 +1447,7 @@
           ]
         },
         "indexes": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/IndexesConfig"
-            }
-          ]
+          "$ref": "#/definitions/IndexesConfig"
         },
         "initialize": {
           "type": [
@@ -1712,12 +1707,7 @@
           ]
         },
         "primary_key": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/PrimaryKeyConfig"
-            }
-          ]
+          "$ref": "#/definitions/PrimaryKeyConfig"
         },
         "query_settings": {
           "type": [
@@ -3725,12 +3715,7 @@
           ]
         },
         "indexes": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/IndexesConfig"
-            }
-          ]
+          "$ref": "#/definitions/IndexesConfig"
         },
         "initialize": {
           "type": [
@@ -3981,12 +3966,7 @@
           ]
         },
         "primary_key": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/PrimaryKeyConfig"
-            }
-          ]
+          "$ref": "#/definitions/PrimaryKeyConfig"
         },
         "query_settings": {
           "type": [
@@ -6092,12 +6072,7 @@
           ]
         },
         "indexes": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/IndexesConfig"
-            }
-          ]
+          "$ref": "#/definitions/IndexesConfig"
         },
         "initialize": {
           "type": [
@@ -6482,12 +6457,7 @@
           }
         },
         "primary_key": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/PrimaryKeyConfig"
-            }
-          ]
+          "$ref": "#/definitions/PrimaryKeyConfig"
         },
         "python_job_config": {
           "type": [
@@ -8465,12 +8435,7 @@
           ]
         },
         "indexes": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/IndexesConfig"
-            }
-          ]
+          "$ref": "#/definitions/IndexesConfig"
         },
         "initialize": {
           "type": [
@@ -8745,12 +8710,7 @@
           ]
         },
         "primary_key": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/PrimaryKeyConfig"
-            }
-          ]
+          "$ref": "#/definitions/PrimaryKeyConfig"
         },
         "query_settings": {
           "type": [
@@ -9825,12 +9785,7 @@
           ]
         },
         "indexes": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/IndexesConfig"
-            }
-          ]
+          "$ref": "#/definitions/IndexesConfig"
         },
         "initialize": {
           "type": [
@@ -10120,12 +10075,7 @@
           ]
         },
         "primary_key": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/PrimaryKeyConfig"
-            }
-          ]
+          "$ref": "#/definitions/PrimaryKeyConfig"
         },
         "query_settings": {
           "type": [
@@ -11220,12 +11170,7 @@
           ]
         },
         "indexes": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/IndexesConfig"
-            }
-          ]
+          "$ref": "#/definitions/IndexesConfig"
         },
         "initialize": {
           "type": [
@@ -11472,12 +11417,7 @@
           ]
         },
         "primary_key": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/PrimaryKeyConfig"
-            }
-          ]
+          "$ref": "#/definitions/PrimaryKeyConfig"
         },
         "query_settings": {
           "type": [
@@ -12767,12 +12707,7 @@
           ]
         },
         "indexes": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/IndexesConfig"
-            }
-          ]
+          "$ref": "#/definitions/IndexesConfig"
         },
         "initialize": {
           "type": [
@@ -13007,12 +12942,7 @@
           ]
         },
         "primary_key": {
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/PrimaryKeyConfig"
-            }
-          ]
+          "$ref": "#/definitions/PrimaryKeyConfig"
         },
         "query_settings": {
           "type": [
