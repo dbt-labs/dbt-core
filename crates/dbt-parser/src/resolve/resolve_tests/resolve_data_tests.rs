@@ -1,6 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
+use crate::dbt_project_config::coalesce_project_tests_config;
 use crate::dbt_project_config::disallow_plus_prefix_from_flags;
 use crate::dbt_project_config::init_project_config;
 use crate::renderer::RenderCtx;
@@ -395,17 +396,10 @@ pub async fn resolve_data_tests(
 
     let config_resolver =
         ProjectConfigResolver::build(root_project_configs.tests.clone(), is_dependency, || {
-            let tests_config = match (
+            let tests_config = coalesce_project_tests_config(
                 package.dbt_project.tests.clone(),
                 package.dbt_project.data_tests.clone(),
-            ) {
-                (Some(_), Some(_)) => {
-                    unimplemented!("Merge logic for tests and data tests is unimplemented")
-                }
-                (Some(tests), None) => Some(tests),
-                (None, Some(data_tests)) => Some(data_tests),
-                (None, None) => None,
-            };
+            )?;
             let disallow_plus_prefix =
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref());
             init_project_config(
