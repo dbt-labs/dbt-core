@@ -1392,8 +1392,7 @@ impl Object for AgateTable {
                 })?;
                 Ok(Value::from_object(result))
             }
-            "__eq__" | "__ne__" => self.call_eq_ne(name, args),
-            other => unimplemented!("AgateTable::{}", other),
+            _ => self.call_unknown_method(name, args),
         }
     }
 }

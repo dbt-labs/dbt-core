@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use minijinja::arg_utils::ArgsIter;
 use minijinja::value::{DynObject, Value};
-use minijinja::{Error, ErrorKind};
+use minijinja::Error;
 
 use crate::AgateTable;
 
@@ -16,30 +16,45 @@ impl AgateTable {
         if std::ptr::eq(self, other) {
             return Ordering::Equal;
         }
+        self.cmp_shape(other)
+            .then_with(|| self.cmp_cells(other))
+    }
+
+    fn cmp_shape(&self, other: &Self) -> Ordering {
         self.num_rows()
             .cmp(&other.num_rows())
             .then_with(|| self.num_columns().cmp(&other.num_columns()))
             .then_with(|| self.column_names_iter().cmp(other.column_names_iter()))
-            .then_with(|| {
-                self.column_types()
-                    .iter()
-                    .map(|t| t.type_name())
-                    .cmp(other.column_types().iter().map(|t| t.type_name()))
-            })
-            .then_with(|| {
-                for row_idx in 0..self.num_rows() {
-                    for col_idx in 0..self.num_columns() {
-                        match self
-                            .cell(row_idx as isize, col_idx as isize)
-                            .cmp(&other.cell(row_idx as isize, col_idx as isize))
-                        {
-                            Ordering::Equal => {}
-                            other => return other,
-                        }
-                    }
-                }
-                Ordering::Equal
-            })
+            .then_with(|| self.cmp_column_types(other))
+    }
+
+    fn cmp_column_types(&self, other: &Self) -> Ordering {
+        self.column_types()
+            .iter()
+            .map(|t| t.type_name())
+            .cmp(other.column_types().iter().map(|t| t.type_name()))
+    }
+
+    fn cmp_cells(&self, other: &Self) -> Ordering {
+        for row_idx in 0..self.num_rows() {
+            let row_ord = self.cmp_row(other, row_idx);
+            if row_ord != Ordering::Equal {
+                return row_ord;
+            }
+        }
+        Ordering::Equal
+    }
+
+    fn cmp_row(&self, other: &Self, row_idx: usize) -> Ordering {
+        for col_idx in 0..self.num_columns() {
+            let cell_ord = self
+                .cell(row_idx as isize, col_idx as isize)
+                .cmp(&other.cell(row_idx as isize, col_idx as isize));
+            if cell_ord != Ordering::Equal {
+                return cell_ord;
+            }
+        }
+        Ordering::Equal
     }
 
     pub(crate) fn custom_cmp_object(&self, other: &DynObject) -> Option<Ordering> {
@@ -54,25 +69,21 @@ impl AgateTable {
             .is_some_and(|other| self.semantic_cmp(other) == Ordering::Equal)
     }
 
-    pub(crate) fn call_eq_ne(&self, name: &str, args: &[Value]) -> Result<Value, Error> {
-        let fn_name = match name {
-            "__eq__" => "Table.__eq__",
-            "__ne__" => "Table.__ne__",
-            other => {
-                return Err(Error::new(
-                    ErrorKind::UnknownMethod,
-                    format!("AgateTable::{other}"),
-                ));
-            }
-        };
+    pub(crate) fn call_unknown_method(&self, name: &str, args: &[Value]) -> Result<Value, Error> {
+        match name {
+            "__eq__" | "__ne__" => self.call_eq_ne(name, args),
+            other => unimplemented!("AgateTable::{other}"),
+        }
+    }
+
+    fn call_eq_ne(&self, name: &str, args: &[Value]) -> Result<Value, Error> {
+        let eq = name == "__eq__";
+        let fn_name = if eq { "Table.__eq__" } else { "Table.__ne__" };
         let iter = ArgsIter::for_unnamed_pos_args(fn_name, 1, args);
         let other = iter.next_arg::<&Value>()?;
         iter.finish()?;
-        Ok(Value::from(if name == "__eq__" {
-            self.eq_value(other)
-        } else {
-            !self.eq_value(other)
-        }))
+        let equal = self.eq_value(other);
+        Ok(Value::from(if eq { equal } else { !equal }))
     }
 }
 
