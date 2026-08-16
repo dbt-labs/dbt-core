@@ -381,6 +381,23 @@ pub trait MetadataAdapter: Send + Sync {
         Box::pin(async move { Ok(BTreeMap::new()) })
     }
 
+    /// Whether an empty result from `freshness_all_in_schema` should be
+    /// treated as authoritative -- i.e. every relation in the group
+    /// genuinely has no freshness data yet -- rather than ambiguous evidence
+    /// that the caller should fall back to `freshness_with_overrides_and_options`.
+    ///
+    /// Defaults to `false`, matching `freshness_all_in_schema`'s own default
+    /// implementation above (which deliberately returns empty to signal
+    /// "fall back"). Adapters whose `freshness_all_in_schema` queries each
+    /// relation directly, with no intermediate eventually-consistent catalog
+    /// snapshot to lag behind (e.g. Databricks' per-relation `DESCRIBE
+    /// HISTORY`), should override this to `true`: an empty result there
+    /// means every relation in the group doesn't exist yet, which is the
+    /// normal state for a freshly created schema, not a race condition.
+    fn freshness_all_in_schema_empty_result_is_authoritative(&self) -> bool {
+        false
+    }
+
     /// Check whether each relation exists, keyed by semantic FQN.
     ///
     /// The default implementation uses `list_relations_in_parallel`, which is

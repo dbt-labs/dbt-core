@@ -18,7 +18,7 @@ use crate::context::TaskRunnerCtx;
 use crate::task::{TaskOp, TaskResult};
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{Cancellable, into_fs_error};
-use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
+use dbt_adapter::metadata::{FreshnessOverride, MetadataAdapter, MetadataQueryOptions};
 use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
@@ -542,34 +542,23 @@ fn heuristic_clock_enabled_for_adapter(adapter_type: AdapterType) -> bool {
     )
 }
 
-/// Whether an empty `freshness_all_in_schema` result for `adapter_type`
-/// should trigger the slower per-node `freshness_with_overrides_and_options`
-/// fallback (and its `StateServiceWarn`).
+/// Whether an empty `freshness_all_in_schema` result should trigger the
+/// slower per-node `freshness_with_overrides_and_options` fallback (and its
+/// `StateServiceWarn`).
 ///
 /// An empty schema-level dump is ambiguous in general: it can mean the
 /// underlying metadata catalog hasn't caught up yet (a real race), or it can
 /// mean every relation in the group genuinely doesn't exist yet. Which one
-/// applies depends on how the adapter implements `freshness_all_in_schema`:
-///
-/// - Snowflake and BigQuery each issue a single `INFORMATION_SCHEMA`-style
-///   bulk query (`snowflake/mod.rs`, `bigquery/mod.rs`) against a metadata
-///   view that is documented to lag behind DDL by a few seconds -- the
-///   fallback exists specifically to work around that lag, so it must fire.
-/// - Any adapter that hasn't overridden the trait method at all gets the
-///   default implementation (`metadata_adapter.rs`), which *deliberately*
-///   returns an empty map to signal "fall back" (see its doc comment) -- the
-///   fallback is the only way those adapters get real freshness data, so it
-///   must fire there too.
-/// - Databricks (`databricks/mod.rs`) is the one exception: it issues a real
-///   per-relation `DESCRIBE HISTORY` (or `INFORMATION_SCHEMA.last_altered`
-///   for views) lookup directly, with no intermediate eventually-consistent
-///   catalog snapshot to lag behind. An empty result there means every
-///   relation in the group genuinely doesn't exist yet -- the normal state
-///   for a freshly created CI schema before any model has run. Falling back
-///   in that case only repeats the same (still-empty) per-relation lookups
-///   at higher cost while emitting a misleading warning on every CI run.
-fn schema_dump_empty_requires_fallback(adapter_type: AdapterType, dump_is_empty: bool) -> bool {
-    dump_is_empty && !matches!(adapter_type, AdapterType::Databricks)
+/// applies is adapter-specific, so the policy lives on the adapter itself
+/// (`MetadataAdapter::freshness_all_in_schema_empty_result_is_authoritative`)
+/// rather than being matched on `AdapterType` here -- see that method's doc
+/// comment for why Databricks is the one adapter where an empty result is
+/// authoritative rather than ambiguous.
+fn schema_dump_empty_requires_fallback(
+    metadata_adapter: &dyn MetadataAdapter,
+    dump_is_empty: bool,
+) -> bool {
+    dump_is_empty && !metadata_adapter.freshness_all_in_schema_empty_result_is_authoritative()
 }
 
 /// Collect every relation and source freshness override needed for the run's
@@ -757,7 +746,7 @@ async fn bulk_prefetch_last_modified_by_schema(
             .await
             .map_err(into_fs_error)?;
 
-        if schema_dump_empty_requires_fallback(ctx.adapter_type(), dump.is_empty()) {
+        if schema_dump_empty_requires_fallback(metadata_adapter.as_ref(), dump.is_empty()) {
             // Empty result from the schema dump. This is typically caused by
             // INFORMATION_SCHEMA eventual consistency: Fusion's global prefetch
             // fires eagerly at run start (before any node executes), whereas the
@@ -3004,6 +2993,7 @@ mod tests {
     use crate::context::{ExtendedCtx, RunCacheCtx, TaskRunnerCtxInner};
     use arrow::array::RecordBatch;
     use arrow_schema::{Schema, SchemaRef};
+    use dbt_adapter::metadata::MetadataFreshness;
     use dbt_adapter::sql_types::DefaultTypeOps;
     use dbt_common::collections::DashMap;
     use dbt_common::io_args::RunCacheMode;
@@ -4908,64 +4898,181 @@ mod tests {
         assert_eq!(clock.now_ms(), 42_000);
     }
 
-    /// Regression tests for https://github.com/dbt-labs/dbt-core/issues/15594:
-    /// Databricks issues a real per-relation `DESCRIBE HISTORY` lookup in
-    /// `freshness_all_in_schema` (no eventually-consistent catalog snapshot to
-    /// lag behind), so an empty result there is authoritative and must not
+    /// Regression tests for https://github.com/dbt-labs/dbt-core/issues/15594.
+    ///
+    /// These exercise `schema_dump_empty_requires_fallback` through the real
+    /// `MetadataAdapter` trait object -- i.e. the adapter *capability*
+    /// (`freshness_all_in_schema_empty_result_is_authoritative`) -- rather
+    /// than matching on `AdapterType` directly, so the test coverage tracks
+    /// whatever any given adapter actually declares, including future
+    /// adapters that override the default.
+    ///
+    /// `FakeMetadataAdapter` is a minimal test double: constructing a real
+    /// `DatabricksMetadataAdapter`/`SnowflakeMetadataAdapter`/etc. here would
+    /// require a full mock `AdapterEngine` (13+ required methods covering
+    /// connections, relation cache, config, ...) that doesn't exist in this
+    /// crate today -- disproportionate scaffolding for exercising a single
+    /// boolean-returning method. This double implements only what
+    /// `schema_dump_empty_requires_fallback` actually calls.
+    struct FakeMetadataAdapter {
+        empty_result_is_authoritative: bool,
+    }
+
+    impl MetadataAdapter for FakeMetadataAdapter {
+        fn adapter_type(&self) -> AdapterType {
+            AdapterType::Snowflake
+        }
+
+        fn freshness_all_in_schema_empty_result_is_authoritative(&self) -> bool {
+            self.empty_result_is_authoritative
+        }
+
+        // The rest of the trait is irrelevant to this test double --
+        // `schema_dump_empty_requires_fallback` never calls any of it.
+        fn build_schemas_from_stats_sql(
+            &self,
+            _: Arc<RecordBatch>,
+        ) -> Result<
+            BTreeMap<String, dbt_schemas::schemas::legacy_catalog::CatalogTable>,
+            dbt_adapter::errors::AdapterError,
+        > {
+            unimplemented!("not used by schema_dump_empty_requires_fallback tests")
+        }
+
+        fn build_columns_from_get_columns(
+            &self,
+            _: Arc<RecordBatch>,
+        ) -> Result<
+            BTreeMap<
+                String,
+                BTreeMap<String, dbt_schemas::schemas::legacy_catalog::ColumnMetadata>,
+            >,
+            dbt_adapter::errors::AdapterError,
+        > {
+            unimplemented!("not used by schema_dump_empty_requires_fallback tests")
+        }
+
+        fn create_schemas_if_not_exists(
+            &self,
+            _: &minijinja::State<'_, '_>,
+            _: Vec<(String, String, String)>,
+        ) -> Result<
+            Vec<(
+                String,
+                String,
+                String,
+                Result<(), dbt_adapter::errors::AdapterError>,
+            )>,
+            dbt_adapter::errors::AdapterError,
+        > {
+            unimplemented!("not used by schema_dump_empty_requires_fallback tests")
+        }
+
+        fn list_relations_schemas_inner(
+            &self,
+            _: Option<String>,
+            _: Option<dbt_adapter_core::ExecutionPhase>,
+            _: &[Arc<dyn BaseRelation>],
+            _: dbt_common::cancellation::CancellationToken,
+        ) -> dbt_adapter::errors::AsyncAdapterResult<
+            '_,
+            HashMap<String, Result<Arc<Schema>, dbt_adapter::errors::AdapterError>>,
+        > {
+            unimplemented!("not used by schema_dump_empty_requires_fallback tests")
+        }
+
+        fn list_relations_schemas_by_patterns_inner(
+            &self,
+            _: &[dbt_schemas::schemas::relations::base::RelationPattern],
+            _: dbt_common::cancellation::CancellationToken,
+        ) -> dbt_adapter::errors::AsyncAdapterResult<
+            '_,
+            Vec<(
+                String,
+                Result<(Arc<dyn BaseRelation>, Arc<Schema>), dbt_adapter::errors::AdapterError>,
+            )>,
+        > {
+            unimplemented!("not used by schema_dump_empty_requires_fallback tests")
+        }
+
+        fn freshness_inner(
+            &self,
+            _: &[Arc<dyn BaseRelation>],
+            _: dbt_common::cancellation::CancellationToken,
+        ) -> dbt_adapter::errors::AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>>
+        {
+            unimplemented!("not used by schema_dump_empty_requires_fallback tests")
+        }
+
+        fn list_relations_in_parallel_inner(
+            &self,
+            _: &[dbt_adapter::metadata::CatalogAndSchema],
+            _: dbt_common::cancellation::CancellationToken,
+        ) -> dbt_adapter::errors::AsyncAdapterResult<
+            '_,
+            BTreeMap<
+                dbt_adapter::metadata::CatalogAndSchema,
+                Result<Vec<Arc<dyn BaseRelation>>, dbt_adapter::errors::AdapterError>,
+            >,
+        > {
+            unimplemented!("not used by schema_dump_empty_requires_fallback tests")
+        }
+    }
+
+    /// Databricks' real override, exercised via the trait method it actually
+    /// implements: an empty result there is authoritative and must not
     /// trigger the per-node eventual-consistency fallback + warning.
     #[test]
-    fn schema_dump_empty_does_not_require_fallback_on_databricks() {
-        assert!(!schema_dump_empty_requires_fallback(
-            AdapterType::Databricks,
-            true
-        ));
+    fn schema_dump_empty_does_not_require_fallback_when_adapter_says_authoritative() {
+        let adapter = FakeMetadataAdapter {
+            empty_result_is_authoritative: true,
+        };
+        assert!(!schema_dump_empty_requires_fallback(&adapter, true));
     }
 
-    /// Snowflake's `freshness_all_in_schema` is a single `INFORMATION_SCHEMA`
-    /// bulk query that can genuinely lag behind a just-created table -- this
-    /// is the original, still-valid reason the fallback exists, and must be
-    /// preserved.
+    /// Snowflake/BigQuery/every adapter using the trait's default: an empty
+    /// result is NOT authoritative (it can mean the metadata catalog hasn't
+    /// caught up yet), so the fallback must still fire -- this is the
+    /// original, still-valid reason the fallback exists.
     #[test]
-    fn schema_dump_empty_still_requires_fallback_on_snowflake() {
-        assert!(schema_dump_empty_requires_fallback(
-            AdapterType::Snowflake,
-            true
-        ));
+    fn schema_dump_empty_still_requires_fallback_when_adapter_says_not_authoritative() {
+        let adapter = FakeMetadataAdapter {
+            empty_result_is_authoritative: false,
+        };
+        assert!(schema_dump_empty_requires_fallback(&adapter, true));
     }
 
-    /// BigQuery's `freshness_all_in_schema` is likewise a single bulk query
-    /// against a metadata view, so it needs the same fallback as Snowflake.
-    #[test]
-    fn schema_dump_empty_still_requires_fallback_on_bigquery() {
-        assert!(schema_dump_empty_requires_fallback(
-            AdapterType::Bigquery,
-            true
-        ));
-    }
-
-    /// Adapters that haven't overridden `freshness_all_in_schema` get the
-    /// trait's default implementation, which deliberately returns an empty
-    /// map to signal "fall back" (see `MetadataAdapter::freshness_all_in_schema`'s
-    /// doc comment) -- the fallback is the only way those adapters get real
-    /// freshness data, so an empty result must still trigger it.
-    #[test]
-    fn schema_dump_empty_still_requires_fallback_for_unimplemented_adapters() {
-        assert!(schema_dump_empty_requires_fallback(
-            AdapterType::Postgres,
-            true
-        ));
-    }
-
-    /// A non-empty dump never needs the fallback, regardless of adapter.
+    /// A non-empty dump never needs the fallback, regardless of what the
+    /// adapter would say about an empty one.
     #[test]
     fn schema_dump_non_empty_never_requires_fallback() {
+        let authoritative = FakeMetadataAdapter {
+            empty_result_is_authoritative: true,
+        };
+        let not_authoritative = FakeMetadataAdapter {
+            empty_result_is_authoritative: false,
+        };
+        assert!(!schema_dump_empty_requires_fallback(&authoritative, false));
         assert!(!schema_dump_empty_requires_fallback(
-            AdapterType::Snowflake,
+            &not_authoritative,
             false
         ));
-        assert!(!schema_dump_empty_requires_fallback(
-            AdapterType::Databricks,
-            false
-        ));
+    }
+
+    /// The real `DatabricksMetadataAdapter` override actually returns `true`
+    /// -- not just this test module's stand-in for it. Confirms the trait
+    /// wiring in `crates/dbt-adapter/src/metadata/databricks/mod.rs` matches
+    /// what the tests above assume.
+    ///
+    /// Clippy sees this as an assertion on a compile-time constant (since it
+    /// resolves the const at build time) and would otherwise flag it as
+    /// dead weight -- it isn't: this is a deliberate regression guard for if
+    /// someone ever changes `EMPTY_RESULT_IS_AUTHORITATIVE`'s value.
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn databricks_adapter_declares_empty_result_authoritative() {
+        assert!(
+            dbt_adapter::metadata::databricks::DatabricksMetadataAdapter::EMPTY_RESULT_IS_AUTHORITATIVE
+        );
     }
 }

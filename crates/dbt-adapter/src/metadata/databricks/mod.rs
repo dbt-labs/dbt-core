@@ -165,6 +165,17 @@ pub struct DatabricksMetadataAdapter {
 }
 
 impl DatabricksMetadataAdapter {
+    /// See `MetadataAdapter::freshness_all_in_schema_empty_result_is_authoritative`:
+    /// `freshness_all_in_schema` (below) queries each relation directly via
+    /// `DESCRIBE HISTORY` (or `INFORMATION_SCHEMA.last_altered` for views),
+    /// with no eventually-consistent catalog snapshot in between, so an empty
+    /// result means every relation in the group genuinely doesn't exist yet
+    /// -- the normal state for a freshly created schema, not a race
+    /// condition. Exposed as a const (rather than only inline in the trait
+    /// impl) so it's directly unit-testable without constructing a full
+    /// adapter/engine.
+    pub const EMPTY_RESULT_IS_AUTHORITATIVE: bool = true;
+
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
         let adapter = AdapterImpl::new(engine, None);
         Self { adapter }
@@ -1302,6 +1313,10 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         };
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(all_relations), token)
+    }
+
+    fn freshness_all_in_schema_empty_result_is_authoritative(&self) -> bool {
+        Self::EMPTY_RESULT_IS_AUTHORITATIVE
     }
 }
 
