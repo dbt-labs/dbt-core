@@ -519,7 +519,7 @@ fn extract_timeout(config: &Value) -> u64 {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 struct PythonEnvironmentSpec {
     environment_key: Option<String>,
     environment_dependencies: Vec<String>,
@@ -547,15 +547,9 @@ fn extract_python_environment_spec(config: &Value) -> PythonEnvironmentSpec {
         .get_attr("python_job_config")
         .ok()
         .and_then(|pjc| pjc.get_attr("environments").ok())
-        .and_then(|envs| {
-            if envs.is_undefined() || envs.is_none() {
-                None
-            } else {
-                serde_json::to_value(&envs)
-                    .ok()
-                    .filter(|value| !value.is_null())
-            }
-        });
+        .filter(|envs| !envs.is_undefined() && !envs.is_none())
+        .and_then(|envs| serde_json::to_value(&envs).ok())
+        .filter(user_environments_are_set);
 
     PythonEnvironmentSpec {
         environment_key,
@@ -564,8 +558,24 @@ fn extract_python_environment_spec(config: &Value) -> PythonEnvironmentSpec {
     }
 }
 
+fn user_environments_are_set(value: &serde_json::Value) -> bool {
+    // v1 uses `not python_job_config.environments`, so [] is missing.
+    match value {
+        serde_json::Value::Null => false,
+        serde_json::Value::Array(items) => !items.is_empty(),
+        serde_json::Value::Object(map) => !map.is_empty(),
+        serde_json::Value::String(s) => !s.is_empty(),
+        serde_json::Value::Bool(flag) => *flag,
+        serde_json::Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
+    }
+}
+
 fn additional_job_config_for_environment(spec: &PythonEnvironmentSpec) -> serde_json::Value {
-    if let Some(user_environments) = &spec.user_environments {
+    if let Some(user_environments) = spec
+        .user_environments
+        .as_ref()
+        .filter(|value| user_environments_are_set(value))
+    {
         return json!({ "environments": user_environments });
     }
     if let Some(environment_key) = &spec.environment_key
@@ -625,9 +635,7 @@ pub(crate) fn build_job_run_payload(
     if let serde_json::Value::Object(extra) = additional_job_config
         && let serde_json::Value::Object(ref mut map) = payload
     {
-        for (key, value) in extra {
-            map.insert(key, value);
-        }
+        map.extend(extra);
     }
     payload
 }
@@ -667,10 +675,14 @@ fn submit_notebook_job(
     notebook_path: &str,
     task_settings: serde_json::Value,
     timeout_seconds: u64,
-    env: &PythonEnvironmentSpec,
+    environment: &PythonEnvironmentSpec,
 ) -> AdapterResult<String> {
-    let task = build_notebook_task(notebook_path, task_settings, env.environment_key.as_deref());
-    let additional_job_config = additional_job_config_for_environment(env);
+    let task = build_notebook_task(
+        notebook_path,
+        task_settings,
+        environment.environment_key.as_deref(),
+    );
+    let additional_job_config = additional_job_config_for_environment(environment);
     api_client.submit_job_run(run_name, &task, timeout_seconds, &additional_job_config)
 }
 
@@ -925,6 +937,26 @@ mod tests {
         });
         assert_eq!(payload["tasks"][0]["environment_key"], json!("custom_env"));
         assert_eq!(payload["environments"], user_environments);
+    }
+
+    #[test]
+    fn empty_user_environments_still_auto_build() {
+        let payload = payload_for(PythonEnvironmentSpec {
+            environment_key: Some("test_key".to_string()),
+            environment_dependencies: vec!["requests".to_string()],
+            user_environments: Some(json!([])),
+        });
+        assert_eq!(payload["tasks"][0]["environment_key"], json!("test_key"));
+        assert_eq!(
+            payload["environments"],
+            json!([{
+                "environment_key": "test_key",
+                "spec": {
+                    "environment_version": "4",
+                    "dependencies": ["requests"]
+                }
+            }])
+        );
     }
 
     #[test]
