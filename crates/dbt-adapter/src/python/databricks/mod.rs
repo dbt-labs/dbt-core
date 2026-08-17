@@ -108,7 +108,7 @@ fn submit_all_purpose_cluster(
 
     if create_notebook {
         // Extract library configuration (packages, index_url, additional_libs)
-        let packages = extract_packages(config);
+        let packages = extract_string_list(config, "packages");
         let index_url = config
             .get_attr("index_url")
             .ok()
@@ -254,7 +254,7 @@ fn submit_job_cluster(
 
     validate_job_cluster_config(&job_cluster_config)?;
 
-    let packages = extract_packages(config);
+    let packages = extract_string_list(config, "packages");
     let index_url = config
         .get_attr("index_url")
         .ok()
@@ -485,14 +485,14 @@ fn validate_job_cluster_config(config: &Value) -> AdapterResult<()> {
     Ok(())
 }
 
-fn extract_packages(config: &Value) -> Vec<String> {
+fn extract_string_list(config: &Value, attr: &str) -> Vec<String> {
     config
-        .get_attr("packages")
+        .get_attr(attr)
         .ok()
         .and_then(|v| v.try_iter().ok())
         .map(|iter| {
-            iter.filter_map(|v| v.as_str().map(String::from))
-                .collect::<Vec<_>>()
+            iter.filter_map(|item| item.as_str().map(String::from))
+                .collect()
         })
         .unwrap_or_default()
 }
@@ -533,23 +533,24 @@ fn extract_python_environment_spec(config: &Value) -> PythonEnvironmentSpec {
         .and_then(|v| v.as_str().map(String::from))
         .filter(|s| !s.is_empty());
 
-    let environment_dependencies = config
-        .get_attr("environment_dependencies")
-        .ok()
-        .and_then(|v| v.try_iter().ok())
-        .map(|iter| {
-            iter.filter_map(|item| item.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
+    let environment_dependencies = extract_string_list(config, "environment_dependencies");
 
+    // Empty `python_job_config.environments` is unset (`not environments` in v1).
+    // https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L362
     let user_environments = config
         .get_attr("python_job_config")
         .ok()
         .and_then(|pjc| pjc.get_attr("environments").ok())
         .filter(|envs| !envs.is_undefined() && !envs.is_none())
         .and_then(|envs| serde_json::to_value(&envs).ok())
-        .filter(user_environments_are_set);
+        .and_then(|value| match &value {
+            serde_json::Value::Array(items) if !items.is_empty() => Some(value),
+            serde_json::Value::Object(map) if !map.is_empty() => Some(value),
+            serde_json::Value::String(s) if !s.is_empty() => Some(value),
+            serde_json::Value::Bool(true) => Some(value),
+            serde_json::Value::Number(n) if n.as_f64().is_some_and(|n| n != 0.0) => Some(value),
+            _ => None,
+        });
 
     PythonEnvironmentSpec {
         environment_key,
@@ -558,30 +559,14 @@ fn extract_python_environment_spec(config: &Value) -> PythonEnvironmentSpec {
     }
 }
 
-fn user_environments_are_set(value: &serde_json::Value) -> bool {
-    // v1 uses `not python_job_config.environments`, so [] is missing.
-    match value {
-        serde_json::Value::Null => false,
-        serde_json::Value::Array(items) => !items.is_empty(),
-        serde_json::Value::Object(map) => !map.is_empty(),
-        serde_json::Value::String(s) => !s.is_empty(),
-        serde_json::Value::Bool(flag) => *flag,
-        serde_json::Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
-    }
-}
-
 fn additional_job_config_for_environment(spec: &PythonEnvironmentSpec) -> serde_json::Value {
-    if let Some(user_environments) = spec
-        .user_environments
-        .as_ref()
-        .filter(|value| user_environments_are_set(value))
-    {
-        return json!({ "environments": user_environments });
-    }
-    if let Some(environment_key) = &spec.environment_key
-        && !spec.environment_dependencies.is_empty()
-    {
-        return json!({
+    let user_environments = match spec.user_environments.as_ref() {
+        Some(serde_json::Value::Array(items)) if items.is_empty() => None,
+        other => other,
+    };
+    match (user_environments, spec.environment_key.as_deref()) {
+        (Some(user_environments), _) => json!({ "environments": user_environments }),
+        (None, Some(environment_key)) if !spec.environment_dependencies.is_empty() => json!({
             "environments": [{
                 "environment_key": environment_key,
                 "spec": {
@@ -589,9 +574,9 @@ fn additional_job_config_for_environment(spec: &PythonEnvironmentSpec) -> serde_
                     "dependencies": spec.environment_dependencies,
                 }
             }]
-        });
+        }),
+        _ => json!({}),
     }
-    json!({})
 }
 
 fn build_notebook_task(
@@ -792,20 +777,8 @@ fn build_workflow_spec(
         })
         .unwrap_or_default();
 
-    let mut notebook_task = json!({
-        "task_key": "inner_notebook",
-        "notebook_task": {
-            "notebook_path": notebook_path,
-            "source": "WORKSPACE"
-        }
-    });
-
-    // notebook_task is always an Object since we just created it with json!({...})
+    let mut notebook_task = build_notebook_task(notebook_path, task_settings, None);
     let task_map = notebook_task.as_object_mut().unwrap();
-
-    if let serde_json::Value::Object(settings_map) = task_settings {
-        task_map.extend(settings_map);
-    }
 
     if let Ok(additional_settings) = python_job_config.get_attr("additional_task_settings") {
         let additional_json =
