@@ -177,6 +177,10 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub user_folder_for_python: Option<bool>,
+    #[serde(rename = "+environment_key")]
+    pub environment_key: Option<String>,
+    #[serde(rename = "+environment_dependencies")]
+    pub environment_dependencies: Option<Vec<String>>,
     #[serde(
         default,
         rename = "+incremental_apply_config_changes",
@@ -630,6 +634,8 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.index_url.is_some()
             || self.additional_libs.is_some()
             || self.user_folder_for_python.is_some()
+            || self.environment_key.is_some()
+            || self.environment_dependencies.is_some()
             || self.incremental_apply_config_changes.is_some()
             || self.use_safer_relation_operations.is_some()
             || self.view_update_via_alter.is_some()
@@ -839,6 +845,8 @@ pub struct ModelConfig {
     pub index_url: Option<String>,
     pub additional_libs: Option<Vec<YmlValue>>,
     pub user_folder_for_python: Option<bool>,
+    pub environment_key: Option<String>,
+    pub environment_dependencies: Option<Vec<String>>,
     /// Config keys accessed via dbt.config.get() in Python models
     /// Used to populate config_dict at runtime
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -877,6 +885,8 @@ impl From<ProjectModelConfig> for ModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            environment_key: config.environment_key.clone(),
+            environment_dependencies: config.environment_dependencies.clone(),
             catalog_name: config.catalog_name.clone(),
             alt_compute: config.alt_compute,
             column_types: config.column_types,
@@ -1098,6 +1108,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            environment_key: config.environment_key.clone(),
+            environment_dependencies: config.environment_dependencies.clone(),
             on_configuration_change: config.on_configuration_change,
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,

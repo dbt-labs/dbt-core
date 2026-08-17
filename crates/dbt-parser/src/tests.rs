@@ -1509,4 +1509,95 @@ mod tests {
             vec!["cloud_plan".to_string(), "database_source".to_string()]
         );
     }
+
+    #[test]
+    fn test_databricks_python_environment_config_keys_are_recognized() {
+        let yaml = r#"
+        +environment_key: test_key
+        +environment_dependencies:
+          - requests
+        +submission_method: serverless_cluster
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let cfg: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
+            val, false, &env, &ctx, &listeners, None, true,
+        )
+        .unwrap();
+
+        assert_eq!(cfg.environment_key.as_deref(), Some("test_key"));
+        assert_eq!(
+            cfg.environment_dependencies.as_deref(),
+            Some(["requests".to_string()].as_slice())
+        );
+        assert_eq!(cfg.submission_method.as_deref(), Some("serverless_cluster"));
+    }
+
+    #[test]
+    fn test_databricks_python_environment_config_keys_on_model_config() {
+        let yaml = r#"
+        environment_key: test_key
+        environment_dependencies:
+          - requests
+        submission_method: serverless_cluster
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let cfg: ModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
+            val, false, &env, &ctx, &listeners, None, true,
+        )
+        .unwrap();
+
+        assert_eq!(cfg.environment_key.as_deref(), Some("test_key"));
+        assert_eq!(
+            cfg.environment_dependencies.as_deref(),
+            Some(["requests".to_string()].as_slice())
+        );
+        assert_eq!(cfg.submission_method.as_deref(), Some("serverless_cluster"));
+    }
+
+    #[test]
+    fn test_unknown_python_config_key_is_still_unused() {
+        // schema.yml config keys (no `+` prefix). ProjectModelConfig absorbs
+        // unknown `+` keys as nested folder configs via __additional_properties__.
+        let yaml = r#"
+        environment_key: test_key
+        not_a_real_python_config: true
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let mut unused_keys = Vec::new();
+        let cfg: ModelConfig = val
+            .into_typed(
+                |path, key, _| {
+                    let key_repr =
+                        dbt_yaml::to_string(key).unwrap_or_else(|_| "<opaque>".to_string());
+                    unused_keys.push((path.to_string(), key_repr));
+                },
+                |_| Ok(None),
+            )
+            .unwrap();
+
+        assert_eq!(cfg.environment_key.as_deref(), Some("test_key"));
+        assert!(
+            unused_keys
+                .iter()
+                .any(|(_, key)| key.contains("not_a_real_python_config")),
+            "expected unused key warning, got {unused_keys:?}"
+        );
+        assert!(
+            unused_keys
+                .iter()
+                .all(|(_, key)| !key.contains("environment_key")),
+            "environment_key should not be reported unused, got {unused_keys:?}"
+        );
+    }
 }
