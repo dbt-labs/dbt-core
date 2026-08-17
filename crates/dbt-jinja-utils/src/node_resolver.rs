@@ -450,6 +450,55 @@ impl NodeResolverTracker for NodeResolver {
         Ok(())
     }
 
+    fn lookup_self_relation(
+        &self,
+        unique_id: &str,
+        package_name: &str,
+        name: &str,
+        version: &Option<String>,
+    ) -> FsResult<(MinijinjaValue, Option<MinijinjaValue>)> {
+        let ref_name = match version {
+            Some(version) => format!("{name}.v{version}"),
+            None => name.to_string(),
+        };
+        let search_keys = [format!("{package_name}.{ref_name}"), ref_name.clone()];
+        let mut disabled_match = false;
+
+        // Read the live record out of `refs` rather than a parallel index:
+        // `set_deferred_relation` rewrites entries in place during defer
+        // hydration, so a copy taken at insert time would go stale.
+        for key in &search_keys {
+            let Some(records) = self.refs.get(key) else {
+                continue;
+            };
+
+            for (_, relation, status, deferred) in
+                records.iter().filter(|(id, _, _, _)| id == unique_id)
+            {
+                if *status == ModelStatus::Disabled {
+                    disabled_match = true;
+                } else {
+                    return Ok((relation.clone(), deferred.clone()));
+                }
+            }
+        }
+
+        if disabled_match {
+            err!(
+                ErrorCode::DisabledDependency,
+                "Attempted to use disabled ref '{}'",
+                ref_name
+            )
+        } else {
+            err!(
+                ErrorCode::DependencyNotFound,
+                "Ref '{}' not found in project. Searched for '{}'",
+                ref_name,
+                search_keys[0]
+            )
+        }
+    }
+
     /// Lookup a ref by package name, model name, and optional version
     fn lookup_ref(
         &self,

@@ -348,82 +348,76 @@ impl DatabricksMetadataAdapter {
             }
             RelationType::StreamingTable => {}
             RelationType::Table => {
-                let is_hive_metastore = base_relation.is_hive_metastore();
-                if is_hive_metastore {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::NotSupported,
-                        format!(
-                            "Incremental application of constraints and column masks is not supported for Hive Metastore! Relation: `{database}`.`{schema}`.`{identifier}`"
-                        ),
-                    ));
+                // Tags, constraints and column masks all live in `information_schema`, which
+                // Hive Metastore does not have.
+                if !base_relation.is_hive_metastore() {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaColumnTags,
+                        self.fetch_column_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::NonNullConstraints,
+                        self.fetch_non_null_constraint_columns(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::PrimaryKeyConstraints,
+                        self.fetch_primary_key_constraints(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::ForeignKeyConstraints,
+                        self.fetch_foreign_key_constraints(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::ColumnMasks,
+                        self.fetch_column_masks(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
                 }
-
-                metadata.insert(
-                    DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                    self.fetch_tags(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::InfoSchemaColumnTags,
-                    self.fetch_column_tags(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::NonNullConstraints,
-                    self.fetch_non_null_constraint_columns(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::PrimaryKeyConstraints,
-                    self.fetch_primary_key_constraints(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::ForeignKeyConstraints,
-                    self.fetch_foreign_key_constraints(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::ColumnMasks,
-                    self.fetch_column_masks(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
 
                 // Match dbt-databricks/Mantle ordering: SHOW TBLPROPERTIES then DESCRIBE EXTENDED.
                 metadata.insert(

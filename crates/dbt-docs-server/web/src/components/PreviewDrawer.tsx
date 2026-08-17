@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 
 import { Badge, Icon, RyeconClose, RyeconLinkExternal } from '@dbt-labs/sourdough';
 
-import type { NodeSummary } from '../api';
 import {
   RESOURCE_TYPE_LABEL,
   RESOURCE_TYPE_SINGULAR,
@@ -10,6 +9,7 @@ import {
 } from '../lib/resourceType';
 import type { Project } from '../shared';
 import { type Asset, PageHeading } from '../shared';
+import type { NodeSummary } from '../types';
 
 interface Props {
   project: Project;
@@ -145,7 +145,7 @@ export function PreviewDrawer({
             <li>
               <span className="preview-drawer__pending-label">Last run / test</span>
               <span className="preview-drawer__pending-hint">
-                When <code>/api/v1/nodes/:id/run-results</code> ships
+                When run results are exported alongside the nodes
               </span>
             </li>
             <li>

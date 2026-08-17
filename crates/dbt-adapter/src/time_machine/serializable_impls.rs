@@ -299,10 +299,27 @@ impl TimeMachineSerializable for crate::column::Column {
     ) -> Option<minijinja::Value> {
         let ext = JsonExtractor::new(json)?;
         let comment = ext.opt_str("comment");
+        let adapter_type = ctx.replay_context().adapter_type;
+
+        // Choose which recorded string to feed back into `Column::new` as the
+        // `original_sql_str`. For most adapters `dtype` (the core dtype) is the
+        // right choice. For BigQuery, `dtype` is a lossy label (e.g. "RECORD")
+        // that does not round-trip: nested/repeated columns record their full
+        // shape in `data_type` (e.g. "ARRAY<STRUCT<`inner` INT64>>"), which
+        // `Column::new` re-parses into the same `core_dtype`/`core_data_type`.
+        // Feeding `dtype` instead would collapse the type to "STRUCT" and break
+        // same-version replay. See `test_column_reserialization_fixed_point_bigquery_repeated_struct`.
+        let sql_str = match adapter_type {
+            dbt_adapter_core::AdapterType::Bigquery => ext
+                .opt_str("data_type")
+                .unwrap_or_else(|| ext.str_or("dtype", "")),
+            _ => ext.str_or("dtype", ""),
+        };
+
         let column = crate::column::Column::new(
-            ctx.replay_context().adapter_type,
+            adapter_type,
             ext.opt_str("name")?,
-            ext.str_or("dtype", ""),
+            sql_str,
             ext.opt_u32("char_size"),
             ext.opt_u64("numeric_precision"),
             ext.opt_u64("numeric_scale"),
@@ -351,7 +368,7 @@ impl TimeMachineSerializable for RelationConfig {
 #[cfg(test)]
 mod tests {
     use crate::relation::{RelationConfig, RelationObject};
-    use crate::time_machine::serde::{ReplayContext, json_to_value_with_context};
+    use crate::time_machine::serde::{ReplayContext, json_to_value_with_context, values_match};
     use crate::time_machine::serializable::serialize_object;
 
     use super::*;
@@ -443,6 +460,52 @@ mod tests {
                 "RelationConfig should roundtrip for {relation_type:?}"
             );
         }
+    }
+
+    /// Reproduces the Databricks same-version replay break.
+    ///
+    /// `tbl_properties::to_jinja` emits TWO keys for the `tblproperties` component:
+    /// the `tblproperties` sub-map (with `pipelines.pipelineId` filtered out) AND a
+    /// separate top-level `pipeline_id`. But `component_from_recorded` only reads back
+    /// `val.get("tblproperties")` — the `pipeline_id` is silently dropped on deserialize.
+    ///
+    /// For any DLT-backed relation (streaming tables, materialized views), the recorded
+    /// `pipeline_id` is a non-null string. On replay the recorded result is deserialized
+    /// (dropping `pipeline_id`), flows into a later adapter call as an argument, and is
+    /// reserialized — now with `pipeline_id: null`. The recorded-vs-actual comparison
+    /// then mismatches (a non-zero string on the expected side vs null), and `values_match`
+    /// cannot tolerate it. Replay fails on the SAME version that made the recording.
+    #[test]
+    fn test_relation_config_tblproperties_pipeline_id_fixed_point() {
+        // Shape of a real recorded `get_relation_config` payload for a pipeline-backed
+        // streaming table: tblproperties component carries a non-null pipeline_id.
+        let recorded = serde_json::json!({
+            "tblproperties": {
+                "tblproperties": {"delta.parquet.compression.codec": "zstd"},
+                "pipeline_id": "pipeline-abc-123"
+            }
+        });
+
+        let ctx = databricks_ctx(RelationType::StreamingTable);
+        let original = RelationConfig::from_time_machine_json(&recorded, &ctx)
+            .expect("RelationConfig should deserialize");
+        let reserialized = serialize_object(&original).expect("RelationConfig should serialize");
+
+        // The reserialized pipeline_id must remain the recorded non-null value.
+        // (Before the fix it came back as null, which `values_match` cannot tolerate
+        // because a non-zero string on the expected side is not a zero value.)
+        assert_eq!(
+            reserialized["tblproperties"]["pipeline_id"],
+            serde_json::json!("pipeline-abc-123"),
+            "tblproperties pipeline_id must survive deserialize->serialize"
+        );
+
+        // Model the real replay comparison: `values_match` ignores the injected
+        // `__type__` field but requires the pipeline_id to match.
+        assert!(
+            values_match(&recorded, &reserialized),
+            "reserialized config must match the recording under replay comparison"
+        );
     }
 
     #[test]
@@ -715,5 +778,221 @@ mod tests {
         assert!(restored.quote_policy().database);
         assert!(restored.quote_policy().schema);
         assert!(restored.quote_policy().identifier);
+    }
+
+    // =========================================================================
+    // Fixed-point (reserialization idempotency) tests.
+    //
+    // These model the replay data-flow that actually breaks Fusion→Fusion
+    // replay on the SAME version: an object returned by one adapter call is
+    // reconstructed via `json_to_value_with_context` (engine.rs), then passed
+    // as an ARGUMENT to a later adapter call, where it is re-serialized via
+    // `serialize_object`/`serialize_args` and compared against the later
+    // event's recorded args.
+    //
+    // For that to match, serialization must be a fixed point:
+    //
+    //     let j1 = serialize(original);
+    //     let restored = deserialize(j1);
+    //     let j2 = serialize(restored);
+    //     assert_eq!(j1, j2);   // <-- the invariant replay depends on
+    //
+    // The existing `*_roundtrip` tests only check accessors after ONE
+    // deserialize; they do NOT assert this fixed point.
+    // =========================================================================
+
+    /// Assert `serialize(deserialize(serialize(original))) == serialize(original)`.
+    ///
+    /// `original` must already be a serializable jinja Value (i.e. `serialize_object`
+    /// returns `Some`). Returns the first serialization for optional further checks.
+    fn assert_reserialization_fixed_point(
+        original: &minijinja::Value,
+        ctx: &ReplayCallContext,
+    ) -> serde_json::Value {
+        let j1 = serialize_object(original)
+            .expect("original value should be serializable via the time-machine registry");
+        let restored = json_to_value_with_context(&j1, ctx);
+        let j2 = serialize_object(&restored).expect(
+            "reconstructed value should re-serialize via the time-machine registry \
+             (if this is None, deserialize produced a non-registry type such as a plain map)",
+        );
+        assert_eq!(
+            j1, j2,
+            "reserialization must be a fixed point; serialize/deserialize are asymmetric.\n\
+             first:  {j1:#}\n\
+             second: {j2:#}"
+        );
+        j1
+    }
+
+    #[test]
+    fn test_column_reserialization_fixed_point_snowflake_varchar() {
+        // A VARCHAR(255) column as returned by e.g. get_columns_in_relation.
+        let original = crate::column::Column::new(
+            AdapterType::Snowflake,
+            "my_column".to_string(),
+            "VARCHAR".to_string(),
+            Some(255),
+            None,
+            None,
+        )
+        .with_comment(Some("A useful column".to_string()));
+
+        assert_reserialization_fixed_point(&minijinja::Value::from_object(original), &ctx());
+    }
+
+    #[test]
+    fn test_column_reserialization_fixed_point_snowflake_numeric() {
+        // NUMBER(38,2): data_type() is computed from core_dtype + precision/scale.
+        let original = crate::column::Column::new(
+            AdapterType::Snowflake,
+            "amount".to_string(),
+            "NUMBER".to_string(),
+            None,
+            Some(38),
+            Some(2),
+        );
+
+        assert_reserialization_fixed_point(&minijinja::Value::from_object(original), &ctx());
+    }
+
+    #[test]
+    fn test_column_reserialization_fixed_point_bigquery_repeated_struct() {
+        // BigQuery REPEATED / STRUCT columns carry _fields + mode that are dropped
+        // on deserialize. Before the fix the recomputed data_type() shape differed on
+        // re-serialize (e.g. "RECORD"/"ARRAY<STRUCT<`inner` INT64>>" -> "STRUCT"),
+        // breaking Fusion->Fusion replay on the SAME version when such a column is
+        // returned by one adapter call and passed as an arg to a later one.
+        //
+        // A real repeated-struct column carries the full SQL type as its original_sql_str
+        // and the nested fields; both `dtype` (RECORD) and `data_type`
+        // (ARRAY<STRUCT<...>>) are derived from _fields + mode.
+        use crate::column::BigqueryColumnMode;
+
+        let inner = crate::column::Column::new_bigquery(
+            "inner".to_string(),
+            "INT64".to_string(),
+            Vec::new(),
+            BigqueryColumnMode::Nullable,
+        );
+        let original = crate::column::Column::new_bigquery(
+            "events".to_string(),
+            "ARRAY<STRUCT<`inner` INT64>>".to_string(),
+            vec![inner],
+            BigqueryColumnMode::Repeated,
+        );
+
+        let bq_ctx: ReplayCallContext = ReplayContext {
+            adapter_type: AdapterType::Bigquery,
+            quoting: ResolvedQuoting::default(),
+        }
+        .into();
+
+        assert_reserialization_fixed_point(&minijinja::Value::from_object(original), &bq_ctx);
+    }
+
+    #[test]
+    fn test_column_reserialization_fixed_point_bigquery_nested_struct() {
+        // A non-repeated (NULLABLE) STRUCT column. dtype = "RECORD",
+        // data_type = "STRUCT<`a` INT64, `b` STRING>". Same drift class as the
+        // repeated case: reconstruct must rebuild from data_type, not dtype.
+        use crate::column::BigqueryColumnMode;
+
+        let a = crate::column::Column::new_bigquery(
+            "a".to_string(),
+            "INT64".to_string(),
+            Vec::new(),
+            BigqueryColumnMode::Nullable,
+        );
+        let b = crate::column::Column::new_bigquery(
+            "b".to_string(),
+            "STRING".to_string(),
+            Vec::new(),
+            BigqueryColumnMode::Nullable,
+        );
+        let original = crate::column::Column::new_bigquery(
+            "payload".to_string(),
+            "STRUCT<`a` INT64, `b` STRING>".to_string(),
+            vec![a, b],
+            BigqueryColumnMode::Nullable,
+        );
+
+        let bq_ctx: ReplayCallContext = ReplayContext {
+            adapter_type: AdapterType::Bigquery,
+            quoting: ResolvedQuoting::default(),
+        }
+        .into();
+
+        assert_reserialization_fixed_point(&minijinja::Value::from_object(original), &bq_ctx);
+    }
+
+    #[test]
+    fn test_relation_object_reserialization_fixed_point_table() {
+        // A plain table relation should be a clean fixed point (single is_table flag).
+        let relation = do_create_relation(
+            AdapterType::Snowflake,
+            "MY_DB".to_string(),
+            "MY_SCHEMA".to_string(),
+            Some("my_table".to_string()),
+            Some(RelationType::Table),
+            dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING,
+        )
+        .unwrap();
+        let original = RelationObject::from(relation);
+
+        assert_reserialization_fixed_point(&original.into_value(), &ctx());
+    }
+
+    #[test]
+    fn test_relation_object_reserialization_fixed_point_dynamic_table() {
+        // is_dynamic_table sits BELOW is_table/is_view in the deserialize priority
+        // chain. A dynamic table (which also reports is_table == true on some
+        // adapters) is at risk of collapsing to RelationType::Table on the way back.
+        let ctx = ctx();
+        let relation = do_create_relation(
+            AdapterType::Snowflake,
+            "MY_DB".to_string(),
+            "MY_SCHEMA".to_string(),
+            Some("my_dynamic_table".to_string()),
+            Some(RelationType::DynamicTable),
+            dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING,
+        )
+        .unwrap();
+        let original = RelationObject::from(relation);
+
+        // NOTE: This currently PASSES. All RelationObject `is_*` flags are mutually
+        // exclusive derivations of a single `relation_type()` (see
+        // dbt-schemas relations/base.rs), so exactly one flag is ever true and the
+        // deserialize priority chain reconstructs the same RelationType. The flag
+        // collapse is therefore not a replay drift source in practice.
+        assert_reserialization_fixed_point(&original.into_value(), &ctx);
+    }
+
+    #[test]
+    fn test_agate_table_reserialization_fixed_point() {
+        // AgateTable is compared by the verbatim base64 `__ipc__` string
+        // (values_match treats it as opaque). decode -> from_record_batch ->
+        // to_record_batch -> LZ4 re-encode must reproduce byte-identical base64
+        // for a replayed table passed back as an argument to match.
+        use std::sync::Arc;
+
+        use arrow::array::{Int64Array, RecordBatch, StringArray};
+        use arrow_schema::{DataType, Field, Schema};
+
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, true),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(Int64Array::from(vec![1, 2, 3])),
+                Arc::new(StringArray::from(vec![Some("a"), None, Some("c")])),
+            ],
+        )
+        .unwrap();
+        let table = dbt_agate::AgateTable::from_record_batch(Arc::new(batch));
+
+        assert_reserialization_fixed_point(&minijinja::Value::from_object(table), &ctx());
     }
 }

@@ -13,7 +13,6 @@ import {
   Tooltip,
 } from '@dbt-labs/sourdough';
 
-import { type NodeSummary } from '../api';
 import type { FreshnessStatusValue, SourceAsset } from '../shared';
 import {
   asCellRenderer,
@@ -27,6 +26,7 @@ import {
   TimestampCell,
   useMetadataDataSource,
 } from '../shared';
+import { type NodeSummary } from '../types';
 import { ResourceFilterTable } from './ResourceFilterTable';
 
 interface Props {

@@ -17,7 +17,7 @@ use dbt_state::service_config::CloneIncrementalInDev;
 
 use crate::context::TaskRunnerCtx;
 use crate::run_cache::run_cache_request::{
-    model_clone_table_properties, model_execution_type_input, node_identity,
+    DbtProjectInfo, model_clone_table_properties, model_execution_type_input, node_identity,
     snapshot_clone_table_properties, snapshot_execution_type_input,
 };
 use crate::run_cache::run_cache_service::{
@@ -407,6 +407,8 @@ async fn prepare_dev_clone_request(
     let source_last_modified_epoch =
         last_modified_epoch(ctx, &clone_source_table, source_relation.clone()).await;
 
+    let project_info = DbtProjectInfo::from(ctx);
+
     let request = CloneRequestInput {
         target_table: target_table.clone(),
         dialect: ctx.adapter_type().to_string(),
@@ -422,6 +424,7 @@ async fn prepare_dev_clone_request(
             false,
             ctx.dbt_profile().allow_clones,
         ),
+        table_namespace: project_info.table_namespace,
     }
     .into_proto();
 
@@ -729,6 +732,7 @@ mod tests {
             clone_source_table_type: Some("table".to_string()),
             table_properties: candidate.table_properties(),
             clone_chain_depth_limit: None,
+            table_namespace: Some("adapter-unique-id".to_string()),
         }
         .into_proto();
 
@@ -739,6 +743,7 @@ mod tests {
         assert_eq!(request.default_catalog, "dev");
         assert_eq!(request.execution_type, ModelExecutionType::Merge as i32);
         assert_eq!(request.clone_source_last_modified_epoch, Some(123));
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
         assert_eq!(
             request.labels.get("dbt_node_unique_id").map(String::as_str),
             Some("model.jaffle_shop.orders")

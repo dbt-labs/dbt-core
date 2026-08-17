@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use adbc_core::options::{OptionStatement, OptionValue};
-use arrow::compute::concat_batches;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_adapter_sql::statements::is_update_statement;
@@ -26,9 +25,10 @@ use tracy_client::span;
 
 use crate::AdapterType;
 use crate::cache::RelationCache;
+use crate::engine::concat_batches::concat_batches_widened;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::engine::sidecar_client::SidecarClient;
-use crate::errors::{adbc_error_to_adapter_error, arrow_error_to_adapter_error};
+use crate::errors::adbc_error_to_adapter_error;
 use crate::record_batch::{RecordBatchExt, SchemaExt};
 use crate::sql::normalize::strip_sql_comments;
 use crate::sql_types::TypeOps;
@@ -464,7 +464,7 @@ pub(crate) fn adbc_execute_with_options(
         t_do_execute.elapsed(),
     );
     let t_post = std::time::Instant::now();
-    let total_batch = concat_batches(&schema, &batches).map_err(arrow_error_to_adapter_error)?;
+    let total_batch = concat_batches_widened(schema, batches)?;
     let total_batch = normalize_result_column_names(adapter_type, sql.as_ref(), total_batch);
     log_step_duration(
         "concat_batches + normalize_result_column_names",

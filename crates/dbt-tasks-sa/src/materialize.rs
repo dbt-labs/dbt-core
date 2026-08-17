@@ -18,6 +18,7 @@ use arrow::{
         Array, ArrayRef, BooleanArray, Decimal128Array, Float64Array, Int32Array, Int64Array,
         RecordBatch, StringArray, TimestampNanosecondArray, TimestampSecondArray,
     },
+    compute::{CastOptions, cast_with_options},
     datatypes::{DataType, Field, Schema, TimeUnit},
     util::pretty::{pretty_format_batches, print_batches},
 };
@@ -578,20 +579,45 @@ pub fn materialize_seed(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
     let run_path = seed
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
         .into_owned();
 
-    execute_materialization_macro(
+    let unique_id = seed.__common_attr__.unique_id.clone();
+    let node_alias = seed.__base_attr__.alias.clone();
+    let adapter = jinja_env
+        .get_base_adapter()
+        .ok_or_else(|| unexpected_fs_err!("No adapter found for seed {}", &unique_id))?;
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        seed.deprecated_config
+            .__warehouse_specific_config__
+            .snowflake_warehouse
+            .clone(),
+        &seed.__base_attr__.database,
+        &unique_id,
+    )?;
+
+    let result = execute_materialization_macro(
         jinja_env,
         &macro_name,
         &mut context,
         "seed",
-        &seed.__common_attr__.unique_id,
-        &seed.__base_attr__.alias,
+        &unique_id,
+        &node_alias,
         run_path,
-    )
-    .map(|value| (value, result_store.main_adapter_response()))
+    );
+
+    // Surface a failed reset only when the seed itself succeeded: `reset_node_overrides`
+    // already drops the poisoned connection, and a seed error is far more actionable than the
+    // restore error it would otherwise mask. It also keeps the CSV-column hint that
+    // `chain_materialize_seed_error_with_pending_hint` appends attached to a real seed error.
+    let reset = reset_node_overrides(&adapter, &unique_id, &node_overrides);
+    let value = result?;
+    reset?;
+    Ok((value, result_store.main_adapter_response()))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1503,9 +1529,58 @@ pub fn materialize_test(
     Ok((test_results, None, result_store.main_adapter_response()))
 }
 
+/// `AgateTable`'s underlying batches may carry `Utf8View`/`LargeUtf8` columns
+/// (query results are normalized to view types at the adapter boundary; see
+/// `dbt-adapter`'s `concat_batches::to_view_types`). The comparison logic below
+/// assumes plain `Utf8`/`StringArray`, so downgrade back to that before comparing.
+///
+/// TODO(felipecrv): implement semantic comparison functionality in dbt-agate.
+fn normalize_to_utf8(batch: &RecordBatch) -> arrow::error::Result<RecordBatch> {
+    let schema = batch.schema();
+    if !schema
+        .fields()
+        .iter()
+        .any(|f| matches!(f.data_type(), DataType::Utf8View | DataType::LargeUtf8))
+    {
+        return Ok(batch.clone());
+    }
+
+    let fields: Vec<Field> = schema
+        .fields()
+        .iter()
+        .map(|f| match f.data_type() {
+            DataType::Utf8View | DataType::LargeUtf8 => {
+                f.as_ref().clone().with_data_type(DataType::Utf8)
+            }
+            _ => f.as_ref().clone(),
+        })
+        .collect();
+    let new_schema = Arc::new(Schema::new_with_metadata(fields, schema.metadata().clone()));
+
+    let cast_options = CastOptions {
+        safe: false,
+        format_options: Default::default(),
+    };
+    let columns: Vec<ArrayRef> = batch
+        .columns()
+        .iter()
+        .zip(new_schema.fields())
+        .map(|(col, field)| match field.data_type() {
+            DataType::Utf8 if col.data_type() != &DataType::Utf8 => {
+                cast_with_options(col, &DataType::Utf8, &cast_options)
+            }
+            _ => Ok(col.clone()),
+        })
+        .collect::<Result<_, _>>()?;
+
+    RecordBatch::try_new(new_schema, columns)
+}
+
 pub fn compare_record_batches(
     batch: &RecordBatch,
 ) -> arrow::error::Result<CompareRecordBatchResult> {
+    let batch = normalize_to_utf8(batch)?;
+    let batch = &batch;
     let schema = batch.schema();
 
     let label_col_index = schema
@@ -1523,11 +1598,41 @@ pub fn compare_record_batches(
     let mut actual_rows = vec![];
     let mut expected_rows = vec![];
 
-    let label_array = batch
-        .column(label_col_index)
+    // An empty result has no labels to inspect, regardless of the physical type
+    // inferred for the label column.
+    if batch.num_rows() == 0 {
+        return Ok(CompareRecordBatchResult {
+            actual_rows: 0,
+            expected_rows: 0,
+            diff_batch: batch.clone(),
+            has_differences: false,
+        });
+    }
+
+    let label_column = batch.column(label_col_index);
+    let label_column = match label_column.data_type() {
+        DataType::Utf8 => label_column.clone(),
+        DataType::Binary | DataType::BinaryView | DataType::LargeBinary => {
+            let cast_options = CastOptions {
+                safe: false,
+                format_options: Default::default(),
+            };
+            cast_with_options(label_column, &DataType::Utf8, &cast_options)?
+        }
+        data_type => {
+            return Err(arrow::error::ArrowError::SchemaError(format!(
+                "'actual_or_expected' column must be a string or binary, found {data_type}"
+            )));
+        }
+    };
+    let label_array = label_column
         .as_any()
         .downcast_ref::<StringArray>()
-        .expect("'actual_or_expected' column must be StringArray");
+        .ok_or_else(|| {
+            arrow::error::ArrowError::SchemaError(
+                "Failed to normalize 'actual_or_expected' column to a string".to_string(),
+            )
+        })?;
 
     for i in 0..batch.num_rows() {
         match label_array.value(i) {
@@ -1683,6 +1788,127 @@ fn value_as_string(array: &ArrayRef, index: usize, data_type: &DataType) -> Stri
             })
         }
         _ => "[unsupported]".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod compare_record_batches_tests {
+    use super::compare_record_batches;
+    use arrow::array::{BinaryArray, Int32Array, Int64Array, StringViewArray};
+    use arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
+
+    // Query results are normalized to Utf8View/LargeUtf8 at the adapter boundary
+    // (dbt-adapter's concat_batches::to_view_types), so AgateTable's batches carry
+    // Utf8View columns rather than plain Utf8. Regression test for a real mismatch
+    // being masked as a match once that switch happened.
+    #[test]
+    fn detects_mismatch_in_utf8_view_column() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Utf8View, false),
+            Field::new("id", DataType::Int32, false),
+            Field::new("name", DataType::Utf8View, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringViewArray::from(vec!["expected", "actual"])),
+                Arc::new(Int32Array::from(vec![1, 1])),
+                Arc::new(StringViewArray::from(vec!["alice", "bob"])),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(
+            result.has_differences,
+            "expected 'alice' vs 'bob' to be flagged as a mismatch, but Utf8View columns were silently treated as unsupported"
+        );
+    }
+
+    #[test]
+    fn no_differences_when_utf8_view_values_match() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Utf8View, false),
+            Field::new("name", DataType::Utf8View, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringViewArray::from(vec!["expected", "actual"])),
+                Arc::new(StringViewArray::from(vec!["alice", "alice"])),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(!result.has_differences);
+    }
+
+    #[test]
+    fn empty_non_string_label_column_has_no_differences() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Int64, false),
+            Field::new("id", DataType::Int64, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(Int64Array::from(Vec::<i64>::new())),
+                Arc::new(Int64Array::from(Vec::<i64>::new())),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(!result.has_differences);
+        assert_eq!(result.actual_rows, 0);
+        assert_eq!(result.expected_rows, 0);
+        assert_eq!(result.diff_batch.schema(), batch.schema());
+    }
+
+    #[test]
+    fn non_empty_invalid_label_type_returns_schema_error() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Int64, false),
+            Field::new("id", DataType::Int64, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(Int64Array::from(vec![1])),
+                Arc::new(Int64Array::from(vec![1])),
+            ],
+        )
+        .unwrap();
+
+        let error = compare_record_batches(&batch).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Schema error: 'actual_or_expected' column must be a string or binary, found Int64"
+        );
+    }
+
+    #[test]
+    fn accepts_binary_label_column() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Binary, false),
+            Field::new("id", DataType::Int32, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(BinaryArray::from(vec![
+                    b"expected".as_slice(),
+                    b"actual".as_slice(),
+                ])),
+                Arc::new(Int32Array::from(vec![1, 1])),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(!result.has_differences);
     }
 }
 

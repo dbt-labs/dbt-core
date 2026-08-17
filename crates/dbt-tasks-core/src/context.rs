@@ -456,7 +456,7 @@ impl TaskRunnerCtx {
         model: &T,
         base_context: &BTreeMap<String, Value>,
         ref_validation_config: DependencyValidationConfig,
-    ) -> (BTreeMap<String, Value>, Arc<DashMap<String, Value>>)
+    ) -> FsResult<(BTreeMap<String, Value>, Arc<DashMap<String, Value>>)>
     where
         T: InternalDbtNodeAttributes + ?Sized,
     {

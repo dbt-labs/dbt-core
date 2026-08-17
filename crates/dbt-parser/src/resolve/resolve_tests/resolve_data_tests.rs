@@ -244,6 +244,22 @@ fn file_key_name_from_asset(asset: &GenericTestAsset) -> Option<String> {
     Some(format!("{yaml_key}.{name}"))
 }
 
+/// Checksum for a data test node, matching dbt-core.
+///
+/// A singular data test is parsed from its own `tests/*.sql` file, and dbt-core hashes that
+/// file's contents (`FileHash.from_contents`: sha256 over the whitespace-stripped UTF-8
+/// contents — the same bytes it keeps as `raw_code`). Pass those contents here.
+///
+/// A generic data test is synthesized from a `schema.yml` entry and has no file of its own, so
+/// dbt-core leaves it at `FileHash.empty()` (`{"name": "none", "checksum": ""}`) — pass `None`.
+/// That also keeps generic-test checksums stable across runs when schema names change.
+fn data_test_checksum(singular_test_file_contents: Option<&str>) -> DbtChecksum {
+    match singular_test_file_contents {
+        Some(contents) => DbtChecksum::hash(contents.as_bytes()),
+        None => DbtChecksum::default(),
+    }
+}
+
 pub fn build_data_test_raw_code(
     test_metadata: Option<TestMetadata>,
     alias: Option<String>,
@@ -559,6 +575,16 @@ pub async fn resolve_data_tests(
             DbtPath::from(patch_path)
         };
 
+        // Singular tests are backed by their own `.sql` file, so read its contents once here:
+        // both `checksum` (below) and `raw_code` (further down) are derived from these exact
+        // bytes, mirroring dbt-core, where a singular test node's checksum and raw_code both
+        // come from the same source file. Generic tests have no file of their own.
+        let singular_test_file_contents = if is_singular_data_test {
+            get_original_file_contents(&arg.io.in_dir, &manifest_original_file_path)
+        } else {
+            None
+        };
+
         // Populate TestMetadata only for generic data tests (not singular .sql tests)
         // This ensures external tooling (e.g., project-evaluator) correctly classifies tests
         let inferred_test_metadata = if is_singular_data_test {
@@ -613,9 +639,7 @@ pub async fn resolve_data_tests(
                 fqn,
                 // dbt-core: description is always default ''
                 description: Some(properties.description.clone().unwrap_or_default()),
-                // Use empty checksum to match Python/Mantle behavior: FileHash.empty().to_dict(omit_none=True)
-                // This ensures stable checksums across test runs when schema names change
-                checksum: DbtChecksum::default(),
+                checksum: data_test_checksum(singular_test_file_contents.as_deref()),
                 // TODO: hydrate for generic + singular tests
                 // Examples in Mantle:
                 // - Generic test: "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
@@ -766,7 +790,7 @@ pub async fn resolve_data_tests(
         }
 
         dbt_test.__common_attr__.raw_code = if is_singular_data_test {
-            get_original_file_contents(&arg.io.in_dir, &manifest_original_file_path)
+            singular_test_file_contents
         } else {
             build_data_test_raw_code(
                 inferred_test_metadata,
@@ -873,6 +897,54 @@ mod tests {
                 .unwrap(),
             "id"
         );
+    }
+
+    /// A singular data test is parsed from its own `.sql` file, so its checksum must be the
+    /// sha256 of that file's contents — the value dbt-core's `FileHash.from_contents` produces.
+    /// The expected digest below is computed independently of this crate:
+    ///
+    /// ```text
+    /// printf %s "select 1 from {{ ref('customers') }} where x < 0" | sha256sum
+    /// ```
+    #[test]
+    fn test_singular_data_test_checksum_is_sha256_of_file_contents() {
+        const SQL: &str = "select 1 from {{ ref('customers') }} where x < 0";
+        const EXPECTED_SHA256: &str =
+            "0189810ca51b8d0a3a0dd389ed3b616ca34a50d47248d42af82d2cdd16158ff8";
+
+        let in_dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(in_dir.path().join("tests")).expect("mkdir tests");
+        let relative_path = PathBuf::from("tests").join("assert_no_negatives.sql");
+        // Surrounding whitespace is stripped by dbt-core's `load_file_contents` /
+        // `FileHash.from_contents` pair, so it must not change the digest.
+        std::fs::write(in_dir.path().join(&relative_path), format!("\n{SQL}\n"))
+            .expect("write test file");
+
+        let contents = get_original_file_contents(in_dir.path(), &relative_path)
+            .expect("singular test file contents");
+        assert_eq!(contents, SQL);
+
+        let checksum = data_test_checksum(Some(&contents));
+        assert_eq!(checksum.as_checksum_string(), EXPECTED_SHA256);
+        match &checksum {
+            DbtChecksum::Object(object) => assert_eq!(object.name, "sha256"),
+            other => panic!("expected object-form checksum, got {other:?}"),
+        }
+    }
+
+    /// A generic data test is synthesized from `schema.yml` and has no file of its own, so it
+    /// keeps dbt-core's `FileHash.empty()`.
+    #[test]
+    fn test_generic_data_test_checksum_is_empty_file_hash() {
+        let checksum = data_test_checksum(None);
+        assert_eq!(checksum, DbtChecksum::default());
+        match &checksum {
+            DbtChecksum::Object(object) => {
+                assert_eq!(object.name, "none");
+                assert_eq!(object.checksum, "");
+            }
+            other => panic!("expected object-form checksum, got {other:?}"),
+        }
     }
 
     #[test]

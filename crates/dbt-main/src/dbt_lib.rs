@@ -91,12 +91,12 @@ use dbt_telemetry::{
     ShowDataOutputFormat, ShowResult,
 };
 
+use dbt_vortex::vortex_producer_is_running;
 #[cfg(debug_assertions)]
 use git_version::git_version;
 use minijinja::Value;
 use serde_json::{json, to_string_pretty};
 use tracing::{Instrument, Span};
-use vortex_client::client::vortex_producer_is_running;
 use vortex_events::{build_result_string, invocation_end_event};
 
 use crate::{
@@ -423,15 +423,29 @@ async fn do_execute_fs(
                 )
                 .await
             }
-            _ => {
-                emit_warn_log_message(
-                    ErrorCode::DocsGenerateWarning,
-                    "`dbt docs generate` is not supported. Use `dbt compile --write-catalog` to write \
-                    catalog.json. To host docs locally, use the dbt Core index.html with catalog.json \
-                    and manifest.json in the same directory: \
-                    https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/task/docs/index.html",
+            Some(DocsSubcommand::Generate(generate_args)) => {
+                run_docs_generate(generate_args.clone(), eval_arg, &cli, feature_stack, token).await
+            }
+            // An unrecognized subcommand is a typo, not a request. Naming it beats
+            // the silent success this arm used to return.
+            Some(DocsSubcommand::Other(argv)) => {
+                emit_error_log_message(
+                    ErrorCode::Generic,
+                    format!(
+                        "unrecognized subcommand `{}`\n\nUsage: dbt docs <generate|serve>",
+                        argv.join(" "),
+                    ),
                 );
-                Ok(())
+                Err(FsError::exit_with_status(2))
+            }
+            None => {
+                emit_error_log_message(
+                    ErrorCode::Generic,
+                    "`dbt docs` needs a subcommand.\n\n  \
+                     dbt docs generate   Build a statically hostable docs site\n  \
+                     dbt docs serve      Build if needed, then serve it locally",
+                );
+                Err(FsError::exit_with_status(2))
             }
         };
     } else if let Command::Core(Init(init_args)) = &cli.command {
@@ -499,6 +513,7 @@ async fn do_execute_fs(
             deps_args.common_args.warn_error_options.clone(),
             Some(feature_stack.tracing.config_provider.as_ref()),
             token,
+            feature_stack.loader.private_package_resolver.clone(),
         )
         .await
         {
@@ -1078,31 +1093,27 @@ impl<'a> AllPhasesExecutor<'a> {
         // Inform the user that schemas require --static-analysis strict, and CLL requires
         // --write-lineage in addition. Emitted after load_and_resolve_state so the project's
         // warn_error_options (applied during loading) can silence/upgrade these warnings.
-        if self.arg.write_metadata
+        //
+        // Not when `docs generate` drove this compile: the user passed none of these flags,
+        // so advising them to add some to a command they did not run is noise — and under
+        // `--warn-error` it would fail the export. The export prints its own lineage hint,
+        // which names the command that would produce it.
+        let advise_index_flags = self.arg.write_metadata
             && matches!(
                 self.arg.command,
                 FsCommand::Compile | FsCommand::Build | FsCommand::Run
             )
-            && !self
-                .arg
-                .static_analysis
-                .is_some_and(dbt_common::static_analysis::is_strict_static_analysis)
-        {
+            && self.arg.command_entrypoint != FsCommand::Docs;
+        let strict_static_analysis = self
+            .arg
+            .static_analysis
+            .is_some_and(dbt_common::static_analysis::is_strict_static_analysis);
+        if advise_index_flags && !strict_static_analysis {
             emit_warn_log_message(
                 ErrorCode::Generic,
                 "--write-index: column schemas will not be populated without `--static-analysis strict`; add `--write-lineage` to also write column-level lineage.",
             );
-        } else if self.arg.write_metadata
-            && matches!(
-                self.arg.command,
-                FsCommand::Compile | FsCommand::Build | FsCommand::Run
-            )
-            && self
-                .arg
-                .static_analysis
-                .is_some_and(dbt_common::static_analysis::is_strict_static_analysis)
-            && !self.arg.write_lineage
-        {
+        } else if advise_index_flags && strict_static_analysis && !self.arg.write_lineage {
             emit_warn_log_message(
                 ErrorCode::Generic,
                 "--write-index: add `--write-lineage` to write column-level lineage into compile/cll parquet.",
@@ -1710,6 +1721,293 @@ impl<'a> AllPhasesExecutor<'a> {
     }
 }
 
+/// `dbt docs generate` — compile the project, then write a statically hostable site.
+///
+/// Runs `compile --write-index` ([`build_index_for_docs`]) and turns the index that
+/// produces into a directory of files any host can serve. The compile is unconditional,
+/// exactly as in v1: `--no-compile` is how a user says they want the index that is
+/// already on disk. Inferring that from whether an index happens to exist looked like a
+/// saving and behaved like a bug — the second `docs generate` of the day silently
+/// published whatever the first one had compiled.
+///
+/// The compile is a synthesized invocation handed to the ordinary pipeline, not a
+/// docs-aware code path in the pipeline: the phase pipeline branches on
+/// `FsCommand::Compile | Build | Run` in roughly two dozen places, and threading a
+/// docs command through every one of them was tried once and abandoned.
+async fn run_docs_generate(
+    generate_args: dbt_clap_core::DocsGenerateArgs,
+    eval_arg: &EvalArgs,
+    cli: &Cli,
+    feature_stack: Arc<FeatureStack>,
+    token: &CancellationToken,
+) -> FsResult<()> {
+    // `docs generate` is a project command, so `out_dir` is the project's target
+    // directory, resolved the standard way: `--project-dir` or discovery, then
+    // `--target-path` or `dbt_project.yml`'s. The subcommand's own `--target-path`
+    // stays as an explicit override, and `--index-dir` / `--metadata-dir` still win
+    // over both, as they do everywhere else.
+    //
+    // A relative override resolves against the project directory, which is what
+    // `in_out_dir` does for `--target-path` everywhere else. Resolving it against the
+    // working directory instead would put the index the compile writes and the index
+    // the export reads in two different places whenever `--project-dir` is not `.`.
+    let target_dir = generate_args
+        .target_path
+        .clone()
+        .map(|path| {
+            if path.is_relative() {
+                eval_arg.io.in_dir.join(path)
+            } else {
+                path
+            }
+        })
+        .unwrap_or_else(|| eval_arg.io.out_dir.clone());
+
+    let index_dir = eval_arg
+        .index_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.join("index"));
+    let output_dir = generate_args
+        .output_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.clone());
+
+    // Roll any newer metadata epochs into the index, the same opportunistic
+    // catch-up `docs serve` does, so a run since the last `--write-index` is picked up.
+    // Under `--no-compile` this is the only thing that can advance the index; otherwise
+    // `build_index_for_docs` runs it again once its compile has finished.
+    let metadata_dir = eval_arg
+        .metadata_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.join("metadata"));
+    ingest_metadata_into_index(&metadata_dir, &index_dir, "dbt docs generate");
+
+    // Compile unless the user said not to, the way v1 does. `--no-compile` falls through
+    // to the export, and to the error below when there is nothing to export.
+    if !generate_args.no_compile {
+        emit_info_log_message(
+            "Running `compile --write-index`; pass `--no-compile` to export the existing \
+             index instead.",
+        );
+        build_index_for_docs(
+            &target_dir,
+            &index_dir,
+            &metadata_dir,
+            eval_arg,
+            cli,
+            Arc::clone(&feature_stack),
+            token,
+        )
+        .await?;
+    }
+
+    // No index to export. Under `--no-compile` that is the expected way to get here;
+    // otherwise the compile above ran but wrote nothing. Checked before opening the
+    // backend so the user gets the export's message — which names both commands that
+    // write an index — rather than the backend's generic "index directory does not exist".
+    if !dbt_docs_server::index_dir_has_artifacts(&index_dir) {
+        emit_error_log_message(
+            ErrorCode::Generic,
+            format!(
+                "dbt docs generate: {}",
+                dbt_docs_server::ExportError::NoIndex { index_dir }
+            ),
+        );
+        return Err(FsError::exit_with_status(1));
+    }
+
+    let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
+        Ok(backend) => backend,
+        Err(err) => {
+            emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
+            return Err(FsError::exit_with_status(1));
+        }
+    });
+    let providers = (feature_stack.index.providers_factory)(backend);
+
+    let project_dir = &eval_arg.io.in_dir;
+    let options = dbt_docs_server::ExportOptions {
+        index_dir,
+        output_dir,
+        duckdb_cdn_base: generate_args.duckdb_cdn_base,
+        // Consent is resolved here because the project and profile are only
+        // readable on this machine; the browser reads the answer, not the inputs.
+        analytics_enabled: std::env::var("DO_NOT_TRACK").as_deref() != Ok("1")
+            && cli
+                .common_args()
+                .get_send_anonymous_usage_stats_for_project(project_dir),
+    };
+
+    let summary = match dbt_docs_server::export_site(&providers, &options) {
+        Ok(summary) => summary,
+        Err(err) => {
+            emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
+            return Err(FsError::exit_with_status(1));
+        }
+    };
+
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        "Generated".to_string(),
+        format!(
+            "{}{}{}",
+            summary.output_dir.display(),
+            if summary.copied_artifacts > 0 {
+                format!(" ({} artifacts copied)", summary.copied_artifacts)
+            } else {
+                // The common case: the site reads the index where it already lies.
+                format!(" (reading {})", summary.data_dir)
+            },
+            if summary.has_column_lineage {
+                ""
+            } else {
+                " — no column lineage; rerun the compile or build with \
+                 `--write-index --static-analysis strict` to include it"
+            },
+        ),
+    ));
+    // The caveat only applies when the site was written into the target directory,
+    // which holds plenty besides the site. An explicit `--output-dir` gets a fresh
+    // directory containing nothing else.
+    let wrote_into_target = summary.output_dir == target_dir;
+    emit_info_log_message(format!(
+        "Host the contents of {} on any static file server.{}",
+        summary.output_dir.display(),
+        if wrote_into_target {
+            " Note that this publishes everything else in the target directory too, \
+             including compiled SQL and any stored test failures."
+        } else {
+            ""
+        },
+    ));
+
+    Ok(())
+}
+
+/// Roll metadata epochs newer than the index into it, best-effort.
+///
+/// A missing metadata directory is nothing to do, and a failed ingest is worth a
+/// warning but not the command: whatever the index already holds is still exportable.
+fn ingest_metadata_into_index(
+    metadata_dir: &std::path::Path,
+    index_dir: &std::path::Path,
+    context: &str,
+) {
+    if !metadata_dir.exists() {
+        return;
+    }
+    let mut state = IngestState::default();
+    if let Err(err) = apply_delta_direct(metadata_dir, index_dir, &mut state) {
+        emit_warn_log_message(
+            ErrorCode::Generic,
+            format!("{context}: failed to ingest metadata: {err}"),
+        );
+    }
+}
+
+/// Run `compile --write-index` in-process so `docs generate` has an index to export.
+///
+/// Synthesizes the compile's own args and hands them to the ordinary pipeline, which
+/// is how `dbt retry` reaches the command it is retrying (`prepare_for_potential_retry`)
+/// and how `dbt-repl` runs its bootstrap compile. `EvalArgs::command` therefore reads
+/// `Compile` — the pipeline branches on it in roughly two dozen places, and anything
+/// else silently produces an empty index — while `command_entrypoint` keeps `Docs` as
+/// the origin, the same way the LSP labels its internal compiles.
+async fn build_index_for_docs(
+    target_dir: &std::path::Path,
+    index_dir: &std::path::Path,
+    metadata_dir: &std::path::Path,
+    docs_arg: &EvalArgs,
+    docs_cli: &Cli,
+    feature_stack: Arc<FeatureStack>,
+    token: &CancellationToken,
+) -> FsResult<()> {
+    let mut common_args = docs_cli.common_args();
+    // `write_index` is the only flag to set — `CommonArgs::to_eval_args` derives
+    // `write_metadata` from it — and deliberately the only one. Static analysis is left
+    // at its default, so this is a plain `compile --write-index` and nothing more: an
+    // index built here is exactly what the two-command flow produces, no better and no
+    // worse. That means no column lineage, which needs `--static-analysis strict`; the
+    // export says so, naming the compile that would include it.
+    common_args.write_index = true;
+    // Pin the directories `run_docs_generate` resolved, so the compile writes exactly
+    // where the export reads. `docs generate --target-path` is a subcommand-level
+    // override that does not exist in `CommonArgs`, so without this the compile would
+    // write into the project's default target directory instead.
+    common_args.target_path = Some(target_dir.to_path_buf());
+    common_args.index_dir = Some(index_dir.to_path_buf());
+    common_args.metadata_dir = Some(metadata_dir.to_path_buf());
+
+    let compile_cli = Cli {
+        command: Command::Core(CoreCommand::Compile(CompileArgs {
+            common_args: common_args.clone(),
+            ..CompileArgs::default()
+        })),
+        common_args,
+    };
+
+    // Built from the docs invocation rather than `from_main`, so an embedder is not
+    // told this came from the binary, and so the compile shares the docs invocation id
+    // and log configuration. `to_eval_args` overwrites `in_dir` / `out_dir`, and
+    // `exit_process_on_panic` is not one of the fields it reads.
+    let system_args = SystemArgs {
+        command: FsCommand::Compile,
+        io: docs_arg.io.clone(),
+        from_main: docs_arg.from_main,
+        exit_process_on_panic: false,
+        num_threads: docs_arg.num_threads,
+        no_parallel: docs_arg.no_parallel,
+        target: docs_arg.target.clone(),
+    };
+    let mut compile_arg = compile_cli.to_eval_args(system_args)?;
+    compile_arg.command_entrypoint = FsCommand::Docs;
+
+    // Started before the run so the recorded duration is the compile's.
+    let invocation_ctx = InvocationContext::new(
+        compile_arg.metadata_dir(),
+        &compile_arg.io,
+        FsCommand::Compile,
+        &compile_cli.common_args(),
+    );
+
+    let hooks_factory = Arc::clone(&feature_stack.task_runner.hooks_factory);
+    // Boxed: this nests the whole phase pipeline's future inside the one `do_execute_fs`
+    // already returns, and the combined layout overflows rustc's query depth limit in
+    // downstream crates. `Box::pin` keeps the inner future off the outer one's layout.
+    let result = Box::pin(execute_setup_and_all_phases(
+        &compile_arg,
+        &compile_cli,
+        &mut DbtCommandExecutionArtifacts::default(),
+        feature_stack,
+        hooks_factory,
+        token,
+    ))
+    .await;
+
+    // Compile ends at the `Phases::Compile` checkpoint, which reports success as
+    // `Err` carrying exit status 0 — a sentinel, not a failure. Unwrapped the same way
+    // `setup_and_execute_fs` does for the top-level invocation.
+    let failure = match result {
+        Ok(()) => None,
+        Err(err) if err.exit_status() == Some(0) => None,
+        Err(err) => Some(err),
+    };
+    invocation_ctx.write(if failure.is_some() {
+        "error"
+    } else {
+        "success"
+    });
+    if let Some(err) = failure {
+        return Err(err);
+    }
+
+    // The invocation record is written after the compile's own `--write-index` ingest,
+    // so without this second pass it never reaches `dbt_rt.invocations` and the site's
+    // timings and status surfaces come up empty.
+    ingest_metadata_into_index(metadata_dir, index_dir, "dbt docs generate");
+
+    Ok(())
+}
+
 async fn run_docs_serve(
     serve_args: ClapDocsServeArgs,
     feature_stack: &Arc<FeatureStack>,
@@ -1726,6 +2024,8 @@ async fn run_docs_serve(
         no_open: serve_args.no_open,
         has_dbt_state,
         send_anonymous_usage_stats,
+        // Filled in below, once the site has been generated.
+        site_dir: None,
     };
     let index_dir = dbt_docs_server::resolve_index_dir(&args);
 
@@ -1749,17 +2049,7 @@ async fn run_docs_serve(
         return Err(FsError::exit_with_status(1));
     }
 
-    if let Some(md) = metadata_dir.exists().then_some(metadata_dir.as_path()) {
-        if md.exists() {
-            let mut state = IngestState::default();
-            if let Err(err) = apply_delta_direct(md, &index_dir, &mut state) {
-                emit_warn_log_message(
-                    ErrorCode::Generic,
-                    format!("dbt docs serve: failed to ingest metadata: {err}"),
-                );
-            }
-        }
-    }
+    ingest_metadata_into_index(&metadata_dir, &index_dir, "dbt docs serve");
 
     let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
         Ok(b) => b,
@@ -1770,12 +2060,59 @@ async fn run_docs_serve(
     });
     let providers = (feature_stack.index.providers_factory)(backend);
 
+    // Serve the same static site `docs generate` produces rather than the
+    // embedded bundle, so local preview exercises the artifact the user will
+    // actually host. Regenerated when missing or older than the index; a failure
+    // here is not fatal, because the embedded bundle is still a usable fallback.
+    let site_dir = target.clone();
+    if site_needs_regenerating(&site_dir, &index_dir) {
+        let options = dbt_docs_server::ExportOptions {
+            index_dir: index_dir.clone(),
+            output_dir: site_dir.clone(),
+            duckdb_cdn_base: None,
+            analytics_enabled: std::env::var("DO_NOT_TRACK").as_deref() != Ok("1")
+                && send_anonymous_usage_stats,
+        };
+        match dbt_docs_server::export_site(&providers, &options) {
+            Ok(summary) => eprintln!(
+                "dbt docs serve: generated {} (reading {})",
+                summary.output_dir.display(),
+                summary.data_dir
+            ),
+            Err(err) => emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("dbt docs serve: could not generate the site: {err}"),
+            ),
+        }
+    }
+
+    let args = dbt_docs_server::DocsServeArgs {
+        site_dir: site_dir.exists().then_some(site_dir),
+        ..args
+    };
+
     dbt_docs_server::run_with_args(Arc::new(args), providers)
         .await
         .map_err(|err| {
             emit_error_log_message(ErrorCode::Generic, err.to_string());
             FsError::exit_with_status(1)
         })
+}
+
+/// Whether `site_dir` is missing or predates the index it was built from.
+///
+/// Compares against the index directory's mtime, the same staleness signal
+/// `AppState::compute_generation` reports to the UI. Any unreadable timestamp
+/// means regenerate: cheap, and being wrong the other way serves stale docs.
+fn site_needs_regenerating(site_dir: &std::path::Path, index_dir: &std::path::Path) -> bool {
+    let Ok(site_mtime) = std::fs::metadata(site_dir.join("index.html")).and_then(|m| m.modified())
+    else {
+        return true;
+    };
+    let Ok(index_mtime) = std::fs::metadata(index_dir).and_then(|m| m.modified()) else {
+        return true;
+    };
+    site_mtime < index_mtime
 }
 
 #[allow(clippy::cognitive_complexity)]

@@ -118,7 +118,8 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 Some(catalog_name) => catalog_name,
             }
         }
-        AdapterType::DuckDB => match model_catalog_name(model, AdapterType::DuckDB) {
+        // Alt behaves as DuckDB-backed for relation-building purposes.
+        AdapterType::DuckDB | AdapterType::Alt => match model_catalog_name(model, adapter_type) {
             None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
             Some(catalog_name) => catalog_name,
         },
@@ -197,6 +198,24 @@ pub(super) fn from_model_config_and_catalogs_v2(
             AdapterErrorKind::Configuration,
             format!(
                 "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'iceberg_rest', 'ducklake', and 'local_filesystem'",
+                other.as_str()
+            ),
+        )),
+        // Alt never issues its own ATTACH: the dbt-compute
+        // service auto-attaches the org's MDLS catalog server-side via the
+        // caller's bearer token. All Alt needs from catalogs.yml is the
+        // Snowflake-cased `catalog_database` these catalog types carry --
+        // see `catalog_attach_database()` in dbt-tasks'
+        // local_engine::runnable::compute_platform, which reads the exact
+        // same field and nothing else.
+        (
+            AdapterType::Alt,
+            V2CatalogType::Horizon | V2CatalogType::IcebergRest | V2CatalogType::Unity,
+        ) => CatalogRelation::build_alt_with_catalogs_v2(catalog, &catalog_name),
+        (AdapterType::Alt, other) => Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Catalog '{catalog_name}' has type '{}'; Alt (dbt Compute) v2 mapping supports only 'horizon', 'iceberg_rest', and 'unity'",
                 other.as_str()
             ),
         )),
@@ -816,6 +835,44 @@ impl CatalogRelation {
             catalog_database,
             base_location: None,
             file_format: Some(file_format),
+        })
+    }
+
+    /// Alt equivalent of `build_horizon_with_catalogs_v2` /
+    /// `build_snowflake_linked_with_catalogs_v2`, pared down to the single
+    /// field the Alt runtime actually consults: `catalog_database` from
+    /// `config.snowflake`. Alt attaches server-side (see module doc on
+    /// `build_duckdb_with_catalogs_v2` and `catalog_attach_database()` in
+    /// dbt-tasks), so none of the ATTACH/endpoint fields apply here.
+    fn build_alt_with_catalogs_v2(
+        catalog: &CatalogSpecV2View<'_>,
+        catalog_name: &str,
+    ) -> AdapterResult<CatalogRelation> {
+        let snowflake = require_platform_block(catalog, catalog_name, "snowflake")?;
+
+        let catalog_database = get_yaml_str(snowflake, FIELD_CATALOG_DATABASE)
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!(
+                        "Catalog '{catalog_name}' requires config.snowflake.catalog_database for the Alt (dbt Compute) adapter"
+                    ),
+                )
+            })?;
+
+        Ok(CatalogRelation {
+            adapter_type: AdapterType::Alt,
+            catalog_name: Some(catalog_name.to_string()),
+            integration_name: None,
+            catalog_type: catalog.catalog_type.as_str().to_string(),
+            table_format: catalog.table_format,
+            file_format: None,
+            external_volume: None,
+            catalog_database: Some(catalog_database),
+            base_location: None,
+            adapter_properties: BTreeMap::new(),
+            is_transient: None,
         })
     }
 

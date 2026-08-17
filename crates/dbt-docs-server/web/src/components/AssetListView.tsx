@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icon } from '@dbt-labs/sourdough';
 
-import type { NodeSummary } from '../api';
 import type { AssetFilters } from '../App';
 import {
   inferModelingLayer,
@@ -12,6 +11,7 @@ import {
 } from '../lib/resourceType';
 import type { Project } from '../shared';
 import { SimpleLinkBreadcrumbs, useResourceLink } from '../shared';
+import type { NodeSummary } from '../types';
 
 const PAGE_SIZE = 200;
 

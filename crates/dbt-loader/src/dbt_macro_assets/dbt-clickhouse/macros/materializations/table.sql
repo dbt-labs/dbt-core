@@ -90,12 +90,17 @@
 
 {% macro primary_key_clause(label) %}
   {%- set primary_key = config.get('primary_key', validator=validation.any[list, basestring]) -%}
-  {#- Fusion compatibility: Fusion's typed primary_key config arrives as a list
-      (scalar inputs are listified), so join it back into the raw string this
-      clause renders. Guarded like the incremental macros' unique_key handling.
-      No-op in Python, where a plain string passes through untouched. -#}
+  {#- An empty value ('' or []) would emit "PRIMARY KEY" with no columns,
+      which is invalid DDL - treat it as unset instead. -#}
+{%- if primary_key is not none and ((primary_key is string and primary_key | trim | length == 0) or (primary_key is not string and primary_key | length == 0)) -%}
+  {%- set primary_key = none -%}
+{%- endif -%}
+  {#- v2 compatibility: v2's typed primary_key config arrives as a list
+      (scalar inputs are listified). Render it as a single parenthesized
+      expression, since bare "PRIMARY KEY a, b" is a ClickHouse syntax error.
+      Guarded like the incremental macros' unique_key handling. -#}
   {%- if primary_key is not none and primary_key is iterable and (primary_key is not string and primary_key is not mapping) -%}
-    {%- set primary_key = primary_key | join(', ') -%}
+    {%- set primary_key = '(' ~ (primary_key | join(', ')) ~ ')' -%}
   {%- endif %}
 
   {%- if primary_key is not none %}

@@ -22,7 +22,7 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use vortex_client::client::{log_proto, log_proto_and_shutdown};
+use dbt_vortex::{log_proto, log_proto_and_shutdown};
 
 /// Structure for the .user.yml file format: {id: <uuid>}
 #[derive(Debug, Serialize, Deserialize)]

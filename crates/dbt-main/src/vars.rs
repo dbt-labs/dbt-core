@@ -129,6 +129,7 @@ const USED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_STATE_API_URL",
     "DBT_ENGINE_STATE_AUTH_URL",
     "DBT_ENGINE_STATE_EMIT_REUSED_STATUS",
+    "DBT_ENGINE_STATE_HOME",
     "DBT_ENGINE_STATE_OAUTH_CLIENT_ID",
     "DBT_ENGINE_STATE_TOKEN_URL",
 ];
@@ -287,6 +288,8 @@ mod tests {
             std::env::set_var("DBT_ENGINE_MANAGE_STATE", "1");
             #[allow(clippy::disallowed_methods)]
             std::env::set_var("DBT_ENGINE_STATE_OAUTH_CLIENT_ID", "client-id");
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("DBT_ENGINE_STATE_HOME", "state-home");
         }
         let result = validate_engine_env_vars();
         unsafe {
@@ -294,6 +297,8 @@ mod tests {
             std::env::remove_var("DBT_ENGINE_MANAGE_STATE");
             #[allow(clippy::disallowed_methods)]
             std::env::remove_var("DBT_ENGINE_STATE_OAUTH_CLIENT_ID");
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENGINE_STATE_HOME");
         }
         assert!(result.is_ok(), "dbt State engine env vars should not error");
     }

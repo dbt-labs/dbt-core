@@ -70,11 +70,15 @@ pub struct TestUnrenderedConfigs {
     pub columns: BTreeMap<String, Vec<BTreeMap<String, dbt_yaml::Value>>>,
 }
 
-/// Extract the raw `config:` mapping authored on a single test entry in schema.yml.
+/// Extract the raw config authored on a single test entry in schema.yml.
 /// Handles the three YAML shapes that deserialize into [`DataTests`]:
 /// - a bare string (`- not_null`) → no config → empty map;
 /// - the multi-key shape (`{test_name: <t>, config: {...}}`) → `config` at the top level;
 /// - the single-key shape (`{not_null: {config: {...}}}`) → `config` nested under the test key.
+///
+/// Config keys accepted in the deprecated top-level and `arguments:` positions are merged in
+/// the same order as test parsing: explicit `config:`, deprecated top-level keys, then keys from
+/// `arguments:`. Keeping the raw values here preserves authored Jinja in `unrendered_config`.
 fn raw_test_entry_config(entry: &dbt_yaml::Value) -> BTreeMap<String, dbt_yaml::Value> {
     let Some(mapping) = entry.as_mapping() else {
         // Bare-string test (or unexpected scalar): no authored config.
@@ -90,7 +94,29 @@ fn raw_test_entry_config(entry: &dbt_yaml::Value) -> BTreeMap<String, dbt_yaml::
             None => return BTreeMap::new(),
         }
     };
-    extract_config_map(config_holder).unwrap_or_default()
+    let mut config = extract_config_map(config_holder).unwrap_or_default();
+    let Some(holder_mapping) = config_holder.as_mapping() else {
+        return config;
+    };
+
+    for key in CONFIG_ARGS {
+        if let Some(value) = holder_mapping.get(*key) {
+            config.insert((*key).to_string(), value.clone());
+        }
+    }
+
+    if let Some(arguments) = holder_mapping
+        .get("arguments")
+        .and_then(dbt_yaml::Value::as_mapping)
+    {
+        for key in CONFIG_ARGS {
+            if let Some(value) = arguments.get(*key) {
+                config.insert((*key).to_string(), value.clone());
+            }
+        }
+    }
+
+    config
 }
 
 /// Collect the raw per-test `config:` blocks (in order) from a `data_tests`/`tests` sequence.
@@ -752,8 +778,8 @@ fn extract_config_keys_from_map(deprecated_map: &BTreeMap<String, dbt_yaml::Valu
         .collect()
 }
 
-/// Helper function to process a kwarg value and detect if it needs a Jinja set block
-/// Returns (kwarg_value, jinja_vars)
+/// Helper function to process a kwarg value and detect if it needs a Jinja set block.
+/// Returns (kwarg_value, jinja_vars).
 fn process_kwarg(key: &str, value: &Value) -> (Value, Vec<(String, String)>) {
     match value {
         Value::String(s) => {
@@ -801,6 +827,82 @@ fn process_kwarg(key: &str, value: &Value) -> (Value, Vec<(String, String)>) {
             (value.clone(), vec![])
         }
     }
+}
+
+fn process_config_jinja(
+    value: &Value,
+    jinja_set_vars: &BTreeMap<String, String>,
+) -> (Value, Vec<(String, String)>) {
+    fn collect_string_values(value: &Value, values: &mut HashSet<String>) {
+        match value {
+            Value::String(value) => {
+                values.insert(value.clone());
+            }
+            Value::Array(items) => {
+                for item in items {
+                    collect_string_values(item, values);
+                }
+            }
+            Value::Object(items) => {
+                for item in items.values() {
+                    collect_string_values(item, values);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn visit(
+        value: &Value,
+        next_id: &mut usize,
+        reserved_names: &mut HashSet<String>,
+    ) -> (Value, Vec<(String, String)>) {
+        match value {
+            Value::String(value) if value.contains("{{") && value.contains("}}") => {
+                let variable_name = loop {
+                    let candidate = format!("dbt_custom_config_{next_id}");
+                    *next_id += 1;
+                    if reserved_names.insert(candidate.clone()) {
+                        break candidate;
+                    }
+                };
+                (
+                    Value::String(variable_name.clone()),
+                    vec![(variable_name, value.clone())],
+                )
+            }
+            Value::Array(values) => {
+                let mut variables = Vec::new();
+                let values = values
+                    .iter()
+                    .map(|value| {
+                        let (value, nested_variables) = visit(value, next_id, reserved_names);
+                        variables.extend(nested_variables);
+                        value
+                    })
+                    .collect();
+                (Value::Array(values), variables)
+            }
+            Value::Object(values) => {
+                let mut variables = Vec::new();
+                let values = values
+                    .iter()
+                    .map(|(key, value)| {
+                        let (value, nested_variables) = visit(value, next_id, reserved_names);
+                        variables.extend(nested_variables);
+                        (key.clone(), value)
+                    })
+                    .collect();
+                (Value::Object(values), variables)
+            }
+            _ => (value.clone(), Vec::new()),
+        }
+    }
+
+    let mut reserved_names: HashSet<String> = jinja_set_vars.keys().cloned().collect();
+    collect_string_values(value, &mut reserved_names);
+    let mut next_id = 0;
+    visit(value, &mut next_id, &mut reserved_names)
 }
 
 /// Reverses `process_kwarg` placeholder substitution so hash/manifest values match
@@ -1226,10 +1328,22 @@ fn generate_test_macro(
     config: &Option<DataTestConfig>,
     jinja_set_vars: &BTreeMap<String, String>,
 ) -> FsResult<String> {
-    let mut sql = String::new();
+    let (non_empty, cfg_json) = merged_test_config(config, kwargs)?;
+    let cfg_serde: Value = serde_json::to_value(&cfg_json).map_err(|e| {
+        fs_err!(
+            ErrorCode::DbtYamlValidationError,
+            "Failed to serialize config: {}",
+            e
+        )
+    })?;
+    let (cfg_serde, config_jinja_vars) = process_config_jinja(&cfg_serde, jinja_set_vars);
+
+    let mut render_jinja_set_vars = jinja_set_vars.clone();
+    render_jinja_set_vars.extend(config_jinja_vars);
 
     // Add Jinja set blocks at the beginning of the file
-    for (var_name, var_value) in jinja_set_vars {
+    let mut sql = String::new();
+    for (var_name, var_value) in &render_jinja_set_vars {
         let set_val = if check_single_expression_without_whitepsace_control(var_value) {
             format!(
                 "{{% set {} = {} %}}\n\n",
@@ -1251,24 +1365,10 @@ fn generate_test_macro(
     // (macro call then embedded config) lets the embedded block win. Fusion
     // previously emitted the embedded block first, which inverted precedence.
     //
-    // We use `format_value_for_jinja` (not `serde_json::to_string`) so string
-    // values that are references to a generated `{% set %}` variable — created
-    // by `process_kwarg` when an embedded config value contained `{{ ... }}` —
-    // are emitted unquoted and Jinja resolves them at render time. Raw JSON
-    // serialization would quote those names into literal strings (e.g.
-    // `"dbt_custom_arg_config_severity"`), and a strict downstream config
-    // deserializer (e.g. the `severity` enum) would reject them as
-    // `unknown variant` (production conformance bucket dbt1501).
-    let (non_empty, cfg_json) = merged_test_config(config, kwargs)?;
+    // Config strings can themselves contain Jinja. Route those values through
+    // generated set variables so they render before `config(...)` receives them.
     let config_emit = if non_empty {
-        let cfg_serde: Value = serde_json::to_value(&cfg_json).map_err(|e| {
-            fs_err!(
-                ErrorCode::DbtYamlValidationError,
-                "Failed to serialize config: {}",
-                e
-            )
-        })?;
-        Some(format_value_for_jinja(&cfg_serde, jinja_set_vars))
+        Some(format_value_for_jinja(&cfg_serde, &render_jinja_set_vars))
     } else {
         None
     };
@@ -2763,6 +2863,50 @@ mod tests {
         assert!(
             sql.contains("{{ test_accepted_values(") && sql.contains("model=ref('my_model')"),
             "Macro call should be well-formed and include model kwarg"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_macro_renders_jinja_inside_config_strings() {
+        use serde_json::json;
+
+        let config: DataTestConfig = serde_json::from_value(json!({
+            "fail_calc": "dbt_custom_config_0",
+            "where": "dim_partner_tier_sk != '{{ var('missing_surrogate_key') }}'",
+            "__warehouse_specific_config__": {}
+        }))
+        .unwrap();
+        let kwargs = BTreeMap::from([(
+            "model".to_string(),
+            Value::String(
+                "get_where_subquery(ref('fct_partner_list_historic_states'))".to_string(),
+            ),
+        )]);
+
+        let sql = generate_test_macro(
+            "relationships",
+            &kwargs,
+            None,
+            &Some(config),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        assert!(
+            sql.contains(
+                "{% set dbt_custom_config_1 -%}\n\
+                 dim_partner_tier_sk != '{{ var('missing_surrogate_key') }}'\n\
+                 {%- endset %}"
+            ),
+            "nested config Jinja should render through a set block: {sql}"
+        );
+        assert!(
+            sql.contains("\"where\":dbt_custom_config_1"),
+            "config(...) should receive the rendered set variable: {sql}"
+        );
+        assert!(
+            sql.contains("\"fail_calc\":\"dbt_custom_config_0\""),
+            "literal config values must not collide with generated variables: {sql}"
         );
     }
 

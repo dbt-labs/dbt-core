@@ -384,6 +384,7 @@ impl NodeEvaluated {
             dbt_core_event_code_for_node_evaluation(phase).map(str::to_string),
             None, // rows_affected
             None, // idle_time_ms
+            None, // state_decision_id
             None, // node_outcome_detail
         )
     }

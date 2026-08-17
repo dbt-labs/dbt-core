@@ -121,6 +121,16 @@ pub enum PrivatePackageProvider {
 }
 
 impl PrivatePackageProvider {
+    /// Every Azure DevOps spelling names the same provider.
+    pub fn is_ado(self) -> bool {
+        matches!(self, Self::Ado | Self::AzureActiveDirectory)
+    }
+
+    /// Azure DevOps spellings are interchangeable; other providers must match exactly.
+    pub fn equivalent(self, other: Self) -> bool {
+        (self.is_ado() && other.is_ado()) || self == other
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Github => "github",
@@ -133,9 +143,9 @@ impl PrivatePackageProvider {
 
 #[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct PrivatePackage {
-    /// Private package identifier. Two-segment `org/repo` for GitHub or 2-part Azure DevOps
-    /// (`azure_active_directory`); three-or-more-segment `org/group/repo` for GitLab subgroups
-    /// or Azure DevOps `org/project/repo` (`ado` / `azure_devops`).
+    /// Private package identifier. Two-segment `org/repo` for GitHub, legacy Azure DevOps
+    /// (`azure_devops`), or Azure Active Directory (`azure_active_directory`); three-or-more-segment
+    /// `org/group/repo` for GitLab subgroups or Azure DevOps `org/project/repo` (`ado`).
     #[schemars(regex(pattern = r"^[\w\-\.]+(/[\w\-\.]+){1,}$"))]
     pub private: Verbatim<String>,
     /// Git provider. Defaults to `github` when unset.

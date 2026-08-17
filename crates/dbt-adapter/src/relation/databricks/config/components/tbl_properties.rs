@@ -15,7 +15,7 @@ use minijinja::value::{Value, ValueMap};
 
 pub(crate) const TYPE_NAME: &str = "tblproperties";
 
-const PIPELINE_ID_KEY: &str = "pipelines.pipelineId";
+pub(crate) const PIPELINE_ID_KEY: &str = "pipelines.pipelineId";
 
 /// All of the following keys are ignoring by the diffing function
 ///

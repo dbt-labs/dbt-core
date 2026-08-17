@@ -626,6 +626,10 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 table: None,
                 update_field: None,
                 update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }

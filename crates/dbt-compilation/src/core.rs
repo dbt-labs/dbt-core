@@ -50,6 +50,7 @@ use dbt_schemas::{
         PatternedDanglingSources, ResolverState, ResourcePathKind,
     },
 };
+use fs_deps::private_package::PrivatePackageResolver;
 
 pub struct DbtLoadedProject {
     config: CompilationConfig,
@@ -71,6 +72,7 @@ async fn load_phase(
     tracing_config: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
     loader_hooks: Arc<dyn LoaderHooks>,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
     jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<DbtLoadedProject> {
     // Set previous state for incremental compilation if provided
@@ -88,6 +90,7 @@ async fn load_phase(
         tracing_config,
         token,
         loader_hooks,
+        private_package_resolver,
     )
     .await?;
 
@@ -421,6 +424,7 @@ impl DbtLoadedProject {
         tracing_config: Option<&dyn TracingConfigProvider>,
         token: &CancellationToken,
         loader_hooks: Arc<dyn LoaderHooks>,
+        private_package_resolver: Arc<dyn PrivatePackageResolver>,
         jinja_factory: Arc<dyn JinjaFactory>,
     ) -> FsResult<DbtLoadedProject> {
         load_phase(
@@ -433,6 +437,7 @@ impl DbtLoadedProject {
             tracing_config,
             token,
             loader_hooks,
+            private_package_resolver,
             jinja_factory,
         )
         .await

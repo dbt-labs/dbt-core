@@ -167,7 +167,7 @@ fn precompile_ephemeral_models(
             resolver_state,
             base_context,
             DependencyValidationConfig::new_unvalidated(),
-        );
+        )?;
 
         let original_file_path = model.__common_attr__.original_file_path.clone();
         let absolute_path =
@@ -384,7 +384,7 @@ pub async fn run_operation_on_run_with_ctx(
         &**operation,
         &ctx.inner.base_context,
         DependencyValidationConfig::new_unvalidated(),
-    );
+    )?;
 
     // Extend with stateful functions
     extend_base_context_stateful_fn(

@@ -10,6 +10,7 @@ import { inferResourceType } from '../lib/inferResourceType';
 import { isTelemetryInitialized, trackLineageViewed } from '../lib/telemetry';
 import { paths } from '../routes';
 import { Spinner } from '../shared';
+import { UNSUPPORTED_SURFACE_MESSAGE } from '../shared/hooks/unsupportedSurface';
 import { NoLineageFallback } from './NoLineageFallback';
 
 interface Props {
@@ -20,7 +21,10 @@ interface Props {
 
 export function LineageView({ rootUniqueId, modelName, onSelect }: Props) {
   const navigate = useNavigate();
-  const { data, error, dagNodes, selector } = useLineageData(rootUniqueId, 1);
+  const { data, error, dagNodes, selector, isSupported } = useLineageData(
+    rootUniqueId,
+    1,
+  );
 
   // Analytics: `lineage_viewed` (inline) once the graph resolves for the
   // current root.
@@ -59,6 +63,16 @@ export function LineageView({ rootUniqueId, modelName, onSelect }: Props) {
       <div className="err">
         Failed to load lineage: <code className="inline">{error.message}</code>
       </div>
+    );
+  }
+  // Distinct from "no lineage in the data": nothing is loading and nothing is
+  // coming, and `NoLineageFallback` would advise rerunning with
+  // `--write-lineage`, which would not help.
+  if (!isSupported) {
+    return (
+      <p className="muted" style={{ fontSize: 13 }}>
+        {UNSUPPORTED_SURFACE_MESSAGE}
+      </p>
     );
   }
   if (!data) {

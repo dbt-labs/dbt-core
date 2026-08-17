@@ -4,6 +4,12 @@ use std::path::{Path, PathBuf};
 
 const SCHEMA_VERSION: &str = "v1";
 
+/// File name of the base epoch — epoch 0, the one rewritten in place by a full
+/// parse or a consolidation.
+pub fn base_epoch_filename() -> String {
+    format!("{SCHEMA_VERSION}_0.parquet")
+}
+
 /// List epoch files matching `{SCHEMA_VERSION}_{N}.parquet` in `dir`, sorted ascending.
 pub fn existing_epochs(dir: &Path) -> Vec<(u32, PathBuf)> {
     let Ok(rd) = std::fs::read_dir(dir) else {

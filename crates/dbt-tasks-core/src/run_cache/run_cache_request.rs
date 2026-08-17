@@ -54,11 +54,12 @@ const PERSISTED_DOCS_HASH_KEY: &str = "__persisted_docs_hash";
 
 #[derive(Clone, Debug)]
 pub struct DbtProjectInfo {
-    active_profile_name: String,
-    active_target_name: String,
-    project_name: String,
-    project_id: Option<String>, // dbt cloud project id; only present if dbt cloud is in use
-    project_root: DbtPath,
+    pub active_profile_name: String,
+    pub active_target_name: String,
+    pub project_name: String,
+    pub project_id: Option<String>, // dbt cloud project id; only present if dbt cloud is in use
+    pub project_root: DbtPath,
+    pub table_namespace: Option<String>,
 }
 
 impl From<&TaskRunnerCtx> for DbtProjectInfo {
@@ -79,6 +80,7 @@ impl From<&TaskRunnerCtx> for DbtProjectInfo {
             project_name,
             project_id,
             project_root,
+            table_namespace: profile.db_config.get_adapter_unique_id(),
         }
     }
 }
@@ -204,6 +206,7 @@ fn build_node_state<'a, 'b>(
         node_persisted_descriptions_hash: hashes.node_persisted_descriptions_hash,
         node_macros_hash: hashes.node_macros_hash,
         node_contract_hash: hashes.node_contract_hash,
+        node_database_representation: None, //todo: implement
     };
 
     // Every component is logged individually because the server compares them
@@ -338,6 +341,7 @@ pub fn build_seed_values_request<'a>(
         clone_table_properties: context.clone_table_properties,
         clone_chain_depth_limit: context.clone_chain_depth_limit,
         dbt_node_state: Some(node_state),
+        table_namespace: context.dbt_project_info.table_namespace,
     }
     .into_proto())
 }
@@ -510,6 +514,7 @@ fn build_sql_request_input(
         clone_chain_depth_limit: context.clone_chain_depth_limit,
         dbt_node_state: Some(node_state),
         compare_unrendered_code: context.compare_unrendered_code,
+        table_namespace: context.dbt_project_info.table_namespace,
     })
 }
 
@@ -853,6 +858,7 @@ mod tests {
             project_name: "test_project".to_owned(),
             project_id: None,
             project_root: "dummy-project-root".into(),
+            table_namespace: Some("adapter-unique-id".to_owned()),
         }
     }
 
@@ -1010,6 +1016,7 @@ mod tests {
         );
         assert_eq!(request.default_catalog, "analytics");
         assert_eq!(request.execution_type, ModelExecutionType::Merge as i32);
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
         assert_eq!(
             request.labels.get("dbt_node_unique_id").unwrap(),
             "model.jaffle_shop.orders"
@@ -1377,6 +1384,7 @@ mod tests {
         assert_eq!(request.values_hash, node_state_hashes.node_hash);
         assert_eq!(request.last_modified_epoch, Some(456));
         assert_eq!(request.clone_time_travel_limit, Some(3600));
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
         assert_eq!(
             request.semantic_extras.get("column_types").unwrap(),
             "{\"id\":\"integer\"}"
@@ -1622,5 +1630,6 @@ mod tests {
         );
         // Data tests always submit with target_table=None (see build_test_sql_request).
         assert!(request.target_table.is_none());
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
     }
 }

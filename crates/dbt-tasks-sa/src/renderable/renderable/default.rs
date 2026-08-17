@@ -122,7 +122,7 @@ fn render_default(
         node.as_ref(),
         &base_context,
         DependencyValidationConfig::new_validated(),
-    );
+    )?;
 
     if let Some(overrides) = local_exec_unit_test_overrides {
         unit_test::apply_unit_test_overrides(&mut compile_context, overrides, ctx);
@@ -253,7 +253,7 @@ fn render_python_model(
         node.as_ref(),
         base_context,
         DependencyValidationConfig::new_validated(),
-    );
+    )?;
 
     let postfix_template = "{{ py_script_postfix(model) }}";
     let rendered_postfix = render_sql(

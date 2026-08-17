@@ -923,7 +923,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             node_resolver.clone(),
             runtime_config.clone(),
             DependencyValidationConfig::new_for_node(&model).skip_validation(),
-        );
+        )?;
 
         // Inject the DbtNamespace to intercept dbt macro calls
         let dbt_namespace = DbtNamespace::new(parse_adapter.clone());

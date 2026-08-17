@@ -21,6 +21,7 @@ use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
+use dbt_schemas::schemas::relations::default_resolved_quoting_for;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 
 use arrow::array::RecordBatch;
@@ -78,6 +79,10 @@ impl StaticBaseRelation for RelationStatic {
 
     fn get_adapter_type(&self) -> String {
         self.adapter_type.as_ref().to_string()
+    }
+
+    fn get_default_quoting(&self) -> ResolvedQuoting {
+        default_resolved_quoting_for(self.adapter_type)
     }
 
     fn create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
@@ -1167,6 +1172,12 @@ impl BaseRelation for Relation {
                 }
             }
             Bigquery => {
+                if remote_state_value.is_none() {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        "remote_state cannot be None",
+                    ));
+                }
                 let current_state = remote_state_value
                     .as_object()
                     .ok_or_else(|| {

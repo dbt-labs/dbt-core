@@ -206,6 +206,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             Some(feature_stack.tracing.config_provider.as_ref()),
             &self.token,
             feature_stack.loader.hooks.clone(),
+            feature_stack.loader.private_package_resolver.clone(),
             feature_stack.jinja.factory.clone(),
         )
         .await?;

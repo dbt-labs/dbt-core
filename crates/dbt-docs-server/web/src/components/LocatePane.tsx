@@ -13,14 +13,12 @@ import {
   PaginatedFileTree,
   RyeconDataGeography,
   RyeconFile,
-  RyeconGitBranch,
   RyeconThemeDark,
   RyeconThemeLight,
+  RyeconThemeSystem,
   SegmentedButton,
 } from '@dbt-labs/sourdough';
 
-import type { NodeSummary } from '../api';
-import { SEARCHABLE_RESOURCE_TYPES } from '../api';
 import type { AssetFilters } from '../App';
 import { FEATURE_FLAGS } from '../lib/featureFlags';
 import { buildFileTreeItems } from '../lib/fileTree';
@@ -40,6 +38,8 @@ import {
   UpgradeRailStack,
   type UserState,
 } from '../shared';
+import type { NodeSummary } from '../types';
+import { SEARCHABLE_RESOURCE_TYPES } from '../types';
 
 export type LocatePaneMode = 'assets' | 'files' | 'filter';
 
@@ -81,8 +81,8 @@ interface Props {
   isHome: boolean;
   query: string;
   loadingProgress?: { loaded: number; total: number } | null;
-  theme: 'dark' | 'light';
-  onSetTheme(theme: 'dark' | 'light'): void;
+  theme: 'dark' | 'light' | 'system';
+  onSetTheme(theme: 'dark' | 'light' | 'system'): void;
   filters: AssetFilters;
   onSetFilters(next: AssetFilters): void;
   /**
@@ -294,31 +294,21 @@ export function LocatePane({
         />
       )}
 
-      {/* Footer — theme toggle + branch */}
+      {/* Footer — theme toggle */}
       <footer className="locate-pane__footer">
-        {project.gitBranch && (
-          <span className="locate-pane__branch" title="Git branch">
-            <Icon ryecon={RyeconGitBranch} size="xs" alt="" />
-            <span>{project.gitBranch}</span>
-            {project.gitIsDirty && (
-              <span className="locate-pane__dirty" aria-label="uncommitted changes">
-                ●
-              </span>
-            )}
-          </span>
-        )}
         <div className="flex w-full justify-center">
           <SegmentedButton
             segments={[
+              { label: 'Light', value: 'light', startIcon: { ryecon: RyeconThemeLight } },
               { label: 'Dark', value: 'dark', startIcon: { ryecon: RyeconThemeDark } },
               {
-                label: 'Light',
-                value: 'light',
-                startIcon: { ryecon: RyeconThemeLight },
+                label: 'System',
+                value: 'system',
+                startIcon: { ryecon: RyeconThemeSystem },
               },
             ]}
             selectedValue={theme}
-            onSelect={(v) => onSetTheme(v as 'dark' | 'light')}
+            onSelect={(v) => onSetTheme(v as 'dark' | 'light' | 'system')}
             size="sm"
           />
         </div>
@@ -750,7 +740,7 @@ function FilterMode({
   const clear = (key: keyof AssetFilters) => onSetFilters({ ...filters, [key]: [] });
 
   // Skip 0-count options so "Select all" matches the visibly-enabled rows;
-  // selecting a disabled value would either no-op or 400 on /api/v1/search.
+  // selecting a disabled value would only ever return nothing.
   const selectAllWithCounts = (
     key: keyof AssetFilters,
     options: string[],

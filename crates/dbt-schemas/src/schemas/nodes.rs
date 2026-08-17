@@ -4652,6 +4652,7 @@ pub struct DbtSeedAttr {
     pub delimiter: Option<String>,
     pub root_path: Option<PathBuf>,
     pub catalog_name: Option<String>,
+    pub alt_compute: Option<ComputePlatform>,
 }
 
 fn is_false(b: &bool) -> bool {

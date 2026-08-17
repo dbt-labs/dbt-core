@@ -254,6 +254,8 @@ pub enum ErrorCode {
     DeprecatedOption = 1702,
     DeprecatedStaticAnalysisValue = 1703,
     NotSupportedWarnErrorOption = 1704,
+    /// No longer emitted. Retained so an existing `warn_error_options` entry naming it
+    /// keeps resolving instead of failing as an unknown code.
     DocsGenerateWarning = 1705,
 
     // --------------------------------------------------------------------------------------------

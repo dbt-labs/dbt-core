@@ -91,6 +91,7 @@ impl MetadataWarehouseConnectionFactory {
                         SNOWFLAKE_METADATA_NODE_ID,
                         token.clone(),
                     )
+                    .map(|_| ())
                     .map_err(metadata_warehouse_error)
             }) as UseWarehouseFn
         };

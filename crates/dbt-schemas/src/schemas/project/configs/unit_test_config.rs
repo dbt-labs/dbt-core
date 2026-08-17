@@ -509,6 +509,10 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 table: None,
                 update_field: None,
                 update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -654,4 +658,32 @@ impl ResolvableConfig<UnitTestConfig> for UnitTestConfig {
 impl ConfigKeys for UnitTestConfig {
     // The default implementation from the trait will handle
     // extracting field names via serialization automatically
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ComputeArg, ProjectUnitTestConfig, UnitTestConfig};
+
+    #[test]
+    fn test_compute_local_is_an_alias_for_sidecar() {
+        // Project-level, in dbt_project.yml.
+        let project_config: ProjectUnitTestConfig = dbt_yaml::from_str(
+            r#"
++compute: local
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.compute, Some(ComputeArg::Sidecar));
+
+        // Per-test, in a properties file or `config()`.
+        let config: UnitTestConfig = dbt_yaml::from_str(
+            r#"
+compute: local
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.compute, Some(ComputeArg::Sidecar));
+    }
 }
