@@ -1,0 +1,9 @@
+kind: Fixes
+body: 'Send the `x-ms-blob-type: BlockBlob` header and accept `201 Created` when uploading
+  artifacts to an Azure Blob Storage signed URL, so artifact ingestion no longer fails
+  with `400 MissingRequiredHeader` on Azure-hosted regions. Upload errors now include
+  the storage provider''s error code alongside the status code.'
+time: 2026-08-14T12:00:00.000000-05:00
+custom:
+    Author: tauhid621
+    Issue: "N/A"

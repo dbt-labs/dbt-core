@@ -7,12 +7,18 @@ from unittest.mock import MagicMock, call, patch
 from dbt.constants import MANIFEST_FILE_NAME, RUN_RESULTS_FILE_NAME
 from dbt.exceptions import DbtProjectError
 from dbt.utils.artifact_upload import (
+    PRODUCED_ARTIFACTS_PATHS,
     ArtifactUploadConfig,
+    _format_error,
     _retry_with_backoff,
+    _upload_headers,
     add_artifact_produced,
     upload_artifacts,
 )
 from dbt_common.exceptions import DbtBaseException
+
+# Service SAS query string; sv and sig are what mark a URL as Azure.
+AZURE_SAS = "sv=2024-11-04&ss=b&srt=o&sp=cw&se=2026-08-15T00:00:00Z&sig=cGxhY2Vob2xkZXI%3D"
 
 
 class TestArtifactUploadConfig(unittest.TestCase):
@@ -145,12 +151,140 @@ class TestRetryWithBackoff(unittest.TestCase):
         self.assertEqual(func.call_count, 2)
         self.mock_sleep.assert_called_once_with(1)
 
+    def test_error_message_includes_provider_error_code(self):
+        """Test that the provider's error code is surfaced, not just the status code."""
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.headers = {}
+        mock_response.text = (
+            "<Error><Code>MissingRequiredHeader</Code>"
+            "<HeaderName>x-ms-blob-type</HeaderName></Error>"
+        )
+        func = MagicMock(return_value=(False, mock_response))
+        with self.assertRaises(DbtBaseException) as context:
+            _retry_with_backoff("uploading artifacts", func)
+        self.assertIn("MissingRequiredHeader", str(context.exception))
+
+
+class TestUploadHeaders(unittest.TestCase):
+    def test_azure_blob_storage_requires_blob_type(self):
+        """Azure Blob Storage rejects Put Blob without x-ms-blob-type."""
+        headers = _upload_headers(f"https://prodeu2.blob.core.windows.net/c/a.zip?{AZURE_SAS}")
+        self.assertEqual(headers["x-ms-blob-type"], "BlockBlob")
+        self.assertEqual(headers["Content-Type"], "application/zip")
+
+    def test_azure_endpoints_without_blob_core_hostname(self):
+        """Detection is on the SAS grammar, so non-".blob.core.*" endpoints are covered too."""
+        for label, url in (
+            ("sovereign gov", f"https://acct.blob.core.usgovcloudapi.net/c/a.zip?{AZURE_SAS}"),
+            ("sovereign china", f"https://acct.blob.core.chinacloudapi.cn/c/a.zip?{AZURE_SAS}"),
+            ("dns zone endpoint", f"https://acct.z14.blob.storage.azure.net/c/a.zip?{AZURE_SAS}"),
+            ("custom domain", f"https://artifacts.example.com/c/a.zip?{AZURE_SAS}"),
+            ("azurite", f"http://127.0.0.1:10000/devstoreaccount1/c/a.zip?{AZURE_SAS}"),
+        ):
+            with self.subTest(label):
+                self.assertEqual(_upload_headers(url)["x-ms-blob-type"], "BlockBlob")
+
+    def test_user_delegation_sas_is_detected(self):
+        """A user-delegation SAS carries extra skoid/sktid params but still has sv and sig."""
+        url = (
+            "https://acct.blob.core.windows.net/c/a.zip?sv=2024-11-04&sr=b&sp=cw"
+            "&skoid=1111-2222&sktid=3333-4444&sig=cGxhY2Vob2xkZXI%3D"
+        )
+        self.assertEqual(_upload_headers(url)["x-ms-blob-type"], "BlockBlob")
+
+    def test_s3_and_gcs_get_no_extra_headers(self):
+        """Presigned S3/GCS URLs must be left untouched."""
+        for url in (
+            "https://bucket.s3.us-east-1.amazonaws.com/artifacts.zip?X-Amz-Signature=abc",
+            "https://storage.googleapis.com/bucket/artifacts.zip?X-Goog-Signature=abc",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(_upload_headers(url), {})
+
+    def test_partial_sas_params_get_no_extra_headers(self):
+        """Both sv and sig are required; a lone one is not an Azure SAS."""
+        for url in (
+            "https://acct.blob.core.windows.net/c/a.zip?sv=2024-11-04",
+            "https://acct.blob.core.windows.net/c/a.zip?sig=cGxhY2Vob2xkZXI%3D",
+            "https://acct.blob.core.windows.net/c/a.zip",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(_upload_headers(url), {})
+
+    def test_malformed_url_gets_no_extra_headers(self):
+        """A URL without a hostname must not raise."""
+        self.assertEqual(_upload_headers("not-a-url"), {})
+
+
+class TestFormatError(unittest.TestCase):
+    def _response(self, text="", headers=None):
+        response = MagicMock()
+        response.headers = headers or {}
+        response.text = text
+        response.__repr__ = lambda _: "<Response [403]>"
+        return response
+
+    def test_signed_request_is_not_leaked(self):
+        """An S3 SignatureDoesNotMatch body echoes live credentials; only the code may escape."""
+        body = (
+            "<Error><Code>SignatureDoesNotMatch</Code>"
+            "<Message>The request signature we calculated does not match</Message>"
+            "<StringToSign>AWS4-HMAC-SHA256\n20260814T120000Z\n"
+            "X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20260814%2Fus-east-1%2Fs3%2Faws4_request&amp;"
+            "X-Amz-Security-Token=FwoGZXIvYXdzEBYaDF9SECRETSESSIONTOKEN</StringToSign>"
+            "<CanonicalRequest>PUT\n/artifacts.zip</CanonicalRequest></Error>"
+        )
+        message = _format_error(self._response(text=body))
+        self.assertEqual(message, "<Response [403]> SignatureDoesNotMatch")
+        self.assertNotIn("X-Amz-Security-Token", message)
+        self.assertNotIn("SECRETSESSIONTOKEN", message)
+        self.assertNotIn("AKIAIOSFODNN7EXAMPLE", message)
+
+    def test_azure_authentication_error_detail_is_not_leaked(self):
+        """Azure echoes the string-to-sign in <AuthenticationErrorDetail>."""
+        body = (
+            "<Error><Code>AuthenticationFailed</Code>"
+            "<AuthenticationErrorDetail>Signature did not match. String to sign used was "
+            "PUT\n\n\nsv=2024-11-04&amp;sig=REDACTMEabc123"
+            "</AuthenticationErrorDetail></Error>"
+        )
+        message = _format_error(self._response(text=body))
+        self.assertEqual(message, "<Response [403]> AuthenticationFailed")
+        self.assertNotIn("REDACTMEabc123", message)
+
+    def test_error_code_response_header_is_preferred(self):
+        """Azure sets a machine-readable code in x-ms-error-code; the body is then untouched."""
+        message = _format_error(
+            self._response(
+                text="<Error><Code>Ignored</Code><StringToSign>secret</StringToSign></Error>",
+                headers={"x-ms-error-code": "MissingRequiredHeader"},
+            )
+        )
+        self.assertEqual(message, "<Response [403]> MissingRequiredHeader")
+        self.assertNotIn("secret", message)
+
+    def test_body_without_error_code_is_dropped_entirely(self):
+        """An unrecognized body shape must not be echoed on the chance it holds a secret."""
+        message = _format_error(self._response(text="sig=abc123 was rejected"))
+        self.assertEqual(message, "<Response [403]>")
+
+    def test_non_string_body_is_ignored(self):
+        """A stubbed/streamed response whose .text is not a str must not raise."""
+        response = MagicMock()
+        response.headers = {}
+        response.__repr__ = lambda _: "<Response [400]>"
+        self.assertEqual(_format_error(response), "<Response [400]>")
+
 
 class TestUploadArtifacts(unittest.TestCase):
     def setUp(self):
         self.project_dir = "/fake/project/dir"
         self.target_path = "/fake/project/dir/target"
         self.command = "run"
+
+        # Module-level state, only cleared on successful upload; reset for test isolation
+        PRODUCED_ARTIFACTS_PATHS.clear()
 
         # Create patchers
         self.load_project_patcher = patch("dbt.utils.artifact_upload.load_project")
@@ -257,6 +391,55 @@ class TestUploadArtifacts(unittest.TestCase):
         self.assertIn("completing ingest", retry_calls)
 
         # Verify fire_event was called with ArtifactUploadSuccess
+        success_event_call = [
+            call
+            for call in self.mock_fire_event.call_args_list
+            if "completed successfully" in call[0][0].msg
+        ]
+        self.assertTrue(len(success_event_call) > 0)
+
+    def _set_upload_url(self, upload_url):
+        self.mock_post_response.json.return_value = {
+            "data": {"id": "ingest123", "upload_url": upload_url}
+        }
+
+    def test_upload_sends_blob_type_header_for_azure_url(self):
+        """The PUT to an Azure Blob SAS URL must carry x-ms-blob-type."""
+        self.mock_zipfile.return_value.__enter__.return_value = MagicMock()
+        self._set_upload_url(f"https://prodeu2.blob.core.windows.net/c/artifacts.zip?{AZURE_SAS}")
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
+
+        upload_artifacts(self.project_dir, self.target_path, self.command)
+
+        headers = self.mock_requests_put.call_args.kwargs["headers"]
+        self.assertEqual(headers["x-ms-blob-type"], "BlockBlob")
+
+    def test_upload_sends_no_extra_headers_for_s3_url(self):
+        """Presigned S3 uploads must not gain Azure-specific headers."""
+        self.mock_zipfile.return_value.__enter__.return_value = MagicMock()
+        self._set_upload_url(
+            "https://bucket.s3.us-east-1.amazonaws.com/artifacts.zip"
+            "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=abc"
+        )
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
+
+        upload_artifacts(self.project_dir, self.target_path, self.command)
+
+        self.assertEqual(self.mock_requests_put.call_args.kwargs["headers"], {})
+
+    def test_upload_treats_201_created_as_success(self):
+        """Azure returns 201 on a successful Put Blob; it must not be an error."""
+        # Delegate to the real retry logic so success/failure classification is exercised
+        self.mock_retry.side_effect = _retry_with_backoff
+
+        self.mock_zipfile.return_value.__enter__.return_value = MagicMock()
+        self._set_upload_url(f"https://prodeu2.blob.core.windows.net/c/artifacts.zip?{AZURE_SAS}")
+        self.mock_put_response.status_code = 201
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
+
+        upload_artifacts(self.project_dir, self.target_path, self.command)
+
+        self.mock_requests_put.assert_called_once()
         success_event_call = [
             call
             for call in self.mock_fire_event.call_args_list

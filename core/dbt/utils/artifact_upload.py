@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 import time
 import uuid
 import zipfile
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -49,6 +51,36 @@ class ArtifactUploadConfig(BaseSettings):
         }
 
 
+def _upload_headers(url: str) -> dict[str, str]:
+    """Return headers required to upload to the signed URL.
+
+    Azure rejects Put Blob with 400 MissingRequiredHeader unless x-ms-blob-type is set.
+    Matching the SAS params (sv and sig are mandatory) rather than a ".blob.core.*"
+    hostname also covers DNS-zone endpoints, custom domains, and Azurite. S3 and GCS
+    sign with X-Amz-/X-Goog- params, so they match nothing and need no headers.
+    """
+    query = parse_qs(urlparse(url).query)
+    if "sv" in query and "sig" in query:
+        return {"x-ms-blob-type": "BlockBlob", "Content-Type": "application/zip"}
+    return {}
+
+
+# Only the error code is kept: bodies echo the signed request back, and S3's
+# SignatureDoesNotMatch puts a live X-Amz-Security-Token in <StringToSign>, which would
+# then land in logs/dbt.log.
+_ERROR_CODE_PATTERN = re.compile(r"<Code>([^<]{1,64})</Code>")
+
+
+def _format_error(result) -> str:
+    """Add the provider's error code, since the status code alone is rarely actionable."""
+    # Azure sets the code in a header; S3/GCS only in the XML body
+    code = result.headers.get("x-ms-error-code") or result.headers.get("x-amz-error-code")
+    if not code and isinstance(result.text, str):
+        match = _ERROR_CODE_PATTERN.search(result.text)
+        code = match.group(1) if match else None
+    return f"{result} {code}" if code else str(result)
+
+
 def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES, retry_codes=None):
     """Execute a function with exponential backoff retry logic.
 
@@ -73,9 +105,9 @@ def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES, retry_cod
                 return result
 
             if result.status_code not in retry_codes:
-                raise DbtException(f"Error {operation_name}: {result}")
+                raise DbtException(f"Error {operation_name}: {_format_error(result)}")
             if attempt == max_retries:  # Last attempt
-                raise DbtException(f"Error {operation_name}: {result}")
+                raise DbtException(f"Error {operation_name}: {_format_error(result)}")
         except requests.RequestException as e:
             if attempt == max_retries:  # Last attempt
                 raise DbtException(f"Error {operation_name}: {str(e)}")
@@ -131,8 +163,10 @@ def upload_artifacts(project_dir, target_path, command):
         file_data = f.read()
 
         def upload_file():
-            upload_response = requests.put(url=upload_url, data=file_data)
-            return upload_response.status_code in (200, 204), upload_response
+            upload_response = requests.put(
+                url=upload_url, data=file_data, headers=_upload_headers(upload_url)
+            )
+            return upload_response.status_code in (200, 201, 204), upload_response
 
         _retry_with_backoff("uploading artifacts", upload_file)
 
