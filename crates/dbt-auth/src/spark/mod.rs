@@ -479,49 +479,28 @@ mod tests {
     }
 
     #[test]
-    fn livy_ttl() {
-        let config = Mapping::from_iter([
-            ("host".into(), "myhost".into()),
-            ("method".into(), "livy".into()),
-            ("auth".into(), "BASIC".into()),
-            (
-                "server_side_parameters".into(),
-                Mapping::from_iter([("livy.server.session.ttl".into(), "1h".into())]).into(),
-            ),
-        ]);
+    fn livy_ttl_and_alias() {
+        for key in ["server_side_parameters", "conf"] {
+            let config = Mapping::from_iter([
+                ("host".into(), "myhost".into()),
+                ("method".into(), "livy".into()),
+                ("auth".into(), "BASIC".into()),
+                (
+                    key.into(),
+                    Mapping::from_iter([("livy.server.session.ttl".into(), "1h".into())]).into(),
+                ),
+            ]);
 
-        let builder = SparkAuth {}
-            .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
+            let builder = SparkAuth {}
+                .configure(&AdapterConfig::new(config))
+                .expect("configure")
+                .builder;
 
-        assert_eq!(
-            other_option_value(&builder, spark::livy::SESSION_TTL),
-            Some("1h")
-        );
-    }
-
-    #[test]
-    fn livy_ttl_conf_alias() {
-        let config = Mapping::from_iter([
-            ("host".into(), "myhost".into()),
-            ("method".into(), "livy".into()),
-            ("auth".into(), "BASIC".into()),
-            (
-                "conf".into(),
-                Mapping::from_iter([("livy.server.session.ttl".into(), "1h".into())]).into(),
-            ),
-        ]);
-
-        let builder = SparkAuth {}
-            .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
-
-        assert_eq!(
-            other_option_value(&builder, spark::livy::SESSION_TTL),
-            Some("1h")
-        );
+            assert_eq!(
+                other_option_value(&builder, spark::livy::SESSION_TTL),
+                Some("1h")
+            );
+        }
     }
 
     #[test]
