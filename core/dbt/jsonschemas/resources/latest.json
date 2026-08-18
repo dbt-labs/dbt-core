@@ -3965,6 +3965,28 @@
             }
           ]
         },
+        "post-hook": {
+          "default": [],
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre-hook": {
+          "default": [],
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
