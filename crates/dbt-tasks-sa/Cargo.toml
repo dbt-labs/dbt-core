@@ -64,3 +64,4 @@ doctest = false
 
 [dev-dependencies]
 dbt-test-primitives = { workspace = true }
+tempfile = { workspace = true }

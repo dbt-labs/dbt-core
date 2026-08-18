@@ -3,6 +3,7 @@
 pub mod command;
 pub mod dist;
 mod proc;
+pub mod python;
 use std::{
     collections::HashSet,
     env,
@@ -15,8 +16,8 @@ use std::{
 use dbt_common::{ErrorCode, FsResult, err, error::WrappedError, fs_err};
 pub use dist::{Channel, DistInfo, Distribution, Generation};
 
-use crate::dist::PythonPackageManager;
 use crate::proc::{GRACE_WAIT, NORMAL_WAIT, ProcessOutput, real_run};
+pub use crate::python::PythonPackageManager;
 
 /// Entry point for discovering [`DistInfo`] about one or more `dbt`
 /// installations.

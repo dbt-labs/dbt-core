@@ -20,8 +20,11 @@
  * window a long description around the match, and SQL is a poor place for that.
  *
  * Not carried over: the three "view might be missing" variants (`full`,
- * `no_freshness`, `no_rr`) the handler probed in order, since the exporter emits
- * every artifact. Also not carried over: the N+1 query the handler issued per
+ * `no_freshness`, `no_rr`) the handler probed in order — `dbt.source_freshness` and
+ * `dbt_rt.run_results` can still be absent, but the engine declares an empty relation
+ * for each (`EMPTY_RELATION_DDL`), which both `LEFT JOIN`s below read as nulls the
+ * same way the `full` variant did. Also not carried over: the N+1 query the handler
+ * issued per
  * column-matched row to find *which* column matched. That is one join here.
  */
 

@@ -4,9 +4,10 @@ import {
   type ResourceTypeExplorer,
   resourceTypesWithColumns,
 } from '@dbt-labs/dbt-dag';
-import { Button, RyeconShare, RyeconTable } from '@dbt-labs/sourdough';
+import { Button, Card, RyeconShare, RyeconTable } from '@dbt-labs/sourdough';
 
 import { getColumns, toRelationshipItem } from '../lib/assetView';
+import { filterConfig } from '../lib/configView';
 import { decorateOutboundHref } from '../lib/outboundReferrer';
 import { handleUpsellEvent } from '../lib/upsellAnalytics';
 import {
@@ -21,6 +22,7 @@ import {
   type ColumnItem,
   ColumnsView,
   ColumnTable,
+  ConfigDisplay,
   DescriptionDisplay,
   DetailsSection,
   DetailTabs,
@@ -84,6 +86,14 @@ function getMaterialization(asset: Asset): string | null {
 }
 
 function getTabsForAsset(asset: Asset): TabInfo[] {
+  const hasConfig = filterConfig(asset.config ?? null) != null;
+  return [
+    ...getResourceTabsForAsset(asset),
+    ...(hasConfig ? [{ type: 'config' as TabType }] : []),
+  ];
+}
+
+function getResourceTabsForAsset(asset: Asset): TabInfo[] {
   const hasCode = Boolean(getCode(asset));
   const colCount = getColumns(asset).length;
 
@@ -350,7 +360,7 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
                       );
                     })()}
 
-                  <DetailsSection heading="Relationships">
+                  <DetailsSection heading="Relationships" className="!p-3">
                     <AssetRelationships
                       dependsOn={(asset.dependsOn ?? []).map(toRelationshipItem)}
                       referencedBy={(asset.referencedBy ?? []).map(toRelationshipItem)}
@@ -358,6 +368,18 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
                     />
                   </DetailsSection>
                 </>
+              );
+            }
+
+            case 'config': {
+              const visibleConfig = filterConfig(asset.config ?? null);
+              if (!visibleConfig) return null;
+              return (
+                <div className="p-4">
+                  <Card className="!p-3 overflow-hidden">
+                    <ConfigDisplay config={visibleConfig} />
+                  </Card>
+                </div>
               );
             }
 

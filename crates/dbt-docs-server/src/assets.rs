@@ -9,11 +9,16 @@
 //! 2. **The bundle embedded via `rust-embed`** ([`serve_assets`]), gated on the
 //!    `embed-ui` feature. A fallback for a server started with no generated site.
 //!
-//! Both answer unknown paths with `index.html` so client-side routes survive a
+//! Both answer unknown *routes* with `index.html` so client-side routes survive a
 //! reload — belt and braces, since the SPA uses hash routes and a Vite base of
 //! `./`, so the document path never changes as the user navigates and no host
 //! rewrite is required. That is what lets the generated directory be served from
 //! any subpath by anything, including a plain file server.
+//!
+//! Unknown *files* get a 404 instead ([`is_navigation_path`]). The browser reads the
+//! parquet artifacts over this server, and the index writes no file for a table with
+//! no rows — so "absent" is a normal answer the client handles, and answering it with
+//! an HTML document instead is not.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -87,6 +92,35 @@ pub(crate) fn resolve_within(root: &Path, request_path: &str) -> Option<PathBuf>
     Some(resolved)
 }
 
+/// Whether a path that is not on disk should fall back to `index.html`.
+///
+/// Only a route should. The client fetches its parquet from this server, and an
+/// artifact for a table with no rows is never written — so a request for one is
+/// expected to come back empty-handed, and the client turns that into an empty
+/// relation. Handing it `index.html` with a 200 instead makes an absent artifact
+/// indistinguishable from a present one until DuckDB chokes on the document
+/// (`No magic bytes found at end of file`) and the page renders nothing.
+///
+/// The last segment decides: `/models/foo` is a route, `/index/dbt.nodes.parquet` and
+/// `/assets/index-abc123.js` are files. A route with a dot in it would be misread as
+/// a file, which is why this is not a general-purpose rule — but the SPA routes on the
+/// fragment, so the only path it ever asks for as a document is the site root.
+pub(crate) fn is_navigation_path(path: &str) -> bool {
+    !path
+        .rsplit('/')
+        .next()
+        .is_some_and(|segment| segment.contains('.'))
+}
+
+/// 404 for a file the site does not have. Plain text: nothing renders it.
+pub(crate) fn not_found() -> Response {
+    Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(Body::from("not found"))
+        .expect("valid 404 response")
+}
+
 /// Serve a generated site directory, falling back to its `index.html`.
 ///
 /// Falls through to the embedded bundle when the directory has no `index.html`,
@@ -96,6 +130,10 @@ pub async fn serve_site_dir(site_dir: &Path, uri: Uri) -> Response {
         && let Ok(bytes) = tokio::fs::read(&path).await
     {
         return asset_response(&path.to_string_lossy(), bytes, None);
+    }
+
+    if !is_navigation_path(uri.path()) {
+        return not_found();
     }
 
     let index = site_dir.join("index.html");
@@ -173,6 +211,65 @@ mod tests {
         ] {
             assert_eq!(resolved(attempt), None, "{attempt} should be refused");
         }
+    }
+
+    #[test]
+    fn only_routes_fall_back_to_the_spa() {
+        // Files. A missing artifact must read as missing: the client writes an empty
+        // relation for it, and cannot do that if it is handed a 200 and a document.
+        for path in [
+            "/index/dbt_rt.run_results.parquet",
+            "/index/dbt.source_freshness.parquet",
+            "/index/dbt.column_lineage.parquet",
+            "/assets/index-C_njZe3n.js",
+            "/favicon.ico",
+        ] {
+            assert!(!is_navigation_path(path), "{path} should 404 when absent");
+        }
+
+        // Routes. `main.tsx` mounts a `HashRouter`, so the route lives in the fragment
+        // and the document path the browser asks for is always the site root.
+        for path in ["/", "", "/models"] {
+            assert!(
+                is_navigation_path(path),
+                "{path} should fall back to index.html"
+            );
+        }
+
+        // The known consequence of reading the last segment: a dotted path is taken
+        // for a file. Harmless while routing is hash-based — nothing requests such a
+        // path as a document — but a move to history routing would have to revisit
+        // this, since `#/models/model.jaffle_shop.customers` would become a real URL.
+        assert!(!is_navigation_path("/models/model.jaffle_shop.customers"));
+    }
+
+    #[tokio::test]
+    async fn missing_artifact_is_a_404_not_the_spa() {
+        let site = tempfile::tempdir().expect("tempdir");
+        std::fs::write(site.path().join("index.html"), "<!doctype html>").expect("write index");
+        std::fs::create_dir(site.path().join("index")).expect("mkdir index");
+        std::fs::write(site.path().join("index/dbt.nodes.parquet"), b"PAR1..PAR1")
+            .expect("write artifact");
+
+        // The index writes no file for a table with no rows, which is the case the
+        // client's empty-relation DDL exists for.
+        let absent = serve_site_dir(
+            site.path(),
+            "/index/dbt_rt.run_results.parquet".parse().expect("uri"),
+        )
+        .await;
+        assert_eq!(absent.status(), StatusCode::NOT_FOUND);
+
+        let present = serve_site_dir(
+            site.path(),
+            "/index/dbt.nodes.parquet".parse().expect("uri"),
+        )
+        .await;
+        assert_eq!(present.status(), StatusCode::OK);
+
+        // A route still resolves to the app, so a reload on a deep link works.
+        let route = serve_site_dir(site.path(), "/models".parse().expect("uri")).await;
+        assert_eq!(route.status(), StatusCode::OK);
     }
 
     #[test]

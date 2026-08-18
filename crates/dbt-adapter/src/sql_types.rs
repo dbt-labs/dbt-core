@@ -56,8 +56,12 @@ pub trait TypeOps: Send + Sync {
     /// Picks a SQL type for a given Arrow DataType and renders it as SQL.
     ///
     /// The implementation is dialect-specific.
-    fn format_arrow_type_as_sql(&self, data_type: &DataType, out: &mut String)
-    -> AdapterResult<()>;
+    fn format_arrow_type_as_sql(
+        &self,
+        data_type: &DataType,
+        nullable: bool,
+        out: &mut String,
+    ) -> AdapterResult<()>;
 
     /// Renders a given SqlType as SQL.
     ///
@@ -78,7 +82,7 @@ pub trait TypeOps: Send + Sync {
             .map(Ok)
             .unwrap_or_else(|| {
                 let mut out = String::new();
-                self.format_arrow_type_as_sql(field.data_type(), &mut out)
+                self.format_arrow_type_as_sql(field.data_type(), field.is_nullable(), &mut out)
                     .map(|_| Cow::Owned(out))
             })
     }
@@ -174,14 +178,15 @@ impl TypeOps for DefaultTypeOps {
     fn format_arrow_type_as_sql(
         &self,
         data_type: &DataType,
+        nullable: bool,
         out: &mut String,
     ) -> AdapterResult<()> {
         use AdapterType::*;
         let adapter_type = self.0;
         match adapter_type {
-            Postgres | Salesforce => postgres::try_format_type(data_type, true, out),
-            Fabric => fabric::try_format_type(data_type, true, out),
-            ClickHouse => clickhouse::try_format_type(data_type, true, out),
+            Postgres | Salesforce => postgres::try_format_type(data_type, nullable, out),
+            Fabric => fabric::try_format_type(data_type, nullable, out),
+            ClickHouse => clickhouse::try_format_type(data_type, nullable, out),
             _ => {
                 // sdf-specific distinct types are encoded as FixedSizeList(field, 1).
                 // Render them as the uppercased field name (e.g. "variant" → "VARIANT").
@@ -195,7 +200,7 @@ impl TypeOps for DefaultTypeOps {
                         out.push_str("ARRAY");
                     } else {
                         out.push_str("ARRAY<");
-                        self.format_arrow_type_as_sql(field.data_type(), out)?;
+                        self.format_arrow_type_as_sql(field.data_type(), field.is_nullable(), out)?;
                         out.push('>');
                     }
                     return Ok(());
@@ -209,7 +214,7 @@ impl TypeOps for DefaultTypeOps {
                         }
                         out.push_str(field.name());
                         out.push(' ');
-                        self.format_arrow_type_as_sql(field.data_type(), out)?;
+                        self.format_arrow_type_as_sql(field.data_type(), field.is_nullable(), out)?;
                     }
                     out.push('>');
                     return Ok(());

@@ -415,6 +415,7 @@ where
         Some(&target_dir),
         &arg.io,
         warn_error_options.as_ref(),
+        cli.common_args.skip_fusion_only_upgrades(),
         "dbt-tests",
     );
     let (middlewares, consumer_layers, mut shutdown_items, feature_handle) =

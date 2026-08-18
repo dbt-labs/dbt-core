@@ -1,3 +1,4 @@
+mod bigquery;
 mod duckdb;
 mod equals;
 mod persist_docs;

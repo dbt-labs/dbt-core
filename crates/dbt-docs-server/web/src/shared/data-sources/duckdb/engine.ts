@@ -43,10 +43,43 @@ const EMPTY_RELATION_DDL: Partial<Record<TableName, string>> = {
     '(unique_id VARCHAR, stat_id VARCHAR, stat_value VARCHAR)',
   'dbt.catalog_tables':
     'CREATE OR REPLACE TABLE "dbt"."catalog_tables" (unique_id VARCHAR)',
+  // The resolver always injects `doc.dbt.__overview__`, so in practice this table
+  // is never empty — but the delta write path skips a batch with no doc rows, and
+  // the overview query is the landing page. Zero rows means "no authored
+  // overview", which the page already renders the bundled default for.
+  'dbt.docs':
+    'CREATE OR REPLACE TABLE "dbt"."docs" ' +
+    '(unique_id VARCHAR, name VARCHAR, package_name VARCHAR, block_contents VARCHAR)',
 };
 
 /** Logical table name, e.g. `dbt.nodes`. Matches the artifact's file stem. */
 export type TableName = string;
+
+/**
+ * Whether `bytes` are actually a parquet file.
+ *
+ * Checked before registering, because "the artifact is absent" does not reliably
+ * arrive as a 404. A host that answers unknown paths with `index.html` — which
+ * `dbt docs serve` does, and which most SPA hosts do by default — returns 200 and a
+ * document, and registering that leaves DuckDB to fail on it with `No magic bytes
+ * found at end of file`. The bytes are the only thing every host agrees on, so they
+ * decide, and an expected empty relation stays an empty relation rather than
+ * becoming a page that renders nothing.
+ *
+ * Parquet brackets the file with `PAR1` at both ends. The trailing copy is the one
+ * that matters here — it is what DuckDB reads first, and what a truncated or
+ * substituted file loses — but both are checked, since a document that happens to
+ * end in `PAR1` is no more readable than one that does not. 12 bytes is the smallest
+ * possible file: two magics plus the 4-byte footer length between them.
+ */
+export function isParquetBytes(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 12) return false;
+  const magic = [0x50, 0x41, 0x52, 0x31]; // 'PAR1'
+  return magic.every(
+    (byte, i) =>
+      bytes[i] === byte && bytes[bytes.byteLength - magic.length + i] === byte,
+  );
+}
 
 export interface EngineOptions {
   /** Absolute URL of the `data/` directory, with a trailing slash. */
@@ -153,6 +186,12 @@ export function createEngine(options: EngineOptions): DuckDbEngine {
    * relation is the right answer and {@link EMPTY_RELATION_DDL} supplies one, so the
    * SQL needs no missing-table variant. Column lineage is the exception: it has no
    * DDL here because its absence is the capability signal itself.
+   *
+   * Absence is decided by {@link isParquetBytes} rather than by the status code: a
+   * host that rewrites unknown paths to `index.html` reports a missing artifact as
+   * 200 and a document, so a 404 is one way absence arrives and not the only one.
+   * A status that is neither — a 500, a timeout — is still an error and still
+   * throws; those are worth surfacing.
    */
   function register(table: TableName): Promise<boolean> {
     const existing = registered.get(table);
@@ -162,19 +201,20 @@ export function createEngine(options: EngineOptions): DuckDbEngine {
       const { db, conn } = await loaded();
       const fileName = `${table}.parquet`;
       const res = await fetch(new URL(fileName, options.dataBaseUrl).href);
-      if (res.status === 404) {
+      if (!res.ok && res.status !== 404) {
+        throw new Error(`${res.status} ${res.statusText} fetching ${fileName}`);
+      }
+
+      const bytes = res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+      if (!bytes || !isParquetBytes(bytes)) {
         const ddl = EMPTY_RELATION_DDL[table];
         if (!ddl) return false;
-        // No file to register: the relation is declared straight into the catalog.
+        // Nothing to register: the relation is declared straight into the catalog.
         await conn.query(ddl);
         present.add(table);
         return true;
       }
-      if (!res.ok) {
-        throw new Error(`${res.status} ${res.statusText} fetching ${fileName}`);
-      }
 
-      const bytes = new Uint8Array(await res.arrayBuffer());
       await db.registerFileBuffer(fileName, bytes);
       // Quoted so the `.` in `dbt.nodes` reads as schema.table rather than being
       // taken from the file name, which contains one too.

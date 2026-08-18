@@ -13,9 +13,9 @@ import {
   PaginatedFileTree,
   RyeconDataGeography,
   RyeconFile,
-  RyeconGitBranch,
   RyeconThemeDark,
   RyeconThemeLight,
+  RyeconThemeSystem,
   SegmentedButton,
 } from '@dbt-labs/sourdough';
 
@@ -81,8 +81,8 @@ interface Props {
   isHome: boolean;
   query: string;
   loadingProgress?: { loaded: number; total: number } | null;
-  theme: 'dark' | 'light';
-  onSetTheme(theme: 'dark' | 'light'): void;
+  theme: 'dark' | 'light' | 'system';
+  onSetTheme(theme: 'dark' | 'light' | 'system'): void;
   filters: AssetFilters;
   onSetFilters(next: AssetFilters): void;
   /**
@@ -294,31 +294,21 @@ export function LocatePane({
         />
       )}
 
-      {/* Footer — theme toggle + branch */}
+      {/* Footer — theme toggle */}
       <footer className="locate-pane__footer">
-        {project.gitBranch && (
-          <span className="locate-pane__branch" title="Git branch">
-            <Icon ryecon={RyeconGitBranch} size="xs" alt="" />
-            <span>{project.gitBranch}</span>
-            {project.gitIsDirty && (
-              <span className="locate-pane__dirty" aria-label="uncommitted changes">
-                ●
-              </span>
-            )}
-          </span>
-        )}
         <div className="flex w-full justify-center">
           <SegmentedButton
             segments={[
+              { label: 'Light', value: 'light', startIcon: { ryecon: RyeconThemeLight } },
               { label: 'Dark', value: 'dark', startIcon: { ryecon: RyeconThemeDark } },
               {
-                label: 'Light',
-                value: 'light',
-                startIcon: { ryecon: RyeconThemeLight },
+                label: 'System',
+                value: 'system',
+                startIcon: { ryecon: RyeconThemeSystem },
               },
             ]}
             selectedValue={theme}
-            onSelect={(v) => onSetTheme(v as 'dark' | 'light')}
+            onSelect={(v) => onSetTheme(v as 'dark' | 'light' | 'system')}
             size="sm"
           />
         </div>

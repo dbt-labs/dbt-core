@@ -8,7 +8,7 @@ use axum::{
 };
 use rust_embed::RustEmbed;
 
-use crate::assets::{asset_response, normalize_path};
+use crate::assets::{asset_response, is_navigation_path, normalize_path, not_found};
 
 // `web/dist/` is a committed build of the SPA whose source lives beside it in
 // `web/src/`. Cargo interpolates `CARGO_MANIFEST_DIR`, so the path needs no help from
@@ -34,12 +34,17 @@ pub(crate) fn iter_assets() -> impl Iterator<Item = (String, Cow<'static, [u8]>)
 /// Fallback handler for the embedded SPA.
 ///
 /// Tries the requested file, then falls back to `index.html` so SPA hash
-/// routes resolve client-side.
+/// routes resolve client-side. A missing *file* 404s rather than falling back, for
+/// the reason in [`is_navigation_path`] — and all the more so here, since the
+/// embedded bundle carries no parquet at all.
 pub async fn serve_assets(uri: Uri) -> Response {
     let path = normalize_path(uri.path());
 
     if let Some(file) = Assets::get(&path) {
         return asset_response(&path, file.data.into_owned(), None);
+    }
+    if !is_navigation_path(uri.path()) {
+        return not_found();
     }
     if let Some(file) = Assets::get("index.html") {
         return asset_response("index.html", file.data.into_owned(), None);

@@ -85,7 +85,7 @@ LIMIT 1`;
 }
 
 const NODE_BASE = `n.unique_id, n.name, n.resource_type, n.package_name, n.description,
-  n.original_file_path, n.file_path, n.patch_path, n.tags, n.fqn, n.meta,
+  n.original_file_path, n.file_path, n.patch_path, n.tags, n.fqn, n.meta, n.config,
   n.database_name, n.schema_name, n.identifier`;
 
 export const DETAIL_REGISTRY: Partial<Record<ResourceType, DetailSpec>> = {
@@ -97,7 +97,7 @@ export const DETAIL_REGISTRY: Partial<Record<ResourceType, DetailSpec>> = {
     ),
     tables: ['dbt.nodes'],
     wantsColumns: true,
-    jsonColumns: ['meta'],
+    jsonColumns: ['meta', 'config'],
     map: (row) => fromModelDetail(row as never),
   },
 
@@ -105,7 +105,7 @@ export const DETAIL_REGISTRY: Partial<Record<ResourceType, DetailSpec>> = {
     sql: nodeDetail('seed', `${NODE_BASE}`),
     tables: ['dbt.nodes'],
     wantsColumns: true,
-    jsonColumns: ['meta'],
+    jsonColumns: ['meta', 'config'],
     map: (row) => fromSeedDetail(row as never),
   },
 
@@ -116,7 +116,7 @@ export const DETAIL_REGISTRY: Partial<Record<ResourceType, DetailSpec>> = {
     ),
     tables: ['dbt.nodes'],
     wantsColumns: true,
-    jsonColumns: ['meta'],
+    jsonColumns: ['meta', 'config'],
     map: (row) => fromSnapshotDetail(row as never),
   },
 
@@ -134,7 +134,7 @@ WHERE n.unique_id = ${sqlStr(uniqueId)}
 LIMIT 1`,
     tables: ['dbt.nodes', 'dbt.source_freshness'],
     wantsColumns: true,
-    jsonColumns: ['meta'],
+    jsonColumns: ['meta', 'config'],
     map: (row) => fromSourceDetail(row as never),
   },
 
@@ -306,7 +306,7 @@ export const GENERIC_DETAIL: DetailSpec = {
   sql: genericDetailSql,
   tables: ['dbt.nodes'],
   wantsColumns: false,
-  jsonColumns: ['meta'],
+  jsonColumns: ['meta', 'config'],
   map: (row) => fromNodeDetail(row as never),
 };
 

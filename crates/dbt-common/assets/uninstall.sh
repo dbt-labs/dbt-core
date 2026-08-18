@@ -59,9 +59,11 @@ package="${package:-dbt}"
 # set install locations
 if [ -z "${installLocation:-}" ]; then
     dbtInstallLocation="$HOME/.local/bin/dbt"
+    runnerInstallLocation="$HOME/.local/bin/dbt-db-runner"
     lspInstallLocation="$HOME/.local/bin/dbt-lsp"
 else
     dbtInstallLocation="$installLocation/dbt"
+    runnerInstallLocation="$installLocation/dbt-db-runner"
     lspInstallLocation="$installLocation/dbt-lsp"
 fi
 
@@ -79,11 +81,12 @@ fi
 
 # uninstall dbt / dbt-lsp
 if [ "$package" = "all" ] || [ "$package" = "dbt" ]; then
-    rm -rf $dbtInstallLocation
+    rm -f "$dbtInstallLocation" "$runnerInstallLocation"
     log "Uninstalled dbt from $dbtInstallLocation"
+    log "Uninstalled dbt-db-runner from $runnerInstallLocation"
 fi
 
 if [ "$package" = "all" ] || [ "$package" = "dbt-lsp" ]; then
-    rm -rf $lspInstallLocation
+    rm -f "$lspInstallLocation"
     log "Uninstalled dbt-lsp from $lspInstallLocation"
 fi

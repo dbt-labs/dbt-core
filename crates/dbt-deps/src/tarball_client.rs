@@ -7,13 +7,14 @@
 
 use async_compression::tokio::bufread::GzipDecoder;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::tracing::dbt_emit::emit_info_log_message;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use futures::StreamExt;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 use std::io;
 use std::path::{Path, PathBuf};
-use tokio_tar::Archive;
+use tokio_tar::{Archive, EntryType};
 use tokio_util::io::StreamReader;
 
 /// Client for downloading and extracting tarball archives.
@@ -181,6 +182,27 @@ impl TarballClient {
                     "Refusing to extract tar entry with path traversal: {}",
                     entry_path.display()
                 );
+            }
+
+            // Links and device nodes are extracted as-is, but `unpack()` applies no
+            // containment to a link *target*, so they are not safe in general. Only
+            // notify for now: dropping them outright would change what installs,
+            // because some published packages commit a self-referential
+            // `integration_tests/dbt_packages/<pkg>` symlink. This notice is the
+            // signal for whether real projects contain any such entry.
+            let entry_type = entry.header().entry_type();
+            if matches!(
+                entry_type,
+                EntryType::Symlink
+                    | EntryType::Link
+                    | EntryType::Char
+                    | EntryType::Block
+                    | EntryType::Fifo
+            ) {
+                emit_info_log_message(format!(
+                    "Unsupported tar entry ({entry_type:?}) in tarball from {download_url}: {}. Extracting these entries will stop being supported in a future release.",
+                    entry_path.display()
+                ));
             }
 
             entry.unpack(&target_entry_path).await.map_err(|e| {

@@ -682,6 +682,41 @@ fn looks_like_function_call(value: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+#[derive(Debug)]
+struct QuotePolicyObject(ResolvedQuoting);
+
+impl Object for QuotePolicyObject {
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State,
+        name: &str,
+        args: &[Value],
+        _listeners: &[std::rc::Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, minijinja::Error> {
+        match name {
+            "get_part" => {
+                let iter = ArgsIter::new("QuotePolicy.args", &[], args);
+                let name = iter.next_kwarg::<String>("name")?;
+                iter.finish()?;
+
+                match name.as_str() {
+                    "database" => Ok(Value::from(self.0.database)),
+                    "schema" => Ok(Value::from(self.0.schema)),
+                    "identifier" => Ok(Value::from(self.0.identifier)),
+                    _ => Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        format!("'{name}' is not a valid argument"),
+                    )),
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::UnknownMethod,
+                format!("Unknown method on DefaultQuotePolicyObject: '{name}'"),
+            )),
+        }
+    }
+}
+
 /// A Wrapper type for StaticBaseRelation
 /// for any concrete StaticBaseRelation type to be used as Object in Jinja
 /// to expose static methods via api.Relation
@@ -754,6 +789,13 @@ impl Object for StaticBaseRelationObject {
                     })?;
                 Ok(Value::from_object(relation_config))
             }
+            "get_default_quote_policy" => {
+                let iter = ArgsIter::new("Relation.get_default_quote_policy", &[], args);
+                iter.finish()?;
+                Ok(Value::from_object(QuotePolicyObject(
+                    self.0.get_default_quoting(),
+                )))
+            }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on StaticBaseRelationObject: '{name}'"),
@@ -776,6 +818,8 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
     ) -> Result<Value, minijinja::Error>;
 
     fn get_adapter_type(&self) -> String;
+
+    fn get_default_quoting(&self) -> ResolvedQuoting;
 
     /// Create a new relation from the given arguments
     /// impl for api.Relation.create
@@ -845,6 +889,8 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use crate::relation::factory::create_static_relation;
+
     use super::*;
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
     use minijinja_contrib::testing::jinja_assert;
@@ -1050,6 +1096,161 @@ mod tests {
         assert_eq!(
             derived.relation_type(),
             Some(RelationType::MaterializedView)
+        );
+    }
+
+    #[test]
+    fn static_relation_snowflake_get_default_quote_policy_passes_with_get_part() {
+        let obj = create_static_relation(
+            AdapterType::Snowflake,
+            ResolvedQuoting {
+                database: true,
+                schema: false,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(&state, "get_default_quote_policy", &[], &[])
+            .unwrap();
+
+        let database = result
+            .call_method(&state, "get_part", &[Value::from("database")], &[])
+            .unwrap()
+            .is_true();
+        let schema = result
+            .call_method(&state, "get_part", &[Value::from("schema")], &[])
+            .unwrap()
+            .is_true();
+        let identifier = result
+            .call_method(&state, "get_part", &[Value::from("identifier")], &[])
+            .unwrap()
+            .is_true();
+
+        // snowflake defaults
+        assert!(!database);
+        assert!(!schema);
+        assert!(!identifier);
+    }
+
+    #[test]
+    fn static_relation_other_get_default_quote_policy_passes_with_get_part() {
+        let obj = create_static_relation(
+            AdapterType::Postgres,
+            ResolvedQuoting {
+                database: true,
+                schema: false,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(&state, "get_default_quote_policy", &[], &[])
+            .unwrap();
+
+        let database = result
+            .call_method(&state, "get_part", &[Value::from("database")], &[])
+            .unwrap()
+            .is_true();
+        let schema = result
+            .call_method(&state, "get_part", &[Value::from("schema")], &[])
+            .unwrap()
+            .is_true();
+        let identifier = result
+            .call_method(&state, "get_part", &[Value::from("identifier")], &[])
+            .unwrap()
+            .is_true();
+
+        // other defaults
+        assert!(database);
+        assert!(schema);
+        assert!(identifier);
+    }
+
+    #[test]
+    fn static_relation_get_default_quote_policy_fails_with_one_or_more_arguments() {
+        let obj = create_static_relation(
+            AdapterType::ClickHouse,
+            ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(
+                &state,
+                "get_default_quote_policy",
+                &[Value::from("bad arg")],
+                &[],
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            result.detail().unwrap(),
+            "Relation.get_default_quote_policy() takes exactly zero positional arguments (1 given)"
+        );
+    }
+
+    #[test]
+    fn static_relation_get_default_quote_policy_with_get_part_should_fail() {
+        let obj = create_static_relation(
+            AdapterType::ClickHouse,
+            ResolvedQuoting {
+                database: true,
+                schema: false,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(&state, "get_default_quote_policy", &[], &[])
+            .unwrap();
+
+        let result_get_part = result
+            .call_method(&state, "get_part", &[], &[])
+            .unwrap_err();
+        assert_eq!(
+            result_get_part.detail().unwrap(),
+            "missing keyword argument 'name'"
+        );
+
+        let result_get_part = result
+            .call_method(
+                &state,
+                "get_part",
+                &[Value::from("schema"), Value::from("schema")],
+                &[],
+            )
+            .unwrap_err();
+        assert_eq!(
+            result_get_part.detail().unwrap(),
+            "QuotePolicy.args() takes from 0 to 1 positional arguments but 2 were given"
+        );
+
+        let result_get_part = result
+            .call_method(&state, "get_part", &[Value::from("bad")], &[])
+            .unwrap_err();
+        assert_eq!(
+            result_get_part.detail().unwrap(),
+            "'bad' is not a valid argument"
         );
     }
 }

@@ -15,9 +15,15 @@
 //!
 //! Two properties the browser depends on:
 //!
-//! 1. **Every artifact in the set is present**, empty ones included, so client
-//!    queries never have to probe for a relation. Column lineage is the sole
-//!    exception, and its absence *is* the gating signal.
+//! 1. **An artifact may be absent, and absence is data.** `--write-index` writes no
+//!    file for a table with no rows, and the export copies the index rather than
+//!    filling it in — so a project that has never run has no `dbt_rt.run_results`,
+//!    one with no sources no `dbt.source_freshness`, and so on. The client declares
+//!    an empty relation for those (`EMPTY_RELATION_DDL` in `duckdb/engine.ts`), which
+//!    is why its queries need no missing-table variant. For column lineage the
+//!    absence *is* the gating signal. What the client cannot absorb is a missing
+//!    artifact answered with something other than nothing: see `is_navigation_path`
+//!    in `assets.rs`.
 //! 2. **Nothing outside `data/` describes the data.** There is no manifest to
 //!    keep in sync; artifact names are a constant in the client, project
 //!    identity comes from `dbt.project.parquet`, staleness from

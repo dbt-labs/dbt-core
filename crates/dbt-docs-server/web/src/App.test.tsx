@@ -15,7 +15,6 @@ import {
 import type { MetadataDataSource } from './shared/data-sources/MetadataDataSource';
 import { createFakeDataSource } from './shared/testing/createFakeDataSource';
 import { makeTestQueryClient } from './test/renderWithProviders';
-import { pageFromWire } from './test/wireFixtures';
 
 /**
  * The shell's data source, built from the same fixtures the fetch stub described.
@@ -38,24 +37,6 @@ function shellSource(overrides: Partial<MetadataDataSource> = {}): MetadataDataS
         fromDistribution({ name: 'oss', version: '0.0.0', is_logged_in: false }),
       fetchFiles: async () => [],
       fetchAssetCounts: async () => ({ model: 1 }),
-      // The home page's Marts strip.
-      fetchAssetList: async () =>
-        pageFromWire('model', {
-          data: [
-            {
-              unique_id: 'model.demo.dim_customers',
-              name: 'dim_customers',
-              package_name: 'demo',
-              original_file_path: 'models/marts/dim_customers.sql',
-              modeling_layer: 'Marts',
-              access_level: null,
-              contract_enforced: null,
-              owner: null,
-              executed_at: null,
-            },
-          ],
-          page_info: { total_count: 1, has_next_page: false, end_cursor: null },
-        }),
       ...overrides,
     } as never,
     { full: true },
@@ -112,99 +93,44 @@ describe('<App />', () => {
     expect(screen.getByText('Loading…')).toBeVisible();
   });
 
-  describe('home page', () => {
-    it('does not render hero action buttons', async () => {
-      renderApp();
-      await waitFor(() => {
-        expect(screen.getByText('demo_project', { selector: 'h1' })).toBeVisible();
-      });
-      expect(screen.queryByRole('button', { name: /set as home/i })).toBeNull();
-      expect(screen.queryByRole('button', { name: /add to favorites/i })).toBeNull();
-      expect(screen.queryByRole('button', { name: /in favorites/i })).toBeNull();
-    });
-
-    it('renders the "Get more from dbt" upgrade panel for Core users', async () => {
-      // Test fixtures stub `has_column_lineage: false`, which maps to
-      // `core` — per the gating doc, that surfaces the CLL + Mesh
-      // upgrade panel on home.
-      renderApp();
-      await waitFor(() => {
-        expect(screen.getByText('demo_project', { selector: 'h1' })).toBeVisible();
-      });
-      expect(screen.getByText(/Get more from dbt/i)).toBeVisible();
-    });
-
-    it('renders all asset types in the Explore grid, including zero-count types', async () => {
-      renderApp();
-      await waitFor(() => {
-        expect(screen.getByText('Explore')).toBeVisible();
-      });
-      // Every canonical resource type renders, even when there are zero nodes.
-      for (const label of [
-        'Models',
-        'Sources',
-        'Tests',
-        'Exposures',
-        'Groups',
-        'Metrics',
-        'Semantic models',
-        'Seeds',
-        'Macros',
-        'Snapshots',
-        'Saved queries',
-      ]) {
-        expect(
-          screen.getByRole('button', { name: new RegExp(`Browse ${label}`, 'i') }),
-        ).toBeVisible();
-      }
-    });
-
-    it('renders the project description when present', async () => {
-      renderApp();
-      await waitFor(() => {
-        expect(screen.getByText('About this project')).toBeVisible();
-      });
-      expect(screen.getByText('A demo project description.')).toBeVisible();
-    });
-
-    it('hides the description section when description is empty', async () => {
+  describe('overview page', () => {
+    it('renders the project-authored overview at /', async () => {
       renderApp(
         shellSource({
-          fetchProject: async () => ({
-            name: 'demo_project',
-            // Whitespace-only: the section should treat it as absent.
-            description: '   ',
-            dbtVersion: null,
-            adapterType: null,
-            git: null,
+          fetchOverview: async () => ({
+            uniqueId: 'doc.demo.__overview__',
+            packageName: 'demo',
+            blockContents: '# Authored overview\n\nFrom the project.',
           }),
         } as never),
       );
       await waitFor(() => {
-        expect(screen.getByText('demo_project', { selector: 'h1' })).toBeVisible();
+        expect(screen.getByText('Authored overview', { selector: 'h1' })).toBeVisible();
       });
-      expect(screen.queryByText('About this project')).toBeNull();
+      expect(screen.getByText('From the project.')).toBeVisible();
     });
 
-    it('renders the marts section when marts exist', async () => {
-      renderApp();
+    it('falls back to the bundled default when no package defines one', async () => {
+      // `fetchOverview` resolving null is the real "not defined" answer, not an
+      // error — the landing page must still render something.
+      renderApp(shellSource({ fetchOverview: async () => null } as never));
       await waitFor(() => {
-        expect(screen.getByText('Marts')).toBeVisible();
+        expect(screen.getByText('Welcome!', { selector: 'h3' })).toBeVisible();
       });
-      expect(screen.getByText('dim_customers')).toBeVisible();
-      expect(screen.getByRole('button', { name: /view all/i })).toBeVisible();
     });
 
-    it('hides the marts section when no marts are returned', async () => {
+    it('falls back to the bundled default when the overview read fails', async () => {
+      // An unreadable dbt.docs must not blank the landing page.
       renderApp(
         shellSource({
-          fetchAssetList: async () => ({ items: [], nextCursor: null, totalCount: 0 }),
+          fetchOverview: async () => {
+            throw new Error('dbt.docs is missing');
+          },
         } as never),
       );
       await waitFor(() => {
-        expect(screen.getByText('demo_project', { selector: 'h1' })).toBeVisible();
+        expect(screen.getByText('Welcome!', { selector: 'h3' })).toBeVisible();
       });
-      expect(screen.queryByText('Marts')).toBeNull();
     });
   });
 

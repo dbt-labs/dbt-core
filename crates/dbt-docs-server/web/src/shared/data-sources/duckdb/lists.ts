@@ -10,7 +10,9 @@
  *
  * - **The "view might be missing" variants.** Each list handler built two to four
  *   SQL strings and probed them in order, because `--write-index` skips empty
- *   tables. The exporter now emits every artifact, so one query is enough.
+ *   tables. It still does; the engine now declares an empty relation for the
+ *   artifacts that can be absent (`EMPTY_RELATION_DDL`), so one query is enough.
+ *   A column added to a query here needs adding there too.
  * - **Cursor pagination.** ADR-6 chose cursors partly because "a read-only parquet
  *   snapshot makes stable cursors free" — with the snapshot in this process that
  *   reasoning collapses into plain offsets. The `Page` contract still speaks

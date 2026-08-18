@@ -30,7 +30,7 @@ use dbt_tasks_core::pretty_table::from_pretty_table_error;
 use dbt_tasks_core::run_cache::run_cache_service::CachedTestExecutionResult;
 use dbt_tasks_core::span_manager::SpanTreeRequest;
 use dbt_tasks_core::task::TaskResult;
-use dbt_tasks_core::task::{TP, Task, TaskOp};
+use dbt_tasks_core::task::{AggregatedNodeGroup, TP, Task, TaskOp};
 use dbt_tasks_core::task_spans::create_task_span_for_node;
 use dbt_tasks_core::test_aggregation::GenericTestGroup;
 use dbt_tasks_core::visitor::SkipReason;
@@ -185,6 +185,7 @@ pub(super) fn record_test_span_with_detail(
                 diff,
                 store_failures,
                 statically_checked,
+                None,
             ),
         ))
     });
@@ -287,7 +288,7 @@ impl AggregatedTestRunRemoteTask {
         &self,
         test_results: &[crate::materialize::TestResult],
         warn_error_options: &WarnErrorOptions,
-    ) -> (HashMap<String, TestReportedResult>, TestExecutionStatus) {
+    ) -> (Vec<(String, TestReportedResult)>, TestExecutionStatus) {
         let mut column_results = HashMap::new();
         for result in test_results {
             if let Some(column_name) = &result.column_name {
@@ -297,7 +298,8 @@ impl AggregatedTestRunRemoteTask {
             }
         }
 
-        let mut member_results = HashMap::with_capacity(self.group.tests.len());
+        // Ordered like `self.group.tests` so member result lines are emitted deterministically.
+        let mut member_results = Vec::with_capacity(self.group.tests.len());
         let mut worst_status = TestExecutionStatus::Passed;
 
         for test in &self.group.tests {
@@ -318,7 +320,7 @@ impl AggregatedTestRunRemoteTask {
                 .and_then(|result| usize::try_from(result.failures.max(0)).ok())
                 .unwrap_or(0);
 
-            member_results.insert(
+            member_results.push((
                 test.unique_id.clone(),
                 TestReportedResult {
                     failures,
@@ -334,7 +336,7 @@ impl AggregatedTestRunRemoteTask {
                             .unwrap_or(false),
                     }),
                 },
-            );
+            ));
         }
 
         (member_results, worst_status)
@@ -392,7 +394,7 @@ impl AggregatedTestRunRemoteTask {
 
         let (member_results, worst_status) =
             self.get_member_test_results(&test_results, &ctx.inner.arg.warn_error_options);
-        let total_failures: usize = member_results.values().map(|r| r.failures).sum();
+        let total_failures: usize = member_results.iter().map(|(_, r)| r.failures).sum();
 
         // TODO(pc) recreate per-test diff
         let diff_output = if let Some(batch) = failing_rows_opt {
@@ -421,6 +423,15 @@ impl AggregatedTestRunRemoteTask {
             None
         };
 
+        increment_metric(
+            FusionMetricKey::InvocationMetric(InvocationMetricKey::AggregatedTestQueries),
+            1,
+        );
+        increment_metric(
+            FusionMetricKey::InvocationMetric(InvocationMetricKey::AggregatedTests),
+            member_results.len() as u64,
+        );
+
         for (unique_id, result) in &member_results {
             // Members share the aggregated query, so they share its main response.
             if let Some(main_response) = &main_response {
@@ -448,6 +459,7 @@ impl AggregatedTestRunRemoteTask {
         diff_output: Option<&String>,
     ) -> FsResult<()> {
         let diff = result.diff.clone().or_else(|| diff_output.cloned());
+        let group_unique_id = self.group.unique_id.clone();
         record_test_metric(result.status);
 
         record_span_status_from_attrs(&span, move |attrs| {
@@ -460,6 +472,7 @@ impl AggregatedTestRunRemoteTask {
                         diff,
                         None,
                         None,
+                        Some(group_unique_id),
                     ),
                 ));
             }
@@ -543,6 +556,14 @@ impl Task for AggregatedTestRunRemoteTask {
 
     fn task_phase(&self) -> Option<TP> {
         Some(TP::Run)
+    }
+
+    fn aggregated_node_group(&self) -> Option<AggregatedNodeGroup> {
+        Some(AggregatedNodeGroup {
+            unique_id: self.group.unique_id.clone(),
+            macro_name: self.group.macro_name.clone(),
+            attached_node: self.group.attached_node.clone(),
+        })
     }
 
     fn telemetry_request(
@@ -699,6 +720,10 @@ pub fn process_statically_checked_test_result(
         execution_result: None,
     };
     record_test_span_with_detail(&result, None, None, Some(true));
+    increment_metric(
+        FusionMetricKey::InvocationMetric(InvocationMetricKey::StaticallyCheckedTests),
+        1,
+    );
 
     let unique_id = &test.common().unique_id;
     ctx.inner.run_stats.insert(

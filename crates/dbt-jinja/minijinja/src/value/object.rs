@@ -1445,13 +1445,7 @@ pub mod mutable_vec {
                     "insert() expects an integer as first argument"
                 )));
                 let mut inner = lock_write!(vec);
-                let len = inner.len();
-                if idx > len {
-                    return Err(Error::new(
-                        ErrorKind::InvalidOperation,
-                        format!("insert() index {idx} is out of bounds for list of length {len}"),
-                    ));
-                }
+                let idx = idx.min(inner.len());
                 if value.is_introspective_stub() {
                     vec.tainted
                         .store(true, std::sync::atomic::Ordering::Relaxed);

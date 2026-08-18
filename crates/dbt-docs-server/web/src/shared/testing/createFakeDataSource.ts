@@ -17,6 +17,7 @@ import type { Distribution } from '../typings/domain/distribution';
 import type { ExecutionInfo } from '../typings/domain/executionInfo';
 import type { Facets } from '../typings/domain/facets';
 import type { FileEntry } from '../typings/domain/files';
+import type { ProjectOverview } from '../typings/domain/overview';
 import type { Project } from '../typings/domain/project';
 import type { SearchFacets, SearchHit, SearchResult } from '../typings/domain/search';
 import type { Page } from '../typings/page';
@@ -321,6 +322,9 @@ export function createFakeDataSource(
         }),
         fetchAssetCounts: async (): Promise<AssetCounts> => ({}),
         fetchProject: async (): Promise<Project> => makeFakeProject(),
+        // Null is the real "no authored overview" answer, not a missing stub —
+        // consumers render their own default from it.
+        fetchOverview: async (): Promise<ProjectOverview | null> => null,
         fetchFiles: async (): Promise<FileEntry[]> => [],
         fetchSearch: async (): Promise<SearchResult> => ({
           kind: 'ok',
