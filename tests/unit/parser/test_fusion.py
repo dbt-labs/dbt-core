@@ -306,9 +306,16 @@ class TestParseWithFusion:
             parse_with_fusion(self._runtime_config(target), write=True, write_json=False)
         assert list(target.iterdir()) == []
 
-    def test_write_json_copies_manifest_to_target_dir(self, tmp_path: Path, _patch_fusion_deps):
+    def test_write_json_writes_corrected_manifest_to_target_dir(
+        self, tmp_path: Path, _patch_fusion_deps
+    ):
+        """manifest.json must be written from the corrected in-memory Manifest
+        (after rediscover_adapter_macros) rather than copied from Fusion's raw
+        handoff file, so the on-disk artifact reflects the rediscovered macros
+        actually used for compilation."""
         target = tmp_path / "target"
         target.mkdir()
+        corrected_manifest = mock.MagicMock()
         with mock.patch(
             "dbt.parser.fusion.subprocess.run",
             side_effect=_fake_parser(json.dumps({"metadata": {}})),
@@ -317,10 +324,10 @@ class TestParseWithFusion:
             return_value=mock.MagicMock(),
         ), mock.patch(
             "dbt.parser.fusion.Manifest.from_writable_manifest",
-            return_value=mock.MagicMock(),
+            return_value=corrected_manifest,
         ):
             parse_with_fusion(self._runtime_config(target), write=True, write_json=True)
-        assert (target / "manifest.json").exists()
+        corrected_manifest.write.assert_called_once_with(str(target / "manifest.json"))
 
 
 class TestParseWithFusionTelemetry:
@@ -486,6 +493,64 @@ class TestRediscoverAdapterMacros:
             rediscover_adapter_macros(manifest, runtime_config)
 
         mock_parser_instance.parse_file.assert_not_called()
+
+    def test_restores_evicted_generic_test_macros(self):
+        """The four built-in generic tests (test_not_null, test_unique,
+        test_accepted_values, test_relationships) are {% test %} blocks under
+        tests/generic/, parsed by GenericTestParser over generic_test_paths --
+        not by MacroParser over macro_paths. Eviction removes them (their
+        package_name is "dbt"), so the GenericTestParser reparse pass must
+        restore them; otherwise test compilation fails with 'test_not_null'
+        is undefined (regression from issue #15914)."""
+        from dbt.contracts.graph.nodes import Macro
+        from dbt.node_types import NodeType
+
+        stale = self._make_macro("macro.dbt.test_not_null", "dbt")
+
+        manifest = mock.MagicMock()
+        manifest.macros = {"macro.dbt.test_not_null": stale}
+
+        dbt_project = mock.MagicMock()
+        dbt_project.project_name = "dbt"
+
+        runtime_config = mock.MagicMock()
+        runtime_config.credentials.type = "postgres"
+        runtime_config.project_name = "my_project"
+        runtime_config.load_projects.return_value = [("dbt", dbt_project)]
+
+        restored = Macro(
+            name="test_not_null",
+            resource_type=NodeType.Macro,
+            package_name="dbt",
+            path="tests/generic/builtin.sql",
+            original_file_path="tests/generic/builtin.sql",
+            unique_id="macro.dbt.test_not_null",
+            macro_sql="{% test not_null(model, column_name) %}select 1{% endtest %}",
+        )
+
+        def _parse_file_side_effect(block):
+            manifest.macros[restored.unique_id] = restored
+
+        with mock.patch("dbt.adapters.factory.load_plugin"), mock.patch(
+            "dbt.adapters.factory.get_adapter_package_names",
+            return_value=["dbt_postgres", "dbt"],
+        ), mock.patch("dbt.adapters.factory.get_include_paths", return_value=[]), mock.patch(
+            "dbt.parser.macros.MacroParser"
+        ), mock.patch(
+            "dbt.parser.read_files.load_source_file", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.search.filesystem_search", return_value=[mock.MagicMock()]
+        ), mock.patch(
+            "dbt.parser.generic_test.GenericTestParser"
+        ) as MockGenericTestParser, mock.patch(
+            "dbt.parser.manifest.get_adapter", return_value=mock.MagicMock()
+        ):
+            MockGenericTestParser.return_value.parse_file.side_effect = _parse_file_side_effect
+
+            rediscover_adapter_macros(manifest, runtime_config)
+
+        assert "macro.dbt.test_not_null" in manifest.macros
+        MockGenericTestParser.return_value.parse_file.assert_called_once()
 
     def test_populates_depends_on_for_reparsed_macros(self):
         """A re-parsed adapter macro that calls another macro should get
