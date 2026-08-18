@@ -1,0 +1,8 @@
+kind: Fixes
+body: Write target/manifest.json from the corrected in-memory manifest after loading
+    a Fusion-generated manifest, so the on-disk artifact reflects the rediscovered
+    adapter macros actually used for compilation instead of Fusion's raw bundled macros
+time: 2026-08-12T13:34:14.000000-06:00
+custom:
+    Author: aiguofer
+    Issue: ""
