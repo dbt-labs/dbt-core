@@ -49,7 +49,9 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::Cancellable;
 
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
-use crate::metadata::{CatalogAndSchema, MetadataFreshness, RelationSchemaPair, RelationVec, UDF};
+use crate::metadata::{
+    CatalogAndSchema, FreshnessOverride, MetadataFreshness, RelationSchemaPair, RelationVec, UDF,
+};
 
 use super::event::{CatalogSchema, CatalogSchemas, MetadataCallArgs};
 use super::{global_recorder, global_replayer};
@@ -669,6 +671,49 @@ pub fn args_freshness(relations: impl IntoIterator<Item = impl AsRef<str>>) -> M
             .into_iter()
             .map(|r| r.as_ref().to_string())
             .collect(),
+    }
+}
+
+/// Create MetadataCallArgs for freshness checks with source overrides.
+pub fn args_freshness_with_overrides(
+    relations: impl IntoIterator<Item = impl AsRef<str>>,
+    overrides: &BTreeMap<String, FreshnessOverride>,
+    warehouse: Option<String>,
+) -> MetadataCallArgs {
+    MetadataCallArgs::FreshnessWithOverrides {
+        relations: relations
+            .into_iter()
+            .map(|r| r.as_ref().to_string())
+            .collect(),
+        overrides: overrides
+            .iter()
+            .map(|(relation, override_)| {
+                let kind = match override_ {
+                    FreshnessOverride::Query(_) => "query",
+                    FreshnessOverride::Field(_) => "field",
+                };
+                (relation.clone(), kind.to_string())
+            })
+            .collect(),
+        warehouse,
+    }
+}
+
+/// Create MetadataCallArgs for schema-wide freshness.
+pub fn args_freshness_all_in_schema(
+    database: impl Into<String>,
+    schema: impl Into<String>,
+    relations: impl IntoIterator<Item = impl AsRef<str>>,
+    warehouse: Option<String>,
+) -> MetadataCallArgs {
+    MetadataCallArgs::FreshnessAllInSchema {
+        database: database.into(),
+        schema: schema.into(),
+        relations: relations
+            .into_iter()
+            .map(|r| r.as_ref().to_string())
+            .collect(),
+        warehouse,
     }
 }
 

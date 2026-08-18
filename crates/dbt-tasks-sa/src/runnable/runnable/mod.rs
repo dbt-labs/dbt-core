@@ -12,7 +12,9 @@ use crate::runnable::test::{
     process_statically_checked_test_result, record_test_metric, record_test_span_with_detail,
     reported_test_verdict_from_components, status_with_warn_error_overrides,
 };
-use dbt_adapter::time_machine::{SaoStatus, global_recorder, global_replayer};
+use dbt_adapter::time_machine::{
+    RecordedCachedTestResult, SaoStatus, global_recorder, global_replayer, is_replaying,
+};
 use dbt_adapter_core::AdapterType;
 use dbt_common::constants::RUNNING;
 use dbt_common::stats::{NodeStatus, Stat};
@@ -53,7 +55,8 @@ use dbt_tasks_core::run_cache::run_cache_service::{
     RunCacheReuseHookExecutor, RunCacheReuseHookPhase, RunCacheServiceDecision,
     clear_stale_missing_last_modified_epoch_for_node, confirm_run_cache_service_execution,
     execute_run_cache_service_clone, insert_compiled_view_definition,
-    record_run_cache_service_execution, run_cache_service_before_execution,
+    record_run_cache_clone_decision, record_run_cache_service_execution, replay_dev_clone_decision,
+    replay_run_cache_clone_decision, run_cache_service_before_execution,
     should_execute_hooks_for_skip_reuse,
 };
 
@@ -128,8 +131,17 @@ impl Task for RunTask {
                 reporter.show_progress(RUNNING, display_path.as_ref(), None);
             }
 
+            // During time-machine replay the dbt State service is always
+            // disabled (see `should_initialize_run_cache_service`), which
+            // would otherwise make this condition look identical to a normal
+            // run with the service off and incorrectly route nodes into the
+            // local SAO cache path — a branch that was never exercised during
+            // the original recording when the service was active. Replay
+            // must be driven solely by recorded events (see
+            // `maybe_replay_remote_run` / `maybe_replay_run_cache_clone`).
             let cache_enabled = self.execution_path == RunExecutionPath::Remote
                 && !ctx.inner.run_cache_ctx.run_cache_service_requested
+                && !is_replaying()
                 && ctx.inner.arg.run_cache_mode.write_cache()
                 && node_runs_with_cache(self.node.as_ref());
 
@@ -149,10 +161,8 @@ impl Task for RunTask {
                     Ok(node_status)
                 }
                 (None, RunExecutionPath::Remote) => {
-                    // Step 0: Replay a cached SAO result if one was recorded
-                    if let Some(status) = maybe_replay_remote_run(&self.node.unique_id()) {
-                        return Ok(status);
-                    }
+                    // Step 0: Replay a cached result if one was recorded.
+                    let replayed_cache_decision = maybe_replay_remote_run(&self.node.unique_id());
 
                     // Nodes without a task_result (e.g. sources) go straight to execution
                     let Some(task_result) = task_result else {
@@ -173,7 +183,33 @@ impl Task for RunTask {
                     // `sao_guard`), or Disabled.
                     let run_cache_service_requested =
                         ctx.inner.run_cache_ctx.run_cache_service_requested;
-                    let decision = if run_cache_service_requested {
+                    let decision = if let Some(decision) = replayed_cache_decision {
+                        decision
+                    } else if is_replaying()
+                        && ctx
+                            .inner
+                            .run_cache_ctx
+                            .run_cache_dev_cloned_nodes
+                            .contains_key(&self.node.unique_id())
+                    {
+                        let status = replay_dev_clone_decision(&unique_id)
+                            .map(|clone| clone.replay_status())
+                            .unwrap_or(NodeStatus::ReusedCloned(None));
+                        RunCacheServiceDecision::Skip {
+                            status,
+                            sao_stored_hash: None,
+                            cached_test_result: None,
+                        }
+                    } else if let Some(clone) =
+                        replay_run_cache_clone_decision(&self.node.unique_id())
+                    {
+                        // Replaying a recorded Clone decision: route straight into the
+                        // Clone branch below so the clone SQL is re-executed and matched
+                        // against its own recorded `AdapterCallEvent`s, instead of
+                        // falling through to a normal Execute (which would generate
+                        // different SQL than what was actually recorded).
+                        RunCacheServiceDecision::Clone { clone }
+                    } else if run_cache_service_requested {
                         insert_compiled_view_definition(ctx, self.node.as_ref(), &task_result);
                         // Microbatch models make one per-model cache decision keyed to
                         // the run's event-time window. Resolve it here (fail open: a
@@ -262,6 +298,7 @@ impl Task for RunTask {
                                     ctx.thread_id,
                                 ),
                             );
+                            record_cached_test_skip(&unique_id, status, *cached_result);
                             cached_status.final_status
                         } else {
                             record_cache_skip(&unique_id, status, source);
@@ -292,6 +329,7 @@ impl Task for RunTask {
                                 .await
                                 {
                                     Ok(status) => {
+                                        record_run_cache_clone_decision(&unique_id, clone);
                                         confirm_run_cache_service_execution(
                                             ctx,
                                             self.node.as_ref(),
@@ -627,12 +665,22 @@ impl Task for RunTask {
     }
 }
 
-fn maybe_replay_remote_run(unique_id: &str) -> Option<NodeStatus> {
-    // Check for SAO skip events during time machine replay.
-    // If this node was skipped due to SAO during recording, we should skip it during replay too.
+fn maybe_replay_remote_run(unique_id: &str) -> Option<RunCacheServiceDecision> {
+    // Check for cache skip events during time-machine replay. Cached data tests
+    // need their recorded result so the common skip path can rebuild their stats.
     let replayer = global_replayer()?;
     let sao_event = replayer.get_sao_event(unique_id)?;
-    Some(sao_event.to_node_status())
+    Some(RunCacheServiceDecision::Skip {
+        status: sao_event.to_node_status(),
+        sao_stored_hash: None,
+        cached_test_result: sao_event
+            .cached_test_result
+            .map(|result| CachedTestExecutionResult {
+                failures: result.failures,
+                should_warn: result.should_warn,
+                should_error: result.should_error,
+            }),
+    })
 }
 
 async fn execute_run_cache_service_clone_with_hooks(
@@ -948,30 +996,56 @@ fn record_cache_skip(unique_id: &str, task_status: &NodeStatus, source: &str) {
         return;
     };
 
-    let sao_status = match task_status {
-        NodeStatus::ReusedNoChanges(message) => Some((SaoStatus::ReusedNoChanges, message.clone())),
-        NodeStatus::ReusedStillFresh(message, freshness, last_updated) => Some((
+    if let Some((status, message)) = sao_status_for_task_status(task_status) {
+        recorder.record_sao_skip(unique_id, status, &message, source);
+    }
+}
+
+fn record_cached_test_skip(
+    unique_id: &str,
+    task_status: &NodeStatus,
+    result: CachedTestExecutionResult,
+) {
+    let Some(recorder) = global_recorder() else {
+        return;
+    };
+
+    if let Some((status, message)) = sao_status_for_task_status(task_status) {
+        recorder.record_sao_skip_with_test_result(
+            unique_id,
+            status,
+            &message,
+            "run-cache-service",
+            Some(RecordedCachedTestResult {
+                failures: result.failures,
+                should_warn: result.should_warn,
+                should_error: result.should_error,
+            }),
+        );
+    }
+}
+
+fn sao_status_for_task_status(task_status: &NodeStatus) -> Option<(SaoStatus, String)> {
+    Some(match task_status {
+        NodeStatus::ReusedNoChanges(message) => (SaoStatus::ReusedNoChanges, message.clone()),
+        NodeStatus::ReusedStillFresh(message, freshness, last_updated) => (
             SaoStatus::ReusedStillFresh {
                 freshness_seconds: *freshness,
                 last_updated_seconds: *last_updated,
             },
             message.clone(),
-        )),
+        ),
         NodeStatus::ReusedStillFreshNoChanges(message) => {
-            Some((SaoStatus::ReusedStillFreshNoChanges, message.clone()))
+            (SaoStatus::ReusedStillFreshNoChanges, message.clone())
         }
-        NodeStatus::ReusedCloned(freshness) => Some((
+        NodeStatus::ReusedCloned(freshness) => (
             SaoStatus::ReusedCloned {
                 freshness_seconds: *freshness,
             },
             task_status.default_message(),
-        )),
-        _ => None,
-    };
-
-    if let Some((status, message)) = sao_status {
-        recorder.record_sao_skip(unique_id, status, &message, source);
-    }
+        ),
+        _ => return None,
+    })
 }
 
 fn emit_run_usage_stats(
@@ -1191,6 +1265,125 @@ mod tests {
     #[test]
     fn elapsed_millis_saturates_for_large_durations() {
         assert!(elapsed_millis(Instant::now()) >= 0);
+    }
+
+    // Serializes tests that touch the process-global time-machine state
+    // (`GLOBAL_SESSION`/`GLOBAL_REPLAYER` in `dbt_adapter::time_machine`).
+    static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[tokio::test]
+    async fn run_cache_clone_decision_records_and_replays() {
+        use dbt_adapter::time_machine::{
+            EventReplayer, RecordedRunCacheCloneDecision, get_or_init_recording,
+            get_or_init_replayer, reset_time_machine_globals,
+        };
+        use dbt_common::cancellation::CancellationToken;
+        use dbt_tasks_core::run_cache::run_cache_service::record_dev_clone_decision;
+
+        let _guard = TIME_MACHINE_TEST_LOCK.lock().await;
+        reset_time_machine_globals().await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let handle = get_or_init_recording(
+            dir.path(),
+            "snowflake",
+            "test-invocation",
+            None,
+            CancellationToken::never_cancels(),
+        );
+
+        let decision = RunCacheCloneDecision::from_recorded(RecordedRunCacheCloneDecision {
+            request_id: "req-1".to_string(),
+            clone_sqls: vec!["create table t clone s".to_string()],
+            clone_source: "db.schema.source".to_string(),
+            clone_target: "db.schema.target".to_string(),
+            required_source_epoch: Some(123),
+            execution_runtime_ms: Some(456),
+            freshness_tolerance_seconds: 60,
+            is_stale: true,
+            execution_decision_id: Some("decision-1".to_string()),
+        });
+
+        record_run_cache_clone_decision("model.test.orders", &decision);
+        record_dev_clone_decision("model.test.orders", &decision);
+
+        handle.shutdown().await.unwrap();
+        reset_time_machine_globals().await.unwrap();
+        get_or_init_replayer(|| Ok(Arc::new(EventReplayer::load(dir.path())?))).unwrap();
+
+        let replayed = replay_run_cache_clone_decision("model.test.orders")
+            .expect("clone decision should be recorded and replayed");
+        assert_eq!(decision, replayed);
+
+        let replayed_dev = replay_dev_clone_decision("model.test.orders")
+            .expect("dev clone decision should be recorded and replayed");
+        assert_eq!(
+            replayed_dev.replay_status(),
+            NodeStatus::ReusedCloned(Some(60))
+        );
+
+        assert!(
+            replay_run_cache_clone_decision("model.test.unrelated").is_none(),
+            "should not replay a clone decision that was never recorded for this node"
+        );
+        reset_time_machine_globals().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cached_data_test_result_records_and_replays() {
+        use dbt_adapter::time_machine::{
+            EventReplayer, get_or_init_recording, get_or_init_replayer, reset_time_machine_globals,
+        };
+        use dbt_common::cancellation::CancellationToken;
+
+        let _guard = TIME_MACHINE_TEST_LOCK.lock().await;
+        reset_time_machine_globals().await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let handle = get_or_init_recording(
+            dir.path(),
+            "snowflake",
+            "test-invocation",
+            None,
+            CancellationToken::never_cancels(),
+        );
+        global_recorder().unwrap().record_sao_skip_with_test_result(
+            "test.test_orders",
+            SaoStatus::ReusedNoChanges,
+            "No new changes",
+            "run-cache-service",
+            Some(RecordedCachedTestResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            }),
+        );
+
+        handle.shutdown().await.unwrap();
+        reset_time_machine_globals().await.unwrap();
+        get_or_init_replayer(|| Ok(Arc::new(EventReplayer::load(dir.path())?))).unwrap();
+
+        let RunCacheServiceDecision::Skip {
+            status,
+            cached_test_result,
+            ..
+        } = maybe_replay_remote_run("test.test_orders").unwrap()
+        else {
+            panic!("expected a replayed cached test skip");
+        };
+        assert_eq!(
+            status,
+            NodeStatus::ReusedNoChanges("No new changes".to_string())
+        );
+        assert_eq!(
+            cached_test_result,
+            Some(CachedTestExecutionResult {
+                failures: 2,
+                should_warn: true,
+                should_error: false,
+            })
+        );
+        reset_time_machine_globals().await.unwrap();
     }
 
     #[test]

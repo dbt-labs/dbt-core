@@ -1341,6 +1341,7 @@ pub enum OptimizeTestsOptions {
 }
 
 pub const SKIP_REDUNDANT_TESTS_ENV: &str = "DBT_ENGINE_SKIP_REDUNDANT_TESTS";
+pub const BATCH_TESTS_ENV: &str = "DBT_ENGINE_BATCH_TESTS";
 
 pub fn optimize_test_defaults_from_project_flags(
     project_flags: Option<&Value>,
@@ -1351,6 +1352,12 @@ pub fn optimize_test_defaults_from_project_flags(
         project_flags,
         OptimizeTestsOptions::TestStaticAnalysis,
         "skip_redundant_tests",
+    );
+    insert_project_default_if_enabled(
+        &mut optimize_tests,
+        project_flags,
+        OptimizeTestsOptions::TestAggregation,
+        "batch_tests",
     );
     optimize_tests
 }
@@ -1390,6 +1397,16 @@ fn resolve_effective_optimize_tests_with_env_lookup(
     get_env: impl Fn(&str) -> Option<OsString>,
 ) -> HashSet<OptimizeTestsOptions> {
     let mut optimize_tests = explicit_cli.clone();
+    // Not gated on Build: batching applies to every command that schedules generic
+    // tests. Graph construction filters by command, so it is inert elsewhere.
+    insert_effective_optimize_test_option(
+        &mut optimize_tests,
+        explicit_cli,
+        project_defaults,
+        &get_env,
+        OptimizeTestsOptions::TestAggregation,
+        BATCH_TESTS_ENV,
+    );
     if command == FsCommand::Build {
         insert_effective_optimize_test_option(
             &mut optimize_tests,
@@ -1757,6 +1774,45 @@ mod tests {
 
         assert!(resolved.contains(&OptimizeTestsOptions::TestAggregation));
         assert!(!resolved.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+    }
+
+    #[test]
+    fn optimize_tests_batch_tests_project_flag_applies_to_test_command() {
+        let project_defaults = project_defaults("batch_tests: true\n");
+
+        let resolved =
+            optimize_tests_with_env(FsCommand::Test, &HashSet::default(), &project_defaults, &[]);
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestAggregation));
+    }
+
+    #[test]
+    fn optimize_tests_batch_tests_env_false_overrides_project_true() {
+        let project_defaults = project_defaults("batch_tests: true\n");
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &HashSet::default(),
+            &project_defaults,
+            &[(BATCH_TESTS_ENV, "0")],
+        );
+
+        assert!(!resolved.contains(&OptimizeTestsOptions::TestAggregation));
+    }
+
+    #[test]
+    fn optimize_tests_batch_tests_cli_true_wins_over_env_false() {
+        let mut explicit_cli = HashSet::default();
+        explicit_cli.insert(OptimizeTestsOptions::TestAggregation);
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &explicit_cli,
+            &HashSet::default(),
+            &[(BATCH_TESTS_ENV, "false")],
+        );
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestAggregation));
     }
 
     #[test]

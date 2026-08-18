@@ -18,6 +18,7 @@ use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
 use crate::output::{CaptureMode, Output};
 use crate::utils::{untrusted_size_hint, AutoEscape};
+use crate::value::introspective::IntrospectiveValue;
 use crate::value::mutable_map::MutableMap;
 use crate::value::namespace_object::Namespace;
 use crate::value::Object;
@@ -672,9 +673,23 @@ impl<'env> Vm<'env> {
                     let stop = stack.pop();
                     let b = stack.pop();
                     let a = stack.pop();
-                    stack.push(
-                        ops::slice(a, b, stop, step).map_err(|e| state.with_span_error(e, span))?,
-                    );
+                    // `ops::slice` only understands `ObjectRepr::Seq`/`Iterable`
+                    // (or scalars it knows how to index); a tainted value's
+                    // fabricated inner value is usually neither (most stub
+                    // methods return `ObjectRepr::Plain` placeholders), which
+                    // would otherwise fail with "cannot be sliced" instead of
+                    // propagating the taint like every other operator here.
+                    let overridden = override_listener.and_then(|l| {
+                        l.override_value(&a)
+                            .or_else(|| l.override_value(&b))
+                            .or_else(|| l.override_value(&stop))
+                            .or_else(|| l.override_value(&step))
+                    });
+                    stack.push(match overridden {
+                        Some(v) => v,
+                        None => ops::slice(a, b, stop, step)
+                            .map_err(|e| state.with_span_error(e, span))?,
+                    });
                 }
                 Instruction::LoadConst(value) => {
                     stack.push(value.clone());
@@ -1814,6 +1829,30 @@ impl<'env> Vm<'env> {
 
     fn unpack_list(&self, stack: &mut Stack, count: usize) -> Result<(), Error> {
         let top = stack.pop();
+        if let Some(stub) = top.downcast_object::<IntrospectiveValue>() {
+            // Fixed-arity destructuring (`{% set a, b = call() %}`, and each
+            // item of a `{% for a, b in list %}`) also compiles to
+            // `UnpackList` and shares this VM path with for-loops, but
+            // `IntrospectiveValue::enumerate` always yields exactly one
+            // representative item regardless of arity (see its doc comment
+            // -- that invariant is specifically for loop bodies). Delegate
+            // to `IntrospectiveValue::unpack`, which hands back exactly
+            // `count` tainted items (preserving the fabricated inner
+            // value's real items when their count already matches) instead
+            // of forcing the value through that single-item iterator, which
+            // would otherwise fail every tainted tuple-unpack with
+            // "sequence of wrong length" (e.g. `{% set res, table =
+            // adapter.execute(...) %}` in dbt-adapters' `statement()`
+            // macro). Checking for the concrete wrapper type here (rather
+            // than the broader `is_introspective_stub()`) is deliberate: an
+            // ordinary container that merely *contains* a tainted item (see
+            // e.g. `appending_a_tainted_item_taints_the_list`) doesn't have
+            // this single-item invariant and unpacks fine below.
+            for item in stub.unpack(count) {
+                stack.push(item);
+            }
+            return Ok(());
+        }
         let iter = ok!(top
             .as_object()
             .and_then(|x| x.try_iter())

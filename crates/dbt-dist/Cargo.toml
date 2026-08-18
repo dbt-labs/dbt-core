@@ -15,12 +15,13 @@ workspace = true
 [dependencies]
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-yaml = { workspace = true }
 libc = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-
-[dev-dependencies]
+sha2 = { workspace = true }
 tempfile = { workspace = true }
+toml_edit = { workspace = true }
 
 [lib]
 name = "dbt_dist"

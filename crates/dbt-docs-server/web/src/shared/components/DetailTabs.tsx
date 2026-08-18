@@ -15,6 +15,7 @@ export const tabTypes = [
   'tables',
   'views',
   'relationships',
+  'config',
 ] as const;
 
 export type TabType = (typeof tabTypes)[number];
@@ -37,6 +38,7 @@ export const tabNameMap: Record<TabType, string> = {
   tables: 'Tables',
   views: 'Views',
   relationships: 'Relationships',
+  config: 'Config',
 };
 
 export const tabAnnotationMap: Partial<Record<TabType, string>> = {

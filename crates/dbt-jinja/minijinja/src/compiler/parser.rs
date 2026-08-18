@@ -923,6 +923,28 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_expr_noif_or_implied_tuple(&mut self) -> Result<ast::Expr<'a>, Error> {
+        let first = ok!(self.parse_expr_noif());
+        if skip_token!(self, Token::Comma) {
+            let mut items = vec![first];
+            loop {
+                if matches_token!(self, Token::BlockEnd) || matches_token!(self, Token::Colon) {
+                    break;
+                }
+                items.push(ok!(self.parse_expr_noif()));
+                if !skip_token!(self, Token::Comma) {
+                    break;
+                }
+            }
+            Ok(ast::Expr::Tuple(Spanned::new(
+                ast::Tuple { items },
+                self.stream.expand_span(self.stream.last_span()),
+            )))
+        } else {
+            Ok(first)
+        }
+    }
+
     fn parse_expr_noif(&mut self) -> Result<ast::Expr<'a>, Error> {
         self.parse_or()
     }
@@ -1218,7 +1240,7 @@ impl<'a> Parser<'a> {
         start_open_span: Span,
         start_tag_kind: JinjaLayoutEventKind,
     ) -> Result<ast::IfCond<'a>, Error> {
-        let expr = ok!(self.parse_expr_noif());
+        let expr = ok!(self.parse_expr_noif_or_implied_tuple());
         skip_token!(self, Token::Colon);
         expect_token!(self, Token::BlockEnd, "end of block");
         let start_tag_span = self.stream.expand_span(start_open_span);

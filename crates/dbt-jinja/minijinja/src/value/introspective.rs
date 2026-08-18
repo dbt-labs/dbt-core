@@ -58,11 +58,51 @@ impl IntrospectiveValue {
         })
     }
 
-    fn wrap_leaf(value: Value) -> Value {
+    pub(crate) fn wrap_leaf(value: Value) -> Value {
         Value::from_object(IntrospectiveValue {
             inner: value,
             iterable: false,
         })
+    }
+
+    /// Unpacks this stub into exactly `count` tainted items for fixed-arity
+    /// destructuring (`{% set a, b = ... %}`, and each item of `{% for a, b
+    /// in list %}`), which -- unlike `enumerate()`'s "exactly one item"
+    /// loop-body model (see `iterable`'s doc comment) -- has a statically
+    /// known arity to satisfy.
+    ///
+    /// When the fabricated inner value already has exactly `count` real
+    /// items (e.g. `adapter.execute()`'s Parse-mode stub really is a
+    /// `(response, table)` pair of correctly-typed defaults, not bare
+    /// placeholders), wraps and returns those instead of discarding them --
+    /// this preserves fidelity for further Jinja-level attribute/method
+    /// access (which `get_value`/`call_method` already degrade gracefully
+    /// on regardless of what's really inside). It does *not* make the
+    /// result safe to `downcast_object` through, though: the wrapper
+    /// itself is what gets stored, not its contents, so native callers
+    /// that need the concrete type back out of a destructured item still
+    /// need their own `is_introspective_stub()` check before downcasting
+    /// (see e.g. `ResultStore::store_result`'s `agate_table` handling).
+    ///
+    /// Falls back to `count` tainted `undefined` leaves when the inner
+    /// value's real arity doesn't match `count` (including the common case
+    /// of an empty/scalar Parse-mode stub).
+    pub(crate) fn unpack(&self, count: usize) -> Vec<Value> {
+        if let Some(items) = self
+            .inner
+            .as_object()
+            .and_then(|o| o.try_iter())
+            .map(|it| it.collect::<Vec<_>>())
+            .filter(|items| items.len() == count)
+        {
+            return items
+                .into_iter()
+                .map(IntrospectiveValue::wrap_leaf)
+                .collect();
+        }
+        (0..count)
+            .map(|_| IntrospectiveValue::wrap_leaf(Value::UNDEFINED))
+            .collect()
     }
 }
 
@@ -416,6 +456,89 @@ mod tests {
             )
             .unwrap();
         assert_eq!(out, "[True:]");
+    }
+
+    #[test]
+    fn tuple_unpack_of_tainted_value_yields_tainted_items_instead_of_erroring() {
+        // Regression test: `{% set a, b = ... %}` compiles to the same
+        // `UnpackList` instruction used to unpack each `{% for a, b in
+        // list %}` item, but unlike a for-loop it requires an exact arity
+        // match. Before the fix, unpacking a tainted origin (whose
+        // `enumerate()` always reports exactly one item, see `iterable`'s
+        // doc comment) against any arity other than 1 failed with "cannot
+        // unpack: sequence of wrong length" -- e.g. dbt-adapters'
+        // `{% set res, table = adapter.execute(...) %}` in `statement()`.
+        let env = test_env();
+        let wrapped = IntrospectiveValue::wrap(Value::from_object(TestRelation));
+        let out = env
+            .render_str(
+                "{% set a, b = rel %}{{ is_tainted(a) }},{{ is_tainted(b) }}",
+                context! { rel => wrapped },
+                &[],
+            )
+            .unwrap();
+        assert_eq!(out, "True,True");
+    }
+
+    #[test]
+    fn unpack_preserves_real_items_when_arity_matches() {
+        // Review follow-up on `tuple_unpack_of_tainted_value_yields_
+        // tainted_items_instead_of_erroring`: substituting bare `undefined`
+        // for every unpacked item would "kick the can down the road" for
+        // callers that need a *concrete* type back out, not just a taint
+        // marker -- e.g. `adapter.execute()`'s Parse-mode stub really is a
+        // `(response, table)` pair of correctly-typed defaults (not empty
+        // placeholders), and `{{ store_result(name, response=res,
+        // agate_table=table) }}` immediately downstream in `statement()`
+        // downcasts `table` to a concrete `AgateTable`. When the fabricated
+        // inner value's real arity already matches, unpack should hand
+        // back those real (tainted-leaf-wrapped) items instead of discarding
+        // them.
+        let wrapped = IntrospectiveValue {
+            inner: Value::from(vec![Value::from("a-response"), Value::from("a-table")]),
+            iterable: true,
+        };
+        let items = wrapped.unpack(2);
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().all(|v| v.is_introspective_stub()));
+        assert_eq!(items[0].to_string(), "a-response");
+        assert_eq!(items[1].to_string(), "a-table");
+    }
+
+    #[test]
+    fn unpack_falls_back_to_undefined_leaves_when_arity_does_not_match() {
+        // The common Parse-mode case: an empty/scalar fabricated inner
+        // value can't supply `count` real items, so unpack must still
+        // produce exactly `count` tainted placeholders rather than
+        // erroring or under/over-supplying the stack.
+        let wrapped = IntrospectiveValue {
+            inner: Value::from(vec![Value::from("only-one")]),
+            iterable: true,
+        };
+        let items = wrapped.unpack(2);
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().all(|v| v.is_introspective_stub()));
+        assert_eq!(items[0].to_string(), "");
+        assert_eq!(items[1].to_string(), "");
+    }
+
+    #[test]
+    fn slicing_a_tainted_value_propagates_taint_instead_of_erroring() {
+        // Regression test: `ops::slice` only understands `ObjectRepr::Seq`/
+        // `Iterable` (or scalars it knows how to index); a tainted value's
+        // fabricated inner value is usually neither (e.g. a `None` stub,
+        // `ObjectRepr::Plain`), which previously failed with "value of type
+        // plain object cannot be sliced" instead of propagating taint like
+        // every other operator.
+        let env = test_env();
+        let out = env
+            .render_str(
+                "{{ s[0:2] }}",
+                context! { s => IntrospectiveValue::wrap(Value::from(())) },
+                &taint_gate(),
+            )
+            .unwrap();
+        assert_eq!(out, "{{}}");
     }
 
     #[test]

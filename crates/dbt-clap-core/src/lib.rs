@@ -830,7 +830,7 @@ pub struct ShowArgs {
     pub common_args: CommonArgs,
 
     /// Show the given query
-    #[arg(long)]
+    #[arg(long, allow_hyphen_values = true)]
     pub inline: Option<String>,
 
     /// Select nodes of a specific type;
@@ -962,8 +962,8 @@ pub struct TestArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Aggregate compatible generic tests.
-    #[arg(long, hide = true)]
+    /// Batch compatible generic tests.
+    #[arg(long = "batch-tests", hide = true)]
     pub aggregate_tests: bool,
 
     /// Select nodes of a specific type;
@@ -1054,8 +1054,8 @@ pub struct BuildArgs {
     #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
-    /// Aggregate compatible generic tests.
-    #[arg(long, hide = true)]
+    /// Batch compatible generic tests.
+    #[arg(long = "batch-tests", hide = true)]
     pub aggregate_tests: bool,
 
     /// Skip data tests that are proven redundant.
@@ -1521,13 +1521,12 @@ impl DocsArgs {
 pub enum DocsSubcommand {
     /// Generate a self-contained, statically hostable docs site.
     ///
-    /// Reads the parquet artifacts a previous `--write-index` run wrote and
-    /// writes the site to `--output-dir`. The result is a plain directory of
-    /// files: host it anywhere, no server process required.
+    /// Runs `compile --write-index`, then writes the site that index describes to
+    /// `--output-dir`. The result is a plain directory of files: host it anywhere,
+    /// no server process required.
     ///
-    /// Build the index first with `dbt compile --write-index` or `dbt build
-    /// --write-index`. Adding `--static-analysis strict` to that run is what
-    /// produces column-level lineage; without it the site omits that feature.
+    /// Pass `--no-compile` to skip the compile and export the index a previous
+    /// `--write-index` run wrote, which is then an error if there is none.
     Generate(DocsGenerateArgs),
     /// Start the dbt docs v2 server backed by parquet artifacts in the target directory.
     ///
@@ -1573,9 +1572,10 @@ impl Default for DocsServeArgs {
 /// Args for `dbt docs generate`.
 ///
 /// Mirrors [`DocsServeArgs`] on `--target-path`, including the env var, so both
-/// docs subcommands locate the index identically. `generate` does not compile —
-/// it exports an index a previous `--write-index` run wrote — so it needs no
-/// project directory and no warehouse connection.
+/// docs subcommands locate the index identically. `generate` compiles with
+/// `--write-index` and exports the index that produces, so it needs a project
+/// directory and a warehouse connection — unless `--no-compile` reduces it to the
+/// exporter it used to be.
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct DocsGenerateArgs {
     /// Path to the dbt target directory containing the `index/` subdirectory of
@@ -1594,6 +1594,22 @@ pub struct DocsGenerateArgs {
     /// wasm from your own infrastructure; the site never bundles it.
     #[arg(long, value_name = "URL", env = "DBT_DOCS_DUCKDB_CDN_BASE")]
     pub duckdb_cdn_base: Option<String>,
+
+    /// Export only what is already indexed; never compile.
+    ///
+    /// Without this, `compile --write-index` runs first, so the site always reflects
+    /// the project as it is now. With it, the export reads the index a previous
+    /// `--write-index` run wrote and a missing one is an error naming that remedy —
+    /// useful where the warehouse is unreachable, or to keep the command cheap and
+    /// read-only.
+    #[arg(long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), env = "DBT_DOCS_NO_COMPILE", overrides_with = "compile")]
+    pub no_compile: bool,
+
+    /// Accepted for dbt v1 compatibility, where it was the default. Compiling is
+    /// the default here too, so this is a no-op; it exists so v1 scripts that pass
+    /// it keep working.
+    #[arg(long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true, overrides_with = "no_compile")]
+    pub compile: bool,
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
@@ -2771,6 +2787,11 @@ impl CommonArgs {
         }
 
         options
+    }
+
+    /// True when replaying a prior recorded dbt run via `--dbt-replay`, since those recordings predate fusion-only warnings.
+    pub fn skip_fusion_only_upgrades(&self) -> bool {
+        self.dbt_replay.is_some()
     }
 }
 

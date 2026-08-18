@@ -43,19 +43,17 @@ import {
   useTelemetryInitialized,
 } from './lib/telemetry';
 import { type View, viewFromPath } from './lib/viewFromPath';
-import Home from './pages/Home';
 import NotFoundPage from './pages/NotFoundPage';
+import Overview from './pages/Overview';
 import ResourceDetails from './pages/ResourceDetails';
 import ResourceFilter from './pages/ResourceFilter';
 import Search from './pages/Search';
 import { paths, ROUTES } from './routes';
 import {
   type Asset,
-  type ModelSummary,
   type Project,
   useAssetCounts,
   useAssetDetail,
-  useAssetList,
   useCapabilities,
   useDistribution,
   useFiles,
@@ -137,13 +135,6 @@ export default function App() {
   const userState = deriveUserState(distInfo);
   const upgradeCapabilities = deriveUpgradeCapabilities(capabilities, distInfo);
 
-  // Marts list for the home page. Best-effort and isolated — section hides
-  // when the fetch returns zero or errors.
-  const { data: marts } = useAssetList<ModelSummary>(
-    { filter: { resourceTypes: ['model'], modelingLayers: ['Marts'] }, limit: 12 },
-    'marts',
-  );
-
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<AssetFilters>(() => {
     const initial = viewFromPath(window.location.pathname);
@@ -183,7 +174,7 @@ export default function App() {
     });
   }, [project, nodeTotal, identityQuery.data]);
 
-  // Analytics: `resource_viewed` on detail and list routes. Home and /search
+  // Analytics: `resource_viewed` on detail and list routes. The overview and /search
   // (a list view with no type) emit nothing — search is covered by
   // `search_performed`.
   useEffect(() => {
@@ -285,12 +276,6 @@ export default function App() {
     },
     [navigate],
   );
-
-  const onShowMarts = useCallback(() => {
-    // ModelFilterView reads `?modeling_layer=` and passes it as a server-side
-    // list filter. dbt-docs-server's LAYER_CONDITIONS uses capitalized "Marts".
-    navigate(`${paths.resource('model')}?modeling_layer=Marts`);
-  }, [navigate]);
 
   // LocatePane's project-root row (Assets or Files tab) navigates here.
   const onShowProject = useCallback(() => {
@@ -466,22 +451,7 @@ export default function App() {
         />
         <main className="main">
           <Routes>
-            <Route
-              path={ROUTES.home}
-              element={
-                <Home
-                  project={project}
-                  nodes={nodes}
-                  previewId={previewId}
-                  marts={marts}
-                  onPeek={onPeek}
-                  onShowList={onShowList}
-                  onShowMarts={onShowMarts}
-                  userState={userState}
-                  hasDbtState={upgradeCapabilities?.hasDbtState ?? false}
-                />
-              }
-            />
+            <Route path={ROUTES.home} element={<Overview />} />
             <Route
               path={ROUTES.details}
               element={
@@ -652,19 +622,21 @@ function Topbar({
             type="button"
             className="topbar-v2__brand-btn"
             onClick={onResetHome}
-            aria-label="Home — reset view"
-            title="Home — reset view"
+            aria-label="Overview — reset view"
+            title="Overview — reset view"
           >
             <span key={spinTrigger ?? 0} className="topbar-v2__brand-anim">
               <Icon ryecon={RyeconColorDbt} size="xl" alt="dbt" />
             </span>
           </button>
-          <Tooltip content="This docs site is in alpha." placement="bottom">
-            <Badge text="alpha" type="purple" size="xs" />
-          </Tooltip>
           {project && (
             <div className="topbar-v2__brand-text">
-              <div className="topbar-v2__brand-name">{project.name}</div>
+              <div className="topbar-v2__brand-name">
+                {project.name}
+                <Tooltip content="This docs site is in beta." placement="bottom">
+                  <Badge text="beta" type="purple" size="xs" />
+                </Tooltip>
+              </div>
               <div className="topbar-v2__brand-sub">
                 {project.adapterType ?? ''}
                 {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}

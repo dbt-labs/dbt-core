@@ -1,0 +1,7 @@
+kind: Features
+body: Seed data types are not Nullable for ClickHouse. Fix incorrect primary key declaration when configured as a list'
+time: 2026-08-12T17:32:49.757029+02:00
+custom:
+    author: koletzilla
+    issue: "14585"
+    project: dbt-core

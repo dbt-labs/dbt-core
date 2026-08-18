@@ -846,6 +846,7 @@ pub struct ManifestModelConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub classifiers: Option<StringOrArrayOfStrings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_name: Option<String>,
@@ -861,6 +862,7 @@ pub struct ManifestModelConfig {
     pub group: Option<String>,
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub incremental_predicates: Option<Vec<String>>,
     pub batch_size: Option<DbtBatchSize>,
     pub lookback: Option<i32>,
@@ -949,6 +951,7 @@ pub struct ManifestModelConfig {
         serialize_with = "crate::schemas::serde::serialize_none_as_default"
     )]
     pub latest_version_pointer: Option<LatestVersionPointer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sql_header: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
@@ -2145,6 +2148,38 @@ impl From<DbtSavedQuery> for ManifestSavedQuery {
             group: saved_query.__saved_query_attr__.group,
             config: saved_query.deprecated_config,
             __other__: saved_query.__other__,
+        }
+    }
+}
+
+#[cfg(test)]
+mod manifest_model_config_null_omission_tests {
+    use super::ManifestModelConfig;
+
+    /// dbt-core macros like `default__create_indexes` call
+    /// `config.get('indexes', default=[])` with no null-guard, so an explicit JSON
+    /// `null` (instead of an omitted key) breaks under `--use-v2-parser`
+    /// (dbt-core#15913). These fields must be omitted from the manifest when unset.
+    #[test]
+    fn unset_fields_are_omitted_not_serialized_as_null() {
+        let config = ManifestModelConfig::default();
+        let json = serde_json::to_value(&config).unwrap();
+
+        for key in ["classifiers", "incremental_predicates", "sql_header"] {
+            assert!(
+                json.get(key).is_none(),
+                "expected top-level key `{key}` to be omitted when unset, got: {json}"
+            );
+        }
+
+        let warehouse_specific = json
+            .get("__warehouse_specific_config__")
+            .expect("__warehouse_specific_config__ should be present");
+        for key in ["indexes", "primary_key"] {
+            assert!(
+                warehouse_specific.get(key).is_none(),
+                "expected `{key}` to be omitted when unset, got: {warehouse_specific}"
+            );
         }
     }
 }

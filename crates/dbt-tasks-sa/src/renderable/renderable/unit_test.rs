@@ -1597,7 +1597,7 @@ fn yml_sequence_to_sql_literal(
     };
     let mut element_type_literal = String::new();
     type_ops
-        .format_arrow_type_as_sql(element_field.data_type(), &mut element_type_literal)
+        .format_arrow_type_as_sql(element_field.data_type(), true, &mut element_type_literal)
         .map_err(|e| {
             fs_err!(
                 ErrorCode::InvalidConfig,
@@ -1762,7 +1762,7 @@ fn columns_to_formatted_types<'a>(
         .map(|f| {
             let mut formatted = String::new();
             type_ops
-                .format_arrow_type_as_sql(f.data_type(), &mut formatted)
+                .format_arrow_type_as_sql(f.data_type(), f.is_nullable(), &mut formatted)
                 .map_err(|e| {
                     fs_err!(
                         ErrorCode::InvalidConfig,

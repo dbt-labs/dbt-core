@@ -8,6 +8,7 @@ use std::fs::create_dir_all;
 use std::path::PathBuf;
 
 use crate::RecordingContext;
+use crate::SharedConfig;
 use crate::error::to_adbc_error;
 use crate::naming::{
     compute_file_name, compute_file_name_for_get_objects, compute_file_name_for_table_schema,
@@ -17,15 +18,22 @@ use crate::storage::sqlite::SqliteHandler;
 pub struct RecordConnection {
     recordings_path: PathBuf,
     inner: Box<dyn Connection>,
+    config: SharedConfig,
     ctx: RecordingContext,
     generation: u64,
 }
 
 impl RecordConnection {
-    pub fn new(recordings_path: PathBuf, inner: Box<dyn Connection>, generation: u64) -> Self {
+    pub fn new(
+        recordings_path: PathBuf,
+        inner: Box<dyn Connection>,
+        config: SharedConfig,
+        generation: u64,
+    ) -> Self {
         Self {
             recordings_path,
             inner,
+            config,
             ctx: RecordingContext::default(),
             generation,
         }
@@ -82,12 +90,14 @@ impl Connection for RecordConnection {
         let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| to_adbc_error(e.into(), Some(&path)))?;
 
+        // Normalize so a randomized __dbt_tmp suffix doesn't change the hash key.
+        let normalized_table_name = table_name.map(|t| self.config.normalize_sql(t));
         let unique_id = compute_file_name_for_get_objects(
             &path,
             self.ctx.node_id.as_deref(),
             catalog,
             db_schema,
-            table_name,
+            normalized_table_name.as_deref(),
             table_type.as_deref(),
             column_name,
         );
@@ -129,12 +139,14 @@ impl Connection for RecordConnection {
         let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| to_adbc_error(e.into(), Some(&path)))?;
 
+        // Same as get_objects: keep the hash key stable despite tmp-suffix churn.
+        let normalized_table_name = self.config.normalize_sql(table_name);
         let unique_id = compute_file_name_for_table_schema(
             &path,
             self.ctx.node_id.as_deref(),
             catalog,
             db_schema,
-            table_name,
+            &normalized_table_name,
         );
 
         let sqlite_handler = SqliteHandler::new(&path);
